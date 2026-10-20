@@ -660,6 +660,181 @@ def _json1_available(conn: sqlite3.Connection) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+# Prepare operations schema (D05 / task 12)
+# ---------------------------------------------------------------------------
+#
+# ``data_operations`` is **owned by the Data layer** and created by
+# :class:`acp_services.data.operations.PrepareOperationService` — never by
+# ``JobStore``.  This is the single migration implementation both a standalone
+# prepare DB and a mixed ``acp_jobs.db`` go through; it is deliberately
+# restricted so a standalone prepare DB never receives unrelated scheduler
+# tables.  It records its own version (``_prepare_schema_migrations``) so the
+# prepare schema version is distinct from the jobs schema version.
+#
+# Explicit order (do not reorder):
+#   1. create/verify ``data_operations`` (``create_table=False`` verifies only
+#      and never marks a missing table as migrated);
+#   2. apply the additive prepare columns and indexes;
+#   3. mark the prepare schema version last (a partially applied schema is
+#      never recorded as migrated).
+
+#: Bumped when the prepare schema changes; independent of the jobs migrations.
+PREPARE_SCHEMA_VERSION = 1
+
+_PREPARE_SCHEMA_MIGRATIONS_SQL = """
+CREATE TABLE IF NOT EXISTS _prepare_schema_migrations (
+    id INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+)
+"""
+
+_PREPARE_TABLE_DDL = """
+CREATE TABLE IF NOT EXISTS data_operations (
+    operation_id TEXT PRIMARY KEY,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    job_id TEXT NOT NULL,
+    job_attempt INTEGER NOT NULL,
+    resource_id TEXT NOT NULL,
+    resource_kind TEXT NOT NULL,
+    resource_digest TEXT NOT NULL,
+    resource_key TEXT NOT NULL,
+    permission_scope TEXT NOT NULL,
+    state TEXT NOT NULL,
+    owner_generation INTEGER NOT NULL DEFAULT 0,
+    lease_token TEXT,
+    lease_expires_at REAL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    authorization_version INTEGER NOT NULL DEFAULT 0,
+    binding_id TEXT NOT NULL DEFAULT '',
+    resource_generation INTEGER NOT NULL DEFAULT 0,
+    availability TEXT NOT NULL DEFAULT 'absent',
+    error_code TEXT,
+    error_message TEXT,
+    result_json TEXT,
+    payload_json TEXT,
+    size_bytes INTEGER,
+    sha256 TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    available_at REAL NOT NULL DEFAULT 0.0,
+    content_identity TEXT NOT NULL DEFAULT '',
+    client_idempotency_key TEXT NOT NULL DEFAULT '',
+    dedup_epoch INTEGER NOT NULL DEFAULT 0
+)
+"""
+
+#: Additive columns applied to pre-D05 rows.  Old rows get ``''``/``''``/``0``
+#: and stay conservative (revalidate/reprepare, never silently current-ready).
+_PREPARE_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("content_identity", "TEXT NOT NULL DEFAULT ''"),
+    ("client_idempotency_key", "TEXT NOT NULL DEFAULT ''"),
+    ("dedup_epoch", "INTEGER NOT NULL DEFAULT 0"),
+)
+
+#: ``idx_data_operations_client_key`` is the DB-level guard that the
+#: idempotency hash alone cannot provide: it rejects the same explicit client
+#: key at the same epoch even when the request content (and therefore the hash)
+#: differs.  Legacy rows carry ``''`` and are excluded by the predicate.
+_PREPARE_INDEX_STATEMENTS: tuple[str, ...] = (
+    "CREATE INDEX IF NOT EXISTS idx_data_operations_state "
+    "ON data_operations(state, available_at)",
+    "CREATE INDEX IF NOT EXISTS idx_data_operations_key "
+    "ON data_operations(idempotency_key)",
+    "CREATE INDEX IF NOT EXISTS idx_data_operations_resource "
+    "ON data_operations(permission_scope, resource_key, dedup_epoch)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_data_operations_client_key "
+    "ON data_operations(permission_scope, client_idempotency_key, dedup_epoch) "
+    "WHERE client_idempotency_key <> ''",
+)
+
+
+def _ensure_prepare_meta_table(conn: sqlite3.Connection) -> None:
+    conn.executescript(_PREPARE_SCHEMA_MIGRATIONS_SQL)
+
+
+def _apply_prepare_columns(conn: sqlite3.Connection) -> None:
+    for column, declaration in _PREPARE_COLUMNS:
+        if not _column_exists(conn, "data_operations", column):
+            try:
+                conn.execute(
+                    f"ALTER TABLE data_operations ADD COLUMN {column} {declaration}"
+                )
+            except sqlite3.OperationalError as exc:  # pragma: no cover - race guard
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+
+
+def _apply_prepare_indexes(conn: sqlite3.Connection) -> None:
+    for statement in _PREPARE_INDEX_STATEMENTS:
+        conn.execute(statement)
+
+
+def migrate_prepare_schema(
+    db_path: Path | str,
+    *,
+    create_table: bool = True,
+) -> bool:
+    """Create/verify and migrate the Data-owned prepare-operation schema.
+
+    This is the **only** implementation of the prepare schema migration.  It is
+    safe to call from every ``PrepareOperationService`` initialisation (new DB,
+    old prepare-only DB, mixed jobs DB) and from concurrent initialisers: the
+    whole body runs under ``BEGIN IMMEDIATE`` with a busy timeout, and every
+    statement is idempotent.
+
+    Args:
+        db_path: SQLite database path (created when missing).
+        create_table: When ``True`` (the service path) create ``data_operations``
+            if missing.  When ``False`` this is a restricted verify-only entry:
+            a missing table returns ``False`` and is **never** marked migrated.
+
+    Returns:
+        ``True`` when ``data_operations`` exists and the schema version is
+        recorded; ``False`` only in verify-only mode when the table is missing.
+    """
+    path = Path(db_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = _connect(path)
+    try:
+        conn.execute("PRAGMA busy_timeout=15000")
+        _ensure_prepare_meta_table(conn)
+        conn.commit()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if not _table_exists(conn, "data_operations"):
+                if not create_table:
+                    conn.rollback()
+                    return False
+                conn.execute(_PREPARE_TABLE_DDL)
+            if not _table_exists(conn, "data_operations"):  # pragma: no cover - DDL failed
+                conn.rollback()
+                return False
+            _apply_prepare_columns(conn)
+            _apply_prepare_indexes(conn)
+            conn.execute(
+                "INSERT OR IGNORE INTO _prepare_schema_migrations (id, applied_at) "
+                "VALUES (?, ?)",
+                (PREPARE_SCHEMA_VERSION, _utc_now_iso()),
+            )
+            conn.commit()
+            return True
+        except BaseException:
+            conn.rollback()
+            raise
+    finally:
+        conn.close()
+
+
+def get_prepare_schema_version(conn: sqlite3.Connection) -> int:
+    """Return the highest applied prepare schema version (``0`` when absent)."""
+    if not _table_exists(conn, "_prepare_schema_migrations"):
+        return 0
+    row = conn.execute("SELECT MAX(id) AS v FROM _prepare_schema_migrations").fetchone()
+    return int(row["v"]) if row is not None and row["v"] is not None else 0
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -714,4 +889,10 @@ def migrate(db_path: Path | str) -> int:
     return applied
 
 
-__all__ = ["get_schema_version", "migrate"]
+__all__ = [
+    "PREPARE_SCHEMA_VERSION",
+    "get_prepare_schema_version",
+    "get_schema_version",
+    "migrate",
+    "migrate_prepare_schema",
+]

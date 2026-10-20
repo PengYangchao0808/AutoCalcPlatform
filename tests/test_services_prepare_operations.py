@@ -22,7 +22,12 @@ Run with: pytest tests/test_services_prepare_operations.py -q
 from __future__ import annotations
 
 import json
+import sqlite3
+import subprocess
+import sys
+import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +38,11 @@ from acp.scheduler.manager import JobManager
 from acp.scheduler.remote.runner import RemotePollObservation
 from acp_services.data import contracts as dc
 from acp_services.data import operations as ops
+from acp_services.store.migrations import (
+    get_prepare_schema_version,
+    migrate,
+    migrate_prepare_schema,
+)
 
 MANIFEST = {
     "schema_version": "confsearch_v1",
@@ -106,6 +116,10 @@ def _request(
     max_attempts: int = 3,
     authorization_version: int = 0,
     binding_id: str = "",
+    generation: int = 0,
+    payload: dict[str, Any] | None = None,
+    client_key: str = "",
+    dedup_epoch: int = 0,
 ) -> ops.PrepareRequest:
     return ops.PrepareRequest(
         job_id=job_id,
@@ -117,6 +131,10 @@ def _request(
         max_attempts=max_attempts,
         authorization_version=authorization_version,
         binding_id=binding_id,
+        resource_generation=generation,
+        payload=payload,
+        client_idempotency_key=client_key,
+        dedup_epoch=dedup_epoch,
     )
 
 
@@ -509,3 +527,432 @@ def test_manager_restart_recovers_undecided_operation(tmp_path: Path) -> None:
         assert final is not None and final.state is ops.PrepareState.SUCCEEDED
     finally:
         mgr2.shutdown()
+
+
+# ===========================================================================
+# D05 (task 12) — full content identity, client-key index and prepare migration
+# ===========================================================================
+
+_LEGACY_PREPARE_DDL = """
+CREATE TABLE IF NOT EXISTS data_operations (
+    operation_id TEXT PRIMARY KEY,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    job_id TEXT NOT NULL,
+    job_attempt INTEGER NOT NULL,
+    resource_id TEXT NOT NULL,
+    resource_kind TEXT NOT NULL,
+    resource_digest TEXT NOT NULL,
+    resource_key TEXT NOT NULL,
+    permission_scope TEXT NOT NULL,
+    state TEXT NOT NULL,
+    owner_generation INTEGER NOT NULL DEFAULT 0,
+    lease_token TEXT,
+    lease_expires_at REAL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    authorization_version INTEGER NOT NULL DEFAULT 0,
+    binding_id TEXT NOT NULL DEFAULT '',
+    resource_generation INTEGER NOT NULL DEFAULT 0,
+    availability TEXT NOT NULL DEFAULT 'absent',
+    error_code TEXT,
+    error_message TEXT,
+    result_json TEXT,
+    payload_json TEXT,
+    size_bytes INTEGER,
+    sha256 TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    available_at REAL NOT NULL DEFAULT 0.0
+);
+CREATE INDEX IF NOT EXISTS idx_data_operations_state
+    ON data_operations(state, available_at);
+CREATE INDEX IF NOT EXISTS idx_data_operations_key
+    ON data_operations(idempotency_key);
+"""
+
+
+def _sqlite(db: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(db))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _prepare_schema(db: Path) -> tuple[tuple[str, ...], dict[str, str | None], set[str]]:
+    conn = _sqlite(db)
+    try:
+        columns = tuple(row["name"] for row in conn.execute("PRAGMA table_info(data_operations)"))
+        indexes = {
+            str(row["name"]): row["sql"]
+            for row in conn.execute(
+                "SELECT name, sql FROM sqlite_master "
+                "WHERE type='index' AND tbl_name='data_operations'"
+            )
+        }
+        tables = {
+            str(row["name"])
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        return columns, indexes, tables
+    finally:
+        conn.close()
+
+
+def _prepare_version(db: Path) -> int:
+    conn = _sqlite(db)
+    try:
+        return get_prepare_schema_version(conn)
+    finally:
+        conn.close()
+
+
+def _create_legacy_prepare_db(db: Path) -> None:
+    conn = _sqlite(db)
+    try:
+        conn.executescript(_LEGACY_PREPARE_DDL)
+        conn.execute(
+            "INSERT INTO data_operations ("
+            "operation_id, idempotency_key, job_id, job_attempt, resource_id, "
+            "resource_kind, resource_digest, resource_key, permission_scope, state, "
+            "availability, created_at, updated_at, available_at"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "op_legacy",
+                "op_legacy_key",
+                "old-job",
+                1,
+                "catalog:Confsearch",
+                "cache",
+                "dg-old",
+                "old-job\x1f1\x1fcatalog:Confsearch",
+                "local-single",
+                "succeeded",
+                "ready",
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+                0.0,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_content_identity_is_canonical_and_covers_every_fact() -> None:
+    base = _request(
+        payload={"b": 2, "a": 1},
+        digest="dg-1",
+        generation=1,
+        binding_id="sb_1",
+        authorization_version=1,
+    )
+    assert base.content_identity == ops.content_identity_for(
+        permission_scope=base.permission_scope,
+        job_id=base.job_id,
+        attempt=base.attempt,
+        resource_id=base.resource_id,
+        resource_kind=base.resource_kind,
+        resource_digest=base.resource_digest,
+        resource_generation=base.resource_generation,
+        binding_id=base.binding_id,
+        authorization_version=base.authorization_version,
+        payload={"a": 1, "b": 2},
+    )
+    # key order in the payload is not identity-bearing
+    assert base.content_identity == replace(base, payload={"a": 1, "b": 2}).content_identity
+
+    variants = [
+        replace(base, resource_generation=2),
+        replace(base, resource_digest="dg-2"),
+        replace(base, binding_id="sb_2"),
+        replace(base, authorization_version=2),
+        replace(base, payload={"a": 1, "b": 3}),
+        replace(base, resource_id="catalog:OrcaGradient"),
+        replace(base, job_id="j2"),
+        replace(base, attempt=2),
+        replace(base, permission_scope="scope-B"),
+    ]
+    identities = {base.content_identity} | {variant.content_identity for variant in variants}
+    keys = {base.idempotency_key} | {variant.idempotency_key for variant in variants}
+    assert len(identities) == len(variants) + 1
+    assert len(keys) == len(variants) + 1
+
+
+def test_content_identity_change_creates_a_new_operation(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    base = service.enqueue(
+        _request(generation=1, digest="dg-1", payload={"workflow": "Confsearch"})
+    )
+    newer = service.enqueue(
+        _request(generation=2, digest="dg-2", payload={"workflow": "Confsearch"})
+    )
+
+    assert base.operation_id != newer.operation_id
+    assert base.content_identity != newer.content_identity
+    assert len(service.list()) == 2
+    # same logical key, newest preparation returned by the logical lookup
+    assert service.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch") is not None
+    assert newer.operation_id == service.find(
+        job_id="j1", attempt=1, resource_id="catalog:Confsearch"
+    ).operation_id
+
+
+def test_enqueue_same_client_key_same_content_merges(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    request = _request(client_key="client-1")
+    first = service.enqueue(request)
+    second = service.enqueue(request)
+    assert first.operation_id == second.operation_id
+    assert second.client_idempotency_key == "client-1"
+    assert second.content_identity == first.content_identity
+    assert len(service.list()) == 1
+
+
+def test_same_client_key_different_params_conflicts_one_winner(tmp_path: Path) -> None:
+    db = tmp_path / "acp_jobs.db"
+    services = [_service(tmp_path), ops.PrepareOperationService(db, clock=FakeClock())]
+    barrier = threading.Barrier(2)
+    results: list[ops.PrepareOperationRecord] = []
+    errors: list[BaseException] = []
+
+    def _attempt(service: ops.PrepareOperationService, digest: str) -> None:
+        barrier.wait(timeout=10)
+        try:
+            results.append(service.enqueue(_request(client_key="shared", digest=digest)))
+        except BaseException as exc:  # noqa: BLE001 - asserted below
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=_attempt, args=(services[0], "dg-A")),
+        threading.Thread(target=_attempt, args=(services[1], "dg-B")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+
+    assert len(results) == 1, (results, errors)
+    assert len(errors) == 1 and isinstance(errors[0], ops.PrepareOperationConflictError), errors
+    assert len(services[0].list()) == 1
+    stored = services[0].list()[0]
+    assert stored.operation_id == results[0].operation_id
+    assert stored.client_idempotency_key == "shared"
+    for service in services:
+        service.close()
+
+
+def test_same_client_key_same_content_concurrent_merge_is_one_row(tmp_path: Path) -> None:
+    db = tmp_path / "acp_jobs.db"
+    services = [
+        ops.PrepareOperationService(db, clock=FakeClock(), retry_backoff_seconds=0.0),
+        ops.PrepareOperationService(db, clock=FakeClock(), retry_backoff_seconds=0.0),
+    ]
+    barrier = threading.Barrier(2)
+    results: list[ops.PrepareOperationRecord] = []
+
+    def _attempt(service: ops.PrepareOperationService) -> None:
+        barrier.wait(timeout=10)
+        results.append(service.enqueue(_request(client_key="shared", digest="dg-same")))
+
+    threads = [
+        threading.Thread(target=_attempt, args=(services[0],)),
+        threading.Thread(target=_attempt, args=(services[1],)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+
+    assert len(results) == 2
+    assert results[0].operation_id == results[1].operation_id
+    assert len(services[0].list()) == 1
+    for service in services:
+        service.close()
+
+
+def test_expired_same_client_key_same_content_starts_new_epoch(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    request = _request(client_key="reprepare")
+    first = service.enqueue(request)
+    expired = service.expire(first.operation_id, reason="cache_evicted")
+    assert expired.state is ops.PrepareState.EXPIRED
+    assert service.availability(first.operation_id).availability is dc.Availability.ABSENT
+
+    second = service.enqueue(request)
+    assert second.operation_id != first.operation_id
+    assert second.dedup_epoch == 1
+    assert second.client_idempotency_key == "reprepare"
+    assert second.content_identity == first.content_identity
+    assert service.get(first.operation_id).state is ops.PrepareState.EXPIRED
+    assert service.pending_count() == 1
+
+    with pytest.raises(ops.PrepareOperationConflictError):
+        service.enqueue(_request(client_key="reprepare", digest="dg-other"))
+
+
+def test_expired_same_client_key_different_content_conflicts(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    first = service.enqueue(_request(client_key="reprepare", digest="dg-A"))
+    service.expire(first.operation_id, reason="cache_evicted")
+
+    with pytest.raises(ops.PrepareOperationConflictError):
+        service.enqueue(_request(client_key="reprepare", digest="dg-B"))
+    assert service.get(first.operation_id).state is ops.PrepareState.EXPIRED
+    assert len(service.list()) == 1
+
+
+def test_legacy_empty_client_keys_do_not_collide(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    first = service.enqueue(_request(resource_id="catalog:Confsearch"))
+    second = service.enqueue(_request(resource_id="catalog:OrcaGradient"))
+    assert first.operation_id != second.operation_id
+    assert first.client_idempotency_key == ""
+    assert second.client_idempotency_key == ""
+    assert len(service.list()) == 2
+
+
+def test_prepare_migration_new_db_standalone(tmp_path: Path) -> None:
+    db = tmp_path / "prepare.db"
+    service = ops.PrepareOperationService(db, clock=FakeClock())
+    columns, indexes, tables = _prepare_schema(db)
+    assert columns[-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+    assert "idx_data_operations_client_key" in indexes
+    assert "WHERE client_idempotency_key <> ''" in str(indexes["idx_data_operations_client_key"])
+    assert _prepare_version(db) == 1
+    assert "data_operations" in tables
+    assert "jobs" not in tables and "tasks" not in tables, tables
+    service.close()
+
+
+def test_prepare_migration_old_prepare_only_db_is_conservative(tmp_path: Path) -> None:
+    db = tmp_path / "prepare.db"
+    _create_legacy_prepare_db(db)
+    assert "content_identity" not in _prepare_schema(db)[0]
+
+    reference_db = tmp_path / "reference.db"
+    ops.PrepareOperationService(reference_db, clock=FakeClock()).close()
+    reference_columns, reference_indexes, _ = _prepare_schema(reference_db)
+
+    service = ops.PrepareOperationService(db, clock=FakeClock())
+    try:
+        columns, indexes, tables = _prepare_schema(db)
+        # one canonical shape regardless of create-then-migrate vs migrate-old
+        assert columns == reference_columns
+        assert set(indexes) == set(reference_indexes)
+        assert columns[-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+        assert "idx_data_operations_client_key" in indexes
+        assert _prepare_version(db) == 1
+        assert "jobs" not in tables and "tasks" not in tables
+
+        legacy = service.get("op_legacy")
+        assert legacy is not None
+        assert legacy.content_identity == ""
+        assert legacy.client_idempotency_key == ""
+        assert legacy.dedup_epoch == 0
+        assert legacy.state is ops.PrepareState.SUCCEEDED
+        assert service.availability("op_legacy").availability is dc.Availability.UNAVAILABLE
+        assert service.availability("op_legacy").availability is not dc.Availability.READY
+        assert legacy.to_contract().availability is dc.Availability.UNAVAILABLE
+        assert legacy.to_contract().freshness is dc.Freshness.STALE
+
+        # old operation-id lookup still works; the logical lookup still finds it
+        found = service.find(job_id="old-job", attempt=1, resource_id="catalog:Confsearch")
+        assert found is not None
+        # a new enqueue with the same logical key starts a NEW content-addressed
+        # operation (never reuses the legacy success as the current one)
+        fresh = service.enqueue(_request(job_id="old-job", digest="dg-old"))
+        assert fresh.operation_id != "op_legacy"
+        assert fresh.content_identity != ""
+        assert len(service.list()) == 2
+    finally:
+        service.close()
+
+
+def test_prepare_migration_mixed_jobs_db_migrates_once(tmp_path: Path) -> None:
+    db = tmp_path / "acp_jobs.db"
+    assert migrate(db) > 0
+    conn = _sqlite(db)
+    try:
+        jobs_version = conn.execute("SELECT COUNT(*) FROM _schema_migrations").fetchone()[0]
+    finally:
+        conn.close()
+    assert _prepare_version(db) == 0
+
+    first = ops.PrepareOperationService(db, clock=FakeClock())
+    second = ops.PrepareOperationService(db, clock=FakeClock())
+    try:
+        conn = _sqlite(db)
+        try:
+            prepare_rows = conn.execute(
+                "SELECT COUNT(*) FROM _prepare_schema_migrations"
+            ).fetchone()[0]
+            jobs_rows = conn.execute("SELECT COUNT(*) FROM _schema_migrations").fetchone()[0]
+            assert prepare_rows == 1
+            assert jobs_rows == jobs_version
+        finally:
+            conn.close()
+        assert _prepare_version(db) == 1
+        op = first.enqueue(_request())
+        assert second.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch") is not None
+        assert op.content_identity != ""
+    finally:
+        first.close()
+        second.close()
+
+
+def test_prepare_migration_before_create_and_missing_table_not_marked(tmp_path: Path) -> None:
+    migrated_first = tmp_path / "migrated-first.db"
+    assert migrate_prepare_schema(migrated_first) is True
+    canonical = _prepare_schema(migrated_first)
+    assert canonical[0][-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+    service = ops.PrepareOperationService(migrated_first, clock=FakeClock())
+    service.close()
+    assert _prepare_schema(migrated_first) == canonical
+    assert _prepare_version(migrated_first) == 1
+
+    missing = tmp_path / "missing.db"
+    assert migrate_prepare_schema(missing, create_table=False) is False
+    assert "data_operations" not in _prepare_schema_allow_missing(missing)
+    assert _prepare_version(missing) == 0
+
+
+def _prepare_schema_allow_missing(db: Path) -> set[str]:
+    conn = _sqlite(db)
+    try:
+        return {
+            str(row["name"])
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+    finally:
+        conn.close()
+
+
+def test_two_concurrent_initializers_converge(tmp_path: Path) -> None:
+    db = tmp_path / "prepare.db"
+    code = (
+        "import sys\n"
+        "from acp_services.data.operations import PrepareOperationService\n"
+        "PrepareOperationService(sys.argv[1]).close()\n"
+    )
+    processes = [
+        subprocess.Popen([sys.executable, "-c", code, str(db)])
+        for _ in range(2)
+    ]
+    try:
+        for process in processes:
+            assert process.wait(timeout=60) == 0
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=10)
+
+    columns, indexes, tables = _prepare_schema(db)
+    assert columns[-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+    assert "idx_data_operations_client_key" in indexes
+    assert "jobs" not in tables and "tasks" not in tables
+    assert _prepare_version(db) == 1
+    conn = _sqlite(db)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM _prepare_schema_migrations").fetchone()[0] == 1
+    finally:
+        conn.close()

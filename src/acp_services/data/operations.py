@@ -14,10 +14,17 @@ authority and may be lost at any time without changing what happened.
 
 Frozen properties (all enforced by :class:`PrepareOperationService`):
 
-* **Stable idempotency key.**  ``op_`` + sha256(permission_scope + resource_key).
-  The permission scope is part of the key, so two observers holding different
-  scopes never share an operation — cancelling one observer's operation can
-  never kill another legitimate consumer's preparation of the same resource.
+* **Content-addressed idempotency.**  ``resource_key`` stays the logical
+  ``job/attempt/resource`` lookup key.  ``content_identity`` is a canonical
+  digest over scope/job/attempt/resource/kind/digest/generation/binding/
+  authorization/payload/workflow, and the idempotency key is
+  ``op_`` + sha256(permission_scope + resource_key + content_identity +
+  dedup_epoch).  A generation/digest/binding/authorization/payload change is
+  therefore a distinct operation, not a silent reuse.  The permission scope is
+  part of the key, so one observer's cancel never kills another observer's
+  preparation of the same resource.  An explicit ``client_idempotency_key``
+  reused with different content at the same epoch is rejected by the DB partial
+  unique index and surfaces as :class:`PrepareOperationConflictError`.
 * **State machine.**  ``queued`` → ``running`` → ``succeeded`` | ``failed`` |
   ``canceled`` | ``expired``.  A retryable failure returns to ``queued`` while
   its budget remains.
@@ -71,6 +78,7 @@ from acp_services.data.contracts import (
     ResourceKind,
     ResourceState,
 )
+from acp_services.store.migrations import migrate_prepare_schema
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +98,15 @@ __all__ = [
     "PrepareOperationError",
     "PrepareOperationNotFoundError",
     "PrepareOperationTerminalError",
+    "PrepareOperationConflictError",
     "PreparePublishRejectedError",
     "StaleLeaseError",
     "PrepareExecutorPort",
     "PrepareOperationService",
     "PrepareOperationWorker",
     "idempotency_key_for",
+    "content_identity_for",
+    "workflow_from_resource_id",
     "default_resource_key",
     "resolve_operation_state",
 ]
@@ -181,6 +192,16 @@ class PreparePublishRejectedError(PrepareOperationError):
     """
 
 
+class PrepareOperationConflictError(PrepareOperationError):
+    """An explicit client idempotency key was reused with different content.
+
+    The DB partial unique index ``(permission_scope, client_idempotency_key,
+    dedup_epoch)`` enforces this across connections/processes; the idempotency
+    hash alone cannot, because different parameters produce a different hash.
+    The stored row (and its audit meaning) is never rewritten.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Identity keys
 # ---------------------------------------------------------------------------
@@ -191,15 +212,26 @@ def default_resource_key(job_id: str, attempt: int, resource_id: str) -> str:
     return f"{job_id}\x1f{int(attempt)}\x1f{resource_id}"
 
 
-def idempotency_key_for(*, permission_scope: str, resource_key: str) -> str:
-    """Return the stable idempotency key of one scoped resource.
+def idempotency_key_for(
+    *,
+    permission_scope: str,
+    resource_key: str,
+    content_identity: str = "",
+    dedup_epoch: int = 0,
+) -> str:
+    """Return the idempotency key of one scoped prepare content.
 
-    The permission scope is folded into the key so a different authorization
-    scope yields a distinct operation for the same resource.  That is what keeps
-    one observer's cancel from killing another observer's legitimate preparation.
+    ``resource_key`` stays the logical ``job/attempt/resource`` lookup key; the
+    content identity and dedup epoch make the key name one *preparation* of
+    that resource.  Omitting the content identity keeps the legacy formula for
+    callers that only need a scope-folded key (e.g. MCP request idempotency).
+    The permission scope is folded in so one observer's cancel can never kill
+    another legitimate consumer's preparation.
     """
-    payload = f"{permission_scope}\x1f{resource_key}"
-    return "op_" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+    material = f"{permission_scope}\x1f{resource_key}"
+    if content_identity:
+        material += f"\x1f{content_identity}\x1f{int(dedup_epoch)}"
+    return "op_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +262,9 @@ class PrepareRequest:
     resource_generation: int = 0
     max_attempts: int = 3
     payload: Mapping[str, Any] | None = None
+    client_idempotency_key: str = ""
+    dedup_epoch: int = 0
+    content_identity: str = ""
 
     def __post_init__(self) -> None:
         if not str(self.job_id).strip():
@@ -240,6 +275,24 @@ class PrepareRequest:
             raise ValueError("resource_id must be a non-empty string")
         if int(self.max_attempts) < 1:
             raise ValueError("max_attempts must be >= 1")
+        if int(self.dedup_epoch) < 0:
+            raise ValueError("dedup_epoch must be >= 0")
+        object.__setattr__(
+            self,
+            "content_identity",
+            content_identity_for(
+                permission_scope=self.permission_scope,
+                job_id=self.job_id,
+                attempt=self.attempt,
+                resource_id=self.resource_id,
+                resource_kind=self.resource_kind,
+                resource_digest=self.resource_digest,
+                resource_generation=self.resource_generation,
+                binding_id=self.binding_id,
+                authorization_version=self.authorization_version,
+                payload=self.payload,
+            ),
+        )
 
     @property
     def key(self) -> str:
@@ -250,8 +303,13 @@ class PrepareRequest:
 
     @property
     def idempotency_key(self) -> str:
-        """The stable scoped idempotency key."""
-        return idempotency_key_for(permission_scope=self.permission_scope, resource_key=self.key)
+        """The scoped content idempotency key (content identity + epoch)."""
+        return idempotency_key_for(
+            permission_scope=self.permission_scope,
+            resource_key=self.key,
+            content_identity=self.content_identity,
+            dedup_epoch=self.dedup_epoch,
+        )
 
 
 @dataclass(frozen=True)
@@ -286,29 +344,40 @@ class PrepareOperationRecord:
     available_at: float
     size_bytes: int | None = None
     sha256: str | None = None
+    content_identity: str = ""
+    client_idempotency_key: str = ""
+    dedup_epoch: int = 0
 
     @property
     def is_terminal(self) -> bool:
         return self.state.value in _TERMINAL_STATES
+
+    @property
+    def is_legacy_identity(self) -> bool:
+        """True for pre-D05 rows: no content identity, never current-ready."""
+        return not self.content_identity
 
     def to_contract(self) -> PrepareOperation:
         """Project the row onto the frozen ``PrepareOperation`` wire shape."""
         error: Mapping[str, Any] | None = None
         if self.error_code is not None:
             error = {"code": self.error_code, "message": self.error_message or ""}
-        if self.state is PrepareState.SUCCEEDED:
+        if self.state is PrepareState.SUCCEEDED and not self.is_legacy_identity:
             freshness = Freshness.CURRENT
-        elif self.state in (PrepareState.QUEUED, PrepareState.RUNNING):
-            freshness = Freshness.UNKNOWN
+        elif self.state is PrepareState.SUCCEEDED:
+            freshness = Freshness.STALE
         else:
             freshness = Freshness.UNKNOWN
+        projected_availability = self.availability
+        if self.state is PrepareState.SUCCEEDED and self.is_legacy_identity:
+            projected_availability = Availability.UNAVAILABLE
         return PrepareOperation(
             operation_id=self.operation_id,
             idempotency_key=self.idempotency_key,
             resource_id=self.resource_id,
             resource_kind=ResourceKind(self.resource_kind),
             state=_STATE_TO_RESOURCE[self.state],
-            availability=self.availability,
+            availability=projected_availability,
             freshness=freshness,
             basis_revision=self.resource_generation,
             expected_revision=self.resource_generation,
@@ -410,43 +479,11 @@ class PrepareExecutorPort(Protocol):
 # ---------------------------------------------------------------------------
 # SQLite authority
 # ---------------------------------------------------------------------------
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS data_operations (
-    operation_id TEXT PRIMARY KEY,
-    idempotency_key TEXT NOT NULL UNIQUE,
-    job_id TEXT NOT NULL,
-    job_attempt INTEGER NOT NULL,
-    resource_id TEXT NOT NULL,
-    resource_kind TEXT NOT NULL,
-    resource_digest TEXT NOT NULL,
-    resource_key TEXT NOT NULL,
-    permission_scope TEXT NOT NULL,
-    state TEXT NOT NULL,
-    owner_generation INTEGER NOT NULL DEFAULT 0,
-    lease_token TEXT,
-    lease_expires_at REAL,
-    attempt_count INTEGER NOT NULL DEFAULT 0,
-    max_attempts INTEGER NOT NULL DEFAULT 3,
-    authorization_version INTEGER NOT NULL DEFAULT 0,
-    binding_id TEXT NOT NULL DEFAULT '',
-    resource_generation INTEGER NOT NULL DEFAULT 0,
-    availability TEXT NOT NULL DEFAULT 'absent',
-    error_code TEXT,
-    error_message TEXT,
-    result_json TEXT,
-    payload_json TEXT,
-    size_bytes INTEGER,
-    sha256 TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    available_at REAL NOT NULL DEFAULT 0.0
-);
-CREATE INDEX IF NOT EXISTS idx_data_operations_state
-    ON data_operations(state, available_at);
-CREATE INDEX IF NOT EXISTS idx_data_operations_key
-    ON data_operations(idempotency_key);
-"""
+#
+# The table DDL, additive columns and indexes live in ONE place —
+# ``acp_services.store.migrations.migrate_prepare_schema`` — so a standalone
+# prepare DB and a mixed jobs DB always converge on the same shape.  The
+# service calls that restricted migration entry from ``__init__``.
 
 _RECORD_COLUMNS = (
     "operation_id",
@@ -477,7 +514,69 @@ _RECORD_COLUMNS = (
     "created_at",
     "updated_at",
     "available_at",
+    "content_identity",
+    "client_idempotency_key",
+    "dedup_epoch",
 )
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    )
+
+
+def _canonical_digest(value: Any) -> str:
+    return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def workflow_from_resource_id(resource_id: str) -> str:
+    """Return the workflow embedded in a resource id (``catalog:Confsearch``)."""
+    head, separator, tail = str(resource_id).partition(":")
+    if separator and tail.strip():
+        return tail.strip()
+    return ""
+
+
+def content_identity_for(
+    *,
+    permission_scope: str,
+    job_id: str,
+    attempt: int,
+    resource_id: str,
+    resource_kind: str,
+    resource_digest: str = "",
+    resource_generation: int = 0,
+    binding_id: str = "",
+    authorization_version: int = 0,
+    payload: Mapping[str, Any] | None = None,
+) -> str:
+    """Return the canonical content identity of one prepare request (D05).
+
+    Covers every fact that can change the bytes a preparation produces, so a
+    generation/digest/binding/authorization/payload/workflow change always
+    yields a distinct identity (and therefore a distinct operation).  The key
+    is a stable digest of key-sorted canonical JSON — never an in-memory id.
+    """
+    kind = resource_kind.value if isinstance(resource_kind, Enum) else str(resource_kind)
+    facts = {
+        "permission_scope": str(permission_scope),
+        "job_id": str(job_id),
+        "attempt": int(attempt),
+        "resource_id": str(resource_id),
+        "resource_kind": kind,
+        "resource_digest": str(resource_digest),
+        "resource_generation": int(resource_generation),
+        "binding_id": str(binding_id),
+        "authorization_version": int(authorization_version),
+        "payload_digest": _canonical_digest(dict(payload or {})),
+        "workflow": workflow_from_resource_id(str(resource_id)),
+    }
+    return "ci_" + _canonical_digest(facts)
 
 
 def _utc_now_iso() -> str:
@@ -524,6 +623,10 @@ class PrepareOperationService:
     ) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not migrate_prepare_schema(self.db_path):
+            raise PrepareOperationError(
+                f"could not create/verify the prepare schema at {self.db_path}"
+            )
         self._lock = threading.RLock()
         self._default_max_attempts = max(1, int(default_max_attempts))
         self._default_lease_seconds = max(0.001, float(default_lease_seconds))
@@ -534,7 +637,6 @@ class PrepareOperationService:
         )
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA busy_timeout=5000")
-        self._conn.executescript(_SCHEMA)
 
     # -- lifecycle ------------------------------------------------------
 
@@ -584,6 +686,9 @@ class PrepareOperationService:
             available_at=float(row["available_at"]),
             size_bytes=row["size_bytes"],
             sha256=row["sha256"],
+            content_identity=str(row["content_identity"] or ""),
+            client_idempotency_key=str(row["client_idempotency_key"] or ""),
+            dedup_epoch=int(row["dedup_epoch"] or 0),
         )
 
     def _lease_from_row(self, row: sqlite3.Row) -> PrepareLease:
@@ -628,12 +733,18 @@ class PrepareOperationService:
         permission_scope: str = "local-single",
         resource_key: str = "",
     ) -> PrepareOperationRecord | None:
-        """Look an operation up by its dedup identity."""
+        """Look an operation up by its logical ``job/attempt/resource`` key.
+
+        The logical key is stable across content identities and dedup epochs;
+        the newest preparation row (highest epoch, then newest) is returned.
+        Operation-id lookups (:meth:`get`) are unaffected by this projection.
+        """
         key = resource_key or default_resource_key(job_id, attempt, resource_id)
-        idem = idempotency_key_for(permission_scope=permission_scope, resource_key=key)
         with self._lock:
             row = self._conn.execute(
-                "SELECT * FROM data_operations WHERE idempotency_key=?", (idem,)
+                "SELECT * FROM data_operations WHERE permission_scope=? AND resource_key=? "
+                "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
+                (permission_scope, key),
             ).fetchone()
             return self._record_from_row(row) if row is not None else None
 
@@ -682,7 +793,13 @@ class PrepareOperationService:
         record = self.get(operation_id)
         if record is None:
             raise PrepareOperationNotFoundError(f"no prepare operation {operation_id!r}")
-        if record.state is PrepareState.SUCCEEDED:
+        if record.state is PrepareState.SUCCEEDED and record.is_legacy_identity:
+            # A pre-D05 success has no content identity: its cached body was
+            # produced for an unknown content.  It must be revalidated/reprepared,
+            # never silently reused as the current READY resource.
+            availability = Availability.UNAVAILABLE
+            freshness = Freshness.STALE
+        elif record.state is PrepareState.SUCCEEDED:
             availability = record.availability
             freshness = Freshness.CURRENT
         elif record.state in (PrepareState.QUEUED, PrepareState.RUNNING):
@@ -702,48 +819,100 @@ class PrepareOperationService:
             expected_revision=record.resource_generation,
         )
 
-    # -- enqueue (dedup by stable key) ----------------------------------
+    # -- enqueue (dedup by content identity) ----------------------------
+
+    def _latest_identity_row_locked(
+        self, *, request: PrepareRequest, client_key: str
+    ) -> sqlite3.Row | None:
+        if client_key:
+            return self._conn.execute(
+                "SELECT * FROM data_operations WHERE permission_scope=? "
+                "AND client_idempotency_key=? "
+                "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
+                (request.permission_scope, client_key),
+            ).fetchone()
+        return self._conn.execute(
+            "SELECT * FROM data_operations WHERE permission_scope=? AND resource_key=? "
+            "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
+            (request.permission_scope, request.key),
+        ).fetchone()
+
+    def _merge_existing(
+        self,
+        record: PrepareOperationRecord,
+        request: PrepareRequest,
+        payload_json: str | None,
+        now: float,
+        iso: str,
+    ) -> PrepareOperationRecord:
+        if record.state is PrepareState.FAILED:
+            self._conn.execute(
+                "UPDATE data_operations SET state=?, owner_generation=owner_generation+1, "
+                "lease_token=NULL, lease_expires_at=NULL, attempt_count=0, available_at=?, "
+                "authorization_version=?, binding_id=?, resource_generation=?, "
+                "resource_digest=?, payload_json=?, error_code=NULL, error_message=NULL, "
+                "updated_at=? WHERE operation_id=?",
+                (
+                    PrepareState.QUEUED.value,
+                    now,
+                    int(request.authorization_version),
+                    request.binding_id,
+                    int(request.resource_generation),
+                    request.resource_digest,
+                    payload_json,
+                    iso,
+                    record.operation_id,
+                ),
+            )
+            row = self._get_row_locked(record.operation_id)
+            assert row is not None
+            return self._record_from_row(row)
+        return record
 
     def enqueue(self, request: PrepareRequest) -> PrepareOperationRecord:
-        """Enqueue one operation, deduplicating on the stable idempotency key.
+        """Enqueue one operation, deduplicating on content identity + epoch.
 
-        Returns the existing operation when the same scoped resource is already
-        known (one row / one execution).  A previously ``failed`` operation is
-        reset to ``queued`` with a fresh retry budget so a re-enqueue retries
-        rather than silently succeeding.
+        One logical request with the same content identity yields exactly one
+        row (a concurrent insert is merged via the DB constraints).  An explicit
+        ``client_idempotency_key`` reused for different content at the same
+        ``dedup_epoch`` is a :class:`PrepareOperationConflictError` enforced by
+        the partial unique index, never a silent rewrite of the stored row.  A
+        re-enqueue of an ``EXPIRED`` row with the same content starts a new
+        ``dedup_epoch + 1`` row and leaves the old failure/audit row intact.
         """
         now = self._clock()
         iso = _utc_now_iso()
         resource_key = request.key
-        idem = request.idempotency_key
+        client_key = str(request.client_idempotency_key or "").strip()
+        content_identity = request.content_identity
         payload_json = _json_dumps(request.payload)
+        epoch = int(request.dedup_epoch)
         with self._lock:
+            if epoch == 0:
+                latest = self._latest_identity_row_locked(request=request, client_key=client_key)
+                if latest is not None:
+                    record = self._record_from_row(latest)
+                    if record.content_identity == content_identity:
+                        if record.state is PrepareState.EXPIRED:
+                            epoch = record.dedup_epoch + 1
+                        else:
+                            return self._merge_existing(record, request, payload_json, now, iso)
+            idem = idempotency_key_for(
+                permission_scope=request.permission_scope,
+                resource_key=resource_key,
+                content_identity=content_identity,
+                dedup_epoch=epoch,
+            )
             existing = self._conn.execute(
                 "SELECT * FROM data_operations WHERE idempotency_key=?", (idem,)
             ).fetchone()
             if existing is not None:
                 record = self._record_from_row(existing)
-                if record.state is PrepareState.FAILED:
-                    self._conn.execute(
-                        "UPDATE data_operations SET state=?, owner_generation=owner_generation+1, "
-                        "lease_token=NULL, lease_expires_at=NULL, attempt_count=0, available_at=?, "
-                        "authorization_version=?, binding_id=?, resource_generation=?, "
-                        "resource_digest=?, payload_json=?, error_code=NULL, error_message=NULL, "
-                        "updated_at=? WHERE operation_id=?",
-                        (
-                            PrepareState.QUEUED.value,
-                            now,
-                            int(request.authorization_version),
-                            request.binding_id,
-                            int(request.resource_generation),
-                            request.resource_digest,
-                            payload_json,
-                            iso,
-                            record.operation_id,
-                        ),
-                    )
-                    return self._record_from_row(self._get_row_locked(record.operation_id))
-                return record
+                if record.content_identity == content_identity:
+                    return self._merge_existing(record, request, payload_json, now, iso)
+                raise PrepareOperationConflictError(
+                    f"idempotency key collision for {request.job_id!r} at epoch {epoch}"
+                )
 
             operation_id = "op_" + uuid.uuid4().hex
             params = (
@@ -775,6 +944,9 @@ class PrepareOperationService:
                 iso,
                 iso,
                 now,
+                content_identity,
+                client_key,
+                epoch,
             )
             columns = ", ".join(_RECORD_COLUMNS)
             placeholders = ", ".join("?" for _ in _RECORD_COLUMNS)
@@ -782,15 +954,53 @@ class PrepareOperationService:
                 self._conn.execute(
                     f"INSERT INTO data_operations ({columns}) VALUES ({placeholders})", params
                 )
-            except sqlite3.IntegrityError:
-                # Concurrent enqueue of the same scoped resource: adopt the winner.
-                row = self._conn.execute(
-                    "SELECT * FROM data_operations WHERE idempotency_key=?", (idem,)
-                ).fetchone()
-                if row is None:  # pragma: no cover - unique-constraint anomaly
-                    raise
-                return self._record_from_row(row)
+            except sqlite3.IntegrityError as exc:
+                return self._read_back_integrity_winner(
+                    exc,
+                    idem=idem,
+                    permission_scope=request.permission_scope,
+                    client_key=client_key,
+                    epoch=epoch,
+                    content_identity=content_identity,
+                )
             return self._record_from_row(self._get_row_locked(operation_id))
+
+    def _read_back_integrity_winner(
+        self,
+        exc: sqlite3.IntegrityError,
+        *,
+        idem: str,
+        permission_scope: str,
+        client_key: str,
+        epoch: int,
+        content_identity: str,
+    ) -> PrepareOperationRecord:
+        """Resolve a unique-constraint race: same content merges, else conflict."""
+        row = self._conn.execute(
+            "SELECT * FROM data_operations WHERE idempotency_key=?", (idem,)
+        ).fetchone()
+        if row is not None:
+            record = self._record_from_row(row)
+            if record.content_identity == content_identity:
+                return record
+            raise PrepareOperationConflictError(
+                f"concurrent enqueue conflict at epoch {epoch} for {permission_scope!r}"
+            )
+        if client_key:
+            row = self._conn.execute(
+                "SELECT * FROM data_operations WHERE permission_scope=? "
+                "AND client_idempotency_key=? AND dedup_epoch=?",
+                (permission_scope, client_key, epoch),
+            ).fetchone()
+            if row is not None:
+                record = self._record_from_row(row)
+                if record.content_identity == content_identity:
+                    return record
+                raise PrepareOperationConflictError(
+                    f"client idempotency key reused with different content "
+                    f"(scope={permission_scope!r}, epoch={epoch})"
+                )
+        raise exc
 
     # -- lease / heartbeat ----------------------------------------------
 
