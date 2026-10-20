@@ -323,15 +323,40 @@ class ReadOnlyResourceReader:
     def availability(self, request: AvailabilityRead) -> AvailabilitySnapshot:
         """Report availability/freshness/revision for one resource (no side effects).
 
-        Precedence: a prepared cache-index hit wins (the body is already
-        readable); otherwise the least-minimal undoable operation row is
-        reported; otherwise the resource is ``absent``.  Nothing is fetched,
-        enqueued or written on any branch.
+        Precedence: the operation row for the caller's expected identity is
+        authoritative whenever it exists.  A queued/running/failed/expired (or
+        identity-mismatched) operation suppresses a cache-index hit, so an old
+        cached body can never report READY for a newer current identity.  When
+        the operation is READY (or no operation exists) a prepared cache-index
+        hit wins; otherwise the operation projection is reported; otherwise the
+        resource is ``absent``.  Nothing is fetched, enqueued or written on any
+        branch.
         """
         observed_at = self._clock()
         root = self._resolver.resolve(request.job_id)
         if not root.found:
             return self._absent(request, observed_at, root, detail="job_not_found")
+
+        op_facts = self._operations.facts(request) if self._operations is not None else None
+        if (
+            op_facts is not None
+            and op_facts.exists
+            and op_facts.availability is not Availability.READY
+        ):
+            expected = int(op_facts.expected_revision) or int(request.expected_revision)
+            return AvailabilitySnapshot(
+                resource_id=request.resource_id,
+                availability=op_facts.availability,
+                freshness=op_facts.freshness,
+                basis_revision=int(op_facts.basis_revision),
+                expected_revision=expected,
+                observed_at=observed_at,
+                job_id=request.job_id,
+                is_remote=root.is_remote,
+                prepared_root=None,
+                size_bytes=None,
+                detail=op_facts.detail or "operation",
+            )
 
         if request.relative_path:
             facts = self._cache.entry(
@@ -354,6 +379,28 @@ class ReadOnlyResourceReader:
             prepared_root = root.path if ready else None
 
         if ready:
+            operation_generation = int(op_facts.expected_revision) if op_facts else 0
+            if (
+                op_facts is not None
+                and op_facts.exists
+                and op_facts.availability is Availability.READY
+                and operation_generation > 0
+                and int(basis_revision) > 0
+                and int(basis_revision) < operation_generation
+            ):
+                return AvailabilitySnapshot(
+                    resource_id=request.resource_id,
+                    availability=Availability.ABSENT,
+                    freshness=Freshness.STALE,
+                    basis_revision=int(basis_revision),
+                    expected_revision=operation_generation,
+                    observed_at=observed_at,
+                    job_id=request.job_id,
+                    is_remote=root.is_remote,
+                    prepared_root=None,
+                    size_bytes=None,
+                    detail="cache_generation_behind_operation",
+                )
             return AvailabilitySnapshot(
                 resource_id=request.resource_id,
                 availability=Availability.READY,
@@ -368,8 +415,7 @@ class ReadOnlyResourceReader:
                 detail="cache_index",
             )
 
-        if self._operations is not None:
-            op_facts = self._operations.facts(request)
+        if op_facts is not None:
             if op_facts.exists:
                 expected = int(op_facts.expected_revision) or int(request.expected_revision)
                 return AvailabilitySnapshot(

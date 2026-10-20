@@ -740,18 +740,71 @@ class PrepareOperationService:
     ) -> PrepareOperationRecord | None:
         """Look an operation up by its logical ``job/attempt/resource`` key.
 
-        The logical key is stable across content identities and dedup epochs;
-        the newest preparation row (highest epoch, then newest) is returned.
-        Operation-id lookups (:meth:`get`) are unaffected by this projection.
+        The logical key is stable across content identities and dedup epochs.
+        The *current* projection is ordered by the authoritative resource
+        generation first, then by epoch/insertion: a late request for an older
+        generation can therefore never displace a newer generation of the same
+        logical resource (D05 task 14).  Operation-id lookups (:meth:`get`)
+        remain exact row reads.
         """
         key = resource_key or default_resource_key(job_id, attempt, resource_id)
         with self._lock:
             row = self._conn.execute(
                 "SELECT * FROM data_operations WHERE permission_scope=? AND resource_key=? "
-                "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
+                "ORDER BY resource_generation DESC, dedup_epoch DESC, rowid DESC LIMIT 1",
                 (permission_scope, key),
             ).fetchone()
             return self._record_from_row(row) if row is not None else None
+
+    def find_by_identity(self, expected: PrepareRequest) -> PrepareOperationRecord | None:
+        """Locate the current operation for one frozen expected identity.
+
+        ``expected`` is the authoritative snapshot (content identity encodes
+        permission/job/attempt/resource/digest/generation/binding/authorization/
+        payload).  Selection rules (D05 task 14):
+
+        * an exact content-identity match is preferred; ordering by epoch and
+          insertion only chooses between retries of that *same* identity;
+        * if a strictly newer resource generation exists for the same logical
+          resource, the expected snapshot is stale and the newer generation row
+          is returned — a late generation-1 lookup can never roll back a
+          generation-2 resource;
+        * when no row matches and no newer generation exists, ``None`` is
+          returned (the expected identity has no preparation; callers must not
+          fall back to an unrelated content identity).
+
+        Operation-id lookups (:meth:`get`) stay exact and unaffected.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM data_operations WHERE permission_scope=? AND resource_key=? "
+                "ORDER BY resource_generation DESC, dedup_epoch DESC, rowid DESC",
+                (expected.permission_scope, expected.key),
+            ).fetchall()
+            if not rows:
+                return None
+            current = rows[0]
+            exact = next(
+                (
+                    row
+                    for row in rows
+                    if str(row["content_identity"] or "") == expected.content_identity
+                ),
+                None,
+            )
+            if exact is not None:
+                if int(exact["resource_generation"]) < int(current["resource_generation"]):
+                    # The expected snapshot names an older generation than one
+                    # already known: report the current generation, never the
+                    # stale one.
+                    return self._record_from_row(current)
+                return self._record_from_row(exact)
+            if int(current["resource_generation"]) > int(expected.resource_generation):
+                # Expected identity is absent at its generation, but the
+                # resource has moved on.  Returning the newer row keeps the
+                # current projection authoritative (never masked by the gap).
+                return self._record_from_row(current)
+            return None
 
     def list(
         self,
