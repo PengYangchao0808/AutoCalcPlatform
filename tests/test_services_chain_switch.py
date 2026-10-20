@@ -2367,3 +2367,158 @@ def test_t28_manager_restart_resumes_pending_publication_without_qc_or_cas(
         assert store.get(_JOB).revision == 0  # type: ignore[union-attr]
     finally:
         manager.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# 12. 07-D same-attempt protocol + archive discipline (todo 32)
+# ---------------------------------------------------------------------------
+
+
+def _t32_work(tmp_path: Path, *, attempt: int = 1) -> Path:
+    work = tmp_path / "task"
+    work.mkdir(parents=True)
+    env = _t26_env(_JOB, attempt=attempt)
+    write_frozen_attempt(work, _freeze_spec(envelope=env))
+    chain.write_attempt_choice(
+        work,
+        chain.AttemptExecutionChoice(
+            attempt=attempt,
+            workflow="singlepoint",
+            entry=chain.EXECUTION_ENTRY_ENVELOPE,
+            protocol=chain.EXECUTION_PROTOCOL_LOCAL,
+            closure="integrated",
+            release_id=_RELEASE,
+        ),
+    )
+    return work
+
+
+def test_t32_same_attempt_reuses_choice_group_and_claim_without_archive(
+    tmp_path: Path,
+) -> None:
+    work = _t32_work(tmp_path)
+    runtime = work.joinpath(*chain.RUNTIME_PROTOCOL_DIR)
+    (runtime / af.ATTEMPT_LOCK_FILENAME).write_text("{}", encoding="utf-8")
+    group_before = chain.load_frozen_group(work, expected_attempt=1)
+    record = _record("singlepoint", attempt=1)
+    runner = JobRunner(python_executable=sys.executable)
+
+    first = runner._resolve_attempt_choice(record, work)
+    second = runner._resolve_attempt_choice(record, work)
+
+    assert first == second
+    assert first.entry == chain.EXECUTION_ENTRY_ENVELOPE
+    assert chain.load_frozen_group(work, expected_attempt=1).manifest.identity_key == (
+        group_before.manifest.identity_key
+    )
+    assert (runtime / af.ATTEMPT_LOCK_FILENAME).is_file()
+    assert not (work / "WORK" / "00_RUNTIME" / "attempts").exists()
+    assert chain.read_attempt_choice(work) == first
+
+
+def test_t32_continue_archives_all_per_attempt_files_after_stop(
+    tmp_path: Path,
+) -> None:
+    manager, store, _runner, _run_root = _t27_manager(tmp_path)
+    try:
+        work = _t32_work(tmp_path)
+        runtime = work.joinpath(*chain.RUNTIME_PROTOCOL_DIR)
+        (runtime / af.ATTEMPT_LOCK_FILENAME).write_text("{}", encoding="utf-8")
+        (runtime / "run.lock").write_text("{}", encoding="utf-8")
+        (work / ".exit_code").write_text("1", encoding="utf-8")
+        (work / "state.json").write_text("{}", encoding="utf-8")
+        (work / "checkpoint.json").write_text("{}", encoding="utf-8")
+        (work / "RESULT").mkdir()
+        (work / "RESULT" / "result_manifest.json").write_text("{}", encoding="utf-8")
+        write_receipt_atomic(
+            work / "execution_receipt.json",
+            _t26_receipt(_t26_env(_JOB)),
+        )
+        (runtime / "task_result.json").write_text("{}", encoding="utf-8")
+        record = JobRecord(
+            id=_JOB,
+            spec=JobSpec(workflow="mechanism", name="t32", input={"smiles": "CCO"}),
+            status=JobStatus.FAILED,
+            work_dir=str(work),
+            attempt=1,
+        )
+        store.create(record)
+        submitted: list[str] = []
+        manager._execute_submission = lambda job_id: submitted.append(job_id)  # type: ignore[method-assign]
+
+        continued = manager.continue_job(_JOB)
+
+        assert continued.attempt == 2
+        assert continued.status == JobStatus.QUEUED
+        archive = work / "WORK" / "00_RUNTIME" / "attempts" / "1"
+        for rel in (
+            "execution_receipt.json",
+            ".exit_code",
+            "state.json",
+            "WORK/00_RUNTIME/execution_protocol.json",
+            "WORK/00_RUNTIME/frozen/envelope.json",
+            "WORK/00_RUNTIME/frozen/plan.json",
+            "WORK/00_RUNTIME/frozen/frozen_group.json",
+            "WORK/00_RUNTIME/attempt.lock",
+            "WORK/00_RUNTIME/task_result.json",
+            "WORK/00_RUNTIME/run.lock",
+        ):
+            assert (archive / rel).is_file(), rel
+        assert not (runtime / "execution_protocol.json").exists()
+        assert not (runtime / "frozen").exists()
+        assert not (runtime / af.ATTEMPT_LOCK_FILENAME).exists()
+        assert not (work / "execution_receipt.json").exists()
+        # Science stays in place on continue (adopted by the new attempt).
+        assert (work / "checkpoint.json").is_file()
+        assert (work / "RESULT" / "result_manifest.json").is_file()
+        assert not (archive / "RESULT").exists()
+    finally:
+        manager.shutdown()
+
+
+def test_t32_envelope_attempt_mismatch_is_typed(tmp_path: Path) -> None:
+    work = _t32_work(tmp_path, attempt=1)
+
+    with pytest.raises(chain.FrozenAttemptMismatchError, match="stale envelope"):
+        chain.load_frozen_group(work, expected_attempt=2)
+    assert chain.frozen_artifacts_present(work, expected_attempt=2) is False
+
+
+def test_t32_missing_or_corrupt_artifacts_after_choice_never_fall_back_to_legacy(
+    tmp_path: Path,
+) -> None:
+    runner = JobRunner(python_executable=sys.executable)
+    record = _record("singlepoint", attempt=1)
+
+    missing = _t32_work(tmp_path / "missing")
+    (missing / "WORK" / "00_RUNTIME" / "frozen" / "plan.json").unlink()
+    with pytest.raises(FileNotFoundError):
+        runner._build_execution_cmd(record, missing, "CCO", {})
+
+    corrupt = _t32_work(tmp_path / "corrupt")
+    protocol = corrupt.joinpath(*chain.RUNTIME_PROTOCOL_DIR, chain.ATTEMPT_PROTOCOL_FILENAME)
+    protocol.write_text("{not-json", encoding="utf-8")
+    with pytest.raises(chain.AttemptProtocolError):
+        chain.read_attempt_choice(corrupt)
+    with pytest.raises(chain.AttemptProtocolError):
+        runner._build_execution_cmd(record, corrupt, "CCO", {})
+
+
+def test_t32_completed_job_is_rerun_not_continue(tmp_path: Path) -> None:
+    manager, store, _runner, _run_root = _t27_manager(tmp_path)
+    try:
+        work = tmp_path / "task"
+        work.mkdir()
+        record = JobRecord(
+            id=_JOB,
+            spec=JobSpec(workflow="mechanism", name="t32-done", input={"smiles": "CCO"}),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work),
+            attempt=1,
+        )
+        store.create(record)
+        with pytest.raises(ValueError, match="FAILED or CANCELLED"):
+            manager.continue_job(_JOB)
+        assert store.get(_JOB).status == JobStatus.COMPLETED  # type: ignore[union-attr]
+    finally:
+        manager.shutdown()

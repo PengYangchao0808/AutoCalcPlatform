@@ -66,8 +66,10 @@ __all__ = [
     "RUNTIME_PROTOCOL_DIR",
     "WORKER_MODULE",
     "AttemptExecutionChoice",
+    "AttemptProtocolError",
     "ExecutionLaunch",
     "ExecutionEntrySelection",
+    "FrozenAttemptMismatchError",
     "FrozenGroup",
     "FrozenGroupError",
     "FrozenGroupManifest",
@@ -257,6 +259,10 @@ def select_execution_entry(
 # ── per-attempt protocol record ─────────────────────────────────────────────
 
 
+class AttemptProtocolError(ValueError):
+    """The per-attempt protocol record exists but cannot be decoded safely."""
+
+
 @dataclass(frozen=True)
 class AttemptExecutionChoice:
     """The entry/protocol frozen on one attempt (the unique-dispatch record)."""
@@ -333,20 +339,36 @@ def _protocol_path(work_dir: Path | str) -> Path:
 
 
 def read_attempt_choice(work_dir: Path | str) -> AttemptExecutionChoice | None:
-    """Read the attempt protocol record from *work_dir* (``None`` when absent)."""
+    """Read the attempt protocol record from *work_dir* (``None`` when absent).
+
+    A present-but-corrupt record is a typed :class:`AttemptProtocolError`, not
+    ``None``: once an attempt's entry was frozen, a damaged record must fail the
+    dispatch rather than silently re-selecting (possibly legacy) entry.
+    """
     target = _protocol_path(work_dir)
     if not target.is_file():
         return None
     try:
         payload = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+    except (OSError, ValueError) as exc:
+        raise AttemptProtocolError(
+            f"attempt protocol record unreadable at {target}: {exc}"
+        ) from exc
     if not isinstance(payload, Mapping):
-        return None
+        raise AttemptProtocolError(f"attempt protocol record at {target} is not a mapping")
     try:
-        return AttemptExecutionChoice.from_dict(payload)
-    except (TypeError, ValueError):
-        return None
+        choice = AttemptExecutionChoice.from_dict(payload)
+    except (TypeError, ValueError) as exc:
+        raise AttemptProtocolError(
+            f"attempt protocol record at {target} is invalid: {exc}"
+        ) from exc
+    if choice.schema != CURRENT_SWITCH_SCHEMA:
+        raise AttemptProtocolError(
+            f"attempt protocol record at {target} has unsupported schema {choice.schema}"
+        )
+    if not choice.workflow or not choice.entry or not choice.protocol or choice.attempt < 1:
+        raise AttemptProtocolError(f"attempt protocol record at {target} is incomplete")
+    return choice
 
 
 def write_attempt_choice(work_dir: Path | str, choice: AttemptExecutionChoice) -> Path:
@@ -397,6 +419,10 @@ def with_attempt_choice(
 
 class FrozenGroupError(Exception):
     """The frozen-attempt input group is absent, incomplete or tampered."""
+
+
+class FrozenAttemptMismatchError(FrozenGroupError):
+    """A valid frozen group belongs to a different attempt than the current one."""
 
 
 @dataclass(frozen=True)
@@ -627,12 +653,16 @@ def inspect_frozen_group_dir(directory: Path | str) -> FrozenGroup:
     return FrozenGroup(directory=target, manifest=manifest)
 
 
-def load_frozen_group(work_dir: Path | str) -> FrozenGroup:
+def load_frozen_group(
+    work_dir: Path | str, *, expected_attempt: int | None = None
+) -> FrozenGroup:
     """Strict local reader: complete, hash-verified, exactly-membered group.
 
     The group directory must contain exactly the manifest-listed members plus
     the manifest itself — anything else is a mixed group and is rejected
-    without partial adoption.
+    without partial adoption.  When *expected_attempt* is supplied, a valid
+    group from another attempt is a typed :class:`FrozenAttemptMismatchError`
+    (never silently reused or re-selected).
     """
     group = inspect_frozen_group_dir(frozen_group_dir(work_dir))
     expected = set(group.manifest.member_digests) | {FROZEN_GROUP_MANIFEST_FILENAME}
@@ -643,6 +673,11 @@ def load_frozen_group(work_dir: Path | str) -> FrozenGroup:
         raise FrozenGroupError(
             f"frozen group directory is mixed (extra={extra}, missing={missing}); "
             "refusing partial adoption"
+        )
+    if expected_attempt is not None and group.manifest.attempt != int(expected_attempt):
+        raise FrozenAttemptMismatchError(
+            f"frozen group attempt {group.manifest.attempt} != current attempt "
+            f"{expected_attempt}; refusing to reuse a stale envelope"
         )
     return group
 
@@ -660,16 +695,19 @@ class ExecutionLaunch:
     binding_path: str | None = None
 
 
-def frozen_artifacts_present(work_dir: Path | str) -> bool:
+def frozen_artifacts_present(
+    work_dir: Path | str, *, expected_attempt: int | None = None
+) -> bool:
     """True when a complete, hash-verified frozen group exists under *work_dir*.
 
     ``frozen_group.json`` is the sole commit marker: an envelope/plan pair
     without it, a group with a missing/tampered member, or a mixed directory
     all read as absent — the dispatcher then deterministically selects the
-    legacy entry instead of adopting a partial freeze.
+    legacy entry instead of adopting a partial freeze.  A valid group for a
+    different attempt is absent for *this* attempt.
     """
     try:
-        load_frozen_group(work_dir)
+        load_frozen_group(work_dir, expected_attempt=expected_attempt)
     except FrozenGroupError:
         return False
     return True
@@ -686,7 +724,9 @@ def local_launch(work_dir: Path | str, choice: AttemptExecutionChoice) -> Execut
     if choice.entry != EXECUTION_ENTRY_ENVELOPE:
         raise ValueError(f"attempt {choice.attempt} did not select the envelope entry")
     try:
-        group = load_frozen_group(work_dir)
+        group = load_frozen_group(work_dir, expected_attempt=choice.attempt)
+    except FrozenAttemptMismatchError:
+        raise
     except FrozenGroupError as exc:
         raise FileNotFoundError(
             f"no complete frozen group under {frozen_group_dir(work_dir)} "

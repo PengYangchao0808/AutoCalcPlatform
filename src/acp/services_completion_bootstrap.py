@@ -25,13 +25,14 @@ from pathlib import Path
 from typing import Any
 
 from acp_services.runtime.attempt_completion import (
+    AttemptCompletionError,
     AttemptCompletionService,
     AttemptPublicationPort,
     AttemptSnapshot,
     AttemptSnapshotReader,
 )
 from acp_services.runtime.execution_chain import FrozenGroupError, load_frozen_group
-from acp_services.worker_bootstrap import load_frozen_envelope
+from acp_services.worker_bootstrap import FrozenEnvelopeDecodeError, load_frozen_envelope
 
 __all__ = [
     "FrozenGroupSnapshotReader",
@@ -88,8 +89,11 @@ class FrozenGroupSnapshotReader:
             group = load_frozen_group(work_dir)
         except FrozenGroupError:
             return None
-        envelope = load_frozen_envelope(group.envelope_path)
-        return AttemptSnapshot.from_record(record, envelope)
+        try:
+            envelope = load_frozen_envelope(group.envelope_path)
+            return AttemptSnapshot.from_record(record, envelope)
+        except (FrozenEnvelopeDecodeError, AttemptCompletionError):
+            return None
 
 
 def build_job_state_advance_port(store: Any) -> JobStoreAdvancePort:

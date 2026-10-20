@@ -734,3 +734,68 @@ def test_lost_bsub_reply_reconciles_without_second_bsub(tmp_path):
         assert harness.bsub_calls == 1, "reconcile must never re-run bsub"
     finally:
         harness.close()
+
+
+@requires_remote
+def test_continue_remote_archives_frozen_group_protocol_claim_and_receipts(tmp_path):
+    """The remote adopt_results=True branch archives every attempt-scoped file.
+
+    Science (checkpoint/RESULT) stays in place for adoption, but the old
+    protocol record, frozen group, claim, worker receipt and task_result must
+    leave the execution namespace before the new attempt's bsub.
+    """
+    harness = _RunnerHarness(str(tmp_path))
+    try:
+        record, event_log, remote_dir = harness.make_record("arch-continue")
+        record.attempt = 2
+        meta = dict((record.result or {}).get("remote") or {})
+        meta["resume"] = True
+        record.result = {**(record.result or {}), "remote": meta}
+        node = harness.node
+        runtime = posixpath.join(remote_dir, "WORK", "00_RUNTIME")
+        frozen = posixpath.join(runtime, "frozen")
+        seeded = (
+            "execution_receipt.json",
+            ".exit_code",
+            "state.json",
+            posixpath.join("WORK", "00_RUNTIME", "execution_protocol.json"),
+            posixpath.join("WORK", "00_RUNTIME", "attempt.lock"),
+            posixpath.join("WORK", "00_RUNTIME", "task_result.json"),
+            posixpath.join("WORK", "00_RUNTIME", "run.lock"),
+            posixpath.join("WORK", "00_RUNTIME", "frozen", "envelope.json"),
+            posixpath.join("WORK", "00_RUNTIME", "frozen", "plan.json"),
+            posixpath.join("WORK", "00_RUNTIME", "frozen", "binding.json"),
+            posixpath.join("WORK", "00_RUNTIME", "frozen", "frozen_group.json"),
+        )
+        for rel in seeded:
+            harness.sftp.files[posixpath.join(remote_dir, rel)] = b"x"
+        for directory in (
+            remote_dir,
+            posixpath.join(remote_dir, "WORK"),
+            runtime,
+            frozen,
+            posixpath.join(remote_dir, "RESULT"),
+        ):
+            harness.sftp.dirs.add(directory)
+        checkpoint = posixpath.join("checkpoint.json")
+        manifest = posixpath.join("RESULT", "result_manifest.json")
+        harness.sftp.files[posixpath.join(remote_dir, checkpoint)] = b"{}"
+        harness.sftp.files[posixpath.join(remote_dir, manifest)] = b"{}"
+
+        with _connected(harness):
+            harness.runner._archive_remote_attempt(
+                node, remote_dir, record, event_log, disposition="reused"
+            )
+
+        archive = posixpath.join(remote_dir, "WORK", "00_RUNTIME", "attempts", "1")
+        for rel in seeded:
+            assert posixpath.join(archive, rel) in harness.sftp.files, rel
+            assert posixpath.join(remote_dir, rel) not in harness.sftp.files, rel
+        assert posixpath.join(remote_dir, checkpoint) in harness.sftp.files
+        assert posixpath.join(remote_dir, manifest) in harness.sftp.files
+        event = [
+            item for item in event_log.read_all() if item.get("type") == "remote.attempts_archived"
+        ]
+        assert event and event[-1].get("adopted_results") is True
+    finally:
+        harness.close()

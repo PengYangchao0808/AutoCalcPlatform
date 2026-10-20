@@ -86,15 +86,27 @@ from acp_services.data.operations import (
     PrepareOperationWorker,
     PrepareRequest,
 )
+from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
 from acp_services.runtime.execution_chain import (
+    ATTEMPT_PROTOCOL_FILENAME,
+    BINDING_FILENAME,
+    ENVELOPE_FILENAME,
     EXECUTION_ENTRY_ENVELOPE,
+    FROZEN_GROUP_DIRNAME,
+    FROZEN_GROUP_MANIFEST_FILENAME,
+    PLAN_FILENAME,
+    AttemptProtocolError,
     attempt_choice_from_result,
     read_attempt_choice,
 )
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 from acp_services.runtime.outbox import OutboxDeliveryResult, OutboxEventSpec
 from acp_services.runtime.receipts import verify_receipt
-from acp_services.runtime.worker import ReceiptConflictError, read_receipt
+from acp_services.runtime.worker import (
+    TASK_RESULT_RELATIVE_PATH,
+    ReceiptConflictError,
+    read_receipt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1723,7 +1735,31 @@ class JobManager:
         for name in (".exit_code", "state.json"):
             _archive(work_dir / name, archive_root / name)
         runtime = work_dir / "WORK" / "00_RUNTIME"
-        _archive(runtime / "run.lock", archive_root / "WORK" / "00_RUNTIME" / "run.lock")
+        runtime_archive = archive_root / "WORK" / "00_RUNTIME"
+        _archive(runtime / "run.lock", runtime_archive / "run.lock")
+        # 07-D: every envelope/execution record is attempt-scoped.  The
+        # continue path (include_science=False) keeps checkpoint/step_result/
+        # RESULT for adoption but must not leave the old choice, group, claim
+        # or worker receipts visible to the new attempt.
+        _archive(work_dir / "execution_receipt.json", archive_root / "execution_receipt.json")
+        _archive(
+            runtime / ATTEMPT_PROTOCOL_FILENAME,
+            runtime_archive / ATTEMPT_PROTOCOL_FILENAME,
+        )
+        _archive(
+            runtime / FROZEN_GROUP_DIRNAME,
+            runtime_archive / FROZEN_GROUP_DIRNAME,
+        )
+        for name in (
+            ENVELOPE_FILENAME,
+            PLAN_FILENAME,
+            BINDING_FILENAME,
+            FROZEN_GROUP_MANIFEST_FILENAME,
+        ):
+            _archive(runtime / name, runtime_archive / name)
+        _archive(runtime / ATTEMPT_LOCK_FILENAME, runtime_archive / ATTEMPT_LOCK_FILENAME)
+        task_result_name = TASK_RESULT_RELATIVE_PATH[-1]
+        _archive(runtime / task_result_name, runtime_archive / task_result_name)
         if not include_science:
             return
         _archive(work_dir / "checkpoint.json", archive_root / "checkpoint.json")
@@ -2756,6 +2792,12 @@ class JobManager:
                     f"job {job_id} still has a live process tracked by the runner; "
                     "refusing to re-enter (possible zombie)"
                 )
+            killed = self._terminate_stale_task_processes(record)
+            if self._has_live_task_process(record):
+                raise ValueError(
+                    f"job {job_id} still has live process(es) in its task directory; "
+                    "refusing to continue — terminate them first"
+                )
             if job_id in self._submission_jobs:
                 raise ValueError(f"job {job_id} is already being submitted")
 
@@ -2868,6 +2910,7 @@ class JobManager:
             attempt=attempts,
             attempts=attempts,
             workflow=workflow,
+            killed_pids=killed,
         )
         self._start_submission_thread(job_id, f"acp-continue-{job_id}")
         return record
@@ -5270,10 +5313,23 @@ class JobManager:
         ):
             return False
         work_dir = Path(record.work_dir)
+        cancel_intent = record.status == JobStatus.CANCELLING or cancel_event.is_set()
         try:
             choice = read_attempt_choice(work_dir)
-        except (OSError, ValueError):
-            choice = None
+        except AttemptProtocolError as exc:
+            if cancel_intent:
+                return False
+            self._cas_envelope_failure(
+                record,
+                job_id,
+                loaded_revision,
+                loaded_attempt,
+                exit_code,
+                "attempt_protocol_corrupt",
+                str(exc),
+                event_log,
+            )
+            return True
         if choice is None:
             choice = attempt_choice_from_result(record.result)
         if (
@@ -5286,7 +5342,6 @@ class JobManager:
         from acp.services_completion_bootstrap import FrozenGroupSnapshotReader
 
         snapshot = FrozenGroupSnapshotReader(self.store).read(job_id)
-        cancel_intent = record.status == JobStatus.CANCELLING or cancel_event.is_set()
         if snapshot is None or snapshot.envelope is None:
             if cancel_intent:
                 return False
