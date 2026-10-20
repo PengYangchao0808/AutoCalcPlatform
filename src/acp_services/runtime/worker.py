@@ -56,6 +56,7 @@ from acp_services.runtime.receipt_identity import (
     ReceiptIdentityError,
     compare_receipt_identity,
 )
+from cccp.analysis.identity import identity_fingerprint
 
 __all__ = [
     "JOB_STATUS_BY_RECEIPT_STATE",
@@ -90,6 +91,8 @@ __all__ = [
     "build_receipt",
     "decide_task_result",
     "decision_for_failure",
+    "frozen_plan_body_digest",
+    "frozen_plan_to_dict",
     "job_status_for_receipt",
     "outcome_from_decision",
     "outcome_from_task_result",
@@ -167,6 +170,45 @@ class FrozenPlan:
     steps: tuple[FrozenStep, ...] = ()
     item_symbols: tuple[str, ...] = ()
     identity: FrozenPlanIdentity | None = None
+
+
+def frozen_plan_body_digest(plan: FrozenPlan) -> str:
+    """Recompute the content-free body digest of a frozen plan.
+
+    Covers exactly the dispatched body (``payload`` + ordered ``steps`` +
+    ``item_symbols``) and excludes the opaque declared science identity — the
+    digest is the tamper anchor the composition root recomputes, never trusts.
+
+    Single implementation home (07-A / todo 24): the worker composition root
+    (:mod:`acp_services.worker_bootstrap`) re-exports it, and the frozen-attempt
+    producer (:mod:`acp_services.runtime.attempt_freeze`) imports it from here
+    so the producer and the verifier can never drift apart.
+    """
+    return identity_fingerprint(
+        {
+            "scope": "frozen-plan",
+            "payload": dict(plan.payload),
+            "steps": [{"kind": step.kind, "payload": dict(step.payload)} for step in plan.steps],
+            "item_symbols": list(plan.item_symbols),
+        }
+    )
+
+
+def frozen_plan_to_dict(plan: FrozenPlan) -> dict[str, Any]:
+    """Serialise *plan* to its frozen wire form (JSON-safe, single home)."""
+    identity: dict[str, Any] | None = None
+    if plan.identity is not None:
+        identity = {
+            "plan_digest": plan.identity.plan_digest,
+            "plan_identity": plan.identity.plan_identity,
+            "step_identities": list(plan.identity.step_identities),
+        }
+    return {
+        "payload": dict(plan.payload),
+        "steps": [{"kind": step.kind, "payload": dict(step.payload)} for step in plan.steps],
+        "item_symbols": list(plan.item_symbols),
+        "identity": identity,
+    }
 
 
 # ── execution seam dataclasses ──────────────────────────────────────────────
@@ -1246,6 +1288,7 @@ class FrozenWorker:
         storage_binding: StorageBinding | None = None,
         prior_steps: Sequence[Any] = (),
         item_symbols: Sequence[str] | None = None,
+        before_write: Callable[[], None] | None = None,
     ) -> ExecutionReceipt:
         """Execute the attempt once and return the (atomically written) receipt.
 
@@ -1257,6 +1300,11 @@ class FrozenWorker:
         so a tampered plan body, a plan/envelope identity mismatch, or a
         prerequisite gate failure is rejected before a stale receipt can be
         mistaken for the current attempt's result.
+
+        ``before_write`` is the execution-right write seam (07-A): the caller
+        re-checks that it still holds the exclusive right immediately before
+        the authoritative receipt is published and raises otherwise.  A
+        worker that lost the right therefore never writes this path.
         """
         existing = read_receipt(receipt_path)
         self.validate(envelope, plan, prior_steps=prior_steps, item_symbols=item_symbols)
@@ -1270,6 +1318,8 @@ class FrozenWorker:
             storage_binding=storage_binding,
         )
         outcome = self.executor.execute(scope)
+        if before_write is not None:
+            before_write()
         receipt = build_receipt(envelope, outcome)
         write_receipt_atomic(receipt_path, receipt)
         return receipt
