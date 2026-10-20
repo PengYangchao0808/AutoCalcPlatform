@@ -25,7 +25,16 @@ from cccp.analysis.bounded.chunking import (
 )
 from cccp.analysis.bounded.errors import BoundedSchemaError as BoundedSchemaError
 from cccp.analysis.bounded.identity import (
+    BOUNDED_IDENTITY_RULE_VERSION as BOUNDED_IDENTITY_RULE_VERSION,
+)
+from cccp.analysis.bounded.identity import (
     BOUNDED_SCHEMA_VERSION as BOUNDED_SCHEMA_VERSION,
+)
+from cccp.analysis.bounded.identity import (
+    LEGACY_BOUNDED_IDENTITY_RULE_VERSION as LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
+)
+from cccp.analysis.bounded.identity import (
+    LEGACY_BOUNDED_SCHEMA_VERSION as LEGACY_BOUNDED_SCHEMA_VERSION,
 )
 from cccp.analysis.bounded.identity import (
     GENERATOR_CHUNK as GENERATOR_CHUNK,
@@ -53,6 +62,9 @@ from cccp.analysis.bounded.identity import (
 )
 from cccp.analysis.bounded.identity import (
     bounded_identity as bounded_identity,
+)
+from cccp.analysis.bounded.identity import (
+    source_identity_digest as source_identity_digest,
 )
 from cccp.analysis.bounded.manifest import (
     DISPLAY_SAMPLING_NOTE as DISPLAY_SAMPLING_NOTE,
@@ -104,7 +116,10 @@ from cccp.analysis.bounded.subsampling import (
 )
 
 __all__ = [
+    "BOUNDED_IDENTITY_RULE_VERSION",
     "BOUNDED_SCHEMA_VERSION",
+    "LEGACY_BOUNDED_IDENTITY_RULE_VERSION",
+    "LEGACY_BOUNDED_SCHEMA_VERSION",
     "DEFAULT_KEY_POINTS",
     "DISPLAY_SAMPLING_NOTE",
     "GENERATOR_CHUNK",
@@ -124,6 +139,7 @@ __all__ = [
     "BoundedSpec",
     "KeyPointRetention",
     "bounded_identity",
+    "source_identity_digest",
     "build_multiresolution_product",
     "chunk_curve_product",
     "chunk_trajectory_product",

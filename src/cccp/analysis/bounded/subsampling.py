@@ -22,6 +22,7 @@ from cccp.analysis.bounded.identity import (
     METHOD_STRIDE,
     BoundedSpec,
     bounded_identity,
+    source_identity_digest,
 )
 from cccp.analysis.bounded.manifest import (
     DISPLAY_SAMPLING_NOTE,
@@ -50,7 +51,7 @@ __all__ = [
     "subsample_curve_product",
 ]
 
-_ALGORITHM_VERSION = "1"
+_ALGORITHM_VERSION = "2"
 
 #: Scientific key point selectors (min/max energy, local minima, endpoints).
 KEY_GLOBAL_MIN = "global_min_y"
@@ -221,6 +222,7 @@ def subsample_curve_product(  # noqa: PLR0913 - explicit scientific options
         message = "subsample_curve_product requires an available product"
         raise BoundedSchemaError(message)
     base_identity: ProductIdentity = product.identity
+    source_digest = source_identity_digest(base_identity)
     payload = product.payload
     if not isinstance(payload, CurveScatterPayload):
         message = "subsample_curve_product requires a curve_scatter payload"
@@ -244,6 +246,7 @@ def subsample_curve_product(  # noqa: PLR0913 - explicit scientific options
             ("key_points", list(kinds)),
             ("retain_key_points", bool(retain_key_points)),
         ),
+        source_identity_digest=source_digest,
     )
     identity = bounded_identity(base_identity, spec, generator=GENERATOR_SUBSAMPLE)
 
@@ -262,6 +265,7 @@ def subsample_curve_product(  # noqa: PLR0913 - explicit scientific options
         end=count,
         resolution=stride,
         product=level_product,
+        source_identity_digest=source_digest,
     )
     retention = _retention_records(
         points,

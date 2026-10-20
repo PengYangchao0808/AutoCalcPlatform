@@ -27,7 +27,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from cccp.analysis.bounded.errors import BoundedSchemaError
-from cccp.analysis.bounded.identity import BOUNDED_SCHEMA_VERSION, BoundedSpec
+from cccp.analysis.bounded.identity import (
+    BOUNDED_IDENTITY_RULE_VERSION,
+    BOUNDED_SCHEMA_VERSION,
+    LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
+    LEGACY_BOUNDED_SCHEMA_VERSION,
+    BoundedSpec,
+    source_identity_digest,
+)
 from cccp.calculation.contracts import (
     JsonObject,
     parse_bool_strict,
@@ -206,13 +213,20 @@ class KeyPointRetention:
 
 @dataclass(frozen=True, slots=True)
 class BoundedBlock:
-    """One bounded block: an original-index range plus its real C02 product."""
+    """One bounded block: an original-index range plus its real C02 product.
+
+    ``source_identity_digest`` mirrors the full source identity folded into the
+    block's own derived product identity (identity rule v2).  It is empty only
+    on historical (v1) manifests, which remain readable but are not adoptable
+    as current cache/recovery identities.
+    """
 
     block_index: int
     start: int
     end: int
     resolution: int
     product: ScienceProduct
+    source_identity_digest: str = ""
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -233,6 +247,10 @@ class BoundedBlock:
         if not isinstance(self.product, ScienceProduct):
             message = "block.product must be a ScienceProduct"
             raise BoundedSchemaError(message)
+        if not isinstance(self.source_identity_digest, str):
+            message = "block.source_identity_digest must be a string"
+            raise BoundedSchemaError(message)
+        object.__setattr__(self, "source_identity_digest", str(self.source_identity_digest).strip())
 
     def item_count(self) -> int:
         """Number of points/frames actually carried by the block's product."""
@@ -240,13 +258,16 @@ class BoundedBlock:
 
     def to_dict(self) -> JsonObject:
         """Serialise to a JSON-safe dict (block product via the C02 writer)."""
-        return {
+        payload: JsonObject = {
             "block_index": self.block_index,
             "start": self.start,
             "end": self.end,
             "resolution": self.resolution,
             "product": product_to_dict(self.product),
         }
+        if self.source_identity_digest:
+            payload["source_identity_digest"] = self.source_identity_digest
+        return payload
 
     @classmethod
     def from_dict(cls, payload: object | None) -> BoundedBlock:
@@ -268,6 +289,7 @@ class BoundedBlock:
             end=parse_int_strict(payload, "end"),  # type: ignore[arg-type]
             resolution=parse_int_strict(payload, "resolution"),  # type: ignore[arg-type]
             product=product_from_dict(raw_product),
+            source_identity_digest=parse_str_strict(payload, "source_identity_digest") or "",
         )
 
 
@@ -278,6 +300,12 @@ class BoundedProduct:
     ``blocks`` are the bounded pieces (each a real C02 product); ``identity``
     is the derived bounded identity; ``base_identity`` is the source product's
     identity; ``display_subsampled`` plus ``note`` label a display sampling.
+
+    ``schema_version`` 2 uses identity rule v2 (the full source identity is
+    part of the derived identity); schema version 1 is the read-only legacy
+    shape.  Historical manifests stay readable and round-trip byte-equivalently,
+    but :meth:`is_cache_adoptable` is ``False`` for them so they are never
+    reused as current cache/recovery identities (D10).
     """
 
     identity: ProductIdentity
@@ -300,10 +328,14 @@ class BoundedProduct:
             message = "spec must be a BoundedSpec"
             raise BoundedSchemaError(message)
         object.__setattr__(self, "schema_version", int(self.schema_version))
-        if self.schema_version != BOUNDED_SCHEMA_VERSION:
+        if self.schema_version not in (
+            LEGACY_BOUNDED_SCHEMA_VERSION,
+            BOUNDED_SCHEMA_VERSION,
+        ):
             message = (
-                f"BoundedProduct.schema_version {self.schema_version} is not the "
-                f"current bounded contract version {BOUNDED_SCHEMA_VERSION}"
+                f"BoundedProduct.schema_version {self.schema_version} is not "
+                f"{LEGACY_BOUNDED_SCHEMA_VERSION} (legacy) or the current bounded "
+                f"contract version {BOUNDED_SCHEMA_VERSION}"
             )
             raise BoundedSchemaError(message)
         object.__setattr__(self, "blocks", tuple(self.blocks))
@@ -312,6 +344,37 @@ class BoundedProduct:
         object.__setattr__(self, "note", str(self.note))
         if self.display_subsampled and not self.note:
             message = "a subsampled product must carry the explicit display label"
+            raise BoundedSchemaError(message)
+        expected_source_digest = (
+            source_identity_digest(self.base_identity)
+            if self.schema_version == BOUNDED_SCHEMA_VERSION
+            else ""
+        )
+        expected_rule = (
+            BOUNDED_IDENTITY_RULE_VERSION
+            if self.schema_version == BOUNDED_SCHEMA_VERSION
+            else LEGACY_BOUNDED_IDENTITY_RULE_VERSION
+        )
+        if self.spec.identity_rule_version != expected_rule:
+            message = (
+                f"bounded schema_version {self.schema_version} requires identity rule "
+                f"{expected_rule}; spec carries rule {self.spec.identity_rule_version}"
+            )
+            raise BoundedSchemaError(message)
+        if self.spec.source_identity_digest != expected_source_digest:
+            message = (
+                "spec.source_identity_digest disagrees with the full base identity "
+                f"({self.spec.source_identity_digest!r} != {expected_source_digest!r})"
+            )
+            raise BoundedSchemaError(message)
+        if self.identity.product_kind is not self.base_identity.product_kind:
+            message = "bounded identity product_kind must match the base identity"
+            raise BoundedSchemaError(message)
+        if self.identity.input_digest != self.base_identity.input_digest:
+            message = "bounded identity input_digest must be the source input digest"
+            raise BoundedSchemaError(message)
+        if self.identity.params_digest != self.spec.params_digest():
+            message = "bounded identity params_digest disagrees with the bounded spec"
             raise BoundedSchemaError(message)
         for expected, block in enumerate(self.blocks):
             if block.block_index != expected:
@@ -323,6 +386,40 @@ class BoundedProduct:
             if block.start > block.end:
                 message = f"block {block.block_index} has start > end"
                 raise BoundedSchemaError(message)
+            if block.source_identity_digest != expected_source_digest:
+                message = (
+                    f"block {block.block_index} source_identity_digest disagrees with "
+                    "the manifest source identity"
+                )
+                raise BoundedSchemaError(message)
+            block_identity = block.product.identity
+            if block_identity.product_kind is not self.base_identity.product_kind:
+                message = (
+                    f"block {block.block_index} product_kind must match the base identity"
+                )
+                raise BoundedSchemaError(message)
+            if block_identity.input_digest != self.base_identity.input_digest:
+                message = (
+                    f"block {block.block_index} input_digest must be the source input digest"
+                )
+                raise BoundedSchemaError(message)
+
+    def is_cache_adoptable(self) -> bool:
+        """Whether this manifest may be reused as a *current* derived identity.
+
+        Historical (schema version 1) manifests lack the full source-identity
+        basis, so they read/round-trip but must never be adopted as a new
+        cache/recovery result; rebuild rebuildable products under version 2
+        instead of deleting the scientific original.
+        """
+        if self.schema_version != BOUNDED_SCHEMA_VERSION:
+            return False
+        if self.spec.identity_rule_version != BOUNDED_IDENTITY_RULE_VERSION:
+            return False
+        expected = source_identity_digest(self.base_identity)
+        if self.spec.source_identity_digest != expected:
+            return False
+        return all(block.source_identity_digest == expected for block in self.blocks)
 
     def max_block_size(self) -> int:
         """Maximum number of items (points/frames) carried by any block."""
@@ -361,9 +458,13 @@ class BoundedProduct:
         if version is None:
             message = "bounded product.schema_version is required"
             raise BoundedSchemaError(message)
-        if version != BOUNDED_SCHEMA_VERSION:
+        if version not in (
+            LEGACY_BOUNDED_SCHEMA_VERSION,
+            BOUNDED_SCHEMA_VERSION,
+        ):
             message = (
-                f"unsupported bounded schema_version {version}; current is {BOUNDED_SCHEMA_VERSION}"
+                f"unsupported bounded schema_version {version}; current is "
+                f"{BOUNDED_SCHEMA_VERSION} (legacy {LEGACY_BOUNDED_SCHEMA_VERSION})"
             )
             raise BoundedSchemaError(message)
         raw_identity = payload.get("bounded_identity")
@@ -392,6 +493,7 @@ class BoundedProduct:
             note=parse_str_strict(payload, "note") or "",
             blocks=tuple(BoundedBlock.from_dict(entry) for entry in raw_blocks),
             key_points=tuple(KeyPointRetention.from_dict(entry) for entry in raw_keys),
+            schema_version=version,
         )
 
 

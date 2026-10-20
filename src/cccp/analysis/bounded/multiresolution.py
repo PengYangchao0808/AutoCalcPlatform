@@ -22,6 +22,7 @@ from cccp.analysis.bounded.identity import (
     METHOD_MULTIRESOLUTION,
     BoundedSpec,
     bounded_identity,
+    source_identity_digest,
 )
 from cccp.analysis.bounded.manifest import (
     DISPLAY_SAMPLING_NOTE,
@@ -49,7 +50,7 @@ __all__ = [
     "build_multiresolution_product",
 ]
 
-_ALGORITHM_VERSION = "1"
+_ALGORITHM_VERSION = "2"
 _OMISSION_REASON = "display_subsampling_excluded_key_point"
 
 
@@ -106,6 +107,7 @@ def build_multiresolution_product(  # noqa: PLR0913 - explicit scientific option
         message = "build_multiresolution_product requires an available product"
         raise BoundedSchemaError(message)
     base_identity: ProductIdentity = product.identity
+    source_digest = source_identity_digest(base_identity)
     payload = product.payload
     if not isinstance(payload, CurveScatterPayload):
         message = "build_multiresolution_product requires a curve_scatter payload"
@@ -129,6 +131,7 @@ def build_multiresolution_product(  # noqa: PLR0913 - explicit scientific option
             ("key_points", list(kinds)),
             ("retain_key_points", bool(retain_key_points)),
         ),
+        source_identity_digest=source_digest,
     )
     identity = bounded_identity(base_identity, spec, generator=GENERATOR_MULTIRESOLUTION)
 
@@ -155,6 +158,7 @@ def build_multiresolution_product(  # noqa: PLR0913 - explicit scientific option
                 ("level_index", level_index),
                 ("resolutions", list(levels)),
             ),
+            source_identity_digest=source_digest,
         )
         level_product = build_curve_scatter_product(
             series=[level_series],
@@ -171,6 +175,7 @@ def build_multiresolution_product(  # noqa: PLR0913 - explicit scientific option
                 end=count,
                 resolution=resolution,
                 product=level_product,
+                source_identity_digest=source_digest,
             )
         )
         selected_set = set(selected)

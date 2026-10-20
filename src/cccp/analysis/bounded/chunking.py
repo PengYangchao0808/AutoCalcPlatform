@@ -20,6 +20,7 @@ from cccp.analysis.bounded.identity import (
     METHOD_CHUNK,
     BoundedSpec,
     bounded_identity,
+    source_identity_digest,
 )
 from cccp.analysis.bounded.manifest import (
     BoundedBlock,
@@ -42,7 +43,7 @@ __all__ = [
     "chunk_trajectory_product",
 ]
 
-_ALGORITHM_VERSION = "1"
+_ALGORITHM_VERSION = "2"
 
 
 def _require_available(product: ScienceProduct, *, action: str) -> ProductIdentity:
@@ -104,6 +105,7 @@ def chunk_curve_product(
     """
     chunk_size = _require_chunk_size(chunk_size)
     base_identity = _require_available(product, action="chunk_curve_product")
+    source_digest = source_identity_digest(base_identity)
     payload = product.payload
     if not isinstance(payload, CurveScatterPayload):
         message = "chunk_curve_product requires a curve_scatter payload"
@@ -122,6 +124,7 @@ def chunk_curve_product(
             ("series_id", series.ref.series_id),
             ("product_kind", ProductKind.CURVE_SCATTER.value),
         ),
+        source_identity_digest=source_digest,
     )
     identity = bounded_identity(base_identity, spec, generator=GENERATOR_CHUNK)
 
@@ -145,6 +148,7 @@ def chunk_curve_product(
             end=end,
             algorithm_version=_ALGORITHM_VERSION,
             params=(("series_id", series.ref.series_id), ("block_index", block_index)),
+            source_identity_digest=source_digest,
         )
         block_product = build_curve_scatter_product(
             series=[chunk_series],
@@ -161,6 +165,7 @@ def chunk_curve_product(
                 end=end,
                 resolution=chunk_size,
                 product=block_product,
+                source_identity_digest=source_digest,
             )
         )
 
@@ -192,6 +197,7 @@ def chunk_trajectory_product(
     """
     chunk_size = _require_chunk_size(chunk_size)
     base_identity = _require_available(product, action="chunk_trajectory_product")
+    source_digest = source_identity_digest(base_identity)
     payload = product.payload
     if not isinstance(payload, StructureTrajectoryPayload):
         message = "chunk_trajectory_product requires a structure_trajectory payload"
@@ -206,6 +212,7 @@ def chunk_trajectory_product(
         end=count,
         algorithm_version=_ALGORITHM_VERSION,
         params=(("product_kind", ProductKind.STRUCTURE_TRAJECTORY.value),),
+        source_identity_digest=source_digest,
     )
     identity = bounded_identity(base_identity, spec, generator=GENERATOR_TRAJECTORY_CHUNK)
 
@@ -218,7 +225,11 @@ def chunk_trajectory_product(
             start=start,
             end=end,
             algorithm_version=_ALGORITHM_VERSION,
-            params=(("product_kind", ProductKind.STRUCTURE_TRAJECTORY.value),),
+            params=(
+                ("product_kind", ProductKind.STRUCTURE_TRAJECTORY.value),
+                ("block_index", block_index),
+            ),
+            source_identity_digest=source_digest,
         )
         block_product = build_structure_trajectory_product(
             frames=frames[start:end],
@@ -238,6 +249,7 @@ def chunk_trajectory_product(
                 end=end,
                 resolution=chunk_size,
                 product=block_product,
+                source_identity_digest=source_digest,
             )
         )
 
