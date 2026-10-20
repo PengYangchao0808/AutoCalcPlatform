@@ -36,7 +36,7 @@ and inert until a consumer opts in.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Protocol, runtime_checkable
 
@@ -103,14 +103,26 @@ class ReadRoot:
     #: than fall back to this root (D04: a missing historical original is a
     #: refusal, never the current ``work_dir``).
     attempt: int | None = None
+    #: True when this root is a historical attempt's own snapshot.  A remote
+    #: cache entry without an attempt sidecar can never prove a historical
+    #: attempt, so it is a miss (D11) rather than the current cached copy.
+    historical: bool = False
+    #: Structured absence reason (``invalid_attempt``, ``attempt_not_current``,
+    #: ``historical_attempt_missing``, ...).  Empty for a found root.
+    reason: str = ""
 
 
 @runtime_checkable
 class ReadRootPort(Protocol):
     """Resolve a job's readable root from authoritative local metadata only."""
 
-    def resolve(self, job_id: str) -> ReadRoot:
-        """Return the readable root for *job_id*; never touches a network."""
+    def resolve(self, job_id: str, attempt: int | None = None) -> ReadRoot:
+        """Return the readable root for *job_id* and (optionally) *attempt*.
+
+        ``attempt=None`` means "the caller did not pin one": the port resolves
+        the job's authoritative current attempt.  An explicit attempt must be
+        resolved to its own root/snapshot or refused with a structured reason.
+        """
         ...
 
 
@@ -124,9 +136,9 @@ class ReadRootResolver:
     def __init__(self, port: ReadRootPort) -> None:
         self._port = port
 
-    def resolve(self, job_id: str) -> ReadRoot:
-        """Resolve the readable root for *job_id*."""
-        return self._port.resolve(job_id)
+    def resolve(self, job_id: str, attempt: int | None = None) -> ReadRoot:
+        """Resolve the readable root for *job_id* (and optional attempt)."""
+        return self._port.resolve(job_id, attempt)
 
 
 # ---------------------------------------------------------------------------
@@ -305,13 +317,18 @@ class AvailabilitySnapshot:
 
 
 def _requested_attempt(attempt: int | None) -> int | None:
-    """Return the explicitly requested attempt, or ``None`` when unpinned.
+    """Return the pinned positive attempt, or ``None`` when unpinned.
 
-    An unpinned request keeps the port's default attempt-fence behaviour; a
-    pinned request is never silently replaced by the root's attempt (the port
-    refuses a root that cannot prove that attempt).
+    A pinned attempt that is missing/invalid raises instead of being coerced to
+    ``0``: callers turn that into a structured absence (D11), never an attempt-0
+    operation key.
     """
-    return int(attempt) if attempt is not None else None
+    if attempt is None:
+        return None
+    value = int(attempt)
+    if value < 1:
+        raise ValueError("attempt must be >= 1")
+    return value
 
 
 def _freshness_of(basis_revision: int, expected_revision: int) -> Freshness:
@@ -377,9 +394,27 @@ class ReadOnlyResourceReader:
         branch.
         """
         observed_at = self._clock()
-        root = self._resolver.resolve(request.job_id)
+        try:
+            requested = _requested_attempt(request.attempt)
+        except (TypeError, ValueError):
+            return self._absent(
+                request,
+                observed_at,
+                ReadRoot(job_id=request.job_id, path="", found=False),
+                detail="invalid_attempt",
+            )
+        root = self._resolver.resolve(request.job_id, requested)
         if not root.found:
-            return self._absent(request, observed_at, root, detail="job_not_found")
+            return self._absent(request, observed_at, root, detail=root.reason or "job_not_found")
+        try:
+            root_attempt = _requested_attempt(root.attempt)
+        except (TypeError, ValueError):
+            return self._absent(request, observed_at, root, detail="invalid_attempt")
+        if requested is not None and root_attempt != requested:
+            detail = "attempt_unresolved" if root_attempt is None else "attempt_mismatch"
+            return self._absent(request, observed_at, root, detail=detail)
+        if request.attempt is None and root_attempt is not None:
+            request = replace(request, attempt=root_attempt)
 
         op_facts = self._operations.facts(request) if self._operations is not None else None
         if (
@@ -495,10 +530,20 @@ class ReadOnlyResourceReader:
                 resolved root.  No fetch, no enqueue and no fallback to
                 another root is attempted.
         """
-        root = self._resolver.resolve(request.job_id)
-        attempt = _requested_attempt(request.attempt)
+        try:
+            requested = _requested_attempt(request.attempt)
+        except (TypeError, ValueError) as exc:
+            raise ResourceNotPreparedError(f"invalid attempt: {request.job_id}") from exc
+        root = self._resolver.resolve(request.job_id, requested)
         if not root.found or not root.path:
             raise ResourceNotPreparedError(f"resource not prepared: {request.job_id}")
+        try:
+            root_attempt = _requested_attempt(root.attempt)
+        except (TypeError, ValueError) as exc:
+            raise ResourceNotPreparedError(f"invalid attempt: {request.job_id}") from exc
+        if requested is not None and root_attempt != requested:
+            raise ResourceNotPreparedError(f"attempt mismatch: {request.job_id}")
+        attempt = requested if requested is not None else root_attempt
         facts = self._cache.entry(
             root,
             request.relative_path,

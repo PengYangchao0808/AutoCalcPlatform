@@ -62,8 +62,11 @@ _READ_ROOT_SOURCE = (
 class _FakeRootPort:
     roots: dict[str, ReadRoot] = field(default_factory=dict)
 
-    def resolve(self, job_id: str) -> ReadRoot:
-        return self.roots.get(job_id, ReadRoot(job_id=job_id, path="", found=False))
+    def resolve(self, job_id: str, attempt: int | None = None) -> ReadRoot:
+        root = self.roots.get(job_id, ReadRoot(job_id=job_id, path="", found=False))
+        if attempt is not None and root.found and root.attempt is None:
+            return replace(root, attempt=attempt)
+        return root
 
 
 class _FakeCache:
@@ -886,3 +889,301 @@ def test_endpoint_availability_local_directory_only_is_not_ready(
 def test_endpoint_availability_unknown_job_404(client: TestClient) -> None:
     response = client.get("/api/v1/jobs/does-not-exist/availability")
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# D11 — resolve the authoritative current attempt instead of attempt 0
+# ---------------------------------------------------------------------------
+
+
+def _catalog_request(record: Any, *, attempt: int) -> Any:
+    from acp_services.data.contracts import ResourceKind
+    from acp_services.data.operations import PrepareRequest
+
+    workflow = str(record.spec.workflow)
+    return PrepareRequest(
+        job_id=record.id,
+        attempt=attempt,
+        resource_id=f"catalog:{workflow}",
+        resource_kind=ResourceKind.CACHE,
+        resource_digest=f"{record.id}\x1f{attempt}\x1f{workflow}",
+        payload={"workflow": workflow, "job_id": record.id, "attempt": attempt},
+    )
+
+
+class _NoLookupOperations:
+    """Operation port double: any attempt-0 lookup is a hard failure."""
+
+    def find(self, **_kwargs: Any) -> Any:
+        raise AssertionError("operation lookup reached the store")
+
+    def availability(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("operation availability reached the store")
+
+
+def test_builder_availability_defaults_to_current_attempt(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+    from acp_services.data.operations import PrepareOperationService
+
+    record = JobRecord(
+        id="builder-avail-attempt",
+        spec=JobSpec(workflow="singlepoint", name="builder-avail-attempt"),
+        status=JobStatus.COMPLETED,
+        attempt=2,
+        work_dir=str(tmp_path / "builder-avail-attempt"),
+        result={"node": "comp-01", "remote_dir": "/scratch/qc/acp/builder-avail-attempt"},
+    )
+    service = PrepareOperationService(tmp_path / "prepare.db")
+    try:
+        service.enqueue(_catalog_request(record, attempt=2))
+        reader = build_cache_only_resource_reader(
+            job_lookup=lambda _job_id: record,
+            cache=RemoteStructureCache(tmp_path / "runs"),
+            operations=service,
+        )
+
+        default = reader.availability("catalog", job_id=record.id, workflow="singlepoint")
+        explicit = reader.availability(
+            "catalog", job_id=record.id, workflow="singlepoint", attempt=2
+        )
+
+        assert default.availability is Availability.PREPARING
+        assert default.availability is explicit.availability
+        assert default.detail == explicit.detail == "operation:queued"
+    finally:
+        service.close()
+
+
+def test_builder_rerun_does_not_return_old_attempt_operation(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+    from acp_services.data.operations import PrepareOperationService
+
+    record = JobRecord(
+        id="builder-rerun-attempt",
+        spec=JobSpec(workflow="singlepoint", name="builder-rerun-attempt"),
+        status=JobStatus.COMPLETED,
+        attempt=2,
+        work_dir=str(tmp_path / "builder-rerun-attempt"),
+        result={"node": "comp-01", "remote_dir": "/scratch/qc/acp/builder-rerun-attempt"},
+    )
+    service = PrepareOperationService(tmp_path / "prepare.db")
+    try:
+        old = service.enqueue(_catalog_request(record, attempt=1))
+        lease = service.lease_next()
+        assert lease is not None
+        service.complete(lease)
+        service.enqueue(_catalog_request(record, attempt=2))
+        reader = build_cache_only_resource_reader(
+            job_lookup=lambda _job_id: record,
+            cache=RemoteStructureCache(tmp_path / "runs"),
+            operations=service,
+        )
+
+        default = reader.availability("catalog", job_id=record.id, workflow="singlepoint")
+        explicit = reader.availability(
+            "catalog", job_id=record.id, workflow="singlepoint", attempt=2
+        )
+
+        assert service.availability(old.operation_id).availability is Availability.READY
+        assert default.availability is Availability.PREPARING
+        assert default.availability is not Availability.READY
+        assert default.detail == explicit.detail == "operation:queued"
+    finally:
+        service.close()
+
+
+def test_builder_historical_attempt_reads_its_own_archived_original(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    work = tmp_path / "historical-work"
+    _write_tree(work, {"RESULT/result_manifest.json": b"CURRENT"})
+    _write_tree(
+        work / "WORK" / "00_RUNTIME" / "attempts" / "1",
+        {"RESULT/result_manifest.json": b"ATTEMPT-1-ORIGINAL"},
+    )
+    record = _local_record("local-historical-own", work, attempt=2)
+    cache = RemoteStructureCache(tmp_path / "runs")
+    reader = build_cache_only_resource_reader(job_lookup={record.id: record}.get, cache=cache)
+
+    historical = reader.serve("manifest", job_id=record.id, workflow="optimize", attempt=1)
+    current = reader.serve("manifest", job_id=record.id, workflow="optimize")
+    explicit_current = reader.serve("manifest", job_id=record.id, workflow="optimize", attempt=2)
+
+    assert historical.served is True
+    assert historical.data == b"ATTEMPT-1-ORIGINAL"
+    assert current.data == b"CURRENT"
+    assert explicit_current.data == b"CURRENT"
+
+
+def test_attempt_zero_is_rejected_without_an_operation_lookup(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    work = tmp_path / "attempt-zero-work"
+    _write_tree(work, {"RESULT/result_manifest.json": b"CURRENT"})
+    record = _local_record("local-attempt-zero", work, attempt=1)
+    reader = build_cache_only_resource_reader(
+        job_lookup={record.id: record}.get,
+        cache=RemoteStructureCache(tmp_path / "runs"),
+        operations=_NoLookupOperations(),
+    )
+
+    snapshot = reader.availability("manifest", job_id=record.id, workflow="optimize", attempt=0)
+    assert snapshot.availability is Availability.ABSENT
+    assert snapshot.detail == "invalid_attempt"
+    with pytest.raises(ResourceNotPreparedError):
+        reader.read_range("manifest", job_id=record.id, attempt=0)
+
+
+def test_builder_missing_record_attempt_is_a_structured_absence(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+    from acp_services.data.operations import PrepareOperationService
+
+    record = SimpleNamespace(
+        id="builder-attempt-removed",
+        work_dir=str(tmp_path / "builder-attempt-removed"),
+        result={},
+        spec=SimpleNamespace(workflow="optimize"),
+    )
+    service = PrepareOperationService(tmp_path / "prepare.db")
+    try:
+        reader = build_cache_only_resource_reader(
+            job_lookup={record.id: record}.get,
+            cache=RemoteStructureCache(tmp_path / "runs"),
+            operations=service,
+        )
+        snapshot = reader.availability("catalog", job_id=record.id, workflow="optimize")
+        assert snapshot.availability is Availability.ABSENT
+        assert snapshot.detail == "attempt_unresolved"
+        assert service.list() == ()
+    finally:
+        service.close()
+
+
+def test_endpoint_availability_default_and_explicit_attempt_agree(
+    client: TestClient, tmp_path: Path
+) -> None:
+    job_id = "http-attempt-current"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="singlepoint", name="http-attempt-current"),
+            status=JobStatus.COMPLETED,
+            attempt=2,
+            work_dir=str(tmp_path / job_id),
+            result={"node": "comp-01", "remote_dir": f"/scratch/qc/acp/{job_id}"},
+        ),
+    )
+    manager = client.app.state.job_manager
+    manager._prepare_operations.enqueue(_catalog_request(manager.get(job_id), attempt=2))
+    before = _operation_count(manager.store.db_path)
+
+    default = client.get(f"/api/v1/jobs/{job_id}/availability")
+    explicit = client.get(f"/api/v1/jobs/{job_id}/availability?attempt=2")
+    prepared_default = client.get(f"/api/v1/jobs/{job_id}/prepared/catalog")
+    prepared_explicit = client.get(f"/api/v1/jobs/{job_id}/prepared/catalog?attempt=2")
+
+    assert default.status_code == 200
+    assert explicit.status_code == 200
+    assert default.json()["availability"] == explicit.json()["availability"] == "preparing"
+    assert default.json()["detail"] == explicit.json()["detail"] == "operation:queued"
+    assert prepared_default.status_code == 409
+    assert prepared_explicit.status_code == 409
+    assert prepared_default.json() == prepared_explicit.json()
+    assert _operation_count(manager.store.db_path) == before
+
+
+def test_endpoint_availability_rerun_reports_current_attempt(
+    client: TestClient, tmp_path: Path
+) -> None:
+    job_id = "http-attempt-rerun"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="singlepoint", name="http-attempt-rerun"),
+            status=JobStatus.COMPLETED,
+            attempt=2,
+            work_dir=str(tmp_path / job_id),
+            result={"node": "comp-01", "remote_dir": f"/scratch/qc/acp/{job_id}"},
+        ),
+    )
+    manager = client.app.state.job_manager
+    operations = manager._prepare_operations
+    record = manager.get(job_id)
+    old = operations.enqueue(_catalog_request(record, attempt=1))
+    lease = operations.lease_next()
+    assert lease is not None
+    operations.complete(lease)
+    operations.enqueue(_catalog_request(record, attempt=2))
+
+    default = client.get(f"/api/v1/jobs/{job_id}/availability")
+    explicit = client.get(f"/api/v1/jobs/{job_id}/availability?attempt=2")
+
+    assert operations.availability(old.operation_id).availability is Availability.READY
+    assert default.json()["availability"] == "preparing"
+    assert default.json()["availability"] != "ready"
+    assert default.json()["detail"] == explicit.json()["detail"] == "operation:queued"
+
+
+def test_endpoint_prepared_historical_attempt_never_reads_current_original(
+    client: TestClient, tmp_path: Path
+) -> None:
+    job_id = "http-historical-attempt"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="optimize", name="http-historical-attempt"),
+            status=JobStatus.COMPLETED,
+            attempt=2,
+            work_dir=str(tmp_path / job_id),
+        ),
+    )
+    work = tmp_path / job_id
+    _write_tree(work, {"RESULT/result_manifest.json": b"CURRENT"})
+    _write_tree(
+        work / "WORK" / "00_RUNTIME" / "attempts" / "1",
+        {"RESULT/result_manifest.json": b"ATTEMPT-1-ORIGINAL"},
+    )
+
+    default = client.get(f"/api/v1/jobs/{job_id}/prepared/manifest")
+    historical = client.get(f"/api/v1/jobs/{job_id}/prepared/manifest?attempt=1")
+
+    assert default.status_code == 200
+    assert default.content == b"CURRENT"
+    assert historical.status_code == 200
+    assert historical.content == b"ATTEMPT-1-ORIGINAL"
+
+    missing_id = "http-historical-missing"
+    _seed_job(
+        client,
+        JobRecord(
+            id=missing_id,
+            spec=JobSpec(workflow="optimize", name="http-historical-missing"),
+            status=JobStatus.COMPLETED,
+            attempt=2,
+            work_dir=str(tmp_path / missing_id),
+        ),
+    )
+    _write_tree(tmp_path / missing_id, {"RESULT/result_manifest.json": b"CURRENT"})
+    missing = client.get(f"/api/v1/jobs/{missing_id}/prepared/manifest?attempt=1")
+    assert missing.status_code == 409
+    assert "not_prepared" in missing.json()["detail"]
+
+
+def test_endpoint_attempt_zero_is_rejected(client: TestClient, tmp_path: Path) -> None:
+    job_id = "http-attempt-zero"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="optimize", name="http-attempt-zero"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / job_id),
+        ),
+    )
+    availability = client.get(f"/api/v1/jobs/{job_id}/availability?attempt=0")
+    prepared = client.get(f"/api/v1/jobs/{job_id}/prepared/manifest?attempt=0")
+    assert availability.status_code == 422
+    assert prepared.status_code == 422
