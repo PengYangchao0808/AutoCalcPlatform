@@ -53,6 +53,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from acp_services.contracts.envelope import (
@@ -68,8 +69,11 @@ from acp_services.runtime.step_requirements import (
     PriorStep,
     RequirementOutcome,
     evaluate_prerequisite,
+    is_partial_result,
 )
 from acp_services.runtime.worker import (
+    NORMAL_REUSE_METADATA_KEY,
+    PARTIAL_RESULT_METADATA_KEY,
     CccpTaskExecutor,
     DependencyNotSatisfiedError,
     FrozenPlan,
@@ -82,7 +86,11 @@ from acp_services.runtime.worker import (
     TaskExecutorPort,
     WorkerError,
     build_receipt,
+    decision_for_failure,
+    outcome_from_decision,
+    outcome_from_task_result,
     read_receipt,
+    receipt_exit_code,
     write_receipt_atomic,
 )
 from cccp.analysis.identity import identity_fingerprint
@@ -288,6 +296,17 @@ class FrozenPlanVerifier:
 # ── Services-native step-requirement gate ───────────────────────────────────
 
 
+def _entry_is_partial(entry: Any, result: CalculationResult | None) -> bool:
+    if isinstance(entry, Mapping):
+        if entry.get(PARTIAL_RESULT_METADATA_KEY) is True:
+            return True
+        if entry.get(NORMAL_REUSE_METADATA_KEY) is False:
+            return True
+    elif getattr(entry, PARTIAL_RESULT_METADATA_KEY, None) is True:
+        return True
+    return is_partial_result(result)
+
+
 def _coerce_prior_steps(prior: Sequence[Any] | None) -> tuple[PriorStep, ...]:
     """Best-effort decode of upstream step observations into :class:`PriorStep`."""
     if not prior:
@@ -314,7 +333,14 @@ def _coerce_prior_steps(prior: Sequence[Any] | None) -> tuple[PriorStep, ...]:
             kind = raw_kind if isinstance(raw_kind, StepKind) else StepKind(str(raw_kind))
         except (TypeError, ValueError):
             continue
-        decoded.append(PriorStep(kind=kind, status=status, result=result))
+        decoded.append(
+            PriorStep(
+                kind=kind,
+                status=status,
+                result=result,
+                partial_result=_entry_is_partial(entry, result),
+            )
+        )
     return tuple(decoded)
 
 
@@ -350,18 +376,29 @@ class ServicesStepRequirements:
 class _ProbeExecutor:
     """Deterministic executor for the independence probe / remote mock chain.
 
-    Runs no scientific binary; ``state`` is ``completed`` or ``failed`` with a
-    typed :class:`ExecutionError`.  Selected only through the explicit
-    ``--probe-executor`` flag; the production default remains
-    :class:`CccpTaskExecutor`.
+    Runs no scientific binary; ``state`` selects one exact D01 truth-table row
+    (``completed``=b, ``failed``=a, ``partial``=c, ``partial-missing``=d) and the
+    synthetic result is fed through the same ``outcome_from_task_result`` the
+    CCCP executor uses.  Selected only through the explicit ``--probe-executor``
+    flag; the production default remains :class:`CccpTaskExecutor`.
     """
 
     state: str = "completed"
 
-    def execute(self, scope: Any) -> TaskExecutionOutcome:
+    def _result(self) -> Any:
+        coordinates = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))
+        base = {
+            "task": "optimize",
+            "symbols": ("C", "O"),
+            "payload": None,
+            "metadata": {},
+        }
         if self.state == "failed":
-            return TaskExecutionOutcome(
-                state="failed",
+            return SimpleNamespace(
+                **base,
+                status="failed",
+                complete=False,
+                coordinates=None,
                 errors=(
                     ExecutionError(
                         code="probe_failure",
@@ -370,7 +407,32 @@ class _ProbeExecutor:
                     ),
                 ),
             )
-        return TaskExecutionOutcome(state="completed", result_digest="sha256:probe-result")
+        if self.state == "partial":
+            return SimpleNamespace(
+                **base,
+                status="completed",
+                complete=False,
+                coordinates=coordinates,
+                errors=(),
+            )
+        if self.state == "partial-missing":
+            return SimpleNamespace(
+                **base,
+                status="completed",
+                complete=False,
+                coordinates=None,
+                errors=(),
+            )
+        return SimpleNamespace(
+            **base,
+            status="completed",
+            complete=True,
+            coordinates=coordinates,
+            errors=(),
+        )
+
+    def execute(self, scope: Any) -> TaskExecutionOutcome:
+        return outcome_from_task_result(self._result(), work_dir=scope.work_dir)
 
 
 # ── frozen-data loaders ─────────────────────────────────────────────────────
@@ -473,7 +535,7 @@ class WorkerRuntime:
         existing = read_receipt(self.receipt_path)
         if existing is not None:
             return existing
-        outcome = TaskExecutionOutcome(state="failed", errors=(error,))
+        outcome = outcome_from_decision(decision_for_failure(error), work_dir=self.work_dir)
         receipt = build_receipt(self.envelope, outcome)
         write_receipt_atomic(self.receipt_path, receipt)
         return receipt
@@ -556,12 +618,17 @@ def load_and_assemble(
 
 
 def _write_assembly_failure(
-    envelope: ExecutionEnvelope, receipt_path: Path, error: ExecutionError
+    envelope: ExecutionEnvelope,
+    receipt_path: Path,
+    error: ExecutionError,
+    *,
+    work_dir: Path | None = None,
 ) -> ExecutionReceipt:
     existing = read_receipt(receipt_path)
     if existing is not None:
         return existing
-    receipt = build_receipt(envelope, TaskExecutionOutcome(state="failed", errors=(error,)))
+    outcome = outcome_from_decision(decision_for_failure(error), work_dir=work_dir)
+    receipt = build_receipt(envelope, outcome)
     write_receipt_atomic(receipt_path, receipt)
     return receipt
 
@@ -596,7 +663,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--binding", default=None, help="optional StorageBinding JSON path")
     parser.add_argument(
         "--probe-executor",
-        choices=("ok", "fail"),
+        choices=("ok", "fail", "partial", "partial-missing"),
         default=None,
         help="worker-independence probe only: run a deterministic executor instead of cccp",
     )
@@ -616,8 +683,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         plan = load_frozen_plan(args.plan)
         binding = load_storage_binding(args.binding) if args.binding else None
+        probe_state = {
+            "ok": "completed",
+            "fail": "failed",
+            "partial": "partial",
+            "partial-missing": "partial-missing",
+        }
         executor: TaskExecutorPort | None = (
-            _ProbeExecutor(state="failed" if args.probe_executor == "fail" else "completed")
+            _ProbeExecutor(state=probe_state[str(args.probe_executor)])
             if args.probe_executor
             else None
         )
@@ -634,13 +707,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             envelope,
             receipt_path,
             ExecutionError(code="assembly_failed", message=str(exc), retryable=False),
+            work_dir=work_dir,
         )
         print(json.dumps(receipt.to_dict(), sort_keys=True))
         return 1
 
     receipt = runtime.run()
     print(json.dumps(receipt.to_dict(), sort_keys=True))
-    return 0 if receipt.state == "completed" else 1
+    return receipt_exit_code(receipt)
 
 
 if __name__ == "__main__":  # pragma: no cover - process entry

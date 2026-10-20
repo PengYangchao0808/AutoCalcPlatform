@@ -74,6 +74,7 @@ from acp.calculations.step_requirements import (
     RequirementOutcome,
     evaluate_prerequisite,
     payload_is_diagnostic,
+    payload_is_partial,
 )
 from acp.calculations.step_result import (
     STEP_RESULT_FILENAME,
@@ -90,6 +91,10 @@ from acp.calculations.step_result import (
     write_step_result,
 )
 from acp.storage.manifest import MANIFEST_FILENAME, ProductKind, ResultManifest
+from acp_services.runtime.worker import (
+    TaskResultIntegrityError,
+    read_task_result_qualification,
+)
 from cccp.calculation.tasks.casscf import validate_casscf_completion
 
 logger = logging.getLogger(__name__)
@@ -622,6 +627,17 @@ class _Adoption:
     integrity_failed: bool = False
     attempt: int | None = None
     result_ref: dict[str, str] | None = None
+
+
+def _task_result_reuse_refusal(task_root: Path) -> str | None:
+    """Refuse normal adoption when the persisted D01 qualification forbids it."""
+    try:
+        qualification = read_task_result_qualification(task_root)
+    except TaskResultIntegrityError:
+        return "task_result_integrity_failed"
+    if qualification is not None and not qualification.normal_reuse:
+        return "partial_result_not_reusable"
+    return None
 
 
 def _merge_completed_facts(
@@ -1457,6 +1473,11 @@ class CalculationPlanExecutor:
                 reason="diagnostic_result_not_reusable",
                 integrity_failed=True,
             )
+        if payload_is_partial(payload):
+            return _Adoption(reason="partial_result_not_reusable", integrity_failed=True)
+        refusal = _task_result_reuse_refusal(task_root)
+        if refusal is not None:
+            return _Adoption(reason=refusal, integrity_failed=True)
 
         prior_ref: Mapping[str, JsonValue] | None = None
         if was_completed:
