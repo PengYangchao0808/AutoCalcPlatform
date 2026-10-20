@@ -61,8 +61,10 @@ from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.storage.layout import TaskStorage, runtime_file
 from acp_services.runtime.execution_chain import (
+    DEFAULT_ENVELOPE_WORKFLOWS,
     EXECUTION_ENTRY_ENVELOPE,
     AttemptExecutionChoice,
+    FrozenGroupError,
     frozen_artifacts_present,
     local_launch,
     read_attempt_choice,
@@ -529,6 +531,11 @@ class JobRunner:
         # branch runs pre-submit housekeeping before materializing input.
         # Populated by ``JobManager`` when ``local_retention.enabled``.
         self.local_cleanup = local_cleanup
+        # 07-C activation: default-envelope attempts are frozen here before the
+        # dispatcher selects the entry.  Tests may inject a prepared release.
+        self.freeze_release: Any | None = None
+        self._default_release: Any | None = None
+        self._repo_root = Path(__file__).resolve().parents[3]
         # Worker-independence probe only (controlled integration tests): when
         # set, envelope-selected local attempts pass ``--probe-executor`` to the
         # Services worker.  Production leaves it ``None``; no ordinary job is
@@ -630,6 +637,9 @@ class JobRunner:
 
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
+        )
+        self._ensure_default_frozen_attempt(
+            record, work_dir, effective_input_path, event_log
         )
         cmd = self._build_execution_cmd(
             record,
@@ -1088,6 +1098,9 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
+        self._ensure_default_frozen_attempt(
+            record, work_dir, effective_input_path, event_log
+        )
         cmd = self._build_execution_cmd(
             record,
             work_dir,
@@ -1306,6 +1319,65 @@ class JobRunner:
             return True
 
         return False
+
+    def _ensure_default_frozen_attempt(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        input_path: str,
+        event_log: JobEventLog,
+    ) -> None:
+        """Freeze the default-envelope attempt BEFORE the dispatcher decides.
+
+        Ordinary submissions for :data:`DEFAULT_ENVELOPE_WORKFLOWS` get a
+        verified group here; the existing dispatcher then selects the envelope
+        entry.  A same-attempt replay keeps the recorded choice/group/claim; a
+        recorded envelope choice with a missing/corrupt group is a typed
+        failure (never a silent legacy re-submit).
+        """
+        workflow = str(record.spec.workflow)
+        if workflow not in DEFAULT_ENVELOPE_WORKFLOWS:
+            return
+        previous = read_attempt_choice(work_dir)
+        if previous is not None and previous.attempt == record.attempt:
+            if previous.entry == EXECUTION_ENTRY_ENVELOPE:
+                if not frozen_artifacts_present(
+                    work_dir, expected_attempt=record.attempt
+                ):
+                    raise FrozenGroupError(
+                        f"envelope choice for attempt {record.attempt} is recorded but the "
+                        "frozen group is missing/corrupt; refusing a legacy re-submit"
+                    )
+            # Same attempt: never re-select or re-freeze, regardless of entry.
+            return
+        if previous is not None and previous.attempt != record.attempt:
+            # The caller (continue/rerun) owns archiving; a surviving old group
+            # is a typed conflict in the builder, never silently overwritten.
+            pass
+
+        if self.freeze_release is not None:
+            release = self.freeze_release
+        elif self._default_release is not None:
+            release = self._default_release
+        else:
+            from acp.calculations.attempt_freeze import build_local_release
+
+            release = build_local_release(self._repo_root, work_dir.parent.parent)
+            self._default_release = release
+
+        from acp.calculations.attempt_freeze import build_freeze_spec
+        from acp_services.runtime.attempt_freeze import write_frozen_attempt
+
+        spec = build_freeze_spec(record, work_dir, input_path, release)
+        group = write_frozen_attempt(work_dir, spec)
+        event_log.append(
+            "attempt.frozen",
+            job_id=record.id,
+            workflow=workflow,
+            attempt=record.attempt,
+            release_id=group.manifest.release_id,
+            release_digest=group.manifest.release_digest,
+        )
 
     def _resolve_attempt_choice(
         self, record: JobRecord, work_dir: Path, *, remote: bool = False

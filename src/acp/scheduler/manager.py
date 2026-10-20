@@ -90,6 +90,7 @@ from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
 from acp_services.runtime.execution_chain import (
     ATTEMPT_PROTOCOL_FILENAME,
     BINDING_FILENAME,
+    DEFAULT_ENVELOPE_WORKFLOWS,
     ENVELOPE_FILENAME,
     EXECUTION_ENTRY_ENVELOPE,
     FROZEN_GROUP_DIRNAME,
@@ -199,6 +200,8 @@ def _needs_publication_retry(record: JobRecord) -> bool:
     recovered from this marker without a second QC execution.
     """
     if not record.status.is_terminal:
+        return False
+    if record.spec.workflow not in DEFAULT_ENVELOPE_WORKFLOWS:
         return False
     return (record.result or {}).get("publication_pending") is True
 
@@ -357,7 +360,7 @@ class JobManager:
         local_cleanup_interval_hours: int = 6,
         local_max_jobs: int = 4,
         reconnect_local_workers: bool = False,
-        envelope_completion: bool = False,
+        envelope_completion: bool | None = None,
         attempt_completion: Any | None = None,
         attempt_publication: Any | None = None,
     ):
@@ -373,6 +376,8 @@ class JobManager:
         # The ordinary default stays exit-code-only until task 29 activates it.
         self._attempt_completion = attempt_completion
         self._attempt_publication = attempt_publication
+        if envelope_completion is None:
+            envelope_completion = bool(DEFAULT_ENVELOPE_WORKFLOWS)
         self._envelope_completion_enabled = bool(
             envelope_completion or attempt_completion is not None or attempt_publication is not None
         )
@@ -5310,6 +5315,7 @@ class JobManager:
             or self._attempt_completion is None
             or is_remote
             or exit_code == EXIT_WAITING_REVIEW
+            or record.spec.workflow not in DEFAULT_ENVELOPE_WORKFLOWS
         ):
             return False
         work_dir = Path(record.work_dir)

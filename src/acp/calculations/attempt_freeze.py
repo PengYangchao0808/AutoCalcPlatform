@@ -52,9 +52,17 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final
 
-from acp.calculations.contracts import CalculationRequest, StepKind
+from acp.calculations.contracts import (
+    CalculationRequest,
+    StepKind,
+    StructureArtifact,
+    StructureRole,
+)
 from acp.calculations.identity import compute_identity
-from acp.calculations.legacy_adapters import to_task_request
+from acp.calculations.legacy_adapters import (
+    pes2ts_orca_gradient_to_task_request,
+    to_task_request,
+)
 from acp.core.config import load_config
 from acp.workflows.simple import (
     _AdapterContext,
@@ -89,6 +97,7 @@ from acp_services.worker_bootstrap import (
     load_frozen_plan,
     load_storage_binding,
 )
+from cccp.analysis.identity import identity_fingerprint
 from cccp.calculation.requests import TaskKind, TaskRequest
 
 __all__ = [
@@ -102,6 +111,8 @@ __all__ = [
     "ReleaseIdentity",
     "ReleaseIdentityError",
     "StaleReleaseError",
+    "FREEZE_BUILDERS",
+    "build_freeze_spec",
     "build_local_release",
     "build_singlepoint_freeze_spec",
     "freeze_singlepoint_attempt",
@@ -511,6 +522,11 @@ _SIMPLE_METHOD_KEYS: Final[tuple[str, ...]] = (
     "ri_approximation",
     "grid",
     "scf_convergence",
+    "geom_maxiter",
+    "opt_convergence",
+    "max_steps",
+    "opt_level",
+    "gfn",
 )
 
 
@@ -649,8 +665,10 @@ def _owner_token(attempt: int) -> str:
 def _build_envelope(
     record: Any,
     plan: FrozenPlan,
-    binding: StorageBinding,
+    binding: StorageBinding | None,
     release: LocalRelease,
+    *,
+    task_kind: str = TaskKind.SINGLEPOINT.value,
 ) -> ExecutionEnvelope:
     identity = plan.identity
     if identity is None:  # pragma: no cover - built immediately above
@@ -671,20 +689,22 @@ def _build_envelope(
         step_identities=identity.step_identities,
         protocol="local",
         entrypoint="worker.bootstrap",
-        required_capabilities=(TaskKind.SINGLEPOINT.value,),
-        data_bindings=(binding,),
-        scientific_closure=ScientificClosure(task_kind=TaskKind.SINGLEPOINT.value),
+        required_capabilities=(task_kind,),
+        data_bindings=(binding,) if binding is not None else (),
+        scientific_closure=ScientificClosure(task_kind=task_kind),
     )
 
 
-def _existing_spec(work_dir: Path, attempt: int) -> AttemptFreezeSpec | None:
+def _existing_spec(
+    work_dir: Path, attempt: int, *, workflow: str | None = None
+) -> AttemptFreezeSpec | None:
     if not frozen_group_dir(work_dir).exists():
         return None
     group = load_frozen_group(work_dir)
-    if group.manifest.workflow != "singlepoint":
+    if workflow is not None and group.manifest.workflow != workflow:
         raise AttemptFreezeConflictError(
             f"existing frozen group under {work_dir} is for workflow "
-            f"{group.manifest.workflow!r}, not 'singlepoint'"
+            f"{group.manifest.workflow!r}, not {workflow!r}"
         )
     if group.manifest.attempt != attempt:
         raise AttemptFreezeConflictError(
@@ -708,6 +728,38 @@ def _build_singlepoint_request(
     work_dir: Path,
     input_file: Path,
 ) -> tuple[_AdapterContext, CalculationRequest, TaskRequest]:
+    """Backward-compatible singlepoint entry over the generic builder."""
+    return _build_simple_request(
+        record,
+        work_dir,
+        input_file,
+        workflow="singlepoint",
+        step_kind=StepKind.SINGLEPOINT,
+        backend="orca",
+        task_kind=TaskKind.SINGLEPOINT,
+    )
+
+
+_SIMPLE_WORKFLOW_TASKS: Final[dict[str, tuple[StepKind, str, TaskKind]]] = {
+    "singlepoint": (StepKind.SINGLEPOINT, "orca", TaskKind.SINGLEPOINT),
+    "optimize": (StepKind.OPTIMIZE, "orca", TaskKind.OPTIMIZE),
+    "frequency": (StepKind.FREQUENCY, "orca", TaskKind.FREQUENCY),
+    "casscf": (StepKind.CASSCF, "orca", TaskKind.CASSCF),
+    "xtb_optimize": (StepKind.OPTIMIZE, "xtb", TaskKind.OPTIMIZE),
+}
+
+
+def _build_simple_request(
+    record: Any,
+    work_dir: Path,
+    input_file: Path,
+    *,
+    workflow: str,
+    step_kind: StepKind,
+    backend: str,
+    task_kind: TaskKind,
+) -> tuple[_AdapterContext, CalculationRequest, TaskRequest]:
+    """Build the same simple-workflow request through the existing builder."""
     config = _record_config(record)
     input_payload = record.spec.input if isinstance(record.spec.input, Mapping) else {}
     context = _context(
@@ -722,7 +774,7 @@ def _build_singlepoint_request(
     )
     request = _build_request(
         context,
-        _RequestDefinition("singlepoint", "orca", method_kwargs),
+        _RequestDefinition(workflow, backend, method_kwargs),
     )
     # Freeze the request paths relative to the worker CWD (the task work dir).
     request = replace(
@@ -730,65 +782,59 @@ def _build_singlepoint_request(
         input_artifact=replace(context.artifact, path=Path("input.xyz")),
         resources={**request.resources, "output_dir": "."},
     )
-    task_request, _legacy_binding = to_task_request(request, TaskKind.SINGLEPOINT)
+    task_request, _legacy_binding = to_task_request(request, task_kind)
     if task_request.structure is None or task_request.structure.path != Path("input.xyz"):
         raise FreezeSpecError(
-            "the singlepoint request did not freeze a work-dir-relative structure path"
+            f"the {workflow} request did not freeze a work-dir-relative structure path"
         )
     if task_request.output_dir != Path("."):
         raise FreezeSpecError(
-            f"the singlepoint request did not freeze '.' as output_dir: {task_request.output_dir!r}"
+            f"the {workflow} request did not freeze '.' as output_dir: {task_request.output_dir!r}"
         )
     _assert_task_request_paths(task_request.to_dict(), work_dir)
     return context, request, task_request
 
 
-def build_singlepoint_freeze_spec(
+def build_simple_freeze_spec(
     record: Any,
     work_dir: Path | str,
     input_path: Path | str | None,
     release: LocalRelease,
+    *,
+    workflow: str,
 ) -> AttemptFreezeSpec:
-    """Build the frozen singlepoint spec for one ``(job, attempt)``.
-
-    Uses the existing science request builder (``workflows.simple``) plus the
-    existing ACP identity authority (``compute_identity``) and Services
-    conversion (``legacy_adapters.to_task_request``) — no duplicate request
-    construction.  The returned spec is consumed by
-    :func:`acp_services.runtime.attempt_freeze.write_frozen_attempt`.
-
-    Existing-group semantics: the same attempt is reused byte-for-byte; a
-    different attempt is a typed conflict (task 32 owns archival/re-freeze).
-    """
-    if record.spec.workflow != "singlepoint":
-        raise FreezeSpecError(
-            f"build_singlepoint_freeze_spec only builds singlepoint, got {record.spec.workflow!r}"
-        )
+    """Build one simple-workflow freeze spec through the existing builders."""
+    try:
+        step_kind, backend, task_kind = _SIMPLE_WORKFLOW_TASKS[workflow]
+    except KeyError as exc:
+        raise FreezeSpecError(f"no simple freeze builder for workflow {workflow!r}") from exc
+    if record.spec.workflow != workflow:
+        raise FreezeSpecError(f"{workflow} freeze builder cannot build {record.spec.workflow!r}")
     work = Path(work_dir).resolve()
     work.mkdir(parents=True, exist_ok=True)
-
-    existing = _existing_spec(work, int(record.attempt))
+    existing = _existing_spec(work, int(record.attempt), workflow=workflow)
     if existing is not None:
         return existing
-
     if release is None:
         raise FreezeSpecError("an immutable LocalRelease is required for a new freeze")
     release.assert_current()
 
     input_file = _materialize_input(work, input_path)
-    context, request, task_request = _build_singlepoint_request(record, work, input_file)
-
-    calculation_plan = _build_plan(
-        StepKind.SINGLEPOINT,
-        [request],
-        [StepKind.SINGLEPOINT],
+    context, request, task_request = _build_simple_request(
+        record,
+        work,
+        input_file,
+        workflow=workflow,
+        step_kind=step_kind,
+        backend=backend,
+        task_kind=task_kind,
     )
+    calculation_plan = _build_plan(step_kind, [request], [step_kind])
     scientific = compute_identity(calculation_plan, location_root=work)
-
     step_payload = task_request.to_dict()
     body = FrozenPlan(
         payload=step_payload,
-        steps=(FrozenStep(kind=StepKind.SINGLEPOINT.value, payload=step_payload),),
+        steps=(FrozenStep(kind=step_kind.value, payload=step_payload),),
         item_symbols=tuple(context.symbols),
     )
     plan = replace(
@@ -800,13 +846,280 @@ def build_singlepoint_freeze_spec(
         ),
     )
     binding = _local_binding(work, release, input_file)
-    envelope = _build_envelope(record, plan, binding, release)
+    envelope = _build_envelope(
+        record,
+        plan,
+        binding,
+        release,
+        task_kind=task_request.task.value,
+    )
     return AttemptFreezeSpec(
-        workflow="singlepoint",
+        workflow=workflow,
         envelope=envelope,
         plan=plan,
         binding=binding,
     )
+
+
+def build_singlepoint_freeze_spec(
+    record: Any,
+    work_dir: Path | str,
+    input_path: Path | str | None,
+    release: LocalRelease,
+) -> AttemptFreezeSpec:
+    """Build the frozen singlepoint spec for one ``(job, attempt)``."""
+    return build_simple_freeze_spec(
+        record,
+        work_dir,
+        input_path,
+        release,
+        workflow="singlepoint",
+    )
+
+
+def _plan_from_task_request(
+    task_request: TaskRequest,
+    *,
+    step_kind: str,
+    item_symbols: tuple[str, ...],
+    input_file: Path | None,
+) -> FrozenPlan:
+    """Frozen plan whose identity is bound to the task request + input bytes.
+
+    Used by the non-``compute_identity`` workflows (IRC / OrcaGradient) where
+    the executor consumes a standalone typed request rather than a
+    CalculationPlan.  The body digest remains the T24 tamper anchor; the
+    declared plan/step identity uses the shared content fingerprint.
+    """
+    payload = task_request.to_dict()
+    body = FrozenPlan(
+        payload=payload,
+        steps=(FrozenStep(kind=step_kind, payload=payload),),
+        item_symbols=item_symbols,
+    )
+    input_digest = _sha256_bytes(input_file.read_bytes()) if input_file is not None else ""
+    plan_identity = identity_fingerprint(
+        {
+            "scope": "attempt-freeze",
+            "task": payload,
+            "item_symbols": list(item_symbols),
+            "input_sha256": input_digest,
+        }
+    )
+    step_identity = identity_fingerprint(
+        {
+            "scope": "attempt-freeze-step",
+            "index": 0,
+            "step_kind": step_kind,
+            "task": payload,
+            "item_symbols": list(item_symbols),
+            "input_sha256": input_digest,
+        }
+    )
+    return replace(
+        body,
+        identity=FrozenPlanIdentity(
+            plan_digest=frozen_plan_body_digest(body),
+            plan_identity=plan_identity,
+            step_identities=(step_identity,),
+        ),
+    )
+
+
+def build_scan_freeze_spec(
+    record: Any,
+    work_dir: Path | str,
+    input_path: Path | str | None,
+    release: LocalRelease,
+) -> AttemptFreezeSpec:
+    """Build a frozen scan spec through the existing scan request adapter."""
+    if record.spec.workflow != "scan":
+        raise FreezeSpecError(f"scan freeze builder cannot build {record.spec.workflow!r}")
+    work = Path(work_dir).resolve()
+    work.mkdir(parents=True, exist_ok=True)
+    existing = _existing_spec(work, int(record.attempt), workflow="scan")
+    if existing is not None:
+        return existing
+    if release is None:
+        raise FreezeSpecError("an immutable LocalRelease is required for a new freeze")
+    release.assert_current()
+    input_file = _materialize_input(work, input_path)
+    config = _record_config(record)
+    input_payload = record.spec.input if isinstance(record.spec.input, Mapping) else {}
+    context = _context(
+        str(input_file),
+        config,
+        _optional_int(input_payload.get("charge")),
+        _optional_int(input_payload.get("multiplicity")),
+        record.spec.name or None,
+    )
+    method_kwargs = _singlepoint_method_kwargs(
+        record.spec.method if isinstance(record.spec.method, Mapping) else {}
+    )
+    method = str(method_kwargs.pop("method", "") or "r2SCAN-3c")
+    resources: dict[str, Any] = {
+        **method_kwargs,
+        "backend": "orca",
+        "config": config,
+        "output_dir": ".",
+        "result_dir": ".",
+    }
+    coordinate = input_payload.get("scan_coordinates") or input_payload.get("coordinate")
+    if coordinate is not None:
+        resources["scan_coordinates"] = coordinate
+    for key in ("scan_points", "use_scants"):
+        value = input_payload.get(key)
+        if value is not None:
+            resources[key] = value
+    request = CalculationRequest(
+        input_artifact=replace(context.artifact, path=Path("input.xyz")),
+        method=method,
+        resources=resources,
+        workflow="scan",
+        profile="default",
+    )
+    task_request, _binding = to_task_request(request, TaskKind.SCAN)
+    _assert_task_request_paths(task_request.to_dict(), work)
+    plan = _plan_from_task_request(
+        task_request,
+        step_kind=StepKind.SCAN.value,
+        item_symbols=tuple(context.symbols),
+        input_file=input_file,
+    )
+    binding = _local_binding(work, release, input_file)
+    envelope = _build_envelope(record, plan, binding, release, task_kind=task_request.task.value)
+    return AttemptFreezeSpec(workflow="scan", envelope=envelope, plan=plan, binding=binding)
+
+
+def build_irc_freeze_spec(
+    record: Any,
+    work_dir: Path | str,
+    input_path: Path | str | None,
+    release: LocalRelease,
+) -> AttemptFreezeSpec:
+    """Build a frozen IRC spec through the existing typed request adapter."""
+    if record.spec.workflow != "irc":
+        raise FreezeSpecError(f"irc freeze builder cannot build {record.spec.workflow!r}")
+    work = Path(work_dir).resolve()
+    work.mkdir(parents=True, exist_ok=True)
+    existing = _existing_spec(work, int(record.attempt), workflow="irc")
+    if existing is not None:
+        return existing
+    if release is None:
+        raise FreezeSpecError("an immutable LocalRelease is required for a new freeze")
+    release.assert_current()
+    input_file = _materialize_input(work, input_path)
+    config = _record_config(record)
+    input_payload = record.spec.input if isinstance(record.spec.input, Mapping) else {}
+    method_payload = record.spec.method if isinstance(record.spec.method, Mapping) else {}
+    context = _context(
+        str(input_file),
+        config,
+        _optional_int(input_payload.get("charge")),
+        _optional_int(input_payload.get("multiplicity")),
+        record.spec.name or None,
+    )
+    method_kwargs = _singlepoint_method_kwargs(method_payload)
+    method = str(method_kwargs.pop("method", "") or "r2SCAN-3c")
+    basis = str(method_kwargs.pop("basis", "") or "")
+    raw_directions = input_payload.get("directions") or method_payload.get("direction")
+    if isinstance(raw_directions, str):
+        if raw_directions == "both":
+            directions = ("forward", "reverse")
+        else:
+            directions = (raw_directions,)
+    elif isinstance(raw_directions, (list, tuple)) and raw_directions:
+        directions = tuple(str(value) for value in raw_directions)
+    else:
+        directions = ("forward", "reverse")
+    resources: dict[str, Any] = {
+        **method_kwargs,
+        "backend": "orca",
+        "config": config,
+        "output_dir": ".",
+        "result_dir": ".",
+        "basis": basis,
+        "max_iter": _optional_int(input_payload.get("maxpoints")) or 100,
+        "step": float(input_payload.get("step") or 0.1),
+    }
+    request = CalculationRequest(
+        input_artifact=StructureArtifact(
+            path=Path("input.xyz"),
+            elements=list(context.symbols),
+            role=StructureRole.TRANSITION_STATE,
+            source="irc",
+        ),
+        method=method,
+        resources=resources,
+        workflow="irc",
+        profile="default",
+    )
+    task_request, _binding = to_task_request(request, TaskKind.IRC, directions=directions)
+    _assert_task_request_paths(task_request.to_dict(), work)
+    plan = _plan_from_task_request(
+        task_request,
+        step_kind="irc",
+        item_symbols=tuple(context.symbols),
+        input_file=input_file,
+    )
+    binding = _local_binding(work, release, input_file)
+    envelope = _build_envelope(record, plan, binding, release, task_kind=task_request.task.value)
+    return AttemptFreezeSpec(workflow="irc", envelope=envelope, plan=plan, binding=binding)
+
+
+def build_orca_gradient_freeze_spec(
+    record: Any,
+    work_dir: Path | str,
+    input_path: Path | str | None,
+    release: LocalRelease,
+) -> AttemptFreezeSpec:
+    """Build a frozen OrcaGradient spec from its existing frozen payload."""
+    if record.spec.workflow != "OrcaGradient":
+        raise FreezeSpecError(f"OrcaGradient freeze builder cannot build {record.spec.workflow!r}")
+    work = Path(work_dir).resolve()
+    work.mkdir(parents=True, exist_ok=True)
+    existing = _existing_spec(work, int(record.attempt), workflow="OrcaGradient")
+    if existing is not None:
+        return existing
+    if release is None:
+        raise FreezeSpecError("an immutable LocalRelease is required for a new freeze")
+    release.assert_current()
+    input_payload = record.spec.input if isinstance(record.spec.input, Mapping) else {}
+    raw = (
+        input_payload.get("gradient_request")
+        or input_payload.get("orca_gradient_request")
+        or input_payload
+    )
+    if not isinstance(raw, Mapping):
+        raise FreezeSpecError("OrcaGradient freeze requires a gradient_request mapping")
+    from acp.workflows.orca_gradient import _validate_gradient_request
+
+    validated = _validate_gradient_request(raw)
+    task_request, _binding = pes2ts_orca_gradient_to_task_request(validated)
+    task_request = replace(task_request, output_dir=Path("."))
+    _assert_task_request_paths(task_request.to_dict(), work)
+    plan = _plan_from_task_request(
+        task_request,
+        step_kind="orca_gradient",
+        item_symbols=tuple(validated.symbols),
+        input_file=None,
+    )
+    envelope = _build_envelope(record, plan, None, release, task_kind=task_request.task.value)
+    return AttemptFreezeSpec(workflow="OrcaGradient", envelope=envelope, plan=plan, binding=None)
+
+
+def build_freeze_spec(
+    record: Any,
+    work_dir: Path | str,
+    input_path: Path | str | None,
+    release: LocalRelease,
+) -> AttemptFreezeSpec:
+    """Dispatch to the ONE registered builder for ``record.spec.workflow``."""
+    workflow = str(record.spec.workflow)
+    builder = FREEZE_BUILDERS.get(workflow)
+    if builder is None:
+        raise FreezeSpecError(f"no freeze builder registered for workflow {workflow!r}")
+    return builder(record, work_dir, input_path, release)
 
 
 def freeze_singlepoint_attempt(
@@ -818,3 +1131,24 @@ def freeze_singlepoint_attempt(
     """Build + publish one singlepoint group through the task-24 writer."""
     spec = build_singlepoint_freeze_spec(record, work_dir, input_path, release)
     return write_frozen_attempt(work_dir, spec)
+
+
+#: The single builder registry used by the activation hook (no scattered branches).
+FREEZE_BUILDERS: Final[dict[str, Any]] = {
+    "singlepoint": build_singlepoint_freeze_spec,
+    "optimize": lambda record, work, inp, rel: build_simple_freeze_spec(
+        record, work, inp, rel, workflow="optimize"
+    ),
+    "frequency": lambda record, work, inp, rel: build_simple_freeze_spec(
+        record, work, inp, rel, workflow="frequency"
+    ),
+    "casscf": lambda record, work, inp, rel: build_simple_freeze_spec(
+        record, work, inp, rel, workflow="casscf"
+    ),
+    "xtb_optimize": lambda record, work, inp, rel: build_simple_freeze_spec(
+        record, work, inp, rel, workflow="xtb_optimize"
+    ),
+    "scan": build_scan_freeze_spec,
+    "irc": build_irc_freeze_spec,
+    "OrcaGradient": build_orca_gradient_freeze_spec,
+}

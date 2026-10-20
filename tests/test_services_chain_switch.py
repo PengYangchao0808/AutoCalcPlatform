@@ -2522,3 +2522,81 @@ def test_t32_completed_job_is_rerun_not_continue(tmp_path: Path) -> None:
         assert store.get(_JOB).status == JobStatus.COMPLETED  # type: ignore[union-attr]
     finally:
         manager.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# 13. 07-C singlepoint default activation + builder registry (todo 29)
+# ---------------------------------------------------------------------------
+
+
+def test_t29_default_envelope_scope_is_singlepoint_only() -> None:
+    assert chain.DEFAULT_ENVELOPE_WORKFLOWS == frozenset({"singlepoint"})
+    assert chain.ENABLED_WORKFLOWS == _C01_EIGHT  # scientific closure unchanged
+    assert set(acp_freeze.FREEZE_BUILDERS) == {
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "casscf",
+        "xtb_optimize",
+        "OrcaGradient",
+    }
+
+
+def test_t29_ordinary_singlepoint_submit_uses_the_frozen_chain(tmp_path: Path) -> None:
+    run_root = tmp_path / "run_root"
+    store = JobStore(run_root / "acp_jobs.db")
+    runner = JobRunner(python_executable=sys.executable)
+    runner.worker_probe_executor = "ok"
+    manager = JobManager(run_root, store=store, runner=runner, poll_interval=5)
+    try:
+        record = manager.submit(
+            JobSpec(
+                workflow="singlepoint",
+                name="t29",
+                input={"smiles": "CCO"},
+                method={},
+            )
+        )
+        terminal = _t27_wait(manager, store, record.id, timeout=60)
+
+        assert terminal.status == JobStatus.COMPLETED
+        work = Path(terminal.work_dir)
+        group = chain.load_frozen_group(work, expected_attempt=1)
+        assert group.manifest.workflow == "singlepoint"
+        choice = chain.read_attempt_choice(work)
+        assert choice is not None and choice.entry == chain.EXECUTION_ENTRY_ENVELOPE
+        assert (work / "execution_receipt.json").is_file()
+        assert (work / "RESULT" / "result_manifest.json").is_file()
+        events = (work / "WORK" / "00_RUNTIME" / "events.jsonl").read_text(encoding="utf-8")
+        assert "attempt.frozen" in events
+        assert "acp_services.worker_bootstrap" in events
+        assert "acp.cli" not in events
+        assert events.count('"type": "process.starting"') == 1
+        assert store.get(record.id).status == JobStatus.COMPLETED  # type: ignore[union-attr]
+    finally:
+        manager.shutdown()
+
+
+def test_t29_non_default_workflow_stays_on_the_registered_path(tmp_path: Path) -> None:
+    work = tmp_path / "task"
+    work.mkdir()
+    record = JobRecord(
+        id="job-t29-optimize",
+        spec=JobSpec(
+            workflow="optimize",
+            name="t29-optimize",
+            input={"smiles": "CCO"},
+            method={},
+        ),
+        work_dir=str(work),
+    )
+    runner = JobRunner(python_executable=sys.executable)
+
+    cmd = runner._build_execution_cmd(record, work, "CCO", {})
+
+    assert "acp.cli" in " ".join(cmd)
+    assert chain.WORKER_MODULE not in " ".join(cmd)
+    assert not chain.frozen_group_dir(work).exists()
+    assert chain.read_attempt_choice(work) is not None
