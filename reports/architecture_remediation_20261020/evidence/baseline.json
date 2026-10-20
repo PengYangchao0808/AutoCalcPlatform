@@ -1,0 +1,607 @@
+{
+  "config_sources": {
+    "authority": "Python built-in _get_default_config() is the single authority; config/defaults.yaml is reference only",
+    "merge_order": [
+      "built-in defaults",
+      "~/.cccp.yaml",
+      "./cccp.yaml",
+      "--config file",
+      "CONFSEARCH_* env",
+      "CLI args"
+    ],
+    "note": "Resolved without modifying any config; no file written.",
+    "raw_log": "evidence/config-sources.log",
+    "resolved_read_only": {
+      "./cccp.yaml": {
+        "bytes": 5675,
+        "exists": true
+      },
+      "ACP_RUN_ROOT_env": null,
+      "CONFSEARCH_env": {},
+      "config/defaults.yaml": {
+        "bytes": 14238,
+        "exists": true,
+        "sha256": "037f18616c60dd1374d15f964cae0d1f6e95f6c6c2ae3b04d0e759f726b195d1"
+      },
+      "resolved_run_root": "/home/xieningke/.local/share/acp/runs",
+      "~/.cccp.yaml": {
+        "bytes": 5675,
+        "exists": true
+      },
+      "~/.conformer_search.yaml": {
+        "exists": false
+      }
+    }
+  },
+  "dirty": {
+    "command": "git status --porcelain=v1",
+    "e2e_task_root_fact": {
+      "bytes_worktree": 47,
+      "contents_packaged": false,
+      "head_blob_sha1": "f7b076eadb2839061134c03b3de59f0093b7cc6e",
+      "note": "FACT ONLY — path/status/hashes recorded; contents deliberately NOT copied, NOT packaged, NOT committed by this task.",
+      "patch_sha256": "f8940873e5689d2d4f578b8f105bb732dfd86432bdb9e8d6c578b274a63aa1a3",
+      "path": "tests/baseline/refactor-evidence/e2e-task-root.txt",
+      "sha256_worktree": "f6b0d31c0a15a5fc9022bf53ccedecc3f8a2472b53dc2d39bd36a0560ded754e",
+      "status_porcelain": " M"
+    },
+    "entries": [
+      {
+        "code": " M",
+        "path": "docs/ACP_Architecture_Adjustment_Plan_20261016.md"
+      },
+      {
+        "code": " M",
+        "path": "tests/baseline/refactor-evidence/e2e-task-root.txt"
+      },
+      {
+        "bytes": 36338,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md",
+        "sha256": "8d26e3b385ff687396bc67257fd1bd8e71c2bc9f287a453d978da88fbd2c69e2"
+      },
+      {
+        "bytes": 18113,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md",
+        "sha256": "bb29bc2458dfe9b85eab9bf6cfde5be1cb330d34ed7384c9e81d8a8a1b6c34ac"
+      },
+      {
+        "bytes": 12543,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md",
+        "sha256": "49f55fe92aa2cf452d6ef7200311870ce750cb8769b1419e6b8b93eb3743ba8d"
+      },
+      {
+        "bytes": 6614,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md",
+        "sha256": "b058ea0a5dd07d6b189924a003c4d65fe9daf5153072940df9baeaa6a55959b0"
+      },
+      {
+        "bytes": 3828,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md",
+        "sha256": "d18f19283997008c517ddb5f755d8f73967aade8e9c1dc666e91a6152623b2f2"
+      },
+      {
+        "bytes": 15915,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md",
+        "sha256": "27afad1fd53551db6658c8ea9d7f9bce1eb937645913732ab9f0e94dc0e70da2"
+      },
+      {
+        "bytes": 17849,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md",
+        "sha256": "89019859b3868c6d0efdfdbddacc5b23237bfee552b8f5326fe8bb92a6655e3a"
+      },
+      {
+        "bytes": 13832,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md",
+        "sha256": "30c1be8413ecb978a33cad3f81fb55f18a1061d2b4c8baff3b864450f8d3e372"
+      },
+      {
+        "bytes": 45934,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md",
+        "sha256": "4123034a0d106457d514e5ed709d7ba1f4e2be08bd5d2f62129f7a1c5a08a6a8"
+      },
+      {
+        "bytes": 29319,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md",
+        "sha256": "29864b3eb702cff9fe062df313bbefbfde9b33746d3845a1d2d4b3c67554c43c"
+      },
+      {
+        "bytes": 8934,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md",
+        "sha256": "8d4bcf909647ba8caedbcab40b6b31a3879a273d94dc035ebe88ab9a4f4c823e"
+      },
+      {
+        "bytes": 9800,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md",
+        "sha256": "dfdb84f2846402f2a4811d5b4c538d1483e34dff91d5a64982c8d40dc1661008"
+      },
+      {
+        "bytes": 3932,
+        "code": "??",
+        "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md",
+        "sha256": "f72d8a38f1989517f0d4250b14d48dde6152b43cffe473d0dfa236d71a431247"
+      },
+      {
+        "code": "??",
+        "path": "reports/architecture_acceptance_20261019/"
+      },
+      {
+        "code": "??",
+        "path": "reports/architecture_remediation_20261020/"
+      }
+    ],
+    "entry_count": 17,
+    "note": "Pre-existing user changes. Recorded, left in place, never staged by this task.",
+    "patch_sha256_by_file": {
+      "docs/ACP_Architecture_Adjustment_Plan_20261016.md": "53053b6fbc5be20f45c18f706edcf0724185aba2c29b76d8e6cd7bd73dec2a8d",
+      "tests/baseline/refactor-evidence/e2e-task-root.txt": "f8940873e5689d2d4f578b8f105bb732dfd86432bdb9e8d6c578b274a63aa1a3"
+    },
+    "retained_not_cleaned": true,
+    "worktree_diff_sha256": "ef511ec9491adb3bd5b2d16148acfc805bd6516e110804a98d008fd4ad2c66e7"
+  },
+  "fixtures": {
+    "SHA256SUMS.txt": {
+      "lines": 7,
+      "sha256": "18c7f1dbaa5a584e315ea118ba6c201e4e0d2e761abe68a9ac30f29fed2f362c"
+    },
+    "baseline_root": "tests/baseline",
+    "directories": {
+      "tests/baseline/cccp-evidence": {
+        "files": 63,
+        "tree_sha256": "579ca55dec4781d962cdaeae922a613bdd7c670609134fe58a6cbf1ab4e697c3"
+      },
+      "tests/baseline/cccp_calculation_goldens": {
+        "files": 15,
+        "tree_sha256": "6dd435b059722f9d400c79accbb335fb1c13b221ffe66ce9197025ece85cbc2f"
+      },
+      "tests/baseline/nmr": {
+        "files": 3,
+        "tree_sha256": "8dd05a1543381e73c1228e37b391034b17e7e4ded7f0018efe6fc50e13a3f67c"
+      },
+      "tests/baseline/recovery_fixtures": {
+        "files": 45,
+        "tree_sha256": "d0bb62d8f1dbf3d96e3e95d46e7a3c7d8cf814f6ca3a7673f41c1572452e48d7"
+      },
+      "tests/baseline/refactor-evidence": {
+        "files": 127,
+        "tree_sha256": "943305d9ff46c234581e0cb41f8752a9ace648556e58a710c24a826a3f766017"
+      },
+      "tests/baseline/reference": {
+        "files": 7,
+        "tree_sha256": "1d4dd6c7997a08398f464564350dfdb1cbd1bdc7d69d82577e5568f0799d898e"
+      },
+      "tests/baseline/services-evidence": {
+        "files": 51,
+        "tree_sha256": "914ae230c920188e086d728157075ec806699535f66b244e1f616e7f4d600403"
+      }
+    },
+    "method": "per-directory tree digest = sha256 over sorted lines '<file_sha256>  <relpath>' (excluding *.pyc)"
+  },
+  "generated_by": "task 1 — freeze the remediation baseline (evidence skeleton)",
+  "generated_on": "2026-10-20",
+  "harness_contract": "harness-contract.md",
+  "historical_probe": {
+    "collect_only": "12 tests collected, exit 0 (see evidence/collection.log)",
+    "direct_entrypoint": "none — module has no __main__/argparse; direct execution imports and exits 0 with no output; pytest is the only entrypoint",
+    "path": "reports/architecture_acceptance_20261019/reproduce_defects.py",
+    "role": "historical audit artifact, not a gate",
+    "sha256": "7ddd2cc3de714d3f14c8818bf26fc0d1367b099bf6bbf61860ac082e455b27d0"
+  },
+  "parsers": {
+    "module": "acp.intake.parsers",
+    "parsing_stack": {
+      "PyYAML": "6.0.3",
+      "nmrglue": "0.12",
+      "numpy": "2.4.6",
+      "rdkit": "2026.3.6",
+      "scipy": "1.17.1"
+    },
+    "public_functions": [
+      "detect_and_parse",
+      "detect_format",
+      "normalize_molblock",
+      "parse_gjf_text",
+      "parse_mol_text",
+      "parse_orca_inp_text",
+      "parse_qc_output_text",
+      "parse_sdf_text",
+      "parse_smiles_list",
+      "parse_structure_text",
+      "parse_xyz_text"
+    ],
+    "raw_log": "evidence/parsers.log",
+    "supported_formats": [
+      "smiles",
+      "xyz",
+      "gjf",
+      "com",
+      "inp",
+      "sdf",
+      "mol",
+      "out/log (qc output)"
+    ],
+    "version_note": "parsers carry no __version__; pinned instead by the candidate revision and by the installed parsing stack (numpy/rdkit/pyyaml) recorded in versions."
+  },
+  "performance_budget": {
+    "block_size": {
+      "file_copy_bytes": 32768,
+      "rule": "SFTP chunk size recorded as observed; F0/F1 comparisons invalid if block sizes differ"
+    },
+    "browser": {
+      "budget": {
+        "no_monotonic_growth": true,
+        "open_close_cycles": 10,
+        "playback_fps_min": 30,
+        "teardown_heap_growth_max_pct": 20
+      },
+      "engine": "Playwright Chromium + repository 3Dmol-2.5.5.min.js",
+      "frame_rate": "requestAnimationFrame callback count over a fixed 10s window / 10 = fps",
+      "memory": "CDP Performance.getMetrics JSHeapUsedSize sampled at t=0, t=10s, and 10s after teardown"
+    },
+    "cache": {
+      "accounting": "hits = resource already local at read/cache lookup; misses = fetch issued; report hits, misses, hit_ratio and second-pass network bytes",
+      "budget": {
+        "same_session_second_pass_hit_ratio": 1.0,
+        "second_pass_network_bytes": 0
+      }
+    },
+    "db_writes": {
+      "accounting": "connection.total_changes delta + set_trace_callback statement histogram on acp_jobs.db inside the harness process",
+      "budget": {
+        "submit_to_terminal_statements_max": 120,
+        "worker_jobs_db_writes_required": 0
+      }
+    },
+    "discipline": [
+      "No before/after ratio may be claimed without measured numbers on both sides.",
+      "compileall proves syntax only; it never proves imports. Import smoke = python3.11 -c \"import acp, cccp, acp_services\".",
+      "Absent QC/LSF binaries are recorded as absence (NOT_VERIFIED), never as PASS."
+    ],
+    "frozen_by": "task 1 (baseline freeze) — before any performance claim",
+    "frozen_on": "2026-10-20",
+    "latency": {
+      "budget": {
+        "f1_vs_f0_p95_regression_max_pct": 10,
+        "local_list_p50_ms": 150,
+        "local_list_p95_ms": 400,
+        "structure_viewer_frame_list_p95_ms": 800
+      },
+      "percentile_method": "nearest-rank ceil(p*n) on sorted post-warmup latencies",
+      "timer": "time.perf_counter() client-side around each request",
+      "unit": "ms"
+    },
+    "machine": {
+      "node": "v20.19.0",
+      "python": "3.11.13",
+      "rule": "F0 and F1 measurements must use this machine, python3.11.13, the same ACP_RUN_ROOT on a native filesystem, and the same frozen sample (ACP_ACCEPTANCE_SEED equal). Different machine/sample => numbers are not comparable and no improvement may be claimed.",
+      "same_machine_required": true,
+      "uname": "Linux workstation 5.14.0-687.56.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 8 14:47:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+    },
+    "remote_io": {
+      "accounting": "byte counters at the SFTP transport boundary (read/write calls + file count + transfer seconds); a counter is not a mock execution",
+      "budget_singlepoint_attempt": {
+        "bytes_max": 5242880,
+        "files_read_max": 20,
+        "seconds_max": 120
+      }
+    },
+    "sample": {
+      "alternation": "F0 and F1 run alternated, 3 rounds each",
+      "n_for_percentiles": 540,
+      "request_mix": {
+        "detail": 50,
+        "list": 50,
+        "status_poll": 50,
+        "structure_viewer_frames": 50
+      },
+      "requests_per_series": 200,
+      "rounds": 3,
+      "seed_var": "ACP_ACCEPTANCE_SEED",
+      "warmup_discarded_per_round": 20
+    }
+  },
+  "qc_discovery": {
+    "discover_all": {
+      "censo": null,
+      "crest": null,
+      "isostat": null,
+      "molclus": null,
+      "orca": "/usr/bin/orca",
+      "shermo": null,
+      "xtb": null
+    },
+    "doctor_exit_code": 0,
+    "doctor_scope": "acp doctor probes the configured remote node (node-157 / 10.16.5.157) over SSH; remote results are node facts, not local availability and not a PASS for any matrix cell.",
+    "local_binaries": {
+      "bjobs": null,
+      "bstop": null,
+      "bsub": null,
+      "censo": null,
+      "crest": null,
+      "isostat": null,
+      "orca": "/usr/bin/orca",
+      "shermo": null,
+      "ssh": "/usr/bin/ssh",
+      "xtb": null
+    },
+    "local_qc_verdict": "NOT_VERIFIED — locally only 'orca' resolves, to /usr/bin/orca which file(1) identifies as a Python script printing '40.3' (not verified as a QC ORCA binary). crest/xtb/censo/isostat/shermo ABSENT locally.",
+    "lsf_client_local": "bsub/bjobs/bstop ABSENT locally (LSF runs on the configured remote node)",
+    "raw_logs": [
+      "evidence/qc-discovery.log",
+      "evidence/qc-doctor.log"
+    ]
+  },
+  "revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+  "revision_source": "git rev-parse HEAD",
+  "schema": "acp.architecture.remediation.baseline.v1",
+  "status": "DRAFT / NOT_ACCEPTED",
+  "support_matrix_seed": {
+    "allowed_tokens": [
+      "OPEN",
+      "NOT_VERIFIED",
+      "NOT_APPLICABLE"
+    ],
+    "columns": [
+      "scientific_closure",
+      "default_submit_freeze",
+      "local_dispatch_receipt",
+      "remote_dispatch_receipt",
+      "publication_recovery",
+      "real_science"
+    ],
+    "document": "support-matrix.md",
+    "pass_allowed_at_baseline": false,
+    "row_source": "src/acp_services/runtime/workflow_enablement.py::ACTIVE_WORKFLOWS (15) + execution_chain.py::FROZEN_WORKFLOW_CAPABILITY_TABLE",
+    "rows": [
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 1,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "singlepoint"
+      },
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 2,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "optimize"
+      },
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 3,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "frequency"
+      },
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 4,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "scan"
+      },
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 5,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "irc"
+      },
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 6,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "NOT_APPLICABLE",
+        "remote_supported": false,
+        "scientific_closure": "OPEN",
+        "workflow": "casscf"
+      },
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 7,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "xtb_optimize"
+      },
+      {
+        "closure": "integrated",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 8,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "NOT_APPLICABLE",
+        "remote_supported": false,
+        "scientific_closure": "OPEN",
+        "workflow": "OrcaGradient"
+      },
+      {
+        "closure": "legacy",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 9,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "tsmode"
+      },
+      {
+        "closure": "legacy",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 10,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "nmr"
+      },
+      {
+        "closure": "legacy",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 11,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "Confsearch"
+      },
+      {
+        "closure": "legacy",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 12,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "PESsearch"
+      },
+      {
+        "closure": "legacy",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 13,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "OPEN",
+        "remote_supported": true,
+        "scientific_closure": "OPEN",
+        "workflow": "BatchOptimize"
+      },
+      {
+        "closure": "legacy",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 14,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "NOT_APPLICABLE",
+        "remote_supported": false,
+        "scientific_closure": "OPEN",
+        "workflow": "XtbPathSearch"
+      },
+      {
+        "closure": "legacy",
+        "default_submit_freeze": "OPEN",
+        "local_dispatch_receipt": "OPEN",
+        "n": 15,
+        "publication_recovery": "OPEN",
+        "real_science": "NOT_VERIFIED",
+        "remote_dispatch_receipt": "NOT_APPLICABLE",
+        "remote_supported": false,
+        "scientific_closure": "OPEN",
+        "workflow": "XtbConstrainedOpt"
+      }
+    ]
+  },
+  "versions": {
+    "declared_extras": {
+      "api": [
+        "fastapi>=0.115",
+        "python-multipart>=0.0.9",
+        "uvicorn>=0.30",
+        "zipstream-ng>=1.9.0"
+      ],
+      "browser": [
+        "playwright>=1.40"
+      ],
+      "dev": [
+        "httpx>=0.27",
+        "mypy>=1.8.0",
+        "pre-commit>=3.6.0",
+        "pytest-cov>=4.1.0",
+        "pytest>=7.4.0",
+        "ruff>=0.4.0"
+      ],
+      "nmr": [
+        "nmrglue>=0.10",
+        "openbabel>=3.1",
+        "qml>=0.4"
+      ],
+      "remote": [
+        "paramiko>=3.0"
+      ]
+    },
+    "declared_runtime_node_deps": "requirements-node.txt (numpy/rdkit/pyyaml)",
+    "installed_key_packages": {
+      "PyYAML": "6.0.3",
+      "acp": "0.2.0",
+      "anyio": "4.15.1",
+      "fastapi": "0.141.1",
+      "httpx": "0.28.1",
+      "mypy": "2.3.1",
+      "nmrglue": "0.12",
+      "numpy": "2.4.6",
+      "paramiko": "5.0.0",
+      "playwright": "1.63.0",
+      "pydantic": "2.13.5",
+      "pytest": "9.1.1",
+      "rdkit": "2026.3.6",
+      "ruff": "0.15.22",
+      "scipy": "1.17.1",
+      "starlette": "1.6.0",
+      "uvicorn": "0.52.4"
+    },
+    "installed_package_count": 100,
+    "node": "v20.19.0",
+    "pip": "pip 22.3.1 from /usr/lib/python3.11/site-packages/pip (python 3.11)",
+    "platform": "Linux-5.14.0-687.56.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "python": "3.11.13",
+    "python_executable": "/usr/bin/python3.11",
+    "python_full": "3.11.13 (main, Jun  1 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]",
+    "raw_log": "evidence/versions.log",
+    "requires_python": ">=3.10"
+  }
+}

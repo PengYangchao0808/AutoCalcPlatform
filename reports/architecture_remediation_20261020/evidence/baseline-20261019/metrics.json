@@ -1,0 +1,130 @@
+{
+  "src/acp": {
+    "files": 279,
+    "lines": 113494,
+    "largest": [
+      [
+        7691,
+        "src/acp/api/v1_routes.py"
+      ],
+      [
+        6131,
+        "src/acp/scheduler/manager.py"
+      ],
+      [
+        5270,
+        "src/acp/catalog.py"
+      ],
+      [
+        5073,
+        "src/acp/cli.py"
+      ],
+      [
+        4029,
+        "src/acp/workflows/nmr.py"
+      ]
+    ],
+    "except_Exception": 262,
+    "except_Exception_without_binding": 139
+  },
+  "src/acp_services": {
+    "files": 70,
+    "lines": 40380,
+    "largest": [
+      [
+        2409,
+        "src/acp_services/workspace/identity_lifecycle.py"
+      ],
+      [
+        1858,
+        "src/acp_services/runtime/quota.py"
+      ],
+      [
+        1596,
+        "src/acp_services/runtime/admission.py"
+      ],
+      [
+        1503,
+        "src/acp_services/runtime/isolation.py"
+      ],
+      [
+        1455,
+        "src/acp_services/data/import_.py"
+      ]
+    ],
+    "except_Exception": 18,
+    "except_Exception_without_binding": 12
+  },
+  "src/cccp": {
+    "files": 180,
+    "lines": 76598,
+    "largest": [
+      [
+        3812,
+        "src/cccp/qc/interfaces/orca.py"
+      ],
+      [
+        2201,
+        "src/cccp/analysis/nmr/models.py"
+      ],
+      [
+        2049,
+        "src/cccp/calculation/requests.py"
+      ],
+      [
+        1768,
+        "src/cccp/analysis/nmr/carbon_processor.py"
+      ],
+      [
+        1596,
+        "src/cccp/calculation/results.py"
+      ]
+    ],
+    "except_Exception": 64,
+    "except_Exception_without_binding": 24
+  },
+  "frontend/js": {
+    "files": 80,
+    "lines": 55627,
+    "largest": [
+      [
+        4653,
+        "frontend/js/workbench/features/energy.js"
+      ],
+      [
+        4025,
+        "frontend/js/structure_viewer.js"
+      ],
+      [
+        3556,
+        "frontend/js/workbench/features/wizard.js"
+      ],
+      [
+        3484,
+        "frontend/js/workbench/features/wizard/draft-form.js"
+      ],
+      [
+        3125,
+        "frontend/js/workbench/i18n.js"
+      ]
+    ],
+    "except_Exception": 0,
+    "except_Exception_without_binding": 0
+  },
+  "frontend/ACP_Workbench_v2.html": {
+    "baseline_lines": 1252,
+    "current_lines": 1259
+  },
+  "src/acp/scheduler/manager.py": {
+    "baseline_lines": 5758,
+    "current_lines": 6131
+  },
+  "src/acp/api/v1_routes.py": {
+    "baseline_lines": 7394,
+    "current_lines": 7691
+  },
+  "src/acp/scheduler/runner.py": {
+    "baseline_lines": 2101,
+    "current_lines": 2231
+  }
+}

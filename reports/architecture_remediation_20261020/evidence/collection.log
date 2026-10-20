@@ -1,0 +1,129 @@
+=== TASK 1 raw collection log ===
+collected_on: 2026-10-20T17:13:55+08:00
+host: Linux workstation 5.14.0-687.56.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 8 14:47:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+
+=== git rev-parse HEAD ===
+878e3557b3b593a0c42adf842e80fe1408db395e
+exit=0
+
+=== git status --porcelain=v1 ===
+ M docs/ACP_Architecture_Adjustment_Plan_20261016.md
+ M tests/baseline/refactor-evidence/e2e-task-root.txt
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md
+?? reports/architecture_acceptance_20261019/
+exit=0
+entry_count=16
+
+=== git diff (tracked modifications) sha256 ===
+ef511ec9491adb3bd5b2d16148acfc805bd6516e110804a98d008fd4ad2c66e7  -
+=== git diff --stat ===
+ docs/ACP_Architecture_Adjustment_Plan_20261016.md  | 8 ++++++++
+ tests/baseline/refactor-evidence/e2e-task-root.txt | 2 +-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+=== sha256 of each untracked file ===
+8d26e3b385ff687396bc67257fd1bd8e71c2bc9f287a453d978da88fbd2c69e2  docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md
+bb29bc2458dfe9b85eab9bf6cfde5be1cb330d34ed7384c9e81d8a8a1b6c34ac  docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md
+49f55fe92aa2cf452d6ef7200311870ce750cb8769b1419e6b8b93eb3743ba8d  docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md
+b058ea0a5dd07d6b189924a003c4d65fe9daf5153072940df9baeaa6a55959b0  docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md
+d18f19283997008c517ddb5f755d8f73967aade8e9c1dc666e91a6152623b2f2  docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md
+27afad1fd53551db6658c8ea9d7f9bce1eb937645913732ab9f0e94dc0e70da2  docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md
+89019859b3868c6d0efdfdbddacc5b23237bfee552b8f5326fe8bb92a6655e3a  docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md
+30c1be8413ecb978a33cad3f81fb55f18a1061d2b4c8baff3b864450f8d3e372  docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md
+4123034a0d106457d514e5ed709d7ba1f4e2be08bd5d2f62129f7a1c5a08a6a8  docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md
+29864b3eb702cff9fe062df313bbefbfde9b33746d3845a1d2d4b3c67554c43c  docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md
+8d4bcf909647ba8caedbcab40b6b31a3879a273d94dc035ebe88ab9a4f4c823e  docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md
+dfdb84f2846402f2a4811d5b4c538d1483e34dff91d5a64982c8d40dc1661008  docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md
+f72d8a38f1989517f0d4250b14d48dde6152b43cffe473d0dfa236d71a431247  docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md
+(dir) reports/architecture_acceptance_20261019/
+ae3708c4cffc38db4b1a1d36212bb58d1d086958055f9338888a631077f03187  reports/architecture_acceptance_20261019/browser_probe.py
+7792b30af88c746aede1326db7eb006416c3a260bda4ade54e62200a679344e3  reports/architecture_acceptance_20261019/evidence/api-probe.log
+74b0e07668f11e2cc1804dedff0ab8d0b89ddc7450e57bd0d3a477d6a0e03a97  reports/architecture_acceptance_20261019/evidence/baseline.json
+beba208a3779ade04c2a90a54d50c0eeaf52f764618b9ef291e09c237d157e53  reports/architecture_acceptance_20261019/evidence/browser-probe.log
+8c4b1ba7c0900fa08055e9e76577446893bc422e33955772c9db7a99ca33db60  reports/architecture_acceptance_20261019/evidence/collection.log
+b272d20af1a3b44ce01ef1c6f999bbd9a3bf0db515adede93099f3d233e08ffa  reports/architecture_acceptance_20261019/evidence/commands.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  reports/architecture_acceptance_20261019/evidence/compileall.log
+5f1f73524c3d67f6f3913f088f5b147c24ded51cbc565421c123b914706c17d8  reports/architecture_acceptance_20261019/evidence/defects.log
+8f4f5bd36f1650b1faa855c9d33e5a301241d2e71da75928d8308d8f8e20c593  reports/architecture_acceptance_20261019/evidence/defects.xml
+6393ab1ad82efef7b2b46375c47b859bd608ccb19939578de4b625b3f1618d2b  reports/architecture_acceptance_20261019/evidence/e2e-task-root.test-output.txt
+453d8898877772020f8e7c6ca25998ddbb8704bf4fe6e1febce35442dd8c3ef7  reports/architecture_acceptance_20261019/evidence/format.log
+c4b02f32bf29621c97b72bc0725e7b87138502c438845755b47dd81d78beef21  reports/architecture_acceptance_20261019/evidence/guards.log
+290851027fdb6ea377ea2115657b46f356db3dc3993e64c9b098c16832cd6ba5  reports/architecture_acceptance_20261019/evidence/guards.xml
+40f33341f8e68fd465fbe1a49e3892f9881aa343e801e33722ea5c9708c0f1a2  reports/architecture_acceptance_20261019/evidence_manifest.json
+8d547342868ba224597633e420f78f24daf391403289ff71305fb83c31165eeb  reports/architecture_acceptance_20261019/evidence/metrics.json
+547100dc9064b7641ff75ad81bf8a9f66aea2175f18ba0c5eed9d209e295439c  reports/architecture_acceptance_20261019/evidence/node-all.log
+cc773cf11fb504fc8fe693d0a2289f056e2fcddb04b394187b7eaea92ccc8581  reports/architecture_acceptance_20261019/evidence/nonslow-unrestricted.log
+ad6be2e3c47f00576565b645a02d01358a9e4bf847743ddfedfd72885b2bab2b  reports/architecture_acceptance_20261019/evidence/nonslow-unrestricted.xml
+9b993bbf4ef10807b6c68a8cdc2780a73be0e26024af637692096aaffe5466aa  reports/architecture_acceptance_20261019/evidence/ruff.json
+2d9faaa5f564279eb92d78a04b61d9106a6b9508c67ef218b0676c8e749cc7d7  reports/architecture_acceptance_20261019/evidence/wheel-build.log
+3db621e39098d33324a50823e4c6e6691d80f12b9ad120ac06ed48edc9d3b756  reports/architecture_acceptance_20261019/evidence/wheel-build-with-local-tools.log
+d55ecbe88ee28651cde054e2baac25eafcc825cd551f586353bfa94391b848f4  reports/architecture_acceptance_20261019/evidence/wheel-check.json
+56cb0119cd2ab0b1ef3e6bea068073d1a7870e902b42e6b18a5453706adcdee9  reports/architecture_acceptance_20261019/__pycache__/reproduce_defects.cpython-311-pytest-9.1.1.pyc
+9c4bd24ced6f44a6bfe7263642252ef4f7e7cd8d2495c11cee259109758f80ae  reports/architecture_acceptance_20261019/__pycache__/reproduce_defects.cpython-39-pytest-8.4.2.pyc
+e4af978a6124f6c8c53a556a3b22854152247e28376554b26a1dd24128970796  reports/architecture_acceptance_20261019/REPORT.md
+7ddd2cc3de714d3f14c8818bf26fc0d1367b099bf6bbf61860ac082e455b27d0  reports/architecture_acceptance_20261019/reproduce_defects.py
+
+=== python3.11 -m pytest reports/architecture_acceptance_20261019/reproduce_defects.py --collect-only -q ===
+2026-10-20T17:16:00+08:00
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d01_worker_preserves_non_success_status[failed]
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d01_worker_preserves_non_success_status[cancelled]
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d01_worker_preserves_non_success_status[blocked]
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d02_composition_root_does_not_return_previous_attempt_success
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d02_same_attempt_changed_release_does_not_reuse_old_success
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d03_v1_projection_preserves_execution_identity
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d04_prepared_reader_serves_existing_local_manifest
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d05_prepare_new_generation_is_not_old_success
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d06_prepare_adapter_does_not_mark_old_attempt_ready
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d07_default_dispatch_produces_frozen_artifacts_for_enabled_workflow
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d10_bounded_product_keeps_source_algorithm_identity
+reports/architecture_acceptance_20261019/reproduce_defects.py::test_d11_default_availability_reports_pending_current_attempt
+
+12 tests collected in 0.60s
+exit=0
+
+=== python3.11 reports/architecture_acceptance_20261019/reproduce_defects.py --help (real entrypoint capture) ===
+2026-10-20T17:16:01+08:00
+exit=0
+
+=== sha256sum reports/architecture_acceptance_20261019/REPORT.md ===
+e4af978a6124f6c8c53a556a3b22854152247e28376554b26a1dd24128970796  reports/architecture_acceptance_20261019/REPORT.md
+=== sha256sum of 20261019 audit originals ===
+74b0e07668f11e2cc1804dedff0ab8d0b89ddc7450e57bd0d3a477d6a0e03a97  reports/architecture_acceptance_20261019/evidence/baseline.json
+40f33341f8e68fd465fbe1a49e3892f9881aa343e801e33722ea5c9708c0f1a2  reports/architecture_acceptance_20261019/evidence_manifest.json
+7ddd2cc3de714d3f14c8818bf26fc0d1367b099bf6bbf61860ac082e455b27d0  reports/architecture_acceptance_20261019/reproduce_defects.py
+ae3708c4cffc38db4b1a1d36212bb58d1d086958055f9338888a631077f03187  reports/architecture_acceptance_20261019/browser_probe.py
+
+=== entrypoint audit note for reproduce_defects.py ===
+0
+no __main__/argparse/sys.argv handling -> direct execution imports the module and exits 0 with no output; pytest is the only entrypoint
+
+=== per-file patch digests of the 2 pre-existing tracked modifications ===
+53053b6fbc5be20f45c18f706edcf0724185aba2c29b76d8e6cd7bd73dec2a8d  docs/ACP_Architecture_Adjustment_Plan_20261016.md (git diff)
+f8940873e5689d2d4f578b8f105bb732dfd86432bdb9e8d6c578b274a63aa1a3  tests/baseline/refactor-evidence/e2e-task-root.txt (git diff)
+=== fact only for e2e-task-root.txt (path/status/hash; CONTENTS NOT CAPTURED) ===
+ M tests/baseline/refactor-evidence/e2e-task-root.txt
+f6b0d31c0a15a5fc9022bf53ccedecc3f8a2472b53dc2d39bd36a0560ded754e  tests/baseline/refactor-evidence/e2e-task-root.txt
+HEAD blob size: 41
+HEAD blob sha1: f7b076eadb2839061134c03b3de59f0093b7cc6e
+
+=== CLEANUP RECEIPT (temporary verification artifacts) ===
+cleaned_on: 2026-10-20T17:23:44+08:00
+removed: /tmp/opencode/truncated-baseline.json
+removed: /tmp/opencode/compilecheck_bad
+removed: /tmp/opencode/compilecheck_good
+verify absent:
+(none of the temp artifacts remain)
+repo-untracked check for temp artifacts:
+(no temp artifacts in worktree)
