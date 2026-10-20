@@ -676,6 +676,11 @@ def _record_to_v1_model(
         study_status=study_status,
         result=record.result,
         progress_state=_compute_progress_state(record),
+        # D03: the v1 projection must carry the authoritative execution
+        # identity, never schema defaults.  ``name_revision`` stays a separate
+        # organization field and is merged later by ``_enrich_v1_with_names``.
+        attempt=record.attempt,
+        revision=record.revision,
     )
 
 
