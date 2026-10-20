@@ -419,6 +419,11 @@ class PrepareLease:
     attempt_count: int
     payload: Mapping[str, Any] = field(default_factory=dict)
 
+    @property
+    def workflow(self) -> str:
+        """The workflow frozen into the lease payload (never re-read live)."""
+        return str(self.payload.get("workflow") or "")
+
 
 @dataclass(frozen=True)
 class PrepareCompletion:

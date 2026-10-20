@@ -4823,10 +4823,18 @@ class JobManager:
     # ------------------------------------------------------------------ #
 
     def _build_prepare_executor(self) -> Any:
-        from acp.services_data_bootstrap import build_prepare_executor
+        from acp.services_data_bootstrap import (
+            build_local_prepare_identity_provider,
+            build_prepare_executor,
+        )
 
+        # D06: the executor must receive the authoritative current identity.
+        # local-single states its policy explicitly (no generation/binding/
+        # authorization registry, always authorized) instead of falling back
+        # to "no provider means allow".
         return build_prepare_executor(
             job_lookup=self.store.get,
+            identity_provider=build_local_prepare_identity_provider(self.store.get),
             cache_provider=lambda: self.structure_cache,
             is_remote=self._is_remote_job,
         )

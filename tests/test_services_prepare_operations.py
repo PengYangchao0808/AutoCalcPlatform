@@ -1413,3 +1413,221 @@ def test_operation_adapter_locates_retry_of_same_identity_by_epoch(tmp_path: Pat
     assert facts.availability is dc.Availability.PREPARING
     assert facts.detail == "operation:queued"
     assert service.get(first.operation_id).state is ops.PrepareState.EXPIRED
+
+
+# ===========================================================================
+# D06 (task 15) — the full lease identity survives prepare execution
+# ===========================================================================
+
+
+class CatalogFetcher:
+    """Controlled remote fetcher for prepare-executor tests (no SSH/SFTP)."""
+
+    def __init__(
+        self,
+        files: dict[str, bytes] | None = None,
+        *,
+        on_read: Any = None,
+    ) -> None:
+        self.files = dict(files or {})
+        self.on_read = on_read
+        self.calls: list[str] = []
+
+    def read_file(self, record: Any, filename: str) -> bytes:
+        self.calls.append(filename)
+        if self.on_read is not None:
+            self.on_read(filename)
+        if filename in self.files:
+            return self.files[filename]
+        raise FileNotFoundError(filename)
+
+
+def _catalog_cache(tmp_path: Path, fetcher: Any = None) -> Any:
+    from acp.results.remote_structure_cache import RemoteStructureCache
+
+    factory = (lambda _job_id: fetcher) if fetcher is not None else None
+    return RemoteStructureCache(tmp_path / "runs", fetcher_factory=factory)
+
+
+def _prepare_executor(
+    lookup: Any,
+    cache: Any,
+    *,
+    provider: Any = None,
+    before_publish: Any = None,
+) -> Any:
+    from acp.services_data_bootstrap import (
+        build_local_prepare_identity_provider,
+        build_prepare_executor,
+    )
+
+    job_lookup = lookup if callable(lookup) else (lambda _job_id: lookup)
+    return build_prepare_executor(
+        job_lookup=job_lookup,
+        identity_provider=provider or build_local_prepare_identity_provider(job_lookup),
+        cache=cache,
+        is_remote=lambda _record: True,
+        before_publish=before_publish,
+    )
+
+
+def _lease_for(service: ops.PrepareOperationService, record: JobRecord) -> ops.PrepareLease:
+    service.enqueue(_catalog_request(record, generation=0))
+    lease = service.lease_next()
+    assert lease is not None
+    assert lease.attempt == record.attempt
+    return lease
+
+
+def _confsearch_record(job_id: str, tmp_path: Path, *, attempt: int = 1) -> JobRecord:
+    return JobRecord(
+        id=job_id,
+        spec=JobSpec(workflow="Confsearch", name=job_id),
+        status=JobStatus.COMPLETED,
+        attempt=attempt,
+        work_dir=str(tmp_path / job_id),
+        result={"node": "node1", "remote_dir": f"/remote/{job_id}"},
+    )
+
+
+def test_prepare_executor_refuses_assembly_without_identity_provider(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_prepare_executor
+
+    cache = _catalog_cache(tmp_path)
+    with pytest.raises(ValueError, match="identity_provider"):
+        build_prepare_executor(job_lookup=lambda _job_id: None, cache=cache)
+
+
+def test_d06_attempt_one_lease_against_attempt_two_record_is_not_ready(
+    tmp_path: Path,
+) -> None:
+    record = _remote_record("d06-stale", tmp_path)
+    service = _service(tmp_path)
+    lease = _lease_for(service, record)
+    current = replace(record, attempt=2)
+    cache = _remote_cache(tmp_path, current)
+
+    result = _prepare_executor(current, cache).execute(lease)
+
+    assert result.prepared is False
+    assert result.retryable is False
+    assert result.detail == "stale_attempt"
+    assert result.availability is not dc.Availability.READY
+    # The old attempt never publishes a READY row.
+    assert service.get(lease.operation_id).state is ops.PrepareState.RUNNING
+
+
+def test_d06_cache_hit_for_another_attempt_is_not_already_ready(tmp_path: Path) -> None:
+    record = _remote_record("d06-cache-hit", tmp_path)
+    record = replace(record, attempt=2)
+    cache = _remote_cache(tmp_path, record)
+    manifest = cache.job_root(record.id) / "RESULT" / "result_manifest.json"
+    cache._write_attempt_sidecar(manifest, 1)  # bytes belong to attempt 1
+
+    service = _service(tmp_path)
+    lease = _lease_for(service, record)
+    result = _prepare_executor(record, cache).execute(lease)
+
+    assert result.prepared is False
+    assert result.detail != "already_ready"
+    assert result.availability is not dc.Availability.READY
+
+
+def test_d06_catalog_bundle_publishes_each_file_with_attempt_identity(tmp_path: Path) -> None:
+    record = _remote_record("d06-download", tmp_path)
+    payload = b'{"version": 2, "products": []}'
+    fetcher = CatalogFetcher({"RESULT/result_manifest.json": payload, "input.xyz": b"2\nwater\n"})
+    cache = _catalog_cache(tmp_path, fetcher)
+    service = _service(tmp_path)
+    lease = _lease_for(service, record)
+
+    result = _prepare_executor(record, cache).execute(lease)
+
+    assert result.prepared is True
+    assert result.detail == "fetched"
+    assert result.availability is dc.Availability.READY
+    target = cache.job_root(record.id) / "RESULT" / "result_manifest.json"
+    assert target.read_bytes() == payload
+    assert cache._read_attempt_sidecar(target) == (True, 1)
+    assert "RESULT/result_manifest.json" in fetcher.calls
+
+
+def test_d06_barrier_rerun_before_replace_never_publishes_old_bytes(tmp_path: Path) -> None:
+    record = _confsearch_record("d06-barrier-rerun", tmp_path, attempt=2)
+    cache = _catalog_cache(
+        tmp_path,
+        CatalogFetcher({"RESULT/result_manifest.json": b"NEW"}),
+    )
+    root = cache.job_root(record.id)
+    seeded = root / "RESULT" / "result_manifest.json"
+    seeded.parent.mkdir(parents=True, exist_ok=True)
+    seeded.write_bytes(b"CURRENT")
+    cache._write_attempt_sidecar(seeded, 2)
+
+    def barrier() -> None:
+        # A concurrent rerun advanced the attempt between the transfer start
+        # and the atomic replace.
+        cache._write_fence(record.id, attempt=3, generation=0)
+
+    service = _service(tmp_path)
+    lease = _lease_for(service, record)
+    result = _prepare_executor(record, cache, before_publish=barrier).execute(lease)
+
+    assert result.prepared is False
+    assert result.retryable is False
+    assert result.detail.startswith("publish_rejected:")
+    assert seeded.read_bytes() == b"CURRENT"
+    assert cache._read_attempt_sidecar(seeded) == (True, 2)
+
+
+def test_d06_barrier_rebind_before_replace_never_publishes(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_local_prepare_identity_provider
+
+    record = _remote_record("d06-barrier-rebind", tmp_path)
+    cache = _catalog_cache(
+        tmp_path,
+        CatalogFetcher({"RESULT/result_manifest.json": b"NEW"}),
+    )
+    target = cache.job_root(record.id) / "RESULT" / "result_manifest.json"
+
+    state = {"authorization_version": 0}
+    local = build_local_prepare_identity_provider(lambda _job_id: record)
+
+    def provider(lease: ops.PrepareLease) -> Any:
+        identity = local(lease)
+        assert identity is not None
+        return replace(identity, authorization_version=state["authorization_version"])
+
+    def barrier() -> None:
+        state["authorization_version"] = 1
+
+    service = _service(tmp_path)
+    lease = _lease_for(service, record)
+    result = _prepare_executor(record, cache, provider=provider, before_publish=barrier).execute(
+        lease
+    )
+
+    assert result.prepared is False
+    assert result.retryable is False
+    assert target.exists() is False
+
+
+def test_d06_eviction_generation_barrier_discards_publish(tmp_path: Path) -> None:
+    record = _remote_record("d06-barrier-evict", tmp_path)
+    cache = _catalog_cache(
+        tmp_path,
+        CatalogFetcher({"RESULT/result_manifest.json": b"NEW"}),
+    )
+    target = cache.job_root(record.id) / "RESULT" / "result_manifest.json"
+
+    def barrier() -> None:
+        # An eviction bumped the purge generation during the transfer.
+        cache._write_fence(record.id, attempt=record.attempt, generation=1)
+
+    service = _service(tmp_path)
+    lease = _lease_for(service, record)
+    result = _prepare_executor(record, cache, before_publish=barrier).execute(lease)
+
+    assert result.prepared is False
+    assert result.detail.startswith("publish_rejected:")
+    assert target.exists() is False
