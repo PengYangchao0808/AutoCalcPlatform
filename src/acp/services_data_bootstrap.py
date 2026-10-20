@@ -671,6 +671,8 @@ def _catalog_ready_for_attempt(
     job_id: str,
     workflow: str,
     attempt: int,
+    *,
+    strict: bool = False,
 ) -> bool:
     """True only when the catalog body provably belongs to *attempt*.
 
@@ -678,6 +680,9 @@ def _catalog_ready_for_attempt(
     for a legacy sidecar-less entry, when the job fence contradicts the read)
     can never satisfy this attempt.  This is the cache-hit/publish-commit
     identity gate; it never returns "ready" for bytes of a stale attempt.
+    ``strict`` additionally requires every present required file to carry an
+    attempt sidecar, so a historical attempt can never be proven by an
+    unfenced entry (D11).
     """
     if not cache.catalog_ready(root, workflow):
         return False
@@ -692,6 +697,8 @@ def _catalog_ready_for_attempt(
         if present:
             if sidecar_attempt != int(attempt):
                 return False
+        elif strict:
+            return False
         elif stored_attempt is not None and int(stored_attempt) != int(attempt):
             return False
     return True
@@ -1500,24 +1507,92 @@ class _ReadRootAdapter:
         self._job_lookup = job_lookup
         self._cache = cache
 
-    def resolve(self, job_id: str) -> ReadRoot:
+    @staticmethod
+    def _record_attempt(record: Any) -> int | None:
+        raw = getattr(record, "attempt", None)
+        if raw is None:
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if value >= 1 else None
+
+    def resolve(self, job_id: str, attempt: int | None = None) -> ReadRoot:
         record = self._job_lookup(job_id)
         if record is None:
-            return ReadRoot(job_id=job_id, path="", found=False)
+            return ReadRoot(job_id=job_id, path="", found=False, reason="job_not_found")
+        try:
+            requested = int(attempt) if attempt is not None else None
+        except (TypeError, ValueError):
+            return ReadRoot(job_id=job_id, path="", found=False, reason="invalid_attempt")
+        if requested is not None and requested < 1:
+            return ReadRoot(job_id=job_id, path="", found=False, reason="invalid_attempt")
         result = getattr(record, "result", None) or {}
         is_remote = bool(result.get("node") and result.get("remote_dir"))
         workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
-        attempt = int(getattr(record, "attempt", 0) or 0) or None
+        current = self._record_attempt(record)
+        if requested is not None and current is None:
+            return ReadRoot(
+                job_id=job_id,
+                path="",
+                is_remote=is_remote,
+                found=False,
+                reason="attempt_unresolved",
+            )
+        if requested is not None and current is not None and requested > current:
+            return ReadRoot(
+                job_id=job_id,
+                path="",
+                is_remote=is_remote,
+                found=False,
+                attempt=requested,
+                reason="attempt_not_current",
+            )
+        historical = requested is not None and current is not None and requested < current
+        root_attempt = requested if requested is not None else current
+        if historical and not is_remote:
+            archive = (
+                Path(str(record.work_dir)) / "WORK" / "00_RUNTIME" / "attempts" / str(requested)
+            )
+            if not archive.is_dir():
+                return ReadRoot(
+                    job_id=job_id,
+                    path="",
+                    found=False,
+                    attempt=requested,
+                    historical=True,
+                    reason="historical_attempt_missing",
+                )
+            return ReadRoot(
+                job_id=job_id,
+                path=str(archive),
+                found=True,
+                catalog_ready=self._cache.catalog_ready(archive, workflow),
+                attempt=requested,
+                historical=True,
+            )
         if is_remote:
             root = self._cache.job_root(record.id)
-            ready = self._cache.catalog_ready(root, workflow)
+            if root_attempt is not None:
+                ready = _catalog_ready_for_attempt(
+                    self._cache,
+                    root,
+                    record.id,
+                    workflow,
+                    root_attempt,
+                    strict=historical,
+                )
+            else:
+                ready = self._cache.catalog_ready(root, workflow)
             return ReadRoot(
                 job_id=job_id,
                 path=str(root),
                 is_remote=True,
                 catalog_ready=ready,
                 found=True,
-                attempt=attempt,
+                attempt=root_attempt,
+                historical=historical,
             )
         work_dir = Path(str(record.work_dir))
         return ReadRoot(
@@ -1526,7 +1601,7 @@ class _ReadRootAdapter:
             is_remote=False,
             catalog_ready=self._cache.catalog_ready(work_dir, workflow),
             found=True,
-            attempt=attempt,
+            attempt=root_attempt,
         )
 
 
@@ -1591,6 +1666,31 @@ class _ReadCacheIndexAdapter:
             return False
         return root.attempt is None or int(root.attempt) != int(attempt)
 
+    def _legacy_cached_for_attempt(
+        self, root: ReadRoot, relative_path: str, attempt: int
+    ) -> Path | None:
+        """Serve an unfenced pre-D01 entry only when the fence cannot contradict it.
+
+        A sidecar-less entry carries no attempt identity.  It is accepted for
+        the current attempt only while the job fence is absent or equal; a
+        historical attempt (or an advanced fence) can never prove it.
+        """
+        if root.historical:
+            return None
+        try:
+            candidate = self._cache.cache_path(root.job_id, relative_path)
+        except ValueError:
+            return None
+        if not candidate.is_file():
+            return None
+        present, _sidecar_attempt = self._cache._read_attempt_sidecar(candidate)
+        if present:
+            return None
+        fence_attempt, _generation = self._cache._read_fence(root.job_id)
+        if fence_attempt is None or int(fence_attempt) == int(attempt):
+            return candidate
+        return None
+
     def entry(
         self,
         root: ReadRoot,
@@ -1600,6 +1700,8 @@ class _ReadCacheIndexAdapter:
         snapshot: bool = False,
     ) -> CacheIndexFacts:
         requested = int(attempt) if attempt is not None else None
+        if requested is not None and requested < 1:
+            return CacheIndexFacts(present=False)
         if not root.found or not root.path or self._refuses_attempt(root, requested):
             return CacheIndexFacts(present=False)
         approved: Path | None = None
@@ -1608,6 +1710,8 @@ class _ReadCacheIndexAdapter:
                 approved = self._cache.get_cached(root.job_id, relative_path, attempt=requested)
             except ValueError:
                 return CacheIndexFacts(present=False)
+            if approved is None and requested is not None:
+                approved = self._legacy_cached_for_attempt(root, relative_path, requested)
             if approved is None:
                 return CacheIndexFacts(present=False)
             root_dir = self._cache.job_root(root.job_id)
@@ -1662,7 +1766,21 @@ class _ReadCacheIndexAdapter:
             return CacheIndexFacts(present=False)
         root_dir = Path(root.path)
         generation = self._generation(root.job_id) if root.is_remote else 0
-        if root.is_remote and not self._cache.catalog_ready(root_dir, workflow):
+        if root.is_remote:
+            if root.attempt is not None:
+                ready = _catalog_ready_for_attempt(
+                    self._cache,
+                    root_dir,
+                    root.job_id,
+                    workflow,
+                    int(root.attempt),
+                    strict=root.historical,
+                )
+            else:
+                ready = self._cache.catalog_ready(root_dir, workflow)
+            if not ready:
+                return CacheIndexFacts(present=False)
+        elif not root_dir.is_dir():
             return CacheIndexFacts(present=False)
         for rel_path in _catalog_ready_paths(workflow):
             try:
@@ -1707,10 +1825,13 @@ def _expected_catalog_prepare_request(
 ) -> PrepareRequest | None:
     """Build the frozen expected identity for a catalog read from real facts."""
     job_id = str(getattr(record, "id", "") or "")
-    if request.relative_path or not job_id:
+    if request.relative_path or not job_id or request.attempt is None:
         return None
     workflow = request.workflow or str(getattr(getattr(record, "spec", None), "workflow", "") or "")
-    attempt = int(request.attempt or getattr(record, "attempt", 1) or 1)
+    try:
+        attempt = int(request.attempt)
+    except (TypeError, ValueError):
+        return None
     if attempt < 1:
         return None
     return PrepareRequest(
@@ -1749,7 +1870,24 @@ class _OperationAvailabilityAdapter:
     def facts(self, request: AvailabilityRead) -> OperationFacts:
         if self._service is None:
             return OperationFacts(exists=False)
-        attempt = int(request.attempt or 0)
+        if request.attempt is None:
+            return OperationFacts(
+                exists=True,
+                availability=Availability.ABSENT,
+                freshness=Freshness.UNKNOWN,
+                detail="attempt_unresolved",
+            )
+        try:
+            attempt = int(request.attempt)
+        except (TypeError, ValueError):
+            attempt = 0
+        if attempt < 1:
+            return OperationFacts(
+                exists=True,
+                availability=Availability.ABSENT,
+                freshness=Freshness.UNKNOWN,
+                detail="invalid_attempt",
+            )
         resource_key = default_resource_key(request.job_id, attempt, request.resource_id)
         expected: PrepareRequest | None = None
         if self._expected_provider is not None:
@@ -1769,6 +1907,16 @@ class _OperationAvailabilityAdapter:
                 )
                 if logical is None:
                     return OperationFacts(exists=False)
+                if not logical.content_identity:
+                    legacy = self._service.availability(logical.operation_id)
+                    return OperationFacts(
+                        exists=True,
+                        availability=legacy.availability,
+                        freshness=legacy.freshness,
+                        basis_revision=int(legacy.basis_revision),
+                        expected_revision=int(legacy.expected_revision),
+                        detail=f"operation:{logical.state.value}:legacy_identity",
+                    )
                 generation = int(expected.resource_generation)
                 return OperationFacts(
                     exists=True,

@@ -444,6 +444,24 @@ def test_new_path_serves_prepared_geometry_cache_only(client: TestClient, tmp_pa
     assert _operation_count(manager.store.db_path) == before
 
 
+def test_availability_default_attempt_resolves_current_attempt(
+    client: TestClient, tmp_path: Path
+) -> None:
+    job_id = "avail-current-attempt"
+    _remote_job(client, tmp_path, job_id)
+    manager = client.app.state.job_manager
+    record = manager.get(job_id)
+    manager._prepare_operations.enqueue(manager._prepare_request(record))
+
+    default = client.get(f"/api/v1/jobs/{job_id}/availability")
+    explicit = client.get(f"/api/v1/jobs/{job_id}/availability?attempt=1")
+
+    assert default.status_code == 200
+    assert explicit.status_code == 200
+    assert default.json()["availability"] == explicit.json()["availability"] == "preparing"
+    assert default.json()["detail"] == explicit.json()["detail"] == "operation:queued"
+
+
 def test_new_path_rejects_unknown_resource(client: TestClient) -> None:
     response = client.get("/api/v1/jobs/whatever/prepared/bogus")
     assert response.status_code == 400

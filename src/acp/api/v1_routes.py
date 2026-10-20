@@ -7552,6 +7552,18 @@ def _cache_only_resource_reader(request: Request) -> Any:
     )
 
 
+def _record_read_attempt(record: Any) -> int | None:
+    """Return the record's authoritative 1-based attempt (``None`` if absent)."""
+    raw = getattr(record, "attempt", None)
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value >= 1 else None
+
+
 @router.get("/jobs/{job_id}/availability")
 def get_job_availability(
     job_id: str,
@@ -7595,6 +7607,7 @@ def get_job_availability(
         project_id=record.project_id or record.spec.project_id,
         resource_id=resource_id or resource or "",
     )
+    resolved_attempt = attempt if attempt is not None else _record_read_attempt(record)
     resolved_workflow = workflow or str(record.spec.workflow or "")
 
     if resource is not None:
@@ -7617,7 +7630,7 @@ def get_job_availability(
             resource_id=resolved_resource,
             workflow=resolved_workflow,
             relative_path=resolved_path,
-            attempt=attempt,
+            attempt=resolved_attempt,
             expected_revision=expected_revision,
         )
     )
@@ -7670,6 +7683,7 @@ def get_prepared_resource(
         project_id=record.project_id or record.spec.project_id,
         resource_id=(f"{resource}:{relative_path}" if relative_path else resource),
     )
+    resolved_attempt = attempt if attempt is not None else _record_read_attempt(record)
 
     reader = _cache_only_resource_reader(request)
     result = reader.serve(
@@ -7678,7 +7692,7 @@ def get_prepared_resource(
         workflow=str(record.spec.workflow or ""),
         relative_path=relative_path,
         expected_revision=expected_revision,
-        attempt=attempt,
+        attempt=resolved_attempt,
         offset=offset,
         limit=limit,
     )
