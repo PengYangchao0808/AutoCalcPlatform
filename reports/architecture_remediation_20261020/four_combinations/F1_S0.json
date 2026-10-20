@@ -1,0 +1,395 @@
+{
+  "artifacts": [
+    {
+      "bytes": 3556858,
+      "path": "frontend/F1",
+      "sha256": "968fa1ac08337b1d5920863aee53431793b51eef2ccdacb31ba1e2e9cd3da89d"
+    }
+  ],
+  "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "cell": {
+    "frontend_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "frontend_sha256": "968fa1ac08337b1d5920863aee53431793b51eef2ccdacb31ba1e2e9cd3da89d",
+    "legacy": [
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "Confsearch"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                          [--save-config SAVE_CONFIG]",
+          "                          [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run Confsearch: error: one of the arguments --input/-i --batch-file is required"
+        ],
+        "workflow": "Confsearch"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "PESsearch"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "2026-10-21 05:06:07,968 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-i15ket60/F0/config/defaults.yaml",
+          "2026-10-21 05:06:08,257 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
+        ],
+        "workflow": "PESsearch"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "BatchOptimize"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                             [--batch-roles-json BATCH_ROLES_JSON]",
+          "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run BatchOptimize: error: one of the arguments --from-job --from-artifact --items-file is required"
+        ],
+        "workflow": "BatchOptimize"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "XtbPathSearch"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                             [--register]",
+          "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run XtbPathSearch: error: the following arguments are required: --path-config"
+        ],
+        "workflow": "XtbPathSearch"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "XtbConstrainedOpt"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                                 [--config CONFIG] [--register]",
+          "                                 [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run XtbConstrainedOpt: error: the following arguments are required: --opt-config"
+        ],
+        "workflow": "XtbConstrainedOpt"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "tsmode"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                      [--config CONFIG]",
+          "                      [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run tsmode: error: the following arguments are required: --source-bundle, --source-mode-index"
+        ],
+        "workflow": "tsmode"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "nmr"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                   [--log-file LOG_FILE] [--charge CHARGE]",
+          "                   [--multiplicity MULTIPLICITY] [--save-config SAVE_CONFIG]",
+          "acp run nmr: error: the following arguments are required: --input"
+        ],
+        "workflow": "nmr"
+      }
+    ],
+    "service": {
+      "availability_missing_code": 404,
+      "detail_missing_code": 404,
+      "jobs_code": 200,
+      "jobs_count": 0,
+      "jobs_type": "dict",
+      "ok": true,
+      "status_code": 200,
+      "status_keys": [
+        "host",
+        "port",
+        "python",
+        "queue",
+        "run_root",
+        "service",
+        "status",
+        "uptime_seconds",
+        "version",
+        "wsl"
+      ],
+      "workflow_ids": [
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
+        "XtbPathSearch",
+        "XtbConstrainedOpt",
+        "OrcaGradient",
+        "nmr",
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "tsmode",
+        "casscf",
+        "xtb_optimize"
+      ],
+      "workflows_code": 200,
+      "workflows_count": 15
+    },
+    "service_revision": "878e3557b3b593a0c42adf842e80fe1408db395e"
+  },
+  "environment": {
+    "python": "3.11.13",
+    "repo": "<repo>",
+    "service_port": 48467
+  },
+  "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+  "f1_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "harness": "four_combinations.py",
+  "harness_version": "1",
+  "metrics": {
+    "block_size_bytes": 32768,
+    "browser": null,
+    "cache": null,
+    "db_writes": null,
+    "p50_ms": null,
+    "p95_ms": null,
+    "remote_io": null,
+    "requests": 0
+  },
+  "not_verified_reason": null,
+  "result": "PASS",
+  "scenario": "F1/S0",
+  "schema": "acp.acceptance.harness.v1",
+  "scope": "IN_SCOPE",
+  "skip_reason": null,
+  "steps": [
+    {
+      "assertions": [
+        {
+          "actual": {
+            "availability_missing_code": 404,
+            "detail_missing_code": 404,
+            "jobs_code": 200,
+            "jobs_count": 0,
+            "jobs_type": "dict",
+            "ok": true,
+            "status_code": 200,
+            "status_keys": [
+              "host",
+              "port",
+              "python",
+              "queue",
+              "run_root",
+              "service",
+              "status",
+              "uptime_seconds",
+              "version",
+              "wsl"
+            ],
+            "workflow_ids": [
+              "Confsearch",
+              "PESsearch",
+              "BatchOptimize",
+              "XtbPathSearch",
+              "XtbConstrainedOpt",
+              "OrcaGradient",
+              "nmr",
+              "singlepoint",
+              "optimize",
+              "frequency",
+              "scan",
+              "irc",
+              "tsmode",
+              "casscf",
+              "xtb_optimize"
+            ],
+            "workflows_code": 200,
+            "workflows_count": 15
+          },
+          "expected": "old surface 200; missing 400/404",
+          "name": "old_surface",
+          "ok": true
+        }
+      ],
+      "command": "GET F1/S0 service /api/status /api/workflows /api/v1/jobs",
+      "exit_code": 0,
+      "id": "service_probe",
+      "ok": true
+    },
+    {
+      "assertions": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "Confsearch"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                          [--save-config SAVE_CONFIG]",
+            "                          [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run Confsearch: error: one of the arguments --input/-i --batch-file is required"
+          ],
+          "workflow": "Confsearch"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "PESsearch"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "2026-10-21 05:06:07,968 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-i15ket60/F0/config/defaults.yaml",
+            "2026-10-21 05:06:08,257 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
+          ],
+          "workflow": "PESsearch"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "BatchOptimize"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                             [--batch-roles-json BATCH_ROLES_JSON]",
+            "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run BatchOptimize: error: one of the arguments --from-job --from-artifact --items-file is required"
+          ],
+          "workflow": "BatchOptimize"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "XtbPathSearch"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                             [--register]",
+            "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run XtbPathSearch: error: the following arguments are required: --path-config"
+          ],
+          "workflow": "XtbPathSearch"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "XtbConstrainedOpt"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                                 [--config CONFIG] [--register]",
+            "                                 [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run XtbConstrainedOpt: error: the following arguments are required: --opt-config"
+          ],
+          "workflow": "XtbConstrainedOpt"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "tsmode"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                      [--config CONFIG]",
+            "                      [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run tsmode: error: the following arguments are required: --source-bundle, --source-mode-index"
+          ],
+          "workflow": "tsmode"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "nmr"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                   [--log-file LOG_FILE] [--charge CHARGE]",
+            "                   [--multiplicity MULTIPLICITY] [--save-config SAVE_CONFIG]",
+            "acp run nmr: error: the following arguments are required: --input"
+          ],
+          "workflow": "nmr"
+        }
+      ],
+      "command": "python -m acp.cli run <legacy> (missing-argument form)",
+      "exit_code": 0,
+      "id": "legacy_workflows",
+      "ok": true
+    }
+  ]
+}
