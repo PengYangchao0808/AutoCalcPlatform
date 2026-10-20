@@ -1,75 +1,113 @@
-# ACP 架构验收整改 — 修复候选报告（骨架）
+# ACP 架构验收整改 — 修复候选再验收报告
 
-**Status: DRAFT / NOT_ACCEPTED**
+**Status: BATCH COMPLETE / SCOPED — NOT "ALL ARCHITECTURE COMPLETE"**
 
-**Candidate revision:** `878e3557b3b593a0c42adf842e80fe1408db395e`（`git rev-parse HEAD`，task 1 冻结时实测）
+**Code candidate SHA:** `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`
 
-> 本报告是 **DRAFT / NOT_ACCEPTED**：任何格子都还没有通过验收。
-> 本文件存在的意义是给任务 2—45 一个固定的证据落点与状态行；在任务 43 收口前，
-> 状态行 **必须** 保持 `DRAFT / NOT_ACCEPTED`，不得因局部绿灯改写为 `PASS`/`ACCEPTED`。
-> 原 20261019 验收报告对该 revision 的 **FAIL** 结论保持原样，不被本目录覆盖（只读副本见
-> `evidence/baseline-20261019/`）。
+**Evidence-only report SHA:** recorded in `evidence/report_sha256.txt` (the report cannot contain its own digest; the sidecar and `evidence_manifest.json` bind it).
+
+**Baseline:** `878e3557b3b593a0c42adf842e80fe1408db395e` (20261019 FAIL report preserved read-only under `evidence/baseline-20261019/`).
+
+> This report supersedes the 20261019 FAIL conclusions **only for the in-scope remediation batch**.
+> It does not declare the whole architecture adjustment complete. `G4` is OPEN, real science/LSF are
+> `NOT_VERIFIED`, and the six deferred capabilities remain registered, not implemented.
 
 ---
 
-## 1. 候选与基线
+## 1. Scope and evidence vocabulary
 
-| 项 | 值 | 证据 |
+- In scope: D01–D13, the D07 local/remote default worker chain (singlepoint first), additive prepare/read identity contracts, the D08/D09 real-browser fixes, quality/debt cleanup, packaging/role evidence, deferred-capability handoffs, and the four frozen combinations.
+- Out of scope: account/permission/quota production wiring, MCP default entry, project-package CLI/API, metering wiring, persistent event A04, frontend prepare/availability consumption; Slurm/GPU/object storage/pricing; any production restart/release.
+- Vocabulary: `PASS / FAIL / NOT_VERIFIED` plus `IN_SCOPE / DEFERRED / NOT_APPLICABLE`. An executed failure is never rewritten as `NOT_VERIFIED`; `DEFERRED` is never `PASS`; every environment skip names its missing prerequisite.
+
+## 2. Candidate and environment
+
+| Item | Value | Evidence |
 |---|---|---|
-| Candidate revision | `878e3557b3b593a0c42adf842e80fe1408db395e` | `evidence/collection.log` |
-| 工作区脏状态 | 16 条（2 modified + 13 untracked 文档 + 1 untracked 报告目录） | `git status --porcelain=v1` in `evidence/collection.log` |
-| `git diff` 摘要 | `ef511ec9491adb3bd5b2d16148acfc805bd6516e110804a98d008fd4ad2c66e7` | 同上 |
-| 逐文件补丁摘要 | `docs/ACP_Architecture_Adjustment_Plan_20261016.md`、`tests/baseline/refactor-evidence/e2e-task-root.txt` 各一 | `evidence/baseline.json::dirty.patch_sha256_by_file` |
-| `e2e-task-root.txt` | **仅事实记录**（path/status/sha256/HEAD blob sha1）；内容未复制、未打包、未提交 | `evidence/baseline.json::dirty.e2e_task_root_fact` |
-| 环境 | Python 3.11.13 · Node v20.19.0 · pip 22.3.1 · extras `api/browser/dev/nmr/remote` | `evidence/versions.log` |
-| 配置源 | built-in → `~/.cccp.yaml` → `./cccp.yaml` → `--config` → `CONFSEARCH_*` → CLI；解析未写入任何文件 | `evidence/config-sources.log` |
-| QC 发现 | 本机 `discover_all`：仅 `orca → /usr/bin/orca`（`file(1)` = Python script，非经验证的 QC ORCA）；`crest/xtb/censo/isostat/shermo` **ABSENT**；`acp doctor` 经 SSH 探到远端 node-157 版本 | `evidence/qc-discovery.log`、`evidence/qc-doctor.log` |
-| 解析器 | `acp.intake.parsers` 11 个公开函数 + 解析栈版本（numpy/rdkit/PyYAML/scipy/nmrglue） | `evidence/parsers.log` |
-| Fixture 摘要 | `tests/baseline/` 7 个目录树摘要 + `SHA256SUMS.txt` 自身摘要 | `evidence/fixtures.log`、`evidence/baseline.json::fixtures` |
-| 性能/资源方法与预算 | 已在本 todo 冻结（同机同样本、200 请求×3 轮、P50/P95 最近秩、远端 I/O、DB 写入、32 KiB 块、缓存命中、浏览器堆/fps） | `evidence/baseline.json::performance_budget`、`harness-contract.md` §5 |
+| Code candidate | `ab492cc8be9e46125fa2d2fae69a3ecaac64a548` | `git rev-parse HEAD`; T39 |
+| Baseline / F0 | `878e3557b3b593a0c42adf842e80fe1408db395e` | `evidence/collection.log` |
+| Regressions | `10,005 passed, 11 skipped, 95 deselected` (27m41s) | `evidence/t39-nonslow.log` |
+| Guard set | `2,124 passed` (6m42s) | `evidence/t39-guards.log` |
+| Compile | `compileall` exit 0; syntax-error negative exit 1; import smoke OK | T39 evidence |
+| Node | `327 passed, 0 failed`; wizard payload `5 passed` | T40 evidence |
+| Browser | Chromium 153.0.8010.12; `4 passed` (NMR + vibration) | T40 evidence |
+| Four combinations | F0/S0, F1/S0, F0/S1, F1/S1 — **all PASS** | `four_combinations/*.json` |
+| Real science/LSF | **NOT_VERIFIED** (`ACP_M1_ORCA` / `ACP_LSF_NODE` unset) | `real_environment/*.json` |
+| Packaging | Single `acp` wheel; CCCP-only/worker-only/Web isolation **G4 OPEN** | T35 evidence |
 
-**缺失环境一律记 `NOT_VERIFIED` 并写明原因，不记 `PASS`。** 本机 `bsub/bjobs/bstop` 缺失、
-本地 QC 二进制多数缺失 —— 真实科学与真实 LSF 格在本机 **不可执行**。
+## 3. D01–D13 closure
 
-## 2. 支持矩阵（种子）
+| Defect | Original counterexample | Fix commit(s) | Formal regression | Verdict / limits |
+|---|---|---|---|---|
+| D01 | failed/cancelled/blocked rewritten to completed; exit 0 | `5530495` | `tests/test_services_worker_contract.py` D01 truth-table + real subprocess probes; suite 534/T39 10,005 | **PASS** — authoritative truth table; missing fact outranks `complete=True`; partial qualification digest-bound. No new JobStatus. |
+| D02 | receipt reused on job/attempt/submission only; failure paths return old receipt | `1f15bfe`, `c853f3f` | worker-contract identity matrix + worker-bootstrap conflict/holder tests | **PASS** — full identity predicate, acyclic imports, bytes preserved, loser writes no authoritative receipt. |
+| D03 | v1 projection omits attempt/revision | `dea043d`, `408782e` | `tests/test_acp_api_v1.py`; Node `job_detail_controller.test.js` | **PASS** — v1/v2 parity, rerun invalidates old session, `name_revision` isolated. |
+| D04 | local byte resources ignore resolved work_dir; remote-only cache | `5ebbe82` | `tests/test_services_read_root.py`, `test_services_cache_only_switch.py` | **PASS** — descriptor-pinned `O_NOFOLLOW` snapshot; local originals served; zero GET fetch/enqueue; historical miss refuses. |
+| D05 | dedupe omits generation/digest; EXPIRED cannot revive | `5f64ccb`, `ce326d4`, `c7ece80` | `tests/test_services_prepare_operations.py` | **PASS** — canonical content identity, DB partial unique key, new `dedup_epoch` row, availability by expected identity. |
+| D06 | lease reduced to job id; latest record prefetched | `ff2db1f`, `f25f908` | prepare + transfer suites; barrier rerun/rebind/revoke/evict | **PASS** — whole lease, mandatory identity/authorization provider, publish-boundary re-check. Historical probe is an interface difference (no provider), not a pass. |
+| D07 | no production freeze/verify/advance; ordinary submit uses `acp.cli` | `4c20802`, `2185260`, `7d470f3`, `fb799f0`, `399ccd7`, `c259cfd`, `2b594d2`, `c12490e` | chain-switch T24–T32; four combinations; T29 ordinary submit | **PASS (local + controlled remote)** — immutable release, group commit, claim, receipt/CAS/publication, singlepoint default only; real LSF **NOT_VERIFIED**. |
+| D08 | success path clears canvas parent with `textContent = ""` | `54f9809`, `c2294d5` | `tests/test_acp_frontend_browser.py::test_nmr_canvas_survives_success` | **PASS** — canvas connected, atoms loaded, non-empty view/export; real Chromium. |
+| D09 | `_arrowsVisible` gates first draw on `enabled` | `3c17b99`, `2847937` | real-Chromium vibration tests; Node vibration suite | **PASS** — cold-start arrows drawn from display intent; animation/combo/multi-instance/teardown verified. |
+| D10 | bounded identity drops source generator/algorithm/version/params | `086c789`, `d2c5f44` | `tests/test_cccp_bounded_products.py` D10 matrix | **PASS** — source digest in every derived/block identity; v1 readable but not adoptable; forged digest rejected. |
+| D11 | availability converts `None` to attempt 0 | `125c459` | `tests/test_services_cache_only_switch.py`; read-root attempt tests | **PASS** — HTTP + direct builder resolve the authoritative attempt; `attempt=0` rejected; historical miss refuses. Probe D11 is a post-D05 identity interface difference. |
+| D12 | source pins read only `wizard.js` | `102f3e3`, `d9ddbb9` | phase5 pins; Node `wizard_submit_payload.test.js`; real page assembly | **PASS** — owner pins to `submit-edit.js`/`draft-form.js`; explicit 0/false preserved; retired defaults confined. |
+| D13 | test patches `_MIGRATIONS` on the forwarder | `da68291` | `tests/test_job_state_transitions.py::test_migration_backfills_legacy_attempts` | **PASS** — unique root, forwarder identity, `020` applied, idempotent reopen. |
 
-见 `support-matrix.md`：15 个 active workflow × 6 列 = 90 格，
-基线状态只有 `OPEN` / `NOT_VERIFIED` / `NOT_APPLICABLE`，**没有任何 `PASS`**。
-行来自 `workflow_enablement.py::ACTIVE_WORKFLOWS`，closure/remote 来自
-`execution_chain.py::FROZEN_WORKFLOW_CAPABILITY_TABLE` —— 代码事实，不是证据。
+Historical probe: `reports/architecture_acceptance_20261019/reproduce_defects.py`, sha256 `7ddd2cc3de714d3f14c8818bf26fc0d1367b099bf6bbf61860ac082e455b27d0` (unchanged). Result: 3 failed, 9 passed. The three failures are interface differences (D06 provider-less assembly, D07 direct `_build_execution_cmd`, D11 pre-D05 bare request); each maps to a formal test above and is not relabeled PASS or NOT_VERIFIED.
 
-## 3. 验收 Harness 契约
+## 4. Default worker chain (D07) — scoped claim
 
-见 `harness-contract.md`（**任务 44/45 在代码冻结前实现**）：
+- `DEFAULT_ENVELOPE_WORKFLOWS == {"singlepoint"}`. The other 14 active workflows keep their registered legacy paths; `ENABLED_WORKFLOWS` remains the eight-workflow scientific-closure set.
+- Local singlepoint ordinary submit: freeze group → worker bootstrap → receipt → CAS → publication, verified by T27/T29/T41.
+- Remote: immutable release, `src/acp_services` sync, manifest-last group upload, receipt + `task_result.json` fetch, three recovery windows, same-attempt protocol. Controlled fake transport only; real LSF **NOT_VERIFIED**.
+- Support matrix: `support-matrix.md` separates scientific closure / default submit freeze / local / remote / publication / real science; 15/15 gate stays **OPEN**; only explicit default-enabled rows are marked default.
 
-- 任务 45：`m1-singlepoint`、`lsf-singlepoint`（+ `m1-failure-cancel-restart`、`browser-default-page`）；
-  `--help` / `--dry-run` / 缺环境 `NOT_VERIFIED`；退出码 `0=PASS, 1=FAIL, 2=NOT_VERIFIED, 3=usage`。
-- 任务 44：四格 `F0/S0`、`F1/S0`、`F0/S1`、`F1/S1`；`--check-only`；拒绝 `S1-as-S0` 与 `TestClient-as-F0`。
-- 统一 JSON schema `acp.acceptance.harness.v1`；环境变量 `ACP_M1_ORCA`、`ACP_LSF_NODE`、
-  `ACP_RUN_ROOT`、`ACP_ACCEPTANCE_*`。
-- 性能/资源方法与预算在同文件 §5 冻结（本 todo 完成），晚于此的性能声明必须引用它。
+## 5. Packaging, roles and assets
 
-## 4. 证据与词汇
+- Built `acp-0.2.0-py3-none-any.whl` (89,957,369 bytes, sha256 `8a45a72a…`); `acp` 291 / `acp_services` 75 / `cccp` 189 files; no `frontend/`.
+- Model/license assets present and hash-identical (`LICENSE-DP5`, `NOTICE.md`, `atomic_reps.gz`, `frag_reps.gz`).
+- **G4 OPEN** (code-delivery gap): one combined wheel, no CCCP-only, worker-only, or Web/frontend packaging config. Owner: B — packaging/release. Entry condition: separate packaging configs + isolated build/import/serve smokes. Next gate: re-run T35.
+- Worker-only frozen request **PASS** (exit 0, completed receipt, no jobs DB); negative `import acp` fails because the wheel includes `acp`. CCCP-only/Web isolation likewise not delivered.
 
-- 本目录 `evidence/` 保存 task 1 采集的**原始日志**；`evidence_manifest.json` 给出每个文件的 sha256（确定性、已排序）。
-- 证据词汇：`PASS / FAIL / NOT_VERIFIED` + scope `IN_SCOPE / DEFERRED / NOT_APPLICABLE`。
-  **已执行失败不得改写为 `NOT_VERIFIED`；`DEFERRED` 不是 `PASS`；每个 skip 单独说明。**
-- `python3.11 -m compileall` 只证明语法可编译，**不证明 import 可用**；import 冒烟单独执行
-  （`python3.11 -c "import acp, cccp, acp_services"`），见 `evidence/verification.log`。
-- 历史探针 `reports/architecture_acceptance_20261019/reproduce_defects.py` 是**审计件**：
-  `--collect-only` 实收 12 项（exit 0），原模块无 `__main__`/argparse 入口；它不是门。
-  原 20261019 目录**未被本任务修改**（只读副本在 `evidence/baseline-20261019/`）。
+## 6. Deferred capabilities (registered, not implemented)
 
-## 5. 关闭门（引用，不在此收口）
+`tests/baseline/services-evidence/handoff_registry.md` carries owner/blocker/entry condition/next gate/status for account-permission-quota wiring, MCP default entry, project-package CLI/API, metering wiring, persistent event A04, and frontend prepare/availability consumption. All remain `NOT_VERIFIED`/`OPEN`; no deferred capability was implemented or promoted to PASS.
 
-`G1 正确性` / `G2 正式回归` / `G3 默认链路` / `G4 独立交付` / `G5 功能验收` / `G6 发布运行`
-见 `docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md` §7.2。
-“本轮缺陷已修复”至少需要 G1/G2；本报告当前 **0/6 门**，故状态 `DRAFT / NOT_ACCEPTED`。
+## 7. A / B / C verdicts
 
-## 6. 状态历史
-
-| 日期 | 状态 | 说明 |
+| Layer | Verdict | Basis |
 |---|---|---|
-| 2026-10-20 | `DRAFT / NOT_ACCEPTED` | task 1 基线冻结 + 证据骨架 + harness 契约；候选 `878e3557b3b593a0c42adf842e80fe1408db395e` |
+| A — defect fixes (D01–D13) | **PASS (in-scope code/tests)** | Formal coverage matrix + 10,005-pass suite + 2,124 guards + four combinations; historical probe interface differences recorded. |
+| B — default chain / release | **PASS (local + controlled remote)** | singlepoint default chain, immutable release, CAS/publication, remote controlled transport; real LSF **NOT_VERIFIED**. |
+| C — real function | **NOT_VERIFIED** | No real ORCA/CREST/xTB/CENSO or LSF/SSH/SFTP; no performance sample; packaging G4 OPEN. D08/D09 real-Chromium UI is PASS. |
 
-（后续状态由任务 39—43 追加；**不得**在证据未落盘时改写本表。）
+## 8. Gates G1–G6
+
+| Gate | Verdict | Scope / reason |
+|---|---|---|
+| G1 correctness | **PASS** | D01–D13 formal tests; no executed failure rewritten. |
+| G2 formal regression | **PASS** | 10,005 non-slow + 2,124 guards + Node 327 + browser 4; 11 environment skips individually attributable to missing QC/LSF extras. |
+| G3 default chain | **PASS (in-scope)** | Local + controlled remote; real LSF NOT_VERIFIED. |
+| G4 independent delivery | **OPEN** | No CCCP-only/worker-only/Web packaging config; owner B packaging/release; next gate T35. |
+| G5 functional acceptance | **PASS for D08/D09 UI**; **NOT_VERIFIED for real science** | Real Chromium assertions pass; no real QC available; product gate stays NOT_VERIFIED. |
+| G6 release / run | **NOT_VERIFIED** | This plan does not restart/redeploy production; release/restart remains in the existing F1–F4 process. |
+
+## 9. Batch completion verdict
+
+**COMPLETE for the in-scope code/verification items this plan was required to deliver.** All 45 implementation todos are closed; the four final-wave reviews (F1–F4) are recorded alongside this report. `G4` is OPEN with an owner, the six deferred capabilities are registered with owners/gates, and real science/LSF/performance are `NOT_VERIFIED` with exact missing prerequisites. This is not a claim that the whole architecture adjustment is complete.
+
+## 10. Residual limits and rollback
+
+- Real science/LSF and performance remain environment gaps; they are not code-delivery failures.
+- Packaging isolation remains a code-delivery gap (G4 OPEN).
+- Baseline dirty facts (external docs and `tests/baseline/refactor-evidence/e2e-task-root.txt`) were recorded, never packaged or committed.
+- Rollback for each defect is the corresponding commit's revert; compatibility shims/assets/fixtures and the 20261019 report are retained and were not deleted.
+
+## 11. Evidence index
+
+- Task evidence: `.omo/evidence/acp-architecture-acceptance-remediation/task-{1..45}-acp-architecture-acceptance-remediation.md`.
+- Raw logs: `evidence/t39-nonslow.log`, `evidence/t39-guards.log`, `evidence/collection.log`, `evidence/verification.log`.
+- Four combinations: `four_combinations/F0_S0.json`, `F1_S0.json`, `F0_S1.json`, `F1_S1.json`, `summary.json`.
+- Real environment: `real_environment/m1-singlepoint.json`, `lsf-singlepoint.json`, `summary.json`.
+- Packaging: `.omo/evidence/acp-architecture-acceptance-remediation/task-35-acp-architecture-acceptance-remediation.md`.
+- Manifest and report digest: `evidence_manifest.json`, `evidence/report_sha256.txt`.
