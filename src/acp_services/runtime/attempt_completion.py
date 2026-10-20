@@ -229,6 +229,11 @@ class AttemptSnapshot:
 
     @property
     def publication_done(self) -> bool:
+        # An explicit pending marker always wins over the manager's unrelated
+        # terminal-side-effect marker: T27 marks local side effects done while
+        # publication is still outstanding.
+        if self.result.get("publication_pending") is True:
+            return False
         if self.result.get("publication_pending") is False:
             return True
         if self.result.get("publication_done") is True:
