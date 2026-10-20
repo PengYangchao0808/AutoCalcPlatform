@@ -20,10 +20,12 @@ from __future__ import annotations
 import ast
 import dataclasses
 import io
+import json
 import re
 import sqlite3
 import tokenize
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -35,12 +37,25 @@ from acp_services.contracts.envelope import (
     expected_submission_id,
 )
 from acp_services.contracts.injection import JobStateAdvancePort, StepRequirementPort
+from acp_services.runtime.plan_contracts import CalculationResult, StepKind
 from acp_services.runtime.receipts import (
     ReceiptRejectedError,
     advance_job_state,
     verify_receipt,
 )
+from acp_services.runtime.step_requirements import (
+    MISSING_REQUIREMENT,
+    PriorStep,
+    evaluate_prerequisite,
+    is_partial_result,
+)
 from acp_services.runtime.worker import (
+    JOB_STATUS_BY_RECEIPT_STATE,
+    QUALIFICATION_COMPLETE,
+    QUALIFICATION_INCOMPLETE,
+    QUALIFICATION_PARTIAL,
+    QUALIFICATION_TASK_FAILED,
+    TASK_COMPLETION_AUTHORITIES,
     DeclaredPlanVerifier,
     DependencyNotSatisfiedError,
     FrozenPlan,
@@ -52,8 +67,17 @@ from acp_services.runtime.worker import (
     ReceiptConflictError,
     TaskExecutionOutcome,
     TaskExecutorPort,
+    TaskResultIntegrityError,
     build_receipt,
+    decide_task_result,
+    job_status_for_receipt,
+    outcome_from_task_result,
     read_receipt,
+    read_task_result,
+    read_task_result_qualification,
+    receipt_exit_code,
+    task_result_path,
+    write_receipt_atomic,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -733,3 +757,524 @@ def test_controller_advance_preserves_store_cas_semantics(tmp_path: Path) -> Non
             expected_status="queued",
             status="completed",
         )
+
+
+# ---------------------------------------------------------------------------
+# D01 — authoritative TaskResult status and the frozen truth table
+# ---------------------------------------------------------------------------
+
+
+def _result(task: str = "singlepoint", **overrides: object) -> SimpleNamespace:
+    base: dict[str, object] = {
+        "task": task,
+        "status": "completed",
+        "complete": True,
+        "errors": (),
+        "energy_hartree": None,
+        "coordinates": None,
+        "symbols": None,
+        "frequencies": (),
+        "converged": None,
+        "payload": None,
+        "metadata": {},
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _irc_partial_result(
+    directions: tuple[str, ...] = ("forward",),
+    requested: tuple[str, ...] = ("forward", "reverse"),
+    *,
+    complete: bool = False,
+) -> SimpleNamespace:
+    entries = tuple(
+        SimpleNamespace(
+            direction=direction,
+            success=True,
+            coordinates=((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),
+            trajectory_ref=None,
+        )
+        for direction in directions
+    )
+    return _result(
+        "irc",
+        complete=complete,
+        coordinates=((0.0, 0.0, 0.0),),
+        symbols=("C", "O"),
+        payload=SimpleNamespace(directions=entries),
+        metadata={"directions": list(requested)},
+    )
+
+
+def _valid_result(kind: str) -> SimpleNamespace:
+    """One result whose required facts the CCCP authority would accept."""
+    if kind == "singlepoint":
+        return _result(kind, energy_hartree=-76.0)
+    if kind == "optimize":
+        return _result(kind, coordinates=((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)), symbols=("C", "O"))
+    if kind == "frequency":
+        return _result(kind, payload=SimpleNamespace(n_imaginary=0))
+    if kind == "scan":
+        frames = (SimpleNamespace(success=True, geometry_ref=object()),)
+        return _result(
+            kind,
+            payload=SimpleNamespace(frames=frames),
+            metadata={"frame_count": 1, "successful_frame_count": 1},
+        )
+    if kind == "irc":
+        return _irc_partial_result(
+            ("forward", "reverse"),
+            ("forward", "reverse"),
+            complete=True,
+        )
+    if kind == "casscf":
+        return _result(kind, converged=True, payload=SimpleNamespace(active_space="(2,2)"))
+    if kind == "thermochemistry":
+        return _result(
+            kind,
+            payload=SimpleNamespace(gibbs_hartree=-1.0, enthalpy_hartree=-1.0),
+        )
+    if kind == "conformer_search":
+        return _result(kind, payload=SimpleNamespace(conformer_count=2, ensemble_ref=object()))
+    if kind == "md_sampling":
+        return _result(kind, payload=SimpleNamespace(n_frames=3, trajectory_ref=object()))
+    if kind == "clustering":
+        return _result(
+            kind, payload=SimpleNamespace(assignments=(object(),), clustered_ref=object())
+        )
+    if kind == "censo_refine":
+        return _result(
+            kind, payload=SimpleNamespace(records=(object(),), refined_ensemble_ref=object())
+        )
+    if kind == "nmr_shielding":
+        return _result(kind, payload=SimpleNamespace(shieldings={0: object()}))
+    if kind == "xtb_path_search":
+        return _result(
+            kind,
+            payload=SimpleNamespace(frames=(object(),), trajectory_ref=object(), end_frame_index=0),
+        )
+    if kind == "orca_gradient":
+        return _result(
+            kind,
+            symbols=("C",),
+            payload=SimpleNamespace(gradients=((0.0, 0.0, 0.0),)),
+        )
+    if kind == "xtb_constrained_opt":
+        return _result(kind, payload=SimpleNamespace(energy_effective_hartree=-1.0))
+    raise AssertionError(f"no valid-result factory for {kind!r}")
+
+
+_ROW_A = {
+    "row": "a",
+    "receipt_state": "failed",
+    "exit_code": 1,
+    "job_status": "failed",
+    "normal_reuse": False,
+    "publish": False,
+    "publish_policy": "none",
+    "partial_result": False,
+    "qualification": QUALIFICATION_TASK_FAILED,
+}
+_ROW_B = {
+    "row": "b",
+    "receipt_state": "completed",
+    "exit_code": 0,
+    "job_status": "completed",
+    "normal_reuse": True,
+    "publish": True,
+    "publish_policy": "normal",
+    "partial_result": False,
+    "qualification": QUALIFICATION_COMPLETE,
+}
+_ROW_C = {
+    "row": "c",
+    "receipt_state": "completed",
+    "exit_code": 0,
+    "job_status": "completed",
+    "normal_reuse": False,
+    "publish": True,
+    "publish_policy": "partial",
+    "partial_result": True,
+    "qualification": QUALIFICATION_PARTIAL,
+}
+_ROW_D = {
+    "row": "d",
+    "receipt_state": "failed",
+    "exit_code": 1,
+    "job_status": "failed",
+    "normal_reuse": False,
+    "publish": False,
+    "publish_policy": "none",
+    "partial_result": False,
+    "qualification": QUALIFICATION_INCOMPLETE,
+}
+_ROW_E = {
+    "row": "e",
+    "receipt_state": "failed",
+    "exit_code": 1,
+    "job_status": "failed",
+    "normal_reuse": False,
+    "publish": False,
+    "publish_policy": "none",
+    "partial_result": False,
+    "qualification": QUALIFICATION_INCOMPLETE,
+}
+
+
+def _assert_row(decision, expected: dict[str, object]) -> None:
+    for key, value in expected.items():
+        assert getattr(decision, key) == value, f"{key}: {getattr(decision, key)!r} != {value!r}"
+
+
+_D01_CASES = [
+    ("a_failed", _result(status="failed", complete=False, errors=("boom",)), _ROW_A),
+    (
+        "a_cancelled",
+        _result(status="cancelled", complete=False),
+        {**_ROW_A, "receipt_state": "cancelled", "job_status": "cancelled"},
+    ),
+    (
+        "a_blocked",
+        _result(status="blocked", complete=False),
+        {**_ROW_A, "receipt_state": "blocked"},
+    ),
+    ("b_complete", _result("singlepoint", energy_hartree=-76.0), _ROW_B),
+    ("c_partial", _irc_partial_result(), _ROW_C),
+    ("d_partial_missing_fact", _irc_partial_result(directions=()), _ROW_D),
+    (
+        "d_complete_true_missing_fact_outranked",
+        _result("singlepoint", complete=True, energy_hartree=None),
+        _ROW_D,
+    ),
+    (
+        "d_complete_declaration_missing",
+        _result("singlepoint", complete=None, energy_hartree=-76.0),
+        _ROW_D,
+    ),
+    ("e_unknown_status", _result("singlepoint", status="finished"), _ROW_E),
+    ("e_unknown_task_kind", _result("not_a_task", complete=False), _ROW_E),
+]
+
+
+@pytest.mark.parametrize("name,result,expected", _D01_CASES, ids=[c[0] for c in _D01_CASES])
+def test_d01_truth_table_rows(
+    name: str, result: SimpleNamespace, expected: dict[str, object]
+) -> None:
+    decision = decide_task_result(result)
+    _assert_row(decision, expected)
+
+    env = _envelope()
+    outcome = outcome_from_task_result(result)
+    receipt = build_receipt(env, outcome)
+    assert receipt.state == expected["receipt_state"]
+    assert receipt_exit_code(receipt) == expected["exit_code"]
+    assert job_status_for_receipt(receipt) == expected["job_status"]
+    assert receipt.evidence_digests["truth_table_row"] == expected["row"]
+    assert receipt.evidence_digests["partial_result"] == (
+        "true" if expected["partial_result"] else "false"
+    )
+    assert receipt.evidence_digests["normal_reuse"] == (
+        "true" if expected["normal_reuse"] else "false"
+    )
+    assert receipt.evidence_digests["publish"] == ("true" if expected["publish"] else "false")
+    assert receipt.evidence_digests["publish_policy"] == expected["publish_policy"]
+    if expected["qualification"] == QUALIFICATION_INCOMPLETE:
+        codes = [entry.code if hasattr(entry, "code") else str(entry) for entry in receipt.errors]
+        assert QUALIFICATION_INCOMPLETE in codes
+
+
+def test_d01_failed_row_preserves_cause_and_never_upgrades() -> None:
+    decision = decide_task_result(_result(status="failed", complete=False, errors=("boom",)))
+    assert decision.receipt_state == "failed"
+    assert decision.errors == ("boom",)
+
+
+def test_d01_missing_fact_outranks_complete_true() -> None:
+    decision = decide_task_result(_result("singlepoint", complete=True, energy_hartree=None))
+    assert decision.row == "d"
+    assert decision.status == "completed"
+    assert decision.complete is True
+    assert decision.missing_facts == ("energy_hartree",)
+    assert decision.receipt_state == "failed"
+
+
+def test_d01_old_complete_false_upgrade_counterexample(monkeypatch) -> None:
+    import acp_services.runtime.worker as worker_module
+
+    def _legacy_receipt_state(result: SimpleNamespace) -> str:
+        status = str(getattr(result, "status", "completed"))
+        state = status if status in ("completed", "failed", "cancelled", "blocked") else "failed"
+        if state == status and getattr(result, "complete", True) is False:
+            state = "completed"
+        return state
+
+    failed = _result(status="failed", complete=False, errors=("boom",))
+    assert _legacy_receipt_state(failed) == "completed", "counterexample must reproduce the bug"
+
+    monkeypatch.setattr(
+        worker_module,
+        "decide_task_result",
+        lambda result: dataclasses.replace(
+            decide_task_result(result), receipt_state=_legacy_receipt_state(result)
+        ),
+    )
+    with pytest.raises(AssertionError):
+        _assert_row(worker_module.decide_task_result(failed), _ROW_A)
+
+
+_CORE_KINDS = {
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "scan",
+    "irc",
+    "casscf",
+}
+_P2_KINDS = {
+    "conformer_search",
+    "md_sampling",
+    "clustering",
+    "censo_refine",
+    "nmr_shielding",
+    "xtb_path_search",
+    "orca_gradient",
+    "xtb_constrained_opt",
+}
+
+
+def test_completion_authority_matrix_covers_every_registered_kind() -> None:
+    expected = _CORE_KINDS | _P2_KINDS | {"thermochemistry"}
+    assert set(TASK_COMPLETION_AUTHORITIES) == expected
+    for kind in sorted(expected):
+        authority = TASK_COMPLETION_AUTHORITIES[kind]
+        assert authority.kind == kind
+        assert authority.source
+        assert authority.required_facts
+        assert authority.partial_policy
+        decision = decide_task_result(_valid_result(kind))
+        assert decision.row == "b", f"{kind}: {decision.missing_facts}"
+        assert decision.required_facts == tuple(fact.name for fact in authority.required_facts)
+        assert decision.missing_facts == ()
+
+
+def test_completion_authority_missing_kind_fails_closed() -> None:
+    decision = decide_task_result(_result("unregistered_kind", energy_hartree=-1.0))
+    assert decision.row == "e"
+    assert decision.qualification == QUALIFICATION_INCOMPLETE
+    assert decision.receipt_state == "failed"
+    assert decision.normal_reuse is False
+    assert decision.publish is False
+
+
+def test_job_status_map_covers_every_receipt_state() -> None:
+    assert JOB_STATUS_BY_RECEIPT_STATE == {
+        "completed": "completed",
+        "failed": "failed",
+        "cancelled": "cancelled",
+        "blocked": "failed",
+    }
+
+
+# ---------------------------------------------------------------------------
+# D01 — task_result.json persistence, digest binding, round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_partial_qualification_round_trips_through_receipt_and_controller(
+    tmp_path: Path,
+) -> None:
+    result = _irc_partial_result()
+    outcome = outcome_from_task_result(result, work_dir=tmp_path)
+    document = read_task_result(tmp_path)
+    qualification = read_task_result_qualification(tmp_path)
+    assert document is not None and qualification is not None
+    assert document["partial_result"] is True
+    assert document["normal_reuse"] is False
+    assert document["publish"] is True
+    assert document["publish_policy"] == "partial"
+    assert document["truth_table_row"] == "c"
+    assert document["required_facts"] == ["irc_directions"]
+    assert document["missing_required_facts"] == []
+    assert qualification.content_digest == document["content_digest"]
+    assert outcome.evidence_digests["task_result_digest"] == document["content_digest"]
+
+    env = _envelope()
+    receipt = build_receipt(env, outcome)
+    write_receipt_atomic(tmp_path / "receipt.json", receipt)
+    reloaded = read_receipt(tmp_path / "receipt.json")
+    assert reloaded is not None
+    assert reloaded.evidence_digests["partial_result"] == "true"
+    assert reloaded.evidence_digests["normal_reuse"] == "false"
+    assert reloaded.evidence_digests["publish_policy"] == "partial"
+    assert reloaded.evidence_digests["task_result_digest"] == document["content_digest"]
+    assert receipt_exit_code(reloaded) == 0
+    assert job_status_for_receipt(reloaded) == "completed"
+    assert _verify(env, reloaded).accepted is True  # type: ignore[attr-defined]
+
+    port = _FakeAdvancePort()
+    advance_job_state(
+        port,
+        env,
+        reloaded,
+        current_attempt=reloaded.attempt,
+        current_submission_id=reloaded.submission_id,
+        current_release_id=reloaded.release_id,
+        owner_token=reloaded.owner,
+        fencing_token=reloaded.fencing_token,
+        expected_revision=4,
+        expected_status="running",
+        status=job_status_for_receipt(reloaded),
+    )
+    assert len(port.calls) == 1
+    assert port.calls[0][4] == {"status": "completed"}
+    assert not list((tmp_path / "WORK" / "00_RUNTIME").glob(".*.tmp"))
+
+
+def test_task_result_digest_binding_rejects_tampering(tmp_path: Path) -> None:
+    outcome_from_task_result(_irc_partial_result(), work_dir=tmp_path)
+    path = task_result_path(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["normal_reuse"] = True
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(TaskResultIntegrityError):
+        read_task_result(tmp_path)
+    with pytest.raises(TaskResultIntegrityError):
+        read_task_result_qualification(tmp_path)
+
+
+def test_task_result_absent_is_none(tmp_path: Path) -> None:
+    assert read_task_result(tmp_path) is None
+    assert read_task_result_qualification(tmp_path) is None
+
+
+class _TaskResultExecutor:
+    def __init__(self, result: SimpleNamespace) -> None:
+        self.calls = 0
+        self.result = result
+
+    def execute(self, scope: object) -> TaskExecutionOutcome:
+        self.calls += 1
+        work_dir = getattr(scope, "work_dir")
+        return outcome_from_task_result(self.result, work_dir=work_dir)
+
+
+def test_partial_redelivery_is_idempotent_and_keeps_the_fact(tmp_path: Path) -> None:
+    env = _envelope()
+    plan = _plan(env)
+    executor = _TaskResultExecutor(_irc_partial_result())
+    worker = _worker(executor=executor)  # type: ignore[arg-type]
+    receipt_path = tmp_path / "receipt.json"
+
+    first = worker.execute(env, plan, receipt_path=receipt_path, work_dir=tmp_path)
+    second = worker.execute(env, plan, receipt_path=receipt_path, work_dir=tmp_path)
+
+    assert executor.calls == 1
+    assert second == first
+    assert first.evidence_digests["truth_table_row"] == "c"
+    assert first.evidence_digests["partial_result"] == "true"
+    assert first.evidence_digests["normal_reuse"] == "false"
+    assert read_task_result_qualification(tmp_path) is not None
+
+
+# ---------------------------------------------------------------------------
+# D01 — prerequisite + recovery consumers reject completed-partial reuse
+# ---------------------------------------------------------------------------
+
+
+def test_completed_partial_never_satisfies_geometry_prerequisite() -> None:
+    partial = CalculationResult(
+        status="completed",
+        coords=[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
+        metadata={"partial_result": True, "normal_reuse": False},
+    )
+    assert is_partial_result(partial) is True
+    outcome = evaluate_prerequisite(
+        [PriorStep(StepKind.OPTIMIZE, "completed", partial)],
+        StepKind.FREQUENCY,
+        ("C", "O"),
+    )
+    assert outcome.satisfied is False
+    assert outcome.reason == MISSING_REQUIREMENT
+
+    flagged = PriorStep(
+        StepKind.OPTIMIZE,
+        "completed",
+        CalculationResult(status="completed", coords=[(0.0, 0.0, 0.0)]),
+        partial_result=True,
+    )
+    outcome2 = evaluate_prerequisite([flagged], StepKind.SINGLEPOINT, ("C",))
+    assert outcome2.satisfied is False
+    assert outcome2.reason == MISSING_REQUIREMENT
+
+
+def test_completed_partial_never_satisfies_thermochemistry_upstream() -> None:
+    partial_freq = CalculationResult(
+        status="completed",
+        frequencies=[100.0],
+        metadata={"normal_reuse": False},
+    )
+    complete_sp = CalculationResult(status="completed", energy=-76.0)
+    outcome = evaluate_prerequisite(
+        [
+            PriorStep(StepKind.FREQUENCY, "completed", partial_freq),
+            PriorStep(StepKind.SINGLEPOINT, "completed", complete_sp),
+        ],
+        StepKind.THERMOCHEMISTRY,
+        ("C", "O"),
+    )
+    assert outcome.satisfied is False
+    assert outcome.reason == MISSING_REQUIREMENT
+
+
+def test_executor_adoption_refuses_the_persisted_partial_fact(tmp_path: Path) -> None:
+    from acp.calculations.executor import CalculationPlanExecutor
+
+    step_dir = tmp_path / "WORK" / "05_SP"
+    step_dir.mkdir(parents=True)
+    (step_dir / "step_result.json").write_text(
+        json.dumps({"schema_version": 1, "status": "completed"}), encoding="utf-8"
+    )
+    outcome_from_task_result(_irc_partial_result(), work_dir=tmp_path)
+
+    executor = CalculationPlanExecutor()
+    adoption = executor._adopt_step_result(
+        idx=0,
+        step_identity=None,
+        science_root=tmp_path,
+        task_root=tmp_path,
+        rel="WORK/05_SP/step_result.json",
+        enabled=True,
+        was_completed=False,
+        kind=StepKind.SINGLEPOINT,
+    )
+
+    assert adoption.result is None
+    assert adoption.reason == "partial_result_not_reusable"
+    assert adoption.integrity_failed is True
+
+
+def test_executor_adoption_refuses_an_embedded_partial_step_result(tmp_path: Path) -> None:
+    from acp.calculations.executor import CalculationPlanExecutor
+
+    step_dir = tmp_path / "WORK" / "05_SP"
+    step_dir.mkdir(parents=True)
+    (step_dir / "step_result.json").write_text(
+        json.dumps({"schema_version": 1, "partial_result": True}), encoding="utf-8"
+    )
+
+    adoption = CalculationPlanExecutor()._adopt_step_result(
+        idx=0,
+        step_identity=None,
+        science_root=tmp_path,
+        task_root=tmp_path,
+        rel="WORK/05_SP/step_result.json",
+        enabled=True,
+        was_completed=False,
+        kind=StepKind.SINGLEPOINT,
+    )
+
+    assert adoption.result is None
+    assert adoption.reason == "partial_result_not_reusable"
+    assert adoption.integrity_failed is True

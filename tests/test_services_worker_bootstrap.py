@@ -41,6 +41,9 @@ from acp_services.runtime.worker import (
     FrozenStep,
     PlanVerificationError,
     TaskExecutionOutcome,
+    read_task_result,
+    read_task_result_qualification,
+    task_result_path,
 )
 from acp_services.worker_bootstrap import (
     AssemblyError,
@@ -568,3 +571,111 @@ def test_worker_runtime_never_invokes_executor_twice(tmp_path: Path) -> None:
     second = runtime.run()
     assert executor.calls == 1, "re-delivery must not re-execute"
     assert second == first
+
+
+# ---------------------------------------------------------------------------
+# D01 — real worker subprocesses: the frozen status/exit/job/reuse matrix
+# ---------------------------------------------------------------------------
+
+
+def _run_probe(tmp_path: Path, mode: str) -> tuple[subprocess.CompletedProcess[str], dict]:
+    frozen = _write_frozen(tmp_path)
+    run_root = tmp_path / f"rr_{mode.replace('-', '_')}"
+    run_root.mkdir()
+    cmd = [
+        sys.executable,
+        "-m",
+        "acp_services.worker_bootstrap",
+        "--envelope",
+        frozen["envelope"],
+        "--plan",
+        frozen["plan"],
+        "--work-dir",
+        frozen["work_dir"],
+        "--receipt",
+        frozen["receipt"],
+        "--binding",
+        frozen["binding"],
+        "--probe-executor",
+        mode,
+    ]
+    result = _run(cmd, _child_env(run_root))
+    assert "Traceback" not in result.stderr
+    receipt = json.loads(result.stdout.strip().splitlines()[-1])
+    return result, receipt
+
+
+def test_d01_subprocess_failed_row_a(tmp_path: Path) -> None:
+    result, receipt = _run_probe(tmp_path, "fail")
+    assert result.returncode == 1
+    assert receipt["state"] == "failed"
+    assert receipt["errors"][0]["code"] == "probe_failure"
+    evidence = receipt["evidence_digests"]
+    assert evidence["truth_table_row"] == "a"
+    assert evidence["normal_reuse"] == "false"
+    assert evidence["publish"] == "false"
+    assert evidence["publish_policy"] == "none"
+    assert evidence["job_status"] == "failed"
+    assert evidence["exit_code"] == "1"
+    document = read_task_result(tmp_path / "work")
+    assert document is not None
+    assert document["status"] == "failed"
+    assert document["qualification"] == "task_failed"
+    assert evidence["task_result_digest"] == document["content_digest"]
+
+
+def test_d01_subprocess_partial_missing_fact_row_d(tmp_path: Path) -> None:
+    result, receipt = _run_probe(tmp_path, "partial-missing")
+    assert result.returncode == 1
+    assert receipt["state"] == "failed"
+    evidence = receipt["evidence_digests"]
+    assert evidence["truth_table_row"] == "d"
+    assert evidence["qualification"] == "incomplete_result"
+    assert evidence["normal_reuse"] == "false"
+    assert evidence["publish"] == "false"
+    assert evidence["job_status"] == "failed"
+    assert evidence["exit_code"] == "1"
+    assert "coordinates" in evidence["missing_required_facts"]
+    codes = [entry["code"] if isinstance(entry, dict) else entry for entry in receipt["errors"]]
+    assert "incomplete_result" in codes
+
+    document = read_task_result(tmp_path / "work")
+    assert document is not None
+    assert document["truth_table_row"] == "d"
+    assert document["missing_required_facts"]
+
+
+def test_d01_subprocess_partial_satisfied_row_c(tmp_path: Path) -> None:
+    result, receipt = _run_probe(tmp_path, "partial")
+    assert result.returncode == 0
+    assert receipt["state"] == "completed"
+    evidence = receipt["evidence_digests"]
+    assert evidence["truth_table_row"] == "c"
+    assert evidence["qualification"] == "partial_result"
+    assert evidence["partial_result"] == "true"
+    assert evidence["normal_reuse"] == "false"
+    assert evidence["publish"] == "true"
+    assert evidence["publish_policy"] == "partial"
+    assert evidence["job_status"] == "completed"
+    assert evidence["exit_code"] == "0"
+
+    qualification = read_task_result_qualification(tmp_path / "work")
+    assert qualification is not None
+    assert qualification.partial_result is True
+    assert qualification.normal_reuse is False
+    assert qualification.publish is True
+    assert qualification.publish_policy == "partial"
+    assert evidence["task_result_digest"] == qualification.content_digest
+    assert task_result_path(tmp_path / "work").is_file()
+
+
+def test_d01_subprocess_complete_row_b(tmp_path: Path) -> None:
+    result, receipt = _run_probe(tmp_path, "ok")
+    assert result.returncode == 0
+    assert receipt["state"] == "completed"
+    evidence = receipt["evidence_digests"]
+    assert evidence["truth_table_row"] == "b"
+    assert evidence["normal_reuse"] == "true"
+    assert evidence["publish_policy"] == "normal"
+    assert evidence["job_status"] == "completed"
+    assert evidence["exit_code"] == "0"

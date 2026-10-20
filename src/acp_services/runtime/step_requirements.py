@@ -21,6 +21,12 @@ produced under the diagnostics purpose).
 A result produced under the ``diagnostics`` policy carries
 ``metadata["diagnostic_only"]=True``; such a result never satisfies a normal
 prerequisite (consumers re-run as diagnostics or block, always marked).
+
+A completed-but-partial result (the D01 truth-table row ``c``) carries
+``metadata["partial_result"]=True`` / ``metadata["normal_reuse"]=False`` from
+the digest-bound ``task_result.json`` qualification.  It may be returned on
+redelivery of the same execution fact, but it never satisfies a normal
+prerequisite — its downstream step blocks with ``missing_requirement``.
 """
 
 from __future__ import annotations
@@ -30,6 +36,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from acp_services.runtime.plan_contracts import CalculationResult, StepKind
+from acp_services.runtime.worker import (
+    NORMAL_REUSE_METADATA_KEY,
+    PARTIAL_RESULT_METADATA_KEY,
+)
 
 __all__ = [
     "COORD_PRODUCING_KINDS",
@@ -42,7 +52,9 @@ __all__ = [
     "StepRequirement",
     "evaluate_prerequisite",
     "is_diagnostic_result",
+    "is_partial_result",
     "payload_is_diagnostic",
+    "payload_is_partial",
 ]
 
 #: Why a step became ``blocked`` — the only two accepted values.
@@ -94,6 +106,7 @@ class PriorStep:
     kind: StepKind
     status: str
     result: CalculationResult | None = None
+    partial_result: bool = False
 
 
 def is_diagnostic_result(result: CalculationResult | None) -> bool:
@@ -109,6 +122,35 @@ def payload_is_diagnostic(payload: Mapping[str, object]) -> bool:
         return True
     metadata = payload.get("metadata")
     return isinstance(metadata, Mapping) and metadata.get("diagnostic_only") is True
+
+
+def is_partial_result(result: CalculationResult | None) -> bool:
+    """``True`` when *result* is a completed-partial fact (never normal reuse)."""
+    if result is None:
+        return False
+    metadata = result.metadata
+    if metadata.get(PARTIAL_RESULT_METADATA_KEY) is True:
+        return True
+    if metadata.get(NORMAL_REUSE_METADATA_KEY) is False:
+        return True
+    return metadata.get("qualification") == "partial_result"
+
+
+def payload_is_partial(payload: Mapping[str, object]) -> bool:
+    """``True`` when a persisted ``step_result.json`` records a partial fact."""
+    if payload.get(PARTIAL_RESULT_METADATA_KEY) is True:
+        return True
+    if payload.get(NORMAL_REUSE_METADATA_KEY) is False:
+        return True
+    metadata = payload.get("metadata")
+    return isinstance(metadata, Mapping) and (
+        metadata.get(PARTIAL_RESULT_METADATA_KEY) is True
+        or metadata.get(NORMAL_REUSE_METADATA_KEY) is False
+    )
+
+
+def _prior_is_partial(entry: PriorStep) -> bool:
+    return entry.partial_result or is_partial_result(entry.result)
 
 
 def _has_freq_log(result: CalculationResult) -> bool:
@@ -137,6 +179,8 @@ def _geometry_outcome(
         return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
     if is_diagnostic_result(producer.result):
         return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
+    if _prior_is_partial(producer):
+        return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
     coords = producer.result.coords
     if coords is None:
         return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
@@ -159,6 +203,8 @@ def _upstream_outcome(
         if upstream.status != "completed" or upstream.result is None:
             return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
         if is_diagnostic_result(upstream.result):
+            return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
+        if _prior_is_partial(upstream):
             return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
         if needed is StepKind.FREQUENCY and not _has_freq_log(upstream.result):
             return RequirementOutcome(satisfied=False, reason=MISSING_REQUIREMENT)
