@@ -519,6 +519,7 @@ class StorageBinding:
     binding_id: str
     tenant_id: str = ""
     project_id: str = ""
+    kind: str = ""
     endpoint: str = ""
     root: str = ""
     relative_path: str = ""
@@ -527,6 +528,7 @@ class StorageBinding:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "binding_id", _as_str(self.binding_id, name="binding_id"))
+        object.__setattr__(self, "kind", _as_str(self.kind, name="kind"))
         object.__setattr__(self, "mapping_version", int(self.mapping_version))
         object.__setattr__(
             self, "artifact_digests", _as_str_map(self.artifact_digests, name="artifact_digests")
@@ -538,6 +540,7 @@ class StorageBinding:
             "binding_id": self.binding_id,
             "tenant_id": self.tenant_id,
             "project_id": self.project_id,
+            "kind": self.kind,
             "endpoint": self.endpoint,
             "root": self.root,
             "relative_path": self.relative_path,
@@ -553,6 +556,7 @@ class StorageBinding:
             binding_id=_as_str(payload.get("binding_id"), name="binding_id"),
             tenant_id=_as_str(payload.get("tenant_id"), name="tenant_id"),
             project_id=_as_str(payload.get("project_id"), name="project_id"),
+            kind=_as_str(payload.get("kind"), name="kind"),
             endpoint=_as_str(payload.get("endpoint"), name="endpoint"),
             root=_as_str(payload.get("root"), name="root"),
             relative_path=_as_str(payload.get("relative_path"), name="relative_path"),
