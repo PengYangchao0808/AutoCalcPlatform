@@ -1,0 +1,9 @@
+=== local orca version (probe) ===
+40.3
+exit=0
+-rwxr-xr-x. 1 root root 9271  4月 19  2023 /usr/bin/orca
+
+=== parser versions / registry (read-only introspection) ===
+acp.intake.parsers exports: ['Path_safe', 'annotations', 'detect_and_parse', 'detect_format', 'normalize_molblock', 'parse_gjf_text', 'parse_mol_text', 'parse_orca_inp_text', 'parse_qc_output_text', 'parse_sdf_text', 'parse_smiles_list', 'parse_structure_text', 'parse_xyz_text']
+exit=0
+=== package versions relevant to parsing ===
