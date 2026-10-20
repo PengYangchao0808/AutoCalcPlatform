@@ -157,16 +157,18 @@ class SamplingHistory:
                 if (f.energy_kcal_mol is not None and min_e is not None)
                 else None
             )
-            frame_dicts.append({
-                "index": f.index,
-                "time_ps": _sanitize(f.time_ps),
-                "step": f.step,
-                "energy_kcal_mol": _sanitize(f.energy_kcal_mol),
-                "relative_energy_kcal_mol": _sanitize(rel),
-                "basin_id": basin_id,
-                "is_new_basin": is_new,
-                "mds": [_sanitize(mx), _sanitize(my)],
-            })
+            frame_dicts.append(
+                {
+                    "index": f.index,
+                    "time_ps": _sanitize(f.time_ps),
+                    "step": f.step,
+                    "energy_kcal_mol": _sanitize(f.energy_kcal_mol),
+                    "relative_energy_kcal_mol": _sanitize(rel),
+                    "basin_id": basin_id,
+                    "is_new_basin": is_new,
+                    "mds": [_sanitize(mx), _sanitize(my)],
+                }
+            )
         return {
             "schema_version": self.schema_version,
             "protocol": self.protocol,

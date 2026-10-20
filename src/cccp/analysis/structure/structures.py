@@ -76,9 +76,7 @@ class Structure:
             raise ValueError("Structure.coordinates must have shape (N, 3)")
 
         if self.symbols and coordinates.shape[0] != len(self.symbols):
-            raise ValueError(
-                "Structure.coordinates row count must match len(symbols)"
-            )
+            raise ValueError("Structure.coordinates row count must match len(symbols)")
 
         coordinates.setflags(write=False)
         object.__setattr__(self, "coordinates", coordinates)
@@ -205,9 +203,7 @@ class StructureRecord:
             gibbs_energy=_coerce_float(
                 self.properties.get("gibbs_energy_hartree", self.free_energy_hartree)
             ),
-            gibbs_correction=_coerce_float(
-                self.properties.get("gibbs_correction_hartree")
-            ),
+            gibbs_correction=_coerce_float(self.properties.get("gibbs_correction_hartree")),
             h_correction=_coerce_float(self.properties.get("h_correction_hartree")),
             u_correction=_coerce_float(self.properties.get("u_correction_hartree")),
             s_total=_coerce_float(self.properties.get("entropy_total_au")),
@@ -299,14 +295,11 @@ class StructureEnsemble:
         if global_minimum is None or global_minimum.energy_hartree is None:
             return []
 
-        threshold_hartree = (
-            global_minimum.energy_hartree + energy_window_kcal / HARTREE_TO_KCAL
-        )
+        threshold_hartree = global_minimum.energy_hartree + energy_window_kcal / HARTREE_TO_KCAL
         return [
             record
             for record in sorted(self.records, key=self._energy_sort_key)
-            if record.energy_hartree is not None
-            and record.energy_hartree <= threshold_hartree
+            if record.energy_hartree is not None and record.energy_hartree <= threshold_hartree
         ]
 
     def to_candidate_set(self) -> CandidateSet:

@@ -160,9 +160,7 @@ class _Scenario:
             route.fulfill(
                 status=200,
                 content_type="application/json",
-                body=json.dumps(
-                    {"job_id": f"captured_{len(self.job_bodies)}", "status": "queued"}
-                ),
+                body=json.dumps({"job_id": f"captured_{len(self.job_bodies)}", "status": "queued"}),
             )
             return
         if path.startswith("/api/"):
@@ -182,7 +180,9 @@ class _Scenario:
         request = route.request
         if path == "/api/v1/workflow-catalog":
             if not self.live_workflow_catalog:
-                route.fulfill(status=503, body=json.dumps({"detail": "workflow catalog unavailable"}))
+                route.fulfill(
+                    status=503, body=json.dumps({"detail": "workflow catalog unavailable"})
+                )
                 return
             route.fulfill(
                 status=200,
@@ -375,9 +375,7 @@ def test_wizard_submit_rank1_defaults_differ_per_workflow_on_real_page(browser) 
                 workflow,
             )
             page.evaluate("() => window.ACPWizardDraftForm.openMethodConfig()")
-            defaults[workflow["id"]] = page.evaluate(
-                "() => window.wizardState.method.rank1_only"
-            )
+            defaults[workflow["id"]] = page.evaluate("() => window.wizardState.method.rank1_only")
         assert defaults["energy"] is True, "energy rank1-only default must be ON"
         assert defaults["xtbmd_censo_energy"] is False, (
             "xtbmd_censo_energy rank1-only default must be the full ensemble"
@@ -442,9 +440,7 @@ def test_wizard_submit_active_workflow_keeps_catalog_fields_on_real_page(browser
         )
         live_schema = METHOD_SCHEMAS[live["method_schema_id"]]
         expected = {
-            level["level_id"]: {
-                field: _fixture_value(field) for field in level["fields"]
-            }
+            level["level_id"]: {field: _fixture_value(field) for field in level["fields"]}
             for level in live_schema["method_levels"]
         }
         for level in live_schema["method_levels"]:

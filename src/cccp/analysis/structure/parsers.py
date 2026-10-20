@@ -22,6 +22,7 @@ def _reset_asset_counter() -> None:
     global _ASSET_COUNTER
     _ASSET_COUNTER = 0
 
+
 # Bounds for SMILES fallback — rejects oversized content before RDKit is called.
 # These protect against large unknown text (e.g. log files) leaking into the
 # SMILES parse path via detect_and_parse's fallback chain.
@@ -76,9 +77,7 @@ _GAUSSIAN_GEOM_RE = re.compile(
     r"(?:Standard|Input)\s+orientation:.*?Coordinates\s*\(Angstroms\)",
     re.IGNORECASE | re.DOTALL,
 )
-_ORCA_GEOM_RE = re.compile(
-    r"CARTESIAN\s+COORDINATES\s+\((?:ANGSTROEM|A\.U\.)\)", re.IGNORECASE
-)
+_ORCA_GEOM_RE = re.compile(r"CARTESIAN\s+COORDINATES\s+\((?:ANGSTROEM|A\.U\.)\)", re.IGNORECASE)
 _QC_CHARGE_MULT_RE = re.compile(
     r"\bCharge\s*=\s*(-?\d+)\s+Multiplicity\s*=\s*(\d+)",
     re.IGNORECASE,
@@ -328,14 +327,11 @@ def parse_qc_output_text(content: str, filename: str = "input.log") -> Structure
         return StructureParseResult(errors=[error or "No coordinates found in QC output"])
 
     source_name = filename or "input.log"
-    xyz_coords = [
-        (float(row[0]), float(row[1]), float(row[2]))
-        for row in coordinates
-    ]
+    xyz_coords = [(float(row[0]), float(row[1]), float(row[2])) for row in coordinates]
     charge, multiplicity, warnings = _parse_qc_charge_mult(content)
     asset = StructureAsset(
         asset_id=_next_asset_id(),
-        name=Path_safe(source_name),
+        name=path_safe(source_name),
         source_type="paste",
         original_format="log",
         xyz=_xyz_from_symbols_coords(symbols, xyz_coords, source_name),
@@ -632,7 +628,7 @@ def parse_gjf_text(content: str, filename: str = "input.gjf") -> StructureParseR
     if not lines:
         return StructureParseResult(errors=["Empty Gaussian input"])
 
-    blank_indices = [i for i, l in enumerate(lines) if l.strip() == ""]
+    blank_indices = [i for i, line in enumerate(lines) if line.strip() == ""]
     if len(blank_indices) < 2:
         return StructureParseResult(
             errors=["Gaussian input needs at least 2 blank-line separators"]
@@ -664,7 +660,7 @@ def parse_gjf_text(content: str, filename: str = "input.gjf") -> StructureParseR
     xyz = _xyz_from_symbols_coords(symbols, coords, filename)
     structure = StructureAsset(
         asset_id=_next_asset_id(),
-        name=Path_safe(filename),
+        name=path_safe(filename),
         source_type="paste",
         original_format="gjf",
         xyz=xyz,
@@ -677,8 +673,14 @@ def parse_gjf_text(content: str, filename: str = "input.gjf") -> StructureParseR
     return StructureParseResult(structures=[structure])
 
 
-def Path_safe(name: str) -> str:
+def path_safe(name: str) -> str:
+    """Return a filesystem-safe stem for *name*."""
     return re.sub(r"[^a-zA-Z0-9_\-]", "_", name.rsplit(".", 1)[0])
+
+
+def Path_safe(name: str) -> str:  # noqa: N802 - public compatibility alias
+    """Backward-compatible alias for :func:`path_safe`."""
+    return path_safe(name)
 
 
 def _parse_gjf_charge_mult(line: str) -> tuple[int, int]:
@@ -734,7 +736,7 @@ def parse_orca_inp_text(content: str, filename: str = "input.inp") -> StructureP
     xyz = _xyz_from_symbols_coords(symbols, coords, filename)
     structure = StructureAsset(
         asset_id=_next_asset_id(),
-        name=Path_safe(filename),
+        name=path_safe(filename),
         source_type="paste",
         original_format="inp",
         xyz=xyz,
@@ -753,8 +755,7 @@ def parse_smiles_list(content: str) -> StructureParseResult:
     if content_bytes > _SMILES_MAX_CONTENT_BYTES:
         return StructureParseResult(
             errors=[
-                f"SMILES input too large ({content_bytes} bytes, "
-                f"max {_SMILES_MAX_CONTENT_BYTES})"
+                f"SMILES input too large ({content_bytes} bytes, max {_SMILES_MAX_CONTENT_BYTES})"
             ]
         )
 
@@ -768,10 +769,7 @@ def parse_smiles_list(content: str) -> StructureParseResult:
 
     if len(lines) > _SMILES_MAX_LINES:
         return StructureParseResult(
-            errors=[
-                f"SMILES input has too many lines ({len(lines)}, "
-                f"max {_SMILES_MAX_LINES})"
-            ]
+            errors=[f"SMILES input has too many lines ({len(lines)}, max {_SMILES_MAX_LINES})"]
         )
 
     try:
@@ -787,10 +785,7 @@ def parse_smiles_list(content: str) -> StructureParseResult:
         try:
             mol = Chem.MolFromSmiles(smiles)
         except RuntimeError as exc:
-            errors.append(
-                f"Line {idx + 1}: RDKit error parsing SMILES "
-                f"'{smiles[:40]}': {exc}"
-            )
+            errors.append(f"Line {idx + 1}: RDKit error parsing SMILES '{smiles[:40]}': {exc}")
             continue
         if mol is None:
             errors.append(f"Line {idx + 1}: invalid SMILES '{smiles}'")
@@ -816,8 +811,7 @@ def parse_smiles_list(content: str) -> StructureParseResult:
             symbols = [a.GetSymbol() for a in mol3d.GetAtoms()]  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
         except RuntimeError as exc:
             errors.append(
-                f"Line {idx + 1}: RDKit embedding error for SMILES "
-                f"'{smiles[:40]}': {exc}"
+                f"Line {idx + 1}: RDKit embedding error for SMILES '{smiles[:40]}': {exc}"
             )
             continue
 

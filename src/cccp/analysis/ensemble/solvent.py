@@ -180,6 +180,7 @@ def resolve_stage_solvent_models(
         sampling=resolve_sampling_solvent(cfg, solvent),
     )
 
+
 __all__ = [
     "SAMPLING_DEFAULT_SOLVENT_MODEL",
     "SAMPLING_SOLVENT_CONFIG_KEY",

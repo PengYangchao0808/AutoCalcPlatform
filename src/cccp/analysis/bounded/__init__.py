@@ -31,12 +31,6 @@ from cccp.analysis.bounded.identity import (
     BOUNDED_SCHEMA_VERSION as BOUNDED_SCHEMA_VERSION,
 )
 from cccp.analysis.bounded.identity import (
-    LEGACY_BOUNDED_IDENTITY_RULE_VERSION as LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
-)
-from cccp.analysis.bounded.identity import (
-    LEGACY_BOUNDED_SCHEMA_VERSION as LEGACY_BOUNDED_SCHEMA_VERSION,
-)
-from cccp.analysis.bounded.identity import (
     GENERATOR_CHUNK as GENERATOR_CHUNK,
 )
 from cccp.analysis.bounded.identity import (
@@ -47,6 +41,12 @@ from cccp.analysis.bounded.identity import (
 )
 from cccp.analysis.bounded.identity import (
     GENERATOR_TRAJECTORY_CHUNK as GENERATOR_TRAJECTORY_CHUNK,
+)
+from cccp.analysis.bounded.identity import (
+    LEGACY_BOUNDED_IDENTITY_RULE_VERSION as LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
+)
+from cccp.analysis.bounded.identity import (
+    LEGACY_BOUNDED_SCHEMA_VERSION as LEGACY_BOUNDED_SCHEMA_VERSION,
 )
 from cccp.analysis.bounded.identity import (
     METHOD_CHUNK as METHOD_CHUNK,

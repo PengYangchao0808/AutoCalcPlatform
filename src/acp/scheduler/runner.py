@@ -96,6 +96,7 @@ def _electronic_state_cli_flags(module: Mapping[str, object], work_dir: Path) ->
     )
     return ["--spin-config", sidecar.as_posix()]
 
+
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
     "GFN0-xTB": 0,
     "GFN1-xTB": 1,
@@ -638,9 +639,7 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        self._ensure_default_frozen_attempt(
-            record, work_dir, effective_input_path, event_log
-        )
+        self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
         cmd = self._build_execution_cmd(
             record,
             work_dir,
@@ -1098,9 +1097,7 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        self._ensure_default_frozen_attempt(
-            record, work_dir, effective_input_path, event_log
-        )
+        self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
         cmd = self._build_execution_cmd(
             record,
             work_dir,
@@ -1341,9 +1338,7 @@ class JobRunner:
         previous = read_attempt_choice(work_dir)
         if previous is not None and previous.attempt == record.attempt:
             if previous.entry == EXECUTION_ENTRY_ENVELOPE:
-                if not frozen_artifacts_present(
-                    work_dir, expected_attempt=record.attempt
-                ):
+                if not frozen_artifacts_present(work_dir, expected_attempt=record.attempt):
                     raise FrozenGroupError(
                         f"envelope choice for attempt {record.attempt} is recorded but the "
                         "frozen group is missing/corrupt; refusing a legacy re-submit"
@@ -1401,9 +1396,7 @@ class JobRunner:
             workflow=record.spec.workflow,
             attempt=record.attempt,
             remote=remote,
-            envelope_available=frozen_artifacts_present(
-                work_dir, expected_attempt=record.attempt
-            ),
+            envelope_available=frozen_artifacts_present(work_dir, expected_attempt=record.attempt),
             previous=previous,
             release_id=release_id,
         )
@@ -1486,12 +1479,12 @@ class JobRunner:
 
         if wf == "tsmode":
             bundle_path = Path(input_path) if input_path else None
-            if bundle_path is None or not bundle_path.is_file() or not str(
-                bundle_path
-            ).endswith("bundle.json"):
-                raise ValueError(
-                    "tsmode job requires a materialized INPUT/tsmode/bundle.json"
-                )
+            if (
+                bundle_path is None
+                or not bundle_path.is_file()
+                or not str(bundle_path).endswith("bundle.json")
+            ):
+                raise ValueError("tsmode job requires a materialized INPUT/tsmode/bundle.json")
             cmd += [
                 "--source-bundle",
                 bundle_path.as_posix(),
@@ -1888,8 +1881,7 @@ class JobRunner:
         path_request = dict(inp.get("path_request") or spec.method.get("path_request") or {})
         if not path_request:
             raise ValueError(
-                "XtbPathSearch job requires input.path_request "
-                "(pes2ts_xtb_path_request_v1 payload)"
+                "XtbPathSearch job requires input.path_request (pes2ts_xtb_path_request_v1 payload)"
             )
         work_dir.mkdir(parents=True, exist_ok=True)
         path_config_path = work_dir / PATH_CONFIG_FILENAME

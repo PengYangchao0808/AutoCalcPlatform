@@ -246,6 +246,7 @@ def conformer_tag(source: str | None, index: int) -> str:
     cleaned = _TAG_UNSAFE_RE.sub("_", str(source).strip()) if source else ""
     return cleaned if cleaned and cleaned != "rank1" else f"conf_{index:03d}"
 
+
 __all__ = [
     "_base_route_extras",
     "_solvent_from_level",

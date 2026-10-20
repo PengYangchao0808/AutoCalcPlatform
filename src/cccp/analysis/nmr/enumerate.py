@@ -95,9 +95,7 @@ def _require_rdkit() -> tuple[Any, Any, Any, Any]:
     return Chem, EnumerateStereoisomers, StereoEnumerationOptions  # type: ignore[return-value]
 
 
-def _build_enumeration_options(
-    opts: EnumerateOptions, opts_cls: Any
-) -> Any:
+def _build_enumeration_options(opts: EnumerateOptions, opts_cls: Any) -> Any:
     """Construct ``StereoEnumerationOptions`` with a seed across RDKit versions.
 
     Older RDKit (≤ 2023.x) accepted ``randGenSeed=``; newer builds (2024+)

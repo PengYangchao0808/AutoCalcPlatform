@@ -157,6 +157,7 @@ class EnsembleThermoSummary:
         """Serialize the summary to *path* as pretty-printed JSON."""
         Path(path).write_text(json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8")
 
+
 __all__ = [
     "EnsembleThermoSummary",
     "ensemble_total_gibbs",

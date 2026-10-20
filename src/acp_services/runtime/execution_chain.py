@@ -661,9 +661,7 @@ def inspect_frozen_group_dir(directory: Path | str) -> FrozenGroup:
     return FrozenGroup(directory=target, manifest=manifest)
 
 
-def load_frozen_group(
-    work_dir: Path | str, *, expected_attempt: int | None = None
-) -> FrozenGroup:
+def load_frozen_group(work_dir: Path | str, *, expected_attempt: int | None = None) -> FrozenGroup:
     """Strict local reader: complete, hash-verified, exactly-membered group.
 
     The group directory must contain exactly the manifest-listed members plus
@@ -703,9 +701,7 @@ class ExecutionLaunch:
     binding_path: str | None = None
 
 
-def frozen_artifacts_present(
-    work_dir: Path | str, *, expected_attempt: int | None = None
-) -> bool:
+def frozen_artifacts_present(work_dir: Path | str, *, expected_attempt: int | None = None) -> bool:
     """True when a complete, hash-verified frozen group exists under *work_dir*.
 
     ``frozen_group.json`` is the sole commit marker: an envelope/plan pair

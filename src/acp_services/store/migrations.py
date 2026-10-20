@@ -738,10 +738,8 @@ _PREPARE_COLUMNS: tuple[tuple[str, str], ...] = (
 #: key at the same epoch even when the request content (and therefore the hash)
 #: differs.  Legacy rows carry ``''`` and are excluded by the predicate.
 _PREPARE_INDEX_STATEMENTS: tuple[str, ...] = (
-    "CREATE INDEX IF NOT EXISTS idx_data_operations_state "
-    "ON data_operations(state, available_at)",
-    "CREATE INDEX IF NOT EXISTS idx_data_operations_key "
-    "ON data_operations(idempotency_key)",
+    "CREATE INDEX IF NOT EXISTS idx_data_operations_state ON data_operations(state, available_at)",
+    "CREATE INDEX IF NOT EXISTS idx_data_operations_key ON data_operations(idempotency_key)",
     "CREATE INDEX IF NOT EXISTS idx_data_operations_resource "
     "ON data_operations(permission_scope, resource_key, dedup_epoch)",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_data_operations_client_key "
@@ -758,9 +756,7 @@ def _apply_prepare_columns(conn: sqlite3.Connection) -> None:
     for column, declaration in _PREPARE_COLUMNS:
         if not _column_exists(conn, "data_operations", column):
             try:
-                conn.execute(
-                    f"ALTER TABLE data_operations ADD COLUMN {column} {declaration}"
-                )
+                conn.execute(f"ALTER TABLE data_operations ADD COLUMN {column} {declaration}")
             except sqlite3.OperationalError as exc:  # pragma: no cover - race guard
                 if "duplicate column name" not in str(exc).lower():
                     raise
@@ -814,8 +810,7 @@ def migrate_prepare_schema(
             _apply_prepare_columns(conn)
             _apply_prepare_indexes(conn)
             conn.execute(
-                "INSERT OR IGNORE INTO _prepare_schema_migrations (id, applied_at) "
-                "VALUES (?, ?)",
+                "INSERT OR IGNORE INTO _prepare_schema_migrations (id, applied_at) VALUES (?, ?)",
                 (PREPARE_SCHEMA_VERSION, _utc_now_iso()),
             )
             conn.commit()

@@ -5,6 +5,7 @@ its original name and body; the old -> new mapping is
 tests/test_frontend_sync.py::<name> -> tests/test_frontend_sync_vibration.py
 ::<name>. Shared helpers live in tests/_frontend_sync_shared.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -981,7 +982,10 @@ def test_vibration_viewer_node_arrow_math() -> None:
         ns.arrowState.displayMode = "arrows";
         if (!ns._arrowsRequested()) { console.error("FAIL: arrows requested"); process.exit(1); }
         ns.arrowState.displayMode = "animation";
-        if (ns._arrowsRequested()) { console.error("FAIL: animation hides arrows"); process.exit(1); }
+        if (ns._arrowsRequested()) {
+            console.error("FAIL: animation hides arrows");
+            process.exit(1);
+        }
         ns.arrowState.displayMode = "combo";
         if (!ns._arrowsRequested()) { console.error("FAIL: combo shows arrows"); process.exit(1); }
 
@@ -1019,8 +1023,12 @@ def test_vibration_viewer_animation_contract() -> None:
     assert "requestAnimationFrame" not in vib, "no second animation outside the instance"
     assert "setInterval" not in vib, "the playback interval is owned by the scene instance"
     for name in (
-        "_nowImpl", "playSeq", "pausePlayback", "resumePlayback",
-        "setHidden", "stopPlayback",
+        "_nowImpl",
+        "playSeq",
+        "pausePlayback",
+        "resumePlayback",
+        "setHidden",
+        "stopPlayback",
     ):
         assert name in vib, f"{name} missing"
     assert ".play(" in vib, "playback must start via the instance play() entry"
@@ -2032,9 +2040,7 @@ def test_vibration_viewer_contains_tsmode_editor_open_call() -> None:
     assert "ACPTsmodeEditor" in vib, (
         "vibration_viewer.js must reference ACPTsmodeEditor for quick-create"
     )
-    assert "ACPTsmodeEditor.open" in vib, (
-        "vibration_viewer.js must call ACPTsmodeEditor.open"
-    )
+    assert "ACPTsmodeEditor.open" in vib, "vibration_viewer.js must call ACPTsmodeEditor.open"
 
 
 def test_vibration_viewer_has_ts_mode_create_string() -> None:

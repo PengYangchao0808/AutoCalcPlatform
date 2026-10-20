@@ -281,7 +281,9 @@ def test_requeue_with_spec_attempt_and_source_revision(tmp_path: Path) -> None:
         out.exit_code,
         out.remote_job_id,
     ) == (None, None, None, None, None, None, None, None), "runtime fields must clear"
-    assert out.result == {"attempts": 1, "remote": {"node": "n1"}}, "result_json stays unless passed"
+    assert out.result == {"attempts": 1, "remote": {"node": "n1"}}, (
+        "result_json stays unless passed"
+    )
     assert json.loads(str(_raw_row(db, "rq-1")["spec_json"])) == new_spec.to_dict()
 
     reread = store.get("rq-1")
@@ -713,9 +715,7 @@ def test_stale_terminal_cas_registers_zero_side_effects(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
-@pytest.mark.parametrize(
-    "injection", ["after_first_artifact", "after_provenance", "before_marker"]
-)
+@pytest.mark.parametrize("injection", ["after_first_artifact", "after_provenance", "before_marker"])
 def test_terminal_side_effect_failure_injection_converges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, injection: str
 ) -> None:
@@ -741,9 +741,7 @@ def test_terminal_side_effect_failure_injection_converges(
                     raise RuntimeError("injected failure after first artifact insert")
                 return real_register(self, artifact)  # type: ignore[arg-type]
 
-            monkeypatch.setattr(
-                artifacts_module.ArtifactRegistry, "register", flaky_register
-            )
+            monkeypatch.setattr(artifacts_module.ArtifactRegistry, "register", flaky_register)
         elif injection == "after_provenance":
             real_store = mgr.runner._store_provenance
 
@@ -824,9 +822,7 @@ def test_terminal_cas_then_rerun_isolates_old_attempt(tmp_path: Path) -> None:
         assert mgr._cancel_events.get(record.id) is cancel_event, (
             "a stale attempt's retry must not drop the new attempt's cancel event"
         )
-        job_json = json.loads(
-            (Path(final.work_dir) / "job.json").read_text(encoding="utf-8")
-        )
+        job_json = json.loads((Path(final.work_dir) / "job.json").read_text(encoding="utf-8"))
         assert job_json["attempt"] == 2, "stale retry must not rewrite job.json"
         assert job_json["status"] == JobStatus.QUEUED.value
         task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
@@ -970,9 +966,7 @@ def test_manager_has_no_whole_row_update(tmp_path: Path) -> None:
         + "    manager.store.update(record)\n",
         encoding="utf-8",
     )
-    injected_hits = _whole_row_update_lines(
-        injected_path.read_text(encoding="utf-8")
-    )
+    injected_hits = _whole_row_update_lines(injected_path.read_text(encoding="utf-8"))
     assert injected_hits, "scanner must flag an injected whole-row store.update() call"
 
 
