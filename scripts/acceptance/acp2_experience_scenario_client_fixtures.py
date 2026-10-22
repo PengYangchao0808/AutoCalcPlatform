@@ -1,8 +1,9 @@
 """``client-fixtures`` — prove the science/research client query layer offline.
 
-This body is the T-15 / C10a acceptance row.  It never starts a model, DSH, QC,
-LSF or browser process; it runs the zero-dependency Node module harness and
-reads the two committed client modules plus their contract validator.
+This body is the T-15 / C10a acceptance row, extended by T-16 / C10b.  It
+never starts a model, DSH, QC, LSF or browser process; it runs the
+zero-dependency Node module harness and reads the committed client modules plus
+their contract validator.
 
 Assertions:
 * ``frontend/js/module_tests/run_all.js acp2_client`` exits 0 with at least ten
@@ -10,7 +11,10 @@ Assertions:
 * the same run includes the two cross-project key-isolation tests and the two
   late-response ``StaleDiscard`` tests;
 * ``science-query.js`` and ``research-query.js`` contain zero ``fetch(`` calls
-  (all reads go through the injected adapters and ``ACPClient.store.query``).
+  (all reads go through the injected adapters and ``ACPClient.store.query``);
+* **event sub-row (T-16)**: ``run_all.js acp2_client_events`` exits 0 with at
+  least eight passing tests; the stale-revision guard ran; and the GET/loader
+  path made zero ``prepare`` adapter calls.
 
 A missing prerequisite (Node, source tree, module or contract file) is
 ``NOT_VERIFIED`` (exit 2); a command that ran and produced a wrong result is
@@ -20,6 +24,7 @@ A missing prerequisite (Node, source tree, module or contract file) is
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -44,15 +49,22 @@ from acp2_experience_scenarios import (
 SCENARIO_ID = "client-fixtures"
 FILTER = "acp2_client"
 MIN_TESTS = 10
+EVENT_FILTER = "acp2_client_events"
+MIN_EVENT_TESTS = 8
 NODE_SUITE_RE = re.compile(r"(\d+)\s+passed,\s+(\d+)\s+failed")
+EVENT_SUMMARY_RE = re.compile(r"ACP2_EVENT_SUMMARY\s+(\{[^\n]*\})")
+# A bare `fetch(` call, not a helper named `refetch(`/`prefetch(`.
+FETCH_CALL_RE = re.compile(r"(?<![A-Za-z0-9_$])fetch\s*\(")
 
 MODULE_PATHS = (
     "frontend/js/client/science-query.js",
     "frontend/js/client/research-query.js",
+    "frontend/js/client/event-invalidation.js",
 )
 REQUIRED_PATHS = MODULE_PATHS + (
     "frontend/js/workbench/contracts/experience_contract.js",
     "frontend/js/module_tests/acp2_client.test.js",
+    "frontend/js/module_tests/acp2_client_events.test.js",
     "frontend/js/module_tests/run_all.js",
 )
 
@@ -64,9 +76,9 @@ REQUIRED_TEST_FRAGMENTS = (
 
 
 def _fetch_hits(path: Path) -> int:
-    """Count literal ``fetch(`` occurrences in one client module."""
+    """Count bare ``fetch(`` calls in one client module (``refetch`` excluded)."""
 
-    return path.read_text(encoding="utf-8").count("fetch(")
+    return len(FETCH_CALL_RE.findall(path.read_text(encoding="utf-8")))
 
 
 def scenario_client_fixtures(context: Any) -> int:
@@ -131,13 +143,62 @@ def scenario_client_fixtures(context: Any) -> int:
         + (
             ", ".join(f"{path}={count}" for path, count in hits.items())
             if hits
-            else "observed 0 in both modules"
+            else "observed 0 in all client modules"
         ),
+    )
+
+    # ---- T-16 / C10b event sub-row -------------------------------------
+    event_result = _run(
+        [node, str(runner), EVENT_FILTER], cwd=source, timeout=timeout, env=env
+    )
+    event_combined = (event_result.stdout or "") + (event_result.stderr or "")
+    event_match = NODE_SUITE_RE.search(event_combined)
+    event_passed = int(event_match.group(1)) if event_match else 0
+    event_failed = int(event_match.group(2)) if event_match else 0
+    summary_match = EVENT_SUMMARY_RE.search(event_combined)
+    event_summary: dict[str, Any] = {}
+    if summary_match:
+        try:
+            event_summary = json.loads(summary_match.group(1))
+        except ValueError:
+            event_summary = {}
+
+    _assertion(
+        context,
+        "client.events.node_suite",
+        event_result.returncode == 0
+        and event_failed == 0
+        and event_passed >= MIN_EVENT_TESTS,
+        f"rc={event_result.returncode} passed={event_passed} "
+        f"failed={event_failed} min={MIN_EVENT_TESTS}",
+    )
+
+    stale_guard = event_summary.get("stale_revision_guard") is True
+    _assertion(
+        context,
+        "client.events.stale_revision",
+        stale_guard and "old event after a newer snapshot" in event_combined,
+        f"stale_revision_guard={event_summary.get('stale_revision_guard')} "
+        f"stale_test={'present' if 'old event after a newer snapshot' in event_combined else 'absent'}",
+    )
+
+    prepare_calls = event_summary.get("prepare_calls")
+    _assertion(
+        context,
+        "client.events.no_prepare",
+        prepare_calls == 0
+        and "GET loader" in event_combined
+        and "never calls prepare" in event_combined,
+        f"prepare_calls={prepare_calls} "
+        f"get_loader_test={'present' if 'GET loader' in event_combined else 'absent'}",
     )
 
     log_name = "client-fixtures.log"
     _write_text(out, log_name, _truncate(combined, 16000))
     _add_artifact(context, log_name)
+    event_log_name = "events/acp2-client-events.log"
+    _write_text(out, event_log_name, _truncate(event_combined, 16000))
+    _add_artifact(context, event_log_name)
 
     summary = {
         "scenario": SCENARIO_ID,
@@ -151,10 +212,22 @@ def scenario_client_fixtures(context: Any) -> int:
         "cross_project_tests": list(REQUIRED_TEST_FRAGMENTS),
         "stale_discard_occurrences": combined.count("StaleDiscard"),
         "modules": {rel: {"fetch_hits": _fetch_hits(source / rel)} for rel in MODULE_PATHS},
+        "events": {
+            "filter": EVENT_FILTER,
+            "command": [node, str(runner), EVENT_FILTER],
+            "exit_code": event_result.returncode,
+            "passed": event_passed,
+            "failed": event_failed,
+            "min_tests": MIN_EVENT_TESTS,
+            "summary": event_summary,
+        },
     }
     summary_name = "client-fixtures.json"
     _write_json(out, summary_name, summary)
     _add_artifact(context, summary_name)
+    event_summary_name = "events/acp2-client-events.json"
+    _write_json(out, event_summary_name, summary["events"])
+    _add_artifact(context, event_summary_name)
 
     context.extensions.update(
         {
@@ -162,6 +235,11 @@ def scenario_client_fixtures(context: Any) -> int:
             "experience.client_suite_failed": failed,
             "experience.client_min_tests": MIN_TESTS,
             "experience.client_fetch_hits": sum(hits.values()),
+            "experience.client_event_suite_passed": event_passed,
+            "experience.client_event_suite_failed": event_failed,
+            "experience.client_event_min_tests": MIN_EVENT_TESTS,
+            "experience.client_event_prepare_calls": prepare_calls,
+            "experience.client_event_stale_guard": stale_guard,
         }
     )
 
