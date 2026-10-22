@@ -85,19 +85,97 @@ def _is_runtime_boundary(node: ast.AST) -> bool:
     return False
 
 
+_CONTROLLER_CLIENT_ATTRS = frozenset({"client", "controller_client", "controller"})
+
+
+def _controller_client_names(tree: ast.AST) -> set[str]:
+    """Names bound to a controller-client instance in *tree*.
+
+    The sanctioned remote application surface is ``ControllerClient`` (the
+    single-Controller HTTP adapter), not the in-process Runtime.  A name is a
+    controller client only when assigned from ``ControllerClient(...)`` or a
+    factory such as ``_task_controller_client(...)``.
+    """
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets = [node.target]
+        else:
+            continue
+        value = node.value
+        if not isinstance(value, ast.Call):
+            continue
+        func = value.func
+        if isinstance(func, ast.Name):
+            callee = func.id
+        elif isinstance(func, ast.Attribute):
+            callee = func.attr
+        else:
+            continue
+        if callee != "ControllerClient" and "controller_client" not in callee.lower():
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name):
+                names.add(target.id)
+    return names
+
+
+def _source_has_controller_client(tree: ast.AST) -> bool:
+    """True when *tree* imports/mentions the ControllerClient symbol."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "ControllerClient":
+            return True
+        if isinstance(node, ast.Attribute) and node.attr == "ControllerClient":
+            return True
+        if isinstance(node, ast.ImportFrom) and "controller_client" in (node.module or "").lower():
+            return True
+        if isinstance(node, ast.Import) and any(
+            "controller_client" in alias.name.lower() for alias in node.names
+        ):
+            return True
+    return False
+
+
+def _is_controller_client_surface(
+    node: ast.AST, client_names: set[str], has_controller_client: bool
+) -> bool:
+    """True when *node* is the sanctioned ``ControllerClient`` application surface.
+
+    This never weakens the manager/store gate: a receiver is accepted only when
+    the enclosing module imports the controller client symbol and the receiver
+    is either a variable bound to that client or an attribute documented as one.
+    """
+    if not has_controller_client:
+        return False
+    if isinstance(node, ast.Name):
+        return node.id in client_names
+    if isinstance(node, ast.Attribute):
+        return node.attr in _CONTROLLER_CLIENT_ATTRS
+    return False
+
+
 def scan_for_runtime_bypass(source: str) -> list[str]:
     """Return descriptors of direct control/store access (empty == clean).
 
     A call whose verb is a control verb or a store mutation is a bypass unless
-    it is issued on the Runtime command surface itself (``_commands(request)``).
+    it is issued on the Runtime command surface itself (``_commands(request)``)
+    or on the sanctioned single-Controller ``ControllerClient`` surface.
     """
     violations: list[str] = []
     tree = ast.parse(source)
+    client_names = _controller_client_names(tree)
+    has_controller_client = _source_has_controller_client(tree)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
         attr = node.func.attr
         if _is_runtime_boundary(node.func.value):
+            continue
+        if attr in _CONTROL_VERBS and _is_controller_client_surface(
+            node.func.value, client_names, has_controller_client
+        ):
             continue
         if attr in _CONTROL_VERBS:
             violations.append(f"direct control call .{attr}(")
@@ -275,9 +353,7 @@ def test_purge_forwards_once_to_control_port() -> None:
     cmds = _runtime(control=ctrl)
 
     assert cmds.purge(job_ids=["j1", "j2"], status="failed") is _SENTINEL
-    assert ctrl.calls == [
-        ("purge_jobs", (), {"job_ids": ["j1", "j2"], "status": "failed"})
-    ]
+    assert ctrl.calls == [("purge_jobs", (), {"job_ids": ["j1", "j2"], "status": "failed"})]
 
 
 def test_register_completed_job_forwards_once_to_registration_port() -> None:
@@ -470,9 +546,7 @@ def test_api_rerun_routes_through_runtime(tmp_path: Path, monkeypatch: pytest.Mo
             setattr(manager, "rerun_job", original)
 
 
-def test_api_submit_routes_through_runtime(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_api_submit_routes_through_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(tmp_path, monkeypatch) as client:
         manager = client.app.state.job_manager
         calls, original = _stub_manager_method(
@@ -575,11 +649,32 @@ def test_scanner_flags_injected_direct_manager_control_branch(tmp_path: Path) ->
     original = _V1_ROUTES.read_text(encoding="utf-8")
     mutated = original.replace(
         "def _commands(request: Request)",
-        "def _injected(manager):\n"
-        "    manager.cancel('j1')\n\n\n"
-        "def _commands(request: Request)",
+        "def _injected(manager):\n    manager.cancel('j1')\n\n\ndef _commands(request: Request)",
         1,
     )
     assert mutated != original, "mutation did not apply"
     violations = scan_for_runtime_bypass(mutated)
     assert any("cancel" in item for item in violations)
+
+
+def test_scanner_flags_manager_control_in_cli() -> None:
+    """The allowed ControllerClient surface must not mask a raw manager bypass.
+
+    ``cli.py`` legitimately calls ``client.submit`` / ``client.cancel`` on the
+    single-Controller client.  Injecting the same verbs on a ``manager``
+    receiver in that same file must still be reported.
+    """
+    original = _CLI.read_text(encoding="utf-8")
+    mutated = original.replace(
+        "def _task_controller_client(controller_url: str) -> Any:",
+        "def _injected(manager):\n"
+        "    manager.submit(object())\n"
+        "    manager.cancel('j1')\n\n\n"
+        "def _task_controller_client(controller_url: str) -> Any:",
+        1,
+    )
+    assert mutated != original, "mutation did not apply"
+    violations = scan_for_runtime_bypass(mutated)
+    assert any("submit" in item for item in violations)
+    assert any("cancel" in item for item in violations)
+    assert scan_for_runtime_bypass(original) == []
