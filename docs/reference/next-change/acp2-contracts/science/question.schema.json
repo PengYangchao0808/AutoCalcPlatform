@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://acp.local/acp2/science/question.schema.json",
+  "schema_version": 1,
   "title": "ACP2 Scientific Question",
   "description": "Frozen scientific question contract for the limited ACP2 research questions. It declares the question type, hypothesis references, required evidence types, the four-valued claim-status vocabulary, and the comparison conditions that must be compatible before any claim is evaluated. It carries no LLM/model role, cost/price, budget, queue/account or platform job status.",
   "type": "object",

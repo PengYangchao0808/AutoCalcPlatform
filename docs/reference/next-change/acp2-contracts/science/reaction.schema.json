@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://acp.local/acp2/science/reaction.schema.json",
+  "schema_version": 1,
   "title": "ACP2 Reaction",
   "description": "Frozen scientific reaction contract for ACP2. It describes a net reaction or a declared elementary step with stable atom identity on both sides, a one-to-one atom mapping, bond changes, per-species charge/multiplicity/stereochemistry, thermodynamic conditions and declared input uncertainty. JSON Schema validates structure only; element/stoichiometry conservation and map consistency are scientific-semantics rules (see semantic-rules.md). A net reaction never claims a single elementary step.",
   "type": "object",
