@@ -1,8 +1,9 @@
-"""Generic behaviour tests for the ACP2 read-only capability registry.
+"""Behaviour tests for the ACP2 read-only capability registry.
 
-The suite is deliberately catalog-free: no built-in capability is seeded
-here.  A-05b owns the four built-in descriptors.  Everything below is
-constructed from local test descriptors and an injected executable probe.
+The first half is deliberately catalog-free: local test descriptors and an
+injected executable probe exercise the generic registry contract.  The second
+half (A-05b) verifies the four seeded built-in capabilities, the deterministic
+catalog order and the analysis-versus-compute boundary.
 """
 
 from __future__ import annotations
@@ -15,7 +16,12 @@ from pathlib import Path
 import pytest
 
 from cccp.calculation.capabilities import (
+    BUILTIN_CAPABILITY_IDS,
+    BUILTIN_DESCRIPTORS,
+    BUILTIN_FAMILIES,
+    UNSUPPORTED_FAMILIES,
     CapabilityDescriptor,
+    CapabilityKind,
     CapabilityProjections,
     CapabilityRegistry,
     CapabilityState,
@@ -28,11 +34,14 @@ from cccp.calculation.capabilities import (
     SchemaReference,
     UnknownCapabilityError,
     UnknownImplementationError,
+    builtin_catalog,
+    builtin_catalog_json,
+    builtin_registry,
+    describe_family,
+    resolve_analysis_entrypoint,
 )
 
-_INPUT_SCHEMA = SchemaReference(
-    "https://acp.local/acp2/science/task-binding.schema.json"
-)
+_INPUT_SCHEMA = SchemaReference("https://acp.local/acp2/science/task-binding.schema.json")
 _OUTPUT_SCHEMA = SchemaReference("cccp.calculation.results#TaskResult")
 
 
@@ -55,9 +64,7 @@ def _compute_descriptor(
     )
     projections = (
         CapabilityProjections(
-            verified=Projection(
-                CapabilityState.VERIFIED, evidence_ref="evidence:test/reference"
-            )
+            verified=Projection(CapabilityState.VERIFIED, evidence_ref="evidence:test/reference")
         )
         if verified
         else CapabilityProjections()
@@ -128,16 +135,12 @@ def test_catalog_order_is_deterministic() -> None:
     assert tuple(item.capability_id for item in registry.catalog().capabilities) == (
         registry.capability_ids
     )
-    assert tuple(item.capability_id for item in registry.descriptors) == (
-        registry.capability_ids
-    )
+    assert tuple(item.capability_id for item in registry.descriptors) == (registry.capability_ids)
 
 
 def test_catalog_serialization_is_byte_identical_across_registries() -> None:
     forward = CapabilityRegistry(_three_descriptors(), resolver=_resolver("orca"))
-    reverse = CapabilityRegistry(
-        tuple(reversed(_three_descriptors())), resolver=_resolver("orca")
-    )
+    reverse = CapabilityRegistry(tuple(reversed(_three_descriptors())), resolver=_resolver("orca"))
 
     first = forward.catalog_json()
     assert first == forward.catalog_json()
@@ -240,9 +243,7 @@ def test_projections_are_independent() -> None:
     assert projections.available.state is CapabilityState.PRESENT
     assert projections.verified.state is CapabilityState.NOT_VERIFIED
 
-    verified = _compute_descriptor(
-        "test.beta.energy", "test.impl.beta", verified=True
-    )
+    verified = _compute_descriptor("test.beta.energy", "test.impl.beta", verified=True)
     registry = CapabilityRegistry((verified,), resolver=_resolver())
     projections = registry.require("test.beta.energy").projections
 
@@ -328,3 +329,211 @@ assert task_modules == [], task_modules
 
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout == ""
+
+
+BUILTIN_IDS = (
+    "electronic.energy",
+    "geometry.optimize",
+    "vibration.analyze",
+    "vibration.compute",
+)
+COMPUTE_TASK_KINDS = {
+    "electronic.energy": "singlepoint",
+    "geometry.optimize": "optimize",
+    "vibration.compute": "frequency",
+}
+
+
+def test_builtin_catalog_contains_exactly_the_four_seeded_capabilities() -> None:
+    registry = builtin_registry(resolver=_resolver())
+
+    assert registry.capability_ids == BUILTIN_IDS
+    assert BUILTIN_CAPABILITY_IDS == BUILTIN_IDS
+    assert tuple(descriptor.capability_id for descriptor in BUILTIN_DESCRIPTORS) == BUILTIN_IDS
+
+    catalog = builtin_catalog(resolver=_resolver())
+    assert tuple(record.capability_id for record in catalog.capabilities) == BUILTIN_IDS
+
+    payload = json.loads(builtin_catalog_json(resolver=_resolver()))
+    assert [entry["capability_id"] for entry in payload["capabilities"]] == list(BUILTIN_IDS)
+
+
+def test_builtin_catalog_order_and_serialization_are_deterministic() -> None:
+    first = builtin_catalog_json(resolver=_resolver())
+    second = builtin_catalog_json(resolver=_resolver())
+
+    assert first == second
+    assert first == builtin_catalog_json(resolver=_resolver())
+    assert list(BUILTIN_IDS) == sorted(BUILTIN_IDS)
+
+
+def test_builtin_compute_capabilities_delegate_to_one_existing_task_kind() -> None:
+    registry = builtin_registry(resolver=_resolver("orca"))
+
+    for capability_id, task_kind in COMPUTE_TASK_KINDS.items():
+        record = registry.require(capability_id)
+        semantics = record.descriptor.execution_semantics
+
+        assert semantics.kind is CapabilityKind.COMPUTE
+        assert semantics.starts_subprocess is True
+        assert semantics.reads_existing_artifacts_only is False
+        assert semantics.delegates_to_task_kind == task_kind
+        assert semantics.delegation_count == 1
+        assert semantics.side_effects.value == "artifacts_only"
+        assert semantics.writes_artifacts is True
+        assert record.descriptor.implementation_id == f"cccp.calculation.tasks.{task_kind}"
+
+        executable_preconditions = [
+            precondition
+            for precondition in record.descriptor.preconditions
+            if precondition.error_code == "unavailable_binary"
+        ]
+        assert executable_preconditions, capability_id
+        assert all(precondition.required for precondition in executable_preconditions)
+
+
+def test_builtin_vibration_analyze_is_pure_analysis_without_an_executable() -> None:
+    def forbidden(name: str) -> Path | None:
+        raise AssertionError(f"pure analysis must not probe an executable: {name}")
+
+    registry = builtin_registry(resolver=forbidden)
+    record = registry.require("vibration.analyze")
+    semantics = record.descriptor.execution_semantics
+
+    assert semantics.kind is CapabilityKind.PURE_ANALYSIS
+    assert semantics.starts_subprocess is False
+    assert semantics.reads_existing_artifacts_only is True
+    assert semantics.delegates_to_task_kind is None
+    assert semantics.delegation_count == 0
+    assert semantics.side_effects.value == "none"
+    assert semantics.writes_artifacts is False
+
+    assert record.projections.installed.state is CapabilityState.NOT_VERIFIED
+    assert record.projections.available.state is CapabilityState.PRESENT
+    assert record.descriptor.implementation_id == "cccp.analysis.frequency_products"
+
+
+def test_vibration_analyze_resolution_does_not_call_run_frequency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import cccp.calculation.tasks.frequency as frequency_task
+
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def spy_run_frequency(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append((args, kwargs))
+        return {"routed": True}
+
+    monkeypatch.setattr(frequency_task, "run_frequency", spy_run_frequency)
+
+    analyzer = resolve_analysis_entrypoint("vibration.analyze")
+
+    assert analyzer.__module__ == "cccp.analysis.frequency_products"
+    assert analyzer.__name__ == "build_frequency_report"
+    assert calls == []
+
+
+def test_vibration_analyze_resolution_imports_no_task_module() -> None:
+    script = """
+import sys
+
+from cccp.calculation.capabilities import builtin_registry, resolve_analysis_entrypoint
+
+builtin_registry(resolver=lambda name: None).catalog_json()
+assert not any(
+    name == "cccp.calculation.tasks" or name.startswith("cccp.calculation.tasks.")
+    for name in sys.modules
+), "catalog discovery imported a task module"
+
+entry = resolve_analysis_entrypoint("vibration.analyze")
+assert entry.__module__ == "cccp.analysis.frequency_products"
+assert "cccp.calculation.tasks.frequency" not in sys.modules
+assert not any(
+    name == "cccp.calculation.tasks" or name.startswith("cccp.calculation.tasks.")
+    for name in sys.modules
+), "analysis resolution imported a task module"
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == ""
+
+
+def test_builtin_conflict_ids_raise_typed_errors() -> None:
+    registry = builtin_registry(resolver=_resolver())
+
+    with pytest.raises(DuplicateCapabilityError):
+        registry.register(BUILTIN_DESCRIPTORS[0])
+
+    duplicate_implementation = _compute_descriptor(
+        "electronic.energy.probe", "cccp.calculation.tasks.singlepoint"
+    )
+    with pytest.raises(DuplicateImplementationError):
+        registry.register(duplicate_implementation)
+
+
+def test_builtin_unknown_provider_is_typed_unsupported() -> None:
+    registry = builtin_registry(resolver=_resolver())
+
+    result = registry.query("provider.unknown.energy")
+    assert result.supported is False
+    assert result.error is not None
+    assert result.error.code == "unknown_implementation"
+    assert result.error.layer == "scientific"
+    assert result.error.retryable is False
+
+    with pytest.raises(UnknownCapabilityError):
+        registry.require("provider.unknown.energy")
+    with pytest.raises(UnknownImplementationError):
+        registry.require_implementation("provider.unknown")
+    with pytest.raises(UnknownCapabilityError):
+        resolve_analysis_entrypoint("provider.unknown.energy")
+
+
+def test_builtin_incompatible_states_raise_typed_errors() -> None:
+    with pytest.raises(IncompatibleStateError):
+        ExecutionSemantics(
+            kind="compute",
+            starts_subprocess=False,
+            reads_existing_artifacts_only=False,
+            delegates_to_task_kind="frequency",
+            delegation_count=1,
+            side_effects="artifacts_only",
+            writes_artifacts=True,
+        )
+
+    with pytest.raises(IncompatibleStateError):
+        ExecutionSemantics(
+            kind="pure_analysis",
+            starts_subprocess=True,
+            reads_existing_artifacts_only=True,
+            delegates_to_task_kind=None,
+        )
+
+    with pytest.raises(IncompatibleStateError):
+        CapabilityProjections(described=Projection(CapabilityState.ABSENT))
+
+
+def test_unsupported_family_returns_described_false() -> None:
+    assert "vibration" in BUILTIN_FAMILIES
+    supported = describe_family("vibration")
+    assert supported.described is True
+    assert supported.supported is True
+    assert supported.to_dict()["described"] is True
+
+    for family in UNSUPPORTED_FAMILIES:
+        description = describe_family(family)
+        assert description.described is False, family
+        assert description.supported is False, family
+        assert description.capability_ids == (), family
+
+    for family in ("thermochemistry", "nmr", "reaction_path", "not_a_declared_family"):
+        payload = describe_family(family).to_dict()
+        assert payload["described"] is False
+        assert payload["supported"] is False
+        assert payload["capability_ids"] == []
