@@ -36,7 +36,7 @@ import math
 import os
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol, runtime_checkable
@@ -69,6 +69,7 @@ __all__ = [
     "TASK_COMPLETION_AUTHORITIES",
     "TASK_RESULT_RELATIVE_PATH",
     "TASK_RESULT_SCHEMA",
+    "TASK_ENVIRONMENT_CONFIG_KEY",
     "CccpTaskExecutor",
     "CompletionAuthority",
     "CompletionDecision",
@@ -102,8 +103,10 @@ __all__ = [
     "read_task_result_qualification",
     "receipt_exit_code",
     "task_result_path",
+    "build_task_result_document",
     "write_receipt_atomic",
     "write_task_result",
+    "write_task_result_document",
 ]
 
 
@@ -226,12 +229,20 @@ class ExecutionScope:
 
 @dataclass(frozen=True)
 class TaskExecutionOutcome:
-    """Typed result an executor returns for one attempt."""
+    """Typed result an executor returns for one attempt.
+
+    ``pending_task_result`` (R05/D-recheck) carries the fully-built,
+    digest-bound ``task_result.json`` document when the executor produced one
+    without persisting it: the :class:`FrozenWorker` publishes it **inside the
+    execution-right write seam** (after ``before_write``), so a worker that
+    lost the right never writes the authoritative document.
+    """
 
     state: str
     result_digest: str = ""
     errors: tuple[ExecutionError | str, ...] = ()
     evidence_digests: Mapping[str, str] = field(default_factory=dict)
+    pending_task_result: Mapping[str, Any] | None = None
 
 
 # ── injected ports ──────────────────────────────────────────────────────────
@@ -288,6 +299,16 @@ class DeclaredPlanVerifier:
 # ── default executor (cccp task core) ───────────────────────────────────────
 
 
+#: Reserved frozen-plan payload key carrying the executable scientific
+#: configuration snapshot (the fully-resolved cccp config mapping the freeze
+#: producer captured).  ``TaskRequest.from_dict`` ignores unknown keys (rule
+#: S2), so the key rides the frozen body digest without polluting the typed
+#: request; the executor pops it and restores ``TaskContext.config`` so the
+#: independent worker executes with the submitted configuration instead of
+#: whatever the release tree's defaults resolve to at call time (R02).
+TASK_ENVIRONMENT_CONFIG_KEY: str = "environment"
+
+
 @dataclass(frozen=True)
 class CccpTaskExecutor:
     """Default :class:`TaskExecutorPort` backed by ``cccp.calculation.run_*``.
@@ -296,6 +317,10 @@ class CccpTaskExecutor:
     (``cccp.calculation.requests.TaskRequest.to_dict()``). cccp imports are lazy
     so importing this module never pulls the scientific stack, and no ``acp``
     module is ever imported.
+
+    The executor NEVER writes the authoritative ``task_result.json`` itself:
+    it returns the digest-bound document on the outcome and the worker
+    persists it inside the execution-right write seam (R05).
     """
 
     def execute(self, scope: ExecutionScope) -> TaskExecutionOutcome:
@@ -304,11 +329,25 @@ class CccpTaskExecutor:
         from cccp.calculation.requests import TaskRequest
 
         request_payload = dict(scope.plan.payload)
+        environment = request_payload.pop(TASK_ENVIRONMENT_CONFIG_KEY, None)
         request_payload.setdefault("task", scope.envelope.scientific_closure.task_kind)
         request = TaskRequest.from_dict(request_payload)
+        # The worker's launch directory is not an artifact location. Bind the
+        # runtime output root explicitly: task cores may otherwise pass None
+        # through to a QC interface, whose default is the process CWD.
+        output_dir = request.output_dir
+        if output_dir is None:
+            output_dir = scope.work_dir.resolve()
+        elif not output_dir.is_absolute():
+            output_dir = scope.work_dir.resolve() / output_dir
+        request = replace(request, output_dir=output_dir)
         runner = getattr(calculation, f"run_{request.task.value}")
-        context = TaskContext(workdir=scope.work_dir, input_base=scope.work_dir)
-        return outcome_from_task_result(runner(request, context=context), work_dir=scope.work_dir)
+        context = TaskContext(
+            workdir=scope.work_dir,
+            input_base=scope.work_dir,
+            config=environment if isinstance(environment, Mapping) and environment else None,
+        )
+        return outcome_from_task_result(runner(request, context=context))
 
 
 # ── D01 completion authority: the frozen truth table ────────────────────────
@@ -949,6 +988,26 @@ def _result_digest(result: Any) -> str:
     return _content_digest(dict(to_dict()))
 
 
+def _result_body(result: Any | None) -> dict[str, Any] | None:
+    """Full scientific body of *result* (``TaskResult.to_dict()``), when able.
+
+    R01: the persisted document must carry the complete scientific result —
+    energy, coordinates, frequencies, payload and artifact references — not
+    only the qualification and a digest, or a completed task has no
+    recoverable/displayable science after publication or restart.
+    """
+    if result is None:
+        return None
+    to_dict = getattr(result, "to_dict", None)
+    if to_dict is None:
+        return None
+    try:
+        body = dict(to_dict())
+    except (TypeError, ValueError):
+        return None
+    return body if isinstance(body, dict) and body else None
+
+
 def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -968,16 +1027,17 @@ def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
         raise
 
 
-def write_task_result(
-    work_dir: Path | str,
+def build_task_result_document(
     decision: CompletionDecision,
     result: Any | None = None,
-) -> str:
-    """Persist the authoritative qualification; return its content digest.
+) -> dict[str, Any]:
+    """Build the digest-bound ``task_result.json`` document (pure).
 
-    The document is written atomically (temp file + ``os.replace``) and carries
-    a ``content_digest`` over every other field, so a tampered document can be
-    rejected by :func:`read_task_result`.
+    The document carries the qualification matrix, the receipt/job mapping,
+    the result digest and — since R01 — the **full scientific result body**
+    under ``result``.  The ``content_digest`` covers every other field
+    including the body, so a tampered document is rejected by
+    :func:`read_task_result`.
     """
     authority = TASK_COMPLETION_AUTHORITIES.get(decision.task)
     document: dict[str, Any] = {
@@ -1000,10 +1060,37 @@ def write_task_result(
         "result_digest": _result_digest(result) if result is not None else "",
         "written_at": _utc_now_iso(),
     }
-    digest = _content_digest(document)
-    document["content_digest"] = digest
+    body = _result_body(result)
+    if body is not None:
+        document["result"] = body
+    document["content_digest"] = _content_digest(document)
+    return document
+
+
+def write_task_result(
+    work_dir: Path | str,
+    decision: CompletionDecision,
+    result: Any | None = None,
+) -> str:
+    """Persist the authoritative qualification; return its content digest.
+
+    The document is written atomically (temp file + ``os.replace``) and carries
+    the full scientific result body plus a ``content_digest`` over every other
+    field, so a tampered document can be rejected by :func:`read_task_result`.
+    """
+    document = build_task_result_document(decision, result)
     _write_json_atomic(task_result_path(work_dir), document)
-    return digest
+    return str(document["content_digest"])
+
+
+def write_task_result_document(work_dir: Path | str, document: Mapping[str, Any]) -> str:
+    """Persist an already-built digest-bound document; return its digest.
+
+    The R05 write seam: executors return built documents on the outcome and
+    the worker calls this only after re-verifying the execution right.
+    """
+    _write_json_atomic(task_result_path(work_dir), dict(document))
+    return str(document.get("content_digest") or "")
 
 
 def read_task_result(work_dir: Path | str) -> dict[str, Any] | None:
@@ -1118,12 +1205,15 @@ def outcome_from_decision(
     decision: CompletionDecision, *, work_dir: Path | str | None = None
 ) -> TaskExecutionOutcome:
     """Build the executor outcome for *decision*, persisting it when given a root."""
-    digest = write_task_result(work_dir, decision) if work_dir is not None else ""
+    document = build_task_result_document(decision)
+    if work_dir is not None:
+        write_task_result_document(work_dir, document)
     return TaskExecutionOutcome(
         state=decision.receipt_state,
         result_digest="",
         errors=decision.errors,
-        evidence_digests=_evidence_for(decision, digest),
+        evidence_digests=_evidence_for(decision, str(document["content_digest"])),
+        pending_task_result=document,
     )
 
 
@@ -1136,17 +1226,22 @@ def outcome_from_task_result(
     ``WORK/00_RUNTIME/task_result.json``.  Persistence happens **before** the
     receipt is written, so the digest-bound qualification always exists for a
     receipt that references it.
+
+    R05: when ``work_dir`` is omitted the outcome still carries the built
+    document as ``pending_task_result``; the :class:`FrozenWorker` publishes
+    it after the execution-right seam, so a worker that lost the right never
+    writes the authoritative document.
     """
     decision = decide_task_result(result)
+    document = build_task_result_document(decision, result)
     if work_dir is not None:
-        digest = write_task_result(work_dir, decision, result)
-    else:
-        digest = ""
+        write_task_result_document(work_dir, document)
     return TaskExecutionOutcome(
         state=decision.receipt_state,
         result_digest=_result_digest(result),
         errors=decision.errors,
-        evidence_digests=_evidence_for(decision, digest),
+        evidence_digests=_evidence_for(decision, str(document["content_digest"])),
+        pending_task_result=document,
     )
 
 
@@ -1303,8 +1398,10 @@ class FrozenWorker:
 
         ``before_write`` is the execution-right write seam (07-A): the caller
         re-checks that it still holds the exclusive right immediately before
-        the authoritative receipt is published and raises otherwise.  A
-        worker that lost the right therefore never writes this path.
+        any authoritative write is published and raises otherwise.  A worker
+        that lost the right therefore never writes this path — nor the
+        authoritative ``task_result.json`` (R05): an executor-returned
+        ``pending_task_result`` document is persisted only after the seam.
         """
         existing = read_receipt(receipt_path)
         self.validate(envelope, plan, prior_steps=prior_steps, item_symbols=item_symbols)
@@ -1320,6 +1417,8 @@ class FrozenWorker:
         outcome = self.executor.execute(scope)
         if before_write is not None:
             before_write()
+        if outcome.pending_task_result is not None:
+            write_task_result_document(work_dir, outcome.pending_task_result)
         receipt = build_receipt(envelope, outcome)
         write_receipt_atomic(receipt_path, receipt)
         return receipt

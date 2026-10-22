@@ -27,10 +27,11 @@ claim.  Only the holder may write the authoritative
 duplicate delivery, or a worker that lost the right gets a
 ``WorkerRefusal`` and writes only the separate ``<receipt>.refused.json``
 diagnostic — never a same-path failed receipt and never a job failure CAS.
-A crashed or unknown claim is never stolen blindly: a steal requires the
-recorded holder process to be verifiably dead (pid liveness + /proc start-time
-identity against pid recycling); anything unknown is surfaced for checked
-recovery.
+A crashed or unknown claim is never stolen blindly: the local holder must be
+verifiably dead AND an injected recovery authority must confirm that its
+execution children have stopped.  Parent pid death alone leaves possible
+orphaned QC processes, so the default is a non-authoritative refusal pending
+checked recovery.  Unknown/foreign hosts are never reclaimed locally.
 
 Import direction: stdlib + the dependency-free Services contracts/runtime
 modules only (never ``acp``); ``worker_bootstrap`` imports this module, never
@@ -40,15 +41,18 @@ the reverse.
 from __future__ import annotations
 
 import errno
+import fcntl
 import hashlib
 import json
 import os
 import shutil
+import socket
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Protocol
 
 from acp_services.contracts.envelope import (
     ExecutionEnvelope,
@@ -76,6 +80,7 @@ from acp_services.runtime.worker import FrozenPlan, frozen_plan_body_digest, fro
 
 __all__ = [
     "ATTEMPT_LOCK_FILENAME",
+    "ATTEMPT_LOCK_GUARD_FILENAME",
     "CLAIM_SCHEMA",
     "DEFAULT_LEASE_SECONDS",
     "STAGING_DIRNAME",
@@ -83,6 +88,9 @@ __all__ = [
     "AttemptFreezeSpec",
     "AttemptLockClaim",
     "AttemptLockExecutionRight",
+    "AttemptRecoveryProof",
+    "CheckedAttemptRecoveryPort",
+    "AttemptExecutionScope",
     "attempt_lock_path",
     "read_attempt_lock",
     "write_frozen_attempt",
@@ -98,6 +106,13 @@ STAGING_DIRNAME: Final = ".staging"
 
 #: Persistent execution-claim file (NOT a member of the frozen input group).
 ATTEMPT_LOCK_FILENAME: Final = "attempt.lock"
+
+#: Recovery-mutex file (``flock``) serializing dead-claim replacement.  Every
+#: taker/recoverer follows the same protocol: the initial ``O_CREAT|O_EXCL``
+#: acquire stays lock-free; anything that must observe-and-replace an existing
+#: claim (dead-holder recovery) holds this guard so two recoverers can never
+#: unlink each other's fresh claims (R03 — one attempt, one holder).
+ATTEMPT_LOCK_GUARD_FILENAME: Final = "attempt.lock.guard"
 
 #: Wire schema of the attempt execution claim document.
 CLAIM_SCHEMA: Final = "attempt_execution_claim"
@@ -324,8 +339,15 @@ def _proc_start_time(pid: int) -> str:
 
 
 def _holder_alive(claim: AttemptLockClaim) -> bool | None:
-    """Liveness of the recorded holder: True/False, None when unverifiable."""
+    """Liveness of the recorded holder: True/False, None when unverifiable.
+
+    A claim recorded on another host is never provably dead from this node
+    (the pid is only meaningful locally — shared LSF work dirs), so cross-host
+    claims are unverifiable and therefore never stolen.
+    """
     if claim.pid <= 0:
+        return None
+    if not claim.host or claim.host != socket.gethostname():
         return None
     try:
         os.kill(claim.pid, 0)
@@ -353,8 +375,13 @@ class AttemptLockClaim:
     fencing_token: str = ""
     pid: int = 0
     pid_starttime: str = ""
+    host: str = ""
     acquired_at: str = ""
     lease_expires_at: str = ""
+    execution_cgroup_path: str = ""
+    execution_cgroup_inode: int = 0
+    execution_cgroup_device: int = 0
+    execution_boot_id: str = ""
 
     def held_by_current_process(self, envelope: ExecutionEnvelope) -> bool:
         """True only when this claim IS the current process holding *envelope*."""
@@ -366,6 +393,8 @@ class AttemptLockClaim:
             or self.fencing_token != envelope.fencing_token
             or self.pid != os.getpid()
         ):
+            return False
+        if not self.host or self.host != socket.gethostname():
             return False
         if not self.pid_starttime:
             return True
@@ -392,9 +421,18 @@ class AttemptLockClaim:
             "fencing_token": self.fencing_token,
             "pid": self.pid,
             "pid_starttime": self.pid_starttime,
+            "host": self.host,
             "acquired_at": self.acquired_at,
             "lease_expires_at": self.lease_expires_at,
+            "execution_cgroup_path": self.execution_cgroup_path,
+            "execution_cgroup_inode": self.execution_cgroup_inode,
+            "execution_cgroup_device": self.execution_cgroup_device,
+            "execution_boot_id": self.execution_boot_id,
         }
+
+    def content_digest(self) -> str:
+        """Bind a recovery decision to every field of this exact claim."""
+        return _sha256_hex(_json_bytes(self.to_dict()))
 
     @classmethod
     def for_envelope(cls, envelope: ExecutionEnvelope, *, lease_seconds: float) -> AttemptLockClaim:
@@ -408,6 +446,7 @@ class AttemptLockClaim:
             fencing_token=envelope.fencing_token,
             pid=os.getpid(),
             pid_starttime=_proc_start_time(os.getpid()),
+            host=socket.gethostname(),
             acquired_at=now.isoformat(),
             lease_expires_at=datetime.fromtimestamp(deadline, timezone.utc).isoformat(),
         )
@@ -426,11 +465,59 @@ class AttemptLockClaim:
                 fencing_token=str(payload.get("fencing_token") or ""),
                 pid=int(payload.get("pid") or 0),
                 pid_starttime=str(payload.get("pid_starttime") or ""),
+                host=str(payload.get("host") or ""),
                 acquired_at=str(payload.get("acquired_at") or ""),
                 lease_expires_at=str(payload.get("lease_expires_at") or ""),
+                execution_cgroup_path=str(payload.get("execution_cgroup_path") or ""),
+                execution_cgroup_inode=int(payload.get("execution_cgroup_inode") or 0),
+                execution_cgroup_device=int(payload.get("execution_cgroup_device") or 0),
+                execution_boot_id=str(payload.get("execution_boot_id") or ""),
             )
         except (TypeError, ValueError):
             return None
+
+
+@dataclass(frozen=True)
+class AttemptRecoveryProof:
+    """A trusted controller's stopped-execution proof for one exact claim.
+
+    The controller must reconcile the old worker and ALL of its execution
+    children before issuing this proof.  A dead parent pid, an expired lease,
+    or an empty process-group observation for a non-exclusive group cannot
+    prove that fact.  The complete claim digest prevents reusing a proof for
+    another holder or for an updated claim.
+    """
+
+    claim_digest: str
+    holder_stopped: bool
+    children_stopped: bool
+    source: str
+
+    def confirms(self, claim: AttemptLockClaim) -> bool:
+        """Accept only an explicit, complete proof bound to *claim*."""
+        return (
+            self.claim_digest == claim.content_digest()
+            and self.holder_stopped is True
+            and self.children_stopped is True
+            and isinstance(self.source, str)
+            and bool(self.source.strip())
+        )
+
+
+class CheckedAttemptRecoveryPort(Protocol):
+    """Trusted process-tree reconciliation, invoked under the recovery guard."""
+
+    def confirm_stopped(self, claim: AttemptLockClaim) -> AttemptRecoveryProof | None:
+        """Return a claim-bound proof only after all execution processes stopped."""
+        ...
+
+
+class AttemptExecutionScope(Protocol):
+    """Bind the holder and its future children before any scientific execution."""
+
+    def bind(self, claim: AttemptLockClaim, envelope: ExecutionEnvelope) -> AttemptLockClaim:
+        """Return the claim annotated with a verified kernel execution boundary."""
+        ...
 
 
 def read_attempt_lock(lock_path: Path | str) -> AttemptLockClaim | None:
@@ -458,6 +545,32 @@ def _acquire_exclusive(path: Path, claim: AttemptLockClaim) -> bool:
     return True
 
 
+class _RecoveryGuard:
+    """``flock``-held mutual exclusion for observe-and-replace claim recovery.
+
+    The guard file is created beside the claim; the fd is ``flock``-ed for the
+    duration.  A crashed recoverer releases nothing it took — the kernel drops
+    the ``flock`` on process death, so the protocol is crash-safe.
+    """
+
+    def __init__(self, lock_path: Path) -> None:
+        self._guard_path = lock_path.with_name(ATTEMPT_LOCK_GUARD_FILENAME)
+        self._fd: int | None = None
+
+    def __enter__(self) -> _RecoveryGuard:
+        self._fd = os.open(self._guard_path, os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(self._fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        if self._fd is not None:
+            try:
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+            finally:
+                os.close(self._fd)
+                self._fd = None
+
+
 @dataclass(frozen=True)
 class AttemptLockExecutionRight:
     """Persistent :class:`ExecutionRightPort` over ``WORK/00_RUNTIME/attempt.lock``.
@@ -468,8 +581,9 @@ class AttemptLockExecutionRight:
     a loser/duplicate delivery observes ``NOT_HELD`` and writes only the
     ``<receipt>.refused.json`` diagnostic; a holder whose claim was taken over
     observes ``LOST`` at the write seam.  Crashed holders are stolen only
-    after the recorded process is verifiably dead; unreadable or
-    unverifiable claims are never stolen blindly.
+    after the recorded local process is verifiably dead AND a trusted recovery
+    port confirms all execution children stopped.  Without such proof the
+    default refuses recovery; it never kills a process or a shared group.
 
     Controller authorization to dispatch is a separate, earlier fact — it is
     not this claim and can never substitute for holding it.
@@ -477,43 +591,100 @@ class AttemptLockExecutionRight:
 
     lock_path: Path
     lease_seconds: float = DEFAULT_LEASE_SECONDS
+    recovery_check: CheckedAttemptRecoveryPort | None = None
+    execution_scope: AttemptExecutionScope | None = None
+
+    def _held_under_guard(self, envelope: ExecutionEnvelope) -> ExecutionRightVerdict:
+        """Prepare containment while claim recovery/join operations are excluded."""
+        if self.execution_scope is None:
+            return ExecutionRightVerdict(state=ExecutionRightState.HELD)
+        claim = read_attempt_lock(self.lock_path)
+        if claim is None or not claim.held_by_current_process(envelope):
+            return ExecutionRightVerdict(state=ExecutionRightState.LOST)
+        try:
+            bound = self.execution_scope.bind(claim, envelope)
+            if not bound.held_by_current_process(envelope):
+                raise ValueError("execution scope changed the claim owner")
+            fd, temporary = tempfile.mkstemp(dir=self.lock_path.parent, prefix=".attempt-claim-")
+            try:
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(_json_bytes(bound.to_dict()))
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, self.lock_path)
+            finally:
+                Path(temporary).unlink(missing_ok=True)
+        except (OSError, RuntimeError, ValueError) as exc:
+            return ExecutionRightVerdict(
+                state=ExecutionRightState.NOT_HELD,
+                detail=f"execution containment unavailable; refusing to calculate: {exc}",
+            )
+        return ExecutionRightVerdict(state=ExecutionRightState.HELD)
 
     def acquire(self, envelope: ExecutionEnvelope) -> ExecutionRightVerdict:
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         claim = AttemptLockClaim.for_envelope(envelope, lease_seconds=self.lease_seconds)
         if _acquire_exclusive(self.lock_path, claim):
-            return ExecutionRightVerdict(state=ExecutionRightState.HELD)
-        existing = read_attempt_lock(self.lock_path)
-        if existing is None:
+            with _RecoveryGuard(self.lock_path):
+                return self._held_under_guard(envelope)
+        # Observe-and-replace recovery is serialized through the guard mutex:
+        # a second recoverer re-reads the claim under the guard and sees the
+        # first recoverer's live pid, so it can never unlink a fresh claim
+        # (R03 — the pre-guard read/unlink race produced two HELD holders).
+        with _RecoveryGuard(self.lock_path):
+            existing = read_attempt_lock(self.lock_path)
+            if existing is None:
+                return ExecutionRightVerdict(
+                    state=ExecutionRightState.NOT_HELD,
+                    detail=(
+                        f"attempt.lock at {self.lock_path} is unreadable; refusing to steal an "
+                        "unknown claim (checked recovery required)"
+                    ),
+                )
+            if existing.held_by_current_process(envelope):
+                return self._held_under_guard(envelope)
+            if _holder_alive(existing) is False:
+                proof: AttemptRecoveryProof | None = None
+                if self.recovery_check is not None:
+                    try:
+                        proof = self.recovery_check.confirm_stopped(existing)
+                    except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+                        # A failed reconciliation is not a stopped execution.
+                        proof = None
+                if not isinstance(proof, AttemptRecoveryProof) or not proof.confirms(existing):
+                    return ExecutionRightVerdict(
+                        state=ExecutionRightState.NOT_HELD,
+                        detail=(
+                            f"holder {existing.owner!r} (pid {existing.pid}) ended, but its "
+                            "execution children are not confirmed stopped; checked recovery "
+                            "required before replacing attempt.lock"
+                        ),
+                    )
+                current = read_attempt_lock(self.lock_path)
+                if current is None or current.content_digest() != existing.content_digest():
+                    return ExecutionRightVerdict(
+                        state=ExecutionRightState.NOT_HELD,
+                        detail="attempt.lock changed during checked recovery; refusing stale proof",
+                    )
+                try:
+                    self.lock_path.unlink()
+                except FileNotFoundError:
+                    pass
+                if _acquire_exclusive(self.lock_path, claim):
+                    return self._held_under_guard(envelope)
+                return ExecutionRightVerdict(
+                    state=ExecutionRightState.NOT_HELD,
+                    detail=f"verifiably-dead holder {existing.owner!r} (pid {existing.pid}) was "
+                    "recovered by another worker first",
+                )
             return ExecutionRightVerdict(
                 state=ExecutionRightState.NOT_HELD,
                 detail=(
-                    f"attempt.lock at {self.lock_path} is unreadable; refusing to steal an "
-                    "unknown claim (checked recovery required)"
+                    f"attempt {envelope.attempt} of {envelope.job_id!r} is claimed by "
+                    f"{existing.owner!r} (pid {existing.pid}, host {existing.host or '?'}, "
+                    f"lease {existing.lease_state()}); this worker waits/refuses"
                 ),
             )
-        if existing.held_by_current_process(envelope):
-            return ExecutionRightVerdict(state=ExecutionRightState.HELD)
-        if _holder_alive(existing) is False:
-            try:
-                self.lock_path.unlink()
-            except FileNotFoundError:
-                pass
-            if _acquire_exclusive(self.lock_path, claim):
-                return ExecutionRightVerdict(state=ExecutionRightState.HELD)
-            return ExecutionRightVerdict(
-                state=ExecutionRightState.NOT_HELD,
-                detail=f"verifiably-dead holder {existing.owner!r} (pid {existing.pid}) was "
-                "recovered by another worker first",
-            )
-        return ExecutionRightVerdict(
-            state=ExecutionRightState.NOT_HELD,
-            detail=(
-                f"attempt {envelope.attempt} of {envelope.job_id!r} is claimed by "
-                f"{existing.owner!r} (pid {existing.pid}, lease {existing.lease_state()}); "
-                "this worker waits/refuses"
-            ),
-        )
 
     def verify(self, envelope: ExecutionEnvelope) -> ExecutionRightVerdict:
         existing = read_attempt_lock(self.lock_path)

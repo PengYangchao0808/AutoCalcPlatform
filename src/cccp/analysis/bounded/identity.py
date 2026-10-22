@@ -46,8 +46,11 @@ __all__ = [
     "METHOD_CHUNK",
     "METHOD_MULTIRESOLUTION",
     "METHOD_STRIDE",
+    "MULTIRESOLUTION_ALGORITHM_VERSION",
     "BoundedSpec",
     "bounded_identity",
+    "expected_block_params_digests",
+    "multiresolution_block_spec",
     "source_identity_digest",
 ]
 
@@ -71,6 +74,11 @@ LEGACY_BOUNDED_IDENTITY_RULE_VERSION = 1
 METHOD_CHUNK = "chunk"
 METHOD_STRIDE = "stride"
 METHOD_MULTIRESOLUTION = "multiresolution"
+
+# Version 2 omitted the key-point policy from each level's identity. Those
+# manifests remain readable, but their blocks cannot be adopted as current.
+MULTIRESOLUTION_ALGORITHM_VERSION = "3"
+_LEGACY_MULTIRESOLUTION_ALGORITHM_VERSION = "2"
 
 #: Fully-qualified names of the real bounded generating functions.
 GENERATOR_CHUNK = "cccp.analysis.bounded.chunking.chunk_curve_product"
@@ -320,3 +328,102 @@ def bounded_identity(
         algorithm_version=spec.algorithm_version,
         params_digest=effective.params_digest(),
     )
+
+
+def multiresolution_block_spec(spec: BoundedSpec, *, level_index: int) -> BoundedSpec:
+    """Derive one level's identity parameters for both generation and reading.
+
+    Current levels inherit every manifest parameter, including key-point
+    selectors and retention policy, so any option that changes point selection
+    also changes the block identity. Version 2 reproduces the historical digest
+    only for reading; it must not be reused as a current cache identity.
+    """
+    if spec.method != METHOD_MULTIRESOLUTION:
+        raise BoundedSchemaError("multiresolution block requires a multiresolution spec")
+    params = dict(spec.params)
+    if not isinstance(params.get("series_id"), str) or not params["series_id"]:
+        raise BoundedSchemaError("multiresolution spec requires a series_id")
+    resolutions = params.get("resolutions")
+    if not isinstance(resolutions, (list, tuple)) or any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 1 for value in resolutions
+    ):
+        raise BoundedSchemaError("multiresolution resolutions must be positive integers")
+    if isinstance(level_index, bool) or not isinstance(level_index, int):
+        raise BoundedSchemaError("multiresolution level_index must be an integer")
+    if not 0 <= level_index < len(resolutions):
+        raise BoundedSchemaError("multiresolution level_index is outside resolutions")
+    if spec.algorithm_version == _LEGACY_MULTIRESOLUTION_ALGORITHM_VERSION:
+        params = {
+            "series_id": params["series_id"],
+            "level_index": level_index,
+            "resolutions": list(resolutions),
+        }
+    elif spec.algorithm_version == MULTIRESOLUTION_ALGORITHM_VERSION:
+        if "key_points" not in params or "retain_key_points" not in params:
+            raise BoundedSchemaError("multiresolution spec requires its key-point policy")
+        params["level_index"] = level_index
+    else:
+        raise BoundedSchemaError("unsupported multiresolution algorithm version")
+    return replace(
+        spec,
+        resolution=resolutions[level_index],
+        params=tuple(sorted(params.items())),
+    )
+
+
+def expected_block_params_digests(spec: BoundedSpec, block: object | None = None) -> list[str]:
+    """Recompute the admissible ``params_digest`` values for one block.
+
+    Shared by the generators' read gate (R10/D-recheck): a block spliced from a
+    different source (same raw input, different algorithm/version) carries a
+    ``params_digest`` derived from the OLD source identity, so verifying the
+    block shell alone cannot catch it — the digest itself must be re-derived
+    from the manifest's verified source identity and the block's own facts.
+
+    The candidates mirror the real generator block shapes exactly:
+
+    * ``stride``: the single block reuses the manifest spec digest verbatim;
+    * ``chunk``: manifest params (minus ``product_kind`` for curve chunks /
+      minus ``series_id`` for trajectory chunks) plus ``block_index``;
+    * ``multiresolution``: the shared level-spec derivation, including all
+      selection-policy parameters under the current algorithm version.
+
+    An empty list means "no known derivation can produce this block" — the
+    caller fails closed.
+    """
+    if not isinstance(spec, BoundedSpec):
+        raise BoundedSchemaError("spec must be a BoundedSpec")
+    if spec.identity_rule_version != BOUNDED_IDENTITY_RULE_VERSION:
+        return []
+    base = {str(name): value for name, value in spec.params}
+    method = spec.method
+    digests: list[str] = []
+    if method == METHOD_STRIDE:
+        digests.append(spec.params_digest())
+        return digests
+    block_index = int(getattr(block, "block_index", -1))
+    block_start = int(getattr(block, "start", -1))
+    block_end = int(getattr(block, "end", -1))
+    block_resolution = int(getattr(block, "resolution", -1))
+    if block_index < 0 or block_start < 0 or block_end < block_start or block_resolution < 1:
+        return []
+    if method == METHOD_CHUNK:
+        for drop in ("product_kind", "series_id"):
+            params = {name: value for name, value in base.items() if name != drop}
+            params["block_index"] = block_index
+            digests.append(
+                replace(
+                    spec,
+                    resolution=block_resolution,
+                    start=block_start,
+                    end=block_end,
+                    params=tuple(sorted(params.items())),
+                ).params_digest()
+            )
+        return digests
+    if method == METHOD_MULTIRESOLUTION:
+        if block_start != spec.start or block_end != spec.end:
+            return []
+        level_spec = multiresolution_block_spec(spec, level_index=block_index)
+        return [level_spec.params_digest()] if level_spec.resolution == block_resolution else []
+    return []

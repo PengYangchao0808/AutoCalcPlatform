@@ -1,0 +1,64 @@
+[
+  {
+    "issue": "production_fetcher_loses_remote_record",
+    "prepared": false,
+    "detail": "publish_rejected:source_unavailable",
+    "retryable": true,
+    "source_error": "TransferSourceError: 'types.SimpleNamespace' object has no attribute 'result'",
+    "reproduced": true
+  },
+  {
+    "issue": "eviction_keeps_ready_and_cannot_reprepare",
+    "before": {
+      "resource_id": "catalog:singlepoint",
+      "job_id": "j1",
+      "availability": "ready",
+      "freshness": "unknown",
+      "basis_revision": 0,
+      "expected_revision": 0,
+      "observed_at": "2026-10-21T02:34:49.008195+00:00",
+      "is_remote": true,
+      "prepared_root": "/tmp/tmpq1tsxbc0/runs/.remote_cache/j1/RESULT/result_manifest.json",
+      "size_bytes": 2,
+      "detail": "cache_index"
+    },
+    "after": {
+      "resource_id": "catalog:singlepoint",
+      "job_id": "j1",
+      "availability": "ready",
+      "freshness": "current",
+      "basis_revision": 0,
+      "expected_revision": 0,
+      "observed_at": "2026-10-21T02:34:49.010428+00:00",
+      "is_remote": true,
+      "prepared_root": null,
+      "size_bytes": null,
+      "detail": "operation:succeeded"
+    },
+    "same_operation": true,
+    "reenqueue_state": "succeeded",
+    "pending_count": 0,
+    "no_next_lease": true,
+    "reproduced": true
+  },
+  {
+    "issue": "remote_read_check_open_attempt_race",
+    "requested_attempt": 1,
+    "current_attempt": 2,
+    "returned_bytes": "ATTEMPT_2",
+    "reproduced": true
+  },
+  {
+    "issue": "catalog_prepare_loses_auxiliary_frequency_modes",
+    "prepared": true,
+    "detail": "fetched",
+    "mode_path_cached": false,
+    "requested_paths": [
+      "RESULT/result_manifest.json",
+      "input.xyz",
+      "RESULT/frame_candidates.json"
+    ],
+    "retained_legacy_fetch_catalog_fetched_modes": true,
+    "reproduced": true
+  }
+]

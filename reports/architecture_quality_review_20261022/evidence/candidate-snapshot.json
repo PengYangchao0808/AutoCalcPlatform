@@ -1,0 +1,126 @@
+{
+  "base_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "candidate_kind": "working_tree_with_archived_runtime_patch_and_additional_tests",
+  "runtime_patch": "reports/architecture_debug_20261021/evidence/candidate-source.patch",
+  "runtime_patch_sha256": "ffba7728ba70800c06b3b254acc529bc286b594a30768328e3b39c72b3546863",
+  "runtime_source_files_match_debug_archive": true,
+  "snapshot_files": [
+    {
+      "path": "frontend/js/module_tests/nmr_viewer.test.js",
+      "sha256": "49c6335050d0af79c283016a65cd55f4e61feef8e411f3323191baaa8cb0f207"
+    },
+    {
+      "path": "frontend/js/workbench/features/nmr.js",
+      "sha256": "90f71c991cf8ab9b20477cb2d9a5e971d7a749cc8e4d2a3516c49ce4dc037837"
+    },
+    {
+      "path": "scripts/acceptance/compatibility_checks.py",
+      "sha256": "c1e56d2befbb091263dee832160611ebba62c9acc965df24dd28c6e6b48309c4"
+    },
+    {
+      "path": "scripts/acceptance/four_combinations.py",
+      "sha256": "cac4adb40f7e928cdecd8d333f7b9d4185b17d4a05e7d3735abccbb67c72bd1d"
+    },
+    {
+      "path": "scripts/acceptance/ordinary_legacy_cli.py",
+      "sha256": "0439fead0296acc57e445a8bc57a2d3a57ac6d6a686913bdb2e5937e20641188"
+    },
+    {
+      "path": "src/acp/calculations/attempt_freeze.py",
+      "sha256": "f999ed13c833900e2f674cba9cfd03b025b44b59c2954b79793ab3dc099da102"
+    },
+    {
+      "path": "src/acp/calculations/attempt_publication.py",
+      "sha256": "689d83c71dcd3a891bc516a852d57398cb77a7a3e644ea7d0422ca7b3aa923b0"
+    },
+    {
+      "path": "src/acp/calculations/batch/options.py",
+      "sha256": "7fc13af97882a812c34f4108f4ad38454e73ee70af927e9be81d589d629f44d6"
+    },
+    {
+      "path": "src/acp/scheduler/manager.py",
+      "sha256": "ab6978b275f366ec1ce1e07401b5dff90459ed549edf33df881e8a3274e4b492"
+    },
+    {
+      "path": "src/acp/scheduler/remote/runner.py",
+      "sha256": "be641f51399730e011b50a4730dc30afd4f659cd7db5cf99702d306c08198b5e"
+    },
+    {
+      "path": "src/acp/services_data_bootstrap.py",
+      "sha256": "977b1b7821a01fb022689ce3f5d0ebba3d95dfa5fa8c17b3552f04c2d966feac"
+    },
+    {
+      "path": "src/acp_services/data/operations.py",
+      "sha256": "a29e6ae505b70f737305ee1ca241918f6bb4646293815b6ae53b5c245562a2e4"
+    },
+    {
+      "path": "src/acp_services/data/read_root.py",
+      "sha256": "b58c0a711b2500dc40e14961e1db3d6c43b449dc29d4b86c4b58427fa2642c51"
+    },
+    {
+      "path": "src/acp_services/runtime/attempt_freeze.py",
+      "sha256": "e997b395260045769ec0ec21d99eb85bf5f692146816a4bba914d2c178ac89fc"
+    },
+    {
+      "path": "src/acp_services/runtime/worker.py",
+      "sha256": "5b8e5d00ecbbc8e26385f6fa9c693986f642b5ac10f416092cca0722164b68b9"
+    },
+    {
+      "path": "src/acp_services/worker_bootstrap.py",
+      "sha256": "76c5fcac7eefbdcb677678ed02bd29d2fbe3729c299db007e212252207fe6812"
+    },
+    {
+      "path": "src/cccp/analysis/bounded/identity.py",
+      "sha256": "00dcb4c68e2e82ca150201f07e1ed5c95ef7c61b4cadf4dc442747041a6b0cc2"
+    },
+    {
+      "path": "src/cccp/analysis/bounded/manifest.py",
+      "sha256": "6e71aed379a410aa23c9daf861913faa23e24d2f53f03e998bf111f122328b97"
+    },
+    {
+      "path": "src/cccp/analysis/bounded/multiresolution.py",
+      "sha256": "cf94ef04711dcfd0243aa3423237b98671cbdc40a4062d6a97a3e70c83656fb6"
+    },
+    {
+      "path": "tests/baseline/services-evidence/migration_ledger.md",
+      "sha256": "43f156e72c395accf83279206defe6e6dfc292edca91995dff94960c0bb0236d"
+    },
+    {
+      "path": "tests/test_acceptance_compatibility_checks.py",
+      "sha256": "b7207c7c8c082144619025f47f536a5433c0a26f2df6ca3ab6ed8755a47c5e9e"
+    },
+    {
+      "path": "tests/test_acceptance_ordinary_legacy_cli.py",
+      "sha256": "ba17edfd886b5195093a41b34dc54e76bd76c26b75b44c456f939d299059976f"
+    },
+    {
+      "path": "tests/test_architecture_recheck_20261021.py",
+      "sha256": "989b5af75e699f736b4079fd74561bd85caf8ea5599b690ee32259e5ecf6d2c0"
+    },
+    {
+      "path": "tests/test_batch_cli_method_forwarding.py",
+      "sha256": "f106145d96983646574440a9470edd693373aa900e0fce167959858ed48222dd"
+    },
+    {
+      "path": "tests/test_cccp_bounded_multiresolution_identity.py",
+      "sha256": "e3174bf75880bda079d2ebefaa1be98fcc9d0d422e3d85fd996de7dcebf248a0"
+    },
+    {
+      "path": "tests/test_services_attempt_recovery.py",
+      "sha256": "a0094df0e916f8d54ef31c8d76c66c3a591f5466818a31532202c1d12a47becf"
+    },
+    {
+      "path": "tests/test_services_chain_switch.py",
+      "sha256": "0ca7c69aeb4f0050c9c1354d949b71ecd69e177ef7276b2a026f55bac3b748ae"
+    },
+    {
+      "path": "tests/test_services_prepare_recheck_fixes.py",
+      "sha256": "89daa7a0553c57af06a1fe3d4eb71ad6eb9ea10f96f186db09e17d7693d17c15"
+    },
+    {
+      "path": "tests/test_services_worker_bootstrap.py",
+      "sha256": "da38800bd5ee201ad5aa5120d7bce59baa7d565de53ec3e06ec81fe284df64e6"
+    }
+  ],
+  "excluded_user_artifact": "tests/baseline/refactor-evidence/e2e-task-root.txt"
+}

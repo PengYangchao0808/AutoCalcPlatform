@@ -32,7 +32,10 @@ from cccp.analysis.bounded.identity import (
     BOUNDED_SCHEMA_VERSION,
     LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
     LEGACY_BOUNDED_SCHEMA_VERSION,
+    METHOD_MULTIRESOLUTION,
+    MULTIRESOLUTION_ALGORITHM_VERSION,
     BoundedSpec,
+    expected_block_params_digests,
     source_identity_digest,
 )
 from cccp.calculation.contracts import (
@@ -399,6 +402,32 @@ class BoundedProduct:
             if block_identity.input_digest != self.base_identity.input_digest:
                 message = f"block {block.block_index} input_digest must be the source input digest"
                 raise BoundedSchemaError(message)
+            if self.schema_version == BOUNDED_SCHEMA_VERSION:
+                # R10: the block shell matching is not enough — the block's
+                # own derived identity must be reproducible from the
+                # manifest's verified source identity + the block facts, or a
+                # block spliced from a different source (same raw input,
+                # different algorithm/version) passes as adoptable.
+                if block_identity.algorithm != self.spec.method:
+                    message = (
+                        f"block {block.block_index} algorithm {block_identity.algorithm!r} "
+                        f"!= manifest method {self.spec.method!r}"
+                    )
+                    raise BoundedSchemaError(message)
+                if block_identity.algorithm_version != self.spec.algorithm_version:
+                    message = (
+                        f"block {block.block_index} algorithm_version "
+                        f"{block_identity.algorithm_version!r} != manifest "
+                        f"{self.spec.algorithm_version!r}"
+                    )
+                    raise BoundedSchemaError(message)
+                candidates = expected_block_params_digests(self.spec, block)
+                if block_identity.params_digest not in candidates:
+                    message = (
+                        f"block {block.block_index} params_digest is not derivable from the "
+                        "manifest source identity and block parameters (spliced or foreign block)"
+                    )
+                    raise BoundedSchemaError(message)
 
     def is_cache_adoptable(self) -> bool:
         """Whether this manifest may be reused as a *current* derived identity.
@@ -406,16 +435,28 @@ class BoundedProduct:
         Historical (schema version 1) manifests lack the full source-identity
         basis, so they read/round-trip but must never be adopted as a new
         cache/recovery result; rebuild rebuildable products under version 2
-        instead of deleting the scientific original.
+        instead of deleting the scientific original. Multi-resolution algorithm
+        version 2 also stays read-only because its level identities omitted
+        the point-selection policy; rebuild those projections under version 3.
         """
         if self.schema_version != BOUNDED_SCHEMA_VERSION:
             return False
         if self.spec.identity_rule_version != BOUNDED_IDENTITY_RULE_VERSION:
             return False
+        if (
+            self.spec.method == METHOD_MULTIRESOLUTION
+            and self.spec.algorithm_version != MULTIRESOLUTION_ALGORITHM_VERSION
+        ):
+            return False
         expected = source_identity_digest(self.base_identity)
         if self.spec.source_identity_digest != expected:
             return False
-        return all(block.source_identity_digest == expected for block in self.blocks)
+        return all(
+            block.source_identity_digest == expected
+            and block.product.identity.params_digest
+            in expected_block_params_digests(self.spec, block)
+            for block in self.blocks
+        )
 
     def max_block_size(self) -> int:
         """Maximum number of items (points/frames) carried by any block."""
