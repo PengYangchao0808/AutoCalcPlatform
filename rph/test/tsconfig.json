@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["**/*.ts"],
+  "references": [
+    { "path": "../packages/research" },
+    { "path": "../packages/bridge" },
+    { "path": "../packages/dsh-bundle" },
+    { "path": "../packages/cli" }
+  ]
+}

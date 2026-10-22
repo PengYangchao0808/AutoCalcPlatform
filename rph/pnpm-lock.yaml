@@ -1,0 +1,71 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      '@rph/bridge':
+        specifier: workspace:*
+        version: link:packages/bridge
+      '@rph/cli':
+        specifier: workspace:*
+        version: link:packages/cli
+      '@rph/dsh-bundle':
+        specifier: workspace:*
+        version: link:packages/dsh-bundle
+      '@rph/research':
+        specifier: workspace:*
+        version: link:packages/research
+      '@types/node':
+        specifier: 22.10.10
+        version: 22.10.10
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+
+  packages/bridge:
+    dependencies:
+      '@rph/research':
+        specifier: workspace:*
+        version: link:../research
+
+  packages/cli:
+    dependencies:
+      '@rph/dsh-bundle':
+        specifier: workspace:*
+        version: link:../dsh-bundle
+
+  packages/dsh-bundle:
+    dependencies:
+      '@rph/bridge':
+        specifier: workspace:*
+        version: link:../bridge
+
+  packages/research: {}
+
+packages:
+
+  '@types/node@22.10.10':
+    resolution: {integrity: sha512-X47y/mPNzxviAGY5TcYPtYL8JsY3kAq2n8fMmKoRCxq/c4v4pyGNCzM2R6+M5/umG4ZfHuT+sgqDYqWc9rJ6ww==}
+
+  typescript@5.7.3:
+    resolution: {integrity: sha512-84MVSjMEHP+FQRPy3pX9sTVV/INIex71s9TL2Gm5FG/WG1SqXeKyZ0k7/blY/4FdOzI12CBy1vGc4og/eus0fw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  undici-types@6.20.0:
+    resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
+
+snapshots:
+
+  '@types/node@22.10.10':
+    dependencies:
+      undici-types: 6.20.0
+
+  typescript@5.7.3: {}
+
+  undici-types@6.20.0: {}
