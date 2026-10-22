@@ -226,7 +226,9 @@ class _Scenario:
 @pytest.fixture(scope="module")
 def browser() -> Any:
     with sync_playwright() as pw:
-        instance: Browser = pw.chromium.launch(headless=True)
+        from scripts.acceptance.browser_runtime import chromium_launch_options
+
+        instance: Browser = pw.chromium.launch(**chromium_launch_options())
         try:
             yield instance
         finally:

@@ -810,11 +810,12 @@ class _PrepareExecutorAdapter:
         if workflow and record_workflow and workflow != record_workflow:
             return self._refuse("identity_mismatch:workflow")
 
-        # A cache-hit is accepted only for this attempt's own body, and only
-        # after a final identity + fence check under the cache generation lock
-        # (the same lock the cache/purge/publish paths take).
+        # A catalog hit skips its main files, but manifest-referenced auxiliary
+        # products still need checking. A previous transfer may have published
+        # the manifest before failing to download its frequency modes.
         cache_root = cache.job_root(lease.job_id)
         work_dir = Path(str(record.work_dir))
+        catalog_root: Path | None = None
         with cache._get_generation_lock(lease.job_id):
             hit_reason = guard.check()
             if hit_reason is not None:
@@ -823,22 +824,40 @@ class _PrepareExecutorAdapter:
                 if _catalog_ready_for_attempt(
                     cache, root, lease.job_id, workflow, int(lease.attempt)
                 ):
-                    return PrepareExecutionResult(
-                        prepared=True,
-                        availability=Availability.READY,
-                        detail="already_ready",
-                        retryable=False,
-                    )
+                    catalog_root = root
+                    break
 
         # Miss: publish every required catalog file through the unified
         # verified transfer path (single publisher: cache fence/generation +
         # atomic os.replace).  Missing optional files are tolerated exactly as
         # before; identity/permission/stale rejections abort immediately.
-        executor = build_transfer_executor(
-            self._build_pipeline(cache, guard), self._request_factory
-        )
+        executor: TransferPrepareExecutor | None = None
         fetched = 0
-        for rel_path in _catalog_fetch_paths(workflow):
+        if catalog_root is None:
+            executor = build_transfer_executor(
+                self._build_pipeline(cache, guard), self._request_factory
+            )
+            for rel_path in _catalog_fetch_paths(workflow):
+                outcome = executor.execute(self._file_lease(lease, rel_path, workflow))
+                if outcome.prepared:
+                    fetched += 1
+                    continue
+                if outcome.detail.startswith(RejectionCode.SOURCE_NOT_FOUND.value):
+                    continue
+                return self._executor_refusal(outcome)
+            catalog_root = cache_root
+
+        for rel_path in self._aux_frequency_mode_paths(cache, lease, workflow, root=catalog_root):
+            with cache._get_generation_lock(lease.job_id):
+                auxiliary_reason = guard.check()
+                if auxiliary_reason is not None:
+                    return self._refuse(auxiliary_reason)
+                if self._auxiliary_ready(cache, lease, catalog_root, rel_path):
+                    continue
+            if executor is None:
+                executor = build_transfer_executor(
+                    self._build_pipeline(cache, guard), self._request_factory
+                )
             outcome = executor.execute(self._file_lease(lease, rel_path, workflow))
             if outcome.prepared:
                 fetched += 1
@@ -852,7 +871,7 @@ class _PrepareExecutorAdapter:
             if commit_reason is not None:
                 return self._refuse(commit_reason)
             ready = _catalog_ready_for_attempt(
-                cache, cache_root, lease.job_id, workflow, int(lease.attempt)
+                cache, catalog_root, lease.job_id, workflow, int(lease.attempt)
             )
         if not ready:
             return PrepareExecutionResult(
@@ -888,6 +907,93 @@ class _PrepareExecutorAdapter:
         )
         return replace(lease, payload=payload)
 
+    @staticmethod
+    def _auxiliary_ready(
+        cache: RemoteStructureCache,
+        lease: PrepareLease,
+        catalog_root: Path,
+        relative_path: str,
+    ) -> bool:
+        """Check a pinned auxiliary body while the caller holds the cache lock."""
+        cache_root = cache.job_root(lease.job_id)
+        # Apply the same traversal guard even when the catalog lives in the
+        # local synchronized work directory.
+        cache.cache_path(lease.job_id, relative_path)
+        for root in dict.fromkeys((catalog_root, cache_root)):
+            if root == cache_root:
+                path = cache.get_cached(lease.job_id, relative_path, attempt=int(lease.attempt))
+                if path is None:
+                    continue
+            else:
+                present, attempt = cache._read_attempt_sidecar(root / relative_path)
+                if present and attempt != int(lease.attempt):
+                    continue
+            try:
+                descriptor = _open_within_root(root, relative_path)
+            except (OSError, ValueError):
+                continue
+            try:
+                if stat.S_ISREG(os.fstat(descriptor).st_mode):
+                    return True
+            finally:
+                os.close(descriptor)
+        return False
+
+    @staticmethod
+    def _aux_frequency_mode_paths(
+        cache: RemoteStructureCache,
+        lease: PrepareLease,
+        workflow: str,
+        *,
+        root: Path | None = None,
+    ) -> tuple[str, ...]:
+        """Manifest-referenced ``frequency_modes`` products for this attempt.
+
+        R09: the old ``fetch_catalog`` discovered small auxiliary products from
+        the cached result manifest; the prepare adapter must do the same under
+        its lease/publish guard or a prepared catalog reports ready while the
+        modes were never fetched.  Only this attempt's own manifest body is
+        consulted. The cache approval and descriptor open share the publish
+        lock, including when discovery is retried after the main catalog hit.
+        """
+        relative_path = "RESULT/result_manifest.json"
+        cache_root = cache.job_root(lease.job_id)
+        root = root if root is not None else cache_root
+        with cache._get_generation_lock(lease.job_id):
+            if root == cache_root:
+                try:
+                    manifest_path = cache.get_cached(
+                        lease.job_id, relative_path, attempt=int(lease.attempt)
+                    )
+                except ValueError:
+                    return ()
+                if manifest_path is None:
+                    return ()
+            else:
+                present, attempt = cache._read_attempt_sidecar(root / relative_path)
+                if present and attempt != int(lease.attempt):
+                    return ()
+            try:
+                descriptor = _open_within_root(root, relative_path)
+                with os.fdopen(descriptor, encoding="utf-8") as handle:
+                    payload = json.load(handle)
+            except (OSError, ValueError):
+                return ()
+        products = payload.get("products") if isinstance(payload, dict) else None
+        if not isinstance(products, list):
+            return ()
+        rel_paths: list[str] = []
+        for product in products:
+            if not isinstance(product, dict) or product.get("kind") != "frequency_modes":
+                continue
+            product_path = str(product.get("path") or "").replace("\\", "/")
+            if not product_path:
+                continue
+            rel_paths.append(
+                product_path if product_path.startswith("RESULT/") else f"RESULT/{product_path}"
+            )
+        return tuple(dict.fromkeys(rel_paths))
+
     def _build_pipeline(
         self, cache: RemoteStructureCache, guard: _LeaseIdentityGuard
     ) -> TransferPipeline:
@@ -899,6 +1005,7 @@ class _PrepareExecutorAdapter:
             authorization=_LeaseAuthorizationPort(guard),
             identity_check=guard.check,
             before_publish=self._before_publish,
+            job_lookup=self._job_lookup,
         )
 
     @staticmethod
@@ -1037,7 +1144,8 @@ class _TransferCacheAdapter:
       sidecar the cache writes at ``:466-478``; the file is never left partial
       and no second publish implementation exists.
 
-    ``push_paths`` is delegated verbatim (``remote_structure_cache.py:499``).
+    ``push_paths`` is delegated verbatim (``remote_structure_cache.py:499``);
+    ``job_lookup`` supplies the full remote location (R06) for the write-back.
     """
 
     def __init__(
@@ -1046,10 +1154,12 @@ class _TransferCacheAdapter:
         *,
         publish_guard: Callable[[], str | None] | None = None,
         before_publish: Callable[[], None] | None = None,
+        job_lookup: Callable[[str], Any] | None = None,
     ) -> None:
         self._cache = cache
         self._publish_guard = publish_guard
         self._before_publish = before_publish
+        self._job_lookup = job_lookup
 
     def guarded_path(self, job_id: str, relative_path: str) -> Path:
         return self._cache.cache_path(job_id, relative_path)
@@ -1124,7 +1234,13 @@ class _TransferCacheAdapter:
         return tuple(found)
 
     def push_paths(self, job_id: str, relative_paths: Any) -> list[str]:
-        record = SimpleNamespace(id=job_id)
+        result: Mapping[str, Any] = {}
+        if self._job_lookup is not None:
+            record = self._job_lookup(job_id)
+            raw_result = getattr(record, "result", None) if record is not None else None
+            if isinstance(raw_result, Mapping):
+                result = raw_result
+        record = SimpleNamespace(id=job_id, result=dict(result))
         return self._cache.push_paths(record, list(relative_paths))
 
 
@@ -1135,10 +1251,17 @@ class _TransferSourceAdapter:
     a missing file, a permission denial (revoked access) and everything else
     (transient transport) are distinct — an authorization revocation is never
     conflated with "file not there".
+
+    ``job_lookup`` (R06) supplies the authoritative job record so the fetcher
+    receives the full remote location (``record.result`` node/remote_dir);
+    without it the real ``RemoteResultFetcher.resolve`` fails before SSH.
     """
 
-    def __init__(self, cache: RemoteStructureCache) -> None:
+    def __init__(
+        self, cache: RemoteStructureCache, job_lookup: Callable[[str], Any] | None = None
+    ) -> None:
         self._cache = cache
+        self._job_lookup = job_lookup
 
     def _fetcher(self, job_id: str) -> Any:
         factory = getattr(self._cache, "_fetcher_factory", None)
@@ -1152,6 +1275,16 @@ class _TransferSourceAdapter:
             logger.warning("transfer fetcher factory failed for %s", job_id, exc_info=True)
             return None
 
+    def _record_for(self, job_id: str, attempt: int) -> Any:
+        """Fetch-location-bearing record for *job_id* (``result`` included)."""
+        result: Mapping[str, Any] = {}
+        if self._job_lookup is not None:
+            record = self._job_lookup(job_id)
+            raw_result = getattr(record, "result", None) if record is not None else None
+            if isinstance(raw_result, Mapping):
+                result = raw_result
+        return SimpleNamespace(id=job_id, attempt=int(attempt), result=dict(result))
+
     def read(
         self,
         job_id: str,
@@ -1163,7 +1296,7 @@ class _TransferSourceAdapter:
         fetcher = self._fetcher(job_id)
         if fetcher is None:
             raise TransferSourceError(SourceFailureKind.TRANSIENT, "no remote fetcher configured")
-        record = SimpleNamespace(id=job_id, attempt=int(attempt))
+        record = self._record_for(job_id, attempt)
         try:
             if byte_range is not None:
                 data = bytes(
@@ -1263,9 +1396,11 @@ def build_transfer_cache_port(cache: RemoteStructureCache) -> _TransferCacheAdap
     return _TransferCacheAdapter(cache)
 
 
-def build_transfer_source_port(cache: RemoteStructureCache) -> _TransferSourceAdapter:
+def build_transfer_source_port(
+    cache: RemoteStructureCache, job_lookup: Callable[[str], Any] | None = None
+) -> _TransferSourceAdapter:
     """Wrap the real cache's fetcher as the transfer source port."""
-    return _TransferSourceAdapter(cache)
+    return _TransferSourceAdapter(cache, job_lookup)
 
 
 def build_transfer_authorization_port(
@@ -1425,6 +1560,7 @@ def build_transfer_pipeline(
     db_path: str | Path | None = None,
     publications: TransferPublicationStore | None = None,
     source: Any | None = None,
+    job_lookup: Callable[[str], Any] | None = None,
     adoption: Any | None = None,
     before_publish: Callable[[], None] | None = None,
 ) -> TransferPipeline:
@@ -1472,8 +1608,9 @@ def build_transfer_pipeline(
             cache,
             publish_guard=identity_check,
             before_publish=before_publish,
+            job_lookup=job_lookup,
         ),
-        source=source or _TransferSourceAdapter(cache),
+        source=source or _TransferSourceAdapter(cache, job_lookup),
         authorization=authorization,
         publications=store,
         adoption=adoption,
@@ -1706,16 +1843,32 @@ class _ReadCacheIndexAdapter:
             return CacheIndexFacts(present=False)
         approved: Path | None = None
         if root.is_remote:
-            try:
-                approved = self._cache.get_cached(root.job_id, relative_path, attempt=requested)
-            except ValueError:
-                return CacheIndexFacts(present=False)
-            if approved is None and requested is not None:
-                approved = self._legacy_cached_for_attempt(root, relative_path, requested)
-            if approved is None:
-                return CacheIndexFacts(present=False)
-            root_dir = self._cache.job_root(root.job_id)
-            generation = self._generation(root.job_id)
+            # R07: sidecar/attempt approval and the descriptor open run inside
+            # the same per-job generation mutex the publish path takes, so a
+            # concurrent attempt-2 publication can never swap the body between
+            # "approved for attempt 1" and the open — the pre-lock window let
+            # an attempt-1 read serve attempt-2 bytes.
+            with self._cache._get_generation_lock(root.job_id):
+                try:
+                    approved = self._cache.get_cached(root.job_id, relative_path, attempt=requested)
+                except ValueError:
+                    return CacheIndexFacts(present=False)
+                if approved is None and requested is not None:
+                    approved = self._legacy_cached_for_attempt(root, relative_path, requested)
+                if approved is None:
+                    return CacheIndexFacts(present=False)
+                if requested is not None:
+                    present, sidecar_attempt = self._cache._read_attempt_sidecar(approved)
+                    if present and sidecar_attempt != requested:
+                        return CacheIndexFacts(present=False)
+                root_dir = self._cache.job_root(root.job_id)
+                generation = self._generation(root.job_id)
+                try:
+                    return self._snapshot_facts(
+                        root_dir, relative_path, approved, generation, snapshot=snapshot
+                    )
+                except (OSError, ValueError):
+                    return CacheIndexFacts(present=False)
         else:
             root_dir = Path(root.path)
             generation = 0

@@ -1,0 +1,30 @@
+{
+  "candidate_drift": [],
+  "root_testcase_counts": {
+    "tests.test_architecture_recheck_20261021": 18,
+    "tests.test_services_chain_switch": 77,
+    "tests.test_services_worker_contract": 96,
+    "tests.test_services_worker_bootstrap": 30,
+    "tests.test_acceptance_four_combinations": 8,
+    "tests.test_acp_services_isolation": 23,
+    "tests.test_architecture_invariants": 20
+  },
+  "browser_cases": [
+    {
+      "name": "test_nmr_canvas_survives_success",
+      "failure": "playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot read properties of undefined (reading 'instance')\n    at eval (eval at evaluate (:311:30), <anonymous>:68:63)\n    at async <anonymous>:337:30"
+    },
+    {
+      "name": "test_vibration_cold_start_arrows_in_real_browser",
+      "failure": "AssertionError: scene instance not created (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}\nassert False"
+    },
+    {
+      "name": "test_vibration_animation_frames_combo_hide_remount_teardown",
+      "failure": "AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}\nassert (False)"
+    },
+    {
+      "name": "test_vibration_two_instances_do_not_share_state",
+      "failure": "AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}\nassert (False)"
+    }
+  ]
+}
