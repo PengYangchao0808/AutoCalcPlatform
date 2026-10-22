@@ -1,0 +1,32 @@
+{
+  "sample_id": "stage-order.negative",
+  "contract": "dependencies.json",
+  "kind": "negative",
+  "payload": {
+    "nodes": [
+      {
+        "id": "A",
+        "todo": 5,
+        "depends_on": [],
+        "depends_on_relation": "AND"
+      },
+      {
+        "id": "B",
+        "todo": 2,
+        "depends_on": [
+          "A"
+        ],
+        "depends_on_relation": "AND"
+      }
+    ],
+    "external_nodes": [],
+    "external_edges": []
+  },
+  "expected": {
+    "valid": false,
+    "class": "invalid-parameter",
+    "code": "input_invalid",
+    "violation": "acceptance_before_prerequisite",
+    "field": "nodes[1].depends_on"
+  }
+}

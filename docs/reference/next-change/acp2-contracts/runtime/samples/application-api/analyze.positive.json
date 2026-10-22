@@ -1,0 +1,23 @@
+{
+  "sample_id": "analyze.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "analyze",
+  "payload": {
+    "schema_version": 1,
+    "analysis_id": "vibration.analyze",
+    "input_refs": [
+      {
+        "task_id": "20261022_001_demo",
+        "attempt": 1,
+        "artifact_id": "freq_log",
+        "generation": 1,
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    ],
+    "explicit": true
+  },
+  "expected": {
+    "valid": true
+  }
+}

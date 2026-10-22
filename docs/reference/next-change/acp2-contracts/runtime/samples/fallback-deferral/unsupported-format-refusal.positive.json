@@ -1,0 +1,21 @@
+{
+  "sample_id": "unsupported-format-refusal.positive",
+  "contract": "fallback-deferral.json",
+  "kind": "positive",
+  "payload": {
+    "format": "cdxml",
+    "response": {
+      "class": "invalid-parameter",
+      "code": "input_invalid",
+      "params": {
+        "rule": "unsupported_structure_format",
+        "format": "cdxml"
+      }
+    },
+    "creates_task": false,
+    "creates_structure": false
+  },
+  "expected": {
+    "valid": true
+  }
+}

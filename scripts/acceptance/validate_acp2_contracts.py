@@ -35,12 +35,36 @@ PHASE = {
     "live",
     "aggregate",
 }
-B00_DELIVERED_IDS = {
-    "manifest",
-    "baseline-lock",
-    "lint-baseline",
-    "dependencies",
-    "final-debug-patch",
+#: Contract ids each stage is allowed to flip from ``planned`` to ``delivered``.
+#: A delivered row MUST name its stage in ``delivered_by``; a stage may never
+#: deliver a contract it does not own. Adding a new delivering stage requires a
+#: manifest contract_version bump and a consumer confirmation note.
+DELIVERED_IDS_BY_STAGE = {
+    "B00": {
+        "manifest",
+        "baseline-lock",
+        "lint-baseline",
+        "dependencies",
+        "final-debug-patch",
+    },
+    "B01": {
+        "shared-change-request-template",
+        "acceptance-harness",
+        "acceptance-result-schema",
+    },
+    "B03": {
+        "application-api",
+        "entry-call-table",
+        "p2-research-operations",
+        "mcp-launch-schema",
+        "mcp-launch-template",
+        "science-binding",
+        "control-and-data",
+        "admission-approval",
+        "fallback-deferral",
+        "canonical-digest-vectors",
+        "samples",
+    },
 }
 EXPECTED_TODOS = {
     "B00",
@@ -125,6 +149,50 @@ def require(data: dict[str, Any], key: str, label: str) -> Any:
     return data[key]
 
 
+SELF_REFERENTIAL_CONTRACTS = frozenset({"manifest", "baseline-lock"})
+
+
+def contract_digest_for(manifest: dict[str, Any]) -> str:
+    lines = [
+        f"{entry['path']} {entry['sha256']}\n"
+        for entry in manifest.get("contracts", [])
+        if entry.get("status") == "delivered" and entry.get("id") not in SELF_REFERENTIAL_CONTRACTS
+    ]
+    return hashlib.sha256("".join(sorted(lines)).encode("utf-8")).hexdigest()
+
+
+def verify_contract_digests(manifest: dict[str, Any]) -> None:
+    recorded = require(manifest, "contract_digest", "contract_digest")
+    if not isinstance(recorded, str) or not HEX64.match(recorded):
+        fail("contract_digest must be a full 64-hex SHA-256")
+    actual = contract_digest_for(manifest)
+    if recorded != actual:
+        fail(
+            "contract_digest does not match the delivered contract set: "
+            f"expected {recorded}, actual {actual}"
+        )
+
+    self_entry = next(
+        (entry for entry in manifest.get("contracts", []) if entry.get("id") == "manifest"), None
+    )
+    if self_entry is None:
+        fail("contracts registry must contain the manifest entry")
+    recorded_self = require(self_entry, "sha256", "contracts[manifest].sha256")
+    if not isinstance(recorded_self, str) or not HEX64.match(recorded_self):
+        fail("contracts[manifest].sha256 must be a full 64-hex SHA-256")
+    stripped = json.loads(json.dumps(manifest))
+    for entry in stripped.get("contracts", []):
+        if entry.get("id") == "manifest":
+            entry["sha256"] = ""
+    canonical = json.dumps(stripped, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    actual_self = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if recorded_self != actual_self:
+        fail(
+            "contracts[manifest].sha256 does not match the canonical self digest: "
+            f"expected {recorded_self}, actual {actual_self}"
+        )
+
+
 def validate_manifest(root: Path, manifest: dict[str, Any]) -> None:
     if manifest.get("schema") != SCHEMA:
         fail(f"manifest schema must be {SCHEMA}")
@@ -169,9 +237,18 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> None:
         if status not in {"planned", "delivered"}:
             fail(f"contracts[{contract_id}].status must be planned or delivered")
         target = root / path_value
+        delivered_by = entry.get("delivered_by")
         if status == "delivered":
-            if contract_id not in B00_DELIVERED_IDS:
-                fail(f"contract {contract_id} may not be delivered in B00")
+            if delivered_by not in DELIVERED_IDS_BY_STAGE:
+                fail(
+                    f"contracts[{contract_id}] is delivered but declares no known "
+                    f"delivered_by stage: {delivered_by!r}"
+                )
+            if contract_id not in DELIVERED_IDS_BY_STAGE[delivered_by]:
+                fail(
+                    f"contract {contract_id} may not be delivered by {delivered_by}; "
+                    f"allowed: {sorted(DELIVERED_IDS_BY_STAGE[delivered_by])}"
+                )
             if not target.exists():
                 fail(f"contracts[{contract_id}].path does not exist: {path_value}")
             digest = require(entry, "sha256", f"contracts[{contract_id}].sha256")
@@ -189,6 +266,7 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> None:
                         f"expected {digest}, actual {actual}"
                     )
 
+    verify_contract_digests(manifest)
 
     owners = require(manifest, "owners", "owners")
     glob_seen: dict[str, str] = {}
@@ -372,6 +450,34 @@ def validate_dependencies(root: Path, manifest_path: Path) -> None:
             fail(f"external edge {consumer}->{ext_id} has invalid readiness")
         if edge.get("relation") not in {"AND", "OR"}:
             fail(f"external edge {consumer}->{ext_id} lacks explicit AND/OR relation")
+
+    consumer_edges = deps.get("consumer_edges", [])
+    if not isinstance(consumer_edges, list):
+        fail("dependencies.consumer_edges must be an array")
+    for index, edge in enumerate(consumer_edges):
+        producer = require(edge, "producer", f"consumer_edges[{index}].producer")
+        consumer = require(edge, "consumer", f"consumer_edges[{index}].consumer")
+        if producer not in by_id:
+            fail(f"consumer edge producer does not exist: {producer} -> {consumer}")
+        if not str(consumer).strip():
+            fail(f"consumer_edges[{index}].consumer must be non-empty")
+        for field in ("artifact", "version", "digest_or_pending", "readiness"):
+            require(edge, field, f"consumer_edges[{index}].{field}")
+        if edge["readiness"] not in READINESS:
+            fail(f"consumer edge {producer}->{consumer} has invalid readiness")
+        if edge.get("relation") not in {"AND", "OR"}:
+            fail(f"consumer edge {producer}->{consumer} lacks explicit AND/OR relation")
+
+    not_verified = deps.get("not_verified", [])
+    if not isinstance(not_verified, list):
+        fail("dependencies.not_verified must be an array")
+    for index, row in enumerate(not_verified):
+        require(row, "id", f"not_verified[{index}].id")
+        require(row, "expected_path", f"not_verified[{index}].expected_path")
+        if row.get("status") != "NOT_VERIFIED":
+            fail(f"not_verified[{index}].status must be NOT_VERIFIED")
+        require(row, "reason", f"not_verified[{index}].reason")
+        require(row, "closing_condition", f"not_verified[{index}].closing_condition")
 
 
 def main(argv: list[str] | None = None) -> int:

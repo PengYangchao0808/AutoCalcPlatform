@@ -1,0 +1,11 @@
+== negative 1: delivered sha mismatch ==
+INVALID: contracts[application-api].sha256 mismatch: expected 0000000000000000000000000000000000000000000000000000000000000000, actual a9f7e741007029638b64e069d918746f7105c2bf99c97dc1e9c3818cdcc0d4a4
+exit=1
+
+== negative 2: delivered contract without delivered_by ==
+INVALID: contracts[science-binding] is delivered but declares no known delivered_by stage: None
+exit=1
+
+== negative 3: dangling dependency reference (clean manifest + tampered dependencies) ==
+INVALID: dangling dependency reference in B00: B-ghost
+exit=1

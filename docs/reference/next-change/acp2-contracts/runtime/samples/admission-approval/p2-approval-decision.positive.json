@@ -1,0 +1,17 @@
+{
+  "sample_id": "p2-approval-decision.positive",
+  "contract": "admission-approval.v1.json",
+  "kind": "positive",
+  "operation": "p2-approval",
+  "payload": {
+    "approval_ref": "ap_0001",
+    "proposal_ref": "prop-1",
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "approved",
+    "revision": 2,
+    "approver_ref": "user:alice"
+  },
+  "expected": {
+    "valid": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "sample_id": "recover.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "recover",
+  "payload": {
+    "schema_version": 1,
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "diagnostic_only": false
+  },
+  "expected": {
+    "valid": true
+  }
+}

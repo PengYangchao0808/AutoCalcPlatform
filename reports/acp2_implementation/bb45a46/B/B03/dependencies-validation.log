@@ -1,0 +1,26 @@
+# dependency ledger validation (B03 refresh)
+
+schema: acp2.dependencies.v1
+refreshed_by: B03 stage: H1 (B00 skeleton + B03 merge of C rows and the A gap)
+nodes: 43 external_nodes: 32 external_edges: 37 consumer_edges: 5
+sources:
+  B: docs/reference/next-change/acp2-contracts/runtime/dependencies.json sha256=None status=delivered
+  C: /ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/handoffs/dependencies-c.json sha256=505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b status=delivered
+  A: /ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json sha256=None status=NOT_VERIFIED
+not_verified:
+  A-CROSS-TRACK-DEPENDENCIES-ABSENT status=NOT_VERIFIED reason=blocked_fixture
+  expected_path=/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json
+consumer_edges (C consumes B, direction preserved):
+  B00 -> C/T-01 and every downstream C todo: readiness=contract_ready relation=AND delivered=True
+  B00 -> C/T-01 and every C evidence row: readiness=contract_ready relation=AND delivered=True
+  B02a -> C/T-04, C/T-11, C/T-12: readiness=contract_ready relation=AND delivered=True
+  B02a -> C/T-01 acceptance, C harness fixture/live routing: readiness=contract_ready relation=AND delivered=True
+  B02a -> C/T-08, C/T-17, C/T-21, C/T-31, C/T-38: readiness=contract_ready relation=AND delivered=True
+B03 artifact: {"contract_delivery": "delivered", "digest_or_pending": "sha256:6df24cf6b5b0b3a1d2023c64cd032478eeafd2dc27df3f180843895dc2ef65d0", "digest_target": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json", "id": "acp2:artifact:B03", "readiness": "contract_ready", "remaining_gap": "GAP-B03-01..04 are implementation gaps (B04a/B05/B06/B10a/B12), not contract gaps; the entry-call-table audit verdict is PARTIAL", "version": "1.0.0"}
+validation: {"A": {"expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json", "reason": "blocked_fixture", "status": "NOT_VERIFIED"}, "B": {"note": "self", "status": "PASS"}, "C": {"rows_merged": 5, "sha256": "505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b", "status": "PASS"}}
+consumer_edge_checks: {"consumer_nonempty": "PASS", "no_cycle": "PASS", "producer_exists": "PASS", "relation_explicit": "PASS", "rule": "every consumer_edges row names an existing B producer node (or a delivered B artifact path) and an explicit AND/OR relation"}
+C source sha256 recorded=505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b actual=505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b match=True
+
+== scripts/acceptance/validate_acp2_contracts.py ==
+VALID: /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/manifest.json
+exit=0

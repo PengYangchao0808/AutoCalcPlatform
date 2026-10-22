@@ -1,0 +1,22 @@
+{
+  "sample_id": "p1-unbounded-request.negative",
+  "contract": "admission-approval.v1.json",
+  "kind": "negative",
+  "payload": {
+    "principal_id": "u-1",
+    "project_id": "proj-demo",
+    "job_id": "j-1",
+    "cores": 0,
+    "memory_mb": 0,
+    "duration_s": 0,
+    "storage_bytes": 0,
+    "mode": "quota-only"
+  },
+  "expected": {
+    "valid": false,
+    "class": "invalid-parameter",
+    "code": "input_invalid",
+    "violation": "unbounded_request",
+    "field": "cores"
+  }
+}

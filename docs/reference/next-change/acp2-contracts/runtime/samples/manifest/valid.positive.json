@@ -1,0 +1,25 @@
+{
+  "sample_id": "valid",
+  "contract": "manifest.json",
+  "kind": "positive",
+  "payload": {
+    "contracts": [
+      {
+        "id": "a",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/a.json",
+        "owner": "B",
+        "status": "planned"
+      },
+      {
+        "id": "b",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/b.json",
+        "owner": "A",
+        "status": "planned"
+      }
+    ]
+  },
+  "expected": {
+    "valid": true
+  },
+  "note": "structural positive; the delivered manifest.json itself is the real positive instance and is validated by scripts/acceptance/validate_acp2_contracts.py"
+}

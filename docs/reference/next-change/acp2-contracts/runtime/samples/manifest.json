@@ -1,0 +1,738 @@
+{
+  "schema": "acp2.runtime.samples.v1",
+  "contract_version": "1.0.0",
+  "frozen_at": "2026-10-22",
+  "owner": "B",
+  "status": "delivered",
+  "digest_rule": "sha256 over the file bytes",
+  "sample_rule": "every frozen contract has at least one positive and one negative sample; a contract without a negative sample may not be frozen",
+  "counts": {
+    "total": 55,
+    "by_contract": {
+      "admission-approval.v1.json": {
+        "positive": 2,
+        "negative": 3
+      },
+      "application-api.v1.json": {
+        "positive": 11,
+        "negative": 8
+      },
+      "control-and-data.v1.json": {
+        "positive": 4,
+        "negative": 3
+      },
+      "dependencies.json": {
+        "positive": 1,
+        "negative": 5
+      },
+      "fallback-deferral.json": {
+        "positive": 1,
+        "negative": 1
+      },
+      "manifest.json": {
+        "positive": 1,
+        "negative": 3
+      },
+      "mcp-launch.schema.json": {
+        "positive": 1,
+        "negative": 4
+      },
+      "p2-research-operations.v1.json": {
+        "positive": 1,
+        "negative": 2
+      },
+      "science-binding.v1.json": {
+        "positive": 1,
+        "negative": 3
+      }
+    }
+  },
+  "entries": [
+    {
+      "path": "samples/admission-approval/p1-admission-request.positive.json",
+      "contract": "admission-approval.v1.json",
+      "kind": "positive",
+      "size_bytes": 404,
+      "sha256": "5d0e730eb63c7ec219345e8e363224a9f7d09fffd8674dba31f59ef3371f929e",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/admission-approval/p1-unbounded-request.negative.json",
+      "contract": "admission-approval.v1.json",
+      "kind": "negative",
+      "size_bytes": 485,
+      "sha256": "648c48f6c5e4e8d07638b4383db0ca70141d04d8d7aca26c0015a7771653926f",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "unbounded_request",
+        "field": "cores"
+      }
+    },
+    {
+      "path": "samples/admission-approval/p2-approval-decision.positive.json",
+      "contract": "admission-approval.v1.json",
+      "kind": "positive",
+      "size_bytes": 439,
+      "sha256": "551e607d5e1c137fda4090602dc7f3c58954ec3988ef044fe37493a0e8953717",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/admission-approval/p2-model-approver.negative.json",
+      "contract": "admission-approval.v1.json",
+      "kind": "negative",
+      "size_bytes": 579,
+      "sha256": "8d38000bd75068c8f24b0bd6fb2174c92d52a558118946cb20187f5366c41c97",
+      "expected": {
+        "valid": false,
+        "class": "authorization",
+        "code": "access_denied",
+        "violation": "approver_identity_from_payload",
+        "field": "approver_ref"
+      }
+    },
+    {
+      "path": "samples/admission-approval/p2-plan-digest-mismatch.negative.json",
+      "contract": "admission-approval.v1.json",
+      "kind": "negative",
+      "size_bytes": 618,
+      "sha256": "ddc690bf70595aa5d0807561c10f5ac4588a814e8f19d2ccacc4f627a27d11f2",
+      "expected": {
+        "valid": false,
+        "class": "conflict",
+        "code": "revision_conflict",
+        "violation": "approved_plan_digest_mismatch",
+        "field": "plan_digest"
+      }
+    },
+    {
+      "path": "samples/application-api/analyze-implicit.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 801,
+      "sha256": "67516d44917a0563ea9244c44d26629e60c5fdb87b7b36843926698cf683b323",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "const",
+        "field": "explicit"
+      }
+    },
+    {
+      "path": "samples/application-api/analyze.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 529,
+      "sha256": "f26ad5bdae66ab3148c527b910f41369dbfa576844634403d52d302ab25f3e68",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/cancel.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 477,
+      "sha256": "59f20a4c0858b85a399c6ca6336d6ffd4bc678718e5a82621c0a056d95dcbfaa",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/capabilities.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 220,
+      "sha256": "36b069e1860be070c6dc002aa8ca5ce2fb12f01d730b218b56acd971927d6f2f",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/control.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 502,
+      "sha256": "d1fd4e804aaf0f185a65918d053d08472c52653a47878fd917e01e8ffe9e5a3c",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/health.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 181,
+      "sha256": "2f1654d61d13137087180bee7d6c4d1f047c7499499eb1b2c7684570740f5668",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/preflight.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 289,
+      "sha256": "1677ee13cbab9ef3afe53a9b38ec045f3be81ee61cc0566f6b53edf28ecc722a",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/prepare-missing-purpose.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 623,
+      "sha256": "6f4c3d5961355aa00910979397ee9409b059002702f8235688249eda2035834e",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_required",
+        "field": "purpose"
+      }
+    },
+    {
+      "path": "samples/application-api/prepare.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 587,
+      "sha256": "c6201c46078aa4db9a6599b35a2fbd6fbf7ec0196ed68166b9c7a215d7543e0c",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/read-missing-generation.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 643,
+      "sha256": "ac9ca36589cd7776a3acf21fced373008db4416ac4a9baadc5d905e2b3466108",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_required",
+        "field": "artifact_ref.generation"
+      }
+    },
+    {
+      "path": "samples/application-api/read.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 488,
+      "sha256": "0cf388533d6d6ce5cbc4fd3e1eb66c6ecacd3b74d3ce6cf45201bd23dfe6ec07",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/recover.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 334,
+      "sha256": "c290ea34758b2ed35ed42d7a923a345ac9b31b24ba6864b0b417b0a5a80df924",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/status-missing-task-ref.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 351,
+      "sha256": "8191f43b0938d027d9ae6d1c989a312869c4766e2cfab720a145d56b5ac82b76",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_required",
+        "field": "task_ref"
+      }
+    },
+    {
+      "path": "samples/application-api/status.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 449,
+      "sha256": "8d520d3e4e691d318b317181c2d08ff191b688f0c51b7673ea9c20eddb2a4b74",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/submit-invalid-workflow.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 557,
+      "sha256": "e8887d8f7d20d08cbcb214dcd664aac003151b9078d8eda7f452b63e356d0659",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "enum",
+        "field": "workflow"
+      }
+    },
+    {
+      "path": "samples/application-api/submit-missing-plan-digest.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 484,
+      "sha256": "d7896f65c7c9266649e3b0e3f0eff28585fb0bdf0663f8fe8b95d745431539d5",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_required",
+        "field": "plan_digest"
+      }
+    },
+    {
+      "path": "samples/application-api/submit-unknown-field.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 603,
+      "sha256": "95d2e41e40223bd7957168f700c26a1dc84b87943f9d04cf0fc35ddccb3d7477",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "unknown_field",
+        "field": "speedy"
+      }
+    },
+    {
+      "path": "samples/application-api/submit-unsupported-version.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 596,
+      "sha256": "ada410d288f053be41ec3823017009aa3d7a049be7f7ef7c88a82196069675a2",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "unsupported_major_version",
+        "field": "schema_version"
+      }
+    },
+    {
+      "path": "samples/application-api/submit.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 476,
+      "sha256": "26cb582055f1f466306560d1730487e045d9e1f0aecd13a355e33aac3c471be4",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/control-and-data/cancel.positive.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "positive",
+      "size_bytes": 477,
+      "sha256": "2f3cce3c5877261d2aef9591d06a3030b64191309a512912184bcd60b337fd54",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/control-and-data/control-pause.positive.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "positive",
+      "size_bytes": 482,
+      "sha256": "03ef2fe3d987951a811472fef7ca783e50b4f26665dbe52a938529e33b3c6479",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/control-and-data/idempotency-key-reuse.negative.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "negative",
+      "size_bytes": 565,
+      "sha256": "5763e374ed3f81955f1732338cdb3122d91e7e02c2a83fac411b2161f82bc1c9",
+      "expected": {
+        "valid": false,
+        "class": "conflict",
+        "code": "revision_conflict",
+        "violation": "idempotency_key_reuse",
+        "field": "idempotency_key"
+      }
+    },
+    {
+      "path": "samples/control-and-data/prepare-without-purpose.negative.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "negative",
+      "size_bytes": 599,
+      "sha256": "83bf39149ed91be4f8e545b704ab90763cc89d3559a4868b91c9b6557a1ea9ef",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_required",
+        "field": "purpose"
+      }
+    },
+    {
+      "path": "samples/control-and-data/prepare.positive.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "positive",
+      "size_bytes": 563,
+      "sha256": "1a4c0843920c590feef461c397b214ac75980810bc5419a2f0508b0f191bb8f3",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/control-and-data/read-digest-mismatch.negative.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "negative",
+      "size_bytes": 656,
+      "sha256": "033218b8f1b5306a46f2820b7af16fe65301e4b0e012dab1a545e0b815815af8",
+      "expected": {
+        "valid": false,
+        "class": "conflict",
+        "code": "revision_conflict",
+        "violation": "digest_mismatch",
+        "field": "artifact_ref.digest"
+      }
+    },
+    {
+      "path": "samples/control-and-data/read.positive.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "positive",
+      "size_bytes": 464,
+      "sha256": "716438428444372efb593fc218350886c0a9b47abb7e8aef52b77008a248440e",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/dependencies/cycle.negative.json",
+      "contract": "dependencies.json",
+      "kind": "negative",
+      "size_bytes": 618,
+      "sha256": "2fa1bded07d02cce1c3200d000fc4fac9361277037b5d62411ef5ecc5c8bb254",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "cycle",
+        "field": "nodes"
+      }
+    },
+    {
+      "path": "samples/dependencies/dangling-reference.negative.json",
+      "contract": "dependencies.json",
+      "kind": "negative",
+      "size_bytes": 517,
+      "sha256": "c679dda58857192f79f984b8a3653f96b4760739d53d8396431e2e925bdd86d1",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "dangling_reference",
+        "field": "nodes[0].depends_on"
+      }
+    },
+    {
+      "path": "samples/dependencies/free-text-or.negative.json",
+      "contract": "dependencies.json",
+      "kind": "negative",
+      "size_bytes": 848,
+      "sha256": "aeaafdefbba2e994d1f35f8e4f533e382d42d7ab71f03d0226745e64ae3c1272",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "free_text_or",
+        "field": "nodes[0].depends_on"
+      }
+    },
+    {
+      "path": "samples/dependencies/missing-producer.negative.json",
+      "contract": "dependencies.json",
+      "kind": "negative",
+      "size_bytes": 736,
+      "sha256": "4824249fa29a39c056bb830923709afe158aa350062deafb6ccacfc150a01a50",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_producer",
+        "field": "external_edges[0].external_id"
+      }
+    },
+    {
+      "path": "samples/dependencies/stage-order.negative.json",
+      "contract": "dependencies.json",
+      "kind": "negative",
+      "size_bytes": 640,
+      "sha256": "86390365f23e92cb5bcc760015a2016c8da8edb4e08c81a8ef11096a465481b3",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "acceptance_before_prerequisite",
+        "field": "nodes[1].depends_on"
+      }
+    },
+    {
+      "path": "samples/dependencies/valid.positive.json",
+      "contract": "dependencies.json",
+      "kind": "positive",
+      "size_bytes": 483,
+      "sha256": "1a91b5e3dec5715a8322ae1f3dfa6dfded51b30f279ca02253fea1af8ec64b13",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/fallback-deferral/empty-structure-task.negative.json",
+      "contract": "fallback-deferral.json",
+      "kind": "negative",
+      "size_bytes": 387,
+      "sha256": "67529fa4fd820cf553610d22020c1ac88cb8c6b0ffa328ae79163cc9540a6358",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "empty_structure_task_forbidden",
+        "field": "creates_task"
+      }
+    },
+    {
+      "path": "samples/fallback-deferral/unsupported-format-refusal.positive.json",
+      "contract": "fallback-deferral.json",
+      "kind": "positive",
+      "size_bytes": 451,
+      "sha256": "50919e5df333ae2f71f5711799510c910b5b237f6fb085df1cc57ed3daee5c68",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/manifest/delivered-without-sha.negative.json",
+      "contract": "manifest.json",
+      "kind": "negative",
+      "size_bytes": 449,
+      "sha256": "a144150ba7d663a89492b1d8235da6266c2314daede034ab136066f9009825d3",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "delivered_missing_sha",
+        "field": "contracts[0].sha256"
+      }
+    },
+    {
+      "path": "samples/manifest/duplicate-id.negative.json",
+      "contract": "manifest.json",
+      "kind": "negative",
+      "size_bytes": 551,
+      "sha256": "6f2badd3f354a401e6f91df9fef508ef04119e8ad9e97e18b383e6ec72e643c2",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "duplicate_contract_id",
+        "field": "contracts[1].id"
+      }
+    },
+    {
+      "path": "samples/manifest/invalid-owner.negative.json",
+      "contract": "manifest.json",
+      "kind": "negative",
+      "size_bytes": 430,
+      "sha256": "f1945054d2807ea8fc0a68feccf5daef855671f407c9f212bad6808f5d065da4",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "invalid_owner",
+        "field": "contracts[0].owner"
+      }
+    },
+    {
+      "path": "samples/manifest/valid.positive.json",
+      "contract": "manifest.json",
+      "kind": "positive",
+      "size_bytes": 652,
+      "sha256": "380b7d6e315c54b56a747e6e8a3edbea9f6a1af10590995f8ac25f7f10be2438",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/mcp-launch/launch-credential.negative.json",
+      "contract": "mcp-launch.schema.json",
+      "kind": "negative",
+      "size_bytes": 16751,
+      "sha256": "fe54c4d81b7fa9311de42276b90e0f0ff2d091780ca3544a6585edb52719a2d4",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "additional_property",
+        "field": "env.ACP_AUTH_TOKEN"
+      }
+    },
+    {
+      "path": "samples/mcp-launch/launch-missing-constraint.negative.json",
+      "contract": "mcp-launch.schema.json",
+      "kind": "negative",
+      "size_bytes": 16585,
+      "sha256": "f6da47714d3ccfe0c951149674e12edc424706118f8916c27106a819e17a4451",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_required",
+        "field": "constraints.no_side_effect_discovery"
+      }
+    },
+    {
+      "path": "samples/mcp-launch/launch-unknown-field.negative.json",
+      "contract": "mcp-launch.schema.json",
+      "kind": "negative",
+      "size_bytes": 16645,
+      "sha256": "635087b8f62ddf8a2de6cc5b3048427aaffe738e185dd59a50bb7e409911e1a5",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "additional_property",
+        "field": "credentials"
+      }
+    },
+    {
+      "path": "samples/mcp-launch/launch-wrong-protocol.negative.json",
+      "contract": "mcp-launch.schema.json",
+      "kind": "negative",
+      "size_bytes": 16593,
+      "sha256": "4dd1efee5c1c356c0233ae31399136bece4ca312197f78281d658a1eb53f569c",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "const",
+        "field": "protocol_version"
+      }
+    },
+    {
+      "path": "samples/mcp-launch/launch.positive.json",
+      "contract": "mcp-launch.schema.json",
+      "kind": "positive",
+      "size_bytes": 16452,
+      "sha256": "50734661a1b91521ed5f6d810bb376c3b2ec418979f9baa5e3155e28b2ffa804",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/p2-research-operations/approval-model-approver.negative.json",
+      "contract": "p2-research-operations.v1.json",
+      "kind": "negative",
+      "size_bytes": 533,
+      "sha256": "f47c0cf2ef490f75a099a1f15264180761cc63a5b5c621d2a48b2fe5405701f5",
+      "expected": {
+        "valid": false,
+        "class": "authorization",
+        "code": "access_denied",
+        "violation": "approver_identity_from_payload",
+        "field": "approver"
+      }
+    },
+    {
+      "path": "samples/p2-research-operations/proposal-create.positive.json",
+      "contract": "p2-research-operations.v1.json",
+      "kind": "positive",
+      "size_bytes": 508,
+      "sha256": "c8f9c3e9e9f31820f46e5940f2e5ea22587ea325a85c18906ed92a0c9285527b",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/p2-research-operations/wait-unbounded.negative.json",
+      "contract": "p2-research-operations.v1.json",
+      "kind": "negative",
+      "size_bytes": 454,
+      "sha256": "8ef7dd08b7e93efcbe4cbe0d8556c959cfd32d14f4d2d18a451e70533ce03805",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "bound_exceeded",
+        "field": "max_wait_s"
+      }
+    },
+    {
+      "path": "samples/science-binding/reserved-reference-pending.negative.json",
+      "contract": "science-binding.v1.json",
+      "kind": "negative",
+      "size_bytes": 460,
+      "sha256": "50b208527b04d6b382961cf5e19fb476a223ff85bd15abc72c47db7eca2b73ec",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "pending_reference",
+        "field": "digest"
+      }
+    },
+    {
+      "path": "samples/science-binding/singlepoint-request.positive.json",
+      "contract": "science-binding.v1.json",
+      "kind": "positive",
+      "size_bytes": 505,
+      "sha256": "a8c0d25e84157c1acc311ae3444e3280e8572bc1207c0e6697c798fd991ec23d",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/science-binding/singlepoint-unknown-task-kind.negative.json",
+      "contract": "science-binding.v1.json",
+      "kind": "negative",
+      "size_bytes": 464,
+      "sha256": "2cff7120020033506545c690ef35ef98cb6efa92b30c2818ef5bff3d0958e9fe",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "unknown_task_kind",
+        "field": "task"
+      }
+    },
+    {
+      "path": "samples/science-binding/singlepoint-unsupported-version.negative.json",
+      "contract": "science-binding.v1.json",
+      "kind": "negative",
+      "size_bytes": 488,
+      "sha256": "1408962b69a7fc0f8243f717ab9c23c48e549f6f081299cc56e3cb547a3ebec3",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "unsupported_major_version",
+        "field": "schema_version"
+      }
+    }
+  ],
+  "scope": "Samples for the B03-owned contracts. The acceptance harness corpus lives under samples/acceptance/** and is owned and indexed by B01 (runtime/samples/acceptance/cases.json); it is deliberately excluded from this index so B01 can deliver concurrently.",
+  "excluded_subtrees": [
+    "acceptance/"
+  ],
+  "ownership": {
+    "B03": "samples/* excluding acceptance/**",
+    "B01": "samples/acceptance/**"
+  }
+}

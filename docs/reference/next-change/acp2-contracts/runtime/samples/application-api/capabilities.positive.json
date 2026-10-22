@@ -1,0 +1,12 @@
+{
+  "sample_id": "capabilities.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "capabilities",
+  "payload": {
+    "schema_version": 1
+  },
+  "expected": {
+    "valid": true
+  }
+}

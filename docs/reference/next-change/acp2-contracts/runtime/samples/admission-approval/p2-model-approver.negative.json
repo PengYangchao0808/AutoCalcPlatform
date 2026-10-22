@@ -1,0 +1,21 @@
+{
+  "sample_id": "p2-model-approver.negative",
+  "contract": "admission-approval.v1.json",
+  "kind": "negative",
+  "payload": {
+    "approval_ref": "ap_0001",
+    "proposal_ref": "prop-1",
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "approved",
+    "revision": 2,
+    "approver_ref": "model:gpt",
+    "approver_source": "payload"
+  },
+  "expected": {
+    "valid": false,
+    "class": "authorization",
+    "code": "access_denied",
+    "violation": "approver_identity_from_payload",
+    "field": "approver_ref"
+  }
+}
