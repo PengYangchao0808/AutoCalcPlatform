@@ -1,0 +1,73 @@
+{
+  "claim": "same job identity; projection shape parity deferred to B06/GAP-B03-01",
+  "compared_fields": [
+    "id",
+    "status",
+    "revision",
+    "attempt",
+    "exit_code"
+  ],
+  "compared_values": {
+    "attempt": 1,
+    "exit_code": 0,
+    "id": "20261022_210346_001_b04a-parity",
+    "revision": 2,
+    "status": "completed"
+  },
+  "divergent_keys": {
+    "controller_only": [
+      "custom_name",
+      "default_name",
+      "display_method",
+      "latest_event",
+      "live_status",
+      "name_revision",
+      "name_updated_at",
+      "progress_state",
+      "project_name",
+      "resolved_name",
+      "snapshot_version",
+      "stage_detail",
+      "stage_index",
+      "stage_order",
+      "stage_progress",
+      "stage_total",
+      "study_id",
+      "study_status"
+    ],
+    "controller_projection_adds": [
+      "default_name",
+      "resolved_name",
+      "name_revision",
+      "progress_state",
+      "stage_order"
+    ],
+    "local_only": [],
+    "shared_but_different": [
+      "spec"
+    ],
+    "spec_normalization": {
+      "controller_excludes": [
+        "custom_name",
+        "input_hash"
+      ],
+      "local_includes": [
+        "custom_name",
+        "input_hash"
+      ]
+    }
+  },
+  "gap": "GAP-B03-01",
+  "generated_at": "2026-10-22T13:36:00Z",
+  "identity_equal": true,
+  "identity_sources": {
+    "controller": "cli-query-controller.json#/job",
+    "controller_route": "GET /api/v1/jobs/{id}",
+    "local": "cli-query-local.json#/job",
+    "local_route": "acp task query --run-root <run-root>"
+  },
+  "owner": "B04a",
+  "schema": "acp2.b04.parity-note.v1",
+  "shape_parity": false,
+  "shape_parity_owner": "B06 GAP-B03-01"
+}

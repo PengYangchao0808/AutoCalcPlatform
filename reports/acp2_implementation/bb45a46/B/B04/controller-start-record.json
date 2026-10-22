@@ -1,7 +1,7 @@
 {
   "schema": "acp2.controller-start-record.v1",
-  "pid": 4173476,
-  "started_at": "2026-10-22T13:11:09Z",
+  "pid": 13419,
+  "started_at": "2026-10-22T13:35:21Z",
   "argv": [
     "/ACPServer/acp2-development/venvs/b/bin/python",
     "-m",
@@ -19,8 +19,8 @@
   "cwd": "/ACPServer/acp2-development/data/b/controller-config",
   "db_path": "/ACPServer/acp2-development/data/b/run-root/acp_jobs.db",
   "run_root": "/ACPServer/acp2-development/data/b/run-root",
-  "release": "a3ff3c5c4725d3e5bec8a7cb196b81c85a0da45e",
-  "release_source": "git rev-parse HEAD of /ACPServer/AutoCalcPlatform (B04a working tree)",
+  "release": "21610bc1b071d58f367cd04c4f65edb4d2153a5b",
+  "release_source": "git rev-parse HEAD of /ACPServer/AutoCalcPlatform (fix-pass checkout)",
   "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
   "pythonpath": "/ACPServer/AutoCalcPlatform/src",
   "config": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",

@@ -322,3 +322,43 @@ def test_help_dry_run_and_check_only_are_not_scenario_pass(
     run_document = _read(stub_out / _read(summary)["runs"][0])
     assert run_document["result"] == "NOT_VERIFIED"
     assert run_document["extensions"]["b01.skeleton"] is True
+
+
+def test_live_receipt_identity_comes_from_controller_health(monkeypatch: Any) -> None:
+    health_revision = "a" * 40
+    monkeypatch.delenv("ACP_CANDIDATE_REVISION", raising=False)
+    monkeypatch.setattr(harness, "controller_reachable", lambda _controller: True)
+    monkeypatch.setattr(
+        harness,
+        "_http_json",
+        lambda _url, _timeout: {"candidate_revision": health_revision},
+    )
+    candidate, server, error = harness.resolve_candidate_identity(
+        "live", "http://127.0.0.1:18765", 1.0
+    )
+    assert (candidate, server, error) == (health_revision, health_revision, None)
+
+
+def test_live_receipt_identity_rejects_env_mismatch(monkeypatch: Any) -> None:
+    health_revision = "a" * 40
+    env_revision = "b" * 40
+    monkeypatch.setenv("ACP_CANDIDATE_REVISION", env_revision)
+    monkeypatch.setattr(harness, "controller_reachable", lambda _controller: True)
+    monkeypatch.setattr(
+        harness,
+        "_http_json",
+        lambda _url, _timeout: {"candidate_revision": health_revision},
+    )
+    candidate, server, error = harness.resolve_candidate_identity(
+        "live", "http://127.0.0.1:18765", 1.0
+    )
+    assert (candidate, server) == (health_revision, health_revision)
+    assert error == f"candidate_revision_mismatch:{env_revision}!={health_revision}"
+
+
+def test_fixture_receipt_identity_keeps_frozen_baseline(monkeypatch: Any) -> None:
+    monkeypatch.delenv("ACP_CANDIDATE_REVISION", raising=False)
+    candidate, server, error = harness.resolve_candidate_identity("fixture", None, 1.0)
+    assert candidate == harness.BASELINE_CANDIDATE_REVISION
+    assert server == harness.SERVER_CANDIDATE_REVISION
+    assert error is None
