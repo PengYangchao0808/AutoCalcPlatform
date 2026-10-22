@@ -42,6 +42,7 @@ import os
 import re
 import shutil
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -119,6 +120,117 @@ SCENARIOS: tuple[ScenarioSpec, ...] = (
     ),
 )
 SCENARIO_BY_ALIAS = {spec.alias: spec for spec in SCENARIOS}
+
+
+@dataclass(frozen=True)
+class PlatformExportCheck:
+    """Harness-only verdict on the platform binding/export envelope.
+
+    The platform's Data service owns the binding, export eligibility and freeze
+    decision.  This check never inspects artifact bytes or scientific values;
+    it only refuses a snapshot whose platform envelope is absent or not
+    exported as an eligible frozen copy.
+    """
+
+    status: str
+    eligible: bool
+    reasons: tuple[str, ...]
+    binding: dict[str, Any] | None
+    export: dict[str, Any] | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "eligible": self.eligible,
+            "reasons": list(self.reasons),
+            "binding": self.binding,
+            "export": self.export,
+        }
+
+
+def _export_string(
+    mapping: Mapping[str, Any], key: str, where: str, reasons: list[str]
+) -> str | None:
+    value = mapping.get(key)
+    if not isinstance(value, str) or not value.strip():
+        reasons.append(f"{where}.{key} must be a non-empty string")
+        return None
+    return value
+
+
+def check_platform_export(manifest: Any) -> PlatformExportCheck:
+    """Validate the platform binding and export envelope of a snapshot.
+
+    Importable without importing ``cccp`` so the harness stays import-light.
+    A missing envelope is reported as ``MISSING``; an envelope that exists but
+    is not an eligible frozen export is ``INELIGIBLE``.  Both are rejected.
+    """
+    if not isinstance(manifest, Mapping):
+        return PlatformExportCheck(
+            status="MISSING",
+            eligible=False,
+            reasons=("input manifest is not a JSON object",),
+            binding=None,
+            export=None,
+        )
+    platform = manifest.get("platform")
+    if not isinstance(platform, Mapping):
+        return PlatformExportCheck(
+            status="MISSING",
+            eligible=False,
+            reasons=("platform binding is missing from the snapshot",),
+            binding=None,
+            export=None,
+        )
+
+    reasons: list[str] = []
+    _export_string(platform, "owner", "platform", reasons)
+
+    binding = platform.get("binding")
+    binding_view: dict[str, Any] | None = None
+    if not isinstance(binding, Mapping):
+        reasons.append("platform.binding must be a JSON object")
+    else:
+        binding_view = dict(binding)
+        _export_string(binding, "task_ref", "platform.binding", reasons)
+        _export_string(binding, "job_id", "platform.binding", reasons)
+        attempt = binding.get("attempt")
+        if isinstance(attempt, bool) or not isinstance(attempt, int) or attempt < 1:
+            reasons.append("platform.binding.attempt must be a positive integer")
+        for optional in ("release_id", "submission_id"):
+            if optional in binding:
+                _export_string(binding, optional, "platform.binding", reasons)
+
+    export = platform.get("export")
+    export_view: dict[str, Any] | None = None
+    if not isinstance(export, Mapping):
+        reasons.append("platform.export must be a JSON object")
+    else:
+        export_view = dict(export)
+        for flag in ("export_eligible", "authorized", "frozen"):
+            if export.get(flag) is not True:
+                reasons.append(f"platform.export.{flag} must be true")
+        if export.get("revoked") is not False:
+            reasons.append("platform.export.revoked must be false")
+        if "snapshot_id" in export:
+            _export_string(export, "snapshot_id", "platform.export", reasons)
+
+    eligible = not reasons
+    return PlatformExportCheck(
+        status="ELIGIBLE" if eligible else "INELIGIBLE",
+        eligible=eligible,
+        reasons=tuple(reasons),
+        binding=binding_view,
+        export=export_view,
+    )
+
+
+def _platform_export_assertion(check: PlatformExportCheck) -> dict[str, Any]:
+    return {
+        "name": "platform_export_eligibility",
+        "status": "PASS" if check.eligible else "FAIL",
+        "detail": "; ".join(check.reasons) or None,
+    }
 
 
 class _InvalidInputError(Exception):
@@ -721,6 +833,9 @@ def _finish_not_verified(
     reason: str,
     started_at: str,
     argv: list[str],
+    result: str = "NOT_VERIFIED",
+    exit_code: int = EXIT_NOT_VERIFIED,
+    platform_export: PlatformExportCheck | None = None,
 ) -> int:
     out_status = next((status for status in plan["paths"] if status["label"] == "out"), None)
     if out_status is not None and out_status["status"] in (
@@ -753,6 +868,8 @@ def _finish_not_verified(
         if entry is not None
     ]
     assertions = _assertions(plan, receipt)
+    if platform_export is not None:
+        assertions.append(_platform_export_assertion(platform_export))
     finished_at = _utc_now()
     extensions = {
         "science": {
@@ -761,6 +878,7 @@ def _finish_not_verified(
             "harness_sha256": _sha256(SCRIPT_PATH),
             "receipt_protocol_gap": ("NOT_VERIFIED" if receipt["status"] != "AVAILABLE" else None),
             "receipt_protocol": receipt,
+            "platform_export": (platform_export.to_dict() if platform_export is not None else None),
             "interpreter": run_spec.get("interpreter") or sys.executable,
             "software": software,
             "software_version": software_version,
@@ -787,14 +905,14 @@ def _finish_not_verified(
         "scenario_alias": spec.alias,
         "phase": spec.phase,
         "run_id": Path(args.out).name,
-        "result": "NOT_VERIFIED",
+        "result": result,
         "scope": "IN_SCOPE",
         "reason": reason,
         "command": _invocation(argv),
         "cwd": str(Path.cwd()),
         "started_at": started_at,
         "finished_at": finished_at,
-        "exit_code": EXIT_NOT_VERIFIED,
+        "exit_code": exit_code,
         "artifacts": artifacts,
         "extensions": extensions,
     }
@@ -803,15 +921,15 @@ def _finish_not_verified(
         "cwd": str(Path.cwd()),
         "started_at": started_at,
         "finished_at": finished_at,
-        "exit_code": EXIT_NOT_VERIFIED,
+        "exit_code": exit_code,
     }
     try:
         _write_result(Path(args.out), record, argv_document)
     except _InvalidInputError as exc:
         print(f"usage error: {exc}", file=sys.stderr)
         return EXIT_USAGE
-    print(f"NOT_VERIFIED: {reason}", file=sys.stderr)
-    return EXIT_NOT_VERIFIED
+    print(f"{result}: {reason}", file=sys.stderr)
+    return exit_code
 
 
 def _invocation(argv: list[str]) -> list[str]:
@@ -864,6 +982,24 @@ def _execute(
             argv=argv,
         )
 
+    platform_export: PlatformExportCheck | None = None
+    if spec.requires_input_manifest:
+        platform_export = check_platform_export(plan.get("input_manifest"))
+        if not platform_export.eligible:
+            reason = "platform export rejected: " + "; ".join(platform_export.reasons)
+            return _finish_not_verified(
+                args=args,
+                spec=spec,
+                plan=plan,
+                receipt=_receipt_protocol(),
+                reason=reason,
+                started_at=started_at,
+                argv=argv,
+                result="FAIL",
+                exit_code=EXIT_FAIL,
+                platform_export=platform_export,
+            )
+
     receipt = _receipt_protocol()
     if receipt["status"] != "AVAILABLE":
         reason = (
@@ -900,6 +1036,9 @@ def _dry_run(
     plan: dict[str, Any],
     receipt: dict[str, Any],
 ) -> int:
+    platform_export = (
+        check_platform_export(plan.get("input_manifest")) if spec.requires_input_manifest else None
+    )
     document = {
         "dry_run": True,
         "scenario": spec.canonical,
@@ -912,6 +1051,7 @@ def _dry_run(
             "errors": [error for error in plan["errors"] if error["label"] == "run_spec"],
         },
         "budget": plan["budget"],
+        "platform_export": platform_export.to_dict() if platform_export is not None else None,
         "receipt_protocol": {
             "status": receipt["status"],
             "missing_artifact": receipt["missing_artifact"],
@@ -954,6 +1094,12 @@ def _dry_run(
             file=sys.stderr,
         )
         return EXIT_NOT_VERIFIED
+    if platform_export is not None and not platform_export.eligible:
+        print(
+            "FAIL: platform export rejected: " + "; ".join(platform_export.reasons),
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
     return EXIT_PASS
 
 
