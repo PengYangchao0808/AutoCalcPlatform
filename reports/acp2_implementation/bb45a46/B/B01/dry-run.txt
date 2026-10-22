@@ -1,0 +1,3 @@
+DRY-RUN (not a scenario result; no DB/process/job is created)
+/usr/bin/python3.11 -m acp doctor
+/usr/bin/python3.11 <repo>/scripts/acceptance/acp2_runtime.py --scenario env-runtime --phase main --out /tmp/acp2-b01-dryrun

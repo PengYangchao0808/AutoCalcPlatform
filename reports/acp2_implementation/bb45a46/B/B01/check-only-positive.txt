@@ -1,0 +1,8 @@
+--- summary from skeleton NOT_VERIFIED run ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/B/B01/run-not-verified/summary.json
+VALID: reports/acp2_implementation/bb45a46/B/B01/run-not-verified/summary.json (tool check only; this is not a scenario PASS)
+exit=0
+--- legal artifact sample (digest verified) ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-artifact-read.json
+VALID: docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-artifact-read.json (tool check only; this is not a scenario PASS)
+exit=0

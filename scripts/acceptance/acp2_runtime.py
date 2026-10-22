@@ -1,0 +1,1886 @@
+#!/usr/bin/env python3.11
+"""ACP 2.0 runtime acceptance harness (B01 skeleton).
+
+The receipt protocol is frozen in
+``docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json``
+(root schema ``acp2.acceptance.v1``) and described in
+``acceptance-harness.v1.md``.  This module owns the single validator and the
+executable scenario skeleton; scenario bodies are implemented by the owner named
+in the registry (B04a, B05, B07, ... B25b).
+
+Exit codes are exactly 0/1/2/3: PASS (or tool check worked) / FAIL /
+NOT_VERIFIED / usage error.  ``--help``, ``--dry-run`` and ``--check-only`` are
+tool checks and are never a scenario PASS.
+
+Stdlib only.  The schema engine is a deliberate JSON-Schema-subset validator
+(``type``/``required``/``enum``/``const``/``minimum``/``maximum``/``pattern``/
+``items``/``properties``/``additionalProperties``/``propertyNames``/``$ref``/
+``allOf``/``anyOf``/``oneOf``/``not``/``if``-``then``-``else``) with explicit
+reference resolution; it is not a general-purpose JSON Schema implementation.
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import os
+import re
+import shlex
+import socket
+import sys
+import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CONTRACT_ROOT = REPO_ROOT / "docs/reference/next-change/acp2-contracts"
+SCHEMA_PATH = CONTRACT_ROOT / "runtime" / "acceptance-result.schema.json"
+SAMPLES_ROOT = CONTRACT_ROOT / "runtime" / "samples" / "acceptance"
+SCRIPT_PATH = Path(__file__).resolve()
+
+ACCEPTANCE_SCHEMA = "acp2.acceptance.v1"
+SUMMARY_SCHEMA = "acp2.acceptance.summary.v1"
+SAMPLES_SCHEMA = "acp2.acceptance.samples.v1"
+SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
+SUPPORTED_CONTRACT_MAJOR = "1"
+CONTRACT_VERSION = "1.0.0"
+
+BASELINE_CANDIDATE_REVISION = "096cdffe9a3817d8ee443d824830d87ec6e07bc2"
+SERVER_CANDIDATE_REVISION = (
+    "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+)
+
+EXIT_PASS = 0
+EXIT_FAIL = 1
+EXIT_NOT_VERIFIED = 2
+EXIT_USAGE = 3
+
+RESULT_VALUES = ("PASS", "FAIL", "NOT_VERIFIED")
+SCOPE_VALUES = ("IN_SCOPE", "DEFERRED", "NOT_APPLICABLE")
+EVIDENCE_KINDS = ("fixture", "live", "aggregate")
+OWNER_VALUES = ("B", "A", "C", "integration")
+OPERATION_CLASSES = (
+    "submit",
+    "read",
+    "prepare",
+    "discover",
+    "standalone",
+    "control",
+    "aggregate",
+)
+PLATFORM_REF_KEYS = (
+    "job_id",
+    "operation_id",
+    "attempt",
+    "release_id",
+    "submission_id",
+    "manifest_generation",
+    "negotiated_protocol",
+)
+TIMESTAMP_PATTERN = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?Z$"
+)
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+
+# ---------------------------------------------------------------------------
+# Scenario registry
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PhaseSpec:
+    """One signable (scenario, phase) registry row."""
+
+    owner: str
+    operation_class: str
+    target: str
+    required_args: tuple[str, ...]
+    controller_required: bool
+    prerequisites: tuple[str, ...]
+    side_effects: tuple[str, ...]
+    timeout: int
+    manifest_generation_required: bool = False
+
+
+@dataclass(frozen=True)
+class ScenarioSpec:
+    """One of the 15 immutable B scenario IDs."""
+
+    scenario: str
+    default_owner: str
+    phases: dict[str, PhaseSpec]
+    missing_capability: str
+
+
+def _phase(
+    owner: str,
+    operation_class: str,
+    target: str,
+    timeout: int,
+    *,
+    args: tuple[str, ...] = ("out",),
+    controller: bool = False,
+    prerequisites: tuple[str, ...] = (),
+    side_effects: tuple[str, ...] = ("none",),
+    manifest_generation_required: bool = False,
+) -> PhaseSpec:
+    prereqs: list[str] = []
+    for item in (("controller",) if controller else ()) + prerequisites:
+        if item not in prereqs:
+            prereqs.append(item)
+    return PhaseSpec(
+        owner=owner,
+        operation_class=operation_class,
+        target=target,
+        required_args=args,
+        controller_required=controller,
+        prerequisites=prereqs,
+        side_effects=side_effects,
+        timeout=timeout,
+        manifest_generation_required=manifest_generation_required,
+    )
+
+
+def _standard_phases(
+    owner: str,
+    operation_class: str,
+    target: str,
+    timeout: int,
+    *,
+    args: tuple[str, ...] = ("out",),
+    controller: bool = False,
+    prerequisites: tuple[str, ...] = (),
+    side_effects: tuple[str, ...] = ("none",),
+    manifest_generation_required: bool = False,
+) -> dict[str, PhaseSpec]:
+    return {
+        "main": _phase(
+            owner,
+            operation_class,
+            target,
+            timeout,
+            args=args,
+            controller=controller,
+            prerequisites=prerequisites,
+            side_effects=side_effects,
+            manifest_generation_required=manifest_generation_required,
+        )
+    }
+
+
+B_SCENARIOS: dict[str, ScenarioSpec] = {
+    "env-runtime": ScenarioSpec(
+        "env-runtime",
+        "B07",
+        _standard_phases("B07", "discover", "local", 120),
+        "B07 environment/runtime probe is not implemented in the B01 skeleton",
+    ),
+    "entry-readonly": ScenarioSpec(
+        "entry-readonly",
+        "B04a",
+        {
+            "main": _phase("B04a", "discover", "local", 120, controller=True),
+            "live": _phase(
+                "B04a",
+                "discover",
+                "local",
+                180,
+                controller=True,
+                side_effects=("no task submit", "no page render", "no science"),
+            ),
+        },
+        "B04a read-only entry equivalence probe is not implemented in the B01 skeleton",
+    ),
+    "mcp-stdio": ScenarioSpec(
+        "mcp-stdio",
+        "B05",
+        _standard_phases(
+            "B05",
+            "discover",
+            "local",
+            180,
+            args=("launch", "out"),
+            controller=True,
+            prerequisites=("launch", "controller"),
+            side_effects=("adapter process start", "no task/page/science side effect"),
+        ),
+        "B05 MCP stdio launch/handshake probe is not implemented in the B01 skeleton",
+    ),
+    "submit-replay": ScenarioSpec(
+        "submit-replay",
+        "B08",
+        _standard_phases(
+            "B08",
+            "submit",
+            "local",
+            600,
+            args=("fixture", "out"),
+            controller=True,
+            prerequisites=("fixture", "controller"),
+            side_effects=("one task create", "idempotent replay"),
+        ),
+        "B08 idempotent submit/replay is not implemented in the B01 skeleton",
+    ),
+    "local-singlepoint": ScenarioSpec(
+        "local-singlepoint",
+        "B10",
+        {
+            "main": _phase(
+                "B10",
+                "submit",
+                "local",
+                1800,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("one local QC task",),
+            ),
+            "live": _phase(
+                "B10",
+                "submit",
+                "local",
+                1800,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("one local QC task",),
+            ),
+        },
+        "B10 local singlepoint execution is not implemented in the B01 skeleton",
+    ),
+    "lsf-singlepoint": ScenarioSpec(
+        "lsf-singlepoint",
+        "B11",
+        {
+            "main": _phase(
+                "B11",
+                "submit",
+                "remote",
+                3600,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("one LSF submission",),
+            ),
+            "live": _phase(
+                "B11",
+                "submit",
+                "remote",
+                3600,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("one LSF submission",),
+            ),
+        },
+        "B11 LSF singlepoint execution is not implemented in the B01 skeleton",
+    ),
+    "three-entry": ScenarioSpec(
+        "three-entry",
+        "B10",
+        _standard_phases(
+            "B10",
+            "submit",
+            "local",
+            900,
+            args=("fixture", "out"),
+            controller=True,
+            prerequisites=("fixture", "controller"),
+            side_effects=("CLI/HTTP/MCP submit the same request",),
+        ),
+        "B10 three-entry submit equivalence is not implemented in the B01 skeleton",
+    ),
+    "artifact": ScenarioSpec(
+        "artifact",
+        "B12",
+        _standard_phases(
+            "B12",
+            "read",
+            "local",
+            900,
+            args=("fixture", "out"),
+            controller=True,
+            prerequisites=("fixture", "controller"),
+            side_effects=("explicit prepare", "cache-only read"),
+            manifest_generation_required=True,
+        ),
+        "B12 artifact prepare/read is not implemented in the B01 skeleton",
+    ),
+    "control-recovery": ScenarioSpec(
+        "control-recovery",
+        "B13",
+        _standard_phases(
+            "B13",
+            "control",
+            "local",
+            1800,
+            args=("fixture", "out"),
+            controller=True,
+            prerequisites=("fixture", "controller"),
+            side_effects=("pause", "unpause", "cancel", "controlled restart"),
+        ),
+        "B13 control/recovery matrix is not implemented in the B01 skeleton",
+    ),
+    "approval-budget": ScenarioSpec(
+        "approval-budget",
+        "B16",
+        {
+            "approval": _phase(
+                "B16",
+                "control",
+                "local",
+                600,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("approval request/decision only",),
+            ),
+            "budget": _phase(
+                "B17",
+                "control",
+                "local",
+                600,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("budget reservation/settlement only",),
+            ),
+        },
+        "B16/B17 approval and budget acceptance is not implemented in the B01 skeleton",
+    ),
+    "da-runtime": ScenarioSpec(
+        "da-runtime",
+        "B18",
+        {
+            "da-preflight": _phase(
+                "B18",
+                "discover",
+                "local",
+                300,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+            ),
+            "da-submit": _phase(
+                "B20a",
+                "submit",
+                "local",
+                900,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("one task submit",),
+            ),
+            "da-evidence": _phase(
+                "B20b",
+                "read",
+                "local",
+                300,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("cache-only read",),
+                manifest_generation_required=True,
+            ),
+            "aggregate": _phase(
+                "B20c",
+                "aggregate",
+                "local",
+                120,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+            ),
+        },
+        "B18/B20a/B20b/B20c DA runtime acceptance is not implemented in the B01 skeleton",
+    ),
+    "infra-plugin": ScenarioSpec(
+        "infra-plugin",
+        "B21",
+        {
+            "infra:install": _phase(
+                "B21",
+                "control",
+                "local",
+                900,
+                args=("fixture", "out"),
+                prerequisites=("fixture",),
+                side_effects=("plugin/adapter install",),
+            ),
+            "infra:upgrade": _phase(
+                "B22",
+                "control",
+                "local",
+                900,
+                args=("fixture", "out"),
+                prerequisites=("fixture",),
+                side_effects=("plugin/adapter upgrade",),
+            ),
+        },
+        "B21/B22 infrastructure plugin install/upgrade is not implemented in the B01 skeleton",
+    ),
+    "multitenant": ScenarioSpec(
+        "multitenant",
+        "B15",
+        {
+            "multitenant:authz": _phase(
+                "B15",
+                "control",
+                "local",
+                600,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("denied requests only",),
+            ),
+            "multitenant:two-project": _phase(
+                "B23",
+                "control",
+                "local",
+                900,
+                args=("fixture", "out"),
+                controller=True,
+                prerequisites=("fixture", "controller"),
+                side_effects=("isolated project tasks",),
+            ),
+        },
+        "B15/B23 multitenant authorization and two-project isolation is not implemented",
+    ),
+    "migration": ScenarioSpec(
+        "migration",
+        "B24a",
+        _standard_phases(
+            "B24a",
+            "control",
+            "local",
+            1800,
+            args=("fixture", "out"),
+            prerequisites=("fixture",),
+            side_effects=("export", "import", "backup restore"),
+        ),
+        "B24a migration/backup restore acceptance is not implemented in the B01 skeleton",
+    ),
+    "package-install": ScenarioSpec(
+        "package-install",
+        "B25b",
+        _standard_phases(
+            "B25b",
+            "control",
+            "local",
+            1800,
+            side_effects=("clean-environment install",),
+        ),
+        "B25b clean-environment package install is not implemented in the B01 skeleton",
+    ),
+}
+
+EXPECTED_B_SCENARIOS = (
+    "env-runtime",
+    "entry-readonly",
+    "mcp-stdio",
+    "submit-replay",
+    "local-singlepoint",
+    "lsf-singlepoint",
+    "three-entry",
+    "artifact",
+    "control-recovery",
+    "approval-budget",
+    "da-runtime",
+    "infra-plugin",
+    "multitenant",
+    "migration",
+    "package-install",
+)
+
+
+def all_phase_rows() -> list[tuple[str, str, PhaseSpec]]:
+    rows: list[tuple[str, str, PhaseSpec]] = []
+    for scenario in EXPECTED_B_SCENARIOS:
+        spec = B_SCENARIOS[scenario]
+        for phase_name, phase in spec.phases.items():
+            rows.append((scenario, phase_name, phase))
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# JSON Schema subset engine
+# ---------------------------------------------------------------------------
+
+
+class _RefError(Exception):
+    pass
+
+
+_SCHEMA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_REF_CACHE: dict[str, list[str]] = {}
+
+
+def load_schema(path: Path = SCHEMA_PATH) -> dict[str, Any]:
+    key = str(path)
+    mtime = path.stat().st_mtime
+    cached = _SCHEMA_CACHE.get(key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError(f"schema is not an object: {path}")
+    _SCHEMA_CACHE[key] = (mtime, document)
+    return document
+
+
+def _pointer(document: Any, pointer: str) -> Any:
+    if pointer in ("", "/"):
+        return document
+    current = document
+    for raw in pointer.lstrip("/").split("/"):
+        token = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, dict):
+            if token not in current:
+                raise _RefError(f"missing pointer segment {token!r}")
+            current = current[token]
+        elif isinstance(current, list):
+            try:
+                current = current[int(token)]
+            except (ValueError, IndexError) as exc:
+                raise _RefError(f"bad array pointer {token!r}") from exc
+        else:
+            raise _RefError(f"cannot descend into {type(current).__name__}")
+    return current
+
+
+def _resolve_ref(
+    ref: str, root_schema: dict[str, Any], base_dir: Path
+) -> tuple[dict[str, Any], dict[str, Any], Path]:
+    if ref.startswith("#"):
+        return _pointer(root_schema, ref[1:]), root_schema, base_dir
+    file_part, _, fragment = ref.partition("#")
+    target_path = (base_dir / file_part).resolve()
+    if not target_path.is_file():
+        raise _RefError(f"external schema missing: {file_part}")
+    document = json.loads(target_path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise _RefError(f"external schema is not an object: {file_part}")
+    resolved = _pointer(document, fragment) if fragment else document
+    return resolved, document, target_path.parent
+
+
+def validate_schema_refs(schema: dict[str, Any], schema_path: Path = SCHEMA_PATH) -> list[str]:
+    key = f"{schema_path}:{schema_path.stat().st_mtime}"
+    if key in _REF_CACHE:
+        return _REF_CACHE[key]
+    errors: list[str] = []
+
+    def walk(node: Any, base_dir: Path, depth: int) -> None:
+        if depth > 128:
+            errors.append("unresolved_ref:depth_limit")
+            return
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str):
+                try:
+                    resolved, resolved_root, resolved_base = _resolve_ref(ref, schema, base_dir)
+                except (_RefError, json.JSONDecodeError, OSError) as exc:
+                    errors.append(f"unresolved_ref:{ref}:{exc}")
+                else:
+                    walk(resolved, resolved_base, depth + 1)
+                    if resolved_root is not schema:
+                        walk(resolved_root, resolved_base, depth + 1)
+            for child in node.values():
+                walk(child, base_dir, depth + 1)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child, base_dir, depth + 1)
+
+    walk(schema, schema_path.parent, 0)
+    _REF_CACHE[key] = errors
+    return errors
+
+
+def _type_matches(instance: Any, expected: str) -> bool:
+    if expected == "object":
+        return isinstance(instance, dict)
+    if expected == "array":
+        return isinstance(instance, list)
+    if expected == "string":
+        return isinstance(instance, str)
+    if expected == "integer":
+        return isinstance(instance, int) and not isinstance(instance, bool)
+    if expected == "number":
+        return isinstance(instance, (int, float)) and not isinstance(instance, bool)
+    if expected == "boolean":
+        return isinstance(instance, bool)
+    if expected == "null":
+        return instance is None
+    return True
+
+
+def _validate_schema(
+    instance: Any,
+    schema: Any,
+    path: str,
+    root_schema: dict[str, Any],
+    base_dir: Path,
+    depth: int = 0,
+) -> list[str]:
+    if depth > 128:
+        return [f"schema:depth_limit:{path}"]
+    if isinstance(schema, bool):
+        return [] if schema else [f"schema:false:{path}"]
+    if not isinstance(schema, dict):
+        return []
+    errors: list[str] = []
+
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        try:
+            resolved, resolved_root, resolved_base = _resolve_ref(ref, root_schema, base_dir)
+        except (_RefError, json.JSONDecodeError, OSError) as exc:
+            return [f"unresolved_ref:{ref}:{exc}"]
+        return _validate_schema(instance, resolved, path, resolved_root, resolved_base, depth + 1)
+
+    expected = schema.get("type")
+    if expected is not None:
+        allowed = expected if isinstance(expected, list) else [expected]
+        if not any(_type_matches(instance, item) for item in allowed):
+            rendered = "|".join(str(item) for item in allowed)
+            return [f"schema:type:{path}:expected {rendered}"]
+    if "const" in schema and instance != schema["const"]:
+        errors.append(f"schema:const:{path}")
+    if isinstance(schema.get("enum"), list) and instance not in schema["enum"]:
+        errors.append(f"schema:enum:{path}")
+
+    if isinstance(instance, str):
+        min_length = schema.get("minLength")
+        if isinstance(min_length, int) and len(instance) < min_length:
+            errors.append(f"schema:minLength:{path}")
+        max_length = schema.get("maxLength")
+        if isinstance(max_length, int) and len(instance) > max_length:
+            errors.append(f"schema:maxLength:{path}")
+        pattern = schema.get("pattern")
+        if isinstance(pattern, str) and re.search(pattern, instance) is None:
+            errors.append(f"schema:pattern:{path}")
+
+    if isinstance(instance, (int, float)) and not isinstance(instance, bool):
+        minimum = schema.get("minimum")
+        if isinstance(minimum, (int, float)) and instance < minimum:
+            errors.append(f"schema:minimum:{path}")
+        maximum = schema.get("maximum")
+        if isinstance(maximum, (int, float)) and instance > maximum:
+            errors.append(f"schema:maximum:{path}")
+
+    if isinstance(instance, dict):
+        required = schema.get("required")
+        if isinstance(required, list):
+            for key in required:
+                if key not in instance:
+                    errors.append(f"schema:missing_required:{path}:{key}")
+        properties = schema.get("properties", {})
+        if isinstance(properties, dict):
+            for key, child_schema in properties.items():
+                if key in instance:
+                    errors.extend(
+                        _validate_schema(
+                            instance[key],
+                            child_schema,
+                            f"{path}.{key}",
+                            root_schema,
+                            base_dir,
+                            depth + 1,
+                        )
+                    )
+        property_names = schema.get("propertyNames")
+        if isinstance(property_names, dict):
+            for key in instance:
+                errors.extend(
+                    _validate_schema(
+                        key,
+                        property_names,
+                        f"{path}.<key:{key}>",
+                        root_schema,
+                        base_dir,
+                        depth + 1,
+                    )
+                )
+        additional = schema.get("additionalProperties", True)
+        known = set(properties) if isinstance(properties, dict) else set()
+        for key, value in instance.items():
+            if key in known:
+                continue
+            if additional is False:
+                errors.append(f"schema:unexpected_field:{path}:{key}")
+            elif isinstance(additional, dict):
+                errors.extend(
+                    _validate_schema(
+                        value,
+                        additional,
+                        f"{path}.{key}",
+                        root_schema,
+                        base_dir,
+                        depth + 1,
+                    )
+                )
+
+    if isinstance(instance, list):
+        min_items = schema.get("minItems")
+        if isinstance(min_items, int) and len(instance) < min_items:
+            errors.append(f"schema:minItems:{path}")
+        max_items = schema.get("maxItems")
+        if isinstance(max_items, int) and len(instance) > max_items:
+            errors.append(f"schema:maxItems:{path}")
+        items = schema.get("items")
+        if isinstance(items, dict):
+            for index, value in enumerate(instance):
+                errors.extend(
+                    _validate_schema(
+                        value,
+                        items,
+                        f"{path}[{index}]",
+                        root_schema,
+                        base_dir,
+                        depth + 1,
+                    )
+                )
+
+    all_of = schema.get("allOf")
+    if isinstance(all_of, list):
+        for child in all_of:
+            errors.extend(_validate_schema(instance, child, path, root_schema, base_dir, depth + 1))
+    any_of = schema.get("anyOf")
+    if isinstance(any_of, list):
+        if not any(
+            not _validate_schema(instance, child, path, root_schema, base_dir, depth + 1)
+            for child in any_of
+        ):
+            errors.append(f"schema:anyOf:{path}")
+    one_of = schema.get("oneOf")
+    if isinstance(one_of, list):
+        matches = sum(
+            1
+            for child in one_of
+            if not _validate_schema(instance, child, path, root_schema, base_dir, depth + 1)
+        )
+        if matches != 1:
+            errors.append(f"schema:oneOf:{path}")
+    not_schema = schema.get("not")
+    if isinstance(not_schema, dict):
+        if not _validate_schema(instance, not_schema, path, root_schema, base_dir, depth + 1):
+            errors.append(f"schema:not:{path}")
+    if_schema = schema.get("if")
+    if isinstance(if_schema, dict):
+        branch = (
+            "then"
+            if not _validate_schema(instance, if_schema, path, root_schema, base_dir, depth + 1)
+            else "else"
+        )
+        child = schema.get(branch)
+        if isinstance(child, dict):
+            errors.extend(_validate_schema(instance, child, path, root_schema, base_dir, depth + 1))
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Alias normalization and semantic validation
+# ---------------------------------------------------------------------------
+
+
+def _extension_str(document: dict[str, Any], key: str) -> str | None:
+    extensions = document.get("extensions")
+    if not isinstance(extensions, dict):
+        return None
+    value = extensions.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _extension_list(document: dict[str, Any], key: str) -> list[str]:
+    extensions = document.get("extensions")
+    if not isinstance(extensions, dict):
+        return []
+    value = extensions.get(key)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def normalize_receipt(document: Any) -> tuple[Any, list[str]]:
+    """Apply the ingest-only aliases; return the normalized document and errors."""
+
+    if not isinstance(document, dict):
+        return document, ["not_an_object"]
+    normalized = copy.deepcopy(document)
+    errors: list[str] = []
+
+    if "scenario_id" in normalized:
+        alias = normalized["scenario_id"]
+        if "scenario" in normalized and normalized["scenario"] != alias:
+            errors.append("scenario_alias_conflict")
+        elif "scenario" not in normalized:
+            normalized["scenario"] = alias
+        normalized.pop("scenario_id", None)
+
+    owner = normalized.get("owner")
+    scenario = normalized.get("scenario")
+    if owner == "C" and isinstance(scenario, str) and scenario.startswith("runtime:"):
+        normalized["scenario"] = "experience:" + scenario[len("runtime:") :]
+
+    if normalized.get("phase") == "preflight":
+        normalized["phase"] = "da-preflight"
+    if normalized.get("readiness") == "deployed":
+        normalized["readiness"] = "integration_ready"
+
+    if "evidence" in normalized:
+        alias = normalized["evidence"]
+        if "artifacts" in normalized and normalized["artifacts"] != alias:
+            errors.append("evidence_alias_conflict")
+        elif "artifacts" not in normalized:
+            normalized["artifacts"] = alias
+        normalized.pop("evidence", None)
+
+    platform = normalized.get("platform")
+    if isinstance(platform, dict):
+        for key in PLATFORM_REF_KEYS:
+            if key not in platform:
+                continue
+            value = platform[key]
+            if key in normalized and normalized[key] != value:
+                errors.append(f"platform_alias_conflict:{key}")
+            else:
+                normalized[key] = value
+        normalized.pop("platform", None)
+    for key in PLATFORM_REF_KEYS:
+        normalized.setdefault(key, None)
+    return normalized, errors
+
+
+def _platform_matrix_errors(
+    document: dict[str, Any],
+    operation_class: str | None,
+    target: str | None,
+    phase_spec: PhaseSpec | None,
+) -> list[str]:
+    errors: list[str] = []
+    evidence_kind = document.get("evidence_kind")
+    refs = {key: document.get(key) for key in PLATFORM_REF_KEYS}
+
+    if evidence_kind == "fixture":
+        for key in PLATFORM_REF_KEYS:
+            if refs[key] is not None:
+                errors.append(f"fixture_platform_refs_not_null:{key}")
+        return errors
+    if evidence_kind != "live":
+        return errors
+
+    if operation_class in (None, "", "discover", "standalone", "prepare"):
+        allowed = {"negotiated_protocol"}
+        if operation_class == "prepare":
+            allowed.add("operation_id")
+        label = operation_class or "standalone"
+        for key in PLATFORM_REF_KEYS:
+            if key in allowed:
+                continue
+            if refs[key] is not None:
+                errors.append(f"live_{label}_platform_ref:{key}")
+        return errors
+
+    if operation_class == "submit":
+        if refs["job_id"] is None:
+            errors.append("live_submit_missing_job_id")
+        if refs["attempt"] is None:
+            errors.append("live_submit_missing_attempt")
+        if target == "remote":
+            if refs["release_id"] is None:
+                errors.append("live_submit_missing_release_id")
+            if refs["submission_id"] is None:
+                errors.append("live_submit_missing_submission_id")
+        else:
+            if refs["submission_id"] is not None:
+                errors.append("live_submit_submission_id_not_null_local")
+        if refs["manifest_generation"] is not None:
+            errors.append("live_submit_manifest_generation_not_null")
+        return errors
+
+    if operation_class == "read":
+        if refs["job_id"] is None:
+            errors.append("live_read_missing_job_id")
+        if refs["attempt"] is None:
+            errors.append("live_read_missing_attempt")
+        if refs["release_id"] is None:
+            errors.append("live_read_missing_release_id")
+        if target == "remote":
+            if refs["submission_id"] is None:
+                errors.append("live_read_missing_submission_id")
+        else:
+            if refs["submission_id"] is not None:
+                errors.append("live_local_submission_id_not_null")
+        if (
+            phase_spec is not None
+            and phase_spec.manifest_generation_required
+            and refs["manifest_generation"] is None
+        ):
+            errors.append("live_read_missing_manifest_generation")
+        return errors
+
+    return errors
+
+
+def _aggregate_errors(document: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    evidence_kind = document.get("evidence_kind")
+    phase = document.get("phase")
+    if evidence_kind != "aggregate" and phase != "aggregate":
+        return errors
+
+    sub_results = document.get("sub_results")
+    children: list[dict[str, Any]] = []
+    if isinstance(sub_results, list):
+        children = [
+            child
+            for child in sub_results
+            if isinstance(child, dict)
+            and isinstance(child.get("receipt"), str)
+            and child["receipt"]
+        ]
+    if not children:
+        errors.append("aggregate_missing_child_refs")
+        return errors
+
+    required = _extension_list(document, "da.required_child_phases")
+    if not required:
+        required = _extension_list(document, "acceptance.required_child_phases")
+    by_phase = {child.get("phase"): child for child in children}
+    for phase_name in required:
+        if phase_name not in by_phase:
+            errors.append(f"aggregate_missing_required_child_phase:{phase_name}")
+    if document.get("result") == "PASS":
+        for phase_name in required:
+            child = by_phase.get(phase_name)
+            if child is not None and child.get("result") != "PASS":
+                errors.append(f"aggregate_child_not_pass:{phase_name}")
+    return errors
+
+
+def _semantic_errors(document: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    version = document.get("contract_version")
+    if isinstance(version, str) and SEMVER.match(version):
+        if version.split(".")[0] != SUPPORTED_CONTRACT_MAJOR:
+            errors.append(f"unsupported_contract_version_major:{version}")
+
+    owner = document.get("owner")
+    scenario = document.get("scenario")
+    phase = document.get("phase")
+
+    spec: ScenarioSpec | None = None
+    if owner == "B":
+        if isinstance(scenario, str) and scenario not in B_SCENARIOS:
+            errors.append(f"scenario_unknown:{scenario}")
+        elif isinstance(scenario, str):
+            spec = B_SCENARIOS[scenario]
+    elif owner == "A":
+        if isinstance(scenario, str) and not scenario.startswith("science:"):
+            errors.append("owner_scenario_prefix_mismatch:A")
+    elif owner == "C":
+        if isinstance(scenario, str) and not scenario.startswith("experience:"):
+            errors.append("owner_scenario_prefix_mismatch:C")
+
+    phase_spec: PhaseSpec | None = None
+    if spec is not None and isinstance(phase, str):
+        phase_spec = spec.phases.get(phase)
+        if phase_spec is None:
+            errors.append(f"phase_undeclared:{scenario}/{phase}")
+
+    evidence_kind = document.get("evidence_kind")
+    if isinstance(phase, str) and evidence_kind in ("fixture", "live"):
+        phase_is_fixture = phase == "fixture" or phase.endswith(":fixture")
+        phase_is_live = phase == "live" or phase.endswith(":live")
+        if phase_is_fixture and evidence_kind != "fixture":
+            errors.append(f"phase_evidence_kind_mismatch:{phase}!={evidence_kind}")
+        if phase_is_live and evidence_kind != "live":
+            errors.append(f"phase_evidence_kind_mismatch:{phase}!={evidence_kind}")
+    if phase == "aggregate" and evidence_kind != "aggregate":
+        errors.append(f"phase_evidence_kind_mismatch:aggregate!={evidence_kind}")
+
+    operation_class: str | None = None
+    target: str | None = None
+    if phase_spec is not None:
+        operation_class = phase_spec.operation_class
+        target = phase_spec.target
+    else:
+        operation_class = _extension_str(document, "acceptance.operation_class")
+        target = _extension_str(document, "acceptance.target")
+    if operation_class is not None and operation_class not in OPERATION_CLASSES:
+        errors.append(f"operation_class_invalid:{operation_class}")
+
+    errors.extend(_platform_matrix_errors(document, operation_class, target, phase_spec))
+    errors.extend(_aggregate_errors(document))
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Artifacts and public validation API
+# ---------------------------------------------------------------------------
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _artifact_errors(document: dict[str, Any], artifact_root: Path | None) -> list[str]:
+    errors: list[str] = []
+    artifacts = document.get("artifacts")
+    if not isinstance(artifacts, list):
+        return errors
+    cwd = document.get("cwd")
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        raw_path = artifact.get("path")
+        if not isinstance(raw_path, str) or not raw_path:
+            continue
+        relative = Path(raw_path)
+        candidates: list[Path] = []
+        if relative.is_absolute():
+            candidates.append(relative)
+        else:
+            if isinstance(cwd, str) and Path(cwd).is_absolute():
+                candidates.append(Path(cwd) / relative)
+            if artifact_root is not None:
+                candidates.append(Path(artifact_root) / relative)
+            if isinstance(cwd, str):
+                candidates.append(Path(cwd) / relative)
+        found = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if found is None:
+            errors.append(f"artifact_missing:{raw_path}")
+            continue
+        size_bytes = artifact.get("size_bytes")
+        if isinstance(size_bytes, int) and size_bytes != found.stat().st_size:
+            errors.append(f"artifact_size_bytes_mismatch:{raw_path}")
+        digest = artifact.get("sha256")
+        if isinstance(digest, str) and HEX64.match(digest):
+            if sha256_file(found) != digest:
+                errors.append(f"artifact_sha256_mismatch:{raw_path}")
+    return errors
+
+
+def validate_receipt(
+    document: Any,
+    *,
+    schema: dict[str, Any] | None = None,
+    verify_artifacts: bool = False,
+    artifact_root: Path | None = None,
+) -> list[str]:
+    """Validate one receipt.  Returns an empty list when accepted.
+
+    Order is deliberate so cross-field/registry reasons win over generic schema
+    noise: normalize aliases -> semantic registry/platform matrix -> schema.
+    """
+
+    schema_document = schema if schema is not None else load_schema()
+    ref_errors = validate_schema_refs(schema_document, SCHEMA_PATH)
+    if ref_errors:
+        return ref_errors
+
+    normalized, alias_errors = normalize_receipt(document)
+    if alias_errors:
+        return alias_errors
+    if not isinstance(normalized, dict):
+        return ["not_an_object"]
+
+    errors = _semantic_errors(normalized)
+    errors.extend(
+        _validate_schema(
+            normalized,
+            schema_document,
+            "$",
+            schema_document,
+            SCHEMA_PATH.parent,
+        )
+    )
+    if verify_artifacts:
+        errors.extend(_artifact_errors(normalized, artifact_root))
+    return errors
+
+
+def validate_summary(
+    summary_path: Path,
+    *,
+    verify_artifacts: bool = True,
+) -> list[str]:
+    """Validate a summary.json or a single receipt, resolving every child path."""
+
+    summary_path = Path(summary_path)
+    try:
+        document = json.loads(summary_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return [f"summary_missing_run:{summary_path}"]
+    except json.JSONDecodeError as exc:
+        return [f"json_parse:{summary_path.name}:{exc.msg}"]
+    if not isinstance(document, dict):
+        return ["not_an_object"]
+
+    schema_name = document.get("schema")
+    if schema_name == ACCEPTANCE_SCHEMA:
+        return validate_receipt(
+            document,
+            verify_artifacts=verify_artifacts,
+            artifact_root=summary_path.parent,
+        )
+    if schema_name != SUMMARY_SCHEMA:
+        return [f"unknown_summary_schema:{schema_name}"]
+
+    errors: list[str] = []
+    runs = document.get("runs")
+    if not isinstance(runs, list) or not runs:
+        return ["summary_missing_run:<none>"]
+    expected_revision = document.get("candidate_revision")
+    for index, run in enumerate(runs):
+        if not isinstance(run, str) or not run:
+            errors.append(f"summary_missing_run:[{index}]")
+            continue
+        target = (summary_path.parent / run).resolve()
+        if not target.is_file():
+            errors.append(f"summary_missing_run:{run}")
+            continue
+        try:
+            child = json.loads(target.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            errors.append(f"json_parse:{run}:{exc.msg}")
+            continue
+        for reason in validate_receipt(
+            child,
+            verify_artifacts=verify_artifacts,
+            artifact_root=target.parent,
+        ):
+            errors.append(f"run:{run}:{reason}")
+        if (
+            isinstance(expected_revision, str)
+            and isinstance(child, dict)
+            and child.get("candidate_revision") != expected_revision
+        ):
+            errors.append(f"summary_candidate_revision_mismatch:{run}")
+
+    aggregate = document.get("aggregate")
+    if isinstance(aggregate, dict):
+        for reason in validate_receipt(
+            aggregate,
+            verify_artifacts=verify_artifacts,
+            artifact_root=summary_path.parent,
+        ):
+            errors.append(f"aggregate:{reason}")
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Cleanup / timeout accounting
+# ---------------------------------------------------------------------------
+
+
+def _utcnow() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+@dataclass
+class CleanupLedger:
+    """Tracks everything the harness creates; never pretends cleanup happened."""
+
+    pids: list[int] = field(default_factory=list)
+    tasks: list[dict[str, Any]] = field(default_factory=list)
+    submissions: list[str] = field(default_factory=list)
+    started_controller: bool = False
+    logs: list[str] = field(default_factory=list)
+    timed_out: bool = False
+
+    def track_pid(self, pid: int) -> None:
+        if pid not in self.pids:
+            self.pids.append(pid)
+
+    def track_task(
+        self,
+        *,
+        job_id: str,
+        attempt: int | None = None,
+        release_id: str | None = None,
+        submission_id: str | None = None,
+        entry: str | None = None,
+    ) -> None:
+        self.tasks.append(
+            {
+                "job_id": job_id,
+                "attempt": attempt,
+                "release_id": release_id,
+                "submission_id": submission_id,
+                "entry": entry,
+            }
+        )
+
+    def track_submission(self, submission_id: str) -> None:
+        if submission_id not in self.submissions:
+            self.submissions.append(submission_id)
+
+    def record_log(self, path: str) -> None:
+        if path not in self.logs:
+            self.logs.append(path)
+
+    def as_record(
+        self,
+        *,
+        scenario: str | None = None,
+        phase: str | None = None,
+        run_id: str | None = None,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "schema": "acp2.acceptance.cleanup.v1",
+            "scenario": scenario,
+            "phase": phase,
+            "run_id": run_id,
+            "timeout_seconds": timeout_seconds,
+            "timed_out": self.timed_out,
+            "tracked_pids": list(self.pids),
+            "tracked_tasks": list(self.tasks),
+            "tracked_submissions": list(self.submissions),
+            "started_controller": self.started_controller,
+            "logs": list(self.logs),
+            "cleanup_order": [
+                "save logs",
+                "cancel only harness-created active tasks through the platform",
+                "confirm stop/reconciliation",
+                "export native files/manifest/digests",
+                "stop adapters",
+                "stop the test Controller only if the harness started it",
+            ],
+        }
+
+
+def run_handler_with_timeout(
+    handler: Any,
+    timeout: float,
+    ledger: CleanupLedger,
+    out_dir: Path,
+    *,
+    scenario: str | None = None,
+    phase: str | None = None,
+    run_id: str | None = None,
+) -> tuple[int, dict[str, Any] | None]:
+    """Run a scenario handler; on timeout write ``timeout-cleanup.json``.
+
+    Real handlers must be subprocess-based so the listed cleanup actions can be
+    executed after the daemon thread is abandoned.  This skeleton only needs the
+    accounting contract.
+    """
+
+    box: dict[str, Any] = {}
+
+    def target() -> None:
+        try:
+            box["value"] = handler(ledger)
+        except BaseException as exc:  # noqa: BLE001 - scenario boundary reports failures
+            box["error"] = exc
+
+    thread = threading.Thread(target=target, name="acp2-scenario", daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        ledger.timed_out = True
+        record = ledger.as_record(
+            scenario=scenario,
+            phase=phase,
+            run_id=run_id,
+            timeout_seconds=timeout,
+        )
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "timeout-cleanup.json").write_text(
+            json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return EXIT_NOT_VERIFIED, record
+    if "error" in box:
+        raise box["error"]
+    value = box.get("value", EXIT_NOT_VERIFIED)
+    return int(value), None
+
+
+# ---------------------------------------------------------------------------
+# Result writing and execution skeleton
+# ---------------------------------------------------------------------------
+
+
+def _safe_name(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
+
+
+def _new_run_id() -> str:
+    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + f"-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+
+
+def harness_revision() -> str:
+    return sha256_file(SCRIPT_PATH)
+
+
+def _evidence_kind_for_phase(phase: str) -> str:
+    if phase == "fixture" or phase.endswith(":fixture"):
+        return "fixture"
+    if phase == "aggregate":
+        return "aggregate"
+    return "live"
+
+
+def write_result(
+    out_dir: Path,
+    *,
+    scenario: str,
+    phase: str,
+    run_id: str,
+    started_at: str,
+    finished_at: str,
+    result: str,
+    reason: str | None,
+    exit_code: int | None,
+    command: list[str],
+    evidence_kind: str,
+    owner: str = "B",
+    assertions: list[dict[str, Any]] | None = None,
+    artifacts: list[dict[str, Any]] | None = None,
+    refs: dict[str, Any] | None = None,
+    usage: dict[str, Any] | None = None,
+    extensions: dict[str, Any] | None = None,
+) -> tuple[Path, Path]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    reference_values = {key: None for key in PLATFORM_REF_KEYS}
+    if refs:
+        reference_values.update(refs)
+    document: dict[str, Any] = {
+        "schema": ACCEPTANCE_SCHEMA,
+        "schema_dialect": SCHEMA_DIALECT,
+        "contract_version": CONTRACT_VERSION,
+        "owner": owner,
+        "scenario": scenario,
+        "phase": phase,
+        "run_id": run_id,
+        "candidate_revision": os.environ.get("ACP_CANDIDATE_REVISION", BASELINE_CANDIDATE_REVISION),
+        "candidate": {
+            "server_revision": SERVER_CANDIDATE_REVISION,
+            "client_revision": None,
+            "harness_revision": harness_revision(),
+        },
+        "result": result,
+        "scope": "IN_SCOPE",
+        "reason": reason,
+        "command": command,
+        "cwd": str(Path.cwd()),
+        "exit_code": exit_code,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "assertions": assertions or [],
+        "artifacts": artifacts or [],
+        "job_id": reference_values["job_id"],
+        "operation_id": reference_values["operation_id"],
+        "attempt": reference_values["attempt"],
+        "release_id": reference_values["release_id"],
+        "submission_id": reference_values["submission_id"],
+        "manifest_generation": reference_values["manifest_generation"],
+        "negotiated_protocol": reference_values["negotiated_protocol"],
+        "usage": usage,
+        "evidence_kind": evidence_kind,
+        "extensions": extensions or {},
+    }
+    run_name = f"{_safe_name(scenario)}-{_safe_name(phase)}-{run_id}.json"
+    run_path = out_dir / run_name
+    run_path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    summary_path = out_dir / "summary.json"
+    runs: list[str] = []
+    if summary_path.is_file():
+        try:
+            existing = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+        raw_runs = existing.get("runs") if isinstance(existing, dict) else None
+        if isinstance(raw_runs, list):
+            runs = [item for item in raw_runs if isinstance(item, str)]
+    if run_name not in runs:
+        runs.append(run_name)
+    summary = {
+        "schema": SUMMARY_SCHEMA,
+        "schema_dialect": SCHEMA_DIALECT,
+        "contract_version": CONTRACT_VERSION,
+        "candidate_revision": document["candidate_revision"],
+        "generated_at": finished_at,
+        "runs": runs,
+    }
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return run_path, summary_path
+
+
+def _b01_stub_handler(spec: ScenarioSpec) -> Any:
+    def handler(_ledger: CleanupLedger) -> int:
+        return EXIT_NOT_VERIFIED
+
+    return handler
+
+
+def controller_reachable(controller: str) -> bool:
+    parsed = urlparse(controller)
+    host = parsed.hostname
+    if not host:
+        return False
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
+    if args.out:
+        return str(Path(args.out).resolve())
+    return f"/tmp/acp2-{_safe_name(scenario)}-{_safe_name(phase)}"
+
+
+def dry_run_commands(
+    spec: ScenarioSpec,
+    phase_name: str,
+    phase: PhaseSpec,
+    args: argparse.Namespace,
+) -> list[str]:
+    """Return exact, runnable-as-written commands (no literal ellipsis)."""
+
+    out = _dry_run_out(args, spec.scenario, phase_name)
+    controller = args.controller or "http://127.0.0.1:8765"
+    fixture = args.fixture or f"/tmp/acp2-fixtures/{_safe_name(spec.scenario)}.json"
+    launch = args.launch or "/tmp/acp2-launch/mcp-launch.json"
+
+    commands: list[str] = []
+    if spec.scenario == "env-runtime":
+        commands.append(f"{shlex.quote(sys.executable)} -m acp doctor")
+    elif spec.scenario == "entry-readonly":
+        commands.append(f"curl -fsS {shlex.quote(controller + '/api/v2/tasks')}")
+    elif spec.scenario == "mcp-stdio":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp mcp serve --transport stdio "
+            f"--controller {shlex.quote(controller)}"
+        )
+        commands.append(f"{shlex.quote(sys.executable)} -m json.tool {shlex.quote(launch)}")
+    elif spec.scenario == "submit-replay":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task --controller "
+            f"{shlex.quote(controller)} ingest {shlex.quote(fixture)}"
+        )
+    elif spec.scenario in ("local-singlepoint", "lsf-singlepoint", "three-entry"):
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task --controller "
+            f"{shlex.quote(controller)} plan {shlex.quote(fixture)}"
+        )
+    elif spec.scenario == "artifact":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task --controller "
+            f"{shlex.quote(controller)} export {shlex.quote(fixture)}"
+        )
+    elif spec.scenario == "control-recovery":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task --controller "
+            f"{shlex.quote(controller)} query {shlex.quote(fixture)}"
+        )
+    elif spec.scenario == "approval-budget":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task --controller "
+            f"{shlex.quote(controller)} plan {shlex.quote(fixture)}"
+        )
+    elif spec.scenario == "da-runtime":
+        commands.append(
+            f"{shlex.quote(sys.executable)} scripts/acceptance/acp2_runtime.py "
+            f"--scenario da-runtime --phase {phase_name} --controller "
+            f"{shlex.quote(controller)} --fixture {shlex.quote(fixture)} --out {shlex.quote(out)}"
+        )
+    elif spec.scenario == "infra-plugin":
+        commands.append(
+            f"{shlex.quote(sys.executable)} scripts/build_release.py --check {shlex.quote(fixture)}"
+        )
+    elif spec.scenario == "multitenant":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task --controller "
+            f"{shlex.quote(controller)} query {shlex.quote(fixture)}"
+        )
+    elif spec.scenario == "migration":
+        commands.append(f"{shlex.quote(sys.executable)} -m acp task export {shlex.quote(fixture)}")
+    elif spec.scenario == "package-install":
+        commands.append(f"{shlex.quote(sys.executable)} -m pip install -e .")
+
+    harness_command = [
+        sys.executable,
+        str(SCRIPT_PATH),
+        "--scenario",
+        spec.scenario,
+        "--phase",
+        phase_name,
+        "--out",
+        out,
+    ]
+    if phase.controller_required:
+        harness_command += ["--controller", controller]
+    if "fixture" in phase.required_args:
+        harness_command += ["--fixture", fixture]
+    if "launch" in phase.required_args:
+        harness_command += ["--launch", launch]
+    commands.append(" ".join(shlex.quote(part) for part in harness_command))
+    return commands
+
+
+def _write_prerequisite_result(
+    spec: ScenarioSpec,
+    phase_name: str,
+    phase: PhaseSpec,
+    args: argparse.Namespace,
+    reason: str,
+) -> int:
+    started_at = _utcnow()
+    finished_at = _utcnow()
+    run_id = _new_run_id()
+    run_path, _ = write_result(
+        Path(args.out),
+        scenario=spec.scenario,
+        phase=phase_name,
+        run_id=run_id,
+        started_at=started_at,
+        finished_at=finished_at,
+        result="NOT_VERIFIED",
+        reason=reason,
+        exit_code=EXIT_NOT_VERIFIED,
+        command=dry_run_commands(spec, phase_name, phase, args),
+        evidence_kind=_evidence_kind_for_phase(phase_name),
+        assertions=[{"name": "prerequisite", "status": "NOT_VERIFIED", "detail": reason}],
+        extensions={"b01.skeleton": True, "b01.prerequisite_failure": reason},
+    )
+    errors = validate_receipt(
+        json.loads(run_path.read_text(encoding="utf-8")), verify_artifacts=False
+    )
+    if errors:
+        print(
+            "INTERNAL: prerequisite receipt is invalid: " + "; ".join(errors),
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+    print(f"NOT_VERIFIED: {reason}", file=sys.stderr)
+    return EXIT_NOT_VERIFIED
+
+
+def execute_scenario(
+    spec: ScenarioSpec,
+    phase_name: str,
+    phase: PhaseSpec,
+    args: argparse.Namespace,
+) -> int:
+    out_dir = Path(args.out)
+    started_at = _utcnow()
+    run_id = _new_run_id()
+    timeout = args.timeout if args.timeout is not None else phase.timeout
+    ledger = CleanupLedger()
+    command = dry_run_commands(spec, phase_name, phase, args)
+    handler = _b01_stub_handler(spec)
+    code, timeout_record = run_handler_with_timeout(
+        handler,
+        timeout,
+        ledger,
+        out_dir,
+        scenario=spec.scenario,
+        phase=phase_name,
+        run_id=run_id,
+    )
+    finished_at = _utcnow()
+    if timeout_record is not None:
+        reason = f"timeout after {timeout}s; cleanup record saved"
+        result = "NOT_VERIFIED"
+        code = EXIT_NOT_VERIFIED
+    else:
+        reason = f"missing_capability:{spec.missing_capability}"
+        result = (
+            "NOT_VERIFIED"
+            if code == EXIT_NOT_VERIFIED
+            else ("PASS" if code == EXIT_PASS else "FAIL")
+        )
+    extensions: dict[str, Any] = {
+        "b01.skeleton": True,
+        "b01.missing_capability": spec.missing_capability,
+    }
+    if timeout_record is not None:
+        extensions["b01.timeout_cleanup"] = "timeout-cleanup.json"
+    run_path, _ = write_result(
+        out_dir,
+        scenario=spec.scenario,
+        phase=phase_name,
+        run_id=run_id,
+        started_at=started_at,
+        finished_at=finished_at,
+        result=result,
+        reason=reason,
+        exit_code=code,
+        command=command,
+        evidence_kind=_evidence_kind_for_phase(phase_name),
+        assertions=[
+            {
+                "name": "scenario_implemented",
+                "status": "NOT_VERIFIED",
+                "detail": spec.missing_capability,
+            }
+        ],
+        extensions=extensions,
+    )
+    errors = validate_receipt(
+        json.loads(run_path.read_text(encoding="utf-8")), verify_artifacts=False
+    )
+    if errors:
+        print(
+            "INTERNAL: written receipt is invalid: " + "; ".join(errors),
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+    print(f"NOT_VERIFIED: {reason}", file=sys.stderr)
+    return code
+
+
+# ---------------------------------------------------------------------------
+# Corpus / check-only modes
+# ---------------------------------------------------------------------------
+
+
+def _load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def run_validate_samples(samples_root: Path = SAMPLES_ROOT) -> int:
+    cases_path = samples_root / "cases.json"
+    try:
+        manifest = _load_json(cases_path)
+    except FileNotFoundError:
+        print(f"INVALID: samples manifest missing: {cases_path}", file=sys.stderr)
+        return EXIT_FAIL
+    except json.JSONDecodeError as exc:
+        print(f"INVALID: samples manifest is not JSON: {exc}", file=sys.stderr)
+        return EXIT_FAIL
+    cases = manifest.get("samples") if isinstance(manifest, dict) else None
+    if not isinstance(cases, list) or not cases:
+        print("INVALID: samples manifest has no samples", file=sys.stderr)
+        return EXIT_FAIL
+
+    failures = 0
+    for case in cases:
+        if not isinstance(case, dict) or not isinstance(case.get("path"), str):
+            failures += 1
+            print("REJECT  <malformed case>  invalid_case")
+            continue
+        relative = case["path"]
+        path = samples_root / relative
+        expected = case.get("expect")
+        expected_reason = case.get("expect_reason")
+        try:
+            document = _load_json(path)
+        except FileNotFoundError:
+            failures += 1
+            print(f"REJECT  {relative}  sample_missing")
+            continue
+        except json.JSONDecodeError as exc:
+            failures += 1
+            print(f"REJECT  {relative}  json_parse:{exc.msg}")
+            continue
+        reasons = validate_receipt(
+            document,
+            verify_artifacts=True,
+            artifact_root=path.parent,
+        )
+        accepted = not reasons
+        verdict = "ACCEPT" if accepted else "REJECT"
+        reason = "ok" if accepted else reasons[0]
+        print(f"{verdict}  {relative}  {reason}")
+        if expected == "accept":
+            if not accepted:
+                failures += 1
+                print(f"  MISMATCH: expected accept, got {reason}")
+        elif expected == "reject":
+            if accepted:
+                failures += 1
+                print("  MISMATCH: expected reject, got accept")
+            elif isinstance(expected_reason, str) and expected_reason not in reason:
+                failures += 1
+                print(f"  MISMATCH: expected reason containing {expected_reason!r}, got {reason!r}")
+        else:
+            failures += 1
+            print(f"  MISMATCH: unknown expectation {expected!r}")
+    print(f"SUMMARY: {len(cases) - failures}/{len(cases)} sample expectations matched")
+    return EXIT_PASS if failures == 0 else EXIT_FAIL
+
+
+def run_check_only(path: Path) -> int:
+    errors = validate_summary(path)
+    if errors:
+        for reason in errors:
+            print(f"INVALID: {reason}", file=sys.stderr)
+        return EXIT_FAIL
+    print(f"VALID: {path} (tool check only; this is not a scenario PASS)")
+    return EXIT_PASS
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def _help_epilog() -> str:
+    lines = [
+        "Registered B scenarios (15 immutable IDs):",
+    ]
+    for scenario in EXPECTED_B_SCENARIOS:
+        spec = B_SCENARIOS[scenario]
+        phase_names = ", ".join(spec.phases)
+        required = sorted(
+            {arg for phase in spec.phases.values() for arg in phase.required_args if arg != "out"}
+        )
+        required_text = ", ".join(f"--{name}" for name in required) or "(none)"
+        controller = "yes" if any(p.controller_required for p in spec.phases.values()) else "no"
+        lines.append(
+            f"  {scenario:<18} owner={spec.default_owner:<5} phases={phase_names}"
+            f"  required={required_text}  controller={controller}"
+        )
+    lines.append("")
+    lines.append("Phase registry (scenario/phase -> owner, prerequisites, timeout):")
+    for scenario, phase_name, phase in all_phase_rows():
+        prereqs = ", ".join(phase.prerequisites) or "none"
+        effects = ", ".join(phase.side_effects) or "none"
+        lines.append(
+            f"  {scenario}/{phase_name:<16} owner={phase.owner:<5}"
+            f" op={phase.operation_class:<9} target={phase.target:<6}"
+            f" timeout={phase.timeout}s  prereq={prereqs}  effects={effects}"
+        )
+    lines.extend(
+        [
+            "",
+            "A/C namespaced IDs: science:* (A) / experience:* (C).",
+            "dsh-local-singlepoint is C-owned (experience:dsh-local-singlepoint),"
+            " not a 16th B scenario.",
+            "Exit codes: 0 PASS/tool check, 1 FAIL, 2 NOT_VERIFIED, 3 usage error.",
+            "--help/--dry-run/--check-only are tool checks, never a scenario PASS.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="acp2_runtime.py",
+        description=(
+            "ACP 2.0 runtime acceptance harness skeleton (acp2.acceptance.v1). "
+            "Validate receipts/samples, print exact dry-run commands, or execute "
+            "a registered scenario. Scenario bodies are owned by B04a..B25b."
+        ),
+        epilog=_help_epilog(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--scenario", help="registered B scenario ID")
+    parser.add_argument(
+        "--controller",
+        help="existing Controller URL to connect to; the harness never starts one",
+    )
+    parser.add_argument("--launch", help="MCP stdio launch manifest path")
+    parser.add_argument("--fixture", help="scenario request/fixture JSON path")
+    parser.add_argument("--out", help="output directory for run receipt + summary")
+    parser.add_argument(
+        "--timeout", type=float, default=None, help="override the registry timeout (seconds)"
+    )
+    parser.add_argument(
+        "--check-only",
+        type=Path,
+        metavar="PATH",
+        help="validate an existing summary.json or receipt (tool check, not PASS)",
+    )
+    parser.add_argument("--phase", help="registered phase for the scenario")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print exact commands and create no DB/process/job",
+    )
+    parser.add_argument(
+        "--validate-samples",
+        action="store_true",
+        help="run the deterministic acceptance sample corpus",
+    )
+    parser.add_argument(
+        "--samples-root",
+        type=Path,
+        default=SAMPLES_ROOT,
+        help="sample corpus root (default: the frozen runtime samples)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.validate_samples:
+        return run_validate_samples(args.samples_root)
+    if args.check_only is not None:
+        return run_check_only(args.check_only)
+
+    if not args.scenario:
+        parser.print_usage(sys.stderr)
+        print("usage error: --scenario is required", file=sys.stderr)
+        return EXIT_USAGE
+    spec = B_SCENARIOS.get(args.scenario)
+    if spec is None:
+        print(f"usage error: unknown scenario {args.scenario!r}", file=sys.stderr)
+        return EXIT_USAGE
+
+    phase_name = args.phase or "main"
+    if phase_name == "preflight":
+        phase_name = "da-preflight"
+    phase = spec.phases.get(phase_name)
+    if phase is None:
+        print(
+            f"usage error: undeclared scenario/phase combination {spec.scenario}/{phase_name}",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+
+    if args.dry_run:
+        print("DRY-RUN (not a scenario result; no DB/process/job is created)")
+        for command in dry_run_commands(spec, phase_name, phase, args):
+            print(command)
+        return EXIT_PASS
+
+    if not args.out:
+        print("usage error: --out is required for execution", file=sys.stderr)
+        return EXIT_USAGE
+    missing_args = [
+        name for name in phase.required_args if name != "out" and getattr(args, name) is None
+    ]
+    if missing_args:
+        rendered = ", ".join(f"--{name}" for name in missing_args)
+        print(f"usage error: missing required argument(s): {rendered}", file=sys.stderr)
+        return EXIT_USAGE
+
+    if phase.controller_required:
+        if not args.controller:
+            return _write_prerequisite_result(spec, phase_name, phase, args, "missing_controller")
+        if not controller_reachable(args.controller):
+            return _write_prerequisite_result(
+                spec, phase_name, phase, args, "controller_unreachable"
+            )
+    if "launch" in phase.required_args and not Path(args.launch).is_file():
+        return _write_prerequisite_result(spec, phase_name, phase, args, "launch_missing")
+    if "fixture" in phase.required_args and not Path(args.fixture).is_file():
+        return _write_prerequisite_result(spec, phase_name, phase, args, "fixture_missing")
+    return execute_scenario(spec, phase_name, phase, args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

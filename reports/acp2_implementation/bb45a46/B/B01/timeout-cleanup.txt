@@ -1,0 +1,7 @@
+exit_code 2
+timed_out True
+tracked_pids [4242]
+tracked_tasks [{'job_id': 'job-timeout-demo', 'attempt': 1, 'release_id': None, 'submission_id': 'sub-timeout-demo', 'entry': None}]
+started_controller False
+cleanup_order ['save logs', 'cancel only harness-created active tasks through the platform', 'confirm stop/reconciliation', 'export native files/manifest/digests', 'stop adapters', 'stop the test Controller only if the harness started it']
+written True
