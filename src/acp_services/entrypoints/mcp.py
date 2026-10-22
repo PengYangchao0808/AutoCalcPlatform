@@ -16,14 +16,15 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
   tenant/tier/principal are derived from the verified local principal
   (:func:`acp_services.contracts.access.resolve_scope`) and any client-supplied
   tenant or deployment tier is ignored (tier overrides are refused outright).
-* **Budget caps and idempotency keys are server-enforced.**  A per-workspace
-  :class:`WorkspaceBudget` refuses an over-cap submission before the backend is
-  reached, and :class:`IdempotencyRegistry` collapses replays of one key onto a
-  single operation (reusing the Services data primitive
-  :func:`acp_services.data.operations.idempotency_key_for`).  In P0 these
-  in-memory structures are a **test/cache adapter only**: they hold no
-  cross-process authority, and the Controller (not this adapter) owns the
-  durable task/operation identity.  B08/B09 replace the production path.
+* **Budget caps and idempotency keys are server-enforced.**  On the final
+  Controller path the server-side admission ledger is the only resource
+  authority; this adapter deliberately does not construct an in-process
+  :class:`WorkspaceBudget`, so a tool ``cores`` hint can never override the
+  server grant.  :class:`WorkspaceBudget` remains available as an explicit
+  cache/test adapter.  :class:`IdempotencyRegistry` collapses replays of one key
+  onto a single operation (reusing the Services data primitive
+  :func:`acp_services.data.operations.idempotency_key_for`); the durable claim
+  stays with the Controller.
 * **Long tasks return an operation/job reference immediately** (query-based).
   The adapter holds no per-connection task state, so an MCP connection dropping
   never decides a job's fate; a later connection queries the same reference.
@@ -813,7 +814,9 @@ class McpServer:
     Args:
         backends: The injected Service use cases.
         identity: Identity mapper (defaults to the local stdio scope).
-        budget: Server-enforced budget ledger (defaults to :class:`BudgetCaps`).
+        budget: Optional in-process cache/test adapter.  ``None`` on the final
+            Controller path: the Controller's server-side admission ledger is
+            the authority, and a tool hint can never override its grant.
         idempotency: Server-enforced idempotency registry.
         configured_tier: Deployment tier; request overrides are refused.
     """
@@ -829,7 +832,7 @@ class McpServer:
     ) -> None:
         self._backends = backends
         self._identity = identity or IdentityMapper(configured_tier=configured_tier)
-        self._budget = budget or WorkspaceBudget()
+        self._budget = budget
         self._idempotency = idempotency or IdempotencyRegistry()
         self._tier = str(configured_tier)
         # A *literal* allowlist table — never resolved from client input.
@@ -1075,20 +1078,22 @@ class McpServer:
             )
 
         cores = _requested_cores(arguments)
-        decision = self._budget.admit(context.workspace_id, cores=cores)
-        if not decision.allowed:
-            raise McpToolError(
-                mo.ErrorCode.ACCESS_DENIED,
-                "workspace budget cap exceeded",
-                params=decision.to_dict(),
-                retryable=False,
-            )
+        if self._budget is not None:
+            decision = self._budget.admit(context.workspace_id, cores=cores)
+            if not decision.allowed:
+                raise McpToolError(
+                    mo.ErrorCode.ACCESS_DENIED,
+                    "workspace budget cap exceeded",
+                    params=decision.to_dict(),
+                    retryable=False,
+                )
         try:
             record = self._backends.submit.submit(
                 arguments, idempotency_key=idem, workspace_id=context.workspace_id
             )
         except McpToolError:
-            self._budget.release(context.workspace_id, cores=cores)
+            if self._budget is not None:
+                self._budget.release(context.workspace_id, cores=cores)
             raise
         reference = _reference_from(record, kind="job")
         self._idempotency.put(
@@ -1113,6 +1118,10 @@ class McpServer:
                 payload["plan_digest"] = record["plan_digest"]
             if record.get("idempotent_replay") is not None:
                 payload["idempotent_replay"] = record["idempotent_replay"]
+            if record.get("admission") is not None:
+                payload["admission"] = record["admission"]
+            if record.get("identity") is not None:
+                payload["identity"] = record["identity"]
         return mo.MachineResult(
             operation=McpTool.SUBMIT,
             status="ok",
@@ -1135,7 +1144,7 @@ class McpServer:
         projection = record if isinstance(record, Mapping) else {"result": record}
         projection = dict(projection)
         projection.setdefault("reference", reference)
-        if _projection_is_terminal(projection):
+        if _projection_is_terminal(projection) and self._budget is not None:
             self._budget.release(context.workspace_id)
         return mo.MachineResult(
             operation=McpTool.STATUS,
@@ -1149,7 +1158,8 @@ class McpServer:
     ) -> mo.MachineResult:
         reference = _require_reference(arguments)
         record = self._backends.cancel.cancel(reference, workspace_id=context.workspace_id)
-        self._budget.release(context.workspace_id)
+        if self._budget is not None:
+            self._budget.release(context.workspace_id)
         projection = record if isinstance(record, Mapping) else {"result": record}
         projection = dict(projection)
         projection.setdefault("reference", reference)
@@ -1173,20 +1183,22 @@ class McpServer:
                 data={"reference": cached, "idempotent_replay": True},
                 operation_identity=context.workspace_id,
             )
-        decision = self._budget.admit(context.workspace_id)
-        if not decision.allowed:
-            raise McpToolError(
-                mo.ErrorCode.ACCESS_DENIED,
-                "workspace budget cap exceeded",
-                params=decision.to_dict(),
-                retryable=False,
-            )
+        if self._budget is not None:
+            decision = self._budget.admit(context.workspace_id)
+            if not decision.allowed:
+                raise McpToolError(
+                    mo.ErrorCode.ACCESS_DENIED,
+                    "workspace budget cap exceeded",
+                    params=decision.to_dict(),
+                    retryable=False,
+                )
         try:
             record = self._backends.artifacts.prepare(
                 arguments, idempotency_key=idem, workspace_id=context.workspace_id
             )
         except McpToolError:
-            self._budget.release(context.workspace_id)
+            if self._budget is not None:
+                self._budget.release(context.workspace_id)
             raise
         reference = _reference_from(record, kind="operation")
         self._idempotency.put(context.workspace_id, idem, reference)
@@ -1229,18 +1241,21 @@ class McpServer:
                 "analysis requires explicit=true",
                 params={"field": "explicit"},
             )
-        decision = self._budget.admit(context.workspace_id, cores=_requested_cores(arguments))
-        if not decision.allowed:
-            raise McpToolError(
-                mo.ErrorCode.ACCESS_DENIED,
-                "workspace budget cap exceeded",
-                params=decision.to_dict(),
-                retryable=False,
-            )
+        cores = _requested_cores(arguments)
+        if self._budget is not None:
+            decision = self._budget.admit(context.workspace_id, cores=cores)
+            if not decision.allowed:
+                raise McpToolError(
+                    mo.ErrorCode.ACCESS_DENIED,
+                    "workspace budget cap exceeded",
+                    params=decision.to_dict(),
+                    retryable=False,
+                )
         try:
             record = self._backends.analysis.analyze(arguments, workspace_id=context.workspace_id)
         except McpToolError:
-            self._budget.release(context.workspace_id, cores=_requested_cores(arguments))
+            if self._budget is not None:
+                self._budget.release(context.workspace_id, cores=cores)
             raise
         data = record if isinstance(record, Mapping) else {"result": record}
         return mo.MachineResult(

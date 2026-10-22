@@ -116,7 +116,26 @@ class IdempotencyInProgressError(IdempotencyError):
 
 
 class IdempotencyReservationDeniedError(IdempotencyError):
-    """Admission refused the resource reservation for this claim."""
+    """Admission refused the resource reservation for this claim.
+
+    ``decision`` carries the structured :class:`AdmissionDecision` when the
+    denial came from the Runtime admission controller, so the HTTP/MCP entry can
+    return the same machine-readable reason/exceeded matrix it would return for
+    a pre-claim denial.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        decision: Any | None = None,
+        reason_code: str = "",
+        exceeded: Sequence[Mapping[str, Any]] = (),
+    ) -> None:
+        super().__init__(message)
+        self.decision = decision
+        self.reason_code = str(reason_code)
+        self.exceeded = tuple(dict(item) for item in exceeded)
 
 
 @dataclass(frozen=True)

@@ -271,9 +271,22 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
 
 
 @router.get("/capabilities")
-def get_capabilities() -> dict[str, Any]:
+def get_capabilities(request: Request) -> dict[str, Any]:
     """Read-only discovery (``capabilities`` application command)."""
-    return {
+    admission = getattr(request.app.state, "admission", None)
+    identity = getattr(request.app.state, "server_identity", None)
+    if admission is not None:
+        admission_snapshot = admission.snapshot()
+    else:
+        admission_snapshot = {
+            "enforcement": "not-verified",
+            "mode": "usage-only",
+            "quota_enforced": False,
+            "recorded_only": True,
+            "model_token_enforcement": "NOT_VERIFIED",
+            "multi_tenant_security": False,
+        }
+    payload: dict[str, Any] = {
         "schema_version": 1,
         "task_kinds": _task_kinds(),
         "workflows": _active_workflows(),
@@ -282,7 +295,14 @@ def get_capabilities() -> dict[str, Any]:
         "limits": dict(_CONTROLLER_LIMITS),
         "tools": list(_MCP_TOOLS),
         "protocol_version": _MCP_PROTOCOL_VERSION,
+        "admission": admission_snapshot,
+        "admission_enforcement": admission_snapshot["enforcement"],
+        "model_token_enforcement": "NOT_VERIFIED",
+        "multi_tenant_security": False,
     }
+    if identity is not None:
+        payload["identity"] = identity.to_dict()
+    return payload
 
 
 def _load_executables() -> dict[str, Any]:

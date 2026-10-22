@@ -293,11 +293,58 @@ class EntryAuthorizer:
         class is denied ``unknown_entry`` (fail closed) so a newly added entry
         cannot silently bypass the gate.
         """
+        return self._authorize(
+            entry_class,
+            require_known_entry=True,
+            job_id=job_id,
+            project_id=project_id,
+            action=action,
+            resource_id=resource_id,
+            now=now,
+        )
+
+    def authorize_scope(
+        self,
+        *,
+        project_id: str | None = None,
+        action: str | None = None,
+        resource_id: str = "",
+        job_id: str = "",
+        now: datetime | None = None,
+    ) -> EntryDecision:
+        """Authorize a *runtime operation* (submit/control/prepare/read).
+
+        B09 reuses the same verified-principal + project-scope resolution as the
+        seven resource entries without inventing a new identity model.  The
+        caller supplies the server-resolved project (never a raw client field);
+        ``entry_class`` in the decision is the sentinel ``"scope"``.
+        """
+        return self._authorize(
+            "scope",
+            require_known_entry=False,
+            job_id=job_id,
+            project_id=project_id,
+            action=action,
+            resource_id=resource_id,
+            now=now,
+        )
+
+    def _authorize(
+        self,
+        entry_class: str,
+        *,
+        require_known_entry: bool,
+        job_id: str = "",
+        project_id: str | None = None,
+        action: str | None = None,
+        resource_id: str = "",
+        now: datetime | None = None,
+    ) -> EntryDecision:
         effective_action = str(action or entry_default_action(entry_class))
         principal = self._resolve_principal()
         resource = resource_id or project_id or job_id or "tenant"
 
-        if not entry_class_is_valid(entry_class):
+        if require_known_entry and not entry_class_is_valid(entry_class):
             return self._verdict(
                 entry_class=entry_class,
                 action=effective_action,

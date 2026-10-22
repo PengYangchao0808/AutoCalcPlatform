@@ -337,6 +337,7 @@ _HTTP_ERRORS: dict[int, tuple[str, type[ControllerClientError]]] = {
     409: ("revision_conflict", ConflictError),
     422: ("unsupported_capability", UnsupportedError),
     425: ("resource_not_ready", NotPreparedError),
+    429: ("admission_denied", ControllerClientError),
     503: ("backend_unavailable", RetryableError),
 }
 

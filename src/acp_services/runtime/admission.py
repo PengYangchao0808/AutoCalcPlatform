@@ -55,6 +55,7 @@ import threading
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
 from acp_services.contracts.access import ResourceGrantSpec
@@ -665,6 +666,18 @@ CREATE TABLE IF NOT EXISTS admission_reservation_claims (
 );
 CREATE INDEX IF NOT EXISTS idx_admission_claim_reservation
     ON admission_reservation_claims(reservation_id);
+CREATE TABLE IF NOT EXISTS admission_usage_receipts (
+    usage_id        TEXT PRIMARY KEY,
+    reservation_id  TEXT NOT NULL,
+    job_id          TEXT NOT NULL,
+    attempt         INTEGER NOT NULL DEFAULT 1,
+    cores           INTEGER NOT NULL DEFAULT 0,
+    seconds         INTEGER NOT NULL DEFAULT 0,
+    core_hours      TEXT NOT NULL,
+    recorded_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admission_usage_reservation
+    ON admission_usage_receipts(reservation_id);
 """
 
 
@@ -1111,6 +1124,90 @@ class ReservationLedger:
                 conn.close()
         return None if row is None else str(row["reservation_id"])
 
+    # -- trusted usage receipts (idempotent by usage id) --------------------
+
+    def record_usage_once(
+        self,
+        usage_id: str,
+        *,
+        reservation_id: str,
+        job_id: str,
+        attempt: int = 1,
+        cores: int = 0,
+        seconds: int = 0,
+    ) -> bool:
+        """Insert one trusted usage receipt; return ``True`` only the first time.
+
+        The receipt id is the stable ``(job, attempt, submission)`` identity, so
+        a duplicate delivery (Controller retry, replay, double terminal
+        observation) is ignored and can never double-charge.  The write is a
+        short ``BEGIN IMMEDIATE`` transaction on the admission ledger.
+        """
+        identifier = str(usage_id or "").strip()
+        if not identifier:
+            raise AdmissionValidationError("usage_id must be non-empty")
+        core_seconds = max(0, int(cores)) * max(0, int(seconds))
+        core_hours = (Decimal(core_seconds) / Decimal(3600)).quantize(Decimal("0.000001"))
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                cursor = conn.execute(
+                    """INSERT OR IGNORE INTO admission_usage_receipts (
+                           usage_id, reservation_id, job_id, attempt, cores,
+                           seconds, core_hours, recorded_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        identifier,
+                        str(reservation_id),
+                        str(job_id),
+                        int(attempt),
+                        max(0, int(cores)),
+                        max(0, int(seconds)),
+                        str(core_hours),
+                        now,
+                    ),
+                )
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return cursor.rowcount == 1
+
+    def usage_totals(self) -> dict[str, Any]:
+        """Return the recorded usage projection (duplicates are not charged)."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT cores, seconds, core_hours FROM admission_usage_receipts"
+                ).fetchall()
+            finally:
+                conn.close()
+        core_seconds = sum(int(row["cores"]) * int(row["seconds"]) for row in rows)
+        core_hours = sum((Decimal(row["core_hours"]) for row in rows), Decimal(0))
+        return {
+            "receipts": len(rows),
+            "core_seconds": core_seconds,
+            "core_hours": str(core_hours),
+        }
+
+    def usage_receipts(self) -> list[dict[str, Any]]:
+        """Return every usage receipt (diagnostic / evidence dump)."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM admission_usage_receipts ORDER BY recorded_at, usage_id"
+                ).fetchall()
+            finally:
+                conn.close()
+        return [dict(row) for row in rows]
+
     # -- atomic dispatch re-validation --------------------------------------
 
     def dispatch(
@@ -1348,6 +1445,8 @@ class AdmissionController:
         *,
         mode: str = AdmissionMode.QUOTA_ONLY,
         queued: bool | None = None,
+        reservation_id: str | None = None,
+        idempotency: ReservationIdempotency | None = None,
     ) -> AdmissionDecision:
         """Admit *request*, atomically reserving its resources before dispatch.
 
@@ -1355,6 +1454,10 @@ class AdmissionController:
         policy version, an enforced hard-limit capability and a finite per-job
         bound for every requested dimension.  Any missing bound is a structured
         refusal; the only bypass is an explicit ``usage-only`` mode.
+
+        ``reservation_id`` / ``idempotency`` are the B08 claim-keyed hooks: the
+        reservation row and its claim link are written in the same short ledger
+        transaction, so a replay never reserves twice.
         """
         usage_only = self._mode(mode) == AdmissionMode.USAGE_ONLY
         resolution = self._grants.resolve(request)
@@ -1379,7 +1482,12 @@ class AdmissionController:
             queued=request.queued if queued is None else bool(queued),
             enforce=not usage_only,
         )
-        outcome = self._ledger.reserve(request, limits)
+        outcome = self._ledger.reserve(
+            request,
+            limits,
+            reservation_id=reservation_id,
+            idempotency=idempotency,
+        )
         return self._decision(
             outcome,
             mode=mode,
@@ -1499,6 +1607,30 @@ class AdmissionController:
     def release(self, reservation_id: str) -> bool:
         """Release a reservation (terminal); frees all held dimensions."""
         return self._ledger.release(reservation_id)
+
+    def record_usage_receipt(
+        self,
+        usage_id: str,
+        *,
+        reservation_id: str,
+        job_id: str,
+        attempt: int = 1,
+        cores: int = 0,
+        seconds: int = 0,
+    ) -> bool:
+        """Record one trusted usage receipt exactly once (idempotent by id)."""
+        return self._ledger.record_usage_once(
+            usage_id,
+            reservation_id=reservation_id,
+            job_id=job_id,
+            attempt=attempt,
+            cores=cores,
+            seconds=seconds,
+        )
+
+    def usage_totals(self) -> dict[str, Any]:
+        """Return the ledger's usage projection (duplicates never double-charge)."""
+        return self._ledger.usage_totals()
 
     def reservation(self, reservation_id: str) -> Reservation | None:
         return self._ledger.get(reservation_id)
