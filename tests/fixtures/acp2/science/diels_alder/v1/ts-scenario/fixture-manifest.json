@@ -1,0 +1,38 @@
+{
+  "constructed": true,
+  "file_digests": {
+    "artifacts/candidate-selection-no-candidate.json": "005856bf3bb93af8327d6f296029d9f22d6832d14518b8c244cf36b453a60d34",
+    "artifacts/candidate-selection-old-attempt.json": "2778b8c35c679f4579b6e4c0b54ef98f4fca1232acb171a52bde1c3a793d23d6",
+    "artifacts/candidate-selection.json": "e876c865ca7ca43ecebee0233d165f46ee3430e3cb9b012b7b7c42f245b05c34",
+    "artifacts/ts-frequency-result.json": "ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8",
+    "artifacts/ts-optimize-result.json": "a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd",
+    "artifacts/ts-optimized.xyz": "ddae58527d99bbc8c1b6a763b2ff5a4a98a1f8f8f783b3601d990a675e420024",
+    "constructed-platform-registry.json": "87732542ec349742c7f1b114a102d77ced13fd79369032cef01f02a757d7a7ce",
+    "constructed-snapshot-no-candidate.json": "dc451c9722cc1d28f93c2611a3cfc9cb9c11b50bbc109cc6f8c75460c4f4a61a",
+    "constructed-snapshot-old-attempt.json": "7eae7eb71cd8d845e9c8d40314f0e5d20bbefa3e5d1e078a0e254d261de2a160",
+    "constructed-snapshot-success.json": "bc92a90865c5ab85f9d066be7fc4f6b26f085d5e40a239adead7224f711a883b"
+  },
+  "files": {
+    "artifacts/candidate-selection-no-candidate.json": "no-candidate selection with every rejection reason",
+    "artifacts/candidate-selection-old-attempt.json": "negative: attempt-2 selection",
+    "artifacts/candidate-selection.json": "success candidate selection with every reason",
+    "artifacts/ts-frequency-result.json": "constructed frequency TaskResult with one imaginary mode",
+    "artifacts/ts-optimize-result.json": "constructed optimize TaskResult (converged)",
+    "artifacts/ts-optimized.xyz": "constructed TS candidate geometry (product geometry, not a real TS)",
+    "constructed-platform-registry.json": "constructed da-runtime/da-research-live registry",
+    "constructed-snapshot-no-candidate.json": "constructed B20a-exec snapshot no-candidate path",
+    "constructed-snapshot-old-attempt.json": "negative: old-attempt snapshot",
+    "constructed-snapshot-success.json": "constructed B20a-exec snapshot success path"
+  },
+  "fixture_files": {
+    "no_candidate_snapshot": "constructed-snapshot-no-candidate.json",
+    "old_attempt_snapshot": "constructed-snapshot-old-attempt.json",
+    "platform_registry": "constructed-platform-registry.json",
+    "success_snapshot": "constructed-snapshot-success.json"
+  },
+  "fixture_id": "diels-alder-ts-scenario-constructed-a17",
+  "note": "Constructed A-17 DA TS scenario fixtures. No B20a-exec artifact, platform registry, QC run or real transition state is claimed.",
+  "real_run": false,
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1
+}
