@@ -5,15 +5,47 @@ This initializer exports only.  Implementation lives in the sibling modules:
 * :mod:`~cccp.calculation.capabilities.contracts` — frozen descriptor types
   mirroring ``capability.schema.json`` and the typed contract errors;
 * :mod:`~cccp.calculation.capabilities.registry` — the read-only registry,
-  deterministic catalog and the four independent projections.
+  deterministic catalog and the four independent projections;
+* :mod:`~cccp.calculation.capabilities.builtin` — the four seeded built-in
+  capabilities, the unsupported-family declaration and the lazy pure-analysis
+  entry point.
 
 Importing this package pulls in no task-execution module, no QC interface and
-never starts a calculation.  The built-in capability catalog is deliberately
-not seeded here; A-05b owns that.
+never starts a calculation.
 """
 
 from __future__ import annotations
 
+from cccp.calculation.capabilities.builtin import (
+    BUILTIN_CAPABILITY_IDS as BUILTIN_CAPABILITY_IDS,
+)
+from cccp.calculation.capabilities.builtin import (
+    BUILTIN_DESCRIPTORS as BUILTIN_DESCRIPTORS,
+)
+from cccp.calculation.capabilities.builtin import (
+    BUILTIN_FAMILIES as BUILTIN_FAMILIES,
+)
+from cccp.calculation.capabilities.builtin import (
+    UNSUPPORTED_FAMILIES as UNSUPPORTED_FAMILIES,
+)
+from cccp.calculation.capabilities.builtin import (
+    CapabilityFamilyDescription as CapabilityFamilyDescription,
+)
+from cccp.calculation.capabilities.builtin import (
+    builtin_catalog as builtin_catalog,
+)
+from cccp.calculation.capabilities.builtin import (
+    builtin_catalog_json as builtin_catalog_json,
+)
+from cccp.calculation.capabilities.builtin import (
+    builtin_registry as builtin_registry,
+)
+from cccp.calculation.capabilities.builtin import (
+    describe_family as describe_family,
+)
+from cccp.calculation.capabilities.builtin import (
+    resolve_analysis_entrypoint as resolve_analysis_entrypoint,
+)
 from cccp.calculation.capabilities.contracts import (
     BACKWARD_COMPATIBLE_ADDITIONS as BACKWARD_COMPATIBLE_ADDITIONS,
 )
@@ -158,6 +190,9 @@ from cccp.calculation.capabilities.registry import (
 
 __all__ = [
     "BACKWARD_COMPATIBLE_ADDITIONS",
+    "BUILTIN_CAPABILITY_IDS",
+    "BUILTIN_DESCRIPTORS",
+    "BUILTIN_FAMILIES",
     "CAPABILITY_CATALOG_SCHEMA",
     "CAPABILITY_CONTRACT_VERSION",
     "CAPABILITY_SCHEMA",
@@ -171,10 +206,12 @@ __all__ = [
     "TASK_KINDS",
     "UNKNOWN_FIELD_HISTORICAL_READ_POLICY",
     "UNKNOWN_MAJOR_VERSION_POLICY",
+    "UNSUPPORTED_FAMILIES",
     "CapabilityCatalog",
     "CapabilityContractError",
     "CapabilityDescriptor",
     "CapabilityErrorRecord",
+    "CapabilityFamilyDescription",
     "CapabilityKind",
     "CapabilityProjections",
     "CapabilityQueryResult",
@@ -204,4 +241,9 @@ __all__ = [
     "UnknownMajorVersionError",
     "ValidationLayer",
     "ValidationLayers",
+    "builtin_catalog",
+    "builtin_catalog_json",
+    "builtin_registry",
+    "describe_family",
+    "resolve_analysis_entrypoint",
 ]
