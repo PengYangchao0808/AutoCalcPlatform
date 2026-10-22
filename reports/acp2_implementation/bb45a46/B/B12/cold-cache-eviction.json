@@ -1,0 +1,80 @@
+{
+  "eviction_rebuild": {
+    "bodies_removed": 1,
+    "cold_read": {
+      "body": {
+        "detail": {
+          "code": "resource_not_ready",
+          "message": "not_prepared: artifact_body_missing",
+          "params": {
+            "reason": "artifact_body_missing"
+          },
+          "retryable": true
+        }
+      },
+      "status": 409
+    },
+    "first_operation": "op_4838b2b1fdf7460f8d694d674092e1a8",
+    "rebuilt_read": {
+      "body": {
+        "artifact_ref": {
+          "attempt": 1,
+          "authorization": {
+            "action": "read",
+            "allowed": true,
+            "authorization_version": 6,
+            "principal_id": "principal_local",
+            "project_id": "uncategorized",
+            "scope": "local-single"
+          },
+          "availability": "ready",
+          "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+          "generation": 1,
+          "job_id": "20261023_031453_001_singlepoint",
+          "media_type": "application/json",
+          "operation_id": "op_3f5a28f5a2944b0080862012044f4652",
+          "relative_path": "RESULT/energy/singlepoint_energy.json",
+          "resource_id": "b12_eviction",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 241,
+          "source_refs": [],
+          "source_schema": "",
+          "version": 1
+        },
+        "availability": "ready",
+        "body": "{\n  \"energy\": -1.116759307204,\n  \"energy_hartree\": -1.116759307204,\n  \"method\": \"\",\n  \"schema_version\": \"acp_energy_product_v1\",\n  \"source\": \"task_result.json\",\n  \"step_id\": \"singlepoint\",\n  \"step_kind\": \"singlepoint\",\n  \"unit\": \"hartree\"\n}\n",
+        "body_ref": null,
+        "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "encoding": "identity",
+        "generation": 1,
+        "media_type": "application/json",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 241,
+        "source_refs": [],
+        "source_schema": "",
+        "truncated": false,
+        "version": 1
+      },
+      "status": 200
+    },
+    "reprepare_operation": "op_3f5a28f5a2944b0080862012044f4652"
+  },
+  "get_side_effects": {
+    "task_count_after": 1,
+    "task_count_before": 1
+  },
+  "not_prepared": {
+    "body": {
+      "detail": {
+        "code": "resource_not_ready",
+        "message": "not_prepared: no_operation",
+        "params": {
+          "reason": "no_operation"
+        },
+        "retryable": true
+      }
+    },
+    "status": 409
+  },
+  "receipt": "artifact-main-20261022T212957Z-677819-c7cfdc67.json"
+}

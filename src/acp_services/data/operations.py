@@ -1403,6 +1403,121 @@ class PrepareOperationService:
             )
             return self._record_from_row(self._get_row_locked(operation_id))
 
+    def expire_succeeded_for_resource(
+        self,
+        *,
+        job_id: str,
+        attempt: int,
+        resource_id: str,
+        permission_scope: str = "local-single",
+        reason: str = "",
+    ) -> int:
+        """Expire successful preparations of one resource without a list limit.
+
+        The state predicate keeps concurrent queued/running preparations intact;
+        another resource, attempt or permission scope is never invalidated by
+        reconciling this body's eviction.
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                "UPDATE data_operations SET state=?, error_code=?, error_message=?, "
+                "owner_generation=owner_generation+1, lease_token=NULL, "
+                "lease_expires_at=NULL, updated_at=? WHERE job_id=? AND job_attempt=? "
+                "AND resource_id=? AND permission_scope=? AND state=?",
+                (
+                    PrepareState.EXPIRED.value,
+                    "expired",
+                    reason,
+                    _utc_now_iso(),
+                    str(job_id),
+                    int(attempt),
+                    str(resource_id),
+                    str(permission_scope),
+                    PrepareState.SUCCEEDED.value,
+                ),
+            )
+            return int(cursor.rowcount)
+
+    def expire_older_attempts(
+        self,
+        *,
+        job_id: str,
+        attempt: int,
+        resource_id: str,
+        permission_scope: str = "local-single",
+        reason: str = "superseded_by_newer_attempt",
+    ) -> int:
+        """Expire READY preparations of the same resource from older attempts.
+
+        Cross-attempt replacement: once attempt *N* prepares an artifact, an
+        attempt ``< N`` body must never be served as the current result.  The
+        rows keep their result/audit facts but can no longer report READY; a
+        read of the old attempt is then a named refusal instead of stale bytes.
+        """
+        with self._lock:
+            cursor = self._conn.execute(
+                "UPDATE data_operations SET state=?, error_code=?, error_message=?, "
+                "owner_generation=owner_generation+1, lease_token=NULL, "
+                "lease_expires_at=NULL, updated_at=? WHERE job_id=? AND job_attempt<? "
+                "AND resource_id=? AND permission_scope=? AND state=?",
+                (
+                    PrepareState.EXPIRED.value,
+                    "expired",
+                    reason,
+                    _utc_now_iso(),
+                    str(job_id),
+                    int(attempt),
+                    str(resource_id),
+                    str(permission_scope),
+                    PrepareState.SUCCEEDED.value,
+                ),
+            )
+            return int(cursor.rowcount)
+
+    def expire_for_job(self, job_id: str, *, reason: str = "") -> int:
+        """Expire every still-relevant operation of *job_id* (eviction hook).
+
+        R08: cache eviction (``purge_job`` / TTL sweep) must invalidate the
+        job's SUCCEEDED/QUEUED/RUNNING operations so a same-identity re-enqueue
+        opens a new ``dedup_epoch`` and the cache is rebuilt instead of the
+        merged old success being replayed forever.  Terminal FAILED/CANCELED
+        and already-EXPIRED rows stay untouched.  Returns the number of rows
+        expired.
+        """
+        expired = 0
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                rows = self._conn.execute(
+                    "SELECT operation_id, state FROM data_operations WHERE job_id=?",
+                    (str(job_id),),
+                ).fetchall()
+                for row in rows:
+                    if row["state"] in (
+                        PrepareState.EXPIRED.value,
+                        PrepareState.FAILED.value,
+                        PrepareState.CANCELED.value,
+                    ):
+                        continue
+                    self._conn.execute(
+                        "UPDATE data_operations SET state=?, error_code=?, error_message=?, "
+                        "owner_generation=owner_generation+1, lease_token=NULL, "
+                        "lease_expires_at=NULL, updated_at=? WHERE operation_id=?",
+                        (
+                            PrepareState.EXPIRED.value,
+                            "expired",
+                            reason,
+                            _utc_now_iso(),
+                            row["operation_id"],
+                        ),
+                    )
+                    expired += 1
+                self._conn.execute("COMMIT")
+            except BaseException:
+                self._conn.execute("ROLLBACK")
+                raise
+        return expired
+
     def recover(
         self,
         *,
@@ -1475,6 +1590,32 @@ class PrepareOperationService:
             queued=int(queued["n"]),
             running=int(running["n"]),
         )
+
+
+_NAMED_REFUSAL_CODES = frozenset(
+    {
+        "not_prepared",
+        "remote_cache_missing",
+        "digest_mismatch",
+        "path_traversal",
+        "permission_revoked",
+        "unsupported_capability",
+        "invalid_parameter",
+        "artifact_too_large",
+        "artifact_error",
+    }
+)
+
+
+def _error_code_for(detail: str) -> str:
+    """Return the named refusal code carried by an executor detail string.
+
+    Executors report ``"<code>"`` or ``"<code>:<reason>"``.  Only the frozen
+    vocabulary is surfaced as ``error_code``; anything else stays the generic
+    ``not_prepared`` so a transport message never becomes a typed outcome.
+    """
+    code = str(detail or "").split(":", 1)[0].strip()
+    return code if code in _NAMED_REFUSAL_CODES else "not_prepared"
 
 
 # ---------------------------------------------------------------------------
@@ -1579,7 +1720,12 @@ class PrepareOperationWorker:
             except PrepareOperationError:
                 logger.info("prepare completion rejected for %s", lease.operation_id, exc_info=True)
         else:
-            self._record_failure(lease, "not_prepared", result.detail, retryable=result.retryable)
+            self._record_failure(
+                lease,
+                _error_code_for(result.detail),
+                result.detail,
+                retryable=result.retryable,
+            )
 
     def _record_failure(
         self,

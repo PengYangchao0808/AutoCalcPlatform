@@ -1,10 +1,10 @@
 {
   "schema": "acp2.runtime.control-and-data.v1",
-  "contract_version": "1.0.0",
-  "frozen_at": "2026-10-22",
+  "contract_version": "1.1.0",
+  "frozen_at": "2026-10-23",
   "owner": "B",
   "status": "delivered",
-  "scope": "P1 control, artifact, idempotency and budget fields. P2 adds approval/budget accumulation in runtime/admission-approval.v1.json; this file stays the P1 subset.",
+  "scope": "P1 control, artifact, idempotency and budget fields. P2 adds approval/budget accumulation in runtime/admission-approval.v1.json; this file stays the P1 subset. B12 freezes the ArtifactRef and the explicit prepare/read/analyze operation lifecycle.",
   "control": {
     "commands": [
       "pause",
@@ -273,9 +273,69 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "alias of expected_digest"
         },
         "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "task id (also the path parameter); task_ref.task_id is accepted as the alias"
+        },
+        "relative_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "task-relative source path for a result artifact; absolute paths and parent traversal are invalid-parameter/path_traversal"
+        },
+        "expected_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "trusted expected content digest; a mismatch is digest_mismatch and nothing is published"
+        },
+        "expected_size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "schema_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "science schema id for an EvidenceReport artifact"
+        },
+        "source_refs": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object"
+          },
+          "description": "digested source references for an EvidenceReport artifact"
+        },
+        "evidence_report": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "A EvidenceReport document stored verbatim as an artifact; the platform does not interpret any claim"
+        },
+        "media_type": {
           "type": [
             "string",
             "null"
@@ -315,9 +375,53 @@
         },
         "idempotent_replay": {
           "type": "boolean"
+        },
+        "operation_id": {
+          "type": "string",
+          "required": true
+        },
+        "state": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "pending",
+            "running",
+            "ready",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "required": true,
+          "minimum": 1
+        },
+        "digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "authorization": {
+          "type": "object",
+          "required": true
         }
       },
-      "rule": "prepare is explicit, idempotent, budget-checked and never triggered by a read or a list"
+      "rule": "prepare is explicit, idempotent, budget-checked and never triggered by a read or a list",
+      "rules": [
+        "prepare is explicit, idempotent per (job, attempt, resource, content identity), budget-checked and never triggered by a read or a list",
+        "the same (job, attempt, resource, generation, expected digest) returns the same persistent operation ref; a different generation/digest/payload is a new operation",
+        "the operation is executed by the persistent prepare worker under the data_operations state machine, never inline in the route",
+        "a failed prepare is a named error (not_prepared/remote_cache_missing/digest_mismatch/path_traversal/permission_revoked), never an empty success"
+      ]
     },
     "read": {
       "request_fields": {
@@ -346,6 +450,18 @@
             "base64"
           ],
           "default": "identity"
+        },
+        "digest": {
+          "type": "string",
+          "required": true,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "artifact_ref.digest carried as the digest query on GET /api/v1/jobs/{job_id}/prepared/{artifact_id}"
+        },
+        "generation": {
+          "type": "integer",
+          "required": true,
+          "minimum": 1,
+          "description": "artifact_ref.generation carried as expected_revision"
         }
       },
       "response_fields": {
@@ -393,10 +509,135 @@
         }
       },
       "rule": "a read never fetches; a miss is not-prepared (resource_not_ready) with retryable=true and a prepare hint",
-      "digest_rule": "the response digest MUST equal the requested artifact_ref.digest; a mismatch is conflict, never a silent serve"
+      "digest_rule": "the response digest MUST equal the requested artifact_ref.digest; a mismatch is conflict, never a silent serve",
+      "route": "GET /api/v1/jobs/{job_id}/prepared/{artifact_id}?attempt=&expected_revision=&digest=",
+      "rules": [
+        "a read never fetches (no SSH/SFTP), never enqueues a prepare and never parses or writes a body",
+        "a cache miss is resource_not_ready (not_prepared) with retryable=true and a prepare hint; it is never an empty body",
+        "a stale generation is revision_conflict/generation_stale; a cross-attempt read is revision_conflict/attempt_mismatch or not prepared",
+        "a digest mismatch or corrupt stored body is revision_conflict/digest_mismatch and zero bytes are served",
+        "a path traversal/unsafe token is input_invalid/path_traversal before any filesystem access"
+      ]
     },
     "generation_rule": "task_id + attempt + artifact_id + generation + digest is the only verifiable artifact reference; any subset is insufficient",
-    "path_rule": "relative_path is task-relative; an absolute host path is never returned"
+    "path_rule": "relative_path is task-relative; an absolute host path is never returned",
+    "artifact_ref": {
+      "schema": "acp2.artifact-ref.v1",
+      "version": 1,
+      "description": "The only verifiable artifact reference. Every read validates all five identity fields and never serves on a partial match.",
+      "fields": {
+        "schema": {
+          "type": "string",
+          "const": "acp2.artifact-ref.v1",
+          "required": true
+        },
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "required": true
+        },
+        "job_id": {
+          "type": "string",
+          "required": true,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "required": true
+        },
+        "resource_id": {
+          "type": "string",
+          "required": true,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "required": true
+        },
+        "digest": {
+          "type": "string",
+          "required": true,
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "required": true
+        },
+        "availability": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "absent",
+            "preparing",
+            "ready",
+            "unavailable"
+          ]
+        },
+        "media_type": {
+          "type": "string",
+          "required": false
+        },
+        "relative_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "task-relative source path; an absolute host path is never returned"
+        },
+        "source_schema": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "science schema id when the bytes are an EvidenceReport; never interpreted by the platform"
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "digested source references recorded verbatim"
+        },
+        "authorization": {
+          "type": "object",
+          "required": true,
+          "fields": [
+            "principal_id",
+            "project_id",
+            "scope",
+            "action",
+            "allowed",
+            "authorization_version"
+          ],
+          "description": "Inert projection of the boundary that admitted the operation; every request re-authorizes through entry_authz."
+        },
+        "operation_id": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "identity_rule": "job_id + attempt + resource_id + generation + digest is the only verifiable artifact reference; any subset is insufficient",
+      "digest_rule": "the served digest MUST equal the requested digest; a mismatch is revision_conflict/digest_mismatch and no bytes are served",
+      "generation_rule": "a newer generation supersedes older ones; an old generation read is revision_conflict/generation_stale",
+      "attempt_rule": "a body published for attempt N is never served for another attempt; cross-attempt reads are revision_conflict/attempt_mismatch or not prepared",
+      "authorization_rule": "a project-scope revocation/denial refuses prepare/read/analyze; the projection never widens access"
+    },
+    "operation": {
+      "route": "GET /api/v1/operations/{operation_id}",
+      "query_only": true,
+      "projection": "PrepareOperation projection plus the frozen artifact_ref (when purpose=artifact)",
+      "rule": "never enqueues, leases, fetches, parses or mutates an operation"
+    },
+    "evidence_report": {
+      "schema_source": "A docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "storage": "opaque bytes published as an artifact; schema_ref and source_refs are recorded verbatim",
+      "read": "bytes are served unchanged and verified by digest; no claim field is added",
+      "platform_rule": "the platform never interprets an EvidenceReport as claim supported; claim status remains exactly what A wrote",
+      "registration_owner": "B18 owns the evidence registration mapping; B12 owns storage/read only"
+    }
   },
   "idempotency": {
     "scope": "one key per (resolved principal, command, key). A key from another principal is a different operation.",
@@ -520,5 +761,67 @@
       "read-digest-mismatch.negative.json",
       "idempotency-key-reuse.negative.json"
     ]
+  },
+  "analyze": {
+    "route": "POST /api/v1/jobs/{job_id}/analyze",
+    "request_fields": {
+      "analysis_id": {
+        "type": "string",
+        "required": true,
+        "enum": [
+          "vibration.compute",
+          "vibration.analyze"
+        ]
+      },
+      "input_refs": {
+        "type": "array",
+        "required": true,
+        "minItems": 1,
+        "description": "frozen ArtifactRef inputs"
+      },
+      "explicit": {
+        "type": "boolean",
+        "const": true,
+        "required": true
+      },
+      "parameters": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "plan_digest": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      },
+      "idempotency_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+      }
+    },
+    "registry": "src/acp_services/runtime/analysis_capabilities.py::DEFAULT_ANALYSIS_REGISTRY",
+    "implicit_result": {
+      "status": 400,
+      "code": "input_invalid",
+      "params": {
+        "field": "explicit",
+        "rule": "explicit_required"
+      }
+    },
+    "unregistered_result": {
+      "status": 422,
+      "code": "unsupported_capability",
+      "params": {
+        "owner": "A",
+        "rule": "analysis_capability_not_registered"
+      }
+    },
+    "rule": "explicit-only and registry-gated; until A registers a capability handler exactly zero science is started and no task/prepare is created"
   }
 }

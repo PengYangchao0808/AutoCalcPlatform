@@ -261,6 +261,33 @@ def normalize_prepare(payload: Mapping[str, Any]) -> dict[str, Any]:
     relative_path = _string(request, "relative_path")
     if relative_path is not None:
         data["relative_path"] = relative_path
+    # B12 artifact facts: accepted verbatim (the executor re-derives the
+    # committed digest/size; a supplied digest/size is a trusted expectation).
+    for field in ("expected_digest", "content_digest", "media_type", "schema_ref"):
+        value = _string(request, field)
+        if value is not None:
+            data[field] = value
+    expected_size = _optional_int(request, "expected_size_bytes", minimum=0)
+    if expected_size is not None:
+        data["expected_size_bytes"] = expected_size
+    source_refs = request.get("source_refs")
+    if source_refs is not None:
+        if not isinstance(source_refs, list) or not all(
+            isinstance(item, Mapping) for item in source_refs
+        ):
+            raise ApplicationParamError(
+                "source_refs must be an array of objects",
+                params={"field": "source_refs", "rule": "type"},
+            )
+        data["source_refs"] = [dict(item) for item in source_refs]
+    evidence_report = request.get("evidence_report")
+    if evidence_report is not None:
+        if not isinstance(evidence_report, Mapping):
+            raise ApplicationParamError(
+                "evidence_report must be an object",
+                params={"field": "evidence_report", "rule": "type"},
+            )
+        data["evidence_report"] = dict(evidence_report)
     idempotency = _optional_idempotency(request)
     if idempotency is not None:
         data["idempotency_key"] = idempotency

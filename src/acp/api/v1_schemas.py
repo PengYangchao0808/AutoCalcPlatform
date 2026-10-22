@@ -1357,7 +1357,8 @@ class NodeBootstrapResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Structure-viewer models (docs/archive/2026-10-16/history/ACP_Structure_Viewer_Modification_Plan.md §4).
+# Structure-viewer models
+# (docs/archive/2026-10-16/history/ACP_Structure_Viewer_Modification_Plan.md §4).
 # ---------------------------------------------------------------------------
 
 
@@ -1812,7 +1813,8 @@ class V1SamplingFrameResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# TS Mode frequency sources (docs/archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md §8).
+# TS Mode frequency sources
+# (docs/archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md §8).
 # ---------------------------------------------------------------------------
 
 
@@ -1928,6 +1930,14 @@ class V1PrepareRequest(BaseModel):
     generation: int | None = Field(default=None, ge=1)
     expected_revision: int | None = Field(default=None, ge=0)
     relative_path: str | None = None
+    # B12 artifact facts (optional; the committed values are always re-derived).
+    expected_digest: str | None = None
+    content_digest: str | None = None
+    expected_size_bytes: int | None = Field(default=None, ge=0)
+    schema_ref: str | None = None
+    source_refs: list[dict[str, Any]] | None = None
+    evidence_report: dict[str, Any] | None = None
+    media_type: str | None = None
     idempotency_key: str | None = None
 
 

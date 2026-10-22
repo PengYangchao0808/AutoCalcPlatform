@@ -36,6 +36,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from collections.abc import Mapping
@@ -4139,6 +4140,758 @@ def _run_three_entry(
     return EXIT_NOT_VERIFIED, assertions, extensions
 
 
+def _http_json_status(url: str, timeout: float) -> tuple[int, Any]:
+    """GET *url* and return ``(status, body)`` instead of raising on 4xx/5xx."""
+    try:
+        return 200, _http_json(url, timeout)
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            body = raw.decode("utf-8", errors="replace")
+        return int(exc.code), body
+
+
+def _http_post_json_status(url: str, payload: dict[str, Any], timeout: float) -> tuple[int, Any]:
+    """POST JSON *payload* and return ``(status, body)`` instead of raising."""
+    try:
+        return 200, _http_json_post(url, payload, timeout)
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            body = raw.decode("utf-8", errors="replace")
+        return int(exc.code), body
+
+
+def _canonical_json_bytes(document: Mapping[str, Any]) -> bytes:
+    return json.dumps(
+        dict(document), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+
+
+def _artifact_negative_matrix(
+    base: str,
+    job_id: str,
+    attempt: int,
+    *,
+    digest: str,
+    size_bytes: int,
+    fixture_dir: Path,
+    run_root: Path | None,
+    timeout: float,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Exercise the controller-observable negative rows and name every refusal."""
+    rows: list[dict[str, Any]] = []
+    evidence: dict[str, Any] = {}
+    quoted = quote(job_id, safe="")
+    prepare_url = base + f"/api/v1/jobs/{quoted}/prepare"
+
+    def read_url(artifact_id: str, *, generation: int = 1, value: str = digest) -> str:
+        query = urllib.parse.urlencode(
+            {
+                "attempt": attempt,
+                "expected_revision": generation,
+                "digest": value,
+                "max_bytes": 262144,
+            }
+        )
+        return base + f"/api/v1/jobs/{quoted}/prepared/{quote(artifact_id, safe='')}?{query}"
+
+    # 1. not prepared (cold cache) — repeated reads stay cold and serve nothing.
+    status, body = _http_json_status(read_url("b12_never_prepared"), timeout)
+    detail = body.get("detail") if isinstance(body, dict) else None
+    cold_ok = (
+        status == 409
+        and isinstance(detail, dict)
+        and detail.get("code") == "resource_not_ready"
+        and "not_prepared" in str(detail.get("message") or "")
+    )
+    status_repeat, _ = _http_json_status(read_url("b12_never_prepared"), timeout)
+    rows.append(
+        {
+            "row": "not_prepared",
+            "status": "PASS" if cold_ok and status_repeat == 409 else "FAIL",
+            "detail": (
+                f"status={status} repeat={status_repeat} code={detail and detail.get('code')}"
+            ),
+        }
+    )
+    evidence["not_prepared"] = {"status": status, "body": body}
+
+    # 2. corrupt digest read — named conflict and no body.
+    corrupt = "sha256:" + "0" * 64
+    status, body = _http_json_status(read_url("singlepoint_energy", value=corrupt), timeout)
+    detail = body.get("detail") if isinstance(body, dict) else None
+    digest_ok = (
+        status == 409
+        and isinstance(detail, dict)
+        and detail.get("code") == "revision_conflict"
+        and (detail.get("params") or {}).get("rule") == "digest_mismatch"
+        and "body" not in (body or {})
+    )
+    rows.append(
+        {
+            "row": "corrupt_digest",
+            "status": "PASS" if digest_ok else "FAIL",
+            "detail": f"status={status} body_keys={sorted(body or {})}",
+        }
+    )
+    evidence["corrupt_digest"] = {"status": status, "body": body}
+
+    # 3. corrupt expected digest prepare — the operation fails by name.
+    status, body = _http_post_json_status(
+        prepare_url,
+        {
+            "schema_version": 1,
+            "purpose": "artifact",
+            "job_id": job_id,
+            "artifact_id": "b12_corrupt_digest",
+            "attempt": attempt,
+            "generation": 1,
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "expected_digest": corrupt,
+        },
+        timeout,
+    )
+    operation_id = str((body or {}).get("operation_id") or "") if isinstance(body, dict) else ""
+    final: dict[str, Any] = {}
+    deadline = time.monotonic() + timeout
+    while operation_id and time.monotonic() < deadline:
+        op_status, final = _http_json_status(base + f"/api/v1/operations/{operation_id}", timeout)
+        if isinstance(final, dict) and final.get("state") in {"ready", "failed", "cancelled"}:
+            break
+        time.sleep(0.05)
+    error = final.get("error") if isinstance(final, dict) else None
+    corrupt_prepare_ok = (
+        status == 200
+        and isinstance(final, dict)
+        and final.get("state") == "failed"
+        and isinstance(error, dict)
+        and error.get("code") == "digest_mismatch"
+    )
+    rows.append(
+        {
+            "row": "corrupt_prepare",
+            "status": "PASS" if corrupt_prepare_ok else "FAIL",
+            "detail": f"prepare={status} state={final.get('state')} error={error}",
+        }
+    )
+    evidence["corrupt_prepare"] = {"prepare": status, "operation": final}
+
+    # 4. old generation — a newer generation makes the older read stale.
+    status, body = _http_post_json_status(
+        prepare_url,
+        {
+            "schema_version": 1,
+            "purpose": "artifact",
+            "job_id": job_id,
+            "artifact_id": "b12_generation",
+            "attempt": attempt,
+            "generation": 1,
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "expected_digest": digest,
+            "expected_size_bytes": size_bytes,
+        },
+        timeout,
+    )
+    gen_one = str((body or {}).get("operation_id") or "") if isinstance(body, dict) else ""
+    _wait_artifact_operation(base, gen_one, timeout)
+    status, body = _http_post_json_status(
+        prepare_url,
+        {
+            "schema_version": 1,
+            "purpose": "artifact",
+            "job_id": job_id,
+            "artifact_id": "b12_generation",
+            "attempt": attempt,
+            "generation": 2,
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "expected_digest": digest,
+            "expected_size_bytes": size_bytes,
+        },
+        timeout,
+    )
+    gen_two = str((body or {}).get("operation_id") or "") if isinstance(body, dict) else ""
+    _wait_artifact_operation(base, gen_two, timeout)
+    status, body = _http_json_status(
+        read_url("b12_generation", generation=1, value=digest), timeout
+    )
+    detail = body.get("detail") if isinstance(body, dict) else None
+    old_ok = (
+        status == 409
+        and isinstance(detail, dict)
+        and detail.get("code") == "revision_conflict"
+        and (detail.get("params") or {}).get("rule") == "generation_stale"
+    )
+    rows.append(
+        {
+            "row": "old_generation",
+            "status": "PASS" if old_ok else "FAIL",
+            "detail": f"status={status} detail={detail}",
+        }
+    )
+    evidence["old_generation"] = {
+        "generation_1": {"operation_id": gen_one},
+        "generation_2": {"operation_id": gen_two},
+        "read": {"status": status, "body": body},
+    }
+
+    # 5. path traversal — refused before any filesystem access.
+    sentinel = fixture_dir / "b12-escape-proof.json"
+    if sentinel.exists():
+        sentinel.unlink()
+    status, body = _http_post_json_status(
+        prepare_url,
+        {
+            "schema_version": 1,
+            "purpose": "artifact",
+            "job_id": job_id,
+            "artifact_id": "b12_traversal",
+            "attempt": attempt,
+            "generation": 1,
+            "relative_path": "../../b12-escape-proof.json",
+        },
+        timeout,
+    )
+    detail = body.get("detail") if isinstance(body, dict) else None
+    traversal_ok = (
+        status == 400
+        and isinstance(detail, dict)
+        and (detail.get("params") or {}).get("rule") == "path_traversal"
+        and not sentinel.exists()
+    )
+    rows.append(
+        {
+            "row": "path_traversal",
+            "status": "PASS" if traversal_ok else "FAIL",
+            "detail": f"status={status} sentinel_exists={sentinel.exists()}",
+        }
+    )
+    evidence["path_traversal"] = {"status": status, "body": body}
+
+    # 6. eviction → cold read → explicit re-prepare rebuilds the body.
+    evict_id = "b12_eviction"
+    status, body = _http_post_json_status(
+        prepare_url,
+        {
+            "schema_version": 1,
+            "purpose": "artifact",
+            "job_id": job_id,
+            "artifact_id": evict_id,
+            "attempt": attempt,
+            "generation": 1,
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "expected_digest": digest,
+            "expected_size_bytes": size_bytes,
+        },
+        timeout,
+    )
+    first_operation = str((body or {}).get("operation_id") or "") if isinstance(body, dict) else ""
+    first_final = _wait_artifact_operation(base, first_operation, timeout)
+    first_read_status, _ = _http_json_status(
+        read_url(evict_id, generation=1, value=digest), timeout
+    )
+    bodies_removed = 0
+    if run_root is not None:
+        generation_dir = Path(run_root) / "artifact-store" / job_id / str(attempt) / evict_id / "1"
+        for body_path in generation_dir.glob("*.body"):
+            body_path.unlink()
+            bodies_removed += 1
+    cold_status, cold_body = _http_json_status(
+        read_url(evict_id, generation=1, value=digest), timeout
+    )
+    cold_detail = cold_body.get("detail") if isinstance(cold_body, dict) else None
+    cold_ok = (
+        first_read_status == 200
+        and first_final.get("state") == "ready"
+        and bodies_removed >= 1
+        and cold_status == 409
+        and isinstance(cold_detail, dict)
+        and cold_detail.get("code") == "resource_not_ready"
+        and "not_prepared" in str(cold_detail.get("message") or "")
+    )
+    reprepare_status, reprepare_body = _http_post_json_status(
+        prepare_url,
+        {
+            "schema_version": 1,
+            "purpose": "artifact",
+            "job_id": job_id,
+            "artifact_id": evict_id,
+            "attempt": attempt,
+            "generation": 1,
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "expected_digest": digest,
+            "expected_size_bytes": size_bytes,
+        },
+        timeout,
+    )
+    second_operation = (
+        str((reprepare_body or {}).get("operation_id") or "")
+        if isinstance(reprepare_body, dict)
+        else ""
+    )
+    second_final = _wait_artifact_operation(base, second_operation, timeout)
+    rebuilt_status, rebuilt_body = _http_json_status(
+        read_url(evict_id, generation=1, value=digest), timeout
+    )
+    rebuilt_ok = (
+        reprepare_status == 200
+        and second_operation
+        and second_operation != first_operation
+        and second_final.get("state") == "ready"
+        and rebuilt_status == 200
+        and isinstance(rebuilt_body, dict)
+        and rebuilt_body.get("digest") == digest
+        and int(rebuilt_body.get("size_bytes") or -1) == size_bytes
+    )
+    rows.append(
+        {
+            "row": "eviction_rebuild",
+            "status": "PASS" if cold_ok and rebuilt_ok else "FAIL",
+            "detail": (
+                f"first={first_operation} cold={cold_status} "
+                f"reprepare={second_operation} rebuilt={rebuilt_status} "
+                f"bodies_removed={bodies_removed}"
+            ),
+        }
+    )
+    evidence["eviction_rebuild"] = {
+        "first_operation": first_operation,
+        "cold_read": {"status": cold_status, "body": cold_body},
+        "reprepare_operation": second_operation,
+        "rebuilt_read": {"status": rebuilt_status, "body": rebuilt_body},
+        "bodies_removed": bodies_removed,
+    }
+
+    evidence["rows"] = rows
+    return rows, evidence
+
+
+def _wait_artifact_operation(base: str, operation_id: str, timeout: float) -> dict[str, Any]:
+    """Poll one prepare operation until it is terminal (query-only GETs)."""
+    if not operation_id:
+        return {}
+    deadline = time.monotonic() + timeout
+    body: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        status, body = _http_json_status(base + f"/api/v1/operations/{operation_id}", timeout)
+        if isinstance(body, dict) and body.get("state") in {"ready", "failed", "cancelled"}:
+            return body
+        time.sleep(0.05)
+    return body
+
+
+def _run_artifact(
+    controller: str,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B12: real prepare/read against B10's completed task + negative matrix.
+
+    Every happy-path assertion compares the served digest/size/generation with
+    the frozen fixture, so a silent substitution can never pass.  The extended
+    matrix rows that need a second task / remote job / revoked identity are
+    exercised by the same test file the task requires; its exit is part of the
+    scenario verdict.
+    """
+    base = controller.rstrip("/")
+    fixture_file = Path(fixture_path)
+    fixture = json.loads(fixture_file.read_text(encoding="utf-8"))
+    fixture_dir = fixture_file.parent
+    job_id = str(fixture.get("job_id") or "")
+    attempt = int(fixture.get("attempt") or 1)
+    release_id = str(fixture.get("release_id") or "")
+    quoted = quote(job_id, safe="")
+    artifacts = fixture.get("artifacts") if isinstance(fixture.get("artifacts"), list) else []
+    evidence_dir = out_dir / "artifact"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "read",
+        "acceptance.target": "local",
+        "b12.fixture": str(fixture_file),
+        "b12.job_id": job_id,
+        "b12.attempt": attempt,
+        "b12.release_id": release_id,
+        "b12.source": fixture.get("source"),
+    }
+    artifacts_written: list[dict[str, Any]] = []
+    try:
+        before_tasks = _controller_task_count(base, timeout)
+        results: dict[str, dict[str, Any]] = {}
+        for artifact in artifacts:
+            if not isinstance(artifact, dict):
+                continue
+            artifact_id = str(artifact.get("artifact_id") or "")
+            relative_path = str(artifact.get("relative_path") or "")
+            generation = int(artifact.get("generation") or 1)
+            digest = str(artifact.get("digest") or "")
+            size_bytes = int(artifact.get("size_bytes") or 0)
+            payload = {
+                "schema_version": 1,
+                "purpose": "artifact",
+                "job_id": job_id,
+                "artifact_id": artifact_id,
+                "attempt": attempt,
+                "generation": generation,
+                "relative_path": relative_path,
+                "expected_digest": digest,
+                "expected_size_bytes": size_bytes,
+                "media_type": artifact.get("media_type"),
+            }
+            status, prepared = _http_post_json_status(
+                base + f"/api/v1/jobs/{quoted}/prepare", payload, timeout
+            )
+            if status != 200 or not isinstance(prepared, dict):
+                results[artifact_id] = {"prepare_status": status, "prepared": prepared}
+                continue
+            operation_id = str(prepared.get("operation_id") or "")
+            operation_ref = prepared.get("operation_ref") or {}
+            replay_status, replay = _http_post_json_status(
+                base + f"/api/v1/jobs/{quoted}/prepare", payload, timeout
+            )
+            projection = _wait_artifact_operation(base, operation_id, timeout)
+            query = urllib.parse.urlencode(
+                {
+                    "attempt": attempt,
+                    "expected_revision": generation,
+                    "digest": digest,
+                    "max_bytes": 262144,
+                }
+            )
+            read_status, read_body = _http_json_status(
+                base + f"/api/v1/jobs/{quoted}/prepared/{quote(artifact_id, safe='')}?{query}",
+                timeout,
+            )
+            served = ""
+            if isinstance(read_body, dict) and isinstance(read_body.get("body"), str):
+                served = read_body["body"]
+            observed = "sha256:" + hashlib.sha256(served.encode("utf-8")).hexdigest()
+            results[artifact_id] = {
+                "prepare_status": status,
+                "operation_ref": operation_ref,
+                "operation_id": operation_id,
+                "replay_status": replay_status,
+                "replay_operation_id": (replay or {}).get("operation_id")
+                if isinstance(replay, dict)
+                else None,
+                "projection": projection,
+                "read_status": read_status,
+                "read": read_body,
+                "observed_digest": observed,
+            }
+            (evidence_dir / f"prepare-{_safe_name(artifact_id)}.json").write_text(
+                json.dumps(prepared, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            (evidence_dir / f"operation-{_safe_name(artifact_id)}.json").write_text(
+                json.dumps(projection, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            (evidence_dir / f"read-{_safe_name(artifact_id)}.json").write_text(
+                json.dumps(read_body, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            if served:
+                body_path = evidence_dir / f"body-{_safe_name(artifact_id)}"
+                body_path.write_text(served, encoding="utf-8")
+                artifacts_written.append(
+                    {
+                        "path": str(body_path.relative_to(out_dir)),
+                        "size_bytes": len(served.encode("utf-8")),
+                        "sha256": hashlib.sha256(served.encode("utf-8")).hexdigest(),
+                    }
+                )
+            digest_ok = (
+                read_status == 200
+                and isinstance(read_body, dict)
+                and read_body.get("digest") == digest
+                and int(read_body.get("size_bytes") or -1) == size_bytes
+                and int(read_body.get("generation") or -1) == generation
+                and observed == digest
+            )
+            replay_ok = (
+                replay_status == 200
+                and isinstance(replay, dict)
+                and replay.get("operation_id") == operation_id
+            )
+            projection_state = projection.get("state") if isinstance(projection, dict) else None
+            served_digest = read_body.get("digest") if isinstance(read_body, dict) else None
+            served_size = read_body.get("size_bytes") if isinstance(read_body, dict) else None
+            served_generation = read_body.get("generation") if isinstance(read_body, dict) else None
+            assertions.append(
+                {
+                    "name": f"artifact:{artifact_id}:digest_generation_agree",
+                    "status": "PASS" if digest_ok else "FAIL",
+                    "detail": (
+                        f"read={read_status} requested={digest} served={served_digest} "
+                        f"size={served_size}/{size_bytes} "
+                        f"generation={served_generation}/{generation}"
+                    ),
+                }
+            )
+            assertions.append(
+                {
+                    "name": f"artifact:{artifact_id}:prepare_idempotent",
+                    "status": "PASS" if replay_ok else "FAIL",
+                    "detail": (
+                        f"first={operation_id} "
+                        f"replay={replay.get('operation_id') if isinstance(replay, dict) else None}"
+                    ),
+                }
+            )
+            assertions.append(
+                {
+                    "name": f"artifact:{artifact_id}:operation_ready",
+                    "status": "PASS" if projection_state == "ready" else "FAIL",
+                    "detail": f"state={projection_state}",
+                }
+            )
+
+        # Different generation is a different persistent operation.
+        primary = artifacts[0] if artifacts and isinstance(artifacts[0], dict) else {}
+        if primary:
+            primary_digest = str(primary.get("digest") or "")
+            primary_size = int(primary.get("size_bytes") or 0)
+            gen_status, gen_body = _http_post_json_status(
+                base + f"/api/v1/jobs/{quoted}/prepare",
+                {
+                    "schema_version": 1,
+                    "purpose": "artifact",
+                    "job_id": job_id,
+                    "artifact_id": "b12_different_generation",
+                    "attempt": attempt,
+                    "generation": 2,
+                    "relative_path": str(primary.get("relative_path") or ""),
+                    "expected_digest": primary_digest,
+                    "expected_size_bytes": primary_size,
+                },
+                timeout,
+            )
+            gen_two_id = (
+                str((gen_body or {}).get("operation_id") or "")
+                if isinstance(gen_body, dict)
+                else ""
+            )
+            gen_one_id = results.get(str(primary.get("artifact_id") or ""), {}).get("operation_id")
+            assertions.append(
+                {
+                    "name": "artifact:different_generation_new_operation",
+                    "status": "PASS"
+                    if gen_status == 200 and gen_two_id and gen_two_id != gen_one_id
+                    else "FAIL",
+                    "detail": f"generation1={gen_one_id} generation2={gen_two_id}",
+                }
+            )
+
+        # EvidenceReport: stored/read verbatim, never interpreted.
+        evidence_spec = (
+            fixture.get("evidence_report")
+            if isinstance(fixture.get("evidence_report"), dict)
+            else {}
+        )
+        if evidence_spec:
+            report_path = Path(str(evidence_spec.get("path") or ""))
+            if not report_path.is_absolute():
+                report_path = fixture_dir / report_path
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report_bytes = _canonical_json_bytes(report)
+            report_digest = "sha256:" + hashlib.sha256(report_bytes).hexdigest()
+            status, prepared = _http_post_json_status(
+                base + f"/api/v1/jobs/{quoted}/prepare",
+                {
+                    "schema_version": 1,
+                    "purpose": "artifact",
+                    "job_id": job_id,
+                    "artifact_id": str(evidence_spec.get("artifact_id") or "evidence_report"),
+                    "attempt": attempt,
+                    "generation": 1,
+                    "expected_digest": report_digest,
+                    "expected_size_bytes": len(report_bytes),
+                    "schema_ref": evidence_spec.get("schema_ref"),
+                    "source_refs": evidence_spec.get("source_refs") or [],
+                    "evidence_report": report,
+                },
+                timeout,
+            )
+            operation_id = (
+                str((prepared or {}).get("operation_id") or "")
+                if isinstance(prepared, dict)
+                else ""
+            )
+            projection = _wait_artifact_operation(base, operation_id, timeout)
+            query = urllib.parse.urlencode(
+                {
+                    "attempt": attempt,
+                    "expected_revision": 1,
+                    "digest": report_digest,
+                    "max_bytes": 262144,
+                }
+            )
+            evidence_artifact_id = str(evidence_spec.get("artifact_id") or "evidence_report")
+            read_status, read_body = _http_json_status(
+                base
+                + f"/api/v1/jobs/{quoted}/prepared/"
+                + f"{quote(evidence_artifact_id, safe='')}?{query}",
+                timeout,
+            )
+            served = read_body.get("body") if isinstance(read_body, dict) else None
+            served_doc = json.loads(served) if isinstance(served, str) and served else None
+            claim_status = (
+                (served_doc.get("claims") or [{}])[0].get("status")
+                if isinstance(served_doc, dict)
+                else None
+            )
+            evidence_projection_state = (
+                projection.get("state") if isinstance(projection, dict) else None
+            )
+            evidence_ok = (
+                status == 200
+                and isinstance(projection, dict)
+                and projection.get("state") == "ready"
+                and read_status == 200
+                and isinstance(read_body, dict)
+                and read_body.get("digest") == report_digest
+                and served_doc == report
+                and claim_status == evidence_spec.get("expected_claim_status")
+                and "claim_supported" not in read_body
+            )
+            assertions.append(
+                {
+                    "name": "artifact:evidence_report_stored_not_interpreted",
+                    "status": "PASS" if evidence_ok else "FAIL",
+                    "detail": (
+                        f"prepare={status} state={evidence_projection_state} "
+                        f"read={read_status} claim_status={claim_status} "
+                        f"digest={report_digest}"
+                    ),
+                }
+            )
+            (evidence_dir / "evidence-report-read.json").write_text(
+                json.dumps(read_body, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            if isinstance(served, str):
+                body_path = evidence_dir / "body-evidence_report.json"
+                body_path.write_text(served, encoding="utf-8")
+                artifacts_written.append(
+                    {
+                        "path": str(body_path.relative_to(out_dir)),
+                        "size_bytes": len(served.encode("utf-8")),
+                        "sha256": hashlib.sha256(served.encode("utf-8")).hexdigest(),
+                    }
+                )
+
+        # Negative matrix: controller-observable rows.
+        rows, matrix_evidence = _artifact_negative_matrix(
+            base,
+            job_id,
+            attempt,
+            digest=str(primary.get("digest") or ""),
+            size_bytes=int(primary.get("size_bytes") or 0),
+            fixture_dir=fixture_dir,
+            run_root=Path(str(fixture.get("run_root"))) if fixture.get("run_root") else None,
+            timeout=timeout,
+        )
+        assertions.extend(
+            {
+                "name": f"artifact:{row['row']}",
+                "status": row["status"],
+                "detail": row["detail"],
+            }
+            for row in rows
+        )
+        (evidence_dir / "negative-matrix.json").write_text(
+            json.dumps(matrix_evidence, indent=2, sort_keys=True), encoding="utf-8"
+        )
+
+        # Extended rows (second task / cross-attempt / remote / revocation) are
+        # the required B12 test file; its exit is part of this scenario verdict.
+        env = dict(os.environ)
+        existing = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = str(REPO_ROOT / "src") + (os.pathsep + existing if existing else "")
+        pytest_cmd = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_acp2_runtime_artifact.py",
+            "-q",
+        ]
+        pytest_proc = subprocess.run(
+            pytest_cmd,
+            cwd=str(REPO_ROOT),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=max(60.0, timeout),
+        )
+        (evidence_dir / "pytest.txt").write_text(
+            pytest_proc.stdout + pytest_proc.stderr, encoding="utf-8"
+        )
+        assertions.append(
+            {
+                "name": "artifact:extended_negative_matrix_tests",
+                "status": "PASS" if pytest_proc.returncode == 0 else "FAIL",
+                "detail": f"exit={pytest_proc.returncode} log=artifact/pytest.txt",
+            }
+        )
+
+        after_tasks = _controller_task_count(base, timeout)
+        assertions.append(
+            {
+                "name": "artifact:zero_task_side_effects",
+                "status": "PASS" if before_tasks == after_tasks else "FAIL",
+                "detail": f"before={before_tasks} after={after_tasks}",
+            }
+        )
+        extensions.update(
+            {
+                "b12.task_count_before": before_tasks,
+                "b12.task_count_after": after_tasks,
+                "b12.results": results,
+                "b12.negative_matrix": rows,
+                "b12.revoked_permission": (
+                    "PASS via tests/test_acp2_runtime_artifact.py::"
+                    "test_project_scope_denial_refuses_prepare_read_analyze "
+                    "(project-scope denial); API-key revocation is B15/NOT_VERIFIED"
+                ),
+                "b12.missing_remote_cache": (
+                    "PASS via tests/test_acp2_runtime_artifact.py::"
+                    "test_missing_remote_cache_is_named_and_never_fetches"
+                ),
+                "b12.cross_attempt": (
+                    "PASS via tests/test_acp2_runtime_artifact.py::"
+                    "test_cross_attempt_read_never_serves_newer_bytes"
+                ),
+                "b12.old_response_after_switch": (
+                    "PASS via tests/test_acp2_runtime_artifact.py::"
+                    "test_old_response_after_switching_tasks_is_refused"
+                ),
+                "b12.manifest_generation": 1,
+                "b12.operation_id": results.get(str(primary.get("artifact_id") or ""), {}).get(
+                    "operation_id"
+                ),
+                "b12.release_id": release_id,
+                "b12.artifacts": artifacts_written,
+            }
+        )
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        subprocess.TimeoutExpired,
+    ) as exc:
+        extensions["b12.probe_error"] = f"{type(exc).__name__}: {exc}"
+        assertions.append({"name": "b12_probe", "status": "FAIL", "detail": str(exc)})
+        return EXIT_FAIL, assertions, extensions
+
+    passed = bool(assertions) and all(item["status"] == "PASS" for item in assertions)
+    return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
+
+
 def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
     if args.out:
         return str(Path(args.out).resolve())
@@ -4215,8 +4968,10 @@ def dry_run_commands(
         )
     elif spec.scenario == "artifact":
         commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task --controller "
-            f"{shlex.quote(controller)} export {shlex.quote(fixture)}"
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario artifact --phase {shlex.quote(phase_name)} "
+            f"--controller {shlex.quote(controller)} --fixture {shlex.quote(fixture)} "
+            f"--out {shlex.quote(out)}"
         )
     elif spec.scenario == "control-recovery":
         commands.append(
@@ -4431,6 +5186,19 @@ def execute_scenario(
             return code_value
 
         handler = three_entry
+    elif spec.scenario == "artifact":
+
+        def artifact(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_artifact(
+                args.controller, str(args.fixture), out_dir, timeout
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b12.artifacts", [])
+            outcome["reason"] = extensions.get("b12.probe_error")
+            return code_value
+
+        handler = artifact
     else:
         handler = _b01_stub_handler(spec)
 
@@ -4456,6 +5224,7 @@ def execute_scenario(
         "local-singlepoint",
         "lsf-singlepoint",
         "three-entry",
+        "artifact",
     }:
         result = (
             "PASS"
@@ -4485,6 +5254,7 @@ def execute_scenario(
         "local-singlepoint",
         "lsf-singlepoint",
         "three-entry",
+        "artifact",
     }:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -4524,6 +5294,17 @@ def execute_scenario(
         release_id = extensions.get("b10.release_id")
         if isinstance(release_id, str) and release_id:
             refs["release_id"] = release_id
+    if spec.scenario == "artifact":
+        for key, extension in (
+            ("job_id", "b12.job_id"),
+            ("attempt", "b12.attempt"),
+            ("release_id", "b12.release_id"),
+            ("operation_id", "b12.operation_id"),
+            ("manifest_generation", "b12.manifest_generation"),
+        ):
+            value = extensions.get(extension)
+            if value is not None and value != "":
+                refs[key] = value
     if spec.scenario == "lsf-singlepoint":
         for key, extension in (
             ("job_id", "b11.task_ref"),
@@ -4847,6 +5628,26 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 "usage error: three-entry --fixture must carry task_id/job_id "
                 "(the already-submitted TaskRef); the harness never submits a second task",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+    if spec.scenario == "artifact":
+        try:
+            descriptor = json.loads(Path(args.fixture).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(
+                f"usage error: artifact --fixture must be an artifact descriptor JSON: {exc}",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+        if (
+            not isinstance(descriptor, dict)
+            or not str(descriptor.get("job_id") or "").strip()
+            or not isinstance(descriptor.get("artifacts"), list)
+            or not descriptor.get("artifacts")
+        ):
+            print(
+                "usage error: artifact --fixture must carry job_id and a non-empty artifacts array",
                 file=sys.stderr,
             )
             return EXIT_USAGE

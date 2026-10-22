@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "report_id": "er_b12_static_fixture",
+  "subject": {
+    "subject_id": "20261023_031453_001_singlepoint",
+    "subject_kind": "calculation_result",
+    "science_identity": null,
+    "input_digests": [
+      {"algorithm": "sha256", "value": "d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9"}
+    ]
+  },
+  "execution": {
+    "terminal_state": "completed",
+    "argv": [],
+    "exit_code": 0,
+    "started_at": null,
+    "finished_at": null,
+    "stdout_path": null,
+    "stderr_path": null
+  },
+  "claims": [
+    {
+      "claim_id": "b12_fixture_claim",
+      "statement": "Static A-schema fixture: the platform stores bytes and never interprets claim status.",
+      "status": "not_evaluated",
+      "scope": {"subject": "static fixture", "applicability": "system_specific"},
+      "source_refs": [],
+      "missing_checks": [{"check_id": "not_executed", "reason": "static B12 fixture, not a science run"}]
+    }
+  ],
+  "limitations": [
+    {"limitation_id": "b12-static", "description": "Static fixture copied from A's evidence schema shape; not an executed run."}
+  ]
+}

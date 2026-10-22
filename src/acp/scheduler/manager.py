@@ -82,9 +82,11 @@ from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task
 from acp_services.contracts.envelope import EnvelopeError
 from acp_services.data.contracts import ResourceKind
 from acp_services.data.operations import (
+    PrepareOperationError,
     PrepareOperationService,
     PrepareOperationWorker,
     PrepareRequest,
+    PrepareState,
 )
 from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
 from acp_services.runtime.execution_chain import (
@@ -2346,6 +2348,17 @@ class JobManager:
                 cache.purge_job(job_id)
             except Exception:
                 logger.debug("Failed to purge remote cache for job %s", job_id, exc_info=True)
+        # R08: eviction must also expire the job's prepare operations — a
+        # surviving SUCCEEDED row would keep answering READY and merge future
+        # same-identity enqueues instead of allowing a rebuild epoch.
+        operations = getattr(self, "_prepare_operations", None)
+        if operations is not None:
+            try:
+                operations.expire_for_job(job_id, reason="cache_purged")
+            except (OSError, sqlite3.Error, PrepareOperationError):
+                logger.warning(
+                    "Failed to expire prepare operations for job %s", job_id, exc_info=True
+                )
         # Cascade-delete structure-source org rows (index + metadata +
         # tags + index_state) — design plan §5.3 last paragraph.
         try:
@@ -5330,6 +5343,8 @@ class JobManager:
 
     def _build_prepare_executor(self) -> Any:
         from acp.services_data_bootstrap import (
+            build_artifact_prepare_executor,
+            build_composite_prepare_executor,
             build_local_prepare_identity_provider,
             build_prepare_executor,
         )
@@ -5338,12 +5353,22 @@ class JobManager:
         # local-single states its policy explicitly (no generation/binding/
         # authorization registry, always authorized) instead of falling back
         # to "no provider means allow".
-        return build_prepare_executor(
+        catalog = build_prepare_executor(
             job_lookup=self.store.get,
             identity_provider=build_local_prepare_identity_provider(self.store.get),
             cache_provider=lambda: self.structure_cache,
             is_remote=self._is_remote_job,
         )
+        # B12: explicit artifact prepares (local result files or the stored
+        # EvidenceReport) use the same persistent operation state machine and
+        # the read-only artifact source; they never reuse the remote catalog
+        # fetch path and never make a GET do work.
+        artifact = build_artifact_prepare_executor(
+            job_lookup=self.store.get,
+            cache=self.structure_cache,
+            store_root=self.run_root / "artifact-store",
+        )
+        return build_composite_prepare_executor(catalog, artifact)
 
     def _prepare_request(self, record: JobRecord) -> PrepareRequest:
         workflow = str(record.spec.workflow or "")
@@ -5357,9 +5382,17 @@ class JobManager:
             payload={"workflow": workflow, "job_id": record.id, "attempt": record.attempt},
         )
 
+    def ensure_prepare_worker(self) -> None:
+        """Start the prepare worker if it is not already running.
+
+        Artifact prepares must work without any remote fetcher (the B12 real
+        source is a local task), so this is no longer gated on remote
+        execution.  The worker is the only component that executes leases; a
+        route never performs the work inline.
+        """
+        self._ensure_prepare_worker()
+
     def _ensure_prepare_worker(self) -> None:
-        if self._remote_fetcher is None:
-            return
         with self._lock:
             if self._closing:
                 return
@@ -5378,7 +5411,7 @@ class JobManager:
     def _queue_catalog_prefetch(self, job_id: str) -> None:
         """Enqueue one terminal remote job as a persistent prepare operation.
 
-        No-op when remote fetching is not configured.  The operation is durable
+        No-op when remote fetching is not configured. The operation is durable
         (deduplicated by its stable scoped key); the wake signal below only
         shortens the worker's poll latency and is never the source of truth.
         """
@@ -5387,6 +5420,7 @@ class JobManager:
         record = self.store.get(job_id)
         if record is None or not record.status.is_terminal or not self._is_remote_job(record):
             return
+        self._expire_bodyless_succeeded_operations(record)
         try:
             self._prepare_operations.enqueue(self._prepare_request(record))
         except Exception:
@@ -5397,6 +5431,45 @@ class JobManager:
             self._catalog_prefetch_queue.put(job_id)
         except Exception:  # pragma: no cover - unbounded queue never raises
             pass
+
+    def _expire_bodyless_succeeded_operations(self, record: JobRecord) -> None:
+        """Expire SUCCEEDED prepare operations whose cache body is gone (R08).
+
+        Covers evictions that bypass ``_purge_job_records`` (TTL sweeps, manual
+        ``cache.purge_job``): without this the same-identity enqueue merges the
+        stale success and the catalog can never be rebuilt.
+        """
+        operations = getattr(self, "_prepare_operations", None)
+        cache = getattr(self, "_remote_structure_cache", None)
+        if operations is None or cache is None:
+            return
+        try:
+            from acp.services_data_bootstrap import _catalog_ready_for_attempt
+
+            workflow = str(record.spec.workflow or "")
+            ready = _catalog_ready_for_attempt(
+                cache, cache.job_root(record.id), record.id, workflow, int(record.attempt)
+            )
+            if ready:
+                return
+            request = self._prepare_request(record)
+            expired = operations.expire_succeeded_for_resource(
+                job_id=request.job_id,
+                attempt=request.attempt,
+                resource_id=request.resource_id,
+                permission_scope=request.permission_scope,
+                reason="cache_body_missing",
+            )
+            if expired:
+                logger.info(
+                    "Expired %d bodyless catalog preparation(s) for job %s",
+                    expired,
+                    record.id,
+                )
+        except (OSError, sqlite3.Error, PrepareOperationError):
+            logger.warning(
+                "Prepare-operation reconcile failed for job %s", record.id, exc_info=True
+            )
 
     def _prefetch_remote_catalog(self, job_id: str) -> None:
         """Pull one terminal remote job's small catalog files into the cache.
@@ -5424,8 +5497,31 @@ class JobManager:
         Repairs jobs that reached a terminal state before this process started
         (e.g. across an upgrade) so their viewers are ready on first open, and
         replays operations an earlier process left undecided (DB authority).
+        Artifact prepares are recovered even when no remote fetcher is
+        configured (the B12 source is a local task), while a catalog-only
+        backlog still needs the remote fetcher to make progress.
         """
         if self._remote_fetcher is None:
+            pending = self._prepare_operations.list(
+                states=[PrepareState.QUEUED, PrepareState.RUNNING]
+            )
+            artifact_pending = any(
+                str(dict(operation.payload or {}).get("purpose") or "") == "artifact"
+                for operation in pending
+            )
+            if not artifact_pending:
+                return
+            try:
+                report = self._prepare_operations.recover()
+                if report.requeued:
+                    logger.info(
+                        "Recovered %d undecided prepare operation(s) on startup",
+                        report.requeued,
+                    )
+            except Exception:
+                logger.warning("Prepare-operation recovery failed", exc_info=True)
+            if self._prepare_operations.pending_count() > 0:
+                self._ensure_prepare_worker()
             return
         try:
             report = self._prepare_operations.recover()

@@ -1,0 +1,110 @@
+{
+  "artifact_ref": {
+    "attempt_rule": "a body published for attempt N is never served for another attempt; cross-attempt reads are revision_conflict/attempt_mismatch or not prepared",
+    "authorization_rule": "a project-scope revocation/denial refuses prepare/read/analyze; the projection never widens access",
+    "description": "The only verifiable artifact reference. Every read validates all five identity fields and never serves on a partial match.",
+    "digest_rule": "the served digest MUST equal the requested digest; a mismatch is revision_conflict/digest_mismatch and no bytes are served",
+    "fields": {
+      "attempt": {
+        "minimum": 1,
+        "required": true,
+        "type": "integer"
+      },
+      "authorization": {
+        "description": "Inert projection of the boundary that admitted the operation; every request re-authorizes through entry_authz.",
+        "fields": [
+          "principal_id",
+          "project_id",
+          "scope",
+          "action",
+          "allowed",
+          "authorization_version"
+        ],
+        "required": true,
+        "type": "object"
+      },
+      "availability": {
+        "enum": [
+          "absent",
+          "preparing",
+          "ready",
+          "unavailable"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "digest": {
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "required": true,
+        "type": "string"
+      },
+      "generation": {
+        "minimum": 1,
+        "required": true,
+        "type": "integer"
+      },
+      "job_id": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "required": true,
+        "type": "string"
+      },
+      "media_type": {
+        "required": false,
+        "type": "string"
+      },
+      "operation_id": {
+        "required": false,
+        "type": "string"
+      },
+      "relative_path": {
+        "description": "task-relative source path; an absolute host path is never returned",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "resource_id": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "required": true,
+        "type": "string"
+      },
+      "schema": {
+        "const": "acp2.artifact-ref.v1",
+        "required": true,
+        "type": "string"
+      },
+      "size_bytes": {
+        "minimum": 0,
+        "required": true,
+        "type": "integer"
+      },
+      "source_refs": {
+        "description": "digested source references recorded verbatim",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "source_schema": {
+        "description": "science schema id when the bytes are an EvidenceReport; never interpreted by the platform",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "version": {
+        "const": 1,
+        "required": true,
+        "type": "integer"
+      }
+    },
+    "generation_rule": "a newer generation supersedes older ones; an old generation read is revision_conflict/generation_stale",
+    "identity_rule": "job_id + attempt + resource_id + generation + digest is the only verifiable artifact reference; any subset is insufficient",
+    "schema": "acp2.artifact-ref.v1",
+    "version": 1
+  },
+  "contract": "runtime/control-and-data.v1.json",
+  "contract_version": "1.1.0",
+  "control_and_data_sha256": "39994a31052506745a1a3101bbedf55c5f1a33dc7950c22f0780b4987801ff46",
+  "manifest_contract_digest": "d0a338dc934b720253e4ca872b08b8c5b7a10b090c41387e1f4bdc8ecbe011d1"
+}
