@@ -868,6 +868,7 @@ function renderReactionChanges3D() {
 
 function renderReactionDefinitionPanel() {
   renderReactionChangesPanel();
+  renderReactionSpecPanel(); // T-23: QuestionSpec/ReactionSpec binding panel
 }
 
 function addCoordinateFromMeasurement(m) {
@@ -2502,3 +2503,549 @@ function setupMechanismSectionListeners() {
   if (refreshBtn) refreshBtn.addEventListener("click", function() { fetchMechProjects(true); });
 }
 
+// ── QuestionSpec / ReactionSpec binding (T-23 / C17a) ────────────────────
+// Incremental additions on top of the legacy global-function module (same
+// style, no rewrite): explicit reactants / products / candidate elementary
+// steps, net-reaction vs elementary-step distinction, atom mapping, charge /
+// spin, stereo, solvent / temperature / standard state, human confirmations +
+// approximations with the input revision, and the frozen P2 input range.
+//
+// P2 input range is FROZEN to MOL / SDF / SMILES + the existing structure
+// upload. CDXML defaults to DEFERRED and is never claimed supported until A
+// delivers the format semantics (requests/A-req-02) AND B ships an authorized
+// upload/parse entry (requests/B-req-09). A deferred input is recorded as a
+// deferred reference and is NEVER parsed into an empty structure.
+// No scientific parsing authority lives in the browser: formats are recorded
+// by reference; only xyz atom lines are read for display labels (parseXyzAtoms).
+
+var REACTION_P2_ACCEPTED_INPUT_FORMATS = ["mol", "sdf", "smiles", "structure_upload"];
+var REACTION_P2_DEFERRED_INPUT_FORMATS = ["cdxml"];
+var REACTION_INPUT_STATUS_ACCEPTED = "accepted";
+var REACTION_INPUT_STATUS_DEFERRED = "DEFERRED";
+var REACTION_SPEC_KIND_NET = "net_reaction";
+var REACTION_SPEC_KIND_ELEMENTARY = "elementary_step";
+
+function classifyReactionInputFormat(format) {
+  var key = String(format == null ? "" : format).toLowerCase();
+  if (REACTION_P2_DEFERRED_INPUT_FORMATS.indexOf(key) !== -1) {
+    return {
+      format: key,
+      status: REACTION_INPUT_STATUS_DEFERRED,
+      supported: false,
+      claim: "not_supported_until_A-req-02_and_B-req-09",
+    };
+  }
+  if (REACTION_P2_ACCEPTED_INPUT_FORMATS.indexOf(key) !== -1) {
+    return {
+      format: key,
+      status: REACTION_INPUT_STATUS_ACCEPTED,
+      supported: true,
+      claim: "p2_frozen_input_range",
+    };
+  }
+  return {
+    format: key,
+    status: "unsupported",
+    supported: false,
+    claim: "outside_p2_frozen_input_range",
+  };
+}
+
+function reactionInputFormatPolicy() {
+  return {
+    accepted: REACTION_P2_ACCEPTED_INPUT_FORMATS.slice(),
+    deferred: REACTION_P2_DEFERRED_INPUT_FORMATS.slice(),
+    structureUpload: "structure_upload",
+    note: "P2 input range frozen to MOL/SDF/SMILES + structure upload; CDXML is DEFERRED (A-req-02 / B-req-09)",
+  };
+}
+
+function createReactionSpecParticipant(entry) {
+  entry = entry || {};
+  // No silent identity fill: absent charge / multiplicity / stereo stay null.
+  return {
+    ref: entry.ref != null ? String(entry.ref) : "",
+    label: entry.label != null ? String(entry.label) : "",
+    charge: entry.charge === undefined ? null : entry.charge,
+    multiplicity: entry.multiplicity === undefined ? null : entry.multiplicity,
+    stereo: entry.stereo === undefined ? null : entry.stereo,
+    atomLabels: Array.isArray(entry.atomLabels) ? entry.atomLabels.slice() : [],
+    atomMap: Array.isArray(entry.atomMap) ? entry.atomMap.slice() : [],
+    input: entry.input ? {
+      input_id: entry.input.input_id != null ? String(entry.input.input_id) : "",
+      format: entry.input.format != null ? String(entry.input.format).toLowerCase() : "",
+      status: entry.input.status != null ? String(entry.input.status) : "",
+    } : null,
+  };
+}
+
+function createReactionSpecState() {
+  return {
+    kind: REACTION_SPEC_KIND_NET,
+    submitAs: "single_ts",
+    reactants: [],
+    products: [],
+    candidateSteps: [],
+    atomMapping: { status: "unmapped", pairs: [], stale: false },
+    conditions: { solvent: null, temperature: null, standardState: null },
+    humanConfirmations: [],
+    approximations: [],
+    inputRevision: 1,
+    inputFormats: [],
+  };
+}
+
+function ensureReactionSpecState(state) {
+  var target = state || ensureReactionDefinitionState();
+  if (!target.spec) target.spec = createReactionSpecState();
+  return target.spec;
+}
+
+function currentReactionSpecState() {
+  return ensureReactionSpecState(ensureReactionDefinitionState());
+}
+
+function addReactionSpecParticipant(state, side, entry) {
+  var spec = ensureReactionSpecState(state);
+  var list = side === "product" ? spec.products : spec.reactants;
+  var participant = createReactionSpecParticipant(entry);
+  list.push(participant);
+  spec.inputRevision += 1;
+  return participant;
+}
+
+function addReactionSpecCandidateStep(state, step) {
+  var spec = ensureReactionSpecState(state);
+  step = step || {};
+  var entry = {
+    step_id: step.step_id != null ? String(step.step_id) : "step-" + (spec.candidateSteps.length + 1),
+    role: step.role != null ? String(step.role) : "elementary",
+    reactant_refs: Array.isArray(step.reactant_refs) ? step.reactant_refs.slice() : [],
+    product_refs: Array.isArray(step.product_refs) ? step.product_refs.slice() : [],
+    note: step.note != null ? String(step.note) : "",
+  };
+  spec.candidateSteps.push(entry);
+  spec.inputRevision += 1;
+  return entry;
+}
+
+function setReactionSpecKind(state, kind) {
+  var spec = ensureReactionSpecState(state);
+  if (kind !== REACTION_SPEC_KIND_NET && kind !== REACTION_SPEC_KIND_ELEMENTARY) {
+    throw new Error("reaction spec kind must be net_reaction or elementary_step");
+  }
+  spec.kind = kind;
+  spec.inputRevision += 1;
+  return spec.kind;
+}
+
+function setReactionSpecSubmitAs(state, submitAs) {
+  var spec = ensureReactionSpecState(state);
+  spec.submitAs = String(submitAs || "single_ts");
+  spec.inputRevision += 1;
+  return spec.submitAs;
+}
+
+// Record, never silently rewrite: conditions are explicit user input.
+function setReactionSpecConditions(state, conditions) {
+  var spec = ensureReactionSpecState(state);
+  conditions = conditions || {};
+  if (hasOwnField(conditions, "solvent")) spec.conditions.solvent = conditions.solvent;
+  if (hasOwnField(conditions, "temperature")) spec.conditions.temperature = conditions.temperature;
+  if (hasOwnField(conditions, "standardState")) spec.conditions.standardState = conditions.standardState;
+  spec.inputRevision += 1;
+  return spec.conditions;
+}
+
+function hasOwnField(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+// P2 input adoption. A DEFERRED (CDXML) input is recorded as a deferred
+// reference and NEVER parsed — in particular it must never come back as an
+// empty-atom structure. Accepted formats are recorded by reference; xyz-like
+// content may be read for display labels only via parseXyzAtoms.
+function adoptReactionSpecInput(state, input) {
+  var spec = ensureReactionSpecState(state);
+  input = input || {};
+  var classification = classifyReactionInputFormat(input.format);
+  var record = {
+    input_id: input.input_id != null ? String(input.input_id) : "input-" + (spec.inputFormats.length + 1),
+    format: classification.format,
+    status: classification.status,
+    supported: classification.supported,
+    role: input.role != null ? String(input.role) : null,
+    structure: null,
+  };
+  if (classification.status === REACTION_INPUT_STATUS_DEFERRED) {
+    // Deferred: keep the reference, parse nothing, create no structure.
+    spec.inputFormats.push(record);
+    spec.inputRevision += 1;
+    return record;
+  }
+  if (classification.status !== REACTION_INPUT_STATUS_ACCEPTED) {
+    throw new Error("reaction input format outside the frozen P2 range: " + classification.format);
+  }
+  if (input.content != null && classification.format === "structure_upload" && typeof parseXyzAtoms === "function") {
+    var atoms = parseXyzAtoms(String(input.content));
+    record.structure = {
+      atomCount: atoms.length,
+      atomLabels: atoms.map(function (atom) { return atom.elem || "?"; }),
+    };
+  }
+  spec.inputFormats.push(record);
+  spec.inputRevision += 1;
+  return record;
+}
+
+function validateReactionSpec(state, options) {
+  var spec = ensureReactionSpecState(state);
+  options = options || {};
+  var errors = [];
+  var clarifications = [];
+
+  if (!spec.products.length) {
+    errors.push({
+      code: "missing_product",
+      message: "reaction spec has no product participant",
+      path: "reaction.products",
+    });
+  }
+  if (!spec.reactants.length) {
+    errors.push({
+      code: "missing_reactant",
+      message: "reaction spec has no reactant participant",
+      path: "reaction.reactants",
+    });
+  }
+
+  // Duplicate atom map: a map number pairs one reactant atom with one product
+  // atom, so uniqueness is enforced per side — a number may appear once in the
+  // reactants and once in the products, never twice on the same side.
+  function duplicateMapErrors(participants, side) {
+    var seen = {};
+    participants.forEach(function (participant) {
+      (participant.atomMap || []).forEach(function (mapNumber, atomIndex) {
+        if (mapNumber == null || mapNumber === "") return;
+        var key = String(mapNumber);
+        if (hasOwnField(seen, key)) {
+          errors.push({
+            code: "duplicate_atom_map",
+            message: "atom map " + key + " is used by more than one " + side + " atom",
+            path: "reaction.atom_mapping[" + key + "]",
+          });
+        } else {
+          seen[key] = { atomIndex: atomIndex };
+        }
+      });
+    });
+  }
+  duplicateMapErrors(spec.reactants, "reactant");
+  duplicateMapErrors(spec.products, "product");
+
+  // Charge conservation needs explicit charges on every participant — a
+  // missing charge is never silently filled with 0.
+  var chargeMissing = spec.reactants.concat(spec.products).filter(function (participant) {
+    return participant.charge == null;
+  });
+  if (chargeMissing.length) {
+    errors.push({
+      code: "missing_identity",
+      message: "charge is unspecified for " + chargeMissing.length + " participant(s); refusing to default it",
+      path: "reaction.charge",
+    });
+  } else {
+    var reactantCharge = spec.reactants.reduce(function (sum, participant) {
+      return sum + Number(participant.charge);
+    }, 0);
+    var productCharge = spec.products.reduce(function (sum, participant) {
+      return sum + Number(participant.charge);
+    }, 0);
+    if (reactantCharge !== productCharge) {
+      errors.push({
+        code: "charge_non_conservation",
+        message: "reactant charge sum " + reactantCharge + " != product charge sum " + productCharge,
+        path: "reaction.charge",
+      });
+    }
+  }
+
+  // A net multi-step reaction entered as a single TS is a clarification item,
+  // never a silent submit.
+  var submitAs = options.submitAs || spec.submitAs || "single_ts";
+  if (spec.kind === REACTION_SPEC_KIND_NET && spec.candidateSteps.length > 1 && submitAs === "single_ts") {
+    clarifications.push({
+      clarification_id: "clar-net-multi-step-single-ts",
+      field_path: "reaction.candidate_steps",
+      prompt: "净反应包含多个基元步骤 (net reaction with " + spec.candidateSteps.length +
+        " candidate elementary steps)：请拆分为基元步骤，或显式确认单 TS 近似。",
+      status: "open",
+      options: [
+        { value: "split_steps", label: "拆分为基元步骤 (split into elementary steps)" },
+        { value: "confirm_single_ts", label: "确认单 TS 近似 (confirm single-TS approximation)" },
+      ],
+      answer: null,
+      revision: 0,
+    });
+  }
+
+  return { ok: errors.length === 0 && clarifications.length === 0, errors: errors, clarifications: clarifications };
+}
+
+function canSubmitReactionSpec(state, options) {
+  return validateReactionSpec(state, options).ok;
+}
+
+// Submit gate: rejects go back as errors, open clarifications (e.g. a net
+// multi-step reaction entered as a single TS) never return a submit action.
+function evaluateReactionSpecSubmit(state, options) {
+  var result = validateReactionSpec(state, options);
+  if (result.errors.length) {
+    return { action: "reject", errors: result.errors, clarifications: result.clarifications };
+  }
+  if (result.clarifications.length) {
+    return { action: "clarify", errors: [], clarifications: result.clarifications };
+  }
+  return { action: "submit", errors: [], clarifications: [] };
+}
+
+// Incremental edit entry point. Atom labels / references, mapping and stereo
+// are preserved across edits; a structure replacement that invalidates them
+// marks them stale instead of silently rewriting; explicit edits are the only
+// way to change them.
+function applyReactionSpecEdit(state, edit) {
+  var spec = ensureReactionSpecState(state);
+  edit = edit || {};
+  var report = { preserved: { atomLabels: true, atomMap: true, stereo: true }, stale: [], inputRevision: null };
+  var side = edit.side === "product" ? "products" : "reactants";
+  var list = spec[side];
+  var index = typeof edit.index === "number" ? edit.index : -1;
+  var participant = index >= 0 && index < list.length ? list[index] : null;
+
+  switch (edit.type) {
+    case "set_condition":
+      setReactionSpecConditions(state, edit.conditions || {});
+      break;
+    case "set_charge":
+      if (participant) {
+        participant.charge = edit.charge === undefined ? participant.charge : edit.charge;
+        spec.inputRevision += 1;
+      }
+      break;
+    case "set_multiplicity":
+      if (participant) {
+        participant.multiplicity = edit.multiplicity === undefined ? participant.multiplicity : edit.multiplicity;
+        spec.inputRevision += 1;
+      }
+      break;
+    case "set_stereo":
+      if (participant) {
+        participant.stereo = edit.stereo === undefined ? participant.stereo : edit.stereo;
+        spec.inputRevision += 1;
+      }
+      break;
+    case "replace_structure":
+      if (participant) {
+        var previousLabels = participant.atomLabels.length;
+        if (Array.isArray(edit.atomLabels)) {
+          participant.atomLabels = edit.atomLabels.slice();
+          report.preserved.atomLabels = false;
+        }
+        if (Array.isArray(edit.atomMap)) {
+          participant.atomMap = edit.atomMap.slice();
+          report.preserved.atomMap = false;
+        }
+        if (hasOwnField(edit, "stereo")) {
+          participant.stereo = edit.stereo;
+          report.preserved.stereo = false;
+        }
+        if (edit.atomCount != null && edit.atomCount !== previousLabels && !Array.isArray(edit.atomLabels)) {
+          // Structure changed underneath: mapping / stereo become stale, never
+          // silently rewritten.
+          spec.atomMapping.stale = true;
+          report.stale.push("atom_mapping");
+          if (participant.stereo != null) {
+            report.stale.push("stereo");
+          }
+        }
+        spec.inputRevision += 1;
+      }
+      break;
+    case "set_mapping":
+      spec.atomMapping.pairs = Array.isArray(edit.pairs) ? edit.pairs.slice() : spec.atomMapping.pairs;
+      spec.atomMapping.status = edit.status != null ? String(edit.status) : "mapped";
+      spec.atomMapping.stale = false;
+      report.preserved.atomMap = false;
+      spec.inputRevision += 1;
+      break;
+    default:
+      throw new Error("unknown reaction spec edit type: " + edit.type);
+  }
+  report.inputRevision = spec.inputRevision;
+  return report;
+}
+
+function recordReactionSpecConfirmation(state, item) {
+  var spec = ensureReactionSpecState(state);
+  item = item || {};
+  var record = {
+    item: item.item != null ? String(item.item) : "",
+    value: item.value != null ? String(item.value) : "",
+    note: item.note != null ? String(item.note) : "",
+    inputRevision: spec.inputRevision,
+  };
+  spec.humanConfirmations.push(record);
+  spec.inputRevision += 1;
+  return record;
+}
+
+function recordReactionSpecApproximation(state, item) {
+  var spec = ensureReactionSpecState(state);
+  item = item || {};
+  var record = {
+    item: item.item != null ? String(item.item) : "",
+    approximation: item.approximation != null ? String(item.approximation) : "",
+    note: item.note != null ? String(item.note) : "",
+    inputRevision: spec.inputRevision,
+  };
+  spec.approximations.push(record);
+  spec.inputRevision += 1;
+  return record;
+}
+
+function reactionSpecKindLabel(kind) {
+  return kind === REACTION_SPEC_KIND_ELEMENTARY
+    ? "基元步骤 (elementary step)"
+    : "净反应 (net reaction)";
+}
+
+// Display projection: everything the panel must show. Stable field names.
+function describeReactionSpec(state) {
+  var spec = ensureReactionSpecState(state);
+  function participantView(participant) {
+    return {
+      ref: participant.ref,
+      label: participant.label,
+      charge: participant.charge,
+      multiplicity: participant.multiplicity,
+      stereo: participant.stereo,
+      atomLabels: participant.atomLabels.slice(),
+      atomMap: participant.atomMap.slice(),
+      input: participant.input ? Object.assign({}, participant.input) : null,
+    };
+  }
+  return {
+    kind: spec.kind,
+    kindLabel: reactionSpecKindLabel(spec.kind),
+    kindDistinction: "净反应 (net reaction) 是总反应计量；基元步骤 (elementary step) 对应单个过渡态 — 二者不可混同。",
+    submitAs: spec.submitAs,
+    reactants: spec.reactants.map(participantView),
+    products: spec.products.map(participantView),
+    candidateSteps: spec.candidateSteps.map(function (step) {
+      return Object.assign({}, step);
+    }),
+    atomMapping: {
+      status: spec.atomMapping.status,
+      stale: spec.atomMapping.stale,
+      pairs: spec.atomMapping.pairs.slice(),
+    },
+    chargeSpin: spec.reactants.concat(spec.products).map(function (participant) {
+      return {
+        ref: participant.ref,
+        label: participant.label,
+        charge: participant.charge,
+        multiplicity: participant.multiplicity,
+      };
+    }),
+    stereo: spec.reactants.concat(spec.products).map(function (participant) {
+      return { ref: participant.ref, label: participant.label, stereo: participant.stereo };
+    }),
+    conditions: {
+      solvent: spec.conditions.solvent,
+      temperature: spec.conditions.temperature,
+      standardState: spec.conditions.standardState,
+    },
+    humanConfirmations: spec.humanConfirmations.map(function (item) { return Object.assign({}, item); }),
+    approximations: spec.approximations.map(function (item) { return Object.assign({}, item); }),
+    inputRevision: spec.inputRevision,
+    inputFormats: spec.inputFormats.map(function (item) { return Object.assign({}, item); }),
+    inputPolicy: reactionInputFormatPolicy(),
+  };
+}
+
+function formatReactionSpecParticipantLine(participant) {
+  var charge = participant.charge == null ? "未指定 (unspecified)" : String(participant.charge);
+  var spin = participant.multiplicity == null ? "未指定 (unspecified)" : String(participant.multiplicity);
+  var stereo = participant.stereo == null ? "未指定 (unspecified)" : String(participant.stereo);
+  return (participant.ref || participant.label || "?") +
+    " · charge/spin: " + charge + " / " + spin +
+    " · stereo: " + stereo +
+    " · atom labels: [" + (participant.atomLabels || []).join(", ") + "]" +
+    " · atom map: [" + (participant.atomMap || []).map(function (n) { return n == null ? "?" : n; }).join(", ") + "]";
+}
+
+function renderReactionSpecPanel() {
+  var container = document.getElementById("mech-reaction-spec");
+  if (!container) return;
+  var view = describeReactionSpec(ensureReactionDefinitionState());
+  var e = typeof escapeHtml === "function" ? escapeHtml : function (value) { return String(value); };
+  var html = "";
+  html += '<div class="mech-spec-block" id="mech-spec-kind">' +
+    '<strong>' + e(t("mech.spec.kind") || "反应类型 (reaction kind)") + ':</strong> ' + e(view.kindLabel) +
+    '<div class="mech-inline-note">' + e(view.kindDistinction) + "</div></div>";
+  html += '<div class="mech-spec-block" id="mech-spec-reactants"><strong>' +
+    e(t("mech.spec.reactants") || "反应物 (reactants)") + "</strong><ul>" +
+    (view.reactants.length ? view.reactants.map(function (participant) {
+      return "<li>" + e(formatReactionSpecParticipantLine(participant)) + "</li>";
+    }).join("") : "<li>—</li>") + "</ul></div>";
+  html += '<div class="mech-spec-block" id="mech-spec-products"><strong>' +
+    e(t("mech.spec.products") || "产物 (products)") + "</strong><ul>" +
+    (view.products.length ? view.products.map(function (participant) {
+      return "<li>" + e(formatReactionSpecParticipantLine(participant)) + "</li>";
+    }).join("") : "<li>—</li>") + "</ul></div>";
+  html += '<div class="mech-spec-block" id="mech-spec-steps"><strong>' +
+    e(t("mech.spec.steps") || "候选基元步骤 (candidate elementary steps)") + "</strong><ul>" +
+    (view.candidateSteps.length ? view.candidateSteps.map(function (step) {
+      return "<li>" + e(step.step_id + " · " + step.role) + "</li>";
+    }).join("") : "<li>—</li>") + "</ul></div>";
+  html += '<div class="mech-spec-block" id="mech-spec-mapping"><strong>' +
+    e(t("mech.spec.mapping") || "原子映射 (atom mapping)") + ":</strong> " +
+    e(view.atomMapping.status + (view.atomMapping.stale ? " · STALE" : "")) + "</div>";
+  html += '<div class="mech-spec-block" id="mech-spec-charge-spin"><strong>' +
+    e(t("mech.spec.charge_spin") || "电荷/自旋 (charge/spin)") + "</strong><ul>" +
+    view.chargeSpin.map(function (item) {
+      return "<li>" + e((item.ref || item.label || "?") + " · charge " +
+        (item.charge == null ? "未指定 (unspecified)" : item.charge) + " · spin " +
+        (item.multiplicity == null ? "未指定 (unspecified)" : item.multiplicity)) + "</li>";
+    }).join("") + "</ul></div>";
+  html += '<div class="mech-spec-block" id="mech-spec-stereo"><strong>' +
+    e(t("mech.spec.stereo") || "立体 (stereo)") + "</strong><ul>" +
+    view.stereo.map(function (item) {
+      return "<li>" + e((item.ref || item.label || "?") + " · " +
+        (item.stereo == null ? "未指定 (unspecified)" : item.stereo)) + "</li>";
+    }).join("") + "</ul></div>";
+  html += '<div class="mech-spec-block" id="mech-spec-conditions"><strong>' +
+    e(t("mech.spec.conditions") || "溶剂/温度/标准态 (solvent/temperature/standard state)") + ":</strong> " +
+    e("solvent " + (view.conditions.solvent == null ? "未指定 (unspecified)" : view.conditions.solvent) +
+      " · temperature " + (view.conditions.temperature == null ? "未指定 (unspecified)" : view.conditions.temperature) +
+      " · standard state " + (view.conditions.standardState == null ? "未指定 (unspecified)" : view.conditions.standardState)) +
+    "</div>";
+  html += '<div class="mech-spec-block" id="mech-spec-input-formats"><strong>' +
+    e(t("mech.spec.input_formats") || "输入格式 (input formats)") + ":</strong> " +
+    e(view.inputPolicy.accepted.join(" / ") + " + " + view.inputPolicy.structureUpload +
+      " · CDXML: " + REACTION_INPUT_STATUS_DEFERRED) + "</div>";
+  html += '<div class="mech-spec-block" id="mech-spec-confirmations"><strong>' +
+    e(t("mech.spec.confirmations") || "人工确认/近似 (human confirmations/approximations)") + "</strong><ul>" +
+    (view.humanConfirmations.map(function (item) {
+      return "<li>" + e("confirmed " + item.item + "=" + item.value + " @rev " + item.inputRevision) + "</li>";
+    }).concat(view.approximations.map(function (item) {
+      return "<li>" + e("approximation " + item.item + "=" + item.approximation + " @rev " + item.inputRevision) + "</li>";
+    })).join("") || "<li>—</li>") + "</ul></div>";
+  html += '<div class="mech-spec-block" id="mech-spec-input-revision"><strong>' +
+    e(t("mech.spec.input_revision") || "输入版本 (input revision)") + ":</strong> " +
+    e(String(view.inputRevision)) + "</div>";
+  container.innerHTML = html;
+  if (window.ACPScienceQuestion && typeof window.ACPScienceQuestion.setReactionSpecView === "function") {
+    window.ACPScienceQuestion.setReactionSpecView(view);
+  }
+}
