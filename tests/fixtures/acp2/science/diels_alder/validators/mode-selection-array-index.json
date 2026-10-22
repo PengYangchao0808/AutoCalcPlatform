@@ -1,0 +1,11 @@
+{
+  "schema": "acp2.science.mode-selection",
+  "schema_version": 1,
+  "constructed": true,
+  "description": "Constructed NEGATIVE fixture: the selection uses an array-position key ('index') only. The validator must reject the record instead of guessing the native printed index.",
+  "selection": {
+    "index": 6,
+    "mapping_status": "resolved",
+    "source_step": "candidate_frequency"
+  }
+}
