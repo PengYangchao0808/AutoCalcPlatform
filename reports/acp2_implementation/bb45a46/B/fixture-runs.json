@@ -7,7 +7,7 @@
   "derivation_rule": "scenario_timeout_seconds = max_queue_wait_seconds + max_run_seconds + max_prepare_seconds + cleanup_seconds + margin_seconds (arithmetic only; no separate x1.1 rule)",
   "fixtures": [
     {
-      "attempt": null,
+      "attempt": 1,
       "backend": "local",
       "budget": {
         "cores": 1,
@@ -17,6 +17,7 @@
         "walltime_s": 60
       },
       "cleanup_seconds": 10,
+      "evidence": "B/B10/local-singlepoint/",
       "evidence_owner": "B10",
       "fixture_id": "fx-local-singlepoint-h2-sto3g-v1",
       "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
@@ -28,22 +29,31 @@
       "max_queue_wait_seconds": 0,
       "max_run_seconds": 60,
       "method": {
+        "basis": "STO-3G",
         "charge": 0,
-        "method": "STO-3G",
+        "method": "HF",
         "multiplicity": 1
       },
-      "note": "Tiny H2/STO-3G local singlepoint fixture. Registered once; B10 submits it. It is not the B07 ORCA probe.",
-      "release": null,
+      "note": "Tiny H2/STO-3G (HF) local singlepoint fixture. Submitted exactly once by B10 through the real MCP path onto P1; later reads are query-only. It is not the B07 ORCA probe and not the independent m1 baseline.",
+      "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+      "release": {
+        "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+        "release_id": "98e0695545d668e6"
+      },
       "request_owner": "B",
+      "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
       "reusable_by": [
         "B10",
         "B10b",
         "B14a"
       ],
       "scenario_timeout_seconds": 110,
-      "status": "registered",
-      "submitted_once": false,
-      "task": null,
+      "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "status": "completed",
+      "submission_id": "sub_3006306693beb030",
+      "submitted_once": true,
+      "submitted_via": "real MCP stdio acp_submit (B10 MCP driver), then query-only",
+      "task": "20261023_031453_001_singlepoint",
       "workflow": "singlepoint"
     },
     {
@@ -305,6 +315,7 @@
     "scenario_timeout_seconds": 2400
   },
   "lsf_timeout_seconds": 2400,
+  "p1_server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "registration": {
     "duplicate_check": "fixture_id unique; expensive local/LSF/control rows have distinct kind and owner; planned rows claim no bytes",
     "duplicate_expensive_fixture": false,

@@ -1,0 +1,257 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "task_count_before=0 after=1",
+      "name": "one_mcp_submission_one_task",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=completed attempt=1",
+      "name": "job_completed",
+      "status": "PASS"
+    },
+    {
+      "detail": "pids=[595373] max_concurrent=1 samples=443",
+      "name": "real_orca_process_once",
+      "status": "PASS"
+    },
+    {
+      "detail": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+      "name": "orca_terminated_normally",
+      "status": "PASS"
+    },
+    {
+      "detail": "orca=-1.116759307204 task_result=-1.116759307204",
+      "name": "orca_energy_matches_task_result",
+      "status": "PASS"
+    },
+    {
+      "detail": "complete/qualification/required_facts/exit_code",
+      "name": "task_result_complete",
+      "status": "PASS"
+    },
+    {
+      "detail": "attempt=1 release_id=98e0695545d668e6",
+      "name": "attempt_and_release_agree",
+      "status": "PASS"
+    },
+    {
+      "detail": "manifest_task_digest=sha256:5b7d86b79e479739a421ccb83ccfdd6a9aae4777272472fac4bedcfdedf1453c energy=-1.116759307204",
+      "name": "manifest_agrees_with_task_result",
+      "status": "PASS"
+    },
+    {
+      "detail": "native={'sp.inp': '30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6', 'sp.out': '566529291f50b4bebbec3ea3328880e1f6ab9d5afb34233f8a6c1157ad341c5a'}",
+      "name": "native_artifact_digests_agree",
+      "status": "FAIL"
+    },
+    {
+      "detail": "energy_hartree=-1.116759307204 symbols=['H', 'H'] frequencies=[]",
+      "name": "scientific_body_readable",
+      "status": "PASS"
+    },
+    {
+      "detail": "job.started=1",
+      "name": "exactly_one_dispatch",
+      "status": "PASS"
+    }
+  ],
+  "attempt": 1,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "c319fcd84dff781bb1326c1e22ee2b9fe2221cb328663b8011e86e43a4179449",
+    "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a"
+  },
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "command": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "local-singlepoint",
+    "--phase",
+    "main",
+    "--controller",
+    "http://127.0.0.1:18768",
+    "--launch",
+    "reports/acp2_implementation/bb45a46/B/B10/mcp-launch-b10.json",
+    "--fixture",
+    "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B10/local-singlepoint",
+    "--timeout",
+    "300"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "<repo>",
+  "evidence_kind": "live",
+  "exit_code": 1,
+  "extensions": {
+    "acceptance.operation_class": "submit",
+    "acceptance.target": "local",
+    "b10.artifacts": [
+      {
+        "path": "native/sp.inp",
+        "sha256": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+        "size_bytes": 161
+      },
+      {
+        "path": "native/sp.out",
+        "sha256": "566529291f50b4bebbec3ea3328880e1f6ab9d5afb34233f8a6c1157ad341c5a",
+        "size_bytes": 41896
+      },
+      {
+        "path": "native/RESULT__task_result.json",
+        "sha256": "c38782207cea26b21cfdc9d767fca4b2cd5f5aa0cfd1f8a9825fafc32cd13a90",
+        "size_bytes": 1963
+      },
+      {
+        "path": "native/RESULT__result_manifest.json",
+        "sha256": "8a4958f9c1ebf0044085888cc70f182eda2fe1102ecb1425ff09e27512b07359",
+        "size_bytes": 1247
+      },
+      {
+        "path": "native/RESULT__scientific_result.json",
+        "sha256": "e43455460141554a99b699c05a18eab95916ab1ee7482752c21d8ff718402bc4",
+        "size_bytes": 917
+      },
+      {
+        "path": "native/RESULT__energy__singlepoint_energy.json",
+        "sha256": "3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "size_bytes": 241
+      },
+      {
+        "path": "native/RESULT__structures__singlepoint_final.xyz",
+        "sha256": "961b92ef359b1f02e6d443f2f7480df8d7c41d7df8de055d1451ccb44f7c27fe",
+        "size_bytes": 112
+      },
+      {
+        "path": "native/execution_receipt.json",
+        "sha256": "3daa313bf3ad69afa8c23603afaa76bee63e156636d2af401c0cb786becee57e",
+        "size_bytes": 1697
+      },
+      {
+        "path": "native/job.json",
+        "sha256": "eb78b0c2adf92328bfc9c404780083bb9a0dddc3e7481e4a10b2759946f572fd",
+        "size_bytes": 6582
+      },
+      {
+        "path": "native/task.json",
+        "sha256": "b7804c4ab53fe6ee23726fb3198d025234922c23c6347d680ca863e58e55f44f",
+        "size_bytes": 968
+      }
+    ],
+    "b10.attempt": 1,
+    "b10.charge": 0,
+    "b10.completion_conditions": {
+      "complete": true,
+      "exit_code": 0,
+      "missing_required_facts": [],
+      "qualification": "complete",
+      "receipt_state": "completed",
+      "required_facts": [
+        "energy_hartree"
+      ],
+      "status": "completed"
+    },
+    "b10.energy_hartree": -1.116759307204,
+    "b10.energy_units": "hartree",
+    "b10.fixture": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+    "b10.frequencies": [],
+    "b10.frequencies_present": false,
+    "b10.geometry": {
+      "coordinates": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.74
+        ]
+      ],
+      "symbols": [
+        "H",
+        "H"
+      ]
+    },
+    "b10.job_started_events": 1,
+    "b10.manifest_energy_hartree": -1.116759307204,
+    "b10.manifest_task_result_digest": "sha256:5b7d86b79e479739a421ccb83ccfdd6a9aae4777272472fac4bedcfdedf1453c",
+    "b10.mcp_launch": "reports/acp2_implementation/bb45a46/B/B10/mcp-launch-b10.json",
+    "b10.method_level": {
+      "basis": "STO-3G",
+      "engine": "orca",
+      "functional": "HF"
+    },
+    "b10.multiplicity": 1,
+    "b10.native_artifact_digests": {
+      "sp.inp": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+      "sp.out": "566529291f50b4bebbec3ea3328880e1f6ab9d5afb34233f8a6c1157ad341c5a"
+    },
+    "b10.orca_binary": "/home/<user>/orca611/orca",
+    "b10.orca_energy_hartree": -1.116759307204,
+    "b10.orca_max_concurrent": 1,
+    "b10.orca_output": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+    "b10.orca_pids": [
+      595373
+    ],
+    "b10.orca_samples": 443,
+    "b10.orca_terminated_normally": true,
+    "b10.plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+    "b10.release_id": "98e0695545d668e6",
+    "b10.result_digest": "sha256:4fd07ca9e34fdc9b3f27bcf5e920e552bd540fe563b6d0fb95b6d2b81bed9545",
+    "b10.scientific_body": {
+      "coordinates": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.74
+        ]
+      ],
+      "energy_hartree": -1.116759307204,
+      "frequencies": [],
+      "symbols": [
+        "H",
+        "H"
+      ],
+      "units": "hartree"
+    },
+    "b10.submission_id": "sub_4cbc09b3fd40848d",
+    "b10.task_count_after": 1,
+    "b10.task_count_before": 0,
+    "b10.task_ref": "20261023_031338_001_singlepoint",
+    "b10.task_result_artifact_digests": {
+      "sp.inp": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+      "sp.out": "sha256:566529291f50b4bebbec3ea3328880e1f6ab9d5afb34233f8a6c1157ad341c5a"
+    },
+    "b10.task_result_digest": "sha256:5b7d86b79e479739a421ccb83ccfdd6a9aae4777272472fac4bedcfdedf1453c",
+    "b10.three_entry_descriptor_required": true,
+    "b10.work_dir": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
+  },
+  "finished_at": "2026-10-22T19:13:49Z",
+  "job_id": "20261023_031338_001_singlepoint",
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": "assertion_failed:native_artifact_digests_agree",
+  "release_id": "98e0695545d668e6",
+  "result": "FAIL",
+  "run_id": "20261022T191337Z-595199-23530753",
+  "scenario": "local-singlepoint",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T19:13:37Z",
+  "submission_id": null,
+  "usage": null
+}

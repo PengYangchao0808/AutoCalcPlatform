@@ -1,0 +1,134 @@
+{
+  "cli": {
+    "attempt": 1,
+    "command": [
+      "<acp2-dev>/venvs/b/bin/python",
+      "-m",
+      "acp",
+      "task",
+      "query",
+      "--controller",
+      "http://127.0.0.1:18768",
+      "--job",
+      "20261023_031453_001_singlepoint"
+    ],
+    "input_hash": "sha256:d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9",
+    "job_id": "20261023_031453_001_singlepoint",
+    "manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+    "receipt": {
+      "attempt": 1,
+      "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+      "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+      "release_id": "98e0695545d668e6",
+      "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+      "state": "completed",
+      "submission_id": "sub_3006306693beb030"
+    },
+    "status": "completed",
+    "task_result": {
+      "complete": true,
+      "content_digest": "sha256:60d22eff690b080ea38ea3462a615543601ad1c469db699516af5c83e7f376b4",
+      "qualification": "complete",
+      "status": "completed"
+    },
+    "work_dir": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
+  },
+  "health": {
+    "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+    "contract_version": "1.1.0",
+    "status": "ok"
+  },
+  "http": {
+    "attempt": 1,
+    "input_hash": "sha256:d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9",
+    "job_id": "20261023_031453_001_singlepoint",
+    "manifest": {
+      "energy": -1.116759307204,
+      "products": [
+        "task_result.json",
+        "singlepoint_energy",
+        "singlepoint_structure"
+      ],
+      "status": "completed",
+      "task_id": "20261023_031453_001_singlepoint"
+    },
+    "manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+    "method": {
+      "levels": {
+        "single_point": {
+          "basis": "STO-3G",
+          "engine": "orca",
+          "functional": "HF"
+        }
+      }
+    },
+    "receipt": {
+      "attempt": 1,
+      "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+      "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+      "release_id": "98e0695545d668e6",
+      "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+      "state": "completed",
+      "submission_id": "sub_3006306693beb030"
+    },
+    "status": "completed",
+    "task_result": {
+      "complete": true,
+      "content_digest": "sha256:60d22eff690b080ea38ea3462a615543601ad1c469db699516af5c83e7f376b4",
+      "qualification": "complete",
+      "status": "completed"
+    },
+    "task_result_sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+    "work_dir": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
+  },
+  "http_cli_equal": {
+    "attempt": true,
+    "job_id": true,
+    "manifest_sha256": true,
+    "plan_identity": true,
+    "release_id": true,
+    "result_digest": true
+  },
+  "scientific_body": {
+    "artifacts": [
+      {
+        "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+        "path": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+        "path": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "energy_hartree": -1.116759307204,
+    "energy_units": "hartree",
+    "frequencies": [],
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "HF",
+      "version": "unknown"
+    },
+    "symbols": [
+      "H",
+      "H"
+    ]
+  }
+}

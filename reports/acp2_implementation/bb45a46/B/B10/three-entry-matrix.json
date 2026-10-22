@@ -1,0 +1,74 @@
+{
+  "attempt": 1,
+  "compare_keys": [
+    "job_id",
+    "attempt",
+    "release_id",
+    "plan_identity",
+    "manifest_sha256",
+    "result_digest",
+    "method",
+    "input_hash"
+  ],
+  "gated_cli_surface": "acp task query --controller <url> --job <task_id>",
+  "legacy_acp_run_used": false,
+  "legacy_cli_surface": "acp run singlepoint (never executed; it would create a second task)",
+  "manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+  "mismatched": [],
+  "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+  "reason": "c_driver_absent: CLI and HTTP agree on task/attempt/plan identity/manifest digest; the C Workbench row is unavailable",
+  "release_id": "98e0695545d668e6",
+  "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+  "rows": {
+    "cli": {
+      "attempt": 1,
+      "entry": "cli:acp task query --controller",
+      "input_hash": "sha256:d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9",
+      "job_id": "20261023_031453_001_singlepoint",
+      "manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+      "method": {
+        "levels": {
+          "single_point": {
+            "basis": "STO-3G",
+            "engine": "orca",
+            "functional": "HF"
+          }
+        }
+      },
+      "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+      "release_id": "98e0695545d668e6",
+      "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+      "status": "completed",
+      "submission_id": "sub_3006306693beb030"
+    },
+    "http": {
+      "attempt": 1,
+      "entry": "http:GET /api/v1/jobs/{id} + /files",
+      "input_hash": "sha256:d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9",
+      "job_id": "20261023_031453_001_singlepoint",
+      "manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+      "method": {
+        "levels": {
+          "single_point": {
+            "basis": "STO-3G",
+            "engine": "orca",
+            "functional": "HF"
+          }
+        }
+      },
+      "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+      "release_id": "98e0695545d668e6",
+      "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+      "status": "completed",
+      "submission_id": "sub_3006306693beb030"
+    },
+    "workbench": {
+      "entry": "c-workbench:RPH Workbench",
+      "reason": "c_driver_absent: C P1 Workbench UI/DSH is not delivered and this host has no Chromium/DSH driver, so the same task cannot be read from the Workbench surface. The CLI and HTTP rows are verified independently.",
+      "status": "NOT_VERIFIED"
+    }
+  },
+  "schema": "acp2.b10.three-entry-matrix.v1",
+  "task_ref": "20261023_031453_001_singlepoint",
+  "verdict": "NOT_VERIFIED"
+}

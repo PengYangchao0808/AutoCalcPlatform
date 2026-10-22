@@ -1,0 +1,112 @@
+{
+  "authority": "cccp.calculation.tasks.singlepoint:184-239",
+  "complete": true,
+  "content_digest": "sha256:ff001382568fb8d218413d40700081ab5310c63c1b5ba91939def2fe2785e556",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "energy_hartree"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:13e9d8ee0881f580ded87d6bf7c5e3c87c2789d979c211243ad09c4bd0757121",
+        "path": "/tmp/acp-m1-hl_kb0ye/uncategorized/CCO_singlepoint/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:a06258481ab15fdd8a9d83fcb6650bbc4ab4690ac78c750e74fefceff76dfb4a",
+        "path": "/tmp/acp-m1-hl_kb0ye/uncategorized/CCO_singlepoint/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        -0.888311,
+        0.167003,
+        -0.027316
+      ],
+      [
+        0.465753,
+        -0.511559,
+        -0.036795
+      ],
+      [
+        1.431075,
+        0.322916,
+        0.58667
+      ],
+      [
+        -0.848741,
+        1.11748,
+        -0.569524
+      ],
+      [
+        -1.647121,
+        -0.470443,
+        -0.489637
+      ],
+      [
+        -1.196397,
+        0.397845,
+        0.997723
+      ],
+      [
+        0.791997,
+        -0.722428,
+        -1.059726
+      ],
+      [
+        0.424604,
+        -1.455862,
+        0.513791
+      ],
+      [
+        1.467142,
+        1.155048,
+        0.084814
+      ]
+    ],
+    "energy_hartree": -155.001263624935,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {},
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "O",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  },
+  "result_digest": "sha256:6f94091f041aa41c3e92e728edcd8369e25cb26c07fbe32deb39a4a01c07aae3",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "singlepoint",
+  "truth_table_row": "b",
+  "written_at": "2026-10-22T19:12:27.707509+00:00"
+}

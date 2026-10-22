@@ -1,0 +1,10 @@
+{
+  "energy": -1.116759307204,
+  "energy_hartree": -1.116759307204,
+  "method": "",
+  "schema_version": "acp_energy_product_v1",
+  "source": "task_result.json",
+  "step_id": "singlepoint",
+  "step_kind": "singlepoint",
+  "unit": "hartree"
+}

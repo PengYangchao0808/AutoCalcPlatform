@@ -1,0 +1,98 @@
+{
+  "b_fix_overlay": {
+    "applied_with": "git apply --3way --whitespace=nowarn (no conflicts; 9646183+overlay state)",
+    "base_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "files_changed": 150,
+    "kind": "frozen_final_debug_candidate",
+    "patch": "B10/p1/b-fix-overlay.patch",
+    "patch_sha256": "01b5bc74058fdc9165492fabcc534f67eafd87542634429651482bfd517e1baf",
+    "source_revision": "a0185b15c546fbd07919326d581fab13e05000fa"
+  },
+  "built_at_utc": "2026-10-23T03:18:00Z",
+  "candidate_label": "bb45a46",
+  "client_revision": "NOT_VERIFIED",
+  "client_revision_kind": "C-owned RPH Workbench + DSH",
+  "client_revision_reason": "C P1 Workbench UI/DSH is not delivered and this host has no Chromium/DSH driver; C HEAD is recorded for identity only and is not a verified client of this P1 candidate.",
+  "client_revision_ref": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+  "client_revision_source": "<acp2-dev>/C HEAD (identity only)",
+  "client_revision_status": "NOT_VERIFIED",
+  "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+  "contract_digest_source": "GET http://127.0.0.1:18768/api/health on the P1 Controller",
+  "contract_version": "1.1.0",
+  "deployment": {
+    "controller": "http://127.0.0.1:18768",
+    "cwd": "<acp2-dev>/data/b/controller-config",
+    "run_root": "<acp2-dev>/data/b/run-root-b10",
+    "start_command": "<acp2-dev>/venvs/b/bin/python -m acp run serve --host 127.0.0.1 --port 18768 --run-root <acp2-dev>/data/b/run-root-b10"
+  },
+  "env_digest": "bb1471716b8f05166b61bd331b328d9d293c9ae9b7e81b7238a79c44b01a3aec",
+  "env_digest_rule": "sha256 of <acp2-dev>/data/b/acceptance-env.sh after ACP_CANDIDATE_REVISION was updated to the P1 SHA",
+  "harness_real_environment_revision": "21d3d86c520702b037726362879116a69107377d61e130f4a2969bb67e5e07b9",
+  "harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+  "harness_revision_b10a": "3812182b840cc2844455f4f1320af5b8c0cefe7046a1da0692abfb8adce9dc5f",
+  "harness_revision_b10a_note": "sha256 recorded in the B10a local-singlepoint PASS receipt; the later change only corrects the gated CLI argument order for the read-only three-entry row and does not affect submission or science",
+  "harness_revision_rule": "sha256 of <repo>/scripts/acceptance/acp2_runtime.py after the B10 scenario implementation",
+  "notes": [
+    "This is the P1 test candidate consumed by B11 and promoted (not first created) by B14a.",
+    "The independent m1 baseline and the shared B10 task are different runs with different run roots and TaskRefs.",
+    "P1 was built with the explicit --run-root; the platform default /var/lib/acp/runs and the production 8765 Controller were not touched."
+  ],
+  "schema": "acp2.p1-candidate.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "server_base_revision": "964618321a63694112be25c297b927bfc776e3d0",
+  "server_base_tree": "0982ff03355a5a82b6624116a75f38a82d4dcb85",
+  "server_base_tree_equals_main_head_9646183_tree": true,
+  "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "server_revision_kind": "git-commit",
+  "server_source": "<acp2-dev>/B",
+  "server_tree": "316687f434b0a584614becdd7ef3f1032c5b1899",
+  "server_tree_equals_main_head_9646183_tree": false,
+  "server_tree_rule": "P1 = main HEAD 9646183 (B00-B09) + the frozen final-debug B-fix overlay. 9646183 alone has no R01/R02/R05 publication of the scientific body, so B10a cannot read energy/geometry after restart from it (proved by the pre-P1 run recorded under B10/m1-baseline-pre-p1-112f93d and B10/local-singlepoint-aborted-harness-bug). Q04 requires recording the actual candidate and its patch, not treating a SHA that lacks the final fixes as the candidate.",
+  "server_worktree_status_porcelain_empty": true,
+  "tested_matrix": {
+    "b10a_local_singlepoint": {
+      "attempt": 1,
+      "energy_hartree": -1.116759307204,
+      "evidence": "B/B10/local-singlepoint/",
+      "orca_processes": 1,
+      "release_id": "98e0695545d668e6",
+      "result": "PASS",
+      "task_ref": "20261023_031453_001_singlepoint"
+    },
+    "b10a_restart_reread": {
+      "evidence": "B/B10/restart-reread-comparison.json",
+      "note": "same body/digests after Controller restart; no new task; no new dispatch",
+      "result": "PASS"
+    },
+    "b10b_three_entry": {
+      "evidence": "B/B10/three-entry/",
+      "reason": "c_driver_absent: CLI+HTTP PASS; C Workbench unavailable",
+      "result": "NOT_VERIFIED"
+    },
+    "c_chromium": {
+      "owner": "C T-08",
+      "result": "NOT_VERIFIED"
+    },
+    "c_workbench": {
+      "owner": "C",
+      "reason": "C P1 UI/DSH not delivered",
+      "result": "NOT_VERIFIED"
+    },
+    "h3": {
+      "reason": "Local facts exist; LSF row and Workbench row are not verified; B10 does not close H3",
+      "result": "OPEN"
+    },
+    "lsf_singlepoint": {
+      "owner": "B11",
+      "reason": "LSF client/queue absent",
+      "result": "NOT_VERIFIED"
+    },
+    "m1_singlepoint_independent_baseline": {
+      "evidence": "B/B10/m1-baseline/",
+      "note": "separate temporary Controller/DB; not the shared task",
+      "result": "PASS",
+      "task_ref": "20261023_031220_001_singlepoint"
+    }
+  }
+}
