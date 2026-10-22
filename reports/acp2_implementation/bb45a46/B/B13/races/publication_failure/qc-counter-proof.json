@@ -3,21 +3,21 @@
   "job_started_events": 1,
   "max_concurrent": 1,
   "pids_after_retry": [
-    720518
+    751208
   ],
   "pids_before_retry": [
-    720518
+    751208
   ],
   "process_starting_events": 1,
   "publication_completed_events": 1,
   "publication_state": {
     "complete": true,
-    "result_id": "20261023_065036_001_singlepoint:attempt1:sub_4ac3725810011ae9"
+    "result_id": "20261023_073443_001_singlepoint:attempt1:sub_de832e38e61c3559"
   },
   "published_artifacts": [
     {
       "path": "published/execution_receipt.json",
-      "sha256": "ae93d78df30baa96e61fb9e1851f37238c5c5819c289e4822b6a1dbf348c81af",
+      "sha256": "f6ca5a16cae5c1839080d9d38e3c71a022752ff205134cb75bb40e9e675ace23",
       "size_bytes": 1753,
       "source_relative": "execution_receipt.json"
     },
@@ -29,53 +29,53 @@
     },
     {
       "path": "published/sp.out",
-      "sha256": "d02824d0e48bae87b56d9f33dbff05df6c5896afcc4a886da27192cd06b6436c",
+      "sha256": "98e5612a7fc89e03796e65a150c25284352d7ddd02044f6618f7ebc13de930b2",
       "size_bytes": 42092,
       "source_relative": "sp.out"
     },
     {
       "path": "published/WORK__00_RUNTIME__task_result.json",
-      "sha256": "0969a7e59c162e5ba12a23f0dd407dd71e7e0bd5780578be01c15b860cf353e2",
+      "sha256": "6b574c8e36fb05796e022e03379d368464402141d94f9b20d27ac6d302391c9f",
       "size_bytes": 2019,
       "source_relative": "WORK/00_RUNTIME/task_result.json"
     },
     {
       "path": "published/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "fa03f00edd14ac2883ced6a45f0fa3056a9eb09d6e54be8a93a6621fca98707f",
+      "sha256": "201749341fbd55b13a9abc0828bca0a762c28c96668fa3af2e74dd8ac48d6856",
       "size_bytes": 1622,
       "source_relative": "WORK/00_RUNTIME/frozen/envelope.json"
     },
     {
       "path": "published/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "0a800835988842bfe7638061e45621e7748b73ddecd6f49b8889650db026e443",
-      "size_bytes": 3430,
+      "sha256": "216b6273c406e66f01f7ba9f8d6c1f6eb8ca62da0e245c939b0771825edfa928",
+      "size_bytes": 3434,
       "source_relative": "WORK/00_RUNTIME/events.jsonl"
     },
     {
       "path": "published/RESULT__task_result.json",
-      "sha256": "0969a7e59c162e5ba12a23f0dd407dd71e7e0bd5780578be01c15b860cf353e2",
+      "sha256": "6b574c8e36fb05796e022e03379d368464402141d94f9b20d27ac6d302391c9f",
       "size_bytes": 2019,
       "source_relative": "RESULT/task_result.json"
     },
     {
       "path": "published/RESULT__scientific_result.json",
-      "sha256": "cea0bb5799a2bf5ba3c708710ed7cef085a4a2425ca96f9e610637606c60dcbe",
+      "sha256": "6534404ea4187a55fd6ec2bfd18ce82aaa5635e1bc61d9dfac975ddbe505a85c",
       "size_bytes": 917,
       "source_relative": "RESULT/scientific_result.json"
     },
     {
       "path": "published/RESULT__result_manifest.json",
-      "sha256": "d7590730a7fddc006637ca40930a8aa0247b829cb5d066a510a4519a9bfd4e03",
+      "sha256": "0a193f703ec8fca65cbb48f6d1fbc6cceafe116f15207a217d029b83813c2213",
       "size_bytes": 1247,
       "source_relative": "RESULT/result_manifest.json"
     },
     {
       "path": "published/RESULT__publication_state.json",
-      "sha256": "73dfee07c5b0ff9a23a283a9b62768ab80c3039b40a19a61e606ffdde7d4a027",
+      "sha256": "1cd34861a8322e5597c73df1de88598a75a6f4d48c4869b6f8e435466e09653d",
       "size_bytes": 102,
       "source_relative": "RESULT/publication_state.json"
     }
   ],
   "status_after": "completed",
-  "task_ref": "20261023_065036_001_singlepoint"
+  "task_ref": "20261023_073443_001_singlepoint"
 }

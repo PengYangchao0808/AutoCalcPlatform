@@ -4,19 +4,19 @@
     "event_lines": 8,
     "exit_code": 0,
     "job_started_events": 1,
-    "manifest_sha256": "6cdb82e2254cda66b98f44de448c636e94024b6188645438c9fb647399b98276",
+    "manifest_sha256": "18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337",
     "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
     "process_starting_events": 1,
     "publication_complete": true,
     "release_id": "98e0695545d668e6",
-    "result_digest": "sha256:2f79ac74911f05af439ad8c9d31e93a147558a0512ec76a5c4abe07d51e31f53",
+    "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
     "revision": 6,
     "status": "completed",
-    "submission_id": "sub_d2f8abfa367fd6ce",
-    "task_count": 12,
-    "task_id": "20261023_065027_005_singlepoint",
-    "task_result_digest": "sha256:76376f68646b49ab68524e26cf47ee991ce8051ec0c3a8a35927949fb2a5ceac",
-    "work_dir": "<acp2-dev>/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05"
+    "submission_id": "sub_0f79f33c4c284d1c",
+    "task_count": 22,
+    "task_id": "20261023_073435_005_singlepoint",
+    "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
+    "work_dir": "<acp2-dev>/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
   },
   "assertions": [],
   "attempt": 1,
@@ -25,19 +25,19 @@
     "event_lines": 7,
     "exit_code": 0,
     "job_started_events": 1,
-    "manifest_sha256": "6cdb82e2254cda66b98f44de448c636e94024b6188645438c9fb647399b98276",
+    "manifest_sha256": "18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337",
     "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
     "process_starting_events": 1,
     "publication_complete": true,
     "release_id": "98e0695545d668e6",
-    "result_digest": "sha256:2f79ac74911f05af439ad8c9d31e93a147558a0512ec76a5c4abe07d51e31f53",
+    "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
     "revision": 5,
     "status": "completed",
-    "submission_id": "sub_d2f8abfa367fd6ce",
-    "task_count": 12,
-    "task_id": "20261023_065027_005_singlepoint",
-    "task_result_digest": "sha256:76376f68646b49ab68524e26cf47ee991ce8051ec0c3a8a35927949fb2a5ceac",
-    "work_dir": "<acp2-dev>/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05"
+    "submission_id": "sub_0f79f33c4c284d1c",
+    "task_count": 22,
+    "task_id": "20261023_073435_005_singlepoint",
+    "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
+    "work_dir": "<acp2-dev>/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
   },
   "budget": {
     "cleanup_seconds": 10,
@@ -59,11 +59,11 @@
       "walltime_s": 60
     },
     "orca_pids": [
-      720338
+      750891
     ],
-    "pid": 720257,
+    "pid": 750700,
     "race_id": "controller_restart",
-    "task_ref": "20261023_065027_005_singlepoint",
+    "task_ref": "20261023_073435_005_singlepoint",
     "timeout_seconds": 120
   },
   "evidence": "races/controller_restart",
@@ -78,18 +78,27 @@
     "functional": "HF"
   },
   "orca_pids": [
-    720338
+    750891
   ],
-  "pid": 720257,
+  "pid": 750700,
   "race_id": "controller_restart",
   "release_id": "98e0695545d668e6",
   "restart": {
     "command_before": [
       "<acp2-dev>/venvs/b/bin/python",
-      "-m",
-      "acp2_controller_fault",
+      "<repo>/scripts/acceptance/acp2_fault_controller.py",
+      "--source",
+      "<acp2-dev>/B/src",
       "--fault-file",
       "<repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "--config",
+      "<acp2-dev>/data/b/controller-config/cccp.yaml",
+      "--candidate-revision",
+      "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "--orca",
+      "/home/<user>/orca611/orca",
+      "--orca-ld-library-path",
+      "/home/<user>/openmpi418/lib:/home/<user>/orca611",
       "--",
       "run",
       "serve",
@@ -103,7 +112,7 @@
       "1",
       "--no-browser"
     ],
-    "cwd_before": "<acp2-dev>/B/src",
+    "cwd_before": "<repo>",
     "health_after": {
       "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
       "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
@@ -111,26 +120,28 @@
       "contract_version": "1.1.0",
       "read_only": true,
       "schema_version": 1,
-      "started_at": "2026-10-22T22:50:34.660769Z",
+      "started_at": "2026-10-22T23:34:41.660743Z",
       "status": "ok"
     },
-    "log": "controller/controller-restart-1792709433.log",
+    "log": "controller/controller-restart-1792712080.log",
     "parsed_before": {
       "fault_file": "<repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
       "fault_seam": true,
-      "module": "acp2_controller_fault",
+      "module": null,
       "port": 18771,
-      "run_root": "<acp2-dev>/data/b/run-root-b13"
+      "run_root": "<acp2-dev>/data/b/run-root-b13",
+      "script": "<repo>/scripts/acceptance/acp2_fault_controller.py",
+      "source": "<acp2-dev>/B/src"
     },
-    "pid_after": 720345,
-    "pid_before": 715881,
+    "pid_after": 750900,
+    "pid_before": 749204,
     "port": 18771,
     "stopped": true
   },
-  "started_at": "2026-10-22T22:50:27.405688Z",
+  "started_at": "2026-10-22T23:34:34.419972Z",
   "status": "NOT_VERIFIED",
-  "submission_id": "sub_d2f8abfa367fd6ce",
-  "task_count_before": 11,
-  "task_ref": "20261023_065027_005_singlepoint",
+  "submission_id": "sub_0f79f33c4c284d1c",
+  "task_count_before": 21,
+  "task_ref": "20261023_073435_005_singlepoint",
   "timeout_seconds": 120
 }

@@ -6,14 +6,14 @@
       "label": "task_result.json",
       "metadata": {
         "attempt": 1,
-        "job_id": "20261023_065006_004_singlepoint",
+        "job_id": "20261023_073417_004_singlepoint",
         "normal_reuse": true,
         "partial_result": false,
         "plan_identity": "v2:35dbd3c213a1f15d4ea8b5224a537ec9",
         "product_role": "normal",
         "qualification": "complete",
-        "submission_id": "sub_de1c9a3bef019591",
-        "task_result_digest": "sha256:be1135e482a23fb20c333f9fdcebe8be3068db3c446017c619d5da79371857df"
+        "submission_id": "sub_e654b75958571b7f",
+        "task_result_digest": "sha256:77d1454236a293f7d962e988e442ff0f58d7626c4a8a0306912cd88a9702c8cc"
       },
       "path": "task_result.json"
     },
@@ -38,7 +38,7 @@
     }
   ],
   "status": "completed",
-  "task_id": "20261023_065006_004_singlepoint",
+  "task_id": "20261023_073417_004_singlepoint",
   "version": 2,
   "workflow": "singlepoint"
 }

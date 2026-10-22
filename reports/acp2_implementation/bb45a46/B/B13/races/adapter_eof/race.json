@@ -1,6 +1,6 @@
 {
   "adapter_exit": 0,
-  "adapter_pid": 719842,
+  "adapter_pid": 750142,
   "assertions": [],
   "attempt": 1,
   "budget": {
@@ -23,11 +23,11 @@
       "walltime_s": 60
     },
     "orca_pids": [
-      720021
+      750272
     ],
-    "pid": 719885,
+    "pid": 750185,
     "race_id": "adapter_eof",
-    "task_ref": "20261023_065006_004_singlepoint",
+    "task_ref": "20261023_073417_004_singlepoint",
     "timeout_seconds": 120
   },
   "evidence": "races/adapter_eof",
@@ -45,17 +45,17 @@
   },
   "orca_max_concurrent": 1,
   "orca_pids": [
-    720021
+    750272
   ],
-  "pid": 719885,
+  "pid": 750185,
   "pid_alive_at_adapter_exit": true,
   "race_id": "adapter_eof",
   "running_at_adapter_exit": true,
-  "started_at": "2026-10-22T22:50:06.219002Z",
+  "started_at": "2026-10-22T23:34:16.871653Z",
   "status": "NOT_VERIFIED",
-  "task_count_after_reconnect": 11,
-  "task_count_at_running": 11,
-  "task_count_before": 10,
-  "task_ref": "20261023_065006_004_singlepoint",
+  "task_count_after_reconnect": 21,
+  "task_count_at_running": 21,
+  "task_count_before": 20,
+  "task_ref": "20261023_073417_004_singlepoint",
   "timeout_seconds": 120
 }

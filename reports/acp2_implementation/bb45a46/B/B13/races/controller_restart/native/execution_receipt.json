@@ -5,12 +5,12 @@
       "artifact_digests": {
         "input.xyz": "sha256:7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe"
       },
-      "binding_id": "local:98e0695545d668e6:2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05",
+      "binding_id": "local:98e0695545d668e6:2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09",
       "endpoint": "local",
       "kind": "local",
       "mapping_version": 1,
       "project_id": "",
-      "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05",
+      "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09",
       "root": "<acp2-dev>/data/b/run-root-b13/uncategorized",
       "tenant_id": ""
     }
@@ -26,21 +26,21 @@
     "publish_policy": "normal",
     "qualification": "complete",
     "required_facts": "energy_hartree",
-    "task_result_digest": "sha256:76376f68646b49ab68524e26cf47ee991ce8051ec0c3a8a35927949fb2a5ceac",
+    "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
     "truth_table_row": "b"
   },
-  "fencing_token": "57edda6ba587f783c9a2be49a0055b02",
-  "job_id": "20261023_065027_005_singlepoint",
-  "owner": "local:redacted-host:715881:1",
+  "fencing_token": "6ff417cfa6cf9a9bbf0bd31b983694e6",
+  "job_id": "20261023_073435_005_singlepoint",
+  "owner": "local:redacted-host:749204:1",
   "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
   "receipt_version": 1,
   "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
   "release_id": "98e0695545d668e6",
-  "result_digest": "sha256:2f79ac74911f05af439ad8c9d31e93a147558a0512ec76a5c4abe07d51e31f53",
+  "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
   "state": "completed",
   "step_identities": [
     "v2:bf3235c86df3abe7501c6472d005bfc5"
   ],
-  "submission_id": "sub_d2f8abfa367fd6ce",
-  "written_at": "2026-10-22T22:50:30.037052+00:00"
+  "submission_id": "sub_0f79f33c4c284d1c",
+  "written_at": "2026-10-22T23:34:37.296934+00:00"
 }

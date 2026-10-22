@@ -5,21 +5,21 @@
       "artifact_digests": {
         "input.xyz": "sha256:7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe"
       },
-      "binding_id": "local:98e0695545d668e6:2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05",
+      "binding_id": "local:98e0695545d668e6:2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09",
       "endpoint": "local",
       "kind": "local",
       "mapping_version": 1,
       "project_id": "",
-      "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05",
+      "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09",
       "root": "<acp2-dev>/data/b/run-root-b13/uncategorized",
       "tenant_id": ""
     }
   ],
   "entrypoint": "worker.bootstrap",
   "envelope_version": 1,
-  "fencing_token": "57edda6ba587f783c9a2be49a0055b02",
-  "job_id": "20261023_065027_005_singlepoint",
-  "owner": "local:redacted-host:715881:1",
+  "fencing_token": "6ff417cfa6cf9a9bbf0bd31b983694e6",
+  "job_id": "20261023_073435_005_singlepoint",
+  "owner": "local:redacted-host:749204:1",
   "plan_digest": "v2:43ed969410124e1654f49950902b10f6",
   "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
   "protocol": "local",
@@ -46,5 +46,5 @@
   "step_identities": [
     "v2:bf3235c86df3abe7501c6472d005bfc5"
   ],
-  "submission_id": "sub_d2f8abfa367fd6ce"
+  "submission_id": "sub_0f79f33c4c284d1c"
 }

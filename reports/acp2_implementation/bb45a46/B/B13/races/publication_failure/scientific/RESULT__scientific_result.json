@@ -6,12 +6,12 @@
     }
   ],
   "kind": "singlepoint",
-  "result_id": "20261023_065036_001_singlepoint:attempt1:sub_4ac3725810011ae9",
+  "result_id": "20261023_073443_001_singlepoint:attempt1:sub_de832e38e61c3559",
   "summary": {
     "attempt": 1,
     "energy_hartree": -1.116759307204,
     "exit_code": 0,
-    "job_id": "20261023_065036_001_singlepoint",
+    "job_id": "20261023_073443_001_singlepoint",
     "normal_reuse": true,
     "partial_result": false,
     "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
@@ -20,10 +20,10 @@
     "qualification": "complete",
     "receipt_state": "completed",
     "release_id": "98e0695545d668e6",
-    "result_digest": "sha256:76c25c2a7c0f9bd7643d59cf9ef3145f8ebd8fb32f6e9179efe0f16add45af01",
+    "result_digest": "sha256:9a6ea81388251cd191974172fa71a6fcc2e6e3e7f86d061b1ebdb08058a2b725",
     "status": "completed",
-    "submission_id": "sub_4ac3725810011ae9",
+    "submission_id": "sub_de832e38e61c3559",
     "task": "singlepoint",
-    "task_result_digest": "sha256:2900eb8dc584517df17379d96a57d7cdabeed6b1d5625ec2a36b667983615f8b"
+    "task_result_digest": "sha256:10e44031b477c73bcf4046768301ee31400cbff833d55e53eaaffdf1d8f99c58"
   }
 }

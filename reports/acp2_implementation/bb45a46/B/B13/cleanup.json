@@ -5,6 +5,7 @@
   "port_free": true,
   "production_run_root_touched": false,
   "production_service_8765_touched": false,
+  "reproducible_wrapper": "scripts/acceptance/acp2_fault_controller.py",
   "run_root": "<acp2-dev>/data/b/run-root-b13",
   "schema": "acp2.b13.cleanup.v1"
 }

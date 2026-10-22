@@ -1,0 +1,116 @@
+{
+  "artifacts": [
+    {
+      "path": "scientific/execution_receipt.json",
+      "sha256": "ae93d78df30baa96e61fb9e1851f37238c5c5819c289e4822b6a1dbf348c81af",
+      "size_bytes": 1753,
+      "source_relative": "execution_receipt.json"
+    },
+    {
+      "path": "scientific/sp.inp",
+      "sha256": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+      "size_bytes": 161,
+      "source_relative": "sp.inp"
+    },
+    {
+      "path": "scientific/sp.out",
+      "sha256": "d02824d0e48bae87b56d9f33dbff05df6c5896afcc4a886da27192cd06b6436c",
+      "size_bytes": 42092,
+      "source_relative": "sp.out"
+    },
+    {
+      "path": "scientific/WORK__00_RUNTIME__task_result.json",
+      "sha256": "0969a7e59c162e5ba12a23f0dd407dd71e7e0bd5780578be01c15b860cf353e2",
+      "size_bytes": 2019,
+      "source_relative": "WORK/00_RUNTIME/task_result.json"
+    },
+    {
+      "path": "scientific/WORK__00_RUNTIME__frozen__envelope.json",
+      "sha256": "fa03f00edd14ac2883ced6a45f0fa3056a9eb09d6e54be8a93a6621fca98707f",
+      "size_bytes": 1622,
+      "source_relative": "WORK/00_RUNTIME/frozen/envelope.json"
+    },
+    {
+      "path": "scientific/WORK__00_RUNTIME__events.jsonl",
+      "sha256": "b4f136f20045c00223caf1b1ad8e990fbf0c2db5e0089900e97c0372b2d75e31",
+      "size_bytes": 3128,
+      "source_relative": "WORK/00_RUNTIME/events.jsonl"
+    },
+    {
+      "path": "scientific/RESULT__task_result.json",
+      "sha256": "0969a7e59c162e5ba12a23f0dd407dd71e7e0bd5780578be01c15b860cf353e2",
+      "size_bytes": 2019,
+      "source_relative": "RESULT/task_result.json"
+    },
+    {
+      "path": "scientific/RESULT__scientific_result.json",
+      "sha256": "cea0bb5799a2bf5ba3c708710ed7cef085a4a2425ca96f9e610637606c60dcbe",
+      "size_bytes": 917,
+      "source_relative": "RESULT/scientific_result.json"
+    }
+  ],
+  "fault_file": "<repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+  "manifest_absent_at_failure": true,
+  "publication_failed_event": {
+    "attempt": 1,
+    "code": "publication_failed",
+    "detail": "publication failed: OSError: ACP2_ACCEPTANCE_PUBLICATION_FAULT: publication write refused while <repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json exists",
+    "idempotency_key": "publication-pending:20261023_065036_001_singlepoint:1:publication_failed",
+    "job_id": "20261023_065036_001_singlepoint",
+    "timestamp": "2026-10-22T22:50:45.483956+00:00",
+    "type": "job.publication_pending"
+  },
+  "publication_pending": true,
+  "qc_pids_before_retry": [
+    720518
+  ],
+  "receipt": {
+    "attempt": 1,
+    "data_bindings": [
+      {
+        "artifact_digests": {
+          "input.xyz": "sha256:7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe"
+        },
+        "binding_id": "local:98e0695545d668e6:2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__06",
+        "endpoint": "local",
+        "kind": "local",
+        "mapping_version": 1,
+        "project_id": "",
+        "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__06",
+        "root": "<acp2-dev>/data/b/run-root-b13/uncategorized",
+        "tenant_id": ""
+      }
+    ],
+    "errors": [],
+    "evidence_digests": {
+      "exit_code": "0",
+      "job_status": "completed",
+      "missing_required_facts": "",
+      "normal_reuse": "true",
+      "partial_result": "false",
+      "publish": "true",
+      "publish_policy": "normal",
+      "qualification": "complete",
+      "required_facts": "energy_hartree",
+      "task_result_digest": "sha256:2900eb8dc584517df17379d96a57d7cdabeed6b1d5625ec2a36b667983615f8b",
+      "truth_table_row": "b"
+    },
+    "fencing_token": "56508327391f08090688e2cc37892a43",
+    "job_id": "20261023_065036_001_singlepoint",
+    "owner": "local:redacted-host:720345:1",
+    "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
+    "receipt_version": 1,
+    "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+    "release_id": "98e0695545d668e6",
+    "result_digest": "sha256:76c25c2a7c0f9bd7643d59cf9ef3145f8ebd8fb32f6e9179efe0f16add45af01",
+    "state": "completed",
+    "step_identities": [
+      "v2:bf3235c86df3abe7501c6472d005bfc5"
+    ],
+    "submission_id": "sub_4ac3725810011ae9",
+    "written_at": "2026-10-22T22:50:38.662625+00:00"
+  },
+  "status": "completed",
+  "task_ref": "20261023_065036_001_singlepoint",
+  "task_result_content_digest": "sha256:2900eb8dc584517df17379d96a57d7cdabeed6b1d5625ec2a36b667983615f8b"
+}
