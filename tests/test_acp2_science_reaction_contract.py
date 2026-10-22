@@ -25,14 +25,17 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 SCIENCE = REPO / "docs" / "reference" / "next-change" / "acp2-contracts" / "science"
+SEMANTIC_RULES = SCIENCE / "semantic-rules.md"
 EXAMPLES = SCIENCE / "examples"
 REACTION_FIXTURES = REPO / "tests" / "fixtures" / "acp2" / "science" / "contracts" / "reaction"
+CONTRACT_FIXTURES = REACTION_FIXTURES.parent
 
 FORBIDDEN_QUESTION_FIELDS = (
     "role",
@@ -821,6 +824,44 @@ def test_fixture_table_accepted_and_rejected(capsys: Any) -> None:
     assert "valid_simple_reaction.json" in table
     assert "REJECTED" in table
     assert "ElementaryStepClaimWithoutEvidenceError" in table
+
+
+_FIXTURE_REFERENCE_RE = re.compile(
+    r"`((?:reaction|question)/[A-Za-z0-9_.-]+\.json)`"
+)
+
+
+def test_rule_fixture_references_are_delivered_or_marked_planned() -> None:
+    """Every fixture named by R-01…R-10 must exist or be explicitly planned.
+
+    A frozen rule that points at a non-existent fixture is a broken contract
+    reference. Missing fixtures are permitted only when the rules document marks
+    the exact filename with ``(planned)`` or ``not yet delivered`` on the same
+    line; no missing file is created just to satisfy the reference.
+    """
+    text = SEMANTIC_RULES.read_text(encoding="utf-8")
+    referenced = sorted(set(_FIXTURE_REFERENCE_RE.findall(text)))
+    assert referenced, "semantic-rules.md names no reaction/question fixtures"
+
+    # R-06 was renamed by A-02b to match the committed fixture; the old name
+    # must be gone so the rule cannot point at a phantom file.
+    assert "reaction/net_reaction_claimed_as_elementary.json" in referenced
+    assert "reaction/net_as_elementary.json" not in referenced
+
+    unmarked: list[str] = []
+    for name in referenced:
+        if (CONTRACT_FIXTURES / name).is_file():
+            continue
+        marked = any(
+            name in line and ("(planned)" in line or "not yet delivered" in line)
+            for line in text.splitlines()
+        )
+        if not marked:
+            unmarked.append(name)
+    assert not unmarked, (
+        "rule-referenced fixtures are missing and not marked planned: "
+        f"{unmarked}"
+    )
 
 
 def test_valid_simple_reaction_is_accepted() -> None:
