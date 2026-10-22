@@ -77,3 +77,8 @@ export function withRecordRevision(
     revision: requireRevision(revision, "revision"),
   });
 }
+
+export * from "./record.js";
+export * from "./proposal.js";
+export * from "./cas.js";
+export * from "./store.js";
