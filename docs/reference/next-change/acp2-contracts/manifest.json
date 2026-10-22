@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
   "contract_version": "1.0.0",
-  "contract_digest": "cbd6580c5d0b404657952c520760cf7320c279854814ab9717fe9356c06179b1",
+  "contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "e423dff0e707639f1fea0f9b7fa402339df5df5f7a852f3ed20d447ef9e54f85",
+      "sha256": "27f0cf220b9390113c82d90020a8a2e212dba558501520d3d7c44041fe9d97d6",
       "delivered_by": "B00"
     },
     {
@@ -209,9 +209,9 @@
       "id": "shared-change-request-template",
       "path": "docs/reference/next-change/acp2-contracts/runtime/shared-change-request.template.md",
       "owner": "B",
-      "status": "planned",
+      "status": "delivered",
       "delivered_by": "B01",
-      "note": "The template file exists (B00) and is used by A/C to request shared-file changes, but it is not a frozen wire contract: B01 may freeze it when the harness consumes it. A file existing is not delivery."
+      "sha256": "47fcb7e9a6da573cc858698403db98a43d303395b035068ccdf714c3e478014c"
     },
     {
       "id": "acceptance-harness",
@@ -305,8 +305,9 @@
       "id": "controller-topology",
       "path": "docs/reference/next-change/acp2-contracts/runtime/controller-topology.v1.json",
       "owner": "B",
-      "status": "planned",
-      "delivered_by": "B04a"
+      "status": "delivered",
+      "delivered_by": "B04a",
+      "sha256": "dff6ab0bba7317db9984fbaa57e66e790ac4aee8823b6a68fe5679a5b21513aa"
     },
     {
       "id": "fallback-deferral",
@@ -673,6 +674,11 @@
       "version": "1.0.0",
       "stage": "B03",
       "note": "additive delivery of planned contracts; no already-delivered wire field changed, so the version is NOT bumped"
+    },
+    {
+      "version": "1.0.0",
+      "stage": "B04a",
+      "note": "delivers controller-topology.v1.json and the shared change-request template; no already-delivered wire field changed, so contract_version stays 1.0.0"
     }
   ],
   "b01_deliverables": [

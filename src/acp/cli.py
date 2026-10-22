@@ -488,7 +488,7 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             help=(
                 "Use the ORCA ScanTS route (transition-state-oriented scans). "
                 "Off by default; unavailable for synchronous multi-coordinate "
-                    "or explicit-grid scans."
+                "or explicit-grid scans."
             ),
         )
 
@@ -884,7 +884,9 @@ Geometry non-convergence is reported in the evidence, not silently accepted.
             "(or an inline JSON string)"
         ),
     )
-    xtb_constopt.add_argument("--output", "-o", default="./xtb_constopt_out", help="Output directory")
+    xtb_constopt.add_argument(
+        "--output", "-o", default="./xtb_constopt_out", help="Output directory"
+    )
     xtb_constopt.add_argument("--nproc", type=int, help="Number of CPU cores")
     xtb_constopt.add_argument(
         "--mem",
@@ -2199,6 +2201,15 @@ Examples:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--run-root", default=None, help="Data run root (default: ACP_RUN_ROOT)")
     common.add_argument(
+        "--controller",
+        default=None,
+        metavar="URL",
+        help=(
+            "Target an already-running ACP Controller (e.g. http://127.0.0.1:18765) "
+            "instead of the local store/manager; never starts a Controller"
+        ),
+    )
+    common.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
@@ -2214,13 +2225,21 @@ Examples:
 
     plan = task_sub.add_parser("plan", parents=[common], help="Build a calculation plan")
     plan.add_argument("--task-dir", required=True, help="Task directory holding input.xyz")
-    plan.add_argument("--workflow", "-w", default="singlepoint", help="Workflow (default: singlepoint)")
+    plan.add_argument(
+        "--workflow", "-w", default="singlepoint", help="Workflow (default: singlepoint)"
+    )
     plan.add_argument("--method", default="r2SCAN-3c", help="Method (default: r2SCAN-3c)")
     plan.add_argument("--profile", default="default", help="Plan profile (default: default)")
-    plan.add_argument("--config", default=None, help="Explicit config file (merged over user/project)")
+    plan.add_argument(
+        "--config", default=None, help="Explicit config file (merged over user/project)"
+    )
 
-    execute = task_sub.add_parser("execute", parents=[common], help="Submit a job to the local scheduler")
-    execute.add_argument("--workflow", "-w", required=True, help="Workflow id (e.g. fake, singlepoint)")
+    execute = task_sub.add_parser(
+        "execute", parents=[common], help="Submit a job to the local scheduler"
+    )
+    execute.add_argument(
+        "--workflow", "-w", required=True, help="Workflow id (e.g. fake, singlepoint)"
+    )
     execute.add_argument("--input", "-i", required=True, help="Input source (SMILES or file path)")
     execute.add_argument("--name", default=None, help="Task/molecule name")
     execute.add_argument("--method", default="", help="Method override")
@@ -2239,9 +2258,13 @@ Examples:
         control = task_sub.add_parser(verb, parents=[common], help=f"{verb} a persisted job")
         control.add_argument("--job", required=True, help="Job id")
         control.add_argument("--project", default=None, help="Project id (rerun only)")
-        control.add_argument("--target-node", default=None, help="Execution node override (continue)")
+        control.add_argument(
+            "--target-node", default=None, help="Execution node override (continue)"
+        )
 
-    recover = task_sub.add_parser("recover", parents=[common], help="Reuse valid results for a task")
+    recover = task_sub.add_parser(
+        "recover", parents=[common], help="Reuse valid results for a task"
+    )
     recover.add_argument("--task-dir", required=True, help="Task directory holding input.xyz")
     recover.add_argument(
         "--workflow",
@@ -2289,6 +2312,54 @@ def _task_store(run_root: Path) -> Any:
     from acp_services.store.store import JobStore
 
     return JobStore(run_root / "acp_jobs.db")
+
+
+def _live_controller_pid(run_root: Path) -> int | None:
+    """Return the PID of a live Controller owning *run_root*, else ``None``.
+
+    Reuses the existing ``.manager.lock`` ownership record and the existing
+    liveness/identity check (``pid_is_alive`` + ACP/uvicorn cmdline) — there is
+    no second lock.  A stale lock never blocks a local command.
+    """
+    lock_path = run_root / ".manager.lock"
+    try:
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    owner = payload.get("pid") if isinstance(payload, dict) else None
+    if not isinstance(owner, int) or owner <= 0:
+        return None
+    from acp.scheduler.processctl import pid_is_alive, read_cmdline
+
+    if not pid_is_alive(owner):
+        return None
+    cmdline = read_cmdline(owner).lower()
+    if "acp" not in cmdline and "uvicorn" not in cmdline:
+        return None
+    return owner
+
+
+def _refuse_local_ownership(args: argparse.Namespace, run_root: Path) -> int | None:
+    """Refuse a local manager when a live Controller already owns the run root."""
+    owner = _live_controller_pid(run_root)
+    if owner is None:
+        return None
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": "failed",
+            "error": "controller_running_use_--controller",
+            "reason": "controller_running_use_--controller",
+            "controller_pid": owner,
+        }
+    )
+    return 1
+
+
+def _task_controller_client(controller_url: str) -> Any:
+    from acp_services.entrypoints.controller_client import ControllerClient
+
+    return ControllerClient(controller_url)
 
 
 def _emit_task(payload: dict[str, Any]) -> None:
@@ -2517,6 +2588,9 @@ def _handle_task_plan(args: argparse.Namespace) -> int:
 def _handle_task_execute(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     run_root = _task_run_root(args)
+    refusal = _refuse_local_ownership(args, run_root)
+    if refusal is not None:
+        return refusal
     from acp.scheduler.jobs import JobSpec
 
     method: dict[str, Any] = {}
@@ -2587,6 +2661,9 @@ def _handle_task_query(args: argparse.Namespace) -> int:
 def _handle_task_control(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     run_root = _task_run_root(args)
+    refusal = _refuse_local_ownership(args, run_root)
+    if refusal is not None:
+        return refusal
     manager = _task_manager(run_root)
     try:
         record = job_control_command(
@@ -2702,6 +2779,143 @@ def _handle_task_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _controller_error(args: argparse.Namespace, exc: Any) -> int:
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": "failed",
+            "error": str(exc),
+            "code": getattr(exc, "code", "unknown_error"),
+            "retryable": bool(getattr(exc, "retryable", False)),
+        }
+    )
+    return 1
+
+
+def _handle_task_query_controller(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    from acp_services.entrypoints.controller_client import ControllerClientError
+
+    client = _task_controller_client(args.controller)
+    try:
+        if args.job:
+            snapshot = client.status(args.job)
+            _emit_task({"command": "query", "status": "ok", "job": dict(snapshot.raw)})
+            return 0
+        payload = client.list_tasks(status=args.status, limit=args.limit)
+    except ControllerClientError as exc:
+        return _controller_error(args, exc)
+    jobs = payload.get("jobs") if isinstance(payload, Mapping) else None
+    rows = jobs if isinstance(jobs, list) else []
+    _emit_task(
+        {
+            "command": "query",
+            "status": "ok",
+            "count": len(rows),
+            "jobs": [
+                {
+                    "id": row.get("id") or row.get("task_id"),
+                    "status": row.get("status") or row.get("state"),
+                    "workflow": row.get("workflow"),
+                    "work_dir": row.get("work_dir"),
+                    "attempt": row.get("attempt"),
+                }
+                for row in rows
+                if isinstance(row, Mapping)
+            ],
+        }
+    )
+    return 0
+
+
+def _handle_task_execute_controller(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    from acp_services.entrypoints.controller_client import ControllerClientError
+
+    client = _task_controller_client(args.controller)
+    method: dict[str, Any] = {}
+    if args.method:
+        method["method"] = args.method
+    request = {
+        "workflow": args.workflow,
+        "name": args.name or "",
+        "input": _task_input_payload(args.input),
+        "method": method,
+    }
+    try:
+        record = client.submit(request)
+        job_id = str(record.get("job_id") or record.get("task_id") or "")
+        if not job_id:
+            _emit_task(
+                {
+                    "command": "execute",
+                    "status": "failed",
+                    "error": "Controller returned no task id",
+                }
+            )
+            return 1
+        state = str(record.get("status") or record.get("state") or "queued")
+        if args.follow:
+            deadline = time.monotonic() + 120.0
+            while time.monotonic() < deadline:
+                snapshot = client.status(job_id)
+                state = snapshot.state
+                if state in {"completed", "failed", "cancelled"}:
+                    break
+                time.sleep(0.2)
+    except ControllerClientError as exc:
+        return _controller_error(args, exc)
+    _emit_task(
+        {
+            "command": "execute",
+            "status": state,
+            "job_id": job_id,
+            "work_dir": record.get("work_dir"),
+        }
+    )
+    return 0 if state in {"queued", "pending", "starting", "running", "completed"} else 1
+
+
+def _handle_task_control_controller(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    from acp_services.entrypoints.controller_client import ControllerClientError
+
+    client = _task_controller_client(args.controller)
+    task_ref = {"task_id": args.job, "attempt": 1}
+    try:
+        if args.task_command == "cancel":
+            record = client.cancel(task_ref)
+        else:
+            record = client.control(
+                args.task_command,
+                task_ref,
+                project_id=getattr(args, "project", None),
+                target_node=getattr(args, "target_node", None),
+            )
+    except ControllerClientError as exc:
+        return _controller_error(args, exc)
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": str(record.get("status") or record.get("state") or "unknown"),
+            "job_id": str(record.get("id") or record.get("task_id") or args.job),
+            "attempt": record.get("attempt"),
+        }
+    )
+    return 0
+
+
+_TASK_CONTROLLER_HANDLERS: Final[dict[str, Callable[[argparse.Namespace], int]]] = {
+    "query": _handle_task_query_controller,
+    "execute": _handle_task_execute_controller,
+    "pause": _handle_task_control_controller,
+    "unpause": _handle_task_control_controller,
+    "continue": _handle_task_control_controller,
+    "cancel": _handle_task_control_controller,
+    "rerun": _handle_task_control_controller,
+}
+
+
 _TASK_HANDLERS: Final[dict[str, Callable[[argparse.Namespace], int]]] = {
     "ingest": _handle_task_ingest,
     "plan": _handle_task_plan,
@@ -2718,6 +2932,19 @@ _TASK_HANDLERS: Final[dict[str, Callable[[argparse.Namespace], int]]] = {
 
 
 def _dispatch_task(args: argparse.Namespace) -> int:
+    if getattr(args, "controller", None):
+        controller_handler = _TASK_CONTROLLER_HANDLERS.get(args.task_command)
+        if controller_handler is None:
+            _emit_task(
+                {
+                    "command": args.task_command,
+                    "status": "failed",
+                    "error": "unsupported_controller_command",
+                    "reason": "unsupported_controller_command",
+                }
+            )
+            return 2
+        return controller_handler(args)
     handler = _TASK_HANDLERS.get(args.task_command)
     if handler is None:
         return 1
@@ -2968,7 +3195,7 @@ Examples:
 
     init_parser = subparsers.add_parser(
         "init",
-        help="Interactive setup wizard for the user config (local software + remote nodes)",
+        help="Interactive setup wizard for the user config (software, remote nodes, web access)",
     )
     init_parser.add_argument(
         "--config",
@@ -4503,8 +4730,11 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         except json.JSONDecodeError as exc:
             logger.error("Invalid NMR candidate metadata: %s", exc)
             return 1
-        if (not isinstance(candidate_metadata, list) or len(candidate_metadata) != len(args.input)
-                or not all(isinstance(item, dict) for item in candidate_metadata)):
+        if (
+            not isinstance(candidate_metadata, list)
+            or len(candidate_metadata) != len(args.input)
+            or not all(isinstance(item, dict) for item in candidate_metadata)
+        ):
             logger.error("NMR candidate metadata must contain one object per input")
             return 1
 
@@ -4737,9 +4967,7 @@ def _doctor_software_checks(cfg: Mapping[str, Any]) -> list[tuple[str, str, str]
             if configured is not None:
                 checks.append((label, "FAIL", f"已配置路径不可用：{configured}"))
             else:
-                checks.append(
-                    (label, "NOT_VERIFIED", "未配置；PATH 中未找到，科学能力尚未验证")
-                )
+                checks.append((label, "NOT_VERIFIED", "未配置；PATH 中未找到，科学能力尚未验证"))
             continue
         reason = _doctor_binary_sanity(name, resolved)
         if reason is not None:

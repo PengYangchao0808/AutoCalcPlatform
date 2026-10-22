@@ -831,7 +831,7 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
         assert sha256_bytes(path.read_bytes()) == entry["sha256"], contract_id
     for entry in manifest["contracts"]:
         if entry["status"] == "delivered":
-            assert entry["delivered_by"] in {"B00", "B01", "B03"}
+            assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a"}
         else:
             assert "sha256" not in entry
 

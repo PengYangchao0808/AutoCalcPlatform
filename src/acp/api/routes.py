@@ -9,10 +9,14 @@ and result file manifest.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sys
 import time
 from collections.abc import AsyncIterator, Iterator
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, cast
 
 import anyio
@@ -137,6 +141,148 @@ def get_status(request: Request) -> StatusResponse:
         uptime_seconds=round(time.time() - _START_TIME, 1),
         queue=queue,
     )
+
+
+# ---------------------------------------------------------------------------
+# ACP 2.0 Controller discovery endpoints (B04a)
+# ---------------------------------------------------------------------------
+#
+# These are the minimal read-only commands the loopback ControllerClient (and
+# the B05 stdio probe) need: ``health`` proves every entry talks to the same
+# application + frozen contract set, and ``capabilities`` reports the active
+# workflows/backends/limits without creating a task.  Both are side-effect free.
+
+_CONTRACT_MANIFEST_RELATIVE = "docs/reference/next-change/acp2-contracts/manifest.json"
+_MCP_PROTOCOL_VERSION = "2025-06-18"
+_MCP_TOOLS: tuple[str, ...] = (
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_submit",
+    "acp_status",
+    "acp_cancel",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_analyze",
+)
+#: Bounded discovery limits (application-api.v1 ``capabilities.limits``).
+_CONTROLLER_LIMITS: dict[str, int] = {
+    "max_artifact_bytes": 8 * 1024 * 1024,
+    "max_read_bytes": 1 << 20,
+    "max_walltime_s": 7 * 24 * 60 * 60,
+    "max_cores": 64,
+}
+
+
+def _contract_manifest_path() -> Path | None:
+    """Resolve the contract manifest without assuming an installed layout."""
+    override = os.environ.get("ACP_CONTRACT_MANIFEST")
+    if override:
+        candidate = Path(override)
+        return candidate if candidate.is_file() else None
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / _CONTRACT_MANIFEST_RELATIVE
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _contract_facts() -> tuple[str, str, str]:
+    """Return ``(candidate_revision, contract_version, contract_digest)``.
+
+    The Controller is the single authority for these facts: every entry reads
+    them from this one endpoint rather than re-deriving a contract identity.
+    """
+    candidate_revision = (
+        os.environ.get("ACP_CANDIDATE_REVISION") or os.environ.get("ACP2_REV") or "unknown"
+    )
+    contract_version = "1.0.0"
+    contract_digest = hashlib.sha256(b"acp2-contract-manifest-unavailable").hexdigest()
+    manifest_path = _contract_manifest_path()
+    if manifest_path is not None:
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+        if isinstance(manifest, dict):
+            baseline = manifest.get("baseline")
+            if candidate_revision == "unknown" and isinstance(baseline, dict):
+                recorded = baseline.get("code_candidate_revision")
+                if isinstance(recorded, str) and recorded:
+                    candidate_revision = recorded
+            version = manifest.get("contract_version")
+            if isinstance(version, str) and version:
+                contract_version = version
+            digest = manifest.get("contract_digest")
+            if isinstance(digest, str) and digest:
+                contract_digest = digest
+    return candidate_revision, contract_version, contract_digest
+
+
+@router.get("/health")
+def get_health() -> dict[str, Any]:
+    """Entry-equivalence probe (``health`` application command)."""
+    candidate_revision, contract_version, contract_digest = _contract_facts()
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "candidate_revision": candidate_revision,
+        "contract_version": contract_version,
+        "contract_digest": contract_digest,
+        "contract_digest_scope": "delivered-contract-set",
+        "read_only": True,
+        "started_at": datetime.fromtimestamp(_START_TIME, tz=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
+
+
+def _active_workflows() -> list[str]:
+    try:
+        from acp.scheduler.jobs import PUBLIC_WORKFLOWS
+
+        return list(PUBLIC_WORKFLOWS)
+    except ImportError:
+        return []
+
+
+def _task_kinds() -> list[str]:
+    try:
+        from cccp.calculation.requests import TaskKind
+
+        return sorted(kind.value for kind in TaskKind)
+    except ImportError:
+        return []
+
+
+def _backend_capability_summary() -> list[dict[str, Any]]:
+    try:
+        from acp.backends import backend_status, list_backends
+    except ImportError:
+        return []
+    summaries: list[dict[str, Any]] = []
+    for name in list_backends():
+        try:
+            status = cast(dict[str, Any], backend_status(name))
+        except (KeyError, OSError, ValueError):
+            summaries.append({"name": name, "available": False})
+            continue
+        summaries.append({"name": name, "available": bool(status.get("is_available"))})
+    return summaries
+
+
+@router.get("/capabilities")
+def get_capabilities() -> dict[str, Any]:
+    """Read-only discovery (``capabilities`` application command)."""
+    return {
+        "schema_version": 1,
+        "task_kinds": _task_kinds(),
+        "workflows": _active_workflows(),
+        "backends": _backend_capability_summary(),
+        "capability_descriptors": None,
+        "limits": dict(_CONTROLLER_LIMITS),
+        "tools": list(_MCP_TOOLS),
+        "protocol_version": _MCP_PROTOCOL_VERSION,
+    }
 
 
 def _load_executables() -> dict[str, Any]:

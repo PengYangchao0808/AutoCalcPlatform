@@ -1,0 +1,73 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "candidate_revision/contract_version/contract_digest present",
+      "name": "health_entry_equivalence_facts",
+      "status": "PASS"
+    },
+    {
+      "detail": "workflows/backends/limits present and exactly the eight P1 tools",
+      "name": "capabilities_workflows_backends_limits_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=1 after=1",
+      "name": "task_count_unchanged",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "7a344c0a9bce5adfb8a34e0d829f1c3995029a7f8ad4313842d9895215b051f2",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "command": [
+    "/usr/bin/python3.11",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "entry-readonly",
+    "--controller",
+    "http://127.0.0.1:18765",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B04",
+    "--timeout",
+    "120"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "discover",
+    "acceptance.target": "local",
+    "b04a.candidate_revision": "a3ff3c5c4725d3e5bec8a7cb196b81c85a0da45e",
+    "b04a.contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488",
+    "b04a.contract_version": "1.0.0",
+    "b04a.controller": "http://127.0.0.1:18765",
+    "b04a.task_count_after": 1,
+    "b04a.task_count_before": 1,
+    "b04a.tools": 8,
+    "b04a.workflows": 15
+  },
+  "finished_at": "2026-10-22T13:11:33Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261022T131133Z-4173936-a1997f0d",
+  "scenario": "entry-readonly",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T13:11:33Z",
+  "submission_id": null,
+  "usage": null
+}
