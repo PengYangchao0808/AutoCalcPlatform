@@ -1,0 +1,356 @@
+{
+  "base": "http://127.0.0.1:18767",
+  "matrix": [
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "code": "admission_denied",
+        "message": "request cores 4>2",
+        "params": {
+          "enforced": false,
+          "exceeded": [
+            {
+              "dimension": "cores",
+              "limit": 2,
+              "requested": 4,
+              "scope": "request"
+            }
+          ],
+          "mode": "quota-only",
+          "reason_code": "exceeds_cores"
+        },
+        "retryable": false
+      },
+      "expect": 429,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs",
+      "scenario": "over_cores_legacy",
+      "status": 429
+    },
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "code": "admission_denied",
+        "message": "request cores 4>2",
+        "params": {
+          "enforced": false,
+          "exceeded": [
+            {
+              "dimension": "cores",
+              "limit": 2,
+              "requested": 4,
+              "scope": "request"
+            }
+          ],
+          "mode": "quota-only",
+          "reason_code": "exceeds_cores"
+        },
+        "retryable": false
+      },
+      "expect": 429,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs",
+      "scenario": "claim_then_deny",
+      "status": 429
+    },
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "code": "idempotency_conflict",
+        "message": "idempotency claim was rejected by admission",
+        "params": {
+          "idempotency_key": "live-over-cores"
+        },
+        "retryable": false
+      },
+      "expect": 409,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs",
+      "scenario": "claim_then_deny_retry",
+      "status": 409
+    },
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "code": "access_denied",
+        "message": "entry 'scope' denied for principal 'principal_local': no_grant",
+        "params": {
+          "reason_code": "no_grant",
+          "requested_project": "proj-b"
+        },
+        "retryable": false
+      },
+      "expect": 403,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs",
+      "scenario": "project_hint_widen",
+      "status": 403
+    },
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": "Job not found: seed-cross-project-b09",
+      "expect": 404,
+      "method": "GET",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs/seed-cross-project-b09/prepared/catalog",
+      "scenario": "cross_project_read",
+      "status": 404
+    },
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "code": "resource_not_ready",
+        "message": "not_prepared: job 'seed-cross-project-b09' does not exist",
+        "params": {
+          "job_id": "seed-cross-project-b09"
+        },
+        "retryable": true
+      },
+      "expect": 404,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs/seed-cross-project-b09/prepare",
+      "scenario": "cross_project_prepare",
+      "status": 404
+    },
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": "Job not found: seed-cross-project-b09",
+      "expect": 404,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs/seed-cross-project-b09/cancel",
+      "scenario": "cross_project_cancel",
+      "status": 404
+    },
+    {
+      "after": {
+        "active_reservations": 1,
+        "claims": 1,
+        "jobs": 2,
+        "reservations": 1,
+        "usage_receipts": 0,
+        "work_dirs": 1
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "admission": {
+          "enforced": true,
+          "enforcement": "local-single-enforced",
+          "mode": "quota-only",
+          "multi_tenant_security": false,
+          "policy_version": "local-single-v1",
+          "principal_id": "principal_local",
+          "reservation_id": "res_idem_4afcf472e44d43e0892596329858e1ae",
+          "verified_project": "proj-a"
+        },
+        "approval_ref": null,
+        "attempt": 1,
+        "idempotency_key": "live-allowed",
+        "idempotent_replay": false,
+        "identity": {
+          "deployment_tier": "local-single",
+          "issuer": "local",
+          "multi_tenant_security": false,
+          "principal_id": "principal_local",
+          "project_hint_policy": "narrow-only",
+          "subject": "principal_local",
+          "tenant_id": "local-single",
+          "verified_project": "proj-a"
+        },
+        "job_id": "20261023_021632_002_fake",
+        "operation_ref": null,
+        "plan_digest": null,
+        "project_id": "proj-a",
+        "proposal_digest": null,
+        "release_digest": null,
+        "release_id": null,
+        "result": "accepted",
+        "schema_version": 1,
+        "status": "queued",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "20261023_021632_002_fake",
+          "task_id": "20261023_021632_002_fake"
+        },
+        "workflow": "fake"
+      },
+      "expect": 201,
+      "method": "POST",
+      "no_side_effect": false,
+      "path": "/api/v1/jobs",
+      "scenario": "allowed_submit",
+      "status": 201
+    },
+    {
+      "after": {
+        "active_reservations": 4,
+        "claims": 1,
+        "jobs": 2,
+        "reservations": 5,
+        "usage_receipts": 1,
+        "work_dirs": 1
+      },
+      "before": {
+        "active_reservations": 4,
+        "claims": 1,
+        "jobs": 2,
+        "reservations": 5,
+        "usage_receipts": 1,
+        "work_dirs": 1
+      },
+      "detail": {
+        "code": "admission_denied",
+        "message": "user concurrency 5>4; project concurrency 5>4; capacity concurrency 5>4",
+        "params": {
+          "enforced": false,
+          "exceeded": [
+            {
+              "dimension": "concurrency",
+              "limit": 4,
+              "requested": 5,
+              "scope": "user"
+            },
+            {
+              "dimension": "concurrency",
+              "limit": 4,
+              "requested": 5,
+              "scope": "project"
+            },
+            {
+              "dimension": "concurrency",
+              "limit": 4,
+              "requested": 5,
+              "scope": "capacity"
+            }
+          ],
+          "mode": "quota-only",
+          "reason_code": "exceeds_concurrency"
+        },
+        "retryable": false
+      },
+      "expect": 429,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs",
+      "scenario": "over_jobs",
+      "status": 429
+    }
+  ]
+}

@@ -110,6 +110,7 @@ from acp_services.runtime.idempotency import (
     IdempotencyReservationDeniedError,
     ReservationPort,
 )
+from acp_services.runtime.local_admission import AdmissionRefusedError
 from acp_services.runtime.outbox import OutboxDeliveryResult, OutboxEventSpec
 from acp_services.runtime.receipts import verify_receipt
 from acp_services.runtime.worker import (
@@ -373,8 +374,10 @@ class JobManager:
         attempt_completion: Any | None = None,
         attempt_publication: Any | None = None,
         idempotency_reservations: ReservationPort | None = None,
+        admission: Any | None = None,
     ):
         self._idempotency_reservations = idempotency_reservations
+        self._admission = admission
         self._idempotency_adoption_lock = threading.Lock()
         #: Test-only crash-injection seam (mirrors JobStore's hook).  A callable
         #: invoked at named points of the staged idempotent submit; raising or
@@ -961,42 +964,57 @@ class JobManager:
 
         job_id = self._next_job_id(spec)
 
-        work_dir = self._allocate_work_dir(spec, job_id)
-        # The directory allocator is the single source of truth for the task
-        # label. This also captures a ``__02``/``__03`` collision suffix so
-        # queue, task index, task.json and job.json identify the same task.
-        spec = replace(spec, name=work_dir.name)
-        # v2 scaffold from creation so runtime files (events.jsonl) land in
-        # WORK/00_RUNTIME immediately; old dirs without WORK/ stay legacy.
+        admission_result: dict[str, Any] | None = None
+        if self._admission is not None:
+            decision = self._admission.admit_job(job_id, spec, project_id=spec.project_id)
+            if not decision.allowed:
+                raise AdmissionRefusedError(decision)
+            admission_result = self._admission.result_for_reservation(
+                decision.reservation_id,
+                decision=decision,
+            )
         try:
-            TaskStorage(work_dir).ensure_layout()
-        except OSError:
-            logger.warning("v2 scaffold creation failed for %s", work_dir)
+            work_dir = self._allocate_work_dir(spec, job_id)
+            # The directory allocator is the single source of truth for the task
+            # label. This also captures a ``__02``/``__03`` collision suffix so
+            # queue, task index, task.json and job.json identify the same task.
+            spec = replace(spec, name=work_dir.name)
+            # v2 scaffold from creation so runtime files (events.jsonl) land in
+            # WORK/00_RUNTIME immediately; old dirs without WORK/ stay legacy.
+            try:
+                TaskStorage(work_dir).ensure_layout()
+            except OSError:
+                logger.warning("v2 scaffold creation failed for %s", work_dir)
 
-        cancel_event = threading.Event()
-        with self._lock:
-            self._cancel_events[job_id] = cancel_event
+            cancel_event = threading.Event()
+            with self._lock:
+                self._cancel_events[job_id] = cancel_event
 
-        record = JobRecord(
-            id=job_id,
-            spec=spec,
-            status=JobStatus.QUEUED,
-            work_dir=str(work_dir),
-            project_id=spec.project_id,
-            input_hash=spec.input_hash,
-            group_id=group_id or job_id,
-        )
-        # BatchOptimize tasks may wait in the queue before the runner stages
-        # their input. Keep the submitted geometry visible in the task folder
-        # and structure viewer from the moment the task is created.
-        if spec.workflow == "BatchOptimize":
-            xyz_snapshot = input_xyz_snapshot(spec.input)
-            if xyz_snapshot:
-                try:
-                    TaskStorage(work_dir).write_input_xyz(xyz_snapshot)
-                except OSError:
-                    logger.warning("Could not snapshot input.xyz for queued job %s", job_id)
-        self.store.create(record)
+            record = JobRecord(
+                id=job_id,
+                spec=spec,
+                status=JobStatus.QUEUED,
+                work_dir=str(work_dir),
+                project_id=spec.project_id,
+                input_hash=spec.input_hash,
+                group_id=group_id or job_id,
+                result=({"admission": admission_result} if admission_result is not None else None),
+            )
+            # BatchOptimize tasks may wait in the queue before the runner stages
+            # their input. Keep the submitted geometry visible in the task folder
+            # and structure viewer from the moment the task is created.
+            if spec.workflow == "BatchOptimize":
+                xyz_snapshot = input_xyz_snapshot(spec.input)
+                if xyz_snapshot:
+                    try:
+                        TaskStorage(work_dir).write_input_xyz(xyz_snapshot)
+                    except OSError:
+                        logger.warning("Could not snapshot input.xyz for queued job %s", job_id)
+            self.store.create(record)
+        except BaseException:
+            if admission_result is not None and self._admission is not None:
+                self._admission.release_reservation_id(admission_result.get("reservation_id"))
+            raise
         if self.tasks is not None:
             try:
                 self.tasks.sync_from_job(record)
@@ -1068,15 +1086,19 @@ class JobManager:
         reservations = idempotency.reservations or self._idempotency_reservations
         staging = self._staging_dir(claim.claim_id)
         final_dir: Path | None = None
+        reservation_id: str | None = None
+        admission_result: dict[str, Any] | None = None
         try:
             if reservations is not None:
-                reservations.reserve_for_claim(
+                reservation_id = reservations.reserve_for_claim(
                     claim.claim_id,
                     scope_id=idempotency.scope_id,
                     action=idempotency.action,
                     idempotency_key=idempotency.key,
                     spec=spec,
                 )
+                if self._admission is not None:
+                    admission_result = self._admission.result_for_reservation(reservation_id)
             self._fault_point("idempotency.after_reservation")
 
             staging.mkdir(parents=True, exist_ok=True)
@@ -1099,6 +1121,7 @@ class JobManager:
                 project_id=spec.project_id,
                 input_hash=spec.input_hash,
                 group_id=group_id or job_id,
+                result=({"admission": admission_result} if admission_result is not None else None),
             )
             self._fault_point("idempotency.before_finalize")
             finalized = self.store.finalize_idempotent_job(
@@ -2705,6 +2728,8 @@ class JobManager:
         record = final
 
         if record.status == JobStatus.CANCELLED:
+            self._record_admission_usage(record)
+            self._release_admission(record)
             self._stage_task_observer.finalize_job(job_id, JobStatus.CANCELLED.value)
             self._sync_task_status(record)
             self._write_job_json(record)
@@ -3731,6 +3756,9 @@ class JobManager:
                                 attempt=record.attempt,
                             )
                             self._stage_task_observer.finalize_job(job_id, "cancelled")
+                    if record.status == JobStatus.CANCELLED:
+                        self._record_admission_usage(record)
+                        self._release_admission(record)
                     self._release_reservation(job_id)
                     return
                 if record.status.is_terminal:
@@ -3781,6 +3809,8 @@ class JobManager:
                         self._sync_task_status(record)
                         self._write_job_json(record)
                         self._stage_task_observer.finalize_job(job_id, "failed")
+                        self._record_admission_usage(record)
+                        self._release_admission(record)
                 self._release_reservation(job_id)
                 return
 
@@ -4687,6 +4717,8 @@ class JobManager:
                 )
             except OSError:
                 logger.debug("cancel_confirmed event write failed for %s", stored.id)
+            self._record_admission_usage(stored)
+            self._release_admission(stored)
             self._release_reservation(stored.id)
             self._dispatch_queued_jobs()
             return
@@ -4779,6 +4811,12 @@ class JobManager:
             self._sync_task_status(record)
             self._write_job_json(record)
 
+        if self._admission is not None:
+            decision = self._admission.revalidate_job(record)
+            if decision is not None and not decision.allowed:
+                self._fail_admission_revalidation(record, decision)
+                return True
+
         cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
 
@@ -4836,6 +4874,8 @@ class JobManager:
             self._sync_task_status(record)
             self._write_job_json(record)
             self._stage_task_observer.finalize_job(job_id, "completed")
+            self._record_admission_usage(record)
+            self._release_admission(record)
             with self._lock:
                 self._cancel_events.pop(job_id, None)
             self._dispatch_queued_jobs()
@@ -5145,6 +5185,71 @@ class JobManager:
             kind=target.kind,
             attempt=record.attempt,
         )
+
+    def _fail_admission_revalidation(
+        self,
+        record: JobRecord,
+        decision: Any,
+    ) -> None:
+        """Take the defined non-dispatching FAILED transition on revalidation refusal.
+
+        The reservation is released exactly once (the ledger release is
+        idempotent) and no QC process or remote submission is started.
+        """
+        if self._admission is not None:
+            self._admission.release_reservation_id(
+                self._admission.reservation_id_for_record(record)
+            )
+        result = dict(record.result or {})
+        admission = dict(result.get("admission") or {})
+        admission["revalidation"] = decision.to_dict()
+        admission["released"] = True
+        result["admission"] = admission
+        error = f"admission_revalidation_failed: {decision.reason_code}"
+        try:
+            stored = self.store.transition(
+                record.id,
+                expected_status=record.status,
+                expected_revision=record.revision,
+                expected_attempt=record.attempt,
+                status=JobStatus.FAILED,
+                error=error,
+                completed_at=_utc_now_iso(),
+                result=result,
+            )
+        except JobStateConflictError:
+            logger.info("admission revalidation lost the state CAS for %s", record.id)
+            return
+        self._sync_task_status(stored)
+        self._write_job_json(stored)
+        try:
+            self._event_log(stored).append(
+                "job.admission_revalidation_failed",
+                job_id=stored.id,
+                reason_code=decision.reason_code,
+                detail=decision.detail,
+                attempt=stored.attempt,
+            )
+        except OSError:
+            logger.debug("admission revalidation event write failed for %s", stored.id)
+        self._stage_task_observer.finalize_job(stored.id, "failed")
+        self._dispatch_queued_jobs()
+
+    def _record_admission_usage(self, record: JobRecord) -> None:
+        if self._admission is None:
+            return
+        try:
+            self._admission.record_usage(record)
+        except (OSError, ValueError, RuntimeError):
+            logger.warning("admission usage receipt failed for job %s", record.id, exc_info=True)
+
+    def _release_admission(self, record: JobRecord) -> None:
+        if self._admission is None:
+            return
+        try:
+            self._admission.release_job(record)
+        except (OSError, RuntimeError):
+            logger.warning("admission release failed for job %s", record.id, exc_info=True)
 
     def _release_reservation(self, job_id: str) -> None:
         """Idempotently release a job's in-flight node reservation."""
@@ -5531,6 +5636,8 @@ class JobManager:
         self._write_job_json(stored)
         event_log.append("job.failed", job_id=job_id, error=str(exc))
         self._stage_task_observer.finalize_job(job_id, "failed")
+        self._record_admission_usage(stored)
+        self._release_admission(stored)
         self._release_reservation(job_id)
         self._dispatch_queued_jobs()
 
@@ -5946,6 +6053,8 @@ class JobManager:
                 )
                 return
             try:
+                self._record_admission_usage(stored)
+                self._release_admission(stored)
                 self._release_reservation(job_id)
                 self._sync_task_status(stored)
                 if stored.status.is_terminal:
@@ -6045,6 +6154,8 @@ class JobManager:
                 return
             event_log = self._event_log(fresh)
             try:
+                self._record_admission_usage(fresh)
+                self._release_admission(fresh)
                 self._release_reservation(fresh.id)
                 if self._is_remote_job(fresh) and self.remote_runner is not None:
                     self.remote_runner.apply_terminal_side_effects(fresh, event_log)
@@ -6654,6 +6765,8 @@ class JobManager:
         record = final
         self._stage_task_observer.finalize_job(record.id, status.value)
         self._sync_task_status(record)
+        self._record_admission_usage(record)
+        self._release_admission(record)
         try:
             self._write_job_json(record)
         except OSError:

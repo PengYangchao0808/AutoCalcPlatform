@@ -261,7 +261,9 @@ from acp_services.contracts.access import AccessAction as _AccessAction
 from acp_services.runtime.idempotency import (
     IdempotencyConflictError,
     IdempotencyInProgressError,
+    IdempotencyReservationDeniedError,
 )
+from acp_services.runtime.local_admission import AdmissionRefusedError
 from acp_services.workspace.entry_authz import EntryClass as _EntryClass
 
 UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
@@ -368,6 +370,93 @@ def _require_entry_access(
     )
     if not decision.allowed:
         raise HTTPException(status_code=decision.http_status, detail=decision.error_detail())
+
+
+def _server_identity(request: Request) -> Any:
+    """Return the Controller-process identity (never a request field).
+
+    The lifespan installs it on ``app.state``; a bare app/test falls back to the
+    process environment.  A project hint is handled by the returned object and
+    can only narrow the verified scope.
+    """
+    identity = getattr(request.app.state, "server_identity", None)
+    if identity is not None:
+        return identity
+    from acp_services.workspace.server_identity import ServerIdentity
+
+    identity = ServerIdentity.from_environment()
+    request.app.state.server_identity = identity
+    return identity
+
+
+def _require_submit_access(request: Request, project_hint: str | None) -> str | None:
+    """Authorize a submit before normalization; return the effective project."""
+    decision = _server_identity(request).resolve_submit_project(project_hint)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "access_denied",
+                "message": decision.detail or "project hint widens the verified scope",
+                "params": {
+                    "reason_code": decision.reason_code,
+                    "requested_project": project_hint,
+                },
+                "retryable": False,
+            },
+        )
+    return decision.project_id
+
+
+def _require_job_scope_access(
+    request: Request,
+    job_id: str,
+    *,
+    action: str = _AccessAction.READ,
+    resource_id: str = "",
+    require_exists: bool = True,
+) -> JobRecord | None:
+    """Authorize a job-scoped control/prepare/read entry.
+
+    A job from another project is reported with the same not-found shape as an
+    unknown job id so task existence never leaks across projects.  Control
+    entries pass ``require_exists=False`` so the command use case keeps owning
+    its own not-found response (and its existing tests stay intact).
+    """
+    record = _manager(request).get(job_id)
+    if record is None:
+        if require_exists:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        return None
+    decision = _server_identity(request).authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=action,
+        job_id=job_id,
+        resource_id=resource_id,
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return record
+
+
+def _admission_http_error(decision: Any) -> HTTPException:
+    """Map an admission refusal to the stable structured error contract."""
+    reason = str(getattr(decision, "reason_code", "") or "admission_denied")
+    status_code = 429 if reason.startswith(("exceeds_", "capacity_")) else 403
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "code": "admission_denied",
+            "message": str(getattr(decision, "detail", "") or "resource admission denied"),
+            "params": {
+                "reason_code": reason,
+                "mode": getattr(decision, "mode", None),
+                "enforced": bool(getattr(decision, "enforced", False)),
+                "exceeded": [dict(item) for item in getattr(decision, "exceeded", ()) or ()],
+            },
+            "retryable": False,
+        },
+    )
 
 
 def _apply_auto_tag_rules_on_submit(manager: JobManager, record: Any) -> None:
@@ -2310,6 +2399,9 @@ def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | 
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
+    resolved_project = _require_submit_access(request, req.project_id)
+    if resolved_project is not None:
+        req.project_id = resolved_project
     if req.workflow not in ALL_WORKFLOWS:
         raise HTTPException(
             status_code=400,
@@ -2408,6 +2500,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             record = _commands(request).submit(spec)
         else:
             record = _commands(request).submit(spec, idempotency=idempotency_context)
+    except (AdmissionRefusedError, IdempotencyReservationDeniedError) as exc:
+        raise _admission_http_error(exc.decision) from exc
     except IdempotencyConflictError as exc:
         raise HTTPException(
             status_code=409,
@@ -2484,6 +2578,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         result="accepted",
         idempotency_key=idempotency_key,
         idempotent_replay=bool(getattr(record, "_idempotent_replay", False)),
+        admission=(record.result or {}).get("admission"),
+        identity=_server_identity(request).to_dict(),
     )
 
 
@@ -5196,6 +5292,7 @@ def _read_effective_config(record: JobRecord) -> dict[str, Any] | None:
 
 @router.post("/jobs/{job_id}/cancel", response_model=V1JobRecordModel)
 def cancel_job(job_id: str, request: Request) -> V1JobRecordModel:
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
     record = _commands(request).cancel(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
@@ -5263,12 +5360,14 @@ def _run_job_state_action(action: Callable[[str], JobRecord], job_id: str) -> V1
 @router.post("/jobs/{job_id}/pause", response_model=V1JobRecordModel)
 def pause_job(job_id: str, request: Request) -> V1JobRecordModel:
     """Pause a RUNNING job (SIGSTOP locally, ``bstop`` on LSF) → PAUSED."""
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
     return _run_job_state_action(_commands(request).pause, job_id)
 
 
 @router.post("/jobs/{job_id}/unpause", response_model=V1JobRecordModel)
 def unpause_job(job_id: str, request: Request) -> V1JobRecordModel:
     """Revive a PAUSED job in place (SIGCONT locally, ``bresume`` on LSF) → RUNNING."""
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
     return _run_job_state_action(_commands(request).unpause, job_id)
 
 
@@ -5285,6 +5384,7 @@ def continue_job(
     codes as job creation; ``None`` returns to the source node.
     """
     target_node = body.target_node if body else None
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
     try:
         record = _commands(request).continue_job(job_id, target_node=target_node)
     except KeyError as exc:
@@ -5309,6 +5409,7 @@ def rerun_job(
     queueing. The optional legacy ``project_id`` body is accepted only when it
     matches the current project.
     """
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
     try:
         record = _commands(request).rerun(job_id, project_id=body.project_id if body else None)
     except KeyError as exc:
@@ -7771,10 +7872,12 @@ def get_prepared_resource(
     if resource not in RESOURCE_ADAPTERS:
         raise HTTPException(status_code=400, detail=f"Unknown resource kind: {resource}")
 
-    manager = _manager(request)
-    record = manager.get(job_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    record = _require_job_scope_access(
+        request,
+        job_id,
+        action=_AccessAction.READ,
+        resource_id=resource,
+    )
 
     _require_entry_access(
         request,
@@ -8005,6 +8108,20 @@ def prepare_artifact(
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: job {job_id!r} does not exist",
+            params={"job_id": job_id},
+            retryable=True,
+        )
+    decision = _server_identity(request).authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=_AccessAction.WRITE,
+        job_id=job_id,
+        resource_id=req.artifact_id or req.purpose,
+    )
+    if not decision.allowed:
         raise _command_error(
             404,
             "resource_not_ready",

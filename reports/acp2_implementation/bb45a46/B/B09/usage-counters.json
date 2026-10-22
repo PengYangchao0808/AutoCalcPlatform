@@ -1,0 +1,48 @@
+{
+  "final_counts": {
+    "active_reservations": 0,
+    "claims": 1,
+    "jobs": 2,
+    "reservations": 5,
+    "usage_receipts": 2,
+    "work_dirs": 1
+  },
+  "replay": {
+    "admission": {
+      "enforced": true,
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "multi_tenant_security": false,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "reservation_id": "res_idem_4afcf472e44d43e0892596329858e1ae",
+      "verified_project": "proj-a"
+    },
+    "counts": {
+      "active_reservations": 0,
+      "claims": 1,
+      "jobs": 2,
+      "reservations": 1,
+      "usage_receipts": 1,
+      "work_dirs": 1
+    },
+    "idempotent_replay": true,
+    "job_status": "completed",
+    "same_job": true,
+    "status": 201
+  },
+  "usage_proof": {
+    "after": {
+      "core_hours": "2.000556",
+      "core_seconds": 7202,
+      "receipts": 2
+    },
+    "before": {
+      "core_hours": "0.000556",
+      "core_seconds": 2,
+      "receipts": 1
+    },
+    "first_inserted": true,
+    "second_inserted": false
+  }
+}

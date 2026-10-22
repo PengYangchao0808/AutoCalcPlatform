@@ -82,6 +82,7 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "revision_conflict": mo.ErrorCode.REVISION_CONFLICT,
     "idempotency_conflict": mo.ErrorCode.REVISION_CONFLICT,
     "idempotency_in_progress": mo.ErrorCode.REVISION_CONFLICT,
+    "admission_denied": mo.ErrorCode.ACCESS_DENIED,
     "access_denied": mo.ErrorCode.ACCESS_DENIED,
     "timeout": mo.ErrorCode.TIMEOUT,
     "interrupted": mo.ErrorCode.INTERRUPTED,
@@ -199,6 +200,7 @@ class _ControllerSubmit:
             "idempotency_key",
             "idempotent_replay",
             "admission",
+            "identity",
             "submission_id",
             "result",
             "approval_ref",
@@ -328,6 +330,10 @@ def build_mcp_runtime(
     controller_url: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS
 ) -> McpRuntime:
     """Bind every MCP tool to one Controller application command.
+
+    The in-process ``WorkspaceBudget`` is deliberately not wired here: B09 makes
+    the Controller's server-side admission ledger the only resource authority,
+    so a client/tool core hint can never override the server grant.
 
     Raises:
         ControllerClientError: the Controller is unreachable or unhealthy.

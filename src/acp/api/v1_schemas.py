@@ -544,6 +544,8 @@ class V1JobCreatedResponse(BaseModel):
     result: str = "accepted"
     idempotency_key: str | None = None
     idempotent_replay: bool = False
+    admission: dict[str, Any] | None = None
+    identity: dict[str, Any] | None = None
 
 
 class JobMoveRequest(BaseModel):

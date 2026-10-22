@@ -1,0 +1,45 @@
+INFO:     Started server process [551927]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18767 (Press CTRL+C to quit)
+INFO:     127.0.0.1:49644 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43814 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43824 - "POST /api/v1/jobs HTTP/1.1" 429 Too Many Requests
+INFO:     127.0.0.1:43832 - "POST /api/v1/jobs HTTP/1.1" 429 Too Many Requests
+INFO:     127.0.0.1:43846 - "POST /api/v1/jobs HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:43852 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:43866 - "GET /api/v1/jobs/seed-cross-project-b09/prepared/catalog HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43882 - "POST /api/v1/jobs/seed-cross-project-b09/prepare HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43898 - "POST /api/v1/jobs/seed-cross-project-b09/cancel HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43912 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:43924 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43936 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43946 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43952 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43962 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43964 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43976 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43986 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43996 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44010 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44020 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44032 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44034 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44050 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44062 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44064 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44070 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44086 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44102 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44106 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44118 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44134 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44140 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44142 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53380 - "GET /api/v1/jobs/20261023_021632_002_fake HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53390 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:53396 - "POST /api/v1/jobs HTTP/1.1" 429 Too Many Requests
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [551927]

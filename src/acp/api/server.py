@@ -259,7 +259,17 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from acp.scheduler.manager import JobManager
+        from acp_services.runtime.local_admission import build_local_admission
+        from acp_services.workspace.server_identity import (
+            ServerIdentity,
+            resolve_server_project,
+        )
 
+        server_identity = ServerIdentity.build(verified_project=resolve_server_project())
+        admission = build_local_admission(
+            run_root_path / "acp_admission.db",
+            verified_project=server_identity.verified_project,
+        )
         manager = JobManager(
             run_root=run_root_path,
             max_running=eff_max,
@@ -268,9 +278,13 @@ def create_app(
             local_retention_config=local_retention,
             local_cleanup_interval_hours=local_interval,
             local_max_jobs=local_max_jobs,
+            idempotency_reservations=admission.reservation_port(),
+            admission=admission,
         )
         try:
             app.state.job_manager = manager
+            app.state.server_identity = server_identity
+            app.state.admission = admission
             app.state.db_path = str(manager.store.db_path)
             app.state.host = eff_host
             app.state.port = eff_port

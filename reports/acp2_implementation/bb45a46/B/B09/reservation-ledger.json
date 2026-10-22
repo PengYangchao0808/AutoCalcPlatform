@@ -1,0 +1,170 @@
+{
+  "idempotency": [
+    {
+      "action": "submit",
+      "claim_id": "idem_33c55fc7631742ecbde403418b9722dc",
+      "created_at": "2026-10-22T18:16:32.161926+00:00",
+      "idempotency_key": "live-over-cores",
+      "lease_epoch": 0,
+      "lease_expires_at": "2026-10-22T18:17:32.161926+00:00",
+      "operation_id": null,
+      "owner_token": "108dcb47eb2d4e59890489a37c2e6607",
+      "request_digest": "sha256:5518f131608c3a6b7ea984d1a75825dfe4876635347b864ee5026680c1b5437e",
+      "scope_id": "principal_local\u001fproj-a",
+      "state": "rejected",
+      "task_id": null,
+      "updated_at": "2026-10-22T18:16:32.168697+00:00"
+    },
+    {
+      "action": "submit",
+      "claim_id": "idem_4afcf472e44d43e0892596329858e1ae",
+      "created_at": "2026-10-22T18:16:32.234224+00:00",
+      "idempotency_key": "live-allowed",
+      "lease_epoch": 0,
+      "lease_expires_at": "2026-10-22T18:17:32.234224+00:00",
+      "operation_id": null,
+      "owner_token": "32b2c6c1be71437b9c8f44d6f2d9bb33",
+      "request_digest": "sha256:30c1c1b3743a2ccce6452efdbf6800393aea7d88a7918f15bc6b53f6612045a8",
+      "scope_id": "principal_local\u001fproj-a",
+      "state": "committed",
+      "task_id": "20261023_021632_002_fake",
+      "updated_at": "2026-10-22T18:16:32.246694+00:00"
+    }
+  ],
+  "ledger": {
+    "claims": [
+      {
+        "action": "submit",
+        "claim_id": "idem_4afcf472e44d43e0892596329858e1ae",
+        "created_at": "2026-10-22T18:16:32.238098+00:00",
+        "idempotency_key": "live-allowed",
+        "reservation_id": "res_idem_4afcf472e44d43e0892596329858e1ae",
+        "scope_id": "principal_local\u001fproj-a"
+      }
+    ],
+    "reservations": [
+      {
+        "actual_cores": null,
+        "actual_memory_mb": null,
+        "actual_storage_bytes": null,
+        "cores": 1,
+        "created_at": "2026-10-22T18:16:32.238098+00:00",
+        "duration_s": 86400,
+        "job_id": "idem_4afcf472e44d43e0892596329858e1ae",
+        "key_id": null,
+        "memory_mb": 1024,
+        "node": null,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "project_id": "proj-a",
+        "queue": null,
+        "reservation_id": "res_idem_4afcf472e44d43e0892596329858e1ae",
+        "state": "released",
+        "storage_bytes": 0,
+        "updated_at": "2026-10-22T18:16:34.936829+00:00"
+      },
+      {
+        "actual_cores": null,
+        "actual_memory_mb": null,
+        "actual_storage_bytes": null,
+        "cores": 1,
+        "created_at": "2026-10-22T18:16:35.059901+00:00",
+        "duration_s": 0,
+        "job_id": "live-blocker",
+        "key_id": null,
+        "memory_mb": 0,
+        "node": null,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "project_id": "proj-a",
+        "queue": null,
+        "reservation_id": "res_live_blocker",
+        "state": "released",
+        "storage_bytes": 0,
+        "updated_at": "2026-10-22T18:16:35.085876+00:00"
+      },
+      {
+        "actual_cores": null,
+        "actual_memory_mb": null,
+        "actual_storage_bytes": null,
+        "cores": 1,
+        "created_at": "2026-10-22T18:16:35.064648+00:00",
+        "duration_s": 0,
+        "job_id": "live-blocker-0",
+        "key_id": null,
+        "memory_mb": 0,
+        "node": null,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "project_id": "proj-a",
+        "queue": null,
+        "reservation_id": "res_live_blocker_0",
+        "state": "released",
+        "storage_bytes": 0,
+        "updated_at": "2026-10-22T18:16:35.089657+00:00"
+      },
+      {
+        "actual_cores": null,
+        "actual_memory_mb": null,
+        "actual_storage_bytes": null,
+        "cores": 1,
+        "created_at": "2026-10-22T18:16:35.069105+00:00",
+        "duration_s": 0,
+        "job_id": "live-blocker-1",
+        "key_id": null,
+        "memory_mb": 0,
+        "node": null,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "project_id": "proj-a",
+        "queue": null,
+        "reservation_id": "res_live_blocker_1",
+        "state": "released",
+        "storage_bytes": 0,
+        "updated_at": "2026-10-22T18:16:35.093264+00:00"
+      },
+      {
+        "actual_cores": null,
+        "actual_memory_mb": null,
+        "actual_storage_bytes": null,
+        "cores": 1,
+        "created_at": "2026-10-22T18:16:35.072633+00:00",
+        "duration_s": 0,
+        "job_id": "live-blocker-2",
+        "key_id": null,
+        "memory_mb": 0,
+        "node": null,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "project_id": "proj-a",
+        "queue": null,
+        "reservation_id": "res_live_blocker_2",
+        "state": "released",
+        "storage_bytes": 0,
+        "updated_at": "2026-10-22T18:16:35.097305+00:00"
+      }
+    ],
+    "usage": [
+      {
+        "attempt": 1,
+        "core_hours": "0.000556",
+        "cores": 1,
+        "job_id": "20261023_021632_002_fake",
+        "recorded_at": "2026-10-22T18:16:34.933581+00:00",
+        "reservation_id": "res_idem_4afcf472e44d43e0892596329858e1ae",
+        "seconds": 2,
+        "usage_id": "usg_100612486895b1aa"
+      },
+      {
+        "attempt": 1,
+        "core_hours": "2.000000",
+        "cores": 2,
+        "job_id": "live-usage",
+        "recorded_at": "2026-10-22T18:16:35.102317+00:00",
+        "reservation_id": "res_live_usage",
+        "seconds": 3600,
+        "usage_id": "usg_b09_live_dup"
+      }
+    ]
+  }
+}
