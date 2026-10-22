@@ -22,15 +22,24 @@ trajectory/energy is fabricated by this module.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
+import re
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from cccp.analysis.research.reaction import (
+    DuplicateMapError,
+    InventedStereoError,
+    MissingProductError,
+    Reaction,
+)
 from cccp.calculation._common import electron_count, resolve_multiplicity
 from cccp.calculation.capabilities import (
     PreflightCheck,
@@ -351,3 +360,262 @@ def test_singlepoint_has_no_invented_reference_energy() -> None:
     assert gap["run_key_gap"].strip()
     assert gap["receipt_protocol_gap"].strip()
     assert gap["unblock_requirements"]
+
+
+DA_FIXTURE_DIR = REPO / "tests" / "fixtures" / "acp2" / "science" / "diels_alder" / "v1"
+DA_REACTION_PATH = DA_FIXTURE_DIR / "reaction.json"
+DA_QUESTION_PATH = DA_FIXTURE_DIR / "question.json"
+DA_MANIFEST_PATH = DA_FIXTURE_DIR / "fixture-manifest.json"
+DA_ACCEPTANCE_PATH = DA_FIXTURE_DIR / "acceptance.json"
+DA_REACTANTS_PATH = DA_FIXTURE_DIR / "reactants.xyz"
+DA_PRODUCT_PATH = DA_FIXTURE_DIR / "product.xyz"
+DA_FIXTURE_ID = "diels_alder-butadiene-ethene-wb97xd4-def2tzvp"
+
+_DA_FORMULA_TOKEN = re.compile(r"([A-Z][a-z]?)(\d*)")
+
+
+def _da_reaction_payload() -> dict[str, Any]:
+    """Return a mutable deep copy of the frozen DA reaction payload."""
+    return copy.deepcopy(_load_json(DA_REACTION_PATH))
+
+
+def _da_formula_counts(formula: str) -> Counter[str]:
+    """Count elements in a Hill-order fixture formula."""
+    counts: Counter[str] = Counter()
+    position = 0
+    for match in _DA_FORMULA_TOKEN.finditer(formula):
+        assert match.start() == position, f"malformed DA formula {formula!r}"
+        symbol, raw_count = match.group(1), match.group(2)
+        counts[symbol] += int(raw_count) if raw_count else 1
+        position = match.end()
+    assert position == len(formula) and counts, f"malformed DA formula {formula!r}"
+    return counts
+
+
+def _da_xyz_symbols(path: Path) -> list[str]:
+    """Return the element column of a frozen DA XYZ file in file order."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    atom_count = int(lines[0].strip())
+    atom_lines = [line for line in lines[2:] if line.strip()]
+    assert len(atom_lines) == atom_count, (
+        f"{path.name}: declared {atom_count} atoms but found {len(atom_lines)}"
+    )
+    symbols = [line.split()[0] for line in atom_lines]
+    assert all(len(line.split()) == 4 for line in atom_lines), f"{path.name}: malformed atom line"
+    return symbols
+
+
+def _walk_da(payload: Any, path: str = "$") -> Any:
+    """Yield every ``(path, node)`` pair in a fixture document."""
+    yield path, payload
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            yield from _walk_da(value, f"{path}.{key}")
+    elif isinstance(payload, list):
+        for index, value in enumerate(payload):
+            yield from _walk_da(value, f"{path}[{index}]")
+
+
+def _assert_no_endo_exo_request(payload: dict[str, Any], name: str) -> None:
+    """Only the frozen refusal records may mention endo/exo; requested stays false."""
+    for path, node in _walk_da(payload):
+        if not isinstance(node, dict):
+            continue
+        for key, value in node.items():
+            lowered = key.lower()
+            if "endo" not in lowered and "exo" not in lowered:
+                continue
+            where = f"{name}:{path}.{key}"
+            if lowered == "endo_exo_selectivity_supported":
+                assert value is False, f"{where} must be false"
+            elif lowered == "endo_exo_selectivity":
+                if isinstance(value, dict):
+                    assert value.get("requested") is False, f"{where}.requested must be false"
+                    assert value.get("supported_by_fixture") is False, (
+                        f"{where}.supported_by_fixture must be false"
+                    )
+                    assert value.get("status") == "not_evaluated", (
+                        f"{where}.status must stay not_evaluated"
+                    )
+                else:
+                    assert value is False, f"{where} must be the explicit false refusal"
+            else:
+                raise AssertionError(
+                    f"{where} looks like an endo/exo request; the DA fixture forbids it"
+                )
+
+
+def test_diels_alder_fixture_mapping_is_unique_one_to_one_and_exact() -> None:
+    """The mapping covers every atom once and both directions are exact inverses."""
+    reaction = Reaction.from_dict(_load_json(DA_REACTION_PATH))
+    mapping = reaction.atom_mapping
+
+    left_addresses = {
+        f"{structure.structure_id}:{atom_id}"
+        for structure in reaction.left
+        for atom_id in structure.atom_ids
+    }
+    right_addresses = {
+        f"{structure.structure_id}:{atom_id}"
+        for structure in reaction.right
+        for atom_id in structure.atom_ids
+    }
+
+    assert len(mapping.left_to_right) == 16
+    assert set(mapping.left_to_right) == left_addresses
+    assert len(set(mapping.left_to_right.values())) == len(mapping.left_to_right)
+    assert mapping.right_to_left == {right: left for left, right in mapping.left_to_right.items()}
+    assert set(mapping.right_to_left) == right_addresses
+    assert not mapping.unmapped_left
+    assert not mapping.unmapped_right
+    print(
+        "1. exact mapping: 16 unique one-to-one pairs, exact inverse, "
+        "no unmapped atoms on either side"
+    )
+
+
+def test_diels_alder_fixture_conserves_elements_and_charge() -> None:
+    """Elements, side formulas and net charge balance across the net reaction."""
+    reaction = Reaction.from_dict(_load_json(DA_REACTION_PATH))
+
+    left_elements: Counter[str] = Counter()
+    left_charge = 0
+    for structure in reaction.left:
+        assert len(structure.atom_ids) == len(structure.elements)
+        assert _da_formula_counts(structure.formula) == Counter(structure.elements)
+        left_elements.update(structure.elements)
+        left_charge += structure.charge
+
+    right_elements: Counter[str] = Counter()
+    right_charge = 0
+    for structure in reaction.right:
+        assert len(structure.atom_ids) == len(structure.elements)
+        assert _da_formula_counts(structure.formula) == Counter(structure.elements)
+        right_elements.update(structure.elements)
+        right_charge += structure.charge
+
+    assert left_elements == right_elements == Counter({"C": 6, "H": 10})
+    assert left_charge == right_charge == 0
+    assert sum(len(structure.atom_ids) for structure in reaction.left) == 16
+    print("2. conservation: C6H10 and net charge 0 are identical on both sides")
+
+
+def test_diels_alder_rejects_a_duplicate_mapping_claim() -> None:
+    """A right-side atom claimed twice is rejected before a mapping exists."""
+    payload = _da_reaction_payload()
+    payload["atom_mapping"]["left_to_right"]["ethene:et_c1"] = "cyclohexene:cy_c1"
+
+    with pytest.raises(DuplicateMapError, match="more than once"):
+        Reaction.from_dict(payload)
+    print("3. duplicate-map rejection: a second claim on cyclohexene:cy_c1 is refused")
+
+
+def test_diels_alder_rejects_a_missing_product_side() -> None:
+    """An empty right side is an incomplete transformation, not a reaction."""
+    payload = _da_reaction_payload()
+    payload["right"] = []
+
+    with pytest.raises(MissingProductError, match="at least one product"):
+        Reaction.from_dict(payload)
+    print("4. missing-product rejection: an empty right side is refused")
+
+
+def test_diels_alder_rejects_an_invented_stereo_assignment() -> None:
+    """A declared-unknown stereo fact cannot be silently promoted to R/S."""
+    payload = _da_reaction_payload()
+    payload["left"][0]["stereochemistry"] = {
+        "status": "unknown",
+        "centers": [{"atom_id": "bd_c1", "configuration": "R"}],
+        "double_bonds": [],
+    }
+
+    with pytest.raises(InventedStereoError, match="cannot carry"):
+        Reaction.from_dict(payload)
+
+    reaction = Reaction.from_dict(_load_json(DA_REACTION_PATH))
+    assert all(structure.stereochemistry.status == "unknown" for structure in reaction.left)
+    assert all(structure.stereochemistry.status == "unknown" for structure in reaction.right)
+    assert all(not structure.stereochemistry.centers for structure in reaction.left)
+    assert all(not structure.stereochemistry.double_bonds for structure in reaction.left)
+    assert reaction.to_dict() == _load_json(DA_REACTION_PATH)
+    print("5. ambiguous-stereo rejection: an R assignment under status=unknown is refused")
+
+
+def test_diels_alder_fixture_declares_xyz_atom_order() -> None:
+    """Both XYZ files carry exactly the declared atom_ids/elements order."""
+    reaction = Reaction.from_dict(_load_json(DA_REACTION_PATH))
+
+    declared_left = [symbol for structure in reaction.left for symbol in structure.elements]
+    declared_right = [symbol for structure in reaction.right for symbol in structure.elements]
+    assert [atom_id for structure in reaction.left for atom_id in structure.atom_ids] == [
+        "bd_c1",
+        "bd_c2",
+        "bd_c3",
+        "bd_c4",
+        "bd_h1",
+        "bd_h2",
+        "bd_h3",
+        "bd_h4",
+        "bd_h5",
+        "bd_h6",
+        "et_c1",
+        "et_c2",
+        "et_h1",
+        "et_h2",
+        "et_h3",
+        "et_h4",
+    ]
+    assert [atom_id for structure in reaction.right for atom_id in structure.atom_ids] == [
+        "cy_c1",
+        "cy_c2",
+        "cy_c3",
+        "cy_c4",
+        "cy_c5",
+        "cy_c6",
+        "cy_h1",
+        "cy_h2",
+        "cy_h3",
+        "cy_h4",
+        "cy_h5",
+        "cy_h6",
+        "cy_h7",
+        "cy_h8",
+        "cy_h9",
+        "cy_h10",
+    ]
+    assert _da_xyz_symbols(DA_REACTANTS_PATH) == declared_left
+    assert _da_xyz_symbols(DA_PRODUCT_PATH) == declared_right
+
+
+def test_diels_alder_fixture_requests_no_endo_exo_selectivity() -> None:
+    """No question, field or claim in the DA fixture requests endo/exo."""
+    question_set = _load_json(DA_QUESTION_PATH)
+    manifest = _load_json(DA_MANIFEST_PATH)
+    acceptance = _load_json(DA_ACCEPTANCE_PATH)
+
+    assert question_set["fixture_id"] == DA_FIXTURE_ID
+    assert {question["question_type"] for question in question_set["questions"]} == {
+        "path_connectivity",
+        "activation_energy",
+    }
+    refusal = next(
+        item for item in question_set["out_of_scope"] if item["question"] == "endo_exo_selectivity"
+    )
+    assert refusal["requested"] is False
+    assert refusal["supported_by_fixture"] is False
+
+    assert manifest["scope"]["endo_exo_selectivity_supported"] is False
+    assert manifest["scope"]["out_of_scope"][0] == "endo/exo selectivity"
+
+    claim = acceptance["claim_status"]["endo_exo_selectivity"]
+    assert claim["requested"] is False
+    assert claim["supported_by_fixture"] is False
+    assert claim["status"] == "not_evaluated"
+
+    for name, payload in (
+        ("reaction.json", _load_json(DA_REACTION_PATH)),
+        ("question.json", question_set),
+        ("fixture-manifest.json", manifest),
+        ("acceptance.json", acceptance),
+    ):
+        _assert_no_endo_exo_request(payload, name)
