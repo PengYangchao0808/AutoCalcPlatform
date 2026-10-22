@@ -36,12 +36,12 @@ from types import MappingProxyType
 from cccp.calculation.capabilities.contracts import (
     CAPABILITY_SCHEMA_VERSION,
     ERROR_CODES,
+    CapabilityContractError,
     CapabilityDescriptor,
     CapabilityKind,
     CapabilityProjections,
     CapabilityState,
     CapabilityStateError,
-    CapabilityContractError,
     DuplicateCapabilityError,
     DuplicateImplementationError,
     PreconditionKind,
@@ -99,9 +99,7 @@ class CapabilityErrorRecord:
 
     def __post_init__(self) -> None:
         if self.code not in ERROR_CODES:
-            raise CapabilityStateError(
-                f"error code {self.code!r} is not in the frozen vocabulary"
-            )
+            raise CapabilityStateError(f"error code {self.code!r} is not in the frozen vocabulary")
         if self.layer not in ("structure", "scientific", "platform"):
             raise CapabilityStateError(f"unknown error layer {self.layer!r}")
         object.__setattr__(self, "detail", MappingProxyType(dict(self.detail)))
@@ -277,7 +275,7 @@ class CapabilityRegistry:
         """Return registered capability ids in deterministic order."""
         return tuple(record.capability_id for record in self._records.values())
 
-    def register(self, descriptor: CapabilityDescriptor) -> "CapabilityRegistry":
+    def register(self, descriptor: CapabilityDescriptor) -> CapabilityRegistry:
         """Return a new registry with one descriptor added.
 
         The current registry is never mutated.  Duplicate ids are rejected
@@ -316,9 +314,7 @@ class CapabilityRegistry:
         """Return the record or raise :class:`UnknownCapabilityError`."""
         result = self.query(capability_id)
         if result.record is None:
-            raise UnknownCapabilityError(
-                f"capability {capability_id!r} is not registered"
-            )
+            raise UnknownCapabilityError(f"capability {capability_id!r} is not registered")
         return result.record
 
     def query_implementation(self, implementation_id: str) -> CapabilityQueryResult:
@@ -362,9 +358,7 @@ class CapabilityRegistry:
 
     # -- projection derivation ------------------------------------------------
 
-    def _derive_projections(
-        self, descriptor: CapabilityDescriptor
-    ) -> CapabilityProjections:
+    def _derive_projections(self, descriptor: CapabilityDescriptor) -> CapabilityProjections:
         """Derive described/installed/available while preserving verified.
 
         ``verified`` is taken from the descriptor unchanged: installation
@@ -381,9 +375,7 @@ class CapabilityRegistry:
             verified=descriptor.projections.verified,
         )
 
-    def _probe_descriptor(
-        self, descriptor: CapabilityDescriptor
-    ) -> tuple[Projection, Projection]:
+    def _probe_descriptor(self, descriptor: CapabilityDescriptor) -> tuple[Projection, Projection]:
         """Return the installed and available projections.
 
         Pure-analysis descriptors need no executable.  Compute descriptors

@@ -341,8 +341,10 @@ def load_packaging_summary(path: Path = PREVIEW_PATH) -> dict[str, Any]:
     for block in blocks:
         if "packages" in block and "wheel_smoke_argv" in block:
             return block
-    raise AssertionError("packaging-preview.md must contain a fenced json summary block "
-                         "with packages[] and wheel_smoke_argv[]")
+    raise AssertionError(
+        "packaging-preview.md must contain a fenced json summary block "
+        "with packages[] and wheel_smoke_argv[]"
+    )
 
 
 def validate_packaging_summary(summary: dict[str, Any], repo: Path = REPO) -> None:
@@ -466,8 +468,12 @@ def test_baseline_rows_carry_evidence_markers() -> None:
     assert "`static-fact`" in text
     assert "`needs-real-evidence`" in text
     for row in _table_rows("| # | CLI name"):
-        assert row[-1] in {"`static-fact`", "static-fact", "`needs-real-evidence`",
-                           "needs-real-evidence"}, f"workflow row missing evidence marker: {row}"
+        assert row[-1] in {
+            "`static-fact`",
+            "static-fact",
+            "`needs-real-evidence`",
+            "needs-real-evidence",
+        }, f"workflow row missing evidence marker: {row}"
     for row in _table_rows("| # | Task kind id"):
         assert "static-fact" in row[-1] or "needs-real-evidence" in row[-1], (
             f"task row missing evidence marker: {row}"

@@ -36,15 +36,29 @@ from typing import Any
 
 from cccp.analysis.research.question import (
     Question as PublicQuestion,
+)
+from cccp.analysis.research.question import (
     QuestionForbiddenFieldError as PublicQuestionForbiddenFieldError,
+)
+from cccp.analysis.research.question import (
     UnsupportedQuestionSchemaVersionError as PublicQuestionSchemaVersionError,
+)
+from cccp.analysis.research.question import (
     read_historical_question,
 )
 from cccp.analysis.research.reaction import (
     AtomMapping as PublicAtomMapping,
+)
+from cccp.analysis.research.reaction import (
     DuplicateMapError as PublicDuplicateMapError,
+)
+from cccp.analysis.research.reaction import (
     Reaction as PublicReaction,
+)
+from cccp.analysis.research.reaction import (
     UnsupportedSchemaVersionError as PublicReactionSchemaVersionError,
+)
+from cccp.analysis.research.reaction import (
     read_historical_reaction,
 )
 
@@ -236,9 +250,7 @@ def _hill_formula(elements: list[str]) -> str:
         ordered.extend(sorted(symbol for symbol in counts if symbol not in {"C", "H"}))
     else:
         ordered = sorted(counts)
-    return "".join(
-        f"{symbol}{counts[symbol] if counts[symbol] > 1 else ''}" for symbol in ordered
-    )
+    return "".join(f"{symbol}{counts[symbol] if counts[symbol] > 1 else ''}" for symbol in ordered)
 
 
 def _electrons(elements: list[str], charge: int, where: str) -> int:
@@ -258,9 +270,7 @@ def _side_atoms(side: list[dict[str, Any]], where: str) -> set[str]:
         structure_id = _require(item, "structure_id", f"{where}[{index}]")
         assert isinstance(structure_id, str) and structure_id
         if structure_id in structure_ids:
-            raise AtomIdentityError(
-                f"{where}: duplicate structure_id {structure_id!r} on one side"
-            )
+            raise AtomIdentityError(f"{where}: duplicate structure_id {structure_id!r} on one side")
         structure_ids.add(structure_id)
         atom_ids = _require(item, "atom_ids", f"{where}[{index}]")
         assert isinstance(atom_ids, list) and atom_ids, (
@@ -346,9 +356,7 @@ def _validate_stereo(
                 raise AtomIdentityError(
                     f"{where}.double_bonds[{index}]: atom_id {atom_id!r} is not declared"
                 )
-        configuration = _require(
-            double_bond, "configuration", f"{where}.double_bonds[{index}]"
-        )
+        configuration = _require(double_bond, "configuration", f"{where}.double_bonds[{index}]")
         assert configuration in {"E", "Z", "unknown"}, (
             f"{where}.double_bonds[{index}]: invalid configuration {configuration!r}"
         )
@@ -366,9 +374,7 @@ def _validate_stereo(
             "stereochemistry unknown"
         )
     if status == "unknown" and any(value != "unknown" for value in assignments):
-        raise InventedStereoError(
-            f"{where}: status 'unknown' cannot carry an R/S/E/Z assignment"
-        )
+        raise InventedStereoError(f"{where}: status 'unknown' cannot carry an R/S/E/Z assignment")
     if status == "defined" and any(value == "unknown" for value in assignments):
         raise StereoContradictionError(
             f"{where}: status 'defined' contains an explicitly unknown configuration"
@@ -395,9 +401,7 @@ def _resolve(address: str, side: list[dict[str, Any]], where: str) -> str:
                     f"{where}: atom id {atom_id!r} is not declared in {structure_id!r}"
                 )
             return address
-    raise AtomIdentityError(
-        f"{where}: structure id {structure_id!r} does not exist on this side"
-    )
+    raise AtomIdentityError(f"{where}: structure id {structure_id!r} does not exist on this side")
 
 
 def _check_one_to_one(
@@ -425,27 +429,18 @@ def _check_one_to_one(
 
     right_targets = list(left_to_right.values())
     if len(set(right_targets)) != len(right_targets):
-        duplicate = next(
-            value for value, count in Counter(right_targets).items() if count > 1
-        )
-        raise DuplicateMapError(
-            f"atom_mapping.left_to_right claims {duplicate!r} more than once"
-        )
+        duplicate = next(value for value, count in Counter(right_targets).items() if count > 1)
+        raise DuplicateMapError(f"atom_mapping.left_to_right claims {duplicate!r} more than once")
     left_targets = list(right_to_left.values())
     if len(set(left_targets)) != len(left_targets):
-        duplicate = next(
-            value for value, count in Counter(left_targets).items() if count > 1
-        )
-        raise DuplicateMapError(
-            f"atom_mapping.right_to_left claims {duplicate!r} more than once"
-        )
+        duplicate = next(value for value, count in Counter(left_targets).items() if count > 1)
+        raise DuplicateMapError(f"atom_mapping.right_to_left claims {duplicate!r} more than once")
 
     expected_inverse = {value: key for key, value in left_to_right.items()}
     if expected_inverse != right_to_left:
         missing = sorted(set(expected_inverse.items()) ^ set(right_to_left.items()))[:3]
         raise MapInverseError(
-            "left_to_right and right_to_left are not exact inverses "
-            f"(first differences: {missing})"
+            f"left_to_right and right_to_left are not exact inverses (first differences: {missing})"
         )
 
     mapped_left = set(left_to_right)
@@ -582,9 +577,7 @@ def validate_reaction(document: dict[str, Any]) -> None:
             )
 
     scope = document["reaction_scope"]
-    assert scope in {"net_reaction", "elementary_step"}, (
-        f"invalid reaction_scope {scope!r}"
-    )
+    assert scope in {"net_reaction", "elementary_step"}, f"invalid reaction_scope {scope!r}"
 
     left = document["left"]
     right = document["right"]
@@ -607,7 +600,10 @@ def validate_reaction(document: dict[str, Any]) -> None:
 
     for index, item in enumerate(left):
         _validate_stereo(
-            item["stereochemistry"], item["atom_ids"], unknown_fields, f"left[{index}].stereochemistry"
+            item["stereochemistry"],
+            item["atom_ids"],
+            unknown_fields,
+            f"left[{index}].stereochemistry",
         )
     for index, item in enumerate(right):
         _validate_stereo(
@@ -623,17 +619,14 @@ def validate_reaction(document: dict[str, Any]) -> None:
     for key, value in conditions.items():
         if value is None and f"conditions.{key}" not in unknown_fields:
             raise UnknownNotDeclaredError(
-                f"conditions.{key} is null but not declared in "
-                "input_uncertainty.unknown_fields"
+                f"conditions.{key} is null but not declared in input_uncertainty.unknown_fields"
             )
     if conditions["standard_state"] not in STANDARD_STATES:
         raise UnknownNotDeclaredError(
             f"conditions.standard_state {conditions['standard_state']!r} is invalid"
         )
     if conditions["phase"] not in {"gas", "solution", "liquid", "solid", "unknown", None}:
-        raise UnknownNotDeclaredError(
-            f"conditions.phase {conditions['phase']!r} is invalid"
-        )
+        raise UnknownNotDeclaredError(f"conditions.phase {conditions['phase']!r} is invalid")
 
     _check_one_to_one(document["atom_mapping"], left, right)
 
@@ -675,9 +668,7 @@ def _walk_forbidden(value: Any, path: str = "question") -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             if key in FORBIDDEN_QUESTION_FIELDS:
-                raise QuestionForbiddenFieldError(
-                    f"{path}: forbidden question field {key!r}"
-                )
+                raise QuestionForbiddenFieldError(f"{path}: forbidden question field {key!r}")
             _walk_forbidden(child, f"{path}.{key}")
     elif isinstance(value, list):
         for index, child in enumerate(value):
@@ -754,9 +745,7 @@ def validate_question(document: dict[str, Any]) -> None:
         and state["multiplicity"] >= 1
     )
     if conditions["standard_state"] not in STANDARD_STATES:
-        raise UnknownDeclarationError(
-            f"standard_state {conditions['standard_state']!r} is invalid"
-        )
+        raise UnknownDeclarationError(f"standard_state {conditions['standard_state']!r} is invalid")
     assert conditions["energy_unit"] in ENERGY_UNITS, (
         f"unsupported energy_unit {conditions['energy_unit']!r}"
     )
@@ -765,11 +754,10 @@ def validate_question(document: dict[str, Any]) -> None:
         "compatibility_requirements must be non-empty"
     )
     assert set(requirements) <= COMPATIBILITY_REQUIREMENTS, (
-        f"unknown compatibility requirements: {sorted(set(requirements) - COMPATIBILITY_REQUIREMENTS)}"
+        "unknown compatibility requirements: "
+        f"{sorted(set(requirements) - COMPATIBILITY_REQUIREMENTS)}"
     )
-    assert len(set(requirements)) == len(requirements), (
-        "compatibility_requirements must be unique"
-    )
+    assert len(set(requirements)) == len(requirements), "compatibility_requirements must be unique"
     unknown_fields = conditions["unknown_fields"]
     assert isinstance(unknown_fields, list)
     for dotted in unknown_fields:
@@ -844,9 +832,7 @@ def test_fixture_table_accepted_and_rejected(capsys: Any) -> None:
     assert "ElementaryStepClaimWithoutEvidenceError" in table
 
 
-_FIXTURE_REFERENCE_RE = re.compile(
-    r"`((?:reaction|question)/[A-Za-z0-9_.-]+\.json)`"
-)
+_FIXTURE_REFERENCE_RE = re.compile(r"`((?:reaction|question)/[A-Za-z0-9_.-]+\.json)`")
 
 
 def test_rule_fixture_references_are_delivered_or_marked_planned() -> None:
@@ -876,10 +862,7 @@ def test_rule_fixture_references_are_delivered_or_marked_planned() -> None:
         )
         if not marked:
             unmarked.append(name)
-    assert not unmarked, (
-        "rule-referenced fixtures are missing and not marked planned: "
-        f"{unmarked}"
-    )
+    assert not unmarked, f"rule-referenced fixtures are missing and not marked planned: {unmarked}"
 
 
 def test_valid_simple_reaction_is_accepted() -> None:
@@ -926,28 +909,26 @@ def test_valid_simple_reaction_round_trips_canonically() -> None:
 
 
 def test_duplicate_map_rejected_with_named_error() -> None:
-    with pytest_raises(DuplicateMapError) as info:
+    with PytestRaises(DuplicateMapError) as info:
         validate_reaction(load_json(REACTION_FIXTURES / "duplicate_map.json"))
     assert "ethane:ethane_c1" in str(info.value)
 
 
 def test_missing_product_rejected_with_named_error() -> None:
-    with pytest_raises(MissingProductError) as info:
+    with PytestRaises(MissingProductError) as info:
         validate_reaction(load_json(REACTION_FIXTURES / "missing_product.json"))
     assert "product" in str(info.value).lower()
 
 
 def test_charge_mismatch_rejected_with_named_error() -> None:
-    with pytest_raises(ChargeConservationError) as info:
+    with PytestRaises(ChargeConservationError) as info:
         validate_reaction(load_json(REACTION_FIXTURES / "charge_mismatch.json"))
     assert "+0" in str(info.value) and "+1" in str(info.value)
 
 
 def test_net_reaction_claimed_as_elementary_rejected_with_named_error() -> None:
-    with pytest_raises(ElementaryStepClaimWithoutEvidenceError) as info:
-        validate_reaction(
-            load_json(REACTION_FIXTURES / "net_reaction_claimed_as_elementary.json")
-        )
+    with PytestRaises(ElementaryStepClaimWithoutEvidenceError) as info:
+        validate_reaction(load_json(REACTION_FIXTURES / "net_reaction_claimed_as_elementary.json"))
     assert "elementary_step" in str(info.value)
 
 
@@ -973,7 +954,7 @@ def test_claimed_stereo_without_evidence_rejected_with_named_error() -> None:
     stereo = document["right"][0]["stereochemistry"]
     stereo["status"] = "defined"
     stereo["centers"][0]["configuration"] = "R"
-    with pytest_raises(InventedStereoError) as info:
+    with PytestRaises(InventedStereoError) as info:
         validate_reaction(document)
     assert "unknown" in str(info.value).lower()
 
@@ -994,7 +975,7 @@ def test_removing_product_side_is_rejected() -> None:
     """QA failure: remove the product structure from the valid example."""
     document = copy.deepcopy(load_json(EXAMPLES / "reaction-da.json"))
     document["right"] = []
-    with pytest_raises(MissingProductError):
+    with PytestRaises(MissingProductError):
         validate_reaction(document)
 
 
@@ -1002,7 +983,7 @@ def test_flipping_product_charge_is_rejected() -> None:
     """QA failure: flip a product charge in the valid example."""
     document = copy.deepcopy(load_json(EXAMPLES / "reaction-da.json"))
     document["right"][0]["charge"] = 1
-    with pytest_raises(ChargeConservationError):
+    with PytestRaises(ChargeConservationError):
         validate_reaction(document)
 
 
@@ -1014,14 +995,14 @@ def test_element_mismatch_is_rejected_with_named_error() -> None:
     document["atom_mapping"]["left_to_right"].pop("hydrogen:hydrogen_h2")
     document["atom_mapping"]["right_to_left"].pop("ethane:ethane_h6")
     document["atom_mapping"]["unmapped_left"].append("hydrogen:hydrogen_h2")
-    with pytest_raises(ElementConservationError):
+    with PytestRaises(ElementConservationError):
         validate_reaction(document)
 
 
 def test_undeclared_null_condition_is_rejected() -> None:
     document = copy.deepcopy(load_json(REACTION_FIXTURES / "valid_simple_reaction.json"))
     document["input_uncertainty"]["unknown_fields"] = []
-    with pytest_raises(UnknownNotDeclaredError):
+    with PytestRaises(UnknownNotDeclaredError):
         validate_reaction(document)
 
 
@@ -1039,7 +1020,7 @@ def test_question_with_forbidden_field_rejected_with_named_error() -> None:
     for field in ("job_status", "role", "cost", "price"):
         document = copy.deepcopy(base)
         document[field] = "forbidden"
-        with pytest_raises(QuestionForbiddenFieldError) as info:
+        with PytestRaises(QuestionForbiddenFieldError) as info:
             validate_question(document)
         assert field in str(info.value)
 
@@ -1047,7 +1028,7 @@ def test_question_with_forbidden_field_rejected_with_named_error() -> None:
 def test_question_nested_forbidden_field_rejected() -> None:
     document = copy.deepcopy(load_json(EXAMPLES / "question-activation.json"))
     document["comparison_conditions"]["queue"] = "forbidden"
-    with pytest_raises(QuestionForbiddenFieldError) as info:
+    with PytestRaises(QuestionForbiddenFieldError) as info:
         validate_question(document)
     assert "queue" in str(info.value)
 
@@ -1055,14 +1036,14 @@ def test_question_nested_forbidden_field_rejected() -> None:
 # ── tiny stdlib pytest-free assertion helper (keeps this module runnable) ───
 
 
-class pytest_raises:
+class PytestRaises:
     """Minimal ``pytest.raises`` equivalent so the checker is import-independent."""
 
     def __init__(self, expected: type[BaseException]) -> None:
         self.expected = expected
         self.value: BaseException | None = None
 
-    def __enter__(self) -> pytest_raises:
+    def __enter__(self) -> PytestRaises:
         return self
 
     def __exit__(self, exc_type: Any, exc: BaseException | None, traceback: Any) -> bool:
@@ -1108,16 +1089,16 @@ def test_duplicate_map_raises_before_reaction_construction() -> None:
     necessarily hits it before any ``Reaction`` instance is built.
     """
     document = load_json(REACTION_FIXTURES / "duplicate_map.json")
-    with pytest_raises(PublicDuplicateMapError):
+    with PytestRaises(PublicDuplicateMapError):
         PublicAtomMapping.from_dict(document["atom_mapping"])
-    with pytest_raises(PublicDuplicateMapError):
+    with PytestRaises(PublicDuplicateMapError):
         PublicReaction.from_dict(document)
 
 
 def test_unknown_major_reaction_version_raises_typed_error() -> None:
     document = copy.deepcopy(load_json(EXAMPLES / "reaction-da.json"))
     document["schema_version"] = 2
-    with pytest_raises(PublicReactionSchemaVersionError) as info:
+    with PytestRaises(PublicReactionSchemaVersionError) as info:
         PublicReaction.from_dict(document)
     assert "2" in str(info.value)
     assert "never coerced" in str(info.value)
@@ -1148,7 +1129,7 @@ def test_historical_reaction_preserves_unknown_field_without_eligibility() -> No
     assert preserved == document
     assert preserved["left"][0]["legacy_atom_note"] == "kept-in-place"
     # Historical readability never makes the payload canonical/executable.
-    with pytest_raises(PublicReactionSchemaVersionError):
+    with PytestRaises(PublicReactionSchemaVersionError):
         PublicReaction.from_dict(document)
 
 
@@ -1170,20 +1151,20 @@ def test_question_with_job_status_rejected_by_public_type() -> None:
     for field in FORBIDDEN_QUESTION_FIELDS:
         document = copy.deepcopy(base)
         document[field] = "forbidden"
-        with pytest_raises(PublicQuestionForbiddenFieldError) as info:
+        with PytestRaises(PublicQuestionForbiddenFieldError) as info:
             PublicQuestion.from_dict(document)
         assert field in str(info.value)
 
     nested = copy.deepcopy(base)
     nested["comparison_conditions"]["queue"] = "forbidden"
-    with pytest_raises(PublicQuestionForbiddenFieldError):
+    with PytestRaises(PublicQuestionForbiddenFieldError):
         PublicQuestion.from_dict(nested)
 
 
 def test_unknown_major_question_version_raises_typed_error() -> None:
     document = copy.deepcopy(load_json(EXAMPLES / "question-activation.json"))
     document["schema_version"] = 3
-    with pytest_raises(PublicQuestionSchemaVersionError) as info:
+    with PytestRaises(PublicQuestionSchemaVersionError) as info:
         PublicQuestion.from_dict(document)
     assert "3" in str(info.value)
 
@@ -1215,9 +1196,7 @@ def test_public_types_import_without_execution_or_platform_modules() -> None:
     )
     env = dict(os.environ)
     src = str(REPO / "src")
-    env["PYTHONPATH"] = src + (
-        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
-    )
+    env["PYTHONPATH"] = src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     completed = subprocess.run(
         [sys.executable, "-c", probe],
         capture_output=True,

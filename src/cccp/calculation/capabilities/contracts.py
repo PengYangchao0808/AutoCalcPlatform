@@ -25,10 +25,10 @@ Author: QCcalc Team
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from types import MappingProxyType
-from typing import Mapping
 
 from cccp.calculation.errors import CalculationError
 
@@ -83,9 +83,7 @@ CONTRACT_VERSION = CAPABILITY_CONTRACT_VERSION
 
 SUPPORTED_MAJOR_VERSIONS: tuple[int, ...] = (1,)
 UNKNOWN_MAJOR_VERSION_POLICY = "reject_and_never_execute"
-HISTORICAL_UNKNOWN_FIELDS_POLICY = (
-    "preserve_read_only_no_execution_or_recovery_eligibility"
-)
+HISTORICAL_UNKNOWN_FIELDS_POLICY = "preserve_read_only_no_execution_or_recovery_eligibility"
 #: The ``unknown_field_policy.historical_read`` spelling is deliberately a
 #: distinct frozen constant: ``capability.schema.json`` uses a different
 #: const string for that object than for ``compatibility``.  Both mean the
@@ -272,9 +270,7 @@ CAPABILITY_STATE_RULES: Mapping[str, frozenset[CapabilityState]] = MappingProxyT
 
 def _require_identifier(value: str, *, field_name: str) -> str:
     if not isinstance(value, str) or not _IDENTIFIER_RE.fullmatch(value):
-        raise CapabilityContractError(
-            f"{field_name} must match ^[a-z][a-z0-9_]*$ (got {value!r})"
-        )
+        raise CapabilityContractError(f"{field_name} must match ^[a-z][a-z0-9_]*$ (got {value!r})")
     return value
 
 
@@ -500,9 +496,7 @@ class Compatibility:
             or self.min_reader_schema_version < 1
             or self.max_reader_schema_version < self.min_reader_schema_version
         ):
-            raise IncompatibleStateError(
-                "reader schema version range must be positive and ordered"
-            )
+            raise IncompatibleStateError("reader schema version range must be positive and ordered")
         if self.declared_major not in range(
             self.min_reader_schema_version, self.max_reader_schema_version + 1
         ):
@@ -510,9 +504,7 @@ class Compatibility:
                 "declared_major must lie inside the declared reader schema range"
             )
         if self.unknown_major_version != UNKNOWN_MAJOR_VERSION_POLICY:
-            raise IncompatibleStateError(
-                "unknown_major_version must be 'reject_and_never_execute'"
-            )
+            raise IncompatibleStateError("unknown_major_version must be 'reject_and_never_execute'")
         _require_error_code(
             self.unknown_major_error_code, field_name="compatibility.unknown_major_error_code"
         )
@@ -525,9 +517,7 @@ class Compatibility:
                 "historical_unknown_fields policy is frozen for schema version 1"
             )
         if self.backward_compatible_additions != BACKWARD_COMPATIBLE_ADDITIONS:
-            raise IncompatibleStateError(
-                "backward_compatible_additions must be 'same_major_only'"
-            )
+            raise IncompatibleStateError("backward_compatible_additions must be 'same_major_only'")
 
     def to_dict(self) -> dict[str, object]:
         """Return the schema-shaped JSON object."""
@@ -565,8 +555,7 @@ class ProvenanceRequirements:
                 raise IncompatibleStateError(f"provenance_requirements.{field_name} is frozen")
         if self.method_identity not in ("required", "not_applicable"):
             raise CapabilityStateError(
-                "provenance_requirements.method_identity must be "
-                "'required' or 'not_applicable'"
+                "provenance_requirements.method_identity must be 'required' or 'not_applicable'"
             )
         if self.notes is not None:
             object.__setattr__(self, "notes", tuple(self.notes))
@@ -614,35 +603,25 @@ class ExecutionSemantics:
         )
         if self.kind is CapabilityKind.COMPUTE:
             if self.starts_subprocess is not True:
-                raise IncompatibleStateError(
-                    "compute execution must start a subprocess"
-                )
+                raise IncompatibleStateError("compute execution must start a subprocess")
             if self.reads_existing_artifacts_only is not False:
-                raise IncompatibleStateError(
-                    "compute execution may not be artifact-read-only"
-                )
+                raise IncompatibleStateError("compute execution may not be artifact-read-only")
             if self.delegates_to_task_kind not in TASK_KINDS:
                 raise CapabilityStateError(
                     "compute execution must delegate to exactly one existing "
                     f"task kind ({', '.join(TASK_KINDS)})"
                 )
             if self.delegation_count != 1:
-                raise IncompatibleStateError(
-                    "compute execution delegation_count must be 1"
-                )
+                raise IncompatibleStateError("compute execution delegation_count must be 1")
             if self.side_effects is not SideEffects.ARTIFACTS_ONLY:
                 raise IncompatibleStateError(
                     "compute execution side_effects must be 'artifacts_only'"
                 )
             if self.writes_artifacts is not True:
-                raise IncompatibleStateError(
-                    "compute execution must write artifacts"
-                )
+                raise IncompatibleStateError("compute execution must write artifacts")
         else:
             if self.starts_subprocess is not False:
-                raise IncompatibleStateError(
-                    "pure_analysis execution must not start a subprocess"
-                )
+                raise IncompatibleStateError("pure_analysis execution must not start a subprocess")
             if self.reads_existing_artifacts_only is not True:
                 raise IncompatibleStateError(
                     "pure_analysis execution must read existing artifacts only"
@@ -652,17 +631,11 @@ class ExecutionSemantics:
                     "pure_analysis execution must not delegate to a task kind"
                 )
             if self.delegation_count != 0:
-                raise IncompatibleStateError(
-                    "pure_analysis execution delegation_count must be 0"
-                )
+                raise IncompatibleStateError("pure_analysis execution delegation_count must be 0")
             if self.side_effects is not SideEffects.NONE:
-                raise IncompatibleStateError(
-                    "pure_analysis execution side_effects must be 'none'"
-                )
+                raise IncompatibleStateError("pure_analysis execution side_effects must be 'none'")
             if self.writes_artifacts is not False:
-                raise IncompatibleStateError(
-                    "pure_analysis execution must not write artifacts"
-                )
+                raise IncompatibleStateError("pure_analysis execution must not write artifacts")
         if self.network_access is not False:
             raise IncompatibleStateError("execution network_access must be false")
 
@@ -803,18 +776,10 @@ class Projection:
 class CapabilityProjections:
     """The four independent projections required by the frozen schema."""
 
-    described: Projection = field(
-        default_factory=lambda: Projection(CapabilityState.PRESENT)
-    )
-    installed: Projection = field(
-        default_factory=lambda: Projection(CapabilityState.UNKNOWN)
-    )
-    available: Projection = field(
-        default_factory=lambda: Projection(CapabilityState.UNKNOWN)
-    )
-    verified: Projection = field(
-        default_factory=lambda: Projection(CapabilityState.NOT_VERIFIED)
-    )
+    described: Projection = field(default_factory=lambda: Projection(CapabilityState.PRESENT))
+    installed: Projection = field(default_factory=lambda: Projection(CapabilityState.UNKNOWN))
+    available: Projection = field(default_factory=lambda: Projection(CapabilityState.UNKNOWN))
+    verified: Projection = field(default_factory=lambda: Projection(CapabilityState.NOT_VERIFIED))
 
     def __post_init__(self) -> None:
         for name in ("described", "installed", "available", "verified"):
@@ -862,9 +827,7 @@ class CapabilityDescriptor:
     completion_checks: tuple[CompletionCheck, ...] = ()
     limitations: tuple[Limitation, ...] = ()
     compatibility: Compatibility = field(default_factory=Compatibility)
-    provenance_requirements: ProvenanceRequirements = field(
-        default_factory=ProvenanceRequirements
-    )
+    provenance_requirements: ProvenanceRequirements = field(default_factory=ProvenanceRequirements)
     validation_layers: ValidationLayers = field(default_factory=ValidationLayers)
     projections: CapabilityProjections = field(default_factory=CapabilityProjections)
     unknown_field_policy: UnknownFieldPolicy = field(default_factory=UnknownFieldPolicy)
@@ -905,9 +868,7 @@ class CapabilityDescriptor:
         if not isinstance(self.compatibility, Compatibility):
             raise CapabilityContractError("compatibility must be Compatibility")
         if not isinstance(self.provenance_requirements, ProvenanceRequirements):
-            raise CapabilityContractError(
-                "provenance_requirements must be ProvenanceRequirements"
-            )
+            raise CapabilityContractError("provenance_requirements must be ProvenanceRequirements")
         if not isinstance(self.projections, CapabilityProjections):
             raise CapabilityContractError("projections must be CapabilityProjections")
         if not isinstance(self.validation_layers, ValidationLayers):
