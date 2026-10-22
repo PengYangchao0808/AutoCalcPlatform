@@ -82,6 +82,7 @@ PY
 | singlepoint 默认 envelope 集合 | `src/acp_services/runtime/execution_chain.py`（DEFAULT_ENVELOPE_WORKFLOWS） | 既有 legacy 路径保留；DEFAULT 与 ENABLED 分离 | `[CLOSED]` | `tests/test_services_workflow_enablement.py` |
 | 远端冻结链 | `src/acp/scheduler/remote/runner.py`（_upload_frozen_envelope、receipt 与 task_result fetch） | `src/acp/scheduler/remote/sync.py`（sync 含 src/acp_services） | `[CLOSED]`（真实 LSF 为 `NOT_VERIFIED`） | `tests/test_services_chain_switch.py`；`tests/test_remote_phase1.py` |
 | `Path_safe` 公共命名兼容 | `src/cccp/analysis/structure/parsers.py:path_safe` | `Path_safe` 兼容别名；`src/acp/intake/parsers.py` 旧导入面保留 | `[RETAINED]` | `tests/test_acp_intake.py`；T33 import smoke |
+| 本地异常死亡停止核验（2026-10-22） | `runtime/attempt_recovery.py:CgroupAttemptRecovery`；`runtime/cgroup.py` 纯资源计划 | `worker_bootstrap --execution-cgroup-root` / `ACP_EXECUTION_CGROUP_ROOT`；原 `runtime.isolation.CgroupV2Plan` / `EnvelopeProcessGroup` 保留同对象重导出 | `[OPEN]`：受控验证通过，真实委派环境 NOT_VERIFIED；旧无约束 claim 继续拒绝 | `tests/test_services_cgroup_attempt_recovery.py`；`tests/test_services_isolation.py` |
 
 **兼容面结论：** 上述公开面均为加性或新驻点；旧 identity forwarder（`acp.scheduler.{store,migrations}`、
 `acp.calculations.{contracts,step_result,step_requirements}`、`acp.catalog.method_levels_to_cli_flags`）

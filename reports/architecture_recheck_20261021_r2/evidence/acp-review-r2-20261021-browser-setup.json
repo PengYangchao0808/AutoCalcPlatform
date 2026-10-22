@@ -1,0 +1,21 @@
+{
+  "chromium": "153.0.8010.12",
+  "facts": {
+    "initial": {
+      "width": 400,
+      "height": 300,
+      "created": true,
+      "canvases": 1
+    },
+    "generated": {
+      "width": 984,
+      "height": 0,
+      "created": true,
+      "canvases": 1
+    },
+    "webgl": true,
+    "caught": []
+  },
+  "console_errors": [],
+  "page_errors": []
+}

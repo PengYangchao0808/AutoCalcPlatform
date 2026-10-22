@@ -94,6 +94,7 @@ from acp_services.runtime.attempt_freeze import (
     AttemptFreezeSpec,
     AttemptLockClaim,
     AttemptLockExecutionRight,
+    AttemptRecoveryProof,
     attempt_lock_path,
     write_frozen_attempt,
 )
@@ -873,9 +874,12 @@ def test_worker_rejects_tampered_group_before_execution(tmp_path: Path) -> None:
     )
     assert result.returncode == 2
     assert json.loads(result.stdout.strip().splitlines()[-1])["code"] == "frozen_group_invalid"
+    # R04: the canonical receipt path is never touched by an unbound assembly
+    # failure — the diagnostic lands beside it and a pre-existing receipt
+    # would keep its bytes.
     receipt_path = work / "execution_receipt.json"
-    unbound = json.loads(receipt_path.read_text(encoding="utf-8"))
-    # The pre-existing unbound-assembly diagnostic — NOT an authoritative receipt.
+    assert not receipt_path.exists()
+    unbound = json.loads((work / "execution_receipt.json.unbound.json").read_text(encoding="utf-8"))
     assert unbound["schema"] == "worker_assembly_error"
     assert "receipt_version" not in unbound
     assert not (work / "WORK" / "00_RUNTIME" / "task_result.json").exists()
@@ -900,6 +904,7 @@ def _write_foreign_claim(
         fencing_token=fencing,
         pid=pid,
         pid_starttime=pid_starttime,
+        host=socket.gethostname(),
         lease_expires_at=(
             datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)
         ).isoformat(),
@@ -966,12 +971,24 @@ def test_claim_live_holder_is_not_stolen_dead_holder_is_checked_stolen(
         holder.kill()
         holder.wait(timeout=30)
 
-    assert right.acquire(envelope).held is True  # verifiably dead -> checked steal
+    # A dead worker can leave live QC children; parent death alone is not
+    # checked recovery.  This fixture never created any children, so an
+    # explicit reconciliation authority can confirm the complete stopped fact.
+    assert right.acquire(envelope).held is False
+
+    class ReconciledChildlessHolder:
+        def confirm_stopped(self, claim: AttemptLockClaim) -> AttemptRecoveryProof:
+            return AttemptRecoveryProof(
+                claim.content_digest(), True, True, "test: reaped childless holder"
+            )
+
+    right = AttemptLockExecutionRight(lock_path, recovery_check=ReconciledChildlessHolder())
+    assert right.acquire(envelope).held is True
     assert right.verify(envelope).held is True
     assert right.release(envelope) is True
 
 
-def test_claim_recycled_pid_is_detected_as_dead(tmp_path: Path) -> None:
+def test_claim_recycled_pid_does_not_prove_execution_children_stopped(tmp_path: Path) -> None:
     work = tmp_path / "task"
     envelope = _envelope("singlepoint")
     lock_path = attempt_lock_path(work)
@@ -980,7 +997,8 @@ def test_claim_recycled_pid_is_detected_as_dead(tmp_path: Path) -> None:
     _write_foreign_claim(lock_path, pid=os.getpid(), pid_starttime="999999999")
 
     verdict = AttemptLockExecutionRight(lock_path).acquire(envelope)
-    assert verdict.held is True
+    assert verdict.held is False
+    assert "children are not confirmed stopped" in verdict.detail
 
 
 def test_loser_worker_writes_only_a_refusal_diagnostic(tmp_path: Path) -> None:
@@ -1435,7 +1453,13 @@ def test_t25_singlepoint_freeze_spec_creates_complete_recomputable_group(
     context, request, task = acp_freeze._build_singlepoint_request(  # noqa: SLF001
         record, work, work / "input.xyz"
     )
-    assert task.to_dict() == spec.plan.payload
+    # R02: the frozen payload = the typed request body + the reserved
+    # environment key carrying the resolved scientific configuration snapshot.
+    payload_without_env = dict(spec.plan.payload)
+    environment = payload_without_env.pop("environment", None)
+    assert task.to_dict() == payload_without_env
+    assert isinstance(environment, dict) and environment
+    assert environment == request.resources["config"]
     calculation_plan = acp_freeze._build_plan(  # noqa: SLF001
         StepKind.SINGLEPOINT, [request], [StepKind.SINGLEPOINT]
     )
@@ -2204,7 +2228,18 @@ def test_t28_adapter_publishes_bound_task_result_idempotently(tmp_path: Path) ->
     assert manifest.task_id == snapshot.job_id
     assert manifest.workflow == "singlepoint"
     assert manifest.status == "completed"
-    assert [product.path for product in manifest.products] == ["task_result.json"]
+    # R01: publication carries the scientific products derived from the
+    # persisted result body (energy + final structure), not only the
+    # qualification file.
+    assert [product.path for product in manifest.products] == [
+        "task_result.json",
+        "energy/singlepoint_energy.json",
+        "structures/singlepoint_final.xyz",
+    ]
+    energy_product = next(
+        product for product in manifest.products if product.kind.value == "energy_report"
+    )
+    assert energy_product.metadata["energy_hartree"] == -76.0
     record = load_scientific_result(result_dir)
     assert record is not None
     assert record.kind == "singlepoint"
@@ -2218,7 +2253,9 @@ def test_t28_adapter_publishes_bound_task_result_idempotently(tmp_path: Path) ->
     again = adapter.publish(snapshot)
     assert again.result_id == report.result_id
     assert [product.path for product in ResultManifest.read(result_dir).products] == [
-        "task_result.json"
+        "task_result.json",
+        "energy/singlepoint_energy.json",
+        "structures/singlepoint_final.xyz",
     ]
 
 

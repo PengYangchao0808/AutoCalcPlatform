@@ -20,8 +20,10 @@ from cccp.analysis.bounded.errors import BoundedSchemaError
 from cccp.analysis.bounded.identity import (
     GENERATOR_MULTIRESOLUTION,
     METHOD_MULTIRESOLUTION,
+    MULTIRESOLUTION_ALGORITHM_VERSION,
     BoundedSpec,
     bounded_identity,
+    multiresolution_block_spec,
     source_identity_digest,
 )
 from cccp.analysis.bounded.manifest import (
@@ -50,7 +52,7 @@ __all__ = [
     "build_multiresolution_product",
 ]
 
-_ALGORITHM_VERSION = "2"
+_ALGORITHM_VERSION = MULTIRESOLUTION_ALGORITHM_VERSION
 _OMISSION_REASON = "display_subsampling_excluded_key_point"
 
 
@@ -147,19 +149,7 @@ def build_multiresolution_product(  # noqa: PLR0913 - explicit scientific option
             source=series.source,
             parameters=series.parameters,
         )
-        block_spec = BoundedSpec(
-            method=METHOD_MULTIRESOLUTION,
-            resolution=resolution,
-            start=0,
-            end=count,
-            algorithm_version=_ALGORITHM_VERSION,
-            params=(
-                ("series_id", series.ref.series_id),
-                ("level_index", level_index),
-                ("resolutions", list(levels)),
-            ),
-            source_identity_digest=source_digest,
-        )
+        block_spec = multiresolution_block_spec(spec, level_index=level_index)
         level_product = build_curve_scatter_product(
             series=[level_series],
             reference_frame=payload.reference_frame,

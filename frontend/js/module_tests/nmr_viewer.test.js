@@ -510,6 +510,82 @@ module.exports.register = async function (h) {
     assertEq(sandbox.nmrPanelState.viewers, {}, "registry empty even when the re-fetch finds no report");
   });
 
+  await test("R11 late response never rewrites a newer refresh's canvas", async () => {
+    const { sandbox, created } = loadNmr({});
+    const panel = sandbox.document.createElement("div");
+    const body = sandbox.document.createElement("div");
+    sandbox.document.getElementById = (id) => (id === "nmr-report-panel" ? panel : id === "nmr-report-body" ? body : null);
+    const container = sandbox._containers["0"];
+    body.appendChild(container);
+    sandbox.nmrFetchCandidateGeometry = async () => "1\nx\nC 0 0 0\n";
+
+    let releaseA;
+    const gateA = new Promise((resolve) => { releaseA = resolve; });
+    let call = 0;
+    sandbox.fetchNmrReportJson = async () => {
+      call += 1;
+      if (call === 1) return gateA.then(() => null); // A: late null response
+      return { schema_version: 2, summary: {}, candidates: [{ index: 0 }] }; // B: real report
+    };
+
+    const pendingA = sandbox.refreshNmrReport({ id: "jobA", spec: { workflow: "nmr" } });
+    await new Promise((r) => setImmediate(r)); // let A reach its await
+    await sandbox.refreshNmrReport({ id: "jobB", spec: { workflow: "nmr" } }); // B completes fully
+    await new Promise((r) => setImmediate(r)); // fire-and-forget viewer loader settles
+    const childrenAfterB = body.children.length;
+    const firstChildAfterB = body.children[0];
+    assert(childrenAfterB > 0, "B rendered report content");
+    assertEq(created.length, 1, "B created its viewer");
+    const viewerAfterB = sandbox.nmrPanelState.viewers[0];
+    assert(viewerAfterB != null, "B's viewer registered");
+    const canvasAfterB = viewerAfterB.container
+      ? viewerAfterB.container.querySelectorAll("canvas").length
+      : null;
+
+    releaseA();
+    await pendingA;
+    await new Promise((r) => setImmediate(r));
+
+    assertEq(body.children.length, childrenAfterB, "A's late null rewrote nothing");
+    assert(body.children[0] === firstChildAfterB, "B's first report node is still the body's first child");
+    assert(sandbox.nmrPanelState.viewers[0] === viewerAfterB,
+      "B's viewer instance stays registered (no detached orphan replacement)");
+    assert(sandbox.nmrPanelState.viewers[0].instance.isDisposed() === false,
+      "B's viewer instance was not disposed by A");
+    if (canvasAfterB != null) {
+      assertEq(
+        viewerAfterB.container.querySelectorAll("canvas").length,
+        canvasAfterB,
+        "B's canvas was not torn down by A"
+      );
+    }
+  });
+
+  await test("R11 late error response never rewrites a newer refresh's body", async () => {
+    const { sandbox } = loadNmr({});
+    const panel = sandbox.document.createElement("div");
+    const body = sandbox.document.createElement("div");
+    sandbox.document.getElementById = (id) => (id === "nmr-report-panel" ? panel : id === "nmr-report-body" ? body : null);
+    let releaseA;
+    const gateA = new Promise((resolve) => { releaseA = resolve; });
+    let call = 0;
+    sandbox.fetchNmrReportJson = async () => {
+      call += 1;
+      if (call === 1) return gateA.then(() => { throw new Error("late transport failure"); });
+      return { schema_version: 2, summary: {}, candidates: [] };
+    };
+    const pendingA = sandbox.refreshNmrReport({ id: "jobA", spec: { workflow: "nmr" } });
+    await new Promise((r) => setImmediate(r));
+    await sandbox.refreshNmrReport({ id: "jobB", spec: { workflow: "nmr" } });
+    const childrenAfterB = body.children.length;
+    const firstChildAfterB = body.children[0];
+    assert(childrenAfterB > 0, "B rendered report content");
+    releaseA();
+    await pendingA;
+    assertEq(body.children.length, childrenAfterB, "A's late error rewrote nothing");
+    assert(body.children[0] === firstChildAfterB, "B's report nodes survived A's late error");
+  });
+
   await test("source pin: nmr.js holds no raw viewer handles or second adapter", () => {
     const src = fs.readFileSync(path.join(__dirname, "..", "workbench", "features", "nmr.js"), "utf8");
     for (const banned of ["ACPVisualization.mol3d.create(", "ACPVisualization.mol3d.destroy(", "$3Dmol", "getModel(", "info.viewer"]) {

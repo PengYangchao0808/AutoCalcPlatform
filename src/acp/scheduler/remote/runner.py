@@ -1571,8 +1571,18 @@ class RemoteJobRunner:
 
     @staticmethod
     def _assert_relative_task_paths(work_dir: Path, payload: Mapping[str, Any]) -> None:
-        """Reject absolute/escaping path-bearing TaskRequest fields before bsub."""
+        """Reject absolute/escaping path-bearing TaskRequest fields before bsub.
+
+        The reserved ``environment`` key is skipped: it is the host-level
+        configuration snapshot (executable locations, resource settings), not a
+        task artifact reference, and its absolute executable paths are resolved
+        config for the worker host — exactly what must reach the worker (R02).
+        """
+        from acp_services.runtime.worker import TASK_ENVIRONMENT_CONFIG_KEY
+
         for key, value in payload.items():
+            if key == TASK_ENVIRONMENT_CONFIG_KEY:
+                continue
             if key == "output_dir" or key == "path" or str(key).endswith("_path"):
                 if isinstance(value, str) and value:
                     candidate = Path(value)
