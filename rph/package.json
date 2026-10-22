@@ -1,0 +1,25 @@
+{
+  "name": "rph-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Research Package Hub \u2014 standalone pnpm workspace for the ACP 2.0 experience client",
+  "packageManager": "pnpm@11.28.5",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node scripts/run-tests.mjs",
+    "check": "node scripts/check-boundaries.mjs && tsc -b --pretty false",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@rph/bridge": "workspace:*",
+    "@rph/cli": "workspace:*",
+    "@rph/dsh-bundle": "workspace:*",
+    "@rph/research": "workspace:*",
+    "typescript": "5.7.3",
+    "@types/node": "22.10.10"
+  },
+  "type": "module"
+}
