@@ -845,3 +845,22 @@ option, optgroup {
 }
 .se-save-candidate-btn:hover { background: var(--accent-soft); }
 .se-scene-host { min-height: 120px; }
+
+.research-approval-panel { flex: 0 0 auto; max-height: 52vh; }
+.research-approval-panel .panel-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 14px; }
+.ra-card { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--bg-canvas); }
+.ra-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ra-title { font-size: 12px; font-weight: var(--editor-weight-strong); color: var(--text-secondary); }
+.ra-status { font-size: 11px; border-radius: var(--radius-sm); padding: 1px 8px; border: 1px solid var(--border-default); color: var(--text-secondary); }
+.ra-status-approved { color: var(--green, var(--accent)); border-color: var(--green, var(--accent)); }
+.ra-status-rejected, .ra-status-revoked { color: var(--red); border-color: var(--red); }
+.ra-card dl { margin: 0; }
+.ra-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; font-size: 11px; }
+.ra-row dt { flex: 0 0 190px; color: var(--text-soft); font-family: var(--mono); word-break: break-all; }
+.ra-row dd { margin: 0; flex: 1 1 auto; color: var(--text-secondary); font-family: var(--mono); word-break: break-all; }
+.ra-digest { font-family: var(--mono); }
+.ra-expired { margin-left: 6px; font-size: 10px; color: var(--text-soft); }
+.ra-expired[data-ra-expired="true"] { color: var(--red); }
+.ra-validity { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border-subtle); font-size: 11px; color: var(--text-soft); }
+.ra-card[data-ra-validity="ok"] .ra-validity { color: var(--green, var(--accent)); }
+.ra-card[data-ra-validity="approval_binding_mismatch"] .ra-validity { color: var(--red); }
