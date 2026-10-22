@@ -99,7 +99,7 @@
     "evidence_root_cap": "2 GB"
   },
   "not_verified": [
-    "NOT_VERIFIED(b00_handoff): no runtime/baseline-lock.json; evidence root is the provisional root frozen in experience/ownership.md",
-    "NOT_VERIFIED(b02a_handoff): tools root, data root and role interpreters were created by C/T-01, not supplied by B02a; no B acceptance is claimed"
+    "NOT_VERIFIED(harness_not_delivered): scripts/acceptance/acp2_experience.py is C T-06/T-07 scope and is absent at adoption time",
+    "NOT_VERIFIED(chromium_not_installed): Chromium install/launch is C T-08 scope; only playwright importability is verified"
   ]
 }
