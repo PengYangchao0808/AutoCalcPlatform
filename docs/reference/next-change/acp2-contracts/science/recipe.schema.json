@@ -520,6 +520,7 @@
     "alternatives",
     "limits"
   ],
+  "schema_version": 1,
   "title": "ACP2 ScientificRecipe",
   "type": "object"
 }
