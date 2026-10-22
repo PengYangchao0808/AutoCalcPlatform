@@ -543,6 +543,7 @@
     "claims",
     "limitations"
   ],
+  "schema_version": 1,
   "title": "ACP2 EvidenceReport",
   "type": "object"
 }

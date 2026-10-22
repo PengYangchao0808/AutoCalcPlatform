@@ -421,6 +421,7 @@
     "input",
     "conditions"
   ],
+  "schema_version": 1,
   "title": "ACP2 Provenance",
   "type": "object"
 }
