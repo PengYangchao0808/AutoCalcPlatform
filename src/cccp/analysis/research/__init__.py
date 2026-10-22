@@ -2,8 +2,9 @@
 
 This package initializer contains **no implementation and no side effects**.
 The reaction and question contracts live in :mod:`cccp.analysis.research.reaction`
-and :mod:`cccp.analysis.research.question`; this module only re-exports their
-public names.  Generic names that exist in both modules (``SCHEMA_VERSION``,
+and :mod:`cccp.analysis.research.question`, and the artifact-snapshot content
+reader lives in :mod:`cccp.analysis.research.artifact_manifest`; this module only
+re-exports their public names.  Generic names that exist in both modules (``SCHEMA_VERSION``,
 ``STANDARD_STATES``) are exported once from :mod:`~cccp.analysis.research.reaction`;
 the question-specific constants remain available through the ``question``
 submodule.
@@ -17,8 +18,27 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+from . import artifact_manifest as artifact_manifest
 from . import question as question
 from . import reaction as reaction
+from .artifact_manifest import (
+    ARTIFACT_ROLES,
+    SNAPSHOT_SCHEMA,
+    SNAPSHOT_SCHEMA_VERSION,
+    STRUCTURE_ROLES,
+    ArtifactContentUnavailableError,
+    ArtifactDigest,
+    ArtifactDigestMismatchError,
+    ArtifactPathEscapeError,
+    ArtifactRef,
+    ArtifactScienceIdentity,
+    ArtifactScienceIdentityError,
+    ArtifactSnapshot,
+    ArtifactSnapshotError,
+    ArtifactStructuralMismatchError,
+    UnsupportedSnapshotSchemaVersionError,
+    load_verified_snapshot,
+)
 from .question import (
     CLAIM_STATUSES,
     COMPATIBILITY_REQUIREMENTS,
@@ -77,6 +97,7 @@ from .reaction import (
 )
 
 __all__ = [
+    "ARTIFACT_ROLES",
     "ATOM_ID_SCHEMES",
     "BOND_CHANGE_TYPES",
     "CLAIM_STATUSES",
@@ -88,10 +109,23 @@ __all__ = [
     "QUESTION_TYPES",
     "REACTION_SCOPES",
     "SCHEMA_VERSION",
+    "SNAPSHOT_SCHEMA",
+    "SNAPSHOT_SCHEMA_VERSION",
+    "STRUCTURE_ROLES",
     "STANDARD_STATES",
     "STEREO_BOND_CONFIGURATIONS",
     "STEREO_CENTER_CONFIGURATIONS",
     "STEREO_STATUSES",
+    "ArtifactContentUnavailableError",
+    "ArtifactDigest",
+    "ArtifactDigestMismatchError",
+    "ArtifactPathEscapeError",
+    "ArtifactRef",
+    "ArtifactScienceIdentity",
+    "ArtifactScienceIdentityError",
+    "ArtifactSnapshot",
+    "ArtifactSnapshotError",
+    "ArtifactStructuralMismatchError",
     "AtomIdentityError",
     "AtomMapping",
     "BondChange",
@@ -126,7 +160,10 @@ __all__ = [
     "UnknownQuestionDeclarationError",
     "UnsupportedQuestionSchemaVersionError",
     "UnsupportedSchemaVersionError",
+    "UnsupportedSnapshotSchemaVersionError",
+    "artifact_manifest",
     "canonical_json",
+    "load_verified_snapshot",
     "question",
     "reaction",
     "read_historical_question",
