@@ -101,6 +101,15 @@ from acp_services.runtime.execution_chain import (
     read_attempt_choice,
 )
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
+from acp_services.runtime.idempotency import (
+    IdempotencyConflictError,
+    IdempotencyContext,
+    IdempotencyInProgressError,
+    IdempotencyLeaseError,
+    IdempotencyOutcome,
+    IdempotencyReservationDeniedError,
+    ReservationPort,
+)
 from acp_services.runtime.outbox import OutboxDeliveryResult, OutboxEventSpec
 from acp_services.runtime.receipts import verify_receipt
 from acp_services.runtime.worker import (
@@ -363,7 +372,14 @@ class JobManager:
         envelope_completion: bool | None = None,
         attempt_completion: Any | None = None,
         attempt_publication: Any | None = None,
+        idempotency_reservations: ReservationPort | None = None,
     ):
+        self._idempotency_reservations = idempotency_reservations
+        self._idempotency_adoption_lock = threading.Lock()
+        #: Test-only crash-injection seam (mirrors JobStore's hook).  A callable
+        #: invoked at named points of the staged idempotent submit; raising or
+        #: ``os._exit`` from it models a process crash at that boundary.
+        self._fault_point_hook: Callable[[str], None] | None = None
         #: Persistent controller/worker connection mode (B07-8 / todo 74):
         #: a *reconnecting controller* skips destructive startup recovery and
         #: queue draining, and re-attaches to worker processes that survived a
@@ -520,6 +536,7 @@ class JobManager:
         self._release_gc_thread: threading.Thread | None = None
         self._start_release_gc_thread()
 
+        self._sweep_idempotency_staging()
         if self._reconnect_local_workers:
             self._adopt_live_orphans_on_startup()
             with self._lock:
@@ -899,19 +916,33 @@ class JobManager:
         except OSError:
             logger.debug("Failed to append cleanup.log", exc_info=True)
 
-    def submit(self, spec: JobSpec, group_id: str | None = None) -> JobRecord:
+    def submit(
+        self,
+        spec: JobSpec,
+        group_id: str | None = None,
+        *,
+        idempotency: IdempotencyContext | None = None,
+    ) -> JobRecord:
         """Validate, persist, and enqueue a new job. Returns immediately.
 
-        Job submission (including SSH sync, upload, bsub for remote mode)
-        runs on a background daemon thread; an immediate first poll follows
-        submission, then the periodic poller takes over.
+        With ``idempotency`` the persistent staged protocol runs (claim ->
+        reservation -> work directory -> committed job row -> adoption ->
+        dispatch).  Without it the original legacy path is byte-for-byte the
+        same, so every existing caller is unchanged.
 
         Args:
             spec: The job specification to submit.
             group_id: Queue-grouping key. Defaults to the new job's own id
                 (self-rooted); pass an ancestor's id to link a clone (e.g.
                 a ``rerun_job``) into the same group.
+            idempotency: Optional verified-scope idempotency context.
         """
+        if idempotency is None:
+            return self._submit_legacy(spec, group_id=group_id)
+        return self._submit_idempotent(spec, group_id=group_id, idempotency=idempotency)
+
+    def _submit_legacy(self, spec: JobSpec, group_id: str | None = None) -> JobRecord:
+        """Original submit path (unchanged for legacy callers)."""
         if spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
                 f"Unsupported workflow: {spec.workflow}. Supported: {PUBLIC_WORKFLOWS}"
@@ -928,17 +959,7 @@ class JobManager:
             input_hash=spec.input_hash or compute_input_hash(spec),
         )
 
-        with self._lock:
-            self._counter += 1
-            seq = self._counter
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # ``name`` used to be a UI-only label containing a batch timestamp
-        # (for example ``INT_P__energy__mt5g72i5__2``). Keep that legacy value
-        # only for the opaque job id; the persisted task name is canonicalised
-        # to the final physical directory name below.
-        raw_name = spec.name or spec.workflow
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_name)[:40]
-        job_id = f"{ts}_{seq:03d}_{safe_name}"
+        job_id = self._next_job_id(spec)
 
         work_dir = self._allocate_work_dir(spec, job_id)
         # The directory allocator is the single source of truth for the task
@@ -989,6 +1010,286 @@ class JobManager:
         self._start_submission_thread(job_id, f"acp-submit-{job_id}")
 
         return record
+
+    def _next_job_id(self, spec: JobSpec) -> str:
+        with self._lock:
+            self._counter += 1
+            seq = self._counter
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        raw_name = spec.name or spec.workflow
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_name)[:40]
+        return f"{ts}_{seq:03d}_{safe_name}"
+
+    def _fault_point(self, name: str) -> None:
+        hook = self._fault_point_hook
+        if hook is not None:
+            hook(name)
+
+    def _submit_idempotent(
+        self,
+        spec: JobSpec,
+        *,
+        group_id: str | None,
+        idempotency: IdempotencyContext,
+    ) -> JobRecord:
+        if spec.workflow not in ALL_WORKFLOWS:
+            raise ValueError(
+                f"Unsupported workflow: {spec.workflow}. Supported: {PUBLIC_WORKFLOWS}"
+            )
+        if spec.workflow == "irc":
+            spec = self._verified_irc_spec(spec)
+        if spec.workflow != "fake":
+            spec = with_job_resources(spec)
+        spec = replace(
+            spec,
+            project_id=spec.project_id or self.default_project_id,
+            input_hash=spec.input_hash or compute_input_hash(spec),
+        )
+
+        digest = idempotency.digest()
+        outcome = self.store.claim_idempotency(
+            idempotency.scope_id,
+            idempotency.action,
+            idempotency.key,
+            digest,
+            lease_seconds=idempotency.lease_seconds,
+        )
+        self._fault_point("idempotency.after_claim")
+        if outcome.in_progress:
+            outcome = self._await_idempotent_claim(idempotency, digest)
+        if outcome.conflict:
+            raise IdempotencyConflictError(outcome.detail or "idempotency conflict")
+        if outcome.replay:
+            return self._replay_idempotent_claim(outcome)
+        claim = outcome.claim
+        if claim is None or claim.owner_token is None:
+            raise IdempotencyConflictError("idempotency claim was created without an owner")
+
+        reservations = idempotency.reservations or self._idempotency_reservations
+        staging = self._staging_dir(claim.claim_id)
+        final_dir: Path | None = None
+        try:
+            if reservations is not None:
+                reservations.reserve_for_claim(
+                    claim.claim_id,
+                    scope_id=idempotency.scope_id,
+                    action=idempotency.action,
+                    idempotency_key=idempotency.key,
+                    spec=spec,
+                )
+            self._fault_point("idempotency.after_reservation")
+
+            staging.mkdir(parents=True, exist_ok=True)
+            TaskStorage(staging).ensure_layout()
+
+            job_id = self._next_job_id(spec)
+            bound_dir = self._find_claim_bound_dir(claim.claim_id, spec.project_id)
+            if bound_dir is not None:
+                final_dir = bound_dir
+            else:
+                final_dir = self._allocate_work_dir(spec, job_id)
+                self._write_claim_binding(final_dir, claim)
+            spec = replace(spec, name=final_dir.name)
+
+            record = JobRecord(
+                id=job_id,
+                spec=spec,
+                status=JobStatus.QUEUED,
+                work_dir=str(final_dir),
+                project_id=spec.project_id,
+                input_hash=spec.input_hash,
+                group_id=group_id or job_id,
+            )
+            self._fault_point("idempotency.before_finalize")
+            finalized = self.store.finalize_idempotent_job(
+                record,
+                claim.claim_id,
+                claim.owner_token,
+                claim.lease_epoch,
+            )
+            self._fault_point("idempotency.after_finalize")
+            if finalized.claim is not None:
+                claim = finalized.claim
+            self._adopt_staging_dir(staging, final_dir, record, claim)
+            self._fault_point("idempotency.after_adoption")
+        except BaseException as exc:
+            if reservations is not None:
+                try:
+                    reservations.release_for_claim(claim.claim_id)
+                except (OSError, RuntimeError):
+                    logger.warning("idempotency reservation sweep failed", exc_info=True)
+            terminal_state = (
+                "rejected" if isinstance(exc, IdempotencyReservationDeniedError) else "released"
+            )
+            try:
+                self.store.release_idempotency(
+                    claim.claim_id,
+                    owner_token=claim.owner_token,
+                    lease_epoch=claim.lease_epoch,
+                    state=terminal_state,
+                )
+            except (IdempotencyConflictError, IdempotencyLeaseError):
+                logger.debug("idempotency claim already moved", exc_info=True)
+            if self.store.get(claim.task_id or "") is None:
+                shutil.rmtree(staging, ignore_errors=True)
+                if final_dir is not None and self._binding_matches(final_dir, claim):
+                    shutil.rmtree(final_dir, ignore_errors=True)
+            raise
+
+        self._fault_point("idempotency.before_dispatch")
+        self._dispatch_queued_jobs()
+        return record
+
+    def _await_idempotent_claim(
+        self, idempotency: IdempotencyContext, digest: str
+    ) -> IdempotencyOutcome:
+        deadline = time.monotonic() + float(idempotency.wait_seconds)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise IdempotencyInProgressError(
+                    "another submission owns this idempotency key; retry with the same key"
+                )
+            time.sleep(min(0.05, remaining))
+            outcome = self.store.claim_idempotency(
+                idempotency.scope_id,
+                idempotency.action,
+                idempotency.key,
+                digest,
+                lease_seconds=idempotency.lease_seconds,
+            )
+            if not outcome.in_progress:
+                return outcome
+
+    def _replay_idempotent_claim(self, outcome: IdempotencyOutcome) -> JobRecord:
+        claim = outcome.claim
+        task_id = None if claim is None else claim.task_id
+        record = None if not task_id else self.store.get(task_id)
+        if record is None or claim is None:
+            raise IdempotencyConflictError(
+                "idempotency claim is committed but its job row is missing"
+            )
+        self._resume_idempotent_adoption(record, claim)
+        self._dispatch_queued_jobs()
+        setattr(record, "_idempotent_replay", True)
+        setattr(record, "_idempotency_claim_id", claim.claim_id)
+        return record
+
+    def _staging_dir(self, claim_id: str) -> Path:
+        return self.run_root / ".staging" / str(claim_id)
+
+    def _write_claim_binding(self, work_dir: Path, claim: Any) -> None:
+        path = work_dir / ".claim_binding"
+        payload = {
+            "claim_id": claim.claim_id,
+            "attempt": 1,
+            "scope_id": claim.scope_id,
+            "action": claim.action,
+            "request_digest": claim.request_digest,
+        }
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _find_claim_bound_dir(self, claim_id: str, project_id: str | None) -> Path | None:
+        project_root = self.run_root.resolve() / self._projects.dir_leaf_for(
+            str(project_id or self.default_project_id)
+        )
+        if not project_root.is_dir():
+            return None
+        for candidate in project_root.iterdir():
+            if not candidate.is_dir():
+                continue
+            binding = candidate / ".claim_binding"
+            if not binding.is_file():
+                continue
+            try:
+                payload = json.loads(binding.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(payload, dict) and payload.get("claim_id") == claim_id:
+                return candidate
+        return None
+
+    def _binding_matches(self, work_dir: Path, claim: Any) -> bool:
+        path = work_dir / ".claim_binding"
+        if not path.is_file():
+            return False
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return isinstance(payload, dict) and payload.get("claim_id") == claim.claim_id
+
+    def _adopt_staging_dir(
+        self, staging: Path, work_dir: Path, record: JobRecord, claim: Any
+    ) -> None:
+        with self._idempotency_adoption_lock:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            job_json = work_dir / "job.json"
+            first_adoption = not job_json.exists()
+            if staging.is_dir():
+                for child in list(staging.iterdir()):
+                    target = work_dir / child.name
+                    if target.exists():
+                        if child.is_dir():
+                            shutil.copytree(child, target, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(child, target)
+                    else:
+                        shutil.move(str(child), str(target))
+            TaskStorage(work_dir).ensure_layout()
+            self._write_claim_binding(work_dir, claim)
+            self._write_job_json(record)
+            if first_adoption:
+                self._event_log(record).append(
+                    "job.created", job_id=record.id, workflow=record.spec.workflow
+                )
+            if record.spec.workflow == "BatchOptimize":
+                xyz_snapshot = input_xyz_snapshot(record.spec.input)
+                if xyz_snapshot:
+                    try:
+                        TaskStorage(work_dir).write_input_xyz(xyz_snapshot)
+                    except OSError:
+                        logger.warning("Could not snapshot input.xyz for queued job %s", record.id)
+            if self.tasks is not None:
+                try:
+                    self.tasks.sync_from_job(record)
+                except Exception:
+                    logger.warning("Task index sync failed for job %s", record.id, exc_info=True)
+            self._stage_task_observer.initialize_job_stages(record.id, record.spec)
+            shutil.rmtree(staging, ignore_errors=True)
+
+    def _resume_idempotent_adoption(self, record: JobRecord, claim: Any) -> None:
+        work_dir = Path(record.work_dir)
+        if (work_dir / "job.json").is_file():
+            return
+        staging = self._staging_dir(claim.claim_id)
+        self._adopt_staging_dir(staging, work_dir, record, claim)
+
+    def _idempotency_adoption_pending(self, record: JobRecord) -> bool:
+        claim = self.store.get_idempotency_claim_for_task(record.id)
+        if claim is None or not claim.is_committed:
+            return False
+        return not (Path(record.work_dir) / "job.json").is_file()
+
+    def _sweep_idempotency_staging(self) -> None:
+        """Expire stale claims, remove their staging dirs and sweep reservations."""
+        try:
+            expired = self.store.expire_stale_idempotency_claims()
+        except (sqlite3.Error, OSError):
+            logger.warning("idempotency lease sweep failed", exc_info=True)
+            return
+        reservations = self._idempotency_reservations
+        for claim in expired:
+            shutil.rmtree(self._staging_dir(claim.claim_id), ignore_errors=True)
+            if reservations is not None:
+                try:
+                    reservations.release_for_claim(claim.claim_id)
+                except (OSError, RuntimeError):
+                    logger.warning(
+                        "idempotency reservation sweep failed for claim %s",
+                        claim.claim_id,
+                        exc_info=True,
+                    )
 
     def _verified_irc_spec(self, spec: JobSpec) -> JobSpec:
         """Build an IRC spec exclusively from a verified upstream TS result."""
@@ -3537,12 +3838,32 @@ class JobManager:
         return not any(candidate.status == JobStatus.QUEUED for candidate in members[:position])
 
     def _dispatch_queued_jobs(self) -> None:
-        """Re-dispatch durable queued jobs in FIFO order."""
+        """Re-dispatch durable queued jobs in FIFO order.
+
+        An idempotent job whose committed row predates directory adoption is
+        first resumed from its claim-keyed staging directory.  The job is never
+        dispatched while its adoption fact (``job.json``) is missing, so a
+        crash between the job row and adoption cannot start a half-created
+        task.  Once adopted, the committed QUEUED row is the single intent and
+        this pass starts exactly one submission worker.
+        """
         records = self.store.list(status=JobStatus.QUEUED.value, limit=10000)
         records.sort(key=lambda record: (record.created_at or "", record.id))
         for record in records:
             if self._poll_stop.is_set():
                 return
+            if self._idempotency_adoption_pending(record):
+                claim = self.store.get_idempotency_claim_for_task(record.id)
+                if claim is None:
+                    continue
+                try:
+                    self._resume_idempotent_adoption(record, claim)
+                except (OSError, ValueError):
+                    logger.warning(
+                        "idempotent adoption failed for job %s", record.id, exc_info=True
+                    )
+                if self._idempotency_adoption_pending(record):
+                    continue
             self._start_submission_thread(record.id, f"acp-queue-{record.id}")
 
     def _persist_storage_identity(self, record: JobRecord) -> JobRecord | None:
@@ -4540,6 +4861,7 @@ class JobManager:
                 adopted = self._adopt_existing_task_process(record)
                 if not adopted:
                     self.runner.submit(record, event_log, cancel_event)
+                    self._fault_point("dispatch.after_local_spawn")
                 running = self._cas_write(
                     record,
                     expected_status=record.status,
@@ -5889,6 +6211,7 @@ class JobManager:
                 # recovers jobs whose submission worker disappeared because
                 # the service restarted while they were waiting for a batch
                 # slot.
+                self._sweep_idempotency_staging()
                 self._dispatch_queued_jobs()
             except Exception:
                 logger.exception("Poll loop iteration failed")

@@ -258,6 +258,10 @@ from acp.scheduler.structure_sources import StructureSourceService
 from acp.scheduler.tasks import resolve_task_names
 from acp.storage.layout import runtime_file
 from acp_services.contracts.access import AccessAction as _AccessAction
+from acp_services.runtime.idempotency import (
+    IdempotencyConflictError,
+    IdempotencyInProgressError,
+)
 from acp_services.workspace.entry_authz import EntryClass as _EntryClass
 
 UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
@@ -2288,6 +2292,21 @@ def _validate_scan_submission(workflow: str, method: dict[str, Any], inp: dict[s
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | None:
+    header_key = (request.headers.get("Idempotency-Key") or "").strip()
+    body_key = (req.idempotency_key or "").strip()
+    if header_key and body_key and header_key != body_key:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "input_invalid",
+                "message": "Idempotency-Key header and body idempotency_key disagree",
+                "params": {"field": "idempotency_key"},
+            },
+        )
+    return header_key or body_key or None
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -2367,8 +2386,48 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         validate_submission_target(spec, registry=manager.registry)
     except (ExecutionTargetError, NoCapableNodeError) as exc:
         raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+    idempotency_key = _submit_idempotency_key(request, req)
+    idempotency_context = None
+    if idempotency_key:
+        from acp_services.contracts.access import LOCAL_PRINCIPAL_ID
+        from acp_services.runtime.idempotency import (
+            ACTION_SUBMIT,
+            IdempotencyContext,
+            resolve_scope_id,
+        )
+
+        scope_project = req.project_id or manager.default_project_id
+        idempotency_context = IdempotencyContext(
+            key=idempotency_key,
+            scope_id=resolve_scope_id(LOCAL_PRINCIPAL_ID, str(scope_project)),
+            action=ACTION_SUBMIT,
+            request_payload=req.model_dump(exclude_none=True),
+        )
     try:
-        record = _commands(request).submit(spec)
+        if idempotency_context is None:
+            record = _commands(request).submit(spec)
+        else:
+            record = _commands(request).submit(spec, idempotency=idempotency_context)
+    except IdempotencyConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "idempotency_conflict",
+                "message": str(exc) or "idempotency key conflict",
+                "params": {"idempotency_key": idempotency_key},
+                "retryable": False,
+            },
+        ) from exc
+    except IdempotencyInProgressError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "idempotency_in_progress",
+                "message": str(exc) or "idempotent submit is in progress",
+                "params": {"idempotency_key": idempotency_key},
+                "retryable": True,
+            },
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if batch_snapshots:
@@ -2423,7 +2482,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         plan_digest=req.plan_digest,
         proposal_digest=req.proposal_digest,
         result="accepted",
-        idempotency_key=req.idempotency_key,
+        idempotency_key=idempotency_key,
+        idempotent_replay=bool(getattr(record, "_idempotent_replay", False)),
     )
 
 

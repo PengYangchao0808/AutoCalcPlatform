@@ -14,13 +14,24 @@ import json
 import logging
 import sqlite3
 import threading
+import uuid
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from acp_services.contracts.events import EventScope, OwnerType
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
+from acp_services.runtime.idempotency import (
+    ClaimState,
+    IdempotencyClaim,
+    IdempotencyConflictError,
+    IdempotencyLeaseError,
+    IdempotencyOutcome,
+    OutcomeKind,
+    task_ref_for,
+)
 from acp_services.runtime.outbox import OutboxEventSpec, OutboxRecord
 from acp_services.store.migrations import migrate
 from acp_services.store.records import JobRecord, JobSpec, JobStatus
@@ -1063,6 +1074,513 @@ class JobStore:
             }
             for row in rows
         ]
+
+    def claim_idempotency(
+        self,
+        scope_id: str,
+        action: str,
+        key: str,
+        request_digest: str,
+        *,
+        lease_seconds: float = 60.0,
+        now: str | None = None,
+    ) -> IdempotencyOutcome:
+        """Claim one ``(scope, action, key)`` or report the durable outcome.
+
+        The lookup, the cross-scope guard, the insert/takeover CAS and the
+        commit all happen in **one short** ``BEGIN IMMEDIATE`` transaction.
+        A live claim owned by someone else yields ``in_progress`` (never a
+        second reservation); an expired/released claim is taken over with an
+        epoch CAS that replaces ``owner_token``.  A committed claim replays
+        its stored TaskRef; a digest/scope mismatch is a conflict.
+        """
+        scope = str(scope_id or "").strip()
+        act = str(action or "").strip()
+        idem_key = str(key or "").strip()
+        digest = str(request_digest or "").strip()
+        if not scope or not act or not idem_key or not digest:
+            raise ValueError("scope_id, action, key and request_digest are required")
+        now_iso = now or _utc_now_iso()
+        expires = _lease_expiry(now_iso, lease_seconds)
+
+        with self._lock, self._connect() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM idempotency_records "
+                    "WHERE scope_id=? AND action=? AND idempotency_key=?",
+                    (scope, act, idem_key),
+                ).fetchone()
+                if row is None:
+                    other = conn.execute(
+                        "SELECT scope_id FROM idempotency_records "
+                        "WHERE action=? AND idempotency_key=? LIMIT 1",
+                        (act, idem_key),
+                    ).fetchone()
+                    if other is not None:
+                        conn.execute("ROLLBACK")
+                        return IdempotencyOutcome(
+                            OutcomeKind.CONFLICT.value,
+                            detail=(
+                                "idempotency key was already used under a different verified scope"
+                            ),
+                        )
+                    claim_id = "idem_" + uuid.uuid4().hex
+                    owner_token = uuid.uuid4().hex
+                    conn.execute(
+                        """INSERT INTO idempotency_records (
+                               claim_id, scope_id, action, idempotency_key,
+                               request_digest, state, owner_token, lease_epoch,
+                               lease_expires_at, task_id, operation_id,
+                               created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)""",
+                        (
+                            claim_id,
+                            scope,
+                            act,
+                            idem_key,
+                            digest,
+                            ClaimState.CLAIMED.value,
+                            owner_token,
+                            0,
+                            expires,
+                            now_iso,
+                            now_iso,
+                        ),
+                    )
+                    fresh = conn.execute(
+                        "SELECT * FROM idempotency_records WHERE claim_id=?",
+                        (claim_id,),
+                    ).fetchone()
+                    conn.commit()
+                    return IdempotencyOutcome(
+                        OutcomeKind.CREATED.value,
+                        claim=_row_to_idempotency_claim(fresh),
+                    )
+
+                claim = _row_to_idempotency_claim(row)
+                if claim.request_digest != digest:
+                    conn.execute("ROLLBACK")
+                    return IdempotencyOutcome(
+                        OutcomeKind.CONFLICT.value,
+                        claim=claim,
+                        detail="idempotency key reused with a different request payload",
+                    )
+                if claim.state == ClaimState.COMMITTED.value:
+                    task_ref = _task_ref_from_connection(conn, claim.task_id)
+                    conn.execute("ROLLBACK")
+                    return IdempotencyOutcome(
+                        OutcomeKind.REPLAY.value,
+                        claim=claim,
+                        task_ref=task_ref,
+                    )
+                if claim.state == ClaimState.REJECTED.value:
+                    conn.execute("ROLLBACK")
+                    return IdempotencyOutcome(
+                        OutcomeKind.CONFLICT.value,
+                        claim=claim,
+                        detail="idempotency claim was rejected by admission",
+                    )
+                if claim.state == ClaimState.CLAIMED.value and _lease_is_live(
+                    claim.lease_expires_at, now_iso
+                ):
+                    conn.execute("ROLLBACK")
+                    return IdempotencyOutcome(
+                        OutcomeKind.IN_PROGRESS.value,
+                        claim=_claim_without_owner(claim),
+                        retryable=True,
+                        detail="another owner holds a live idempotency lease",
+                    )
+
+                previous_epoch = claim.lease_epoch
+                owner_token = uuid.uuid4().hex
+                cursor = conn.execute(
+                    """UPDATE idempotency_records
+                       SET state=?, owner_token=?, lease_epoch=?, lease_expires_at=?,
+                           updated_at=?
+                       WHERE claim_id=? AND state=? AND lease_epoch=?""",
+                    (
+                        ClaimState.CLAIMED.value,
+                        owner_token,
+                        previous_epoch + 1,
+                        expires,
+                        now_iso,
+                        claim.claim_id,
+                        claim.state,
+                        previous_epoch,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    conn.execute("ROLLBACK")
+                    return IdempotencyOutcome(
+                        OutcomeKind.IN_PROGRESS.value,
+                        claim=_claim_without_owner(claim),
+                        retryable=True,
+                        detail="idempotency takeover lost the epoch CAS",
+                    )
+                taken = conn.execute(
+                    "SELECT * FROM idempotency_records WHERE claim_id=?",
+                    (claim.claim_id,),
+                ).fetchone()
+                conn.commit()
+                return IdempotencyOutcome(
+                    OutcomeKind.CREATED.value,
+                    claim=_row_to_idempotency_claim(taken),
+                    detail="takeover",
+                )
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+
+    def finalize_idempotent_job(
+        self,
+        record: JobRecord,
+        claim_id: str,
+        owner_token: str,
+        lease_epoch: int,
+        *,
+        now: str | None = None,
+    ) -> IdempotencyOutcome:
+        """Commit the claim and insert the QUEUED job row in one short transaction.
+
+        The claim row is re-checked (state, owner token, epoch, live lease)
+        before the job INSERT.  A stale owner or an expired lease raises
+        :class:`IdempotencyLeaseError`; nothing is written.  The committed
+        ``QUEUED`` row is the durable dispatch intent.
+        """
+        now_iso = now or _utc_now_iso()
+        with self._lock, self._connect() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM idempotency_records WHERE claim_id=?",
+                    (str(claim_id),),
+                ).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError(f"unknown idempotency claim {claim_id!r}")
+                claim = _row_to_idempotency_claim(row)
+                if claim.state == ClaimState.COMMITTED.value:
+                    if claim.task_id == record.id:
+                        task_ref = _task_ref_from_connection(conn, claim.task_id)
+                        conn.execute("ROLLBACK")
+                        return IdempotencyOutcome(
+                            OutcomeKind.REPLAY.value,
+                            claim=claim,
+                            task_ref=task_ref,
+                        )
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyConflictError(
+                        "idempotency claim is already committed to another task"
+                    )
+                if claim.state != ClaimState.CLAIMED.value:
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError(
+                        f"idempotency claim is not owned (state={claim.state})"
+                    )
+                if claim.owner_token != str(owner_token):
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError("stale owner token for idempotency claim")
+                if int(claim.lease_epoch) != int(lease_epoch):
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError(
+                        "stale lease epoch for idempotency claim "
+                        f"({claim.lease_epoch} != {lease_epoch})"
+                    )
+                if not _lease_is_live(claim.lease_expires_at, now_iso):
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError("idempotency lease expired before finalize")
+                if conn.execute("SELECT 1 FROM jobs WHERE id=?", (record.id,)).fetchone():
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyConflictError(
+                        f"job {record.id!r} already exists; idempotent finalize refuses"
+                    )
+
+                conn.execute(
+                    """INSERT INTO jobs (id, workflow, name, status, work_dir, spec_json,
+                           created_at, updated_at, started_at, completed_at, project_id,
+                           input_hash, current_stage, progress, error, pid, exit_code,
+                           remote_job_id, group_id, result_json, revision, attempt)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    _record_to_row(record),
+                )
+                cursor = conn.execute(
+                    """UPDATE idempotency_records
+                       SET state=?, task_id=?, updated_at=?
+                       WHERE claim_id=? AND owner_token=? AND lease_epoch=? AND state=?""",
+                    (
+                        ClaimState.COMMITTED.value,
+                        record.id,
+                        now_iso,
+                        claim.claim_id,
+                        str(owner_token),
+                        int(lease_epoch),
+                        ClaimState.CLAIMED.value,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError(
+                        "idempotency claim lost the finalize CAS (stale owner/epoch)"
+                    )
+                committed = conn.execute(
+                    "SELECT * FROM idempotency_records WHERE claim_id=?",
+                    (claim.claim_id,),
+                ).fetchone()
+                conn.commit()
+                committed_claim = _row_to_idempotency_claim(committed)
+                return IdempotencyOutcome(
+                    OutcomeKind.CREATED.value,
+                    claim=committed_claim,
+                    task_ref=task_ref_for(committed_claim, attempt=record.attempt),
+                )
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+
+    def release_idempotency(
+        self,
+        claim_id: str,
+        *,
+        owner_token: str | None = None,
+        lease_epoch: int | None = None,
+        state: str = ClaimState.RELEASED.value,
+        now: str | None = None,
+    ) -> bool:
+        """Release/reject/expire a *claimed* row with owner fencing.
+
+        Only ``claimed`` rows transition.  A committed row is immutable (the
+        job lifecycle owns it).  When an owner token/epoch is supplied it must
+        match, so a stale owner can never release the new owner's claim.
+        """
+        if state not in {
+            ClaimState.RELEASED.value,
+            ClaimState.REJECTED.value,
+            ClaimState.EXPIRED.value,
+        }:
+            raise ValueError(f"invalid release state {state!r}")
+        now_iso = now or _utc_now_iso()
+        clauses = ["claim_id=?", "state=?"]
+        params: list[Any] = [str(claim_id), ClaimState.CLAIMED.value]
+        if owner_token is not None:
+            clauses.append("owner_token=?")
+            params.append(str(owner_token))
+        if lease_epoch is not None:
+            clauses.append("lease_epoch=?")
+            params.append(int(lease_epoch))
+        with self._lock, self._connect() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT state, owner_token, lease_epoch, lease_expires_at "
+                    "FROM idempotency_records WHERE claim_id=?",
+                    (str(claim_id),),
+                ).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    return False
+                if row["state"] == ClaimState.COMMITTED.value:
+                    conn.execute("ROLLBACK")
+                    return False
+                if row["state"] != ClaimState.CLAIMED.value:
+                    conn.execute("ROLLBACK")
+                    return False
+                if owner_token is None and _lease_is_live(row["lease_expires_at"], now_iso):
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError(
+                        "owner token is required while the idempotency lease is live"
+                    )
+                if owner_token is not None and row["owner_token"] != str(owner_token):
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError("stale owner token for idempotency release")
+                if lease_epoch is not None and int(row["lease_epoch"]) != int(lease_epoch):
+                    conn.execute("ROLLBACK")
+                    raise IdempotencyLeaseError("stale lease epoch for idempotency release")
+                cursor = conn.execute(
+                    f"""UPDATE idempotency_records SET state=?, updated_at=?
+                        WHERE {" AND ".join(clauses)}""",
+                    (state, now_iso, *params),
+                )
+                conn.commit()
+                return cursor.rowcount == 1
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+
+    def expire_stale_idempotency_claims(self, *, now: str | None = None) -> list[IdempotencyClaim]:
+        """CAS-expire every ``claimed`` row whose lease has elapsed.
+
+        Returns the expired claims so the caller can remove the claim-keyed
+        staging directory and sweep its orphan reservation exactly once.
+        """
+        now_iso = now or _utc_now_iso()
+        expired: list[IdempotencyClaim] = []
+        with self._lock, self._connect() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                rows = conn.execute(
+                    "SELECT * FROM idempotency_records WHERE state=?",
+                    (ClaimState.CLAIMED.value,),
+                ).fetchall()
+                for row in rows:
+                    claim = _row_to_idempotency_claim(row)
+                    if _lease_is_live(claim.lease_expires_at, now_iso):
+                        continue
+                    cursor = conn.execute(
+                        """UPDATE idempotency_records SET state=?, updated_at=?
+                           WHERE claim_id=? AND state=? AND lease_epoch=?""",
+                        (
+                            ClaimState.EXPIRED.value,
+                            now_iso,
+                            claim.claim_id,
+                            ClaimState.CLAIMED.value,
+                            claim.lease_epoch,
+                        ),
+                    )
+                    if cursor.rowcount == 1:
+                        expired.append(
+                            replace(claim, state=ClaimState.EXPIRED.value, updated_at=now_iso)
+                        )
+                conn.commit()
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+        return expired
+
+    def get_idempotency_claim(self, claim_id: str) -> IdempotencyClaim | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM idempotency_records WHERE claim_id=?",
+                (str(claim_id),),
+            ).fetchone()
+        return None if row is None else _row_to_idempotency_claim(row)
+
+    def find_idempotency_claim(
+        self, scope_id: str, action: str, key: str
+    ) -> IdempotencyClaim | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM idempotency_records "
+                "WHERE scope_id=? AND action=? AND idempotency_key=?",
+                (str(scope_id), str(action), str(key)),
+            ).fetchone()
+        return None if row is None else _row_to_idempotency_claim(row)
+
+    def find_idempotency_claim_any_scope(self, action: str, key: str) -> IdempotencyClaim | None:
+        """Return the first claim for ``(action, key)`` across every scope."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM idempotency_records "
+                "WHERE action=? AND idempotency_key=? ORDER BY created_at LIMIT 1",
+                (str(action), str(key)),
+            ).fetchone()
+        return None if row is None else _row_to_idempotency_claim(row)
+
+    def get_idempotency_claim_for_task(self, task_id: str) -> IdempotencyClaim | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM idempotency_records WHERE task_id=? "
+                "ORDER BY updated_at DESC LIMIT 1",
+                (str(task_id),),
+            ).fetchone()
+        return None if row is None else _row_to_idempotency_claim(row)
+
+    def list_idempotency_claims(
+        self, *, state: str | None = None, limit: int = 1000
+    ) -> list[IdempotencyClaim]:
+        query = "SELECT * FROM idempotency_records"
+        params: list[Any] = []
+        if state is not None:
+            query += " WHERE state=?"
+            params.append(str(state))
+        query += " ORDER BY created_at, claim_id LIMIT ?"
+        params.append(int(limit))
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_idempotency_claim(row) for row in rows]
+
+
+def _lease_expiry(now_iso: str, seconds: float) -> str:
+    now = _parse_iso(now_iso) or datetime.now(timezone.utc)
+    return (now + timedelta(seconds=float(seconds))).isoformat()
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _lease_is_live(expires_at: str | None, now_iso: str) -> bool:
+    expires = _parse_iso(expires_at)
+    now = _parse_iso(now_iso)
+    if expires is None or now is None:
+        return False
+    return expires > now
+
+
+def _claim_without_owner(claim: IdempotencyClaim) -> IdempotencyClaim:
+    """A non-owner view of an in-progress claim (never leaks the owner token)."""
+    return replace(claim, owner_token=None)
+
+
+def _row_to_idempotency_claim(row: sqlite3.Row) -> IdempotencyClaim:
+    return IdempotencyClaim(
+        claim_id=row["claim_id"],
+        scope_id=row["scope_id"],
+        action=row["action"],
+        idempotency_key=row["idempotency_key"],
+        request_digest=row["request_digest"],
+        state=row["state"],
+        owner_token=row["owner_token"],
+        lease_epoch=int(row["lease_epoch"] or 0),
+        lease_expires_at=row["lease_expires_at"],
+        task_id=row["task_id"],
+        operation_id=row["operation_id"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _task_ref_from_connection(
+    conn: sqlite3.Connection, task_id: str | None
+) -> dict[str, Any] | None:
+    """Build the durable TaskRef from the committed jobs row."""
+    if not task_id:
+        return None
+    row = conn.execute(
+        "SELECT id, attempt, result_json FROM jobs WHERE id=?", (str(task_id),)
+    ).fetchone()
+    if row is None:
+        return {"task_id": str(task_id), "job_id": str(task_id), "attempt": 1}
+    ref: dict[str, Any] = {
+        "task_id": row["id"],
+        "job_id": row["id"],
+        "attempt": int(row["attempt"] or 1),
+    }
+    raw = row["result_json"]
+    if raw:
+        try:
+            result = json.loads(raw)
+        except (TypeError, ValueError):
+            result = None
+        release = result.get("release") if isinstance(result, dict) else None
+        if isinstance(release, dict) and release.get("release_id"):
+            ref["release"] = {
+                "release_id": release.get("release_id"),
+                "release_digest": release.get("release_digest"),
+            }
+    return ref
 
 
 def _record_to_row(record: JobRecord) -> tuple[Any, ...]:

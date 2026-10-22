@@ -285,6 +285,38 @@ CREATE INDEX IF NOT EXISTS idx_job_outbox_pending ON job_outbox(delivered_at);
 CREATE INDEX IF NOT EXISTS idx_job_outbox_job ON job_outbox(job_id, delivered_at);
 """,
     },
+    {
+        "id": "022",
+        "description": (
+            "persistent idempotency ledger (B08): one row per verified "
+            "scope/action/key with a canonical request digest, owner lease and "
+            "the committed TaskRef"
+        ),
+        "sql": """
+CREATE TABLE IF NOT EXISTS idempotency_records (
+    claim_id         TEXT PRIMARY KEY,
+    scope_id         TEXT NOT NULL,
+    action           TEXT NOT NULL,
+    idempotency_key  TEXT NOT NULL,
+    request_digest   TEXT NOT NULL,
+    state            TEXT NOT NULL,
+    owner_token      TEXT,
+    lease_epoch      INTEGER NOT NULL DEFAULT 0,
+    lease_expires_at TEXT,
+    task_id          TEXT,
+    operation_id     TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    UNIQUE (scope_id, action, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_task
+    ON idempotency_records(task_id);
+CREATE INDEX IF NOT EXISTS idx_idempotency_state_lease
+    ON idempotency_records(state, lease_expires_at);
+CREATE INDEX IF NOT EXISTS idx_idempotency_action_key
+    ON idempotency_records(action, idempotency_key);
+""",
+    },
 ]
 
 

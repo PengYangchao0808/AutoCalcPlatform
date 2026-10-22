@@ -80,6 +80,8 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "resource_unavailable": mo.ErrorCode.RESOURCE_UNAVAILABLE,
     "resource_not_ready": mo.ErrorCode.RESOURCE_NOT_READY,
     "revision_conflict": mo.ErrorCode.REVISION_CONFLICT,
+    "idempotency_conflict": mo.ErrorCode.REVISION_CONFLICT,
+    "idempotency_in_progress": mo.ErrorCode.REVISION_CONFLICT,
     "access_denied": mo.ErrorCode.ACCESS_DENIED,
     "timeout": mo.ErrorCode.TIMEOUT,
     "interrupted": mo.ErrorCode.INTERRUPTED,

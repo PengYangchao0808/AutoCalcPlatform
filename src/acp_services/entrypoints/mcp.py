@@ -1055,8 +1055,18 @@ class McpServer:
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
         idem = self._resolve_idempotency(arguments, context)
+        payload_digest = derive_idempotency_key(arguments)
         cached = self._idempotency.get(context.workspace_id, idem)
-        if cached is not None:
+        if isinstance(cached, Mapping) and cached.get("payload_digest") is not None:
+            if cached.get("payload_digest") == payload_digest:
+                return mo.MachineResult(
+                    operation=McpTool.SUBMIT,
+                    status="ok",
+                    data={"reference": cached.get("reference"), "idempotent_replay": True},
+                    operation_identity=context.workspace_id,
+                )
+            cached = None
+        elif cached is not None:
             return mo.MachineResult(
                 operation=McpTool.SUBMIT,
                 status="ok",
@@ -1081,7 +1091,11 @@ class McpServer:
             self._budget.release(context.workspace_id, cores=cores)
             raise
         reference = _reference_from(record, kind="job")
-        self._idempotency.put(context.workspace_id, idem, reference)
+        self._idempotency.put(
+            context.workspace_id,
+            idem,
+            {"reference": reference, "payload_digest": payload_digest},
+        )
         payload: dict[str, Any] = {
             "reference": reference,
             "idempotency_key": idem,
@@ -1097,6 +1111,8 @@ class McpServer:
                 payload["approval_ref"] = record["approval_ref"]
             if record.get("plan_digest") is not None:
                 payload["plan_digest"] = record["plan_digest"]
+            if record.get("idempotent_replay") is not None:
+                payload["idempotent_replay"] = record["idempotent_replay"]
         return mo.MachineResult(
             operation=McpTool.SUBMIT,
             status="ok",

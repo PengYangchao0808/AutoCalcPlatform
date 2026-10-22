@@ -37,6 +37,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -2423,6 +2424,272 @@ def _run_mcp_stdio(
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
 
 
+def _submit_arguments(xyz_text: str, key: str, *, project_id: str | None = None) -> dict[str, Any]:
+    arguments: dict[str, Any] = {
+        "workflow": "singlepoint",
+        "input": {"source_type": "xyz_text", "source": xyz_text},
+        "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1},
+        "plan_digest": "sha256:" + "0" * 64,
+        "idempotency_key": key,
+    }
+    if project_id:
+        arguments["project_id"] = project_id
+    return arguments
+
+
+def _submit_task_id(result: Mapping[str, Any]) -> str:
+    data = result.get("structuredContent", {}).get("data", {})
+    if not isinstance(data, Mapping):
+        return ""
+    task_ref = data.get("task_ref")
+    if isinstance(task_ref, Mapping):
+        value = task_ref.get("task_id") or task_ref.get("job_id")
+        if isinstance(value, str) and value:
+            return value
+    reference = data.get("reference")
+    if isinstance(reference, Mapping):
+        value = reference.get("id")
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _job_event_started_count(controller: str, task_id: str, timeout: float) -> int:
+    job = _http_json(controller.rstrip("/") + f"/api/v1/jobs/{task_id}", timeout)
+    work_dir = job.get("work_dir") if isinstance(job, Mapping) else None
+    if not isinstance(work_dir, str) or not work_dir:
+        return 0
+    events = Path(work_dir) / "WORK" / "00_RUNTIME" / "events.jsonl"
+    if not events.is_file():
+        return 0
+    count = 0
+    for line in events.read_text(encoding="utf-8").splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, Mapping) and item.get("type") == "job.started":
+            count += 1
+    return count
+
+
+def _run_submit_replay(
+    controller: str,
+    launch_path: str,
+    fixture_path: str,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """Prove the persistent ledger: two MCP processes, one TaskRef, one dispatch."""
+    base = controller.rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "submit",
+        "acceptance.target": "local",
+        "b08.mcp_launch": str(launch_path),
+        "b08.fixture": str(fixture_path),
+    }
+    probes: list[_McpStdioProbe] = []
+    try:
+        launch = json.loads(Path(launch_path).read_text(encoding="utf-8"))
+        if not isinstance(launch, dict):
+            raise ValueError("launch descriptor must be a JSON object")
+        xyz_text = Path(fixture_path).read_text(encoding="utf-8")
+        key = "b08-" + uuid.uuid4().hex[:24]
+        before = _controller_task_count(base, timeout)
+
+        for index in (0, 1):
+            probe = _McpStdioProbe(launch, timeout)
+            probe.request(
+                1,
+                "initialize",
+                {
+                    "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                    "capabilities": {},
+                    "clientInfo": {"name": f"acp2-b08-probe-{index}", "version": "1"},
+                },
+            )
+            probe.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            probe.request(2, "tools/list", {})
+            probes.append(probe)
+
+        barrier = threading.Barrier(len(probes))
+        results: list[Any] = [None] * len(probes)
+        errors: list[str] = [""] * len(probes)
+
+        def call(index: int) -> None:
+            try:
+                barrier.wait(timeout=timeout)
+                results[index] = probes[index].request(
+                    3,
+                    "tools/call",
+                    {
+                        "name": "acp_submit",
+                        "arguments": _submit_arguments(xyz_text, key),
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001 - recorded as evidence
+                errors[index] = f"{type(exc).__name__}: {exc}"
+
+        threads = [threading.Thread(target=call, args=(index,)) for index in range(len(probes))]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout)
+
+        task_ids = [_submit_task_id(result) for result in results if isinstance(result, Mapping)]
+        same_ref = len(task_ids) == 2 and bool(task_ids[0]) and task_ids[0] == task_ids[1]
+        no_errors = not any(errors)
+        after = _controller_task_count(base, timeout)
+        one_task = after - before == 1
+
+        task_id = task_ids[0] if task_ids else ""
+        started = 0
+        if task_id:
+            deadline = time.monotonic() + min(timeout, 120)
+            while time.monotonic() < deadline:
+                started = _job_event_started_count(base, task_id, min(timeout, 15))
+                if started >= 1:
+                    break
+                job = _http_json(base + f"/api/v1/jobs/{task_id}", timeout)
+                status = job.get("status") if isinstance(job, Mapping) else ""
+                if status in {"completed", "failed", "cancelled"}:
+                    started = _job_event_started_count(base, task_id, min(timeout, 15))
+                    break
+                time.sleep(0.2)
+
+        conflict_ok = False
+        conflict_detail = ""
+        conflict_probe: _McpStdioProbe | None = None
+        try:
+            conflict_probe = _McpStdioProbe(launch, timeout)
+            conflict_probe.request(
+                1,
+                "initialize",
+                {
+                    "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                    "capabilities": {},
+                    "clientInfo": {"name": "acp2-b08-conflict", "version": "1"},
+                },
+            )
+            conflict_probe.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            conflict_result = conflict_probe.request(
+                3,
+                "tools/call",
+                {
+                    "name": "acp_submit",
+                    "arguments": _submit_arguments("2\nH2\nH 0 0 0\nH 0 0 0.9\n", key),
+                },
+            )
+            conflict_ok = (
+                bool(conflict_result.get("isError"))
+                and "idempotency" in json.dumps(conflict_result).lower()
+            )
+            conflict_detail = json.dumps(conflict_result.get("structuredContent", {}))[:400]
+        except (OSError, RuntimeError, ValueError, TimeoutError) as exc:
+            conflict_detail = f"{type(exc).__name__}: {exc}"
+        finally:
+            if conflict_probe is not None:
+                conflict_probe.close()
+
+        changed_scope_ok = False
+        changed_scope_detail = ""
+        scope_probe: _McpStdioProbe | None = None
+        try:
+            project = _http_json_post(
+                base + "/api/v1/projects",
+                {"name": f"b08-scope-{uuid.uuid4().hex[:8]}", "description": "B08 scope probe"},
+                timeout,
+            )
+            project_id = project.get("project_id") or project.get("id") or ""
+            scope_probe = _McpStdioProbe(launch, timeout)
+            scope_probe.request(
+                1,
+                "initialize",
+                {
+                    "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                    "capabilities": {},
+                    "clientInfo": {"name": "acp2-b08-scope", "version": "1"},
+                },
+            )
+            scope_probe.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            scope_result = scope_probe.request(
+                3,
+                "tools/call",
+                {
+                    "name": "acp_submit",
+                    "arguments": _submit_arguments(xyz_text, key, project_id=str(project_id)),
+                },
+            )
+            changed_scope_ok = bool(scope_result.get("isError"))
+            changed_scope_detail = json.dumps(scope_result.get("structuredContent", {}))[:400]
+        except (OSError, RuntimeError, ValueError, TimeoutError) as exc:
+            changed_scope_detail = f"{type(exc).__name__}: {exc}"
+        finally:
+            if scope_probe is not None:
+                scope_probe.close()
+
+        for probe in probes:
+            probe.close()
+        probes.clear()
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+    ) as exc:
+        extensions["b08.probe_error"] = f"{type(exc).__name__}: {exc}"
+        assertions.append({"name": "submit_replay_probe", "status": "FAIL", "detail": str(exc)})
+        for probe in probes:
+            probe.close()
+        return EXIT_FAIL, assertions, extensions
+
+    assertions.extend(
+        [
+            {
+                "name": "two_mcp_processes_same_task_ref",
+                "status": "PASS" if same_ref and no_errors else "FAIL",
+                "detail": f"task_ids={task_ids} errors={errors}",
+            },
+            {
+                "name": "exactly_one_new_task",
+                "status": "PASS" if one_task else "FAIL",
+                "detail": f"before={before} after={after}",
+            },
+            {
+                "name": "exactly_one_dispatch",
+                "status": "PASS" if started == 1 else "FAIL",
+                "detail": f"job.started={started}",
+            },
+            {
+                "name": "same_key_changed_payload_conflict",
+                "status": "PASS" if conflict_ok else "FAIL",
+                "detail": conflict_detail,
+            },
+            {
+                "name": "same_key_changed_scope_rejected",
+                "status": "PASS" if changed_scope_ok else "FAIL",
+                "detail": changed_scope_detail,
+            },
+        ]
+    )
+    extensions.update(
+        {
+            "b08.task_ref": task_ids[0] if task_ids else "",
+            "b08.attempt": 1,
+            "b08.idempotency_key": key,
+            "b08.task_count_before": before,
+            "b08.task_count_after": after,
+            "b08.job_started_events": started,
+        }
+    )
+    passed = (
+        same_ref and no_errors and one_task and started == 1 and conflict_ok and changed_scope_ok
+    )
+    return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
+
+
 def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
     if args.out:
         return str(Path(args.out).resolve())
@@ -2457,8 +2724,18 @@ def dry_run_commands(
         commands.append(f"{shlex.quote(sys.executable)} -m json.tool {shlex.quote(launch)}")
     elif spec.scenario == "submit-replay":
         commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task --controller "
-            f"{shlex.quote(controller)} ingest {shlex.quote(fixture)}"
+            f"{shlex.quote(sys.executable)} -m acp mcp serve --transport stdio "
+            f"--controller {shlex.quote(controller)}"
+        )
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp mcp serve --transport stdio "
+            f"--controller {shlex.quote(controller)}"
+        )
+        commands.append(
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario submit-replay --controller {shlex.quote(controller)} "
+            f"--launch {shlex.quote(str(launch))} --fixture {shlex.quote(fixture)} "
+            f"--out {shlex.quote(out)}"
         )
     elif spec.scenario in ("local-singlepoint", "lsf-singlepoint", "three-entry"):
         commands.append(
@@ -2624,6 +2901,17 @@ def execute_scenario(
             return code_value
 
         handler = mcp_stdio
+    elif spec.scenario == "submit-replay":
+
+        def submit_replay(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_submit_replay(
+                args.controller, str(args.launch), str(args.fixture), timeout
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            return code_value
+
+        handler = submit_replay
     else:
         handler = _b01_stub_handler(spec)
 
@@ -2641,7 +2929,7 @@ def execute_scenario(
         reason = f"timeout after {timeout}s; cleanup record saved"
         result = "NOT_VERIFIED"
         code = EXIT_NOT_VERIFIED
-    elif spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime"}:
+    elif spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime", "submit-replay"}:
         result = (
             "PASS"
             if code == EXIT_PASS
@@ -2662,7 +2950,7 @@ def execute_scenario(
             if code == EXIT_NOT_VERIFIED
             else ("PASS" if code == EXIT_PASS else "FAIL")
         )
-    if spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime"}:
+    if spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime", "submit-replay"}:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
     else:
@@ -2683,6 +2971,14 @@ def execute_scenario(
         result = "FAIL"
         reason = identity_error
         code = EXIT_FAIL
+    refs: dict[str, Any] = {}
+    if spec.scenario == "submit-replay":
+        task_ref = extensions.get("b08.task_ref")
+        if isinstance(task_ref, str) and task_ref:
+            refs["job_id"] = task_ref
+        attempt = extensions.get("b08.attempt")
+        if isinstance(attempt, int):
+            refs["attempt"] = attempt
     run_path, _ = write_result(
         out_dir,
         scenario=spec.scenario,
@@ -2697,6 +2993,7 @@ def execute_scenario(
         evidence_kind=evidence_kind,
         assertions=assertions,
         extensions=extensions,
+        refs=refs or None,
         candidate_revision=candidate_revision,
         server_revision=server_revision,
     )

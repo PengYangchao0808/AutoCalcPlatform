@@ -142,8 +142,16 @@ class _JobSubmissionAdapter:
     def __init__(self, manager: Any) -> None:
         self._manager = manager
 
-    def submit(self, spec: Any, *, group_id: str | None = None) -> Any:
-        return self._manager.submit(spec, group_id)
+    def submit(
+        self,
+        spec: Any,
+        *,
+        group_id: str | None = None,
+        idempotency: Any | None = None,
+    ) -> Any:
+        if idempotency is None:
+            return self._manager.submit(spec, group_id)
+        return self._manager.submit(spec, group_id, idempotency=idempotency)
 
 
 class _JobEditAdapter:
@@ -173,7 +181,14 @@ class _JobRegistrationAdapter:
 class _UnattachedJobSubmission:
     """Submission port placeholder used until the app attaches its live manager."""
 
-    def submit(self, spec: Any, *, group_id: str | None = None) -> Any:
+    def submit(
+        self,
+        spec: Any,
+        *,
+        group_id: str | None = None,
+        idempotency: Any | None = None,
+    ) -> Any:
+        del idempotency
         raise RuntimeError(_unattached_message())
 
 
