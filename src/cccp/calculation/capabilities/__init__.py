@@ -187,6 +187,84 @@ from cccp.calculation.capabilities.registry import (
 from cccp.calculation.capabilities.registry import (
     ExecutableResolver as ExecutableResolver,
 )
+from cccp.calculation.capabilities.task_binding import (
+    BINDABLE_TASK_KINDS as BINDABLE_TASK_KINDS,
+)
+from cccp.calculation.capabilities.task_binding import (
+    EXISTING_TASK_KINDS as EXISTING_TASK_KINDS,
+)
+from cccp.calculation.capabilities.task_binding import (
+    REQUEST_CONTRACT_REF as REQUEST_CONTRACT_REF,
+)
+from cccp.calculation.capabilities.task_binding import (
+    RESULT_CONTRACT_REF as RESULT_CONTRACT_REF,
+)
+from cccp.calculation.capabilities.task_binding import (
+    SUPPORTED_COMPUTE_TASK_KINDS as SUPPORTED_COMPUTE_TASK_KINDS,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TASK_BINDING_CONTRACT_VERSION as TASK_BINDING_CONTRACT_VERSION,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TASK_BINDING_SCHEMA as TASK_BINDING_SCHEMA,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TASK_BINDING_SCHEMA_VERSION as TASK_BINDING_SCHEMA_VERSION,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TASK_ENTRYPOINTS as TASK_ENTRYPOINTS,
+)
+from cccp.calculation.capabilities.task_binding import (
+    BindingSelection as BindingSelection,
+)
+from cccp.calculation.capabilities.task_binding import (
+    BindingSelectionMode as BindingSelectionMode,
+)
+from cccp.calculation.capabilities.task_binding import (
+    PreflightCheck as PreflightCheck,
+)
+from cccp.calculation.capabilities.task_binding import (
+    PreflightOutcome as PreflightOutcome,
+)
+from cccp.calculation.capabilities.task_binding import (
+    PreflightResult as PreflightResult,
+)
+from cccp.calculation.capabilities.task_binding import (
+    ScientificPreconditionError as ScientificPreconditionError,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TaskBinding as TaskBinding,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TaskBindingError as TaskBindingError,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TaskEntrypoint as TaskEntrypoint,
+)
+from cccp.calculation.capabilities.task_binding import (
+    TaskKindReference as TaskKindReference,
+)
+from cccp.calculation.capabilities.task_binding import (
+    UnknownTaskKindError as UnknownTaskKindError,
+)
+from cccp.calculation.capabilities.task_binding import (
+    UnsupportedBindingError as UnsupportedBindingError,
+)
+from cccp.calculation.capabilities.task_binding import (
+    bind_capability as bind_capability,
+)
+from cccp.calculation.capabilities.task_binding import (
+    bind_task_kind as bind_task_kind,
+)
+from cccp.calculation.capabilities.task_binding import (
+    build_task_request as build_task_request,
+)
+from cccp.calculation.capabilities.task_binding import (
+    execute_binding as execute_binding,
+)
+from cccp.calculation.capabilities.task_binding import (
+    preflight_binding as preflight_binding,
+)
 
 __all__ = [
     "BACKWARD_COMPATIBLE_ADDITIONS",
@@ -246,4 +324,30 @@ __all__ = [
     "builtin_registry",
     "describe_family",
     "resolve_analysis_entrypoint",
+    "BINDABLE_TASK_KINDS",
+    "EXISTING_TASK_KINDS",
+    "REQUEST_CONTRACT_REF",
+    "RESULT_CONTRACT_REF",
+    "SUPPORTED_COMPUTE_TASK_KINDS",
+    "TASK_BINDING_CONTRACT_VERSION",
+    "TASK_BINDING_SCHEMA",
+    "TASK_BINDING_SCHEMA_VERSION",
+    "TASK_ENTRYPOINTS",
+    "BindingSelection",
+    "BindingSelectionMode",
+    "PreflightCheck",
+    "PreflightOutcome",
+    "PreflightResult",
+    "ScientificPreconditionError",
+    "TaskBinding",
+    "TaskBindingError",
+    "TaskEntrypoint",
+    "TaskKindReference",
+    "UnknownTaskKindError",
+    "UnsupportedBindingError",
+    "bind_capability",
+    "bind_task_kind",
+    "build_task_request",
+    "execute_binding",
+    "preflight_binding",
 ]
