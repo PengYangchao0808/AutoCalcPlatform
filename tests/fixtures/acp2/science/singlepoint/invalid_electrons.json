@@ -1,0 +1,70 @@
+{
+  "charge": 0,
+  "electronic_state": {
+    "label": "",
+    "reference_state_id": "",
+    "spatial_symmetry": "auto",
+    "spin_mode": "unrestricted",
+    "state_id": "invalid_doublet",
+    "target_multiplicity": 2
+  },
+  "expected_failure": {
+    "checks": [
+      {
+        "expected": false,
+        "inputs": {
+          "multiplicity": 2,
+          "n_electrons": 10
+        },
+        "validator": "cccp.calculation.contracts.electron_parity_ok"
+      },
+      {
+        "expected_error_contains": "parity mismatch",
+        "n_atoms": 3,
+        "n_electrons": 10,
+        "validator": "cccp.calculation.contracts.validate_electronic_state_spec"
+      }
+    ],
+    "detail": "water has 10 electrons; multiplicity 2 is parity-incompatible (an even electron count requires odd multiplicity). Both the top-level multiplicity and the electronic state target are invalid; the invalid spin must not be corrected.",
+    "error_type": "TaskInputError",
+    "message_contains": "parity mismatch",
+    "reason_id": "charge_multiplicity_consistent",
+    "structural_parse": "TaskRequest.from_dict succeeds because parity is a scientific check, not a JSON-shape check; the request must then be rejected by scientific validation, never silently defaulted.",
+    "validation_stage": "scientific_preflight"
+  },
+  "level": {
+    "basis": "def2-SVP",
+    "method": "wB97X-D4"
+  },
+  "multiplicity": 2,
+  "resources": {},
+  "schema_version": 1,
+  "structure": {
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.11779
+      ],
+      [
+        0.0,
+        0.75716,
+        -0.47116
+      ],
+      [
+        0.0,
+        -0.75716,
+        -0.47116
+      ]
+    ],
+    "path": "input.xyz",
+    "role": "minimum",
+    "source": "fixture input.xyz; atom_order=O,H,H",
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ]
+  },
+  "task": "singlepoint"
+}
