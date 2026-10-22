@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from importlib.util import find_spec
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -36,6 +37,10 @@ from acp_services.workspace.boundary import (
 )
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
+if not _FRONTEND_DIR.is_dir():
+    _assets_spec = find_spec("acp_web_assets")
+    if _assets_spec is not None and _assets_spec.origin is not None:
+        _FRONTEND_DIR = Path(_assets_spec.origin).parent
 logger = logging.getLogger(__name__)
 
 

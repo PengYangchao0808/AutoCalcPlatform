@@ -533,7 +533,12 @@ def test_main_unreadable_envelope_writes_assembly_error_document(tmp_path: Path)
     ]
     result = _run(cmd, _child_env(tmp_path / "rr_bad"))
     assert result.returncode == 2, result.stderr
-    document = json.loads(receipt.read_text(encoding="utf-8"))
+    # R04: the canonical receipt path is never written by an unbound assembly
+    # failure; the diagnostic document lands beside it as <receipt>.unbound.json.
+    assert not receipt.exists()
+    document = json.loads(
+        receipt.with_name(receipt.name + ".unbound.json").read_text(encoding="utf-8")
+    )
     assert document["schema"] == "worker_assembly_error"
     assert document["state"] == "failed"
     assert document["errors"][0]["code"] == "envelope_unreadable"

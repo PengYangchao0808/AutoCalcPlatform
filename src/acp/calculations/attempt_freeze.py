@@ -87,6 +87,7 @@ from acp_services.runtime.execution_chain import (
     load_frozen_group,
 )
 from acp_services.runtime.worker import (
+    TASK_ENVIRONMENT_CONFIG_KEY,
     FrozenPlan,
     FrozenPlanIdentity,
     FrozenStep,
@@ -776,11 +777,21 @@ def _build_simple_request(
         context,
         _RequestDefinition(workflow, backend, method_kwargs),
     )
-    # Freeze the request paths relative to the worker CWD (the task work dir).
+    # Freeze the request paths relative to the worker CWD (the task work dir)
+    # and the resolved resources into their typed homes (R02): nproc/mem from
+    # the fully-resolved config reach TaskResources through to_task_request,
+    # so the independent worker executes with the submitted resource intent.
+    frozen_resources: dict[str, Any] = {"output_dir": "."}
+    resources_config = config.get("resources")
+    if isinstance(resources_config, Mapping):
+        for key in ("nproc", "mem"):
+            value = resources_config.get(key)
+            if value is not None and value != "":
+                frozen_resources[key] = value
     request = replace(
         request,
         input_artifact=replace(context.artifact, path=Path("input.xyz")),
-        resources={**request.resources, "output_dir": "."},
+        resources={**request.resources, **frozen_resources},
     )
     task_request, _legacy_binding = to_task_request(request, task_kind)
     if task_request.structure is None or task_request.structure.path != Path("input.xyz"):
@@ -832,6 +843,14 @@ def build_simple_freeze_spec(
     calculation_plan = _build_plan(step_kind, [request], [step_kind])
     scientific = compute_identity(calculation_plan, location_root=work)
     step_payload = task_request.to_dict()
+    # R02: freeze the executable scientific configuration snapshot beside the
+    # typed request.  ``TaskRequest.from_dict`` ignores the reserved key; the
+    # worker executor pops it and restores ``TaskContext.config``, so custom
+    # config paths / executable selections / resource defaults execute exactly
+    # as resolved at submit time instead of the release-tree defaults.
+    config_snapshot = request.resources.get("config")
+    if isinstance(config_snapshot, Mapping) and config_snapshot:
+        step_payload[TASK_ENVIRONMENT_CONFIG_KEY] = dict(config_snapshot)
     body = FrozenPlan(
         payload=step_payload,
         steps=(FrozenStep(kind=step_kind.value, payload=step_payload),),

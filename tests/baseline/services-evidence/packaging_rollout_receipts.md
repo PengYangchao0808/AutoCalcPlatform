@@ -112,3 +112,19 @@ python3.11 -m pytest tests/test_packaging_assets.py tests/test_services_packagin
 ## 3. 滚动续记约定
 
 后续每批（C 迁移 → B 应用）在 §1 表追加一行：C 迁移编号与补丁 sha → `git apply` 退出码 → 构建/测试回执 → B 侧集成提交。B40b 解闸时在 §0/§2 就地更新为 applied 并附 M2 双 wheel 构建回执（复用 C39b §3.3 V0–V4 命令）。
+
+## 2026-10-22 独立角色候选发行补验
+
+本次增加 `packaging/roles/{cccp,worker,web}` 与 `scripts/build_release.py`，
+在出树暂存中构建同版本 `cccp`、`acp-worker`、`acp-web` 的 wheel / sdist。
+根单发行安装保持兼容；上文 B40b 的“根发行默认归属切换未应用”是其原范围，
+不改写历史 manifest 的 `future_split_ownership.applied`。独立角色是显式构建/安装路径，
+不与根 `acp` 单发行混装。
+
+本机已验证三个纯净环境的科学核心受控调用、worker 冻结组/执行权/回执与无 jobs DB、
+Web 包内 HTML/JS 的真实 HTTP 与 ETag 重验证；资产全量字节和零重复文件归属通过。
+三个源码包均可重建出相同包内容，版本和依赖文件未遗漏。具体制品摘要、
+依赖快照及命令见 [修复报告](../../../reports/architecture_repair_20261022/REPORT.md)。
+
+这些结果关闭独立角色候选的本机安装门；真实 QC、LSF、委派 cgroup 及生产发布
+仍按各自证据保留 NOT_VERIFIED，未据探针将产品或生产门改成 PASS。

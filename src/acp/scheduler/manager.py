@@ -82,6 +82,7 @@ from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task
 from acp_services.contracts.envelope import EnvelopeError
 from acp_services.data.contracts import ResourceKind
 from acp_services.data.operations import (
+    PrepareOperationError,
     PrepareOperationService,
     PrepareOperationWorker,
     PrepareRequest,
@@ -2022,6 +2023,17 @@ class JobManager:
                 cache.purge_job(job_id)
             except Exception:
                 logger.debug("Failed to purge remote cache for job %s", job_id, exc_info=True)
+        # R08: eviction must also expire the job's prepare operations — a
+        # surviving SUCCEEDED row would keep answering READY and merge future
+        # same-identity enqueues instead of allowing a rebuild epoch.
+        operations = getattr(self, "_prepare_operations", None)
+        if operations is not None:
+            try:
+                operations.expire_for_job(job_id, reason="cache_purged")
+            except (OSError, sqlite3.Error, PrepareOperationError):
+                logger.warning(
+                    "Failed to expire prepare operations for job %s", job_id, exc_info=True
+                )
         # Cascade-delete structure-source org rows (index + metadata +
         # tags + index_state) — design plan §5.3 last paragraph.
         try:
@@ -4951,7 +4963,7 @@ class JobManager:
     def _queue_catalog_prefetch(self, job_id: str) -> None:
         """Enqueue one terminal remote job as a persistent prepare operation.
 
-        No-op when remote fetching is not configured.  The operation is durable
+        No-op when remote fetching is not configured. The operation is durable
         (deduplicated by its stable scoped key); the wake signal below only
         shortens the worker's poll latency and is never the source of truth.
         """
@@ -4960,6 +4972,7 @@ class JobManager:
         record = self.store.get(job_id)
         if record is None or not record.status.is_terminal or not self._is_remote_job(record):
             return
+        self._expire_bodyless_succeeded_operations(record)
         try:
             self._prepare_operations.enqueue(self._prepare_request(record))
         except Exception:
@@ -4970,6 +4983,45 @@ class JobManager:
             self._catalog_prefetch_queue.put(job_id)
         except Exception:  # pragma: no cover - unbounded queue never raises
             pass
+
+    def _expire_bodyless_succeeded_operations(self, record: JobRecord) -> None:
+        """Expire SUCCEEDED prepare operations whose cache body is gone (R08).
+
+        Covers evictions that bypass ``_purge_job_records`` (TTL sweeps, manual
+        ``cache.purge_job``): without this the same-identity enqueue merges the
+        stale success and the catalog can never be rebuilt.
+        """
+        operations = getattr(self, "_prepare_operations", None)
+        cache = getattr(self, "_remote_structure_cache", None)
+        if operations is None or cache is None:
+            return
+        try:
+            from acp.services_data_bootstrap import _catalog_ready_for_attempt
+
+            workflow = str(record.spec.workflow or "")
+            ready = _catalog_ready_for_attempt(
+                cache, cache.job_root(record.id), record.id, workflow, int(record.attempt)
+            )
+            if ready:
+                return
+            request = self._prepare_request(record)
+            expired = operations.expire_succeeded_for_resource(
+                job_id=request.job_id,
+                attempt=request.attempt,
+                resource_id=request.resource_id,
+                permission_scope=request.permission_scope,
+                reason="cache_body_missing",
+            )
+            if expired:
+                logger.info(
+                    "Expired %d bodyless catalog preparation(s) for job %s",
+                    expired,
+                    record.id,
+                )
+        except (OSError, sqlite3.Error, PrepareOperationError):
+            logger.warning(
+                "Prepare-operation reconcile failed for job %s", record.id, exc_info=True
+            )
 
     def _prefetch_remote_catalog(self, job_id: str) -> None:
         """Pull one terminal remote job's small catalog files into the cache.
