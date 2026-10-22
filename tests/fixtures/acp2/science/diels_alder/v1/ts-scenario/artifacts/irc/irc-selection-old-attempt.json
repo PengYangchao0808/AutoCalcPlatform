@@ -1,0 +1,118 @@
+{
+  "attempt": 2,
+  "bond_change_count": 6,
+  "bond_changes": [
+    {
+      "bond_order_left": 0,
+      "bond_order_right": 1,
+      "change_type": "formed",
+      "left_atoms": [
+        "butadiene:bd_c1",
+        "ethene:et_c2"
+      ],
+      "right_atoms": [
+        "cyclohexene:cy_c1",
+        "cyclohexene:cy_c6"
+      ]
+    },
+    {
+      "bond_order_left": 0,
+      "bond_order_right": 1,
+      "change_type": "formed",
+      "left_atoms": [
+        "butadiene:bd_c4",
+        "ethene:et_c1"
+      ],
+      "right_atoms": [
+        "cyclohexene:cy_c4",
+        "cyclohexene:cy_c5"
+      ]
+    },
+    {
+      "bond_order_left": 2,
+      "bond_order_right": 1,
+      "change_type": "changed",
+      "left_atoms": [
+        "butadiene:bd_c1",
+        "butadiene:bd_c2"
+      ],
+      "right_atoms": [
+        "cyclohexene:cy_c1",
+        "cyclohexene:cy_c2"
+      ]
+    },
+    {
+      "bond_order_left": 1,
+      "bond_order_right": 2,
+      "change_type": "changed",
+      "left_atoms": [
+        "butadiene:bd_c2",
+        "butadiene:bd_c3"
+      ],
+      "right_atoms": [
+        "cyclohexene:cy_c2",
+        "cyclohexene:cy_c3"
+      ]
+    },
+    {
+      "bond_order_left": 2,
+      "bond_order_right": 1,
+      "change_type": "changed",
+      "left_atoms": [
+        "butadiene:bd_c3",
+        "butadiene:bd_c4"
+      ],
+      "right_atoms": [
+        "cyclohexene:cy_c3",
+        "cyclohexene:cy_c4"
+      ]
+    },
+    {
+      "bond_order_left": 2,
+      "bond_order_right": 1,
+      "change_type": "changed",
+      "left_atoms": [
+        "ethene:et_c1",
+        "ethene:et_c2"
+      ],
+      "right_atoms": [
+        "cyclohexene:cy_c5",
+        "cyclohexene:cy_c6"
+      ]
+    }
+  ],
+  "constructed": true,
+  "cross_attempt_provenance": {
+    "attempt": 1,
+    "release_id": "constructed-release-a17",
+    "submission_id": "constructed-submission-a17"
+  },
+  "endpoint_optimization_note": "No endpoint optimization was performed; both endpoints may not be minima.",
+  "endpoint_optimization_performed": false,
+  "expected_path": "two_direction",
+  "irc_provenance": "irc/irc-result.json",
+  "irc_provenance_sha256": "sha256:c384515ed6e6dd1f93ec582db5707028d214f890e538ad8b3c33908369bde760",
+  "irc_reference": "irc/irc-reference.json",
+  "irc_reference_sha256": "sha256:118a9d8324e2a801d785e25cead3d2f7ff4758bef693b1fd43ded5224611cce7",
+  "note": "NEGATIVE constructed fixture: an old-attempt IRC selection must be rejected even when its internal digests are valid.",
+  "producer": "B20a-exec",
+  "schema": "acp2.science.da-irc-selection",
+  "schema_version": 1,
+  "selection_reason": "superseded attempt-2 IRC selection; the current snapshot attempt is 1",
+  "ts_candidate_selection": "candidate-selection.json",
+  "ts_candidate_selection_sha256": "sha256:e876c865ca7ca43ecebee0233d165f46ee3430e3cb9b012b7b7c42f245b05c34",
+  "ts_frequency_provenance": "ts-frequency-result.json",
+  "ts_frequency_provenance_sha256": "sha256:ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8",
+  "ts_identity": {
+    "attempt": 1,
+    "candidate_id": "cand-001",
+    "electronic_state": {
+      "state_id": "state.singlet.s0",
+      "target_multiplicity": 1
+    },
+    "method": "wB97X-D4",
+    "structure_sha256": "sha256:ddae58527d99bbc8c1b6a763b2ff5a4a98a1f8f8f783b3601d990a675e420024"
+  },
+  "ts_optimize_provenance": "ts-optimize-result.json",
+  "ts_optimize_provenance_sha256": "sha256:a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd"
+}
