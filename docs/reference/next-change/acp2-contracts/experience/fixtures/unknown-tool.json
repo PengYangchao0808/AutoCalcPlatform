@@ -1,0 +1,15 @@
+{
+  "fixture": "unknown_tool",
+  "description": "Negative fixture: acp_research_proposal_delete_v1 is absent from B's committed P2 research operations and from the frozen eight P1 tools. It must be rejected as unknown_tool and never dispatched.",
+  "tool": "acp_research_proposal_delete_v1",
+  "arguments": {
+    "proposal_ref": "prop-da-selectivity-001"
+  },
+  "expected_error": {
+    "class": "unsupported",
+    "code": "unknown_tool",
+    "params": {
+      "rule": "tool_not_in_allowlist"
+    }
+  }
+}

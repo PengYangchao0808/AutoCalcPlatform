@@ -1,0 +1,54 @@
+{
+  "research_id": "res-da-selectivity-round-1",
+  "project_id": "proj-acp2-da",
+  "round": 1,
+  "decision": "accept",
+  "plan_definition_digest": "sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b",
+  "step_identity_refs": [
+    {
+      "step_index": 0,
+      "step_identity": "step-0-optimize-ts-r2scan3c",
+      "implementation_version": "release-2026.10.22",
+      "upstream_digests": [
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "materialized_parameters_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "step_index": 1,
+      "step_identity": "step-1-frequency-ts-r2scan3c",
+      "implementation_version": "release-2026.10.22",
+      "upstream_digests": [
+        "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      ],
+      "materialized_parameters_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  ],
+  "task_refs": [
+    {
+      "project_id": "proj-acp2-da",
+      "job_id": "20261022_001_PESsearch",
+      "attempt": 1,
+      "release_id": "release-2026.10.22"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "evidence_id": "ev-result-manifest",
+      "kind": "result_manifest",
+      "sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "relative_path": "RESULT/result_manifest.json"
+    },
+    {
+      "evidence_id": "ev-acceptance-receipt",
+      "kind": "acceptance_receipt",
+      "sha256": "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "relative_path": null
+    }
+  ],
+  "missing_validation": [],
+  "human_edits": [],
+  "approval_ref": "approval-da-selectivity-001",
+  "created_at": "2026-10-22T12:30:00Z",
+  "record_revision": 1
+}
