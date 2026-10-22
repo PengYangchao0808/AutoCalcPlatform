@@ -29,6 +29,7 @@ import os
 import queue
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -41,7 +42,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_ROOT = REPO_ROOT / "docs/reference/next-change/acp2-contracts"
@@ -2690,6 +2691,712 @@ def _run_submit_replay(
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
 
 
+# ---------------------------------------------------------------------------
+# B10 — real Local singlepoint (B10a) and three-entry consumer row (B10b)
+# ---------------------------------------------------------------------------
+
+#: Registered fixture level: HF method + STO-3G basis, emitted verbatim.
+B10_METHOD_LEVEL: dict[str, Any] = {
+    "engine": "orca",
+    "functional": "HF",
+    "basis": "STO-3G",
+}
+B10_DEFAULT_ORCA = "/home/xieningke/orca611/orca"
+B10_NATIVE_RELATIVE: tuple[str, ...] = (
+    "sp.inp",
+    "sp.out",
+    "RESULT/task_result.json",
+    "RESULT/result_manifest.json",
+    "RESULT/scientific_result.json",
+    "RESULT/energy/singlepoint_energy.json",
+    "RESULT/structures/singlepoint_final.xyz",
+    "execution_receipt.json",
+    "job.json",
+    "task.json",
+)
+
+
+def _b10_read_json(path: Path) -> dict[str, Any]:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return document if isinstance(document, dict) else {}
+
+
+def _b10_http_bytes(url: str, timeout: float) -> bytes:
+    request = urllib.request.Request(url, headers={"Accept": "*/*"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read()
+
+
+def _b10_job_started_events(work_dir: Path) -> int:
+    events = work_dir / "WORK" / "00_RUNTIME" / "events.jsonl"
+    if not events.is_file():
+        return 0
+    count = 0
+    for line in events.read_text(encoding="utf-8").splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict) and item.get("type") == "job.started":
+            count += 1
+    return count
+
+
+class _B10OrcaSampler:
+    """Poll ``/proc`` while one Local job runs and count real ORCA processes."""
+
+    def __init__(self, executable: str, interval: float = 0.01) -> None:
+        self.executable = str(Path(executable).resolve())
+        self.interval = interval
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="b10-orca-sampler", daemon=True)
+        self.pids: set[int] = set()
+        self.max_concurrent = 0
+        self.samples = 0
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=5)
+
+    def _scan(self) -> set[int]:
+        pids: set[int] = set()
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                raw = (entry / "cmdline").read_bytes()
+            except OSError:
+                continue
+            if not raw:
+                continue
+            argv0 = raw.split(b"\0", 1)[0].decode("utf-8", "replace")
+            if not argv0:
+                continue
+            try:
+                resolved = str(Path(argv0).resolve())
+            except OSError:
+                resolved = argv0
+            if resolved == self.executable:
+                pids.add(int(entry.name))
+        return pids
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                found = self._scan()
+            except OSError:
+                found = set()
+            self.samples += 1
+            self.pids.update(found)
+            self.max_concurrent = max(self.max_concurrent, len(found))
+            time.sleep(self.interval)
+
+
+def _b10_orca_output(work_dir: Path) -> tuple[Path | None, str]:
+    for path in sorted(work_dir.glob("*.out")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "ORCA TERMINATED NORMALLY" in text:
+            return path, text
+    return None, ""
+
+
+def _b10_final_energy(text: str) -> float | None:
+    matches = re.findall(r"FINAL SINGLE POINT ENERGY\s+(-?\d+\.\d+)", text)
+    return float(matches[-1]) if matches else None
+
+
+def _b10_submit_arguments(xyz_text: str, key: str) -> dict[str, Any]:
+    """One H2/STO-3G Local submission on the registered fixture budget."""
+    return {
+        "workflow": "singlepoint",
+        "input": {
+            "source_type": "xyz_text",
+            "source": xyz_text,
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "method": {"levels": {"single_point": dict(B10_METHOD_LEVEL)}},
+        "resources": {"cores": 1, "nproc": 1, "mem": "1024MB"},
+        "plan_digest": "sha256:" + "0" * 64,
+        "idempotency_key": key,
+    }
+
+
+def _b10_copy_native(work_dir: Path, out_dir: Path) -> list[dict[str, Any]]:
+    native_dir = out_dir / "native"
+    native_dir.mkdir(parents=True, exist_ok=True)
+    artifacts: list[dict[str, Any]] = []
+    for relative in B10_NATIVE_RELATIVE:
+        source = work_dir / relative
+        if not source.is_file():
+            continue
+        target = native_dir / relative.replace("/", "__")
+        shutil.copy2(source, target)
+        artifacts.append(
+            {
+                "path": str(target.relative_to(out_dir)),
+                "size_bytes": target.stat().st_size,
+                "sha256": sha256_file(target),
+            }
+        )
+    return artifacts
+
+
+def _run_local_singlepoint(
+    controller: str,
+    launch_path: str,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B10a: submit once through the real MCP stdio adapter, then read facts."""
+    base = controller.rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "submit",
+        "acceptance.target": "local",
+        "b10.fixture": str(fixture_path),
+        "b10.mcp_launch": str(launch_path),
+        "b10.method_level": dict(B10_METHOD_LEVEL),
+        "b10.charge": 0,
+        "b10.multiplicity": 1,
+    }
+    probe: _McpStdioProbe | None = None
+    sampler: _B10OrcaSampler | None = None
+    try:
+        launch = json.loads(Path(launch_path).read_text(encoding="utf-8"))
+        if not isinstance(launch, dict):
+            raise ValueError("launch descriptor must be a JSON object")
+        xyz_text = Path(fixture_path).read_text(encoding="utf-8")
+        launch_env = launch.get("env") if isinstance(launch.get("env"), dict) else {}
+        orca_path = str(
+            launch_env.get("CONFSEARCH_ORCA_PATH")
+            or os.environ.get("CONFSEARCH_ORCA_PATH")
+            or B10_DEFAULT_ORCA
+        )
+        resolved_orca = Path(orca_path).resolve()
+        if str(resolved_orca) == "/usr/bin/orca":
+            raise ValueError("/usr/bin/orca is the GNOME screen reader, not QC ORCA")
+        if not resolved_orca.is_file():
+            raise ValueError(f"pinned ORCA binary missing: {resolved_orca}")
+        extensions["b10.orca_binary"] = str(resolved_orca)
+
+        key = "b10-" + uuid.uuid4().hex[:24]
+        before = _controller_task_count(base, timeout)
+        sampler = _B10OrcaSampler(str(resolved_orca))
+        sampler.start()
+        probe = _McpStdioProbe(launch, timeout)
+        probe.request(
+            1,
+            "initialize",
+            {
+                "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                "capabilities": {},
+                "clientInfo": {"name": "acp2-b10-driver", "version": "1"},
+            },
+        )
+        probe.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        probe.request(2, "tools/list", {})
+        submitted = probe.request(
+            3,
+            "tools/call",
+            {"name": "acp_submit", "arguments": _b10_submit_arguments(xyz_text, key)},
+        )
+        task_id = _submit_task_id(submitted)
+        if not task_id:
+            raise RuntimeError("acp_submit returned no task id")
+
+        terminal = {"completed", "failed", "cancelled"}
+        deadline = time.monotonic() + timeout
+        job: dict[str, Any] = {}
+        while time.monotonic() < deadline:
+            job = _http_json(
+                base + f"/api/v1/jobs/{quote(task_id, safe='')}",
+                min(timeout, 60),
+            )
+            if isinstance(job, dict) and str(job.get("status") or "").lower() in terminal:
+                break
+            time.sleep(0.2)
+        sampler.stop()
+        after = _controller_task_count(base, timeout)
+
+        status = str(job.get("status") or "").lower() if isinstance(job, dict) else ""
+        work_dir = Path(str(job.get("work_dir") or "")) if isinstance(job, dict) else Path()
+        attempt = int(job.get("attempt") or 0) if isinstance(job, dict) else 0
+        if not work_dir.is_dir():
+            raise RuntimeError(f"job work_dir is not readable: {work_dir}")
+
+        task_result = _b10_read_json(work_dir / "RESULT" / "task_result.json")
+        manifest = _b10_read_json(work_dir / "RESULT" / "result_manifest.json")
+        receipt = _b10_read_json(work_dir / "execution_receipt.json")
+        job_json = _b10_read_json(work_dir / "job.json")
+        envelope = _b10_read_json(work_dir / "WORK" / "00_RUNTIME" / "frozen" / "envelope.json")
+        orca_out, orca_text = _b10_orca_output(work_dir)
+        orca_energy = _b10_final_energy(orca_text)
+        result = task_result.get("result")
+        result = result if isinstance(result, dict) else {}
+        energy = result.get("energy_hartree")
+
+        native_digests: dict[str, str] = {}
+        for name in ("sp.inp", "sp.out"):
+            path = work_dir / name
+            if path.is_file():
+                native_digests[name] = sha256_file(path)
+        task_artifacts = (
+            result.get("artifacts") if isinstance(result.get("artifacts"), list) else []
+        )
+        result_artifact_digests = {
+            Path(str(item.get("path") or "")).name: item.get("checksum")
+            for item in task_artifacts
+            if isinstance(item, dict)
+        }
+        native_ok = bool(native_digests) and all(
+            str(result_artifact_digests.get(name) or "").removeprefix("sha256:") == digest
+            for name, digest in native_digests.items()
+        )
+
+        products = manifest.get("products") if isinstance(manifest.get("products"), list) else []
+        task_product = next(
+            (
+                product
+                for product in products
+                if isinstance(product, dict) and product.get("id") == "task_result.json"
+            ),
+            None,
+        )
+        energy_product = next(
+            (
+                product
+                for product in products
+                if isinstance(product, dict) and product.get("id") == "singlepoint_energy"
+            ),
+            None,
+        )
+        task_product_meta = (task_product or {}).get("metadata") or {}
+        energy_product_meta = (energy_product or {}).get("metadata") or {}
+        manifest_task_digest = task_product_meta.get("task_result_digest")
+        manifest_energy = energy_product_meta.get("energy_hartree")
+        manifest_ok = (
+            manifest.get("task_id") == task_id
+            and manifest.get("status") == "completed"
+            and manifest_task_digest == task_result.get("content_digest")
+            and isinstance(manifest_energy, (int, float))
+            and isinstance(energy, (int, float))
+            and abs(float(manifest_energy) - float(energy)) <= 1e-9
+        )
+
+        complete_ok = (
+            task_result.get("complete") is True
+            and task_result.get("qualification") == "complete"
+            and task_result.get("status") == "completed"
+            and task_result.get("receipt_state") == "completed"
+            and task_result.get("missing_required_facts") == []
+            and "energy_hartree" in (task_result.get("required_facts") or [])
+            and task_result.get("exit_code") == 0
+        )
+        release_id = str(receipt.get("release_id") or "")
+        attempt_ok = (
+            attempt > 0
+            and attempt == int(receipt.get("attempt") or -1) == int(envelope.get("attempt") or -1)
+            and str(job_json.get("attempt") or "") == str(attempt)
+            and bool(release_id)
+            and receipt.get("release_id") == envelope.get("release_id")
+        )
+        energy_ok = (
+            isinstance(energy, (int, float))
+            and orca_energy is not None
+            and abs(orca_energy - float(energy)) <= 1e-9
+        )
+        symbols = result.get("symbols")
+        coordinates = result.get("coordinates")
+        frequencies = result.get("frequencies")
+        body_ok = (
+            isinstance(energy, (int, float))
+            and isinstance(coordinates, list)
+            and len(coordinates) == 2
+            and symbols == ["H", "H"]
+            and isinstance(frequencies, list)
+        )
+        dispatch_events = _b10_job_started_events(work_dir)
+        dispatch_ok = dispatch_events == 1
+        submit_ok = (
+            before + 1 == after and isinstance(submitted, dict) and not submitted.get("isError")
+        )
+
+        artifacts = _b10_copy_native(work_dir, out_dir)
+        extensions.update(
+            {
+                "b10.task_ref": task_id,
+                "b10.attempt": attempt,
+                "b10.release_id": release_id,
+                "b10.submission_id": receipt.get("submission_id"),
+                "b10.plan_identity": receipt.get("plan_identity"),
+                "b10.result_digest": receipt.get("result_digest"),
+                "b10.task_result_digest": task_result.get("content_digest"),
+                "b10.energy_hartree": energy,
+                "b10.energy_units": "hartree",
+                "b10.geometry": {"symbols": symbols, "coordinates": coordinates},
+                "b10.frequencies": frequencies or [],
+                "b10.frequencies_present": bool(frequencies),
+                "b10.orca_output": str(orca_out) if orca_out else None,
+                "b10.orca_terminated_normally": "ORCA TERMINATED NORMALLY" in orca_text,
+                "b10.orca_energy_hartree": orca_energy,
+                "b10.orca_pids": sorted(sampler.pids),
+                "b10.orca_max_concurrent": sampler.max_concurrent,
+                "b10.orca_samples": sampler.samples,
+                "b10.job_started_events": dispatch_events,
+                "b10.task_count_before": before,
+                "b10.task_count_after": after,
+                "b10.work_dir": str(work_dir),
+                "b10.native_artifact_digests": native_digests,
+                "b10.artifacts": artifacts,
+                "b10.task_result_artifact_digests": result_artifact_digests,
+                "b10.manifest_task_result_digest": manifest_task_digest,
+                "b10.manifest_energy_hartree": manifest_energy,
+                "b10.completion_conditions": {
+                    "complete": task_result.get("complete"),
+                    "qualification": task_result.get("qualification"),
+                    "status": task_result.get("status"),
+                    "receipt_state": task_result.get("receipt_state"),
+                    "missing_required_facts": task_result.get("missing_required_facts"),
+                    "required_facts": task_result.get("required_facts"),
+                    "exit_code": task_result.get("exit_code"),
+                },
+                "b10.scientific_body": {
+                    "energy_hartree": energy,
+                    "units": "hartree",
+                    "symbols": symbols,
+                    "coordinates": coordinates,
+                    "frequencies": frequencies or [],
+                },
+                "b10.three_entry_descriptor_required": True,
+            }
+        )
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+    ) as exc:
+        if sampler is not None:
+            sampler.stop()
+        if probe is not None:
+            probe.close()
+        extensions["b10.probe_error"] = f"{type(exc).__name__}: {exc}"
+        assertions.append({"name": "b10_probe", "status": "FAIL", "detail": str(exc)})
+        return EXIT_FAIL, assertions, extensions
+    finally:
+        if probe is not None:
+            probe.close()
+
+    assertions.extend(
+        [
+            {
+                "name": "one_mcp_submission_one_task",
+                "status": "PASS" if submit_ok else "FAIL",
+                "detail": f"task_count_before={before} after={after}",
+            },
+            {
+                "name": "job_completed",
+                "status": "PASS" if status == "completed" else "FAIL",
+                "detail": f"status={status} attempt={attempt}",
+            },
+            {
+                "name": "real_orca_process_once",
+                "status": (
+                    "PASS" if len(sampler.pids) == 1 and sampler.max_concurrent == 1 else "FAIL"
+                ),
+                "detail": (
+                    f"pids={sorted(sampler.pids)} max_concurrent={sampler.max_concurrent} "
+                    f"samples={sampler.samples}"
+                ),
+            },
+            {
+                "name": "orca_terminated_normally",
+                "status": "PASS" if orca_out is not None else "FAIL",
+                "detail": str(orca_out) if orca_out is not None else "no ORCA output",
+            },
+            {
+                "name": "orca_energy_matches_task_result",
+                "status": "PASS" if energy_ok else "FAIL",
+                "detail": f"orca={orca_energy} task_result={energy}",
+            },
+            {
+                "name": "task_result_complete",
+                "status": "PASS" if complete_ok else "FAIL",
+                "detail": "complete/qualification/required_facts/exit_code",
+            },
+            {
+                "name": "attempt_and_release_agree",
+                "status": "PASS" if attempt_ok else "FAIL",
+                "detail": f"attempt={attempt} release_id={release_id}",
+            },
+            {
+                "name": "manifest_agrees_with_task_result",
+                "status": "PASS" if manifest_ok else "FAIL",
+                "detail": f"manifest_task_digest={manifest_task_digest} energy={manifest_energy}",
+            },
+            {
+                "name": "native_artifact_digests_agree",
+                "status": "PASS" if native_ok else "FAIL",
+                "detail": f"native={native_digests}",
+            },
+            {
+                "name": "scientific_body_readable",
+                "status": "PASS" if body_ok else "FAIL",
+                "detail": f"energy_hartree={energy} symbols={symbols} frequencies={frequencies}",
+            },
+            {
+                "name": "exactly_one_dispatch",
+                "status": "PASS" if dispatch_ok else "FAIL",
+                "detail": f"job.started={dispatch_events}",
+            },
+        ]
+    )
+    passed = all(item["status"] == "PASS" for item in assertions)
+    return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
+
+
+def _b10_cli_query(
+    controller: str,
+    task_id: str,
+    descriptor: Mapping[str, Any],
+    timeout: float,
+) -> tuple[dict[str, Any], list[str]]:
+    """Run the gated ``acp task query --controller`` surface (never ``acp run``)."""
+    command = [
+        sys.executable,
+        "-m",
+        "acp",
+        "task",
+        "query",
+        "--controller",
+        controller,
+        "--job",
+        task_id,
+    ]
+    cwd = str(descriptor.get("cli_cwd") or REPO_ROOT)
+    env = dict(os.environ)
+    hint = descriptor.get("launch_env")
+    if isinstance(hint, dict):
+        env.update({str(k): str(v) for k, v in hint.items() if isinstance(v, str)})
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"acp task query exited {completed.returncode}: {completed.stderr.strip()[:400]}"
+        )
+    lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("acp task query produced no JSON")
+    payload = json.loads(lines[-1])
+    if not isinstance(payload, dict):
+        raise ValueError("acp task query did not return a JSON object")
+    return payload, command
+
+
+def _run_three_entry(
+    controller: str,
+    fixture_path: str,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B10b: read one task from CLI, HTTP and C Workbench (when present)."""
+    base = controller.rstrip("/")
+    descriptor = _b10_read_json(Path(fixture_path))
+    task_id = str(descriptor.get("task_id") or descriptor.get("job_id") or "")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "submit",
+        "acceptance.target": "local",
+        "b10.three_entry_fixture": str(fixture_path),
+        "b10.task_ref": task_id,
+        "b10.legacy_acp_run_used": False,
+        "b10.gated_cli_surface": "acp task query --controller <url> --job <task_id>",
+        "b10.legacy_cli_surface": "acp run singlepoint (not used; would create a second task)",
+    }
+    try:
+        before = _controller_task_count(base, timeout)
+        encoded = quote(task_id, safe="")
+        http_job = _http_json(base + f"/api/v1/jobs/{encoded}", timeout)
+        http_receipt = _http_json(
+            base + f"/api/v1/jobs/{encoded}/files/execution_receipt.json", timeout
+        )
+        http_manifest_bytes = _b10_http_bytes(
+            base + f"/api/v1/jobs/{encoded}/files/RESULT/result_manifest.json", timeout
+        )
+        http_task_result = _http_json(
+            base + f"/api/v1/jobs/{encoded}/files/RESULT/task_result.json", timeout
+        )
+        cli_payload, cli_command = _b10_cli_query(controller, task_id, descriptor, timeout)
+        after = _controller_task_count(base, timeout)
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        subprocess.TimeoutExpired,
+    ) as exc:
+        extensions["b10.three_entry_error"] = f"{type(exc).__name__}: {exc}"
+        assertions.append({"name": "three_entry_probe", "status": "FAIL", "detail": str(exc)})
+        return EXIT_FAIL, assertions, extensions
+
+    cli_job = cli_payload.get("job") if isinstance(cli_payload.get("job"), dict) else {}
+    cli_work_dir = Path(str(cli_job.get("work_dir") or ""))
+    cli_receipt = _b10_read_json(cli_work_dir / "execution_receipt.json")
+    cli_manifest_path = cli_work_dir / "RESULT" / "result_manifest.json"
+    cli_task_result = _b10_read_json(cli_work_dir / "RESULT" / "task_result.json")
+
+    def entry_spec(job: Mapping[str, Any]) -> Mapping[str, Any]:
+        spec = job.get("spec") if isinstance(job.get("spec"), Mapping) else {}
+        return spec if isinstance(spec, Mapping) else {}
+
+    def row(
+        entry: str,
+        job: Mapping[str, Any],
+        receipt: Mapping[str, Any],
+        manifest_sha: str,
+        task_result: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        spec = entry_spec(job)
+        return {
+            "entry": entry,
+            "job_id": job.get("id") or job.get("task_id"),
+            "attempt": job.get("attempt"),
+            "status": job.get("status") or job.get("state"),
+            "release_id": receipt.get("release_id"),
+            "submission_id": receipt.get("submission_id"),
+            "plan_identity": receipt.get("plan_identity"),
+            "result_digest": receipt.get("result_digest")
+            or task_result.get("result_digest")
+            or (task_result.get("result") or {}).get("result_digest"),
+            "manifest_sha256": manifest_sha,
+            "method": spec.get("method"),
+            "input_hash": job.get("input_hash"),
+        }
+
+    cli_row = row(
+        "cli:acp task query --controller",
+        cli_job,
+        cli_receipt,
+        sha256_file(cli_manifest_path) if cli_manifest_path.is_file() else "",
+        cli_task_result,
+    )
+    http_row = row(
+        "http:GET /api/v1/jobs/{id} + /files",
+        http_job,
+        http_receipt,
+        hashlib.sha256(http_manifest_bytes).hexdigest(),
+        http_task_result,
+    )
+    workbench_row = {
+        "entry": "c-workbench:RPH Workbench",
+        "status": "NOT_VERIFIED",
+        "reason": (
+            "c_driver_absent: C P1 Workbench UI/DSH is not delivered and this host "
+            "has no Chromium/DSH driver, so the same task cannot be read from the "
+            "Workbench surface. The CLI and HTTP rows are verified independently."
+        ),
+    }
+    compare_keys = (
+        "job_id",
+        "attempt",
+        "release_id",
+        "plan_identity",
+        "manifest_sha256",
+        "result_digest",
+        "method",
+        "input_hash",
+    )
+    mismatched = [key for key in compare_keys if cli_row.get(key) != http_row.get(key)]
+    identity_ok = not mismatched and bool(cli_row.get("job_id"))
+    cli_ok = str(cli_row.get("status") or "").lower() == "completed"
+    http_ok = str(http_row.get("status") or "").lower() == "completed"
+    read_only_ok = before == after
+    workbench_missing = workbench_row["status"] == "NOT_VERIFIED"
+
+    assertions.extend(
+        [
+            {
+                "name": "cli_query_row",
+                "status": "PASS" if cli_ok else "FAIL",
+                "detail": f"acp task query --controller {controller} --job {task_id}",
+            },
+            {
+                "name": "http_get_row",
+                "status": "PASS" if http_ok else "FAIL",
+                "detail": f"GET /api/v1/jobs/{task_id}",
+            },
+            {
+                "name": "entry_identity_equal",
+                "status": "PASS" if identity_ok else "FAIL",
+                "detail": f"mismatched={mismatched}",
+            },
+            {
+                "name": "three_entry_read_only",
+                "status": "PASS" if read_only_ok else "FAIL",
+                "detail": f"task_count_before={before} after={after}",
+            },
+            {
+                "name": "workbench_row_not_verified",
+                "status": "NOT_VERIFIED",
+                "detail": workbench_row["reason"],
+            },
+            {
+                "name": "legacy_acp_run_not_used",
+                "status": "PASS" if not extensions["b10.legacy_acp_run_used"] else "FAIL",
+                "detail": extensions["b10.gated_cli_surface"],
+            },
+        ]
+    )
+    extensions.update(
+        {
+            "b10.attempt": cli_row.get("attempt"),
+            "b10.release_id": cli_row.get("release_id"),
+            "b10.entries": {
+                "cli": cli_row,
+                "http": http_row,
+                "workbench": workbench_row,
+            },
+            "b10.compare_keys": list(compare_keys),
+            "b10.mismatched": mismatched,
+            "b10.task_count_before": before,
+            "b10.task_count_after": after,
+            "b10.cli_command": cli_command,
+            "b10.legacy_cli_distinction": (
+                "The equivalence gate uses the gated Controller query "
+                "`acp task query --controller <url> --job <id>`; the legacy "
+                "`acp run singlepoint` was never executed because it would create "
+                "a second task instead of reading the submitted one."
+            ),
+        }
+    )
+    if not (cli_ok and http_ok and identity_ok and read_only_ok and workbench_missing):
+        extensions["b10.reason"] = "three_entry_cli_http_or_identity_failed"
+        return EXIT_FAIL, assertions, extensions
+    extensions["b10.reason"] = "three_entry_workbench_not_verified:c_driver_absent"
+    return EXIT_NOT_VERIFIED, assertions, extensions
+
+
 def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
     if args.out:
         return str(Path(args.out).resolve())
@@ -2737,10 +3444,32 @@ def dry_run_commands(
             f"--launch {shlex.quote(str(launch))} --fixture {shlex.quote(fixture)} "
             f"--out {shlex.quote(out)}"
         )
-    elif spec.scenario in ("local-singlepoint", "lsf-singlepoint", "three-entry"):
+    elif spec.scenario == "local-singlepoint":
         commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task --controller "
-            f"{shlex.quote(controller)} plan {shlex.quote(fixture)}"
+            f"{shlex.quote(sys.executable)} -m acp mcp serve --transport stdio "
+            f"--controller {shlex.quote(controller)}"
+        )
+        commands.append(
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario local-singlepoint --phase {shlex.quote(phase_name)} "
+            f"--controller {shlex.quote(controller)} --launch {shlex.quote(launch)} "
+            f"--fixture {shlex.quote(fixture)} --out {shlex.quote(out)}"
+        )
+    elif spec.scenario == "three-entry":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task query --controller "
+            f"{shlex.quote(controller)} --job <task_id from fixture>"
+        )
+        commands.append(
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario three-entry --phase {shlex.quote(phase_name)} "
+            f"--controller {shlex.quote(controller)} --fixture {shlex.quote(fixture)} "
+            f"--out {shlex.quote(out)}"
+        )
+    elif spec.scenario == "lsf-singlepoint":
+        commands.append(
+            f"{shlex.quote(sys.executable)} -m acp task plan --controller "
+            f"{shlex.quote(controller)} --task-dir {shlex.quote(fixture)}"
         )
     elif spec.scenario == "artifact":
         commands.append(
@@ -2754,8 +3483,8 @@ def dry_run_commands(
         )
     elif spec.scenario == "approval-budget":
         commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task --controller "
-            f"{shlex.quote(controller)} plan {shlex.quote(fixture)}"
+            f"{shlex.quote(sys.executable)} -m acp task plan --controller "
+            f"{shlex.quote(controller)} --task-dir {shlex.quote(fixture)}"
         )
     elif spec.scenario == "da-runtime":
         commands.append(
@@ -2912,6 +3641,34 @@ def execute_scenario(
             return code_value
 
         handler = submit_replay
+    elif spec.scenario == "local-singlepoint":
+
+        def local_singlepoint(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_local_singlepoint(
+                args.controller,
+                str(args.launch),
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b10.artifacts", [])
+            return code_value
+
+        handler = local_singlepoint
+    elif spec.scenario == "three-entry":
+
+        def three_entry(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_three_entry(
+                args.controller, str(args.fixture), timeout
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["reason"] = extensions.get("b10.reason")
+            return code_value
+
+        handler = three_entry
     else:
         handler = _b01_stub_handler(spec)
 
@@ -2929,7 +3686,14 @@ def execute_scenario(
         reason = f"timeout after {timeout}s; cleanup record saved"
         result = "NOT_VERIFIED"
         code = EXIT_NOT_VERIFIED
-    elif spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime", "submit-replay"}:
+    elif spec.scenario in {
+        "entry-readonly",
+        "mcp-stdio",
+        "env-runtime",
+        "submit-replay",
+        "local-singlepoint",
+        "three-entry",
+    }:
         result = (
             "PASS"
             if code == EXIT_PASS
@@ -2950,7 +3714,14 @@ def execute_scenario(
             if code == EXIT_NOT_VERIFIED
             else ("PASS" if code == EXIT_PASS else "FAIL")
         )
-    if spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime", "submit-replay"}:
+    if spec.scenario in {
+        "entry-readonly",
+        "mcp-stdio",
+        "env-runtime",
+        "submit-replay",
+        "local-singlepoint",
+        "three-entry",
+    }:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
     else:
@@ -2979,6 +3750,16 @@ def execute_scenario(
         attempt = extensions.get("b08.attempt")
         if isinstance(attempt, int):
             refs["attempt"] = attempt
+    if spec.scenario in {"local-singlepoint", "three-entry"}:
+        task_ref = extensions.get("b10.task_ref")
+        if isinstance(task_ref, str) and task_ref:
+            refs["job_id"] = task_ref
+        attempt = extensions.get("b10.attempt")
+        if isinstance(attempt, int):
+            refs["attempt"] = attempt
+        release_id = extensions.get("b10.release_id")
+        if isinstance(release_id, str) and release_id:
+            refs["release_id"] = release_id
     run_path, _ = write_result(
         out_dir,
         scenario=spec.scenario,
@@ -2992,6 +3773,7 @@ def execute_scenario(
         command=command,
         evidence_kind=evidence_kind,
         assertions=assertions,
+        artifacts=outcome.get("artifacts"),
         extensions=extensions,
         refs=refs or None,
         candidate_revision=candidate_revision,
@@ -3234,6 +4016,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"usage error: missing required argument(s): {rendered}", file=sys.stderr)
         return EXIT_USAGE
 
+    if spec.scenario == "local-singlepoint":
+        if not args.launch:
+            print(
+                "usage error: local-singlepoint requires --launch <MCP stdio launch JSON>; "
+                "the real MCP path is mandatory and the harness never starts a Controller",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+        if not Path(args.launch).is_file():
+            print(f"usage error: --launch does not exist: {args.launch}", file=sys.stderr)
+            return EXIT_USAGE
+
     if phase.controller_required:
         if not args.controller:
             return _write_prerequisite_result(spec, phase_name, phase, args, "missing_controller")
@@ -3245,6 +4039,25 @@ def main(argv: list[str] | None = None) -> int:
         return _write_prerequisite_result(spec, phase_name, phase, args, "launch_missing")
     if "fixture" in phase.required_args and not Path(args.fixture).is_file():
         return _write_prerequisite_result(spec, phase_name, phase, args, "fixture_missing")
+    if spec.scenario == "three-entry":
+        try:
+            descriptor = json.loads(Path(args.fixture).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(
+                f"usage error: three-entry --fixture must be a task descriptor JSON: {exc}",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+        if (
+            not isinstance(descriptor, dict)
+            or not str(descriptor.get("task_id") or descriptor.get("job_id") or "").strip()
+        ):
+            print(
+                "usage error: three-entry --fixture must carry task_id/job_id "
+                "(the already-submitted TaskRef); the harness never submits a second task",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
     return execute_scenario(spec, phase_name, phase, args)
 
 

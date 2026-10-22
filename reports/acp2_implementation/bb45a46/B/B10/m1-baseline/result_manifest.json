@@ -1,0 +1,44 @@
+{
+  "products": [
+    {
+      "id": "task_result.json",
+      "kind": "file",
+      "label": "task_result.json",
+      "metadata": {
+        "attempt": 1,
+        "job_id": "20261023_031220_001_singlepoint",
+        "normal_reuse": true,
+        "partial_result": false,
+        "plan_identity": "v2:f5a1970ff626be4ffc6c4b506ea3cf6a",
+        "product_role": "normal",
+        "qualification": "complete",
+        "submission_id": "sub_fb236317442f3f36",
+        "task_result_digest": "sha256:ff001382568fb8d218413d40700081ab5310c63c1b5ba91939def2fe2785e556"
+      },
+      "path": "task_result.json"
+    },
+    {
+      "id": "singlepoint_energy",
+      "kind": "energy_report",
+      "label": "singlepoint \u2014 energy",
+      "metadata": {
+        "energy_hartree": -155.001263624935,
+        "workflow": "singlepoint"
+      },
+      "path": "energy/singlepoint_energy.json"
+    },
+    {
+      "id": "singlepoint_structure",
+      "kind": "structure",
+      "label": "singlepoint \u2014 final structure",
+      "metadata": {
+        "workflow": "singlepoint"
+      },
+      "path": "structures/singlepoint_final.xyz"
+    }
+  ],
+  "status": "completed",
+  "task_id": "20261023_031220_001_singlepoint",
+  "version": 2,
+  "workflow": "singlepoint"
+}

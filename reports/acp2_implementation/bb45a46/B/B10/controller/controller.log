@@ -1,0 +1,75 @@
+INFO:     Started server process [594969]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18768 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18768
+  Run root      : /ACPServer/acp2-development/data/b/run-root-b10
+  Poll interval : 30s
+  Docs (Swagger): http://127.0.0.1:18768/docs
+  Reload        : off
+
+INFO:     127.0.0.1:38350 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38364 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59940 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59954 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59964 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59974 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:59988 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59994 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60004 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60020 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60026 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60038 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60040 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60044 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60056 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60064 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60066 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60080 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60096 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60104 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60106 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60112 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60120 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60124 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60140 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60152 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60162 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60174 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60176 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60192 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60194 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60208 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60216 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60232 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60238 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60254 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60266 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60270 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60280 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54668 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54678 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54692 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54700 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54704 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54710 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54724 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54728 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54742 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54744 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54760 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54766 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54772 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54778 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54794 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54804 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54816 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54832 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54848 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54850 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54858 - "GET /api/v1/jobs/20261023_031338_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54870 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [594969]

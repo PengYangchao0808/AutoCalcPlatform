@@ -125,7 +125,8 @@ def _plan_commands(scenario: str) -> list[str]:
         ]
     return [
         base + " (ACP_RUN_ROOT=<temp>)",
-        "POST /api/v1/jobs {workflow: singlepoint, input: <real xyz/gjf>, method: <real method>}",
+        "POST /api/v1/jobs {workflow: singlepoint, input: {source_type: smiles, source: CCO}, "
+        "method: {levels: {single_point: {engine: orca, functional: r2SCAN-3c}}}}",
         "GET /api/v1/jobs/{id}/detail (poll terminal)",
         "open <work_dir>/RESULT/result_manifest.json",
         "GET /api/v1/jobs/{id}/structure-viewer",
@@ -177,7 +178,7 @@ def _execute_m1(out: Path, *, timeout: float) -> int:
     env = dict(os.environ)
     env["ACP_RUN_ROOT"] = str(root)
     if os.environ.get("ACP_M1_ORCA"):
-        env.setdefault("ACP_ORCA", os.environ["ACP_M1_ORCA"])
+        env.setdefault("CONFSEARCH_ORCA_PATH", os.environ["ACP_M1_ORCA"])
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -204,8 +205,15 @@ def _execute_m1(out: Path, *, timeout: float) -> int:
             base + "/api/v1/jobs",
             {
                 "workflow": "singlepoint",
-                "input": "CCO",
-                "method": {"method": "r2SCAN-3c", "basis": "def2-SVP"},
+                "input": {"source_type": "smiles", "source": "CCO"},
+                "method": {
+                    "levels": {
+                        "single_point": {
+                            "engine": "orca",
+                            "functional": "r2SCAN-3c",
+                        }
+                    }
+                },
             },
         )
         steps.append(
