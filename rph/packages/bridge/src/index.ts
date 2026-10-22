@@ -881,11 +881,80 @@ export function assertBridgeProjectionConsistent(
   }
 }
 
+/**
+ * Credential-bearing result keys.
+ *
+ * A tool result may never carry a material credential, even as an opaque
+ * value. Approval authority and credentials live in the authenticated
+ * Controller channel, not in a model-visible payload.
+ */
+const SENSITIVE_RESULT_KEY_RE =
+  /(?:^|[._-])(?:secret|token|password|passwd|credential|authorization|api[_-]?key|access[_-]?key|private[_-]?key)(?:$|[._-])/i;
+
+/** Values that are recognizably credentials regardless of their key. */
+const CREDENTIAL_VALUE_RE =
+  /(?:Bearer\s+[A-Za-z0-9._~+/=-]{8,})|(?:sk-[A-Za-z0-9]{16,})|(?:AKIA[0-9A-Z]{16})/;
+
+/** POSIX absolute path or Windows drive path embedded in a result string. */
+const ABSOLUTE_PATH_RE =
+  /(?:^|[\s"'`=:([{])((?:\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)|(?:[A-Za-z]:[\\/][^\s"'`)\]}]+))/;
+
+/** Remote/filesystem URI that would disclose a server-side location. */
+const REMOTE_URI_RE = /\b(?:sftp|ssh|file):\/\/\S+/i;
+
+/**
+ * Refuse a result that leaks a credential or an absolute remote path.
+ *
+ * The bridge is a model-facing surface: IDs, digests and platform references
+ * are allowed, but a secret value or a server filesystem path is not. The
+ * guard is a **refusal** (never a silent rewrite), so a caller can decide
+ * whether to redact at the transport layer.
+ */
+export function assertResultRedacted(
+  value: unknown,
+  path = "$",
+): void {
+  if (typeof value === "string") {
+    if (CREDENTIAL_VALUE_RE.test(value)) {
+      contractError("authorization", "access_denied", {
+        rule: "credential_in_result",
+        path,
+      });
+    }
+    if (REMOTE_URI_RE.test(value) || ABSOLUTE_PATH_RE.test(value)) {
+      contractError("authorization", "access_denied", {
+        rule: "absolute_path_in_result",
+        path,
+      });
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((child, index) =>
+      assertResultRedacted(child, `${path}[${index}]`),
+    );
+    return;
+  }
+  if (!isRecord(value)) {
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (SENSITIVE_RESULT_KEY_RE.test(key)) {
+      contractError("authorization", "access_denied", {
+        rule: "credential_in_result",
+        path: `${path}.${key}`,
+      });
+    }
+    assertResultRedacted(child, `${path}.${key}`);
+  }
+}
+
 /** Project a raw `tools/call` result without rewriting its payload. */
 export function projectToolResult(
   tool: string,
   result: BridgeToolResult,
 ): BridgeProjection {
+  assertResultRedacted(result.structuredContent);
   const structured = result.structuredContent;
   const data = structured["data"];
   const error = structured["error"];
@@ -1043,12 +1112,41 @@ function notPreparedResult(request: BridgeRequest): BridgeResult {
 }
 
 /**
+ * Ownership record for one prepared artifact.
+ *
+ * `project` is the caller-supplied hint recorded at prepare time; `read` may
+ * not silently switch to a different project or attempt.
+ */
+interface PreparedArtifact {
+  readonly project: string | null;
+  readonly task: string;
+  readonly attempt: number;
+  readonly resource: string;
+}
+
+interface IdempotencyEntry {
+  readonly signature: string;
+  readonly result: BridgeResult | null;
+}
+
+function isIdempotentOperation(operation: BridgeOperation): boolean {
+  return (
+    operation === "validate" ||
+    operation === "submit" ||
+    operation === "evidence"
+  );
+}
+
+/**
  * Stateful bridge session.
  *
- * Holds only two ephemeral guards, never scientific state:
+ * Holds only ephemeral guards, never scientific state:
  * - prepared artifact identities, so `read` never implies `prepare`;
  * - the canonical scientific signature per idempotency key, so a retry with a
- *   changed method/input is a conflict instead of a silent second operation.
+ *   changed method/input is a conflict instead of a silent second operation;
+ * - the first successful result per idempotency key, replayed without a second
+ *   tool call;
+ * - the project/attempt recorded when an artifact was prepared.
  *
  * The platform client is injected; the bridge owns no transport, no fetch, no
  * store and no process execution.
@@ -1058,7 +1156,8 @@ export class Bridge {
   private readonly negotiated: readonly NegotiatedExtension[];
   private readonly requirePreparedRead: boolean;
   private readonly prepared = new Set<string>();
-  private readonly idempotency = new Map<string, string>();
+  private readonly ownership = new Map<string, PreparedArtifact>();
+  private readonly idempotency = new Map<string, IdempotencyEntry>();
 
   constructor(client: PlatformClient, options: BridgeOptions = {}) {
     this.client = client;
@@ -1077,33 +1176,140 @@ export class Bridge {
         fields: missing,
       });
     }
-    if (
-      request.operation === "read" &&
-      this.requirePreparedRead &&
-      !this.prepared.has(artifactKey(request))
-    ) {
-      return notPreparedResult(request);
+    if (request.operation === "read") {
+      this.assertArtifactOwnership(request);
+      if (this.requirePreparedRead && !this.prepared.has(artifactKey(request))) {
+        return notPreparedResult(request);
+      }
     }
-    if (
-      request.operation === "validate" ||
-      request.operation === "submit" ||
-      request.operation === "evidence"
-    ) {
-      this.assertScientificSignature(request);
+    const replay = this.replayIdempotentResult(request);
+    if (replay !== null) {
+      return replay;
     }
     const params = buildToolArguments(request);
     const raw = assertRawToolName(mapping.tool);
     const result = await this.client.callTool(raw, params);
     if (request.operation === "prepare" && !result.isError) {
-      this.prepared.add(artifactKey(request));
+      this.rememberPreparedArtifact(request);
     }
-    return Object.freeze({
+    const bridgeResult: BridgeResult = Object.freeze({
       operation: request.operation,
       tool: raw,
       isError: result.isError,
       structuredContent: result.structuredContent,
       projection: projectToolResult(raw, result),
     });
+    this.rememberIdempotentResult(request, bridgeResult);
+    return bridgeResult;
+  }
+
+  private rememberPreparedArtifact(request: BridgeRequest): void {
+    const key = artifactKey(request);
+    this.prepared.add(key);
+    this.ownership.set(
+      key,
+      Object.freeze({
+        project: request.project ?? null,
+        task: request.task ?? "",
+        attempt: request.attempt ?? -1,
+        resource: request.resource ?? "",
+      }),
+    );
+  }
+
+  private assertArtifactOwnership(request: BridgeRequest): void {
+    const exact = this.ownership.get(artifactKey(request));
+    if (request.project !== undefined) {
+      const candidate =
+        exact ??
+        [...this.ownership.values()].find(
+          (scope) =>
+            scope.task === request.task && scope.resource === request.resource,
+        );
+      if (
+        candidate !== undefined &&
+        candidate.project !== null &&
+        candidate.project !== request.project
+      ) {
+        contractError("authorization", "access_denied", {
+          rule: "project_ownership_mismatch",
+          expected_project: candidate.project,
+          observed_project: request.project,
+          task: request.task ?? null,
+          attempt: request.attempt ?? null,
+          resource: request.resource ?? null,
+        });
+      }
+    }
+    if (exact === undefined) {
+      const otherAttempt = [...this.ownership.values()].find(
+        (scope) =>
+          scope.task === request.task &&
+          scope.resource === request.resource &&
+          scope.attempt !== request.attempt,
+      );
+      if (otherAttempt !== undefined) {
+        contractError("authorization", "access_denied", {
+          rule: "attempt_ownership_mismatch",
+          expected_attempt: otherAttempt.attempt,
+          observed_attempt: request.attempt ?? null,
+          task: request.task ?? null,
+          resource: request.resource ?? null,
+        });
+      }
+    }
+  }
+
+  private signatureFor(request: BridgeRequest): string | null {
+    const key = request.idempotencyKey;
+    if (key === undefined || key.length === 0) {
+      return null;
+    }
+    return canonicalJson({
+      workflow: request.workflow ?? null,
+      input: request.input ?? null,
+      method: request.method ?? null,
+      resources: request.resources ?? null,
+      project: request.project ?? null,
+    });
+  }
+
+  private replayIdempotentResult(request: BridgeRequest): BridgeResult | null {
+    if (!isIdempotentOperation(request.operation)) {
+      return null;
+    }
+    const key = request.idempotencyKey;
+    const signature = this.signatureFor(request);
+    if (key === undefined || signature === null) {
+      return null;
+    }
+    const previous = this.idempotency.get(key);
+    if (previous === undefined) {
+      this.idempotency.set(key, { signature, result: null });
+      return null;
+    }
+    if (previous.signature !== signature) {
+      contractError("conflict", "revision_conflict", {
+        rule: "idempotency_key_reuse",
+        idempotency_key: key,
+      });
+    }
+    return previous.result;
+  }
+
+  private rememberIdempotentResult(
+    request: BridgeRequest,
+    result: BridgeResult,
+  ): void {
+    if (!isIdempotentOperation(request.operation) || result.isError) {
+      return;
+    }
+    const key = request.idempotencyKey;
+    const signature = this.signatureFor(request);
+    if (key === undefined || signature === null) {
+      return;
+    }
+    this.idempotency.set(key, { signature, result });
   }
 
   /** Execute one P2 operation (negotiation is checked before any call). */
@@ -1123,31 +1329,6 @@ export class Bridge {
       structuredContent: result.structuredContent,
       projection: projectToolResult(raw, result),
     });
-  }
-
-  private assertScientificSignature(request: BridgeRequest): void {
-    const key = request.idempotencyKey;
-    if (key === undefined || key.length === 0) {
-      return;
-    }
-    const signature = canonicalJson({
-      workflow: request.workflow ?? null,
-      input: request.input ?? null,
-      method: request.method ?? null,
-      resources: request.resources ?? null,
-      project: request.project ?? null,
-    });
-    const previous = this.idempotency.get(key);
-    if (previous === undefined) {
-      this.idempotency.set(key, signature);
-      return;
-    }
-    if (previous !== signature) {
-      contractError("conflict", "revision_conflict", {
-        rule: "idempotency_key_reuse",
-        idempotency_key: key,
-      });
-    }
   }
 }
 

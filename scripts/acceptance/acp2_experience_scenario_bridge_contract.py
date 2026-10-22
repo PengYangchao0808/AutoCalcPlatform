@@ -463,6 +463,126 @@ def scenario_bridge_contract(context: Any) -> int:
     _write_text(out, "rph-gates.log", _truncate("\n\n".join(log), 20000))
     _add_artifact(context, "rph-gates.log")
 
+    evidence_root = _env_path("ACP2_EVIDENCE")
+    if evidence_root is None:
+        return _not_verified(context, "missing_prerequisite:ACP2_EVIDENCE")
+    negative_dir = evidence_root / "C" / SCENARIO_ID / "negative" / context.run_id
+    mutant_script = workspace / "scripts/run-bridge-mutants.mjs"
+    mutant_run = _run(
+        [node, str(mutant_script), "--out", str(negative_dir)],
+        cwd=workspace,
+        timeout=max(60.0, timeout),
+        env=env,
+    )
+    mutant_log = (mutant_run.stdout or "") + (mutant_run.stderr or "")
+    log.append(
+        f"$ {node} {mutant_script} --out {negative_dir}\nrc={mutant_run.returncode}\n{mutant_log}"
+    )
+    _write_text(
+        out,
+        "bridge-mutants.log",
+        _truncate(
+            f"$ {node} {mutant_script} --out {negative_dir}\n"
+            f"rc={mutant_run.returncode}\n{mutant_log}",
+            60000,
+        ),
+    )
+    _add_artifact(context, "bridge-mutants.log")
+    _assertion(
+        context,
+        "bridge.negative.mutant_run_exit",
+        mutant_run.returncode == 0,
+        f"rc={mutant_run.returncode} {mutant_log.strip()[-400:]}",
+    )
+
+    matrix_path = negative_dir / "mutants.json"
+    matrix: dict[str, Any] | None = None
+    if matrix_path.is_file():
+        try:
+            loaded = json.loads(matrix_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            loaded = None
+            matrix_error = f"json_parse:{exc}"
+        else:
+            matrix_error = ""
+        if isinstance(loaded, dict):
+            matrix = loaded
+    else:
+        matrix_error = f"missing:{matrix_path}"
+    _assertion(
+        context,
+        "bridge.negative.matrix_present",
+        matrix is not None,
+        matrix_error,
+    )
+
+    expected_mutants = (
+        "raw_prefix",
+        "iserror_preserved",
+        "read_before_prepare",
+        "operation_required_matrix",
+        "artifact_ownership",
+        "credential_absolute_path",
+    )
+    mutants_by_id = {}
+    if matrix is not None:
+        for item in matrix.get("mutants") or []:
+            if isinstance(item, dict) and isinstance(item.get("id"), str):
+                mutants_by_id[item["id"]] = item
+    for mutant_id in expected_mutants:
+        item = mutants_by_id.get(mutant_id)
+        red = (
+            isinstance(item, dict)
+            and item.get("build_exit") == 0
+            and isinstance(item.get("test_exit"), int)
+            and item.get("test_exit") != 0
+            and item.get("red") is True
+            and item.get("specific_test_failed") is True
+            and item.get("restored") is True
+        )
+        _assertion(
+            context,
+            f"bridge.negative.{mutant_id}",
+            red,
+            json.dumps(item, sort_keys=True)[:1200] if item is not None else "missing",
+        )
+
+    source_file = workspace / "packages/bridge/src/index.ts"
+    source_digest = _sha256_file(source_file) if source_file.is_file() else ""
+    before_digest = matrix.get("sha256_before") if matrix is not None else None
+    after_digest = matrix.get("sha256_after") if matrix is not None else None
+    _assertion(
+        context,
+        "bridge.negative.source_restored_byte_for_byte",
+        isinstance(before_digest, str)
+        and before_digest == after_digest
+        and before_digest == source_digest,
+        f"before={before_digest} after={after_digest} current={source_digest}",
+    )
+    _assertion(
+        context,
+        "bridge.negative.all_six_guards_red",
+        matrix is not None
+        and matrix.get("expected_mutants") == len(expected_mutants)
+        and matrix.get("red_mutants") == len(expected_mutants)
+        and matrix.get("restored") is True,
+        f"expected={len(expected_mutants)} "
+        f"observed={matrix.get('red_mutants') if matrix else None} "
+        f"restored={matrix.get('restored') if matrix else None}",
+    )
+
+    negative_pointer = {
+        "evidence_path": str(negative_dir),
+        "sha256_before": before_digest,
+        "sha256_after": after_digest,
+        "current_source_sha256": source_digest,
+        "guards": list(expected_mutants),
+        "red_mutants": matrix.get("red_mutants") if matrix else None,
+        "restored": matrix.get("restored") if matrix else None,
+    }
+    _write_json(out, "bridge-negative-evidence.json", negative_pointer)
+    _add_artifact(context, "bridge-negative-evidence.json")
+
     report = {
         "b03": {
             "path": B03_RELATIVE,
@@ -475,6 +595,14 @@ def scenario_bridge_contract(context: Any) -> int:
         "p2_tool_count": len(b03_tools),
         "tests": {"count": test_count, "failures": test_failures},
         "boundary_cases": list(SIX_BOUNDARY_CASES),
+        "negative": {
+            "evidence_path": str(negative_dir),
+            "guards": list(expected_mutants),
+            "red_mutants": matrix.get("red_mutants") if matrix else None,
+            "sha256_before": before_digest,
+            "sha256_after": after_digest,
+            "restored": matrix.get("restored") if matrix else None,
+        },
         "evidence_kind": kind,
         "closes_h2": False,
     }
@@ -491,6 +619,12 @@ def scenario_bridge_contract(context: Any) -> int:
             "experience.bridge_contract.tests": test_count,
             "experience.bridge_contract.tool_allowlist_sha256": allowlist_digest,
             "experience.bridge_contract.extension": f"{EXTENSION_ID}@{EXTENSION_VERSION}",
+            "experience.bridge_contract.negative_evidence": str(negative_dir),
+            "experience.bridge_contract.negative_guards": list(expected_mutants),
+            "experience.bridge_contract.negative_red_mutants": (
+                matrix.get("red_mutants") if matrix else None
+            ),
+            "experience.bridge_contract.source_sha256": source_digest,
         }
     )
 
