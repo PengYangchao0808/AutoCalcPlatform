@@ -64,7 +64,8 @@ const LAYOUT_DEFAULTS = {
   left:   { width: 240, collapsed: false },
   right:  { width: 240, collapsed: false },
   panels: { file_tree: {collapsed: false}, log: {collapsed: false},
-            queue: {collapsed: false}, info: {collapsed: false} },
+            queue: {collapsed: false}, info: {collapsed: false},
+            science_question: {collapsed: false} },
   heights: { left_log: 180, right_info: 220 }
 };
 let layoutState = loadLayoutState();
