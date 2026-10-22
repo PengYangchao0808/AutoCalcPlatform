@@ -38,7 +38,7 @@
     "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
     "CONFSEARCH_ORCA_PATH": "/home/xieningke/orca611/orca",
     "LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
-    "PATH": "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+    "PATH": "/home/xieningke/.opencode/bin:/usr/local/bin:/usr/bin:/bin"
   },
   "extensions": [
     {

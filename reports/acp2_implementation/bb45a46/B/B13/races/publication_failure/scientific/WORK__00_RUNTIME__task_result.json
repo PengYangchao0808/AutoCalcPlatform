@@ -1,7 +1,7 @@
 {
   "authority": "cccp.calculation.tasks.singlepoint:184-239",
   "complete": true,
-  "content_digest": "sha256:2900eb8dc584517df17379d96a57d7cdabeed6b1d5625ec2a36b667983615f8b",
+  "content_digest": "sha256:10e44031b477c73bcf4046768301ee31400cbff833d55e53eaaffdf1d8f99c58",
   "exit_code": 0,
   "job_status": "completed",
   "missing_required_facts": [],
@@ -18,13 +18,13 @@
     "artifacts": [
       {
         "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
-        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__06/sp.inp",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__10/sp.inp",
         "source": "orca",
         "type": "output"
       },
       {
-        "checksum": "sha256:d02824d0e48bae87b56d9f33dbff05df6c5896afcc4a886da27192cd06b6436c",
-        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__06/sp.out",
+        "checksum": "sha256:98e5612a7fc89e03796e65a150c25284352d7ddd02044f6618f7ebc13de930b2",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__10/sp.out",
         "source": "orca",
         "type": "log"
       }
@@ -61,10 +61,10 @@
     ],
     "task": "singlepoint"
   },
-  "result_digest": "sha256:76c25c2a7c0f9bd7643d59cf9ef3145f8ebd8fb32f6e9179efe0f16add45af01",
+  "result_digest": "sha256:9a6ea81388251cd191974172fa71a6fcc2e6e3e7f86d061b1ebdb08058a2b725",
   "schema": "acp_task_result_v1",
   "status": "completed",
   "task": "singlepoint",
   "truth_table_row": "b",
-  "written_at": "2026-10-22T22:50:38.659743+00:00"
+  "written_at": "2026-10-22T23:34:46.013311+00:00"
 }

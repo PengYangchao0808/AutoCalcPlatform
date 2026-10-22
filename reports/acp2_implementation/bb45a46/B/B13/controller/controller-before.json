@@ -1,10 +1,19 @@
 {
   "argv": [
     "/ACPServer/acp2-development/venvs/b/bin/python",
-    "-m",
-    "acp2_controller_fault",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+    "--source",
+    "/ACPServer/acp2-development/B/src",
     "--fault-file",
     "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "--config",
+    "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+    "--candidate-revision",
+    "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "--orca",
+    "/home/xieningke/orca611/orca",
+    "--orca-ld-library-path",
+    "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
     "--",
     "run",
     "serve",
@@ -18,7 +27,7 @@
     "1",
     "--no-browser"
   ],
-  "cwd": "/ACPServer/acp2-development/B/src",
+  "cwd": "/ACPServer/AutoCalcPlatform",
   "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
   "health": {
     "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
@@ -27,9 +36,9 @@
     "contract_version": "1.1.0",
     "read_only": true,
     "schema_version": 1,
-    "started_at": "2026-10-22T22:46:56.035759Z",
+    "started_at": "2026-10-22T23:32:58.171607Z",
     "status": "ok"
   },
-  "pid": 715881,
+  "pid": 749204,
   "run_root": "/ACPServer/acp2-development/data/b/run-root-b13"
 }

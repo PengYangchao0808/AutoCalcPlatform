@@ -5,12 +5,12 @@
       "artifact_digests": {
         "input.xyz": "sha256:7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe"
       },
-      "binding_id": "local:98e0695545d668e6:2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__06",
+      "binding_id": "local:98e0695545d668e6:2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__10",
       "endpoint": "local",
       "kind": "local",
       "mapping_version": 1,
       "project_id": "",
-      "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__06",
+      "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__10",
       "root": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized",
       "tenant_id": ""
     }
@@ -26,21 +26,21 @@
     "publish_policy": "normal",
     "qualification": "complete",
     "required_facts": "energy_hartree",
-    "task_result_digest": "sha256:2900eb8dc584517df17379d96a57d7cdabeed6b1d5625ec2a36b667983615f8b",
+    "task_result_digest": "sha256:10e44031b477c73bcf4046768301ee31400cbff833d55e53eaaffdf1d8f99c58",
     "truth_table_row": "b"
   },
-  "fencing_token": "56508327391f08090688e2cc37892a43",
-  "job_id": "20261023_065036_001_singlepoint",
-  "owner": "local:workstation:720345:1",
+  "fencing_token": "1e65e84f24ebd2c6974ed96295fa0d09",
+  "job_id": "20261023_073443_001_singlepoint",
+  "owner": "local:workstation:750900:1",
   "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
   "receipt_version": 1,
   "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
   "release_id": "98e0695545d668e6",
-  "result_digest": "sha256:76c25c2a7c0f9bd7643d59cf9ef3145f8ebd8fb32f6e9179efe0f16add45af01",
+  "result_digest": "sha256:9a6ea81388251cd191974172fa71a6fcc2e6e3e7f86d061b1ebdb08058a2b725",
   "state": "completed",
   "step_identities": [
     "v2:bf3235c86df3abe7501c6472d005bfc5"
   ],
-  "submission_id": "sub_4ac3725810011ae9",
-  "written_at": "2026-10-22T22:50:38.662625+00:00"
+  "submission_id": "sub_de832e38e61c3559",
+  "written_at": "2026-10-22T23:34:46.016583+00:00"
 }

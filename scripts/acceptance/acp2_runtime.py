@@ -4905,8 +4905,10 @@ B13_CONTRACT_DIGEST = "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b7066
 B13_LSF_CONTROL_FIXTURE_ID = "fx-control-recovery-lsf-v1"
 B13_LSF_NORMAL_FIXTURE_ID = "fx-lsf-singlepoint-v1"
 
-#: Fault code raised by ``scripts/acceptance/acp2_controller_fault.py``.
+#: Fault code raised by ``scripts/acceptance/acp2_fault_controller.py``.
 B13_PUBLICATION_FAULT_CODE = "ACP2_ACCEPTANCE_PUBLICATION_FAULT"
+B13_FAULT_SCHEMA = "acp2.b13.publication-fault.v1"
+B13_FAULT_WRAPPER = "scripts/acceptance/acp2_fault_controller.py"
 
 B13_TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 B13_ACTIVE_CANCEL_STATUSES = frozenset({"cancelling", "cancelled"})
@@ -5077,6 +5079,8 @@ def _b13_parse_controller_argv(argv: Sequence[str]) -> dict[str, Any]:
     tokens = [str(item) for item in argv]
     result: dict[str, Any] = {
         "module": None,
+        "script": None,
+        "source": None,
         "port": None,
         "run_root": None,
         "fault_file": None,
@@ -5085,6 +5089,12 @@ def _b13_parse_controller_argv(argv: Sequence[str]) -> dict[str, Any]:
     for index, token in enumerate(tokens):
         if token == "-m" and index + 1 < len(tokens):
             result["module"] = tokens[index + 1]
+        if token.endswith("acp2_fault_controller.py") or token.endswith("acp2_controller_fault.py"):
+            result["script"] = token
+        if token == "--source" and index + 1 < len(tokens):
+            result["source"] = tokens[index + 1]
+        if token.startswith("--source="):
+            result["source"] = token.split("=", 1)[1]
         if token == "--port" and index + 1 < len(tokens):
             try:
                 result["port"] = int(tokens[index + 1])
@@ -5101,7 +5111,7 @@ def _b13_parse_controller_argv(argv: Sequence[str]) -> dict[str, Any]:
             result["run_root"] = token.split("=", 1)[1]
         if token == "--fault-file" and index + 1 < len(tokens):
             result["fault_file"] = tokens[index + 1]
-    result["fault_seam"] = "acp2_controller_fault" in tokens and bool(result["fault_file"])
+    result["fault_seam"] = bool(result["script"] and result["fault_file"])
     return result
 
 
@@ -5259,6 +5269,55 @@ def _b13_write_json(path: Path, document: Any) -> Path:
 
 def _b13_iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _b13_arm_fault(fault_file: Path, *, task_ref: str | None = None) -> dict[str, Any]:
+    """Write the persisted JSON descriptor the acceptance wrapper re-reads."""
+
+    descriptor = {
+        "schema": B13_FAULT_SCHEMA,
+        "fault": "publication_failure",
+        "seam": "register_result_manifest",
+        "code": B13_PUBLICATION_FAULT_CODE,
+        "armed": True,
+        "armed_at": _b13_iso_now(),
+        "disarmed_at": None,
+        "task_ref": task_ref,
+        "wrapper": B13_FAULT_WRAPPER,
+    }
+    _b13_write_json(fault_file, descriptor)
+    return descriptor
+
+
+def _b13_disarm_fault(
+    fault_file: Path, *, reason: str, details: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    """Persist the disarmed descriptor instead of deleting the evidence file."""
+
+    try:
+        descriptor = (
+            json.loads(fault_file.read_text(encoding="utf-8")) if fault_file.is_file() else {}
+        )
+    except (OSError, json.JSONDecodeError):
+        descriptor = {}
+    if not isinstance(descriptor, dict):
+        descriptor = {}
+    descriptor.update(
+        {
+            "schema": B13_FAULT_SCHEMA,
+            "fault": "publication_failure",
+            "seam": "register_result_manifest",
+            "code": B13_PUBLICATION_FAULT_CODE,
+            "armed": False,
+            "disarmed_at": _b13_iso_now(),
+            "disarm_reason": reason,
+            "wrapper": B13_FAULT_WRAPPER,
+        }
+    )
+    if details:
+        descriptor["failure"] = dict(details)
+    _b13_write_json(fault_file, descriptor)
+    return descriptor
 
 
 def _b13_event_rows(work_dir: Path) -> list[dict[str, Any]]:
@@ -6367,12 +6426,12 @@ def _b13_race_publication_failure(
     fault_file = fault_file or (out_dir / "fault" / "publication-fault.json")
     race_dir = out_dir / "races" / "publication_failure"
     try:
-        if not fault_file.is_file():
-            _b13_write_json(fault_file, {"armed": True, "reason": "b13 publication fault"})
+        _b13_arm_fault(fault_file)
         before_count = _controller_task_count(base, timeout)
         task_id, _probe, _submitted, _meta = _b13_submit(
             launch, "singlepoint", str(spec["xyz"]), dict(spec["level"]), timeout
         )
+        _b13_arm_fault(fault_file, task_ref=task_id)
         row.update({"task_ref": task_id, "task_count_before": before_count})
         terminal, is_terminal = _b13_wait_terminal(base, task_id, min(90.0, timeout))
         work_dir = Path(str(terminal.get("work_dir") or ""))
@@ -6441,7 +6500,16 @@ def _b13_race_publication_failure(
             }
         )
         # Clear the fault; the Controller's reconcile loop must retry publish ONLY.
-        fault_file.unlink(missing_ok=True)
+        disarm_record = _b13_disarm_fault(
+            fault_file,
+            reason="fault cleared for publication retry",
+            details={
+                "task_ref": task_id,
+                "publication_failure_event": failure_event,
+                "qc_pids_before_retry": qc_pids_before,
+            },
+        )
+        _b13_write_json(race_dir / "fault-disarmed.json", disarm_record)
         published = _b13_wait_publication(work_dir, min(90.0, timeout))
         terminal_after = _b13_job(base, task_id, timeout)
         qc_pids_after = sorted(sampler.pids)
@@ -6553,7 +6621,12 @@ def _b13_race_publication_failure(
                 pass
     finally:
         sampler.stop()
-        fault_file.unlink(missing_ok=True)
+        try:
+            descriptor = json.loads(fault_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            descriptor = {}
+        if not isinstance(descriptor, dict) or descriptor.get("armed") is not False:
+            _b13_disarm_fault(fault_file, reason="publication race cleanup")
     _b13_finish_row(row, assertions)
     return row
 
@@ -6956,12 +7029,17 @@ def _b13_race_timeout(
 
 
 def _b13_source_root(base: str) -> Path:
-    """The P1 worktree that owns the Controller (from ``/proc/<pid>/cwd``)."""
+    """The P1 worktree that owns the Controller (``--source`` or proc cwd)."""
 
     port = urlparse(base).port or int(os.environ.get("ACP2_CONTROLLER_PORT", "18771"))
     pid = _b13_listener_pid(port)
     if pid is not None:
         info = _b13_read_proc(pid)
+        parsed = _b13_parse_controller_argv(info.get("argv") or [])
+        declared = parsed.get("source")
+        if declared:
+            source = Path(str(declared))
+            return source.parent if source.name == "src" else source
         cwd = Path(info.get("cwd") or "")
         if cwd.name == "src" and (cwd.parent / "src").is_dir():
             return cwd.parent
@@ -7126,6 +7204,12 @@ def _run_control_recovery(
             ).stdout.strip()
         except (OSError, subprocess.SubprocessError):
             source_revision = ""
+        controller_start_command = " ".join(
+            shlex.quote(str(item)) for item in controller_info.get("argv") or []
+        )
+        (out_dir / "controller-start-command.txt").write_text(
+            controller_start_command + "\n", encoding="utf-8"
+        )
         extensions["b13.controller"] = {
             "pid": controller_pid,
             "argv": controller_info.get("argv"),
@@ -7133,6 +7217,9 @@ def _run_control_recovery(
             "run_root": parsed.get("run_root"),
             "fault_seam": parsed.get("fault_seam"),
             "fault_file": parsed.get("fault_file"),
+            "script": parsed.get("script"),
+            "source": parsed.get("source"),
+            "start_command": controller_start_command,
             "source_root": str(source_root),
             "source_revision": source_revision,
             "source_revision_matches": source_revision == B13_CANDIDATE_REVISION,
@@ -7186,10 +7273,12 @@ def _run_control_recovery(
         )
         if fault_file is not None:
             fault_file.parent.mkdir(parents=True, exist_ok=True)
-            fault_file.unlink(missing_ok=True)
+            _b13_disarm_fault(fault_file, reason="scenario start")
         extensions["b13.publication_fault_seam"] = {
             "available": bool(fault_file),
             "fault_file": str(fault_file) if fault_file else None,
+            "wrapper": B13_FAULT_WRAPPER,
+            "descriptor_schema": B13_FAULT_SCHEMA,
         }
         if fault_file is None:
             assertions.append(
@@ -7198,7 +7287,7 @@ def _run_control_recovery(
                     "status": "FAIL",
                     "detail": (
                         "Controller was not launched through "
-                        "scripts/acceptance/acp2_controller_fault.py; publication "
+                        "scripts/acceptance/acp2_fault_controller.py; publication "
                         "failure cannot be injected without faking the scheduler"
                     ),
                 }

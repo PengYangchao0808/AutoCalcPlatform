@@ -1,10 +1,19 @@
 {
   "argv": [
     "/ACPServer/acp2-development/venvs/b/bin/python",
-    "-m",
-    "acp2_controller_fault",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+    "--source",
+    "/ACPServer/acp2-development/B/src",
     "--fault-file",
     "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "--config",
+    "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+    "--candidate-revision",
+    "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "--orca",
+    "/home/xieningke/orca611/orca",
+    "--orca-ld-library-path",
+    "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
     "--",
     "run",
     "serve",
@@ -18,12 +27,15 @@
     "1",
     "--no-browser"
   ],
-  "cwd": "/ACPServer/acp2-development/B/src",
+  "cwd": "/ACPServer/AutoCalcPlatform",
   "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
   "fault_seam": true,
-  "pid": 715881,
+  "pid": 749204,
   "run_root": "/ACPServer/acp2-development/data/b/run-root-b13",
+  "script": "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+  "source": "/ACPServer/acp2-development/B/src",
   "source_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "source_revision_matches": true,
-  "source_root": "/ACPServer/acp2-development/B"
+  "source_root": "/ACPServer/acp2-development/B",
+  "start_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py --source /ACPServer/acp2-development/B/src --fault-file /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json --config /ACPServer/acp2-development/data/b/controller-config/cccp.yaml --candidate-revision 10eb71e4bc1811054c9d19ae4fd71d974e027f8a --orca /home/xieningke/orca611/orca --orca-ld-library-path /home/xieningke/openmpi418/lib:/home/xieningke/orca611 -- run serve --host 127.0.0.1 --port 18771 --run-root /ACPServer/acp2-development/data/b/run-root-b13 --poll-interval 1 --no-browser"
 }

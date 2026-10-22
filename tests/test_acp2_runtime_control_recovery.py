@@ -39,7 +39,7 @@ from acp_services.store.store import JobStateConflictError, JobStore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "acceptance" / "acp2_runtime.py"
-FAULT_SCRIPT = REPO_ROOT / "scripts" / "acceptance" / "acp2_controller_fault.py"
+FAULT_SCRIPT = REPO_ROOT / "scripts" / "acceptance" / "acp2_fault_controller.py"
 
 
 def _load(name: str, path: Path) -> Any:
@@ -52,7 +52,7 @@ def _load(name: str, path: Path) -> Any:
 
 
 harness = _load("acp2_runtime_b13", SCRIPT)
-fault_launcher = _load("acp2_controller_fault_b13", FAULT_SCRIPT)
+fault_launcher = _load("acp2_fault_controller_b13", FAULT_SCRIPT)
 
 
 def _envelope(**overrides: object) -> ExecutionEnvelope:
@@ -139,8 +139,9 @@ def test_exit_semantics_keeps_local_pass_visible_with_lsf_gap() -> None:
 def test_controller_argv_parser_extracts_restart_identity() -> None:
     argv = [
         "/venv/python",
-        "-m",
-        "acp2_controller_fault",
+        "/repo/scripts/acceptance/acp2_fault_controller.py",
+        "--source",
+        "/src-worktree/B/src",
         "--fault-file",
         "/tmp/fault.json",
         "--",
@@ -154,7 +155,8 @@ def test_controller_argv_parser_extracts_restart_identity() -> None:
         "/tmp/run-root-b13",
     ]
     parsed = harness._b13_parse_controller_argv(argv)
-    assert parsed["module"] == "acp2_controller_fault"
+    assert parsed["script"].endswith("acp2_fault_controller.py")
+    assert parsed["source"] == "/src-worktree/B/src"
     assert parsed["port"] == 18771
     assert parsed["run_root"] == "/tmp/run-root-b13"
     assert parsed["fault_file"] == "/tmp/fault.json"
@@ -172,27 +174,73 @@ def test_publication_fault_launcher_is_file_armed_and_restores_writer(
 
     module = SimpleNamespace(register_result_manifest=real)
     fault_file = tmp_path / "fault.json"
-    fault_file.write_text("{}", encoding="utf-8")
+    fault_file.write_text(
+        json.dumps(
+            {
+                "schema": "acp2.b13.publication-fault.v1",
+                "fault": "publication_failure",
+                "seam": "register_result_manifest",
+                "code": harness.B13_PUBLICATION_FAULT_CODE,
+                "armed": True,
+            }
+        ),
+        encoding="utf-8",
+    )
     fault_launcher.install_publication_fault(module, fault_file)
 
     with pytest.raises(OSError, match=harness.B13_PUBLICATION_FAULT_CODE):
         module.register_result_manifest(tmp_path, object())
     assert calls == [], "armed fault must not reach the real writer"
 
-    fault_file.unlink()
+    fault_file.write_text(
+        json.dumps(
+            {
+                "schema": "acp2.b13.publication-fault.v1",
+                "fault": "publication_failure",
+                "seam": "register_result_manifest",
+                "code": harness.B13_PUBLICATION_FAULT_CODE,
+                "armed": False,
+            }
+        ),
+        encoding="utf-8",
+    )
     published = module.register_result_manifest(tmp_path, object(), publisher="data")
     assert published == tmp_path / "result_manifest.json"
     assert calls == [(tmp_path, calls[0][1], "data")]
 
 
 def test_publication_fault_launcher_argv_split() -> None:
-    fault_file, acp_argv = fault_launcher._split_argv(
-        ["--fault-file", "/tmp/f.json", "--", "run", "serve", "--port", "18771"]
+    options, acp_argv = fault_launcher._split_argv(
+        [
+            "--source",
+            "/tmp/B/src",
+            "--fault-file",
+            "/tmp/f.json",
+            "--",
+            "run",
+            "serve",
+            "--port",
+            "18771",
+        ]
     )
-    assert fault_file == Path("/tmp/f.json")
+    assert options["source"] == Path("/tmp/B/src")
+    assert options["fault_file"] == Path("/tmp/f.json")
     assert acp_argv == ["run", "serve", "--port", "18771"]
     with pytest.raises(ValueError, match="separator"):
-        fault_launcher._split_argv(["--fault-file", "/tmp/f.json"])
+        fault_launcher._split_argv(["--source", "/tmp/B/src", "--fault-file", "/tmp/f.json"])
+    with pytest.raises(ValueError, match="run serve"):
+        fault_launcher._split_argv(
+            ["--source", "/tmp/B/src", "--fault-file", "/tmp/f.json", "--", "doctor"]
+        )
+
+
+def test_fault_wrapper_is_acceptance_only() -> None:
+    offenders = [
+        str(path.relative_to(REPO_ROOT))
+        for path in (REPO_ROOT / "src").rglob("*.py")
+        if "acp2_fault_controller" in path.read_text(encoding="utf-8", errors="replace")
+    ]
+    assert offenders == []
 
 
 def test_late_receipt_is_identity_valid_but_old_attempt_is_stale() -> None:

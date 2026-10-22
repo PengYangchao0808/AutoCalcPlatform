@@ -21,12 +21,12 @@
       "walltime_s": 60
     },
     "orca_pids": [],
-    "pid": 720610,
+    "pid": 751343,
     "race_id": "cancel_race",
-    "task_ref": "20261023_065051_002_singlepoint",
+    "task_ref": "20261023_073458_002_singlepoint",
     "timeout_seconds": 150
   },
-  "cancelled_persisted_at": "2026-10-22T22:50:55.518146+00:00",
+  "cancelled_persisted_at": "2026-10-22T23:35:02.662537+00:00",
   "controller_restart": "b13.fault.controller_restart",
   "evidence": "races/cancel_race",
   "fault": "cancel_confirmed_stop_late_receipt",
@@ -36,7 +36,7 @@
   "kind": "local",
   "late_receipt_gate": {
     "cas": {
-      "detail": "job 20261023_065051_002_singlepoint state conflict: expected {'revision': 3, 'status': 'cancelling', 'attempt': 1}, actual {'status': 'cancelled', 'revision': 7, 'attempt': 1}",
+      "detail": "job 20261023_073458_002_singlepoint state conflict: expected {'revision': 4, 'status': 'cancelling', 'attempt': 1}, actual {'status': 'cancelled', 'revision': 7, 'attempt': 1}",
       "error": "JobStateConflictError",
       "rejected": true
     },
@@ -62,16 +62,16 @@
     "functional": "wB97M-V"
   },
   "orca_pids": [],
-  "pid": 720610,
+  "pid": 751343,
   "race_id": "cancel_race",
   "release_id": "98e0695545d668e6",
-  "revision_before_cancel": 3,
+  "revision_before_cancel": 4,
   "revision_settled_after_terminal": 7,
-  "started_at": "2026-10-22T22:50:50.623578Z",
+  "started_at": "2026-10-22T23:34:57.834887Z",
   "status": "NOT_VERIFIED",
-  "stop_observed_at": "2026-10-22T22:50:51.947136Z",
-  "submission_id": "sub_db371c85e23edc64",
-  "task_count_before": 13,
-  "task_ref": "20261023_065051_002_singlepoint",
+  "stop_observed_at": "2026-10-22T23:34:59.303088Z",
+  "submission_id": "sub_2c6656fce10f3349",
+  "task_count_before": 23,
+  "task_ref": "20261023_073458_002_singlepoint",
   "timeout_seconds": 150
 }
