@@ -1079,3 +1079,62 @@ register("contracts", scenario_contracts)
 register("workspace", scenario_workspace)
 register("harness-selftest", scenario_harness_selftest)
 register("node-dsh-install", scenario_node_dsh_install)
+
+
+# ---------------------------------------------------------------------------
+# Sibling scenario-module discovery (T-08 contract)
+# ---------------------------------------------------------------------------
+# Every later todo adds ONE ``acp2_experience_scenario_<name>.py`` file in this
+# directory and never edits this registry.  A sibling registers its body through
+# the shared ``register`` function (duplicates raise) or through an import-time
+# call of that same helper.  Discovery is sorted so the registry is
+# deterministic across runs and platforms.
+#
+# A sibling module MUST be import-safe without optional third-party packages:
+# import Playwright/DSH-only libraries inside the handler, so the core five P0
+# bodies keep working in the C interpreter.
+#
+# ``SCENARIO_IMPLS`` stays the only map the harness reads.  ``DISCOVERY_MODULES``
+# is the diagnostic record of which sibling modules were imported.
+
+DISCOVERY_PATTERN = "acp2_experience_scenario_*.py"
+DISCOVERY_MODULES: tuple[str, ...] = ()
+
+
+def _discover_sibling_scenarios() -> tuple[str, ...]:
+    global DISCOVERY_MODULES
+
+    script_dir = Path(__file__).resolve().parent
+    # The harness (and the self-tests) load this file under a synthetic module
+    # name.  Sibling modules import the shared helpers by the canonical name,
+    # so publish the currently-executing registry under that name as well.
+    sys.modules["acp2_experience_scenarios"] = sys.modules[__name__]
+    script_dir_text = str(script_dir)
+    if script_dir_text not in sys.path:
+        sys.path.insert(0, script_dir_text)
+
+    discovered: list[str] = []
+    for path in sorted(script_dir.glob(DISCOVERY_PATTERN)):
+        if path.name == Path(__file__).name or not path.is_file():
+            continue
+        module_name = path.stem
+        before = set(SCENARIO_IMPLS)
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load scenario module {path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            sys.modules.pop(module_name, None)
+            raise
+        added = set(SCENARIO_IMPLS) - before
+        if not added:
+            raise ValueError(f"scenario module {path.name} registered no scenarios")
+        discovered.append(module_name)
+    DISCOVERY_MODULES = tuple(discovered)
+    return DISCOVERY_MODULES
+
+
+_discover_sibling_scenarios()

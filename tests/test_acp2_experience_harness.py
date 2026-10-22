@@ -578,15 +578,25 @@ def test_route_dry_run_live_uses_c_environment():
 # ---------------------------------------------------------------------------
 
 
-def test_scenario_registry_has_exactly_the_five_p0(scenarios):
-    assert set(scenarios.P0_SCENARIOS) == set(scenarios.SCENARIO_IMPLS)
-    assert set(scenarios.SCENARIO_IMPLS) == {
+def test_scenario_registry_contains_the_five_p0_plus_discovered_modules(scenarios):
+    p0 = {
         "baseline",
         "contracts",
         "workspace",
         "harness-selftest",
         "node-dsh-install",
     }
+    assert set(scenarios.P0_SCENARIOS) == p0
+    assert p0.issubset(set(scenarios.SCENARIO_IMPLS))
+    # T-08 owns browser-install; later todos add sibling modules discovered
+    # without editing the registry.
+    assert "browser-install" in scenarios.SCENARIO_IMPLS
+    assert "acp2_experience_scenario_browser_install" in scenarios.DISCOVERY_MODULES
+
+
+def test_scenario_registry_rejects_duplicate_registration(scenarios):
+    with pytest.raises(ValueError, match="already registered"):
+        scenarios.register("browser-install", lambda _context: 0)
 
 
 def test_contracts_scenario_passes_on_real_contracts(scenarios, runtime_env, tmp_path):
