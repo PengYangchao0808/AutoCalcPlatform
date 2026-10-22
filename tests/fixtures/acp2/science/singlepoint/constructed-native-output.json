@@ -1,0 +1,13 @@
+{
+  "constructed": true,
+  "note": "SYNTHETIC/CONSTRUCTED native-output text. This is NOT a measurement and NOT the output of any executed calculation. It only exercises the harness's independent energy re-parser and comparison logic so those functions are tested before a real run exists.",
+  "provenance": "constructed",
+  "software": "ORCA",
+  "source": "Hand-written fixture derived from the documented ORCA marker format; no QC binary was started.",
+  "expected": {
+    "energy_hartree": -76.123456789012,
+    "normal_termination": true,
+    "unit": "hartree"
+  },
+  "output": "                                 *****************\n* O   R   C   A *\n*****************\n\nCONSTRUCTED SYNTHETIC OUTPUT - NOT A REAL CALCULATION\n\n-----------------------\nFINAL SINGLE POINT ENERGY       -76.123456789012\n------------------------\n\nORCA TERMINATED NORMALLY\n"
+}

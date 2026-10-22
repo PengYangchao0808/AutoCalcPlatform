@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
-"""ACP2 science acceptance harness skeleton (A-10a).
+"""ACP2 science acceptance harness (A-10a skeleton, A-10b singlepoint scenario).
 
-This is **not** a production CLI and it never starts a controller, a
-scheduler, a job, a native work root or a QC subprocess.  It exposes the
-scenario/flag contract for the science track, a path/budget ``--dry-run`` and
-the project's ``0=PASS, 1=FAIL, 2=NOT_VERIFIED, 3=usage`` exit-code contract.
+The harness exposes the scenario/flag contract for the science track, a
+path/budget ``--dry-run`` and the project's ``0=PASS, 1=FAIL, 2=NOT_VERIFIED,
+3=usage`` exit-code contract.  ``--help`` and ``--dry-run`` never create a work
+root, start a job or produce a scenario ``PASS``.
+
+The one implemented scenario is ``science:installed-singlepoint``: with an
+approved platform run spec and a published H2 test candidate it calls the
+public ``cccp.calculation.run_singlepoint`` task core (the single execution
+station) inside an independent native work root and re-parses the native output
+locally.  Every other scenario currently records ``NOT_VERIFIED`` for its own
+todo.  The harness never starts a controller, scheduler, job or production run
+root, and never opens SSH.
 
 The single receipt authority is B01's ``acceptance-result.schema.json``
 (``acp2.acceptance.v1``).  While that contract is unpublished the harness
 writes a *provisional* A-internal record under ``extensions.science`` and
 records ``receipt_protocol_gap = NOT_VERIFIED``.  It does not define a second
 receipt schema, copy an unpublished sibling schema, or invent valid/invalid
-samples.  ``--help`` and ``--dry-run`` exit zero for their own success but
-never produce a scenario ``PASS``.
+samples.
 
 Scenarios (canonical ``science:*`` id and short CLI alias are interchangeable):
 
 ``science:installed-singlepoint`` / ``installed-singlepoint``
-    Standalone singlepoint through the public CCCP API (execution is A-10b).
+    Standalone singlepoint through the public CCCP API (A-10b).
 ``science:validate-artifacts`` / ``validate-artifacts``
     Validate authorized optimize/frequency artifacts from a prepared manifest.
 ``science:validate-da-ts`` / ``validate-da-ts``
@@ -43,7 +50,7 @@ import re
 import shutil
 import sys
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -65,6 +72,27 @@ RECEIPT_DELIVERY_TRIGGER = (
 SCRIPT_PATH = Path(__file__).resolve()
 
 _DIGEST_PATTERN = r"^(?:sha256:)?[0-9a-f]{64}$"
+
+SINGLEPOINT_ALIAS = "installed-singlepoint"
+H2_HANDOFF_RELPATH = "docs/reference/next-change/acp2-contracts/science/handoff-H2.json"
+PRODUCTION_RUN_ROOTS = ("/var/lib/acp/runs",)
+_PLACEHOLDER_RUN_KEYS = frozenset(
+    {"", "none", "null", "tbd", "todo", "placeholder", "unapproved", "not-issued"}
+)
+
+#: Local, independent re-parsers for the native output.  Deliberately do not
+#: import ``cccp.analysis.orca_parser``: the acceptance check must be a second
+#: reader of the bytes, not the same parser that produced ``TaskResult``.
+_NATIVE_MARKERS: dict[str, tuple[re.Pattern[str], re.Pattern[str] | None]] = {
+    "orca": (
+        re.compile(r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)"),
+        re.compile(r"ORCA TERMINATED NORMALLY"),
+    ),
+    "xtb": (
+        re.compile(r"TOTAL ENERGY\s+([-+]?\d+(?:\.\d*)?(?:[EeDd][-+]?\d+)?)\s+Eh"),
+        re.compile(r"normal termination|finished", re.IGNORECASE),
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -329,7 +357,7 @@ def _cap_pair(value: Any) -> tuple[int | None, int | None]:
     return None, None
 
 
-def _budget_report(run_spec: dict[str, Any]) -> dict[str, Any]:
+def _budget_report(run_spec: dict[str, Any], *, scenario: str | None = None) -> dict[str, Any]:
     """Validate total/phase/scenario/per-unit caps plus separate unit counts.
 
     The report is pure: it never reads a filesystem path and never reserves or
@@ -344,25 +372,32 @@ def _budget_report(run_spec: dict[str, Any]) -> dict[str, Any]:
         "counts": {},
         "deadlines": {},
         "gaps": [],
+        "missing": [],
+        "malformed": [],
         "exhausted": [],
     }
     budget = run_spec.get("budget")
     if not isinstance(budget, dict):
         report["status"] = "invalid"
         report["gaps"].append("budget object required")
+        report["missing"].append("budget object required")
         return report
 
     caps = budget.get("caps")
     if not isinstance(caps, dict):
         report["gaps"].append("budget.caps object required")
+        report["missing"].append("budget.caps object required")
     else:
         for name in ("total", "phase", "scenario", "per_unit"):
             if name not in caps:
                 report["gaps"].append(f"budget.caps.{name} required")
+                report["missing"].append(f"budget.caps.{name} required")
                 continue
             limit, used = _cap_pair(caps[name])
             if limit is None or used is None:
-                report["gaps"].append(f"budget.caps.{name} must be a non-negative int")
+                gap = f"budget.caps.{name} must be a non-negative int"
+                report["gaps"].append(gap)
+                report["malformed"].append(gap)
                 continue
             report["caps"][name] = {"limit": limit, "used": used}
             if limit <= 0:
@@ -371,20 +406,27 @@ def _budget_report(run_spec: dict[str, Any]) -> dict[str, Any]:
                 report["exhausted"].append(f"cap {name} exhausted ({used}/{limit})")
 
     counts = budget.get("counts")
-    required_units = ("task_ref", "recipe_step", "qc_invocation", "attempt")
+    required_units = ("task_ref", "qc_invocation", "attempt")
+    if scenario != SINGLEPOINT_ALIAS:
+        required_units = ("task_ref", "recipe_step", "qc_invocation", "attempt")
     active_units = list(required_units)
     if scheduler in ("lsf", "remote"):
         active_units.append("bsub")
     if not isinstance(counts, dict):
         report["gaps"].append("budget.counts object required")
+        report["missing"].append("budget.counts object required")
     else:
         for name in ("task_ref", "recipe_step", "qc_invocation", "attempt", "bsub"):
             if name not in counts:
-                report["gaps"].append(f"budget.counts.{name} required")
+                gap = f"budget.counts.{name} required"
+                report["gaps"].append(gap)
+                report["missing"].append(gap)
                 continue
             limit, used = _cap_pair(counts[name])
             if limit is None or used is None:
-                report["gaps"].append(f"budget.counts.{name} must be a non-negative int")
+                gap = f"budget.counts.{name} must be a non-negative int"
+                report["gaps"].append(gap)
+                report["malformed"].append(gap)
                 continue
             report["counts"][name] = {"limit": limit, "used": used}
             if limit == 0:
@@ -396,6 +438,7 @@ def _budget_report(run_spec: dict[str, Any]) -> dict[str, Any]:
     deadlines = budget.get("deadlines")
     if not isinstance(deadlines, dict):
         report["gaps"].append("budget.deadlines object required")
+        report["missing"].append("budget.deadlines object required")
     else:
         for name in ("queue_s", "compute_s", "client_s", "total_s"):
             value = deadlines.get(name)
@@ -405,7 +448,9 @@ def _budget_report(run_spec: dict[str, Any]) -> dict[str, Any]:
                 or value < 0
                 or not math.isfinite(value)
             ):
-                report["gaps"].append(f"budget.deadlines.{name} must be a non-negative number")
+                gap = f"budget.deadlines.{name} must be a non-negative number"
+                report["gaps"].append(gap)
+                report["malformed"].append(gap)
                 continue
             report["deadlines"][name] = value
 
@@ -416,35 +461,325 @@ def _budget_report(run_spec: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
-def _validate_run_spec(run_spec: Any) -> list[str]:
+def _validate_run_spec(run_spec: Any) -> list[dict[str, str]]:
+    """Return typed issues for a run spec.
+
+    ``missing`` issues are absent scientific/platform prerequisites and are
+    reported as ``NOT_VERIFIED`` (exit 2); ``invalid`` issues are malformed
+    documents and remain usage errors (exit 3).
+    """
     if not isinstance(run_spec, dict):
-        return ["run spec must be a JSON object"]
-    gaps: list[str] = []
+        return [
+            {
+                "kind": "invalid",
+                "message": "run spec must be a JSON object",
+            }
+        ]
+    issues: list[dict[str, str]] = []
+
+    def missing(message: str) -> None:
+        issues.append({"kind": "missing", "message": message})
+
+    def invalid(message: str) -> None:
+        issues.append({"kind": "invalid", "message": message})
+
     for key in ("run_key", "interpreter", "native_work_root"):
         value = run_spec.get(key)
         if not isinstance(value, str) or not value.strip():
-            gaps.append(f"{key} must be a non-empty string")
+            missing(f"{key} must be a non-empty string")
+    run_key = run_spec.get("run_key")
+    if isinstance(run_key, str) and run_key.strip().lower() in _PLACEHOLDER_RUN_KEYS:
+        missing("run_key must be a platform-issued key, not a placeholder")
+    interpreter = run_spec.get("interpreter")
+    if isinstance(interpreter, str) and interpreter.strip() and not Path(interpreter).is_absolute():
+        invalid("interpreter must be an absolute path")
     native_root = run_spec.get("native_work_root")
     if isinstance(native_root, str) and native_root and not Path(native_root).is_absolute():
-        gaps.append("native_work_root must be an absolute path")
+        invalid("native_work_root must be an absolute path")
+
     software = run_spec.get("software")
     if not isinstance(software, dict):
-        gaps.append("software object required")
+        missing("software object required")
     else:
         for key in ("name", "version", "executable"):
             value = software.get(key)
             if not isinstance(value, str) or not value.strip():
-                gaps.append(f"software.{key} must be a non-empty string")
+                missing(f"software.{key} must be a non-empty string")
+        executable = software.get("executable")
+        if isinstance(executable, str) and executable.strip():
+            if not Path(executable).is_absolute():
+                invalid("software.executable must be an absolute path")
+
     digest = run_spec.get("source_digest") or run_spec.get("wheel_digest")
     if not isinstance(digest, str) or not _is_digest(digest):
-        gaps.append("source_digest or wheel_digest must be sha256:<64 lowercase hex>")
+        missing("source_digest or wheel_digest must be sha256:<64 lowercase hex>")
+
+    scheduler = run_spec.get("scheduler", "local")
+    if scheduler is not None and str(scheduler).lower() not in ("local", "lsf", "remote"):
+        invalid("scheduler must be one of: local, lsf, remote")
+
     if not isinstance(run_spec.get("budget"), dict):
-        gaps.append("budget object required")
-    return gaps
+        missing("budget object required")
+    return issues
 
 
 def _is_digest(value: str) -> bool:
     return re.fullmatch(_DIGEST_PATTERN, value) is not None
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _approval_status(
+    run_spec: Mapping[str, Any], spec: ScenarioSpec, run_id: str
+) -> dict[str, Any]:
+    """Check the explicit platform approval record bound to this run.
+
+    The harness cannot verify a signature or a registry row; it only refuses a
+    run whose approval is absent, false or issued for a different
+    ``(scenario, phase, run_id)`` tuple.  Authority stays with B01/B07.
+    """
+    approval = run_spec.get("run_key_approval")
+    reasons: list[str] = []
+    record: dict[str, Any] | None = None
+    if not isinstance(approval, Mapping):
+        reasons.append("run_key_approval object required (platform-approved run key)")
+    else:
+        record = dict(approval)
+        if approval.get("approved") is not True:
+            reasons.append("run_key_approval.approved must be true")
+        for key in ("authority", "issued_at", "budget_ref"):
+            value = approval.get(key)
+            if not isinstance(value, str) or not value.strip():
+                reasons.append(f"run_key_approval.{key} must be a non-empty string")
+        expected = {
+            "owner": "A",
+            "scenario": spec.canonical,
+            "phase": spec.phase,
+            "run_id": run_id,
+        }
+        for key, wanted in expected.items():
+            actual = approval.get(key)
+            if actual != wanted:
+                reasons.append(
+                    f"run_key_approval.{key} must be {wanted!r} for this run (got {actual!r})"
+                )
+    return {
+        "approved": not reasons,
+        "reasons": reasons,
+        "record": record,
+        "run_key": run_spec.get("run_key"),
+    }
+
+
+def _native_root_independence(
+    *,
+    run_spec: Mapping[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    raw = run_spec.get("native_work_root")
+    reasons: list[str] = []
+    path: Path | None = None
+    if not isinstance(raw, str) or not raw.strip():
+        reasons.append("native_work_root must be a non-empty absolute path")
+    else:
+        path = Path(raw)
+        resolved = path.resolve()
+        if not path.is_absolute():
+            reasons.append("native_work_root must be absolute")
+        if _is_relative_to(resolved, repo_root):
+            reasons.append("native_work_root must be outside the science worktree")
+        production = [Path(root) for root in PRODUCTION_RUN_ROOTS]
+        env_root = os.environ.get("ACP_RUN_ROOT")
+        if env_root:
+            production.append(Path(env_root))
+        for root in production:
+            if _is_relative_to(resolved, root.resolve()):
+                reasons.append(f"native_work_root must not be a production run root ({root})")
+    return {
+        "path": str(path) if path is not None else raw,
+        "independent": not reasons,
+        "reasons": reasons,
+    }
+
+
+def _software_status(run_spec: Mapping[str, Any]) -> dict[str, Any]:
+    software = run_spec.get("software")
+    reasons: list[str] = []
+    name: str | None = None
+    version: str | None = None
+    executable: str | None = None
+    exists = False
+    if not isinstance(software, Mapping):
+        reasons.append("software object required")
+    else:
+        name = software.get("name") if isinstance(software.get("name"), str) else None
+        version = software.get("version") if isinstance(software.get("version"), str) else None
+        raw = software.get("executable")
+        executable = raw if isinstance(raw, str) else None
+        if not executable:
+            reasons.append("software.executable must be a non-empty absolute path")
+        else:
+            path = Path(executable)
+            if not path.is_absolute():
+                reasons.append("software.executable must be absolute")
+            if not path.exists():
+                reasons.append(f"software executable not found: {executable}")
+            else:
+                exists = True
+                if not path.is_file():
+                    reasons.append(f"software executable is not a file: {executable}")
+                elif not os.access(path, os.X_OK):
+                    reasons.append(f"software executable is not executable: {executable}")
+    return {
+        "name": name,
+        "version": version,
+        "executable": executable,
+        "exists": exists,
+        "available": not reasons,
+        "reasons": reasons,
+    }
+
+
+def _candidate_status(repo_root: Path) -> dict[str, Any]:
+    """Read H2's published server/client/harness candidate without inventing it."""
+    handoff = repo_root / H2_HANDOFF_RELPATH
+    candidate: dict[str, Any] = {
+        "server_revision": None,
+        "client_revision": None,
+        "harness_revision": None,
+    }
+    gaps: dict[str, str] = {
+        "server_revision": "no MCP server revision has been published",
+        "client_revision": "no MCP client revision has been published",
+        "harness_revision": "no integration/DSH harness revision has been published",
+        "h2_test_candidate": "no H2 integration test candidate has been published",
+    }
+    h2_test_candidate: Any = None
+    handoff_status = "NOT_VERIFIED"
+    handoff_sha256: str | None = None
+    if handoff.is_file():
+        handoff_sha256 = _sha256(handoff)
+        try:
+            document = json.loads(handoff.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            document = None
+        external = document.get("external_evidence") if isinstance(document, dict) else None
+        if isinstance(external, Mapping):
+            for key in candidate:
+                candidate[key] = external.get(key)
+                gap = external.get(f"{key}_gap")
+                if isinstance(gap, str) and gap.strip():
+                    gaps[key] = gap
+            h2_test_candidate = external.get("h2_test_candidate")
+            if isinstance(h2_test_candidate, Mapping) and h2_test_candidate.get(
+                "candidate_revision"
+            ):
+                handoff_status = "PUBLISHED"
+            if isinstance(h2_test_candidate, Mapping):
+                gap = h2_test_candidate.get("gap")
+                if isinstance(gap, str) and gap.strip():
+                    gaps["h2_test_candidate"] = gap
+    else:
+        gaps["handoff"] = f"{H2_HANDOFF_RELPATH} is not present in this worktree"
+    published = handoff_status == "PUBLISHED"
+    return {
+        "status": handoff_status,
+        "published": published,
+        "candidate": candidate,
+        "gaps": gaps,
+        "h2_test_candidate": h2_test_candidate,
+        "handoff_path": str(handoff),
+        "handoff_sha256": handoff_sha256,
+    }
+
+
+def _parse_native_energy(text: str, software_name: str | None) -> dict[str, Any]:
+    """Independently parse an energy from native output bytes."""
+    key = (software_name or "").strip().lower()
+    parsers: list[tuple[str, re.Pattern[str], re.Pattern[str] | None]] = []
+    for name, (energy_re, termination_re) in _NATIVE_MARKERS.items():
+        if not key or key == name:
+            parsers.append((name, energy_re, termination_re))
+    for name, energy_re, termination_re in parsers:
+        matches = energy_re.findall(text)
+        if not matches:
+            continue
+        raw = matches[-1].replace("D", "E").replace("d", "e")
+        try:
+            energy = float(raw)
+        except ValueError:
+            continue
+        if not math.isfinite(energy):
+            continue
+        return {
+            "found": True,
+            "software": name,
+            "energy_hartree": energy,
+            "unit": "hartree",
+            "marker": energy_re.pattern,
+            "occurrences": len(matches),
+            "normal_termination": bool(
+                termination_re.search(text) if termination_re is not None else False
+            ),
+            "termination_marker": termination_re.pattern if termination_re else None,
+        }
+    return {
+        "found": False,
+        "software": key or None,
+        "energy_hartree": None,
+        "unit": None,
+        "marker": None,
+        "occurrences": 0,
+        "normal_termination": False,
+        "termination_marker": None,
+        "reason": "no recognised native energy marker",
+    }
+
+
+def _compare_energy(
+    result_energy: float | None,
+    parsed: Mapping[str, Any],
+    tolerance: float,
+) -> dict[str, Any]:
+    """Compare the typed Hartree energy with the independent native parse."""
+    if not parsed.get("found") or parsed.get("energy_hartree") is None:
+        return {
+            "match": False,
+            "reason": "independent parser found no energy",
+            "delta_hartree": None,
+            "tolerance_hartree": tolerance,
+        }
+    if result_energy is None or not math.isfinite(float(result_energy)):
+        return {
+            "match": False,
+            "reason": "TaskResult.energy_hartree is missing or non-finite",
+            "delta_hartree": None,
+            "tolerance_hartree": tolerance,
+        }
+    if parsed.get("unit") != "hartree":
+        return {
+            "match": False,
+            "reason": f"independent parser unit is {parsed.get('unit')!r}, expected 'hartree'",
+            "delta_hartree": None,
+            "tolerance_hartree": tolerance,
+        }
+    delta = abs(float(result_energy) - float(parsed["energy_hartree"]))
+    return {
+        "match": delta <= tolerance,
+        "reason": (
+            None
+            if delta <= tolerance
+            else f"energy mismatch: |delta|={delta:.3e} > {tolerance:.3e}"
+        ),
+        "delta_hartree": delta,
+        "tolerance_hartree": tolerance,
+    }
 
 
 def _file_status(label: str, path: Path) -> dict[str, Any]:
@@ -573,6 +908,7 @@ def _build_plan(args: argparse.Namespace, spec: ScenarioSpec) -> dict[str, Any]:
         "errors": [],
         "run_spec": None,
         "run_spec_path": None,
+        "run_spec_gaps": [],
         "input_manifest": None,
         "input_manifest_path": None,
         "budget": None,
@@ -600,10 +936,20 @@ def _build_plan(args: argparse.Namespace, spec: ScenarioSpec) -> dict[str, Any]:
                 document = None
             if isinstance(document, dict):
                 plan["run_spec"] = document
-                for gap in _validate_run_spec(document):
-                    plan["errors"].append({"kind": "invalid", "label": "run_spec", "message": gap})
+                issues = _validate_run_spec(document)
+                for issue in issues:
+                    if issue["kind"] == "invalid":
+                        plan["errors"].append(
+                            {
+                                "kind": "invalid",
+                                "label": "run_spec",
+                                "message": issue["message"],
+                            }
+                        )
+                    else:
+                        plan["run_spec_gaps"].append(issue["message"])
                 if not plan["errors"]:
-                    plan["budget"] = _budget_report(document)
+                    plan["budget"] = _budget_report(document, scenario=spec.alias)
             elif document is not None:
                 plan["errors"].append(
                     {
@@ -806,13 +1152,20 @@ def _assertions(plan: dict[str, Any], receipt: dict[str, Any]) -> list[dict[str,
         {
             "name": "scenario_executed",
             "status": "NOT_VERIFIED",
-            "detail": "A-10a is a harness skeleton; no scenario is executed.",
+            "detail": "no scenario was executed",
         }
     )
     return assertions
 
 
-def _write_result(out: Path, record: dict[str, Any], argv_document: dict[str, Any]) -> None:
+def _write_result(
+    out: Path,
+    record: dict[str, Any],
+    argv_document: dict[str, Any],
+    *,
+    extra_json: Mapping[str, Any] | None = None,
+    extra_bytes: Mapping[str, bytes] | None = None,
+) -> None:
     """Write ``result.json`` and ``argv.json`` without overwriting a run."""
     if out.exists():
         if not out.is_dir():
@@ -822,9 +1175,17 @@ def _write_result(out: Path, record: dict[str, Any], argv_document: dict[str, An
     out.mkdir(parents=True, exist_ok=True)
     _atomic_json(out / "result.json", record)
     _atomic_json(out / "argv.json", argv_document)
+    for name, payload in (extra_json or {}).items():
+        target = out / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_json(target, payload)
+    for name, payload in (extra_bytes or {}).items():
+        target = out / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(payload)
 
 
-def _finish_not_verified(
+def _finish_scenario(
     *,
     args: argparse.Namespace,
     spec: ScenarioSpec,
@@ -836,6 +1197,11 @@ def _finish_not_verified(
     result: str = "NOT_VERIFIED",
     exit_code: int = EXIT_NOT_VERIFIED,
     platform_export: PlatformExportCheck | None = None,
+    assertions: list[dict[str, Any]] | None = None,
+    extra: Mapping[str, Any] | None = None,
+    extra_json: Mapping[str, Any] | None = None,
+    extra_bytes: Mapping[str, bytes] | None = None,
+    extra_artifacts: list[dict[str, Any]] | None = None,
 ) -> int:
     out_status = next((status for status in plan["paths"] if status["label"] == "out"), None)
     if out_status is not None and out_status["status"] in (
@@ -867,37 +1233,37 @@ def _finish_not_verified(
         )
         if entry is not None
     ]
-    assertions = _assertions(plan, receipt)
+    artifacts.extend(extra_artifacts or [])
+    if assertions is None:
+        assertions = _assertions(plan, receipt)
     if platform_export is not None:
         assertions.append(_platform_export_assertion(platform_export))
     finished_at = _utc_now()
-    extensions = {
-        "science": {
-            "contract_version": CONTRACT_VERSION,
-            "harness": _harness_relpath(),
-            "harness_sha256": _sha256(SCRIPT_PATH),
-            "receipt_protocol_gap": ("NOT_VERIFIED" if receipt["status"] != "AVAILABLE" else None),
-            "receipt_protocol": receipt,
-            "platform_export": (platform_export.to_dict() if platform_export is not None else None),
-            "interpreter": run_spec.get("interpreter") or sys.executable,
-            "software": software,
-            "software_version": software_version,
-            "fixture_id": _fixture_id(fixture_path),
-            "run_key": run_spec.get("run_key"),
-            "native_work_root": run_spec.get("native_work_root"),
-            "budget": plan["budget"],
-            "assertions": assertions,
-            "prerequisites": _prerequisites(plan, receipt),
-            "path_checks": plan["paths"],
-            "limitations": [
-                "A-10a is a harness skeleton: no scenario is executed and no PASS is written.",
-                "No controller, scheduler, job, native work root or QC subprocess is started.",
-                "B01 acceptance-result.schema.json / acp2.acceptance.v1 is not published; "
-                "this record is provisional and is not receipt-validated.",
-                "No B01 valid/invalid sample exists, so none is copied or invented.",
-            ],
-        }
+    science_extension: dict[str, Any] = {
+        "contract_version": CONTRACT_VERSION,
+        "harness": _harness_relpath(),
+        "harness_sha256": _sha256(SCRIPT_PATH),
+        "receipt_protocol_gap": ("NOT_VERIFIED" if receipt["status"] != "AVAILABLE" else None),
+        "receipt_protocol": receipt,
+        "platform_export": (platform_export.to_dict() if platform_export is not None else None),
+        "interpreter": run_spec.get("interpreter") or sys.executable,
+        "software": software,
+        "software_version": software_version,
+        "fixture_id": _fixture_id(fixture_path),
+        "run_key": run_spec.get("run_key"),
+        "native_work_root": run_spec.get("native_work_root"),
+        "budget": plan["budget"],
+        "assertions": assertions,
+        "prerequisites": _prerequisites(plan, receipt),
+        "path_checks": plan["paths"],
+        "limitations": [
+            "No controller, scheduler, job or production run root is touched.",
+            "B01 acceptance-result.schema.json / acp2.acceptance.v1 is not published; "
+            "this record is provisional and is not receipt-validated.",
+            "No B01 valid/invalid sample exists, so none is copied or invented.",
+        ],
     }
+    science_extension.update(extra or {})
     record = {
         "record_state": RECORD_STATE,
         "owner": "A",
@@ -914,7 +1280,7 @@ def _finish_not_verified(
         "finished_at": finished_at,
         "exit_code": exit_code,
         "artifacts": artifacts,
-        "extensions": extensions,
+        "extensions": {"science": science_extension},
     }
     argv_document = {
         "argv": _invocation(argv),
@@ -924,7 +1290,13 @@ def _finish_not_verified(
         "exit_code": exit_code,
     }
     try:
-        _write_result(Path(args.out), record, argv_document)
+        _write_result(
+            Path(args.out),
+            record,
+            argv_document,
+            extra_json=extra_json,
+            extra_bytes=extra_bytes,
+        )
     except _InvalidInputError as exc:
         print(f"usage error: {exc}", file=sys.stderr)
         return EXIT_USAGE
@@ -934,6 +1306,383 @@ def _finish_not_verified(
 
 def _invocation(argv: list[str]) -> list[str]:
     return [sys.executable, str(SCRIPT_PATH), *argv]
+
+
+def _scenario_assertions(
+    *,
+    plan: dict[str, Any],
+    receipt: dict[str, Any],
+    approval: Mapping[str, Any],
+    native_root: Mapping[str, Any],
+    software: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    run_spec_gaps = plan["run_spec_gaps"]
+    budget = plan["budget"] or {}
+    budget_status = {
+        "ok": "PASS",
+        "exhausted": "NOT_VERIFIED",
+        "invalid": "FAIL",
+    }.get(budget.get("status"), "NOT_VERIFIED")
+    return [
+        {
+            "name": "run_spec_complete",
+            "status": "NOT_VERIFIED" if run_spec_gaps else "PASS",
+            "detail": "; ".join(run_spec_gaps) or None,
+        },
+        {
+            "name": "run_key_approval",
+            "status": "PASS" if approval.get("approved") else "NOT_VERIFIED",
+            "detail": "; ".join(approval.get("reasons") or []) or None,
+        },
+        {
+            "name": "native_work_root_independent",
+            "status": "PASS" if native_root.get("independent") else "NOT_VERIFIED",
+            "detail": "; ".join(native_root.get("reasons") or []) or None,
+        },
+        {
+            "name": "software_executable",
+            "status": "PASS" if software.get("available") else "NOT_VERIFIED",
+            "detail": "; ".join(software.get("reasons") or []) or None,
+        },
+        {
+            "name": "h2_test_candidate",
+            "status": "PASS" if candidate.get("published") else "NOT_VERIFIED",
+            "detail": (
+                None
+                if candidate.get("published")
+                else candidate.get("gaps", {}).get("h2_test_candidate")
+            ),
+        },
+        {
+            "name": "budget_preflight",
+            "status": budget_status,
+            "detail": "; ".join(budget.get("gaps") or budget.get("exhausted") or []) or None,
+        },
+        {
+            "name": "shared_validator",
+            "status": "PASS" if receipt["status"] == "AVAILABLE" else "NOT_VERIFIED",
+            "detail": receipt["reason"],
+        },
+        {
+            "name": "scenario_executed",
+            "status": "NOT_VERIFIED",
+            "detail": "no approved run has executed on this host",
+        },
+    ]
+
+
+def _singlepoint_preflight(
+    *,
+    args: argparse.Namespace,
+    spec: ScenarioSpec,
+    plan: dict[str, Any],
+) -> tuple[dict[str, Any], list[str], list[dict[str, Any]]]:
+    receipt = _receipt_protocol()
+    run_spec = plan["run_spec"] if isinstance(plan["run_spec"], dict) else {}
+    approval = _approval_status(run_spec, spec, Path(args.out).name)
+    native_root = _native_root_independence(run_spec=run_spec, repo_root=_repo_root())
+    software = _software_status(run_spec)
+    candidate = _candidate_status(_repo_root())
+    gaps = list(plan["run_spec_gaps"])
+    gaps.extend(approval.get("reasons") or [])
+    gaps.extend(native_root.get("reasons") or [])
+    gaps.extend(software.get("reasons") or [])
+    if not candidate.get("published"):
+        gaps.append(
+            "H2 test candidate not published: "
+            + str(candidate.get("gaps", {}).get("h2_test_candidate"))
+        )
+    extra: dict[str, Any] = {
+        "scenario_implementation": "A-10b",
+        "run_spec_path": plan["run_spec_path"],
+        "run_spec_gaps": plan["run_spec_gaps"],
+        "run_key_approval": approval,
+        "native_root_check": native_root,
+        "software_check": software,
+        "candidate": candidate.get("candidate"),
+        "candidate_status": candidate.get("status"),
+        "candidate_gaps": candidate.get("gaps"),
+        "h2_test_candidate": candidate.get("h2_test_candidate"),
+        "h2_handoff": {
+            "path": candidate.get("handoff_path"),
+            "sha256": candidate.get("handoff_sha256"),
+        },
+        "native_output": None,
+        "native_stdout": None,
+        "native_stderr": None,
+        "native_command_argv": None,
+        "native_command_gap": (
+            "the public TaskResult does not expose the backend command argv; the "
+            "executed harness argv is recorded in argv.json"
+        ),
+        "native_evidence_gap": None,
+        "task_request": None,
+        "task_result": None,
+        "normalized_energy": None,
+    }
+    assertions = _scenario_assertions(
+        plan=plan,
+        receipt=receipt,
+        approval=approval,
+        native_root=native_root,
+        software=software,
+        candidate=candidate,
+    )
+    return extra, gaps, assertions
+
+
+def _native_output_from_result(result: Any) -> Path | None:
+    candidates: list[tuple[int, Path]] = []
+    for artifact in getattr(result, "artifacts", ()):
+        path = Path(getattr(artifact, "path", ""))
+        if not path.is_file():
+            continue
+        kind = str(getattr(artifact, "type", ""))
+        priority = 0 if kind == "output" else 1 if kind == "log" else 2
+        candidates.append((priority, path))
+    if candidates:
+        return sorted(candidates, key=lambda item: item[0])[0][1]
+    return None
+
+
+def _execution_timeout(args: argparse.Namespace, run_spec: Mapping[str, Any]) -> float:
+    timeout = float(args.timeout)
+    deadlines = (run_spec.get("budget") or {}).get("deadlines")
+    if isinstance(deadlines, Mapping):
+        for key in ("compute_s", "total_s"):
+            value = deadlines.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                timeout = min(timeout, float(value))
+    return timeout
+
+
+def _run_native_singlepoint(
+    *,
+    args: argparse.Namespace,
+    plan: dict[str, Any],
+) -> dict[str, Any]:
+    from cccp.calculation import run_singlepoint
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.requests import TaskRequest
+
+    fixture_path = Path(args.fixture)
+    manifest = _load_json(fixture_path)
+    references = manifest.get("fixtures") if isinstance(manifest, dict) else None
+    if not isinstance(references, Mapping):
+        raise _InvalidInputError("fixture manifest has no fixtures mapping")
+    fixture_dir = fixture_path.parent
+    request_path = fixture_dir / str(references.get("request", "request.json"))
+    expected_path = fixture_dir / str(references.get("expected_science", "expected-science.json"))
+    request_payload = _load_json(request_path)
+    expected = _load_json(expected_path)
+    tolerance = float(expected["tolerances"]["reparse_energy_hartree_abs"])
+
+    run_spec = plan["run_spec"]
+    run_id = Path(args.out).name
+    native_root = Path(run_spec["native_work_root"])
+    run_dir = native_root / f"acp2-{run_id}"
+    if run_dir.exists() and any(run_dir.iterdir()):
+        return {
+            "status": "NOT_VERIFIED",
+            "reason": f"native run directory is not empty: {run_dir}",
+            "extra": {},
+            "assertions": [],
+            "extra_json": {},
+            "extra_bytes": {},
+            "artifacts": [],
+        }
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    request = replace(TaskRequest.from_dict(request_payload), output_dir=run_dir)
+    context = TaskContext(
+        workdir=run_dir,
+        input_base=fixture_dir,
+        timeout_s=_execution_timeout(args, run_spec),
+    )
+    execution_started = _utc_now()
+    result = run_singlepoint(request, context=context)
+    execution_finished = _utc_now()
+
+    output_path = _native_output_from_result(result)
+    native_text: str | None = None
+    native_bytes: dict[str, bytes] = {}
+    native_info: dict[str, Any] | None = None
+    if output_path is not None:
+        native_bytes[output_path.name] = output_path.read_bytes()
+        native_text = output_path.read_text(encoding="utf-8", errors="replace")
+        native_info = {
+            "path": str(output_path.resolve()),
+            "sha256": _sha256(output_path),
+            "size_bytes": output_path.stat().st_size,
+            "stdout_is_native_output": True,
+        }
+
+    software = run_spec.get("software") or {}
+    parsed = _parse_native_energy(native_text or "", software.get("name"))
+    comparison = _compare_energy(result.energy_hartree, parsed, tolerance)
+    assertions: list[dict[str, Any]] = [
+        {
+            "name": "task_completed",
+            "status": (
+                "PASS" if result.status == "completed" and result.error_kind is None else "FAIL"
+            ),
+            "detail": f"status={result.status}; error_kind={result.error_kind}",
+        },
+        {
+            "name": "native_output_present",
+            "status": "PASS" if native_info is not None else "FAIL",
+            "detail": None if native_info is not None else "no native output artifact was exposed",
+        },
+        {
+            "name": "native_normal_termination",
+            "status": "PASS" if parsed.get("normal_termination") else "FAIL",
+            "detail": (
+                None if parsed.get("normal_termination") else "native termination marker not found"
+            ),
+        },
+        {
+            "name": "energy_present",
+            "status": ("PASS" if result.energy_hartree is not None else "FAIL"),
+            "detail": f"energy_hartree={result.energy_hartree!r}",
+        },
+        {
+            "name": "energy_reparse_match",
+            "status": "PASS" if comparison["match"] else "FAIL",
+            "detail": comparison.get("reason"),
+        },
+    ]
+    passed = all(item["status"] == "PASS" for item in assertions)
+    result_state = "PASS" if passed else "FAIL"
+    reason = (
+        "singlepoint completed and the independent native parse matches within tolerance"
+        if passed
+        else "singlepoint scenario did not produce a verifiable native energy"
+    )
+    extra = {
+        "native_output": native_info,
+        "native_stdout": native_info,
+        "native_stderr": {
+            "present": False,
+            "reason": (
+                "the task core exposes one native output stream; no separate stderr "
+                "artifact is published by the public TaskResult"
+            ),
+        },
+        "native_command_argv": None,
+        "native_command_gap": (
+            "the public TaskResult does not expose the backend command argv; the "
+            "executed harness argv is recorded in argv.json"
+        ),
+        "parsed_native_energy": parsed,
+        "normalized_energy": comparison,
+        "task_request": request.to_dict(),
+        "task_result": result.to_dict(),
+        "software_version": software.get("version"),
+        "execution": {
+            "started_at": execution_started,
+            "finished_at": execution_finished,
+            "native_work_dir": str(run_dir),
+        },
+    }
+    return {
+        "status": result_state,
+        "reason": reason,
+        "extra": extra,
+        "assertions": assertions,
+        "extra_json": {
+            "task-request.json": request.to_dict(),
+            "task-result.json": result.to_dict(),
+        },
+        "extra_bytes": {f"native/{name}": data for name, data in native_bytes.items()},
+        "artifacts": [
+            {
+                "path": str(output_path.resolve()),
+                "size_bytes": output_path.stat().st_size,
+                "sha256": _sha256(output_path),
+            }
+        ]
+        if output_path is not None
+        else [],
+    }
+
+
+def _execute_installed_singlepoint(
+    args: argparse.Namespace,
+    spec: ScenarioSpec,
+    plan: dict[str, Any],
+    *,
+    started_at: str,
+    argv: list[str],
+) -> int:
+    receipt = _receipt_protocol()
+    extra, gaps, assertions = _singlepoint_preflight(args=args, spec=spec, plan=plan)
+    if gaps:
+        extra["scenario_executed"] = {
+            "status": "NOT_VERIFIED",
+            "reason": "; ".join(gaps),
+        }
+        extra["native_evidence_gap"] = (
+            "no native output, task request/result or software command exists because "
+            "the approved run prerequisites are missing: " + "; ".join(gaps)
+        )
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason="run refused before submission: " + "; ".join(gaps),
+            started_at=started_at,
+            argv=argv,
+            assertions=assertions,
+            extra=extra,
+        )
+
+    try:
+        execution = _run_native_singlepoint(args=args, plan=plan)
+    except (OSError, RuntimeError, ValueError) as exc:
+        extra["scenario_executed"] = {
+            "status": "FAIL",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=f"scenario execution raised {type(exc).__name__}: {exc}",
+            started_at=started_at,
+            argv=argv,
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            assertions=assertions,
+            extra=extra,
+        )
+
+    extra.update(execution["extra"])
+    extra["scenario_executed"] = {
+        "status": "PASS" if execution["status"] == "PASS" else "FAIL",
+        "reason": execution["reason"],
+    }
+    assertions = [item for item in assertions if item["name"] != "scenario_executed"]
+    assertions.extend(execution["assertions"])
+    passed = execution["status"] == "PASS"
+    return _finish_scenario(
+        args=args,
+        spec=spec,
+        plan=plan,
+        receipt=receipt,
+        reason=execution["reason"],
+        started_at=started_at,
+        argv=argv,
+        result="PASS" if passed else "FAIL",
+        exit_code=EXIT_PASS if passed else EXIT_FAIL,
+        assertions=assertions,
+        extra=extra,
+        extra_json=execution["extra_json"],
+        extra_bytes=execution["extra_bytes"],
+        extra_artifacts=execution["artifacts"],
+    )
 
 
 def _execute(
@@ -954,7 +1703,7 @@ def _execute(
 
     missing = [error for error in plan["errors"] if error["kind"] == "missing"]
     if missing:
-        return _finish_not_verified(
+        return _finish_scenario(
             args=args,
             spec=spec,
             plan=plan,
@@ -966,13 +1715,24 @@ def _execute(
 
     budget = plan["budget"]
     if budget is not None and budget["status"] == "invalid":
+        if budget.get("missing"):
+            missing_fields = list(plan["run_spec_gaps"]) + list(budget["missing"])
+            return _finish_scenario(
+                args=args,
+                spec=spec,
+                plan=plan,
+                receipt=_receipt_protocol(),
+                reason="run spec/budget fields missing: " + "; ".join(missing_fields),
+                started_at=started_at,
+                argv=argv,
+            )
         print(
             "usage error: " + "; ".join(budget["gaps"]),
             file=sys.stderr,
         )
         return EXIT_USAGE
     if budget is not None and budget["status"] == "exhausted":
-        return _finish_not_verified(
+        return _finish_scenario(
             args=args,
             spec=spec,
             plan=plan,
@@ -982,12 +1742,15 @@ def _execute(
             argv=argv,
         )
 
+    if spec.alias == SINGLEPOINT_ALIAS:
+        return _execute_installed_singlepoint(args, spec, plan, started_at=started_at, argv=argv)
+
     platform_export: PlatformExportCheck | None = None
     if spec.requires_input_manifest:
         platform_export = check_platform_export(plan.get("input_manifest"))
         if not platform_export.eligible:
             reason = "platform export rejected: " + "; ".join(platform_export.reasons)
-            return _finish_not_verified(
+            return _finish_scenario(
                 args=args,
                 spec=spec,
                 plan=plan,
@@ -1001,29 +1764,14 @@ def _execute(
             )
 
     receipt = _receipt_protocol()
-    if receipt["status"] != "AVAILABLE":
-        reason = (
-            f"{receipt['reason']} Scenario '{spec.canonical}' requires the shared "
-            "receipt; execution is deferred to A-10b (todo 21) and no PASS is written."
-        )
-        return _finish_not_verified(
-            args=args,
-            spec=spec,
-            plan=plan,
-            receipt=receipt,
-            reason=reason,
-            started_at=started_at,
-            argv=argv,
-        )
-
-    return _finish_not_verified(
+    return _finish_scenario(
         args=args,
         spec=spec,
         plan=plan,
         receipt=receipt,
         reason=(
-            "scenario implementation is delivered by A-10b (todo 21); "
-            "A-10a does not execute QC and writes no PASS"
+            f"scenario '{spec.canonical}' is implemented by its dedicated A todo; "
+            "this harness path executes nothing and writes no PASS"
         ),
         started_at=started_at,
         argv=argv,
@@ -1048,7 +1796,12 @@ def _dry_run(
         "paths": plan["paths"],
         "run_spec": {
             "path": plan["run_spec_path"],
-            "errors": [error for error in plan["errors"] if error["label"] == "run_spec"],
+            "errors": [error for error in plan["errors"] if error["label"] == "run_spec"]
+            + [
+                {"kind": "missing", "label": "run_spec", "message": gap}
+                for gap in plan["run_spec_gaps"]
+            ],
+            "gaps": plan["run_spec_gaps"],
         },
         "budget": plan["budget"],
         "platform_export": platform_export.to_dict() if platform_export is not None else None,
@@ -1074,6 +1827,12 @@ def _dry_run(
     if invalid:
         print(
             "usage error: " + "; ".join(error["message"] for error in invalid),
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    if plan["run_spec_gaps"]:
+        print(
+            "usage error: " + "; ".join(plan["run_spec_gaps"]),
             file=sys.stderr,
         )
         return EXIT_USAGE
