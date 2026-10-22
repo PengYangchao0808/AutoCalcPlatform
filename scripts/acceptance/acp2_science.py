@@ -6,13 +6,19 @@ path/budget ``--dry-run`` and the project's ``0=PASS, 1=FAIL, 2=NOT_VERIFIED,
 3=usage`` exit-code contract.  ``--help`` and ``--dry-run`` never create a work
 root, start a job or produce a scenario ``PASS``.
 
-The one implemented scenario is ``science:installed-singlepoint``: with an
-approved platform run spec and a published H2 test candidate it calls the
+Two scenarios are implemented.  ``science:installed-singlepoint`` calls the
 public ``cccp.calculation.run_singlepoint`` task core (the single execution
 station) inside an independent native work root and re-parses the native output
-locally.  Every other scenario currently records ``NOT_VERIFIED`` for its own
-todo.  The harness never starts a controller, scheduler, job or production run
-root, and never opens SSH.
+locally.  ``science:validate-artifacts`` consumes an already-prepared,
+platform-authorized optimize/frequency artifact snapshot: it confirms the
+registered ``dsh-optfreq-live`` id against an explicitly supplied platform
+registry record, verifies the snapshot content through
+``cccp.analysis.research.artifact_manifest`` and runs the frozen
+stationary-point validators.  It never launches a second QC job.
+
+The remaining scenarios record ``NOT_VERIFIED`` for their own todo.  The
+harness never starts a controller, scheduler, job or production run root, and
+never opens SSH.
 
 The single receipt authority is B01's ``acceptance-result.schema.json``
 (``acp2.acceptance.v1``).  While that contract is unpublished the harness
@@ -26,7 +32,9 @@ Scenarios (canonical ``science:*`` id and short CLI alias are interchangeable):
 ``science:installed-singlepoint`` / ``installed-singlepoint``
     Standalone singlepoint through the public CCCP API (A-10b).
 ``science:validate-artifacts`` / ``validate-artifacts``
-    Validate authorized optimize/frequency artifacts from a prepared manifest.
+    Validate a platform-authorized optimize/frequency artifact snapshot
+    (A-11b).  Requires ``--input-manifest``; a PASS also requires
+    ``--platform-registry`` with the registered ``dsh-optfreq-live`` row.
 ``science:validate-da-ts`` / ``validate-da-ts``
     Validate Diels-Alder transition-state artifacts.
 ``science:validate-da-irc`` / ``validate-da-irc``
@@ -74,8 +82,28 @@ SCRIPT_PATH = Path(__file__).resolve()
 _DIGEST_PATTERN = r"^(?:sha256:)?[0-9a-f]{64}$"
 
 SINGLEPOINT_ALIAS = "installed-singlepoint"
+ARTIFACT_ALIAS = "validate-artifacts"
 H2_HANDOFF_RELPATH = "docs/reference/next-change/acp2-contracts/science/handoff-H2.json"
 PRODUCTION_RUN_ROOTS = ("/var/lib/acp/runs",)
+
+#: The platform registry is owned by the platform and is not published to A.
+#: A supplies only the lookup; it never invents the id or a registry row.
+REGISTERED_OPT_FREQ_RUN_ID = "dsh-optfreq-live"
+PLATFORM_REGISTRY_SCHEMA = "acp2.science.platform-registry"
+CONSTRUCTED_SNAPSHOT_SCHEMA = "acp2.science.constructed-snapshot"
+FIXTURE_READ_ROOT_TOKEN = "@fixture"
+PLATFORM_REGISTRY_GAP = (
+    "platform registry not supplied: pass --platform-registry <path> for the "
+    "platform-provided registry record so the registered id "
+    f"{REGISTERED_OPT_FREQ_RUN_ID!r} can be confirmed; the platform registry is "
+    "not published to track A and the harness never invents the id or a row"
+)
+P1_TEST_CANDIDATE_GAP = (
+    "no P1 science/same-task integration test candidate has been published; "
+    "the P1 gate is owned by its own later todo"
+)
+NATIVE_ENERGY_TOLERANCE_HARTREE = 1.0e-6
+NATIVE_FREQUENCY_TOLERANCE_CM1 = 1.0e-6
 _PLACEHOLDER_RUN_KEYS = frozenset(
     {"", "none", "null", "tbd", "todo", "placeholder", "unapproved", "not-issued"}
 )
@@ -699,6 +727,304 @@ def _candidate_status(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def _unpack_snapshot(
+    plan: Mapping[str, Any], fixture_dir: Path
+) -> tuple[dict[str, Any] | None, bool, list[str]]:
+    """Return the artifact-snapshot document and whether it is constructed.
+
+    A platform snapshot is passed through unchanged.  A constructed wrapper is
+    unwrapped only when it declares ``constructed: true``; its relative or
+    ``@fixture`` read root is resolved against the supplied fixture directory.
+    """
+    document = plan.get("input_manifest")
+    if not isinstance(document, Mapping):
+        return None, False, ["input manifest must be a JSON object"]
+    if document.get("schema") == CONSTRUCTED_SNAPSHOT_SCHEMA:
+        if document.get("constructed") is not True:
+            return None, True, ["constructed snapshot wrapper must declare constructed=true"]
+        raw_snapshot = document.get("snapshot")
+        if not isinstance(raw_snapshot, Mapping):
+            return None, True, ["constructed snapshot wrapper has no snapshot object"]
+        payload = dict(raw_snapshot)
+        raw_root = payload.get("read_root")
+        if raw_root == FIXTURE_READ_ROOT_TOKEN:
+            payload["read_root"] = str(fixture_dir.resolve())
+        elif isinstance(raw_root, str) and raw_root and not Path(raw_root).is_absolute():
+            payload["read_root"] = str((fixture_dir / raw_root).resolve())
+        return payload, True, []
+    payload = dict(document)
+    raw_root = payload.get("read_root")
+    if not isinstance(raw_root, str) or not raw_root or not Path(raw_root).is_absolute():
+        return None, False, ["snapshot.read_root must be an absolute path"]
+    return payload, False, []
+
+
+def _registry_entries(document: Any) -> list[Any] | None:
+    if isinstance(document, list):
+        return document
+    if not isinstance(document, Mapping):
+        return None
+    for key in ("entries", "runs", "records", "registry", "items"):
+        value = document.get(key)
+        if isinstance(value, list):
+            return value
+    for key in ("id", "run_id", "run_key"):
+        if isinstance(document.get(key), str):
+            return [document]
+    return None
+
+
+def _registry_entry_ids(entries: list[Any]) -> list[str]:
+    ids: list[str] = []
+    for entry in entries:
+        if isinstance(entry, str):
+            ids.append(entry)
+        elif isinstance(entry, Mapping):
+            for key in ("id", "run_id", "run_key", "name"):
+                value = entry.get(key)
+                if isinstance(value, str) and value:
+                    ids.append(value)
+                    break
+    return ids
+
+
+def _platform_registry_view(path: str | None, document: Any) -> dict[str, Any]:
+    """Confirm the registered run id against an explicitly supplied registry."""
+    if not path:
+        return {
+            "status": "MISSING",
+            "registered": False,
+            "constructed": None,
+            "path": None,
+            "ids": [],
+            "reasons": [PLATFORM_REGISTRY_GAP],
+        }
+    if not isinstance(document, (Mapping, list)):
+        return {
+            "status": "INVALID",
+            "registered": False,
+            "constructed": None,
+            "path": path,
+            "ids": [],
+            "reasons": ["platform registry must be a JSON object or list"],
+        }
+    entries = _registry_entries(document)
+    if entries is None:
+        return {
+            "status": "INVALID",
+            "registered": False,
+            "constructed": None,
+            "path": path,
+            "ids": [],
+            "reasons": ["platform registry has no entries/runs/records list and no single run id"],
+        }
+    ids = _registry_entry_ids(entries)
+    constructed = bool(
+        (isinstance(document, Mapping) and document.get("constructed") is True)
+        or any(isinstance(entry, Mapping) and entry.get("constructed") is True for entry in entries)
+    )
+    registered = REGISTERED_OPT_FREQ_RUN_ID in ids
+    reasons: list[str] = []
+    if not registered:
+        reasons.append(
+            f"registered id {REGISTERED_OPT_FREQ_RUN_ID!r} is absent from the supplied "
+            f"platform registry ({path}); ids seen: {sorted(ids)}"
+        )
+    return {
+        "status": "REGISTERED" if registered else "UNREGISTERED",
+        "registered": registered,
+        "constructed": constructed,
+        "path": path,
+        "ids": ids,
+        "reasons": reasons,
+    }
+
+
+def _single_role_artifact(snapshot: Any, role: str) -> tuple[Any | None, list[str]]:
+    matches = [artifact for artifact in snapshot.artifacts if artifact.role == role]
+    if not matches:
+        return None, [f"snapshot declares no {role!r} artifact"]
+    if len(matches) > 1:
+        return None, [
+            f"snapshot declares {len(matches)} {role!r} artifacts; exactly one is required"
+        ]
+    return matches[0], []
+
+
+def _load_task_results(snapshot: Any) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Parse exactly one optimize and one frequency TaskResult from provenance."""
+    from cccp.calculation.results import TaskResult
+
+    results: dict[str, Any] = {}
+    gaps: list[str] = []
+    contradictions: list[str] = []
+    for artifact in snapshot.artifacts:
+        if artifact.role != "provenance":
+            continue
+        try:
+            document = json.loads(artifact.resolved_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            contradictions.append(f"{artifact.relative_path}: unreadable provenance JSON: {exc}")
+            continue
+        if not isinstance(document, Mapping) or document.get("task") not in (
+            "optimize",
+            "frequency",
+        ):
+            continue
+        task = str(document["task"])
+        try:
+            result = TaskResult.from_dict(document)
+        except (TypeError, ValueError) as exc:
+            contradictions.append(f"{artifact.relative_path}: invalid TaskResult document: {exc}")
+            continue
+        if task in results:
+            contradictions.append(
+                f"duplicate {task} TaskResult in provenance ({artifact.relative_path})"
+            )
+            continue
+        results[task] = result
+    for task in ("optimize", "frequency"):
+        if task not in results:
+            gaps.append(f"snapshot carries no {task} TaskResult provenance artifact")
+    return results, gaps, contradictions
+
+
+def _science_identity_consistency(
+    snapshot: Any, optimize_result: Any, frequency_result: Any
+) -> dict[str, Any]:
+    """Check TaskResults against the snapshot's declared method/state."""
+    identity = snapshot.science_identity
+    contradictions: list[str] = []
+    gaps: list[str] = []
+    for label, result in (("optimize", optimize_result), ("frequency", frequency_result)):
+        provenance = getattr(result, "provenance", None)
+        method = getattr(provenance, "method", None)
+        if not method:
+            gaps.append(f"{label} TaskResult declares no method")
+        elif method != identity.method:
+            contradictions.append(
+                f"{label} method {method!r} differs from snapshot method {identity.method!r}"
+            )
+        payload = getattr(result, "payload", None)
+        state = getattr(payload, "electronic_state", None)
+        if not isinstance(state, Mapping):
+            gaps.append(f"{label} TaskResult declares no electronic state")
+            continue
+        state_id = state.get("state_id")
+        if state_id is not None and identity.electronic_state.state_id is not None:
+            if state_id != identity.electronic_state.state_id:
+                contradictions.append(
+                    f"{label} state_id {state_id!r} differs from snapshot "
+                    f"state_id {identity.electronic_state.state_id!r}"
+                )
+        multiplicity = state.get("target_multiplicity")
+        if multiplicity is not None and int(multiplicity) != identity.electronic_state.multiplicity:
+            contradictions.append(
+                f"{label} multiplicity {multiplicity!r} differs from snapshot "
+                f"multiplicity {identity.electronic_state.multiplicity}"
+            )
+    return {
+        "status": "FAIL" if contradictions else ("NOT_VERIFIED" if gaps else "PASS"),
+        "contradictions": contradictions,
+        "gaps": gaps,
+    }
+
+
+def _native_evidence(
+    optimize_path: Path, frequency_path: Path, optimize_result: Any, frequency_result: Any
+) -> dict[str, Any]:
+    """Independently re-parse the native optimize/frequency outputs."""
+    from cccp.analysis.orca_parser import OrcaOutputParser
+
+    parser = OrcaOutputParser()
+    optimize_calc = parser.parse(optimize_path)
+    frequency_calc = parser.parse(frequency_path)
+    contradictions: list[str] = []
+    gaps: list[str] = []
+
+    if optimize_calc.final_energy_hartree is None:
+        gaps.append("optimize native output exposes no final single-point energy")
+    elif not optimize_calc.converged:
+        contradictions.append("optimize native output does not report convergence")
+    elif optimize_result.energy_hartree is not None and (
+        abs(float(optimize_result.energy_hartree) - optimize_calc.final_energy_hartree)
+        > NATIVE_ENERGY_TOLERANCE_HARTREE
+    ):
+        contradictions.append(
+            "optimize native energy differs from the TaskResult beyond "
+            f"{NATIVE_ENERGY_TOLERANCE_HARTREE} Ha"
+        )
+
+    if not frequency_calc.frequencies:
+        gaps.append("frequency native output exposes no vibrational frequencies")
+    elif not frequency_calc.mode_vectors:
+        gaps.append("frequency native output exposes no normal-mode vectors")
+    else:
+        task_frequencies = tuple(float(value) for value in frequency_result.frequencies)
+        native_frequencies = tuple(float(value) for value in frequency_calc.frequencies)
+        if len(task_frequencies) != len(native_frequencies):
+            contradictions.append(
+                "frequency native mode count differs from the TaskResult "
+                f"({len(native_frequencies)} vs {len(task_frequencies)})"
+            )
+        else:
+            deltas = [
+                abs(left - right)
+                for left, right in zip(native_frequencies, task_frequencies, strict=True)
+            ]
+            if any(delta > NATIVE_FREQUENCY_TOLERANCE_CM1 for delta in deltas):
+                contradictions.append(
+                    "frequency native modes differ from the TaskResult beyond "
+                    f"{NATIVE_FREQUENCY_TOLERANCE_CM1} cm-1"
+                )
+
+    return {
+        "status": "FAIL" if contradictions else ("NOT_VERIFIED" if gaps else "PASS"),
+        "contradictions": contradictions,
+        "gaps": gaps,
+        "optimize": {
+            "converged": optimize_calc.converged,
+            "final_energy_hartree": optimize_calc.final_energy_hartree,
+            "normal_termination": optimize_calc.success,
+            "opt_cycles": optimize_calc.n_opt_cycles,
+        },
+        "frequency": {
+            "frequencies_cm1": list(frequency_calc.frequencies),
+            "imaginary_modes_cm1": list(frequency_calc.imaginary_modes),
+            "mode_count": len(frequency_calc.frequencies),
+            "mode_vectors": len(frequency_calc.mode_vectors),
+        },
+    }
+
+
+def _stationary_point_report(validation: Any, frequencies: tuple[float, ...]) -> dict[str, Any]:
+    report = validation.to_dict()
+    convergence = validation.claim("c-optimization-converged")
+    report["convergence"] = (
+        None
+        if convergence is None
+        else {
+            "status": convergence.status,
+            "reason": convergence.reason,
+            "claim_id": convergence.claim_id,
+        }
+    )
+    report["modes_cm1"] = [float(value) for value in frequencies]
+    report["all_modes"] = [float(value) for value in frequencies]
+    return report
+
+
+def _print_stationary_point_report(report: Mapping[str, Any]) -> None:
+    convergence = report.get("convergence") or {}
+    modes = report.get("all_modes") or []
+    print("stationary-point report")
+    print(f"  convergence: {convergence.get('status')} ({convergence.get('reason')})")
+    print(f"  imaginary-mode count: {report.get('imaginary_mode_count')}")
+    print(f"  mode count: {report.get('mode_count')}")
+    print("  all modes (cm-1): " + ", ".join(f"{float(value):.2f}" for value in modes))
+    print(f"  stationary-point status: {report.get('status')}")
+
+
 def _parse_native_energy(text: str, software_name: str | None) -> dict[str, Any]:
     """Independently parse an energy from native output bytes."""
     key = (software_name or "").strip().lower()
@@ -911,6 +1237,8 @@ def _build_plan(args: argparse.Namespace, spec: ScenarioSpec) -> dict[str, Any]:
         "run_spec_gaps": [],
         "input_manifest": None,
         "input_manifest_path": None,
+        "platform_registry": None,
+        "platform_registry_path": None,
         "budget": None,
     }
 
@@ -960,17 +1288,45 @@ def _build_plan(args: argparse.Namespace, spec: ScenarioSpec) -> dict[str, Any]:
                 )
 
     if spec.requires_input_manifest:
-        manifest_path = Path(args.input_manifest)
-        plan["input_manifest_path"] = str(manifest_path)
-        manifest_status = _file_status("input_manifest", manifest_path)
-        plan["paths"].append(manifest_status)
-        _record_path_error(plan, manifest_status)
-        if manifest_status["status"] == "present":
+        raw_manifest = args.input_manifest
+        if raw_manifest is None or not str(raw_manifest).strip():
+            plan["errors"].append(
+                {
+                    "kind": "missing",
+                    "label": "input_manifest",
+                    "message": (
+                        "authorized input manifest path is empty: pass --input-manifest "
+                        "(env ACP2_ARTIFACT_MANIFEST is unset or empty)"
+                    ),
+                }
+            )
+        else:
+            manifest_path = Path(raw_manifest)
+            plan["input_manifest_path"] = str(manifest_path)
+            manifest_status = _file_status("input_manifest", manifest_path)
+            plan["paths"].append(manifest_status)
+            _record_path_error(plan, manifest_status)
+            if manifest_status["status"] == "present":
+                try:
+                    plan["input_manifest"] = _load_json(manifest_path)
+                except _InvalidInputError as exc:
+                    plan["errors"].append(
+                        {"kind": "invalid", "label": "input_manifest", "message": str(exc)}
+                    )
+
+    raw_registry = getattr(args, "platform_registry", None)
+    if raw_registry is not None and str(raw_registry).strip():
+        registry_path = Path(raw_registry)
+        plan["platform_registry_path"] = str(registry_path)
+        registry_status = _file_status("platform_registry", registry_path)
+        plan["paths"].append(registry_status)
+        _record_path_error(plan, registry_status)
+        if registry_status["status"] == "present":
             try:
-                plan["input_manifest"] = _load_json(manifest_path)
+                plan["platform_registry"] = _load_json(registry_path)
             except _InvalidInputError as exc:
                 plan["errors"].append(
-                    {"kind": "invalid", "label": "input_manifest", "message": str(exc)}
+                    {"kind": "invalid", "label": "platform_registry", "message": str(exc)}
                 )
 
     return plan
@@ -1685,6 +2041,356 @@ def _execute_installed_singlepoint(
     )
 
 
+def _execute_validate_artifacts(
+    args: argparse.Namespace,
+    spec: ScenarioSpec,
+    plan: dict[str, Any],
+    *,
+    started_at: str,
+    argv: list[str],
+) -> int:
+    """Validate a prepared optimize/frequency snapshot without running a job."""
+    receipt = _receipt_protocol()
+    fixture_path = Path(args.fixture)
+    candidate = _candidate_status(_repo_root())
+    p1_test_candidate = {
+        "candidate_revision": None,
+        "status": "NOT_VERIFIED",
+        "gap": P1_TEST_CANDIDATE_GAP,
+    }
+    extra: dict[str, Any] = {
+        "scenario_implementation": "A-11b",
+        "fixture_path": str(fixture_path),
+        "input_manifest_path": plan.get("input_manifest_path"),
+        "platform_registry": None,
+        "constructed_fixture": False,
+        "real_run": False,
+        "candidate": candidate.get("candidate"),
+        "candidate_status": candidate.get("status"),
+        "candidate_gaps": candidate.get("gaps"),
+        "h2_test_candidate": candidate.get("h2_test_candidate"),
+        "h2_handoff": {
+            "path": candidate.get("handoff_path"),
+            "sha256": candidate.get("handoff_sha256"),
+        },
+        "p1_test_candidate": p1_test_candidate,
+        "snapshot": None,
+        "task_results": None,
+        "science_identity": None,
+        "native_evidence": None,
+        "native_evidence_gap": None,
+        "stationary_point_report": None,
+        "modes_cm1": None,
+        "imaginary_mode_count": None,
+    }
+    assertions: list[dict[str, Any]] = []
+    export_check: PlatformExportCheck | None = None
+
+    def finish(
+        *,
+        result: str,
+        exit_code: int,
+        reason: str,
+        extra_json: Mapping[str, Any] | None = None,
+        extra_artifacts: list[dict[str, Any]] | None = None,
+    ) -> int:
+        assertions.append(
+            {
+                "name": "scenario_executed",
+                "status": result if result != "NOT_VERIFIED" else "NOT_VERIFIED",
+                "detail": reason,
+            }
+        )
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=reason,
+            started_at=started_at,
+            argv=argv,
+            result=result,
+            exit_code=exit_code,
+            assertions=assertions,
+            platform_export=export_check,
+            extra=extra,
+            extra_json=extra_json,
+            extra_artifacts=extra_artifacts,
+        )
+
+    snapshot_payload, constructed, unpack_errors = _unpack_snapshot(plan, fixture_path.parent)
+    if snapshot_payload is None:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="artifact snapshot is unusable: " + "; ".join(unpack_errors),
+        )
+    extra["constructed_fixture"] = constructed
+
+    export_check = check_platform_export(snapshot_payload)
+    if not export_check.eligible:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="platform export rejected: " + "; ".join(export_check.reasons),
+        )
+
+    try:
+        fixture_document = _load_json(fixture_path)
+    except _InvalidInputError as exc:
+        print(f"usage error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if not isinstance(fixture_document, Mapping) or fixture_document.get("task_kind") != "optfreq":
+        print(
+            "usage error: validate-artifacts requires the optfreq fixture-manifest.json",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+
+    registry = _platform_registry_view(
+        plan.get("platform_registry_path"), plan.get("platform_registry")
+    )
+    extra["platform_registry"] = registry
+    extra["constructed_fixture"] = bool(constructed or registry.get("constructed"))
+    assertions.append(
+        {
+            "name": "platform_registry_registration",
+            "status": "PASS" if registry.get("registered") else "NOT_VERIFIED",
+            "detail": "; ".join(registry.get("reasons") or []) or None,
+        }
+    )
+    if not registry.get("registered"):
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="registered run prerequisite missing: " + "; ".join(registry["reasons"]),
+        )
+
+    try:
+        from cccp.analysis.research.artifact_manifest import (
+            ArtifactSnapshotError,
+            load_verified_snapshot,
+        )
+        from cccp.analysis.research.validators import validate_stationary_point
+    except ImportError as exc:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason=f"CCCP science consumer unavailable: {type(exc).__name__}: {exc}",
+        )
+
+    try:
+        snapshot, digests = load_verified_snapshot(snapshot_payload)
+    except ArtifactSnapshotError as exc:
+        extra["snapshot_error"] = {
+            "type": type(exc).__name__,
+            "message": str(exc),
+        }
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"snapshot content rejected ({type(exc).__name__}): {exc}",
+        )
+
+    digest_table = [row.to_dict() for row in digests]
+    extra["snapshot"] = {
+        "snapshot_id": snapshot.snapshot_id,
+        "generation": snapshot.generation,
+        "read_root": str(snapshot.read_root),
+        "snapshot_schema": snapshot.snapshot_schema,
+        "snapshot_schema_version": snapshot.snapshot_schema_version,
+        "constructed": constructed,
+        "artifact_digests": digest_table,
+        "scientific_identity": snapshot.science_identity.to_dict(),
+    }
+    extra["real_run"] = not extra["constructed_fixture"]
+    assertions.append(
+        {
+            "name": "snapshot_content_digest",
+            "status": "PASS",
+            "detail": f"{len(digest_table)} artifacts verified against their declared digests",
+        }
+    )
+
+    failures: list[str] = []
+    gaps: list[str] = []
+
+    optimized_artifact, optimized_gaps = _single_role_artifact(snapshot, "optimized_structure")
+    if optimized_gaps:
+        gaps.extend(optimized_gaps)
+    else:
+        identity_digest = snapshot.science_identity.structure_sha256
+        if optimized_artifact.declared_sha256 != identity_digest:
+            failures.append(
+                "snapshot scientific_identity.structure_sha256 does not match the "
+                "optimized_structure artifact digest"
+            )
+        assertions.append(
+            {
+                "name": "optimized_structure_tie",
+                "status": "PASS" if not failures else "FAIL",
+                "detail": None if not failures else failures[-1],
+            }
+        )
+
+    task_results, task_gaps, task_contradictions = _load_task_results(snapshot)
+    gaps.extend(task_gaps)
+    failures.extend(task_contradictions)
+    extra["task_results"] = {
+        task: {
+            "status": result.status,
+            "complete": result.complete,
+            "method": getattr(result.provenance, "method", None),
+            "energy_hartree": result.energy_hartree,
+            "symbols": list(result.symbols) if result.symbols else None,
+        }
+        for task, result in task_results.items()
+    }
+    assertions.append(
+        {
+            "name": "task_results_present",
+            "status": "FAIL" if task_contradictions else ("NOT_VERIFIED" if task_gaps else "PASS"),
+            "detail": "; ".join(task_contradictions or task_gaps) or None,
+        }
+    )
+
+    optimize_result = task_results.get("optimize")
+    frequency_result = task_results.get("frequency")
+    if optimize_result is not None and frequency_result is not None:
+        validation = validate_stationary_point(optimize_result, frequency_result)
+        frequencies = tuple(float(value) for value in frequency_result.frequencies)
+        report = _stationary_point_report(validation, frequencies)
+        extra["stationary_point_report"] = report
+        extra["modes_cm1"] = list(frequencies)
+        extra["imaginary_mode_count"] = report.get("imaginary_mode_count")
+        _print_stationary_point_report(report)
+        if report.get("status") == "refuted":
+            failures.append("stationary-point validation refuted the minimum claim")
+        elif report.get("status") in ("inconclusive", "not_evaluated"):
+            gaps.append(
+                f"stationary-point validation is {report.get('status')}: "
+                "the snapshot does not carry complete Hessian evidence"
+            )
+        assertions.append(
+            {
+                "name": "stationary_point",
+                "status": {
+                    "supported": "PASS",
+                    "refuted": "FAIL",
+                    "inconclusive": "NOT_VERIFIED",
+                    "not_evaluated": "NOT_VERIFIED",
+                }[str(report.get("status"))],
+                "detail": (
+                    f"convergence={report.get('convergence')}; "
+                    f"imaginary_mode_count={report.get('imaginary_mode_count')}; "
+                    f"modes={list(frequencies)}"
+                ),
+            }
+        )
+
+        identity_check = _science_identity_consistency(snapshot, optimize_result, frequency_result)
+        extra["science_identity"] = identity_check
+        failures.extend(identity_check["contradictions"])
+        gaps.extend(identity_check["gaps"])
+        assertions.append(
+            {
+                "name": "science_identity_consistency",
+                "status": identity_check["status"],
+                "detail": "; ".join(identity_check["contradictions"] or identity_check["gaps"])
+                or None,
+            }
+        )
+
+        optimize_native, native_gaps = _single_role_artifact(snapshot, "native_output")
+        frequency_native, frequency_gaps = _single_role_artifact(snapshot, "frequency_output")
+        native_gaps = native_gaps + frequency_gaps
+        if native_gaps:
+            extra["native_evidence"] = {"status": "NOT_VERIFIED", "gaps": native_gaps}
+            gaps.extend(native_gaps)
+            extra["native_evidence_gap"] = "; ".join(native_gaps)
+            assertions.append(
+                {
+                    "name": "native_output_evidence",
+                    "status": "NOT_VERIFIED",
+                    "detail": "; ".join(native_gaps),
+                }
+            )
+        else:
+            native = _native_evidence(
+                optimize_native.resolved_path,
+                frequency_native.resolved_path,
+                optimize_result,
+                frequency_result,
+            )
+            extra["native_evidence"] = native
+            failures.extend(native["contradictions"])
+            gaps.extend(native["gaps"])
+            if native["gaps"]:
+                extra["native_evidence_gap"] = "; ".join(native["gaps"])
+            assertions.append(
+                {
+                    "name": "native_output_evidence",
+                    "status": native["status"],
+                    "detail": "; ".join(native["contradictions"] or native["gaps"]) or None,
+                }
+            )
+    else:
+        assertions.append(
+            {
+                "name": "stationary_point",
+                "status": "NOT_VERIFIED",
+                "detail": "one optimize and one frequency TaskResult are required",
+            }
+        )
+
+    extra_artifacts = [
+        entry
+        for entry in (
+            _artifact_entry(artifact.resolved_path)
+            for artifact in snapshot.artifacts
+            if artifact.role
+            in ("optimized_structure", "native_output", "frequency_output", "provenance")
+        )
+        if entry is not None
+    ]
+    report = extra.get("stationary_point_report")
+    extra_json = {
+        "artifact-digests.json": digest_table,
+        **({"stationary-point-report.json": report} if isinstance(report, Mapping) else {}),
+    }
+
+    if failures:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="scientific/structural contradiction: " + "; ".join(failures),
+            extra_json=extra_json,
+            extra_artifacts=extra_artifacts,
+        )
+    if gaps:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="scientific evidence incomplete: " + "; ".join(gaps),
+            extra_json=extra_json,
+            extra_artifacts=extra_artifacts,
+        )
+    return finish(
+        result="PASS",
+        exit_code=EXIT_PASS,
+        reason=(
+            "stationary-point validation supported the minimum"
+            + (
+                " (constructed fixture path proof, not a real run)"
+                if extra["constructed_fixture"]
+                else ""
+            )
+        ),
+        extra_json=extra_json,
+        extra_artifacts=extra_artifacts,
+    )
+
+
 def _execute(
     args: argparse.Namespace,
     spec: ScenarioSpec,
@@ -1744,6 +2450,8 @@ def _execute(
 
     if spec.alias == SINGLEPOINT_ALIAS:
         return _execute_installed_singlepoint(args, spec, plan, started_at=started_at, argv=argv)
+    if spec.alias == ARTIFACT_ALIAS:
+        return _execute_validate_artifacts(args, spec, plan, started_at=started_at, argv=argv)
 
     platform_export: PlatformExportCheck | None = None
     if spec.requires_input_manifest:
@@ -1784,9 +2492,14 @@ def _dry_run(
     plan: dict[str, Any],
     receipt: dict[str, Any],
 ) -> int:
-    platform_export = (
-        check_platform_export(plan.get("input_manifest")) if spec.requires_input_manifest else None
-    )
+    platform_export = None
+    registry_view: dict[str, Any] | None = None
+    if spec.requires_input_manifest:
+        snapshot_payload, _constructed, _errors = _unpack_snapshot(plan, Path(args.fixture).parent)
+        platform_export = check_platform_export(snapshot_payload)
+        registry_view = _platform_registry_view(
+            plan.get("platform_registry_path"), plan.get("platform_registry")
+        )
     document = {
         "dry_run": True,
         "scenario": spec.canonical,
@@ -1805,6 +2518,7 @@ def _dry_run(
         },
         "budget": plan["budget"],
         "platform_export": platform_export.to_dict() if platform_export is not None else None,
+        "platform_registry": registry_view,
         "receipt_protocol": {
             "status": receipt["status"],
             "missing_artifact": receipt["missing_artifact"],
@@ -1874,7 +2588,7 @@ def _required_flags(spec: ScenarioSpec) -> list[str]:
 def _required_flag_gap(spec: ScenarioSpec, args: argparse.Namespace) -> str | None:
     if spec.requires_run_spec and not args.run_spec:
         return f"scenario {spec.canonical} requires --run-spec"
-    if spec.requires_input_manifest and not args.input_manifest:
+    if spec.requires_input_manifest and args.input_manifest is None:
         return f"scenario {spec.canonical} requires --input-manifest"
     return None
 
@@ -1901,6 +2615,9 @@ def _help_epilog() -> str:
             "  validate-da-report     --input-manifest",
             "Optional flags:",
             "  --timeout   positive seconds (default 600)",
+            "  --platform-registry  platform-provided registry record; a real",
+            "                       validate-artifacts PASS needs the registered",
+            f"                       id {REGISTERED_OPT_FREQ_RUN_ID!r} there",
             "  --dry-run   check paths and budgets only; never creates a work root or job",
             "",
             "Exit codes: 0=PASS, 1=FAIL, 2=NOT_VERIFIED, 3=usage.",
@@ -1913,7 +2630,8 @@ def _help_epilog() -> str:
             "  acp2_science.py --scenario installed-singlepoint --fixture fixture-manifest.json"
             " --run-spec run-spec.json --out evidence/ --dry-run",
             "  acp2_science.py --scenario science:validate-artifacts --fixture"
-            " fixture-manifest.json --input-manifest authorized-artifacts.json --out evidence/",
+            " fixture-manifest.json --input-manifest authorized-artifacts.json"
+            " --platform-registry registry.json --out evidence/",
         ]
     )
     return "\n".join(lines)
@@ -1962,6 +2680,15 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="AUTHORIZED_ARTIFACTS",
         default=None,
         help="platform-prepared authorized artifact manifest; required for validate-*",
+    )
+    parser.add_argument(
+        "--platform-registry",
+        metavar="REGISTRY_RECORD",
+        default=None,
+        help=(
+            "platform-provided registry record used to confirm the registered "
+            f"id {REGISTERED_OPT_FREQ_RUN_ID!r}; absent => NOT_VERIFIED"
+        ),
     )
     parser.add_argument(
         "--dry-run",
