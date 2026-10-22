@@ -942,6 +942,33 @@ def _write_receipt(
     return document, exit_code
 
 
+def aggregate_decision(
+    child_results: list[dict[str, Any]],
+    expected_phases: list[str],
+) -> tuple[str, list[str]]:
+    """Frozen aggregate rule shared by the harness and its unit tests.
+
+    * any executed child FAIL -> FAIL;
+    * no child -> NOT_VERIFIED;
+    * a missing/NOT_VERIFIED/non-PASS child -> NOT_VERIFIED with the gaps;
+    * every required child PASS -> PASS.
+    """
+
+    by_phase = {document.get("phase"): document for document in child_results}
+    gaps = [
+        phase
+        for phase in expected_phases
+        if phase not in by_phase or by_phase[phase].get("result") != "PASS"
+    ]
+    if any(document.get("result") == "FAIL" for document in child_results):
+        return "FAIL", gaps
+    if not child_results:
+        return "NOT_VERIFIED", gaps or ["no_child_results"]
+    if gaps or any(document.get("result") != "PASS" for document in child_results):
+        return "NOT_VERIFIED", gaps
+    return "PASS", gaps
+
+
 def _run_aggregate(
     identity: ResolvedIdentity,
     run_id: str,
@@ -982,22 +1009,15 @@ def _run_aggregate(
         children.append((candidate, document))
 
     expected = [f"experience:{item}" for item in SUBCASE_WHITELIST.get(identity.scenario_key, ())]
-    present = {document.get("phase") for _, document in children}
-    gaps = [phase for phase in expected if phase not in present]
-
-    if any(document.get("result") == "FAIL" for _, document in children):
-        result = "FAIL"
-        exit_code = EXIT_FAIL
-    elif not children:
-        result = "NOT_VERIFIED"
-        exit_code = EXIT_NOT_VERIFIED
-        gaps = gaps or ["no_child_results"]
-    elif gaps or any(document.get("result") != "PASS" for _, document in children):
-        result = "NOT_VERIFIED"
-        exit_code = EXIT_NOT_VERIFIED
-    else:
-        result = "PASS"
-        exit_code = EXIT_PASS
+    result, gaps = aggregate_decision(
+        [document for _, document in children],
+        expected,
+    )
+    exit_code = {
+        "PASS": EXIT_PASS,
+        "FAIL": EXIT_FAIL,
+        "NOT_VERIFIED": EXIT_NOT_VERIFIED,
+    }[result]
 
     if result == "NOT_VERIFIED" and not children:
         print(

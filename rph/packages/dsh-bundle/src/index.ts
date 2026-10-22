@@ -51,3 +51,7 @@ export function bundleProfile(name: BundleProfileName): BundleProfile {
     localOnly: true,
   });
 }
+
+// Research skills and the single Supervisor live at the package root
+// (`skills/`) so the contract is readable outside `src/`.
+export * from "../skills/index.js";
