@@ -1,0 +1,126 @@
+{
+  "db": "<acp2-dev>/data/b/run-root-b08/acp_jobs.db",
+  "applied_migrations": [
+    {
+      "id": "001",
+      "applied_at": "2026-10-22T16:13:15.148533+00:00"
+    },
+    {
+      "id": "002",
+      "applied_at": "2026-10-22T16:13:15.148686+00:00"
+    },
+    {
+      "id": "003",
+      "applied_at": "2026-10-22T16:13:15.151266+00:00"
+    },
+    {
+      "id": "004",
+      "applied_at": "2026-10-22T16:13:15.154707+00:00"
+    },
+    {
+      "id": "005",
+      "applied_at": "2026-10-22T16:13:15.154804+00:00"
+    },
+    {
+      "id": "006",
+      "applied_at": "2026-10-22T16:13:15.157564+00:00"
+    },
+    {
+      "id": "007",
+      "applied_at": "2026-10-22T16:13:15.158594+00:00"
+    },
+    {
+      "id": "008",
+      "applied_at": "2026-10-22T16:13:15.158767+00:00"
+    },
+    {
+      "id": "009",
+      "applied_at": "2026-10-22T16:13:15.159028+00:00"
+    },
+    {
+      "id": "010",
+      "applied_at": "2026-10-22T16:13:15.162867+00:00"
+    },
+    {
+      "id": "011",
+      "applied_at": "2026-10-22T16:13:15.159142+00:00"
+    },
+    {
+      "id": "012",
+      "applied_at": "2026-10-22T16:13:15.164763+00:00"
+    },
+    {
+      "id": "013",
+      "applied_at": "2026-10-22T16:13:15.164916+00:00"
+    },
+    {
+      "id": "014",
+      "applied_at": "2026-10-22T16:13:15.167639+00:00"
+    },
+    {
+      "id": "015",
+      "applied_at": "2026-10-22T16:13:15.170508+00:00"
+    },
+    {
+      "id": "016",
+      "applied_at": "2026-10-22T16:13:15.170816+00:00"
+    },
+    {
+      "id": "017",
+      "applied_at": "2026-10-22T16:13:15.174727+00:00"
+    },
+    {
+      "id": "018",
+      "applied_at": "2026-10-22T16:13:15.177704+00:00"
+    },
+    {
+      "id": "019",
+      "applied_at": "2026-10-22T16:13:15.180851+00:00"
+    },
+    {
+      "id": "020",
+      "applied_at": "2026-10-22T16:13:15.181717+00:00"
+    },
+    {
+      "id": "021",
+      "applied_at": "2026-10-22T16:13:15.182740+00:00"
+    },
+    {
+      "id": "022",
+      "applied_at": "2026-10-22T16:13:15.187670+00:00"
+    }
+  ],
+  "migration_022_description": "persistent idempotency ledger (B08): one row per verified scope/action/key with a canonical request digest, owner lease and the committed TaskRef",
+  "idempotency_schema": [
+    {
+      "type": "table",
+      "name": "idempotency_records",
+      "sql": "CREATE TABLE idempotency_records (\n    claim_id         TEXT PRIMARY KEY,\n    scope_id         TEXT NOT NULL,\n    action           TEXT NOT NULL,\n    idempotency_key  TEXT NOT NULL,\n    request_digest   TEXT NOT NULL,\n    state            TEXT NOT NULL,\n    owner_token      TEXT,\n    lease_epoch      INTEGER NOT NULL DEFAULT 0,\n    lease_expires_at TEXT,\n    task_id          TEXT,\n    operation_id     TEXT,\n    created_at       TEXT NOT NULL,\n    updated_at       TEXT NOT NULL,\n    UNIQUE (scope_id, action, idempotency_key)\n)"
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_idempotency_records_1",
+      "sql": null
+    },
+    {
+      "type": "index",
+      "name": "sqlite_autoindex_idempotency_records_2",
+      "sql": null
+    },
+    {
+      "type": "index",
+      "name": "idx_idempotency_task",
+      "sql": "CREATE INDEX idx_idempotency_task\n    ON idempotency_records(task_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_idempotency_state_lease",
+      "sql": "CREATE INDEX idx_idempotency_state_lease\n    ON idempotency_records(state, lease_expires_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_idempotency_action_key",
+      "sql": "CREATE INDEX idx_idempotency_action_key\n    ON idempotency_records(action, idempotency_key)"
+    }
+  ]
+}

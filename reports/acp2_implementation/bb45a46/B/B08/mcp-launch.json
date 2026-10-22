@@ -1,0 +1,33 @@
+{
+  "launch_version": 1,
+  "transport": "stdio",
+  "protocol_version": "2025-06-18",
+  "command": "<acp2-dev>/venvs/b/bin/python",
+  "args": [
+    "-m",
+    "acp",
+    "mcp",
+    "serve",
+    "--transport",
+    "stdio",
+    "--controller",
+    "http://127.0.0.1:18766",
+    "--log-level",
+    "WARNING"
+  ],
+  "cwd": "<repo>",
+  "env": {
+    "PYTHONPATH": "<repo>/src",
+    "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root-b08",
+    "ACP_CONTROLLER_URL": "http://127.0.0.1:18766",
+    "ACP2_MCP_LOG_LEVEL": "WARNING"
+  },
+  "controller": {
+    "transport": "loopback-http",
+    "loopback_only": true,
+    "start_controller": false,
+    "shared_db": false
+  },
+  "timeouts": {"initialize_s": 10, "tools_call_s": 300, "shutdown_s": 10},
+  "stdio": {"framing": "newline-delimited json-rpc-2.0", "max_frame_bytes": 1048576, "stdout_is_channel_only": true, "logs_to": "stderr"}
+}

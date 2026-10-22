@@ -57,9 +57,21 @@ class RuntimeCommands:
     registration: JobRegistrationPort
 
     # -- submit ------------------------------------------------------------
-    def submit(self, spec: Any, *, group_id: str | None = None) -> Any:
-        """Persist and enqueue *spec* through the injected submission port."""
-        return self.submission.submit(spec, group_id=group_id)
+    def submit(
+        self,
+        spec: Any,
+        *,
+        group_id: str | None = None,
+        idempotency: Any | None = None,
+    ) -> Any:
+        """Persist and enqueue *spec* through the injected submission port.
+
+        ``idempotency`` is forwarded untouched (the port owns the persistent
+        claim/finalize protocol); legacy callers omit it.
+        """
+        if idempotency is None:
+            return self.submission.submit(spec, group_id=group_id)
+        return self.submission.submit(spec, group_id=group_id, idempotency=idempotency)
 
     # -- control intents ---------------------------------------------------
     def pause(self, job_id: str) -> Any:

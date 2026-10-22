@@ -307,9 +307,11 @@ def test_mcp_and_http_submit_parameters_match(live_controller: _LiveController) 
     manager = live_controller.manager
     original_submit = manager.submit
 
-    def capture(spec: Any, group_id: str | None = None) -> Any:
+    def capture(spec: Any, group_id: str | None = None, *, idempotency: Any | None = None) -> Any:
         captured.append(spec)
-        return original_submit(spec, group_id=group_id)
+        if idempotency is None:
+            return original_submit(spec, group_id=group_id)
+        return original_submit(spec, group_id=group_id, idempotency=idempotency)
 
     manager.submit = capture  # type: ignore[method-assign]
     try:

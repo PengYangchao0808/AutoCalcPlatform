@@ -172,8 +172,19 @@ class JobSubmissionPort(Protocol):
     its return value is passed through untouched.
     """
 
-    def submit(self, spec: Any, *, group_id: str | None = None) -> Any:
-        """Validate, persist and enqueue *spec*; return the created record."""
+    def submit(
+        self,
+        spec: Any,
+        *,
+        group_id: str | None = None,
+        idempotency: Any | None = None,
+    ) -> Any:
+        """Validate, persist and enqueue *spec*; return the created record.
+
+        ``idempotency`` is an optional
+        :class:`acp_services.runtime.idempotency.IdempotencyContext`.  Legacy
+        callers pass ``None`` and keep the original submit behaviour.
+        """
         ...
 
 

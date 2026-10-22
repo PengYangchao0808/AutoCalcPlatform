@@ -1,0 +1,7 @@
+{
+  "window": "(e) local/bsub started with a lost response",
+  "local": "PROVEN by tests/test_acp2_runtime_persistent_idempotency.py::test_local_spawn_lost_response_is_not_resubmitted (spawn counter stays 1 after replay; job FAILED by existing restart recovery, never resubmitted)",
+  "remote_bsub": "NOT_VERIFIED",
+  "reason": "LSF is absent in this environment; no bsub was executed. The idempotent replay path returns the stored TaskRef and never calls submit_remote; remote unknown-result reconciliation remains the existing submission_id/attempt protocol.",
+  "fallback_submit_added": false
+}

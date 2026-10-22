@@ -1,0 +1,22 @@
+{
+  "claims": [
+    {
+      "claim_id": "idem_8da4fbbb8bc34f368fd06258cf137231",
+      "scope_id": "principal_local\u001funcategorized",
+      "action": "submit",
+      "idempotency_key": "b08-restart-1e7641e7904f498cb41c",
+      "state": "committed",
+      "lease_epoch": 0,
+      "task_id": "20261023_002746_001_singlepoint"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "20261023_002746_001_singlepoint",
+      "workflow": "singlepoint",
+      "status": "failed",
+      "work_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B08/restart-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "attempt": 1
+    }
+  ]
+}

@@ -59,6 +59,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from acp_services.contracts.access import ResourceGrantSpec
 from acp_services.runtime.helpers import utc_now_iso
+from acp_services.runtime.idempotency import ReservationIdempotency
 
 logger = logging.getLogger(__name__)
 
@@ -654,6 +655,16 @@ CREATE TABLE IF NOT EXISTS admission_reservations (
 CREATE INDEX IF NOT EXISTS idx_admission_scope
     ON admission_reservations(state, principal_id, project_id, key_id);
 CREATE INDEX IF NOT EXISTS idx_admission_job ON admission_reservations(job_id);
+CREATE TABLE IF NOT EXISTS admission_reservation_claims (
+    claim_id         TEXT PRIMARY KEY,
+    reservation_id   TEXT NOT NULL,
+    scope_id         TEXT NOT NULL,
+    action           TEXT NOT NULL,
+    idempotency_key  TEXT NOT NULL,
+    created_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admission_claim_reservation
+    ON admission_reservation_claims(reservation_id);
 """
 
 
@@ -929,17 +940,26 @@ class ReservationLedger:
 
     # -- atomic reserve ------------------------------------------------------
 
-    def reserve(self, request: AdmissionRequest, limits: ReserveLimits) -> ReserveOutcome:
+    def reserve(
+        self,
+        request: AdmissionRequest,
+        limits: ReserveLimits,
+        *,
+        reservation_id: str | None = None,
+        idempotency: ReservationIdempotency | None = None,
+    ) -> ReserveOutcome:
         """Atomically check every ceiling and insert the reservation.
 
-        The occupancy read, the ceiling comparison and the ``INSERT`` all happen
-        inside one ``BEGIN IMMEDIATE`` transaction.  A refusal rolls back without
-        inserting anything (no partial reservation).
+        The occupancy read, the ceiling comparison, the ``INSERT`` and the
+        claim-keyed link row all happen inside one ``BEGIN IMMEDIATE``
+        transaction.  A refusal rolls back without inserting anything (no
+        partial reservation).  When ``idempotency`` is supplied, a claim that
+        already holds a live reservation reuses it instead of reserving twice.
         """
         now = self._clock()
         state = ReservationState.QUEUED if limits.queued else ReservationState.RESERVED
         reservation = Reservation(
-            reservation_id=self._new_id(),
+            reservation_id=reservation_id or self._new_id(),
             principal_id=request.principal_id,
             project_id=request.project_id,
             job_id=request.job_id,
@@ -959,6 +979,29 @@ class ReservationLedger:
             conn = self._connect()
             try:
                 conn.execute("BEGIN IMMEDIATE")
+                if idempotency is not None:
+                    linked = conn.execute(
+                        "SELECT reservation_id FROM admission_reservation_claims WHERE claim_id=?",
+                        (idempotency.claim_id,),
+                    ).fetchone()
+                    if linked is not None:
+                        existing = conn.execute(
+                            "SELECT * FROM admission_reservations WHERE reservation_id=?",
+                            (linked["reservation_id"],),
+                        ).fetchone()
+                        if existing is not None and existing["state"] != ReservationState.RELEASED:
+                            conn.execute("ROLLBACK")
+                            return ReserveOutcome(
+                                True,
+                                AdmissionReason.ADMITTED,
+                                "already_reserved",
+                                _row_to_reservation(existing),
+                                (),
+                            )
+                        conn.execute(
+                            "DELETE FROM admission_reservation_claims WHERE claim_id=?",
+                            (idempotency.claim_id,),
+                        )
                 rows = conn.execute(
                     "SELECT * FROM admission_reservations WHERE state != ?",
                     (ReservationState.RELEASED,),
@@ -998,6 +1041,21 @@ class ReservationLedger:
                         reservation.updated_at,
                     ),
                 )
+                if idempotency is not None:
+                    conn.execute(
+                        """INSERT INTO admission_reservation_claims (
+                               claim_id, reservation_id, scope_id, action,
+                               idempotency_key, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (
+                            idempotency.claim_id,
+                            reservation.reservation_id,
+                            idempotency.scope_id,
+                            idempotency.action,
+                            idempotency.idempotency_key,
+                            now,
+                        ),
+                    )
                 conn.execute("COMMIT")
             except BaseException:
                 if conn.in_transaction:
@@ -1006,6 +1064,52 @@ class ReservationLedger:
             finally:
                 conn.close()
         return ReserveOutcome(True, AdmissionReason.ADMITTED, "reserved", reservation, ())
+
+    def release_for_claim(self, claim_id: str) -> bool:
+        """Release the reservation recorded for *claim_id* (idempotent)."""
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                linked = conn.execute(
+                    "SELECT reservation_id FROM admission_reservation_claims WHERE claim_id=?",
+                    (str(claim_id),),
+                ).fetchone()
+                if linked is None:
+                    conn.execute("ROLLBACK")
+                    return False
+                cursor = conn.execute(
+                    "UPDATE admission_reservations SET state=?, updated_at=? "
+                    "WHERE reservation_id=? AND state != ?",
+                    (
+                        ReservationState.RELEASED,
+                        now,
+                        linked["reservation_id"],
+                        ReservationState.RELEASED,
+                    ),
+                )
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return cursor.rowcount == 1
+
+    def reservation_id_for_claim(self, claim_id: str) -> str | None:
+        """Return the reservation linked to *claim_id* (diagnostic)."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT reservation_id FROM admission_reservation_claims WHERE claim_id=?",
+                    (str(claim_id),),
+                ).fetchone()
+            finally:
+                conn.close()
+        return None if row is None else str(row["reservation_id"])
 
     # -- atomic dispatch re-validation --------------------------------------
 

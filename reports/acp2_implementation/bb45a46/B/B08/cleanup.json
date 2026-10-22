@@ -1,0 +1,10 @@
+{
+  "controller_port": 18766,
+  "port_18766_free": true,
+  "port_18765_free": true,
+  "port_8765_untouched": true,
+  "uvicorn_processes": "",
+  "mcp_processes": "",
+  "remaining_staging_dirs": [],
+  "note": "Only the B08 Controller/MCP processes were ever started (port 18766, run-root-b08/restart-run-root); production 8765 and B07 18765 were never touched."
+}
