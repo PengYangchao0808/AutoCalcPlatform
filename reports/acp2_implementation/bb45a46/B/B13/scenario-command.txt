@@ -1,0 +1,1 @@
+/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py --scenario control-recovery --controller http://127.0.0.1:18771 --fixture /ACPServer/acp2-development/data/b/fixtures/control.json --out reports/acp2_implementation/bb45a46/B/B13

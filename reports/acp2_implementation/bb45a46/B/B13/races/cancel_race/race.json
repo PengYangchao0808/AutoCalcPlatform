@@ -1,0 +1,77 @@
+{
+  "assertions": [],
+  "attempt": 1,
+  "budget": {
+    "cleanup_seconds": 10,
+    "cores": 1,
+    "jobs": 1,
+    "max_orca": 1,
+    "max_prepare_seconds": 30,
+    "memory_mb": 1024,
+    "walltime_s": 60
+  },
+  "budget_row": {
+    "budget": {
+      "cleanup_seconds": 10,
+      "cores": 1,
+      "jobs": 1,
+      "max_orca": 1,
+      "max_prepare_seconds": 30,
+      "memory_mb": 1024,
+      "walltime_s": 60
+    },
+    "orca_pids": [],
+    "pid": 720610,
+    "race_id": "cancel_race",
+    "task_ref": "20261023_065051_002_singlepoint",
+    "timeout_seconds": 150
+  },
+  "cancelled_persisted_at": "2026-10-22T22:50:55.518146+00:00",
+  "controller_restart": "b13.fault.controller_restart",
+  "evidence": "races/cancel_race",
+  "fault": "cancel_confirmed_stop_late_receipt",
+  "finished_at": null,
+  "fixture": "ethanol-wb97mv-def2svp",
+  "input_sha256": "0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404",
+  "kind": "local",
+  "late_receipt_gate": {
+    "cas": {
+      "detail": "job 20261023_065051_002_singlepoint state conflict: expected {'revision': 3, 'status': 'cancelling', 'attempt': 1}, actual {'status': 'cancelled', 'revision': 7, 'attempt': 1}",
+      "error": "JobStateConflictError",
+      "rejected": true
+    },
+    "exit_code": 0,
+    "old_attempt": {
+      "accepted": false,
+      "code": "stale_attempt"
+    },
+    "proof": "acp2.b13.receipt_cas_gate.v1",
+    "row": {
+      "attempt": 1,
+      "revision": 7,
+      "status": "cancelled"
+    },
+    "same_attempt": {
+      "accepted": true,
+      "code": ""
+    }
+  },
+  "method": {
+    "basis": "def2-SVP",
+    "engine": "orca",
+    "functional": "wB97M-V"
+  },
+  "orca_pids": [],
+  "pid": 720610,
+  "race_id": "cancel_race",
+  "release_id": "98e0695545d668e6",
+  "revision_before_cancel": 3,
+  "revision_settled_after_terminal": 7,
+  "started_at": "2026-10-22T22:50:50.623578Z",
+  "status": "NOT_VERIFIED",
+  "stop_observed_at": "2026-10-22T22:50:51.947136Z",
+  "submission_id": "sub_db371c85e23edc64",
+  "task_count_before": 13,
+  "task_ref": "20261023_065051_002_singlepoint",
+  "timeout_seconds": 150
+}

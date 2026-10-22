@@ -1,0 +1,50 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404"
+      },
+      "binding_id": "local:98e0695545d668e6:9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__08",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__08",
+      "root": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized",
+      "tenant_id": ""
+    }
+  ],
+  "entrypoint": "worker.bootstrap",
+  "envelope_version": 1,
+  "fencing_token": "e258c664f29567e9d44c3e4680bba362",
+  "job_id": "20261023_065051_002_singlepoint",
+  "owner": "local:workstation:720345:1",
+  "plan_digest": "v2:d8ab393a35264bdde6e904504ac59cb6",
+  "plan_identity": "v2:35dbd3c213a1f15d4ea8b5224a537ec9",
+  "protocol": "local",
+  "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+  "release_id": "98e0695545d668e6",
+  "required_capabilities": [
+    "singlepoint"
+  ],
+  "resource_budget": {
+    "mem": null,
+    "mem_mb": null,
+    "nproc": null,
+    "partial": false,
+    "queue": null,
+    "walltime_s": null
+  },
+  "scientific_closure": {
+    "algorithm_version": "",
+    "dependency_digests": {},
+    "payload_schema": 1,
+    "result_schema": 1,
+    "task_kind": "singlepoint"
+  },
+  "step_identities": [
+    "v2:cf29f03ad12a0769e459ddfcbc8adcc7"
+  ],
+  "submission_id": "sub_db371c85e23edc64"
+}
