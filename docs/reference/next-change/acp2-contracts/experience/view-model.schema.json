@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acp.local/acp2/experience/view-model.schema.json",
+  "title": "ACP 2.0 Workbench read-only view snapshot",
+  "description": "Frozen (T-02 / C01a) read-only projection the Workbench/RPH may render. It is a snapshot of server-owned state (task/attempt, manifest generation, artifacts, evidence claims, clarifications), never a second scientific authority and never a task-state machine. It carries no mutation endpoint, no status transition and no credential value.",
+  "$comment": "READ-ONLY: consumers must not derive scientific verdicts from this document; claims.project status is copied from the EvidenceReport. Executable vocabulary is JSON Schema 2020-12 only.",
+  "schema": "acp2.experience.view-model.v1",
+  "schema_version": "1.0.0",
+  "schema_dialect": "json-schema-2020-12",
+  "ui_dialect": {
+    "version": "acp2.ui-subset.v1",
+    "supported_keywords": [
+      "$schema",
+      "$id",
+      "$ref",
+      "$comment",
+      "$defs",
+      "schema",
+      "schema_version",
+      "schema_dialect",
+      "ui_dialect",
+      "title",
+      "description",
+      "type",
+      "enum",
+      "const",
+      "required",
+      "properties",
+      "additionalProperties",
+      "items",
+      "minItems",
+      "maxItems",
+      "uniqueItems",
+      "minimum",
+      "maximum",
+      "minLength",
+      "maxLength",
+      "pattern",
+      "oneOf",
+      "anyOf",
+      "allOf",
+      "default",
+      "examples"
+    ],
+    "non_standard_keywords": {
+      "range": {
+        "standard_equivalent": "minimum and maximum",
+        "executable": false,
+        "scope": "UI annotation only"
+      },
+      "nullable": {
+        "standard_equivalent": "type array that contains \"null\"",
+        "executable": false,
+        "scope": "UI annotation only"
+      }
+    },
+    "rule": "Only supported_keywords are executable. range/nullable must never appear outside this ui_dialect block."
+  },
+  "type": "object",
+  "required": [
+    "snapshot_revision",
+    "project_id",
+    "task_ref",
+    "manifest_generation",
+    "artifacts",
+    "claims",
+    "clarifications",
+    "provenance",
+    "read_only",
+    "not_authoritative_for_science"
+  ],
+  "properties": {
+    "snapshot_revision": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic client-visible snapshot revision. A snapshot with a lower revision than the one already rendered is discarded, never merged."
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Project scope of the snapshot. The server derives tenant/scope; the client never asserts it."
+    },
+    "task_ref": {
+      "type": "object",
+      "required": ["job_id", "attempt"],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Attempt number within the job. Artifact/claim identity is scoped by (job_id, attempt)."
+        },
+        "task_id": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false,
+      "description": "The only task identity accepted by this view. There is no second task database."
+    },
+    "manifest_generation": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Server result-manifest generation this snapshot was projected from. Consumers must not edit or re-derive artifacts from an older generation."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["artifact_id", "role", "availability", "generation"],
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Scientific role label (e.g. optimized structure). Not a capability enum owned by C."
+          },
+          "relative_path": {
+            "type": ["string", "null"],
+            "description": "Relative to the evidence/work root; null until the artifact exists."
+          },
+          "availability": {
+            "enum": ["unprepared", "preparing", "readable", "failed"],
+            "description": "The four observable availability states. Anything else is a contract violation, not a fifth state."
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": ["string", "null"],
+            "pattern": "^(?:[0-9a-f]{64})?$"
+          },
+          "size_bytes": {
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Only populated for availability=failed."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim_id", "statement", "status", "evidence_refs"],
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": ["supported", "refuted", "inconclusive", "not_evaluated"],
+            "description": "Projected verbatim from the EvidenceReport. The UI must never compute or upgrade this value."
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "reason": {
+            "type": ["string", "null"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "clarifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "clarification_id",
+          "field_path",
+          "prompt",
+          "status",
+          "options",
+          "answer",
+          "revision"
+        ],
+        "properties": {
+          "clarification_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "field_path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable machine field path the question resolves."
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": ["open", "answered", "waived"]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["value", "label"],
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "answer": {
+            "type": ["string", "null"],
+            "description": "Null while open; a chosen option value when answered."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optimistic-concurrency revision for the clarification; a stale answer must be rejected."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source", "producer_revision", "produced_at", "digest"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Server projection/endpoint that produced the snapshot."
+        },
+        "producer_revision": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$"
+        },
+        "produced_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "read_only": {
+      "const": true,
+      "description": "Machine-readable statement that this document grants no mutation capability."
+    },
+    "not_authoritative_for_science": {
+      "const": true,
+      "description": "Machine-readable statement that the view model is not a second scientific result authority."
+    }
+  },
+  "additionalProperties": false
+}
