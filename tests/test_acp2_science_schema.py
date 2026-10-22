@@ -94,6 +94,8 @@ CONTRACT_FILE_NAMES = (
     "evidence-semantics.md",
     "examples/capability-energy.json",
     "examples/task-binding-singlepoint.json",
+    "examples/reaction-da.json",
+    "examples/question-activation.json",
 )
 
 
