@@ -1,0 +1,39 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3.11
+cachedir: .pytest_cache
+rootdir: <repo>
+configfile: pyproject.toml
+plugins: anyio-4.15.1, cov-7.1.0, mock-3.15.1
+collecting ... collected 28 items
+
+tests/test_acp2_runtime_contracts.py::test_application_api_operations_are_frozen PASSED [  3%]
+tests/test_acp2_runtime_contracts.py::test_digest_fields_are_four_distinct_contracts PASSED [  7%]
+tests/test_acp2_runtime_contracts.py::test_health_reports_entry_equivalence_fields PASSED [ 10%]
+tests/test_acp2_runtime_contracts.py::test_ui_schema_subset_is_explicit PASSED [ 14%]
+tests/test_acp2_runtime_contracts.py::test_unknown_field_policy_has_four_frozen_rules PASSED [ 17%]
+tests/test_acp2_runtime_contracts.py::test_error_classes_match_the_machine_output_catalog PASSED [ 21%]
+tests/test_acp2_runtime_contracts.py::test_entry_call_table_has_one_command_per_entry PASSED [ 25%]
+tests/test_acp2_runtime_contracts.py::test_mcp_launch_schema_freezes_protocol_and_tools PASSED [ 28%]
+tests/test_acp2_runtime_contracts.py::test_mcp_tool_names_match_the_runtime_allowlist PASSED [ 32%]
+tests/test_acp2_runtime_contracts.py::test_mcp_launch_template_is_placeholder_only PASSED [ 35%]
+tests/test_acp2_runtime_contracts.py::test_science_binding_maps_the_existing_singlepoint_task PASSED [ 39%]
+tests/test_acp2_runtime_contracts.py::test_science_binding_positive_sample_parses_as_a_task_request PASSED [ 42%]
+tests/test_acp2_runtime_contracts.py::test_control_and_data_p1_fields PASSED [ 46%]
+tests/test_acp2_runtime_contracts.py::test_admission_approval_p1_subset_and_p2_extension PASSED [ 50%]
+tests/test_acp2_runtime_contracts.py::test_p2_research_operations_are_complete_and_owned PASSED [ 53%]
+tests/test_acp2_runtime_contracts.py::test_fallback_deferral_records_cdxml_scope_change PASSED [ 57%]
+tests/test_acp2_runtime_contracts.py::test_ecosystem_round_trip_is_scheduled_not_claimed PASSED [ 60%]
+tests/test_acp2_runtime_contracts.py::test_canonical_digest_vectors_reproduce_byte_for_byte PASSED [ 64%]
+tests/test_acp2_runtime_contracts.py::test_dependencies_graph_is_valid PASSED [ 67%]
+tests/test_acp2_runtime_contracts.py::test_dependencies_merge_c_rows_and_record_the_a_gap PASSED [ 71%]
+tests/test_acp2_runtime_contracts.py::test_dependency_negative_samples_trigger_their_rule PASSED [ 75%]
+tests/test_acp2_runtime_contracts.py::test_manifest_delivers_every_delivered_contract PASSED [ 78%]
+tests/test_acp2_runtime_contracts.py::test_manifest_contract_digest_and_self_digest PASSED [ 82%]
+tests/test_acp2_runtime_contracts.py::test_manifest_validator_accepts_the_delivered_set PASSED [ 85%]
+tests/test_acp2_runtime_contracts.py::test_sample_index_is_complete_and_hashed PASSED [ 89%]
+tests/test_acp2_runtime_contracts.py::test_samples_accept_or_reject_exactly_as_declared PASSED [ 92%]
+tests/test_acp2_runtime_contracts.py::test_negative_samples_cover_the_required_failure_modes PASSED [ 96%]
+tests/test_acp2_runtime_contracts.py::test_b03_did_not_add_a_second_canonicalizer_or_science_dtos PASSED [100%]
+
+============================== 28 passed in 0.36s ==============================
+exit=0

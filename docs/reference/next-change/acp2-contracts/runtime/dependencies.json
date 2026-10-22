@@ -397,9 +397,18 @@
       "artifact": {
         "id": "acp2:artifact:B00",
         "version": "1.0.0",
-        "digest_or_pending": "PENDING",
+        "digest_or_pending": "sha256:fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
         "readiness": "contract_ready",
-        "delivery_status": "planned"
+        "delivery_status": "planned",
+        "digest_target": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+        "contract_delivery": "delivered",
+        "delivered_contracts": [
+          "manifest.json",
+          "baseline-lock.json",
+          "lint-baseline.json",
+          "dependencies.json",
+          "final-debug-patch/"
+        ]
       }
     },
     {
@@ -427,7 +436,9 @@
         "version": "1.0.0",
         "digest_or_pending": "PENDING",
         "readiness": "contract_ready",
-        "delivery_status": "planned"
+        "delivery_status": "planned",
+        "contract_delivery": "planned",
+        "note": "B01 runs concurrently; B03 verified its contract files were absent at manifest-write time and left the manifest rows planned"
       }
     },
     {
@@ -486,9 +497,25 @@
       "artifact": {
         "id": "acp2:artifact:B03",
         "version": "1.0.0",
-        "digest_or_pending": "PENDING",
+        "digest_or_pending": "sha256:a9f7e741007029638b64e069d918746f7105c2bf99c97dc1e9c3818cdcc0d4a4",
         "readiness": "contract_ready",
-        "delivery_status": "planned"
+        "delivery_status": "planned",
+        "digest_target": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "contract_delivery": "delivered",
+        "delivered_contracts": [
+          "application-api.v1.json",
+          "entry-call-table.v1.md",
+          "p2-research-operations.v1.json",
+          "mcp-launch.schema.json",
+          "mcp-launch.template.json",
+          "science-binding.v1.json",
+          "control-and-data.v1.json",
+          "admission-approval.v1.json",
+          "fallback-deferral.json",
+          "canonical-digest-vectors.v1.json",
+          "samples/"
+        ],
+        "remaining_gap": "GAP-B03-01..04 are implementation gaps (B04a/B05/B06/B10a/B12), not contract gaps; the entry-call-table audit verdict is PARTIAL"
       }
     },
     {
@@ -2124,6 +2151,165 @@
       "free_text_or_allowed": false,
       "violations": [],
       "status": "PASS"
+    },
+    "sources_verified": {
+      "B": {
+        "status": "PASS",
+        "note": "self"
+      },
+      "C": {
+        "status": "PASS",
+        "sha256": "505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b",
+        "rows_merged": 5
+      },
+      "A": {
+        "status": "NOT_VERIFIED",
+        "reason": "blocked_fixture",
+        "expected_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json"
+      }
+    },
+    "consumer_edge_checks": {
+      "producer_exists": "PASS",
+      "consumer_nonempty": "PASS",
+      "relation_explicit": "PASS",
+      "no_cycle": "PASS",
+      "rule": "every consumer_edges row names an existing B producer node (or a delivered B artifact path) and an explicit AND/OR relation"
+    },
+    "not_verified_references": 1,
+    "and_or": {
+      "internal": "nodes[].depends_on_relation + nodes[].any_of",
+      "external": "external_edges[].relation",
+      "consumer": "consumer_edges[].relation",
+      "free_text_or_allowed": false
     }
-  }
+  },
+  "refreshed_by": "B03",
+  "refreshed_at": "2026-10-22",
+  "refresh_stage": "H1 (B00 skeleton + B03 merge of C rows and the A gap)",
+  "delivery_status_semantics": "artifact.delivery_status tracks ACCEPTANCE delivery (planned|blocked) and stays inside the frozen manifest common_enums. Contract publication is tracked by artifact.readiness + artifact.digest_or_pending + artifact.contract_delivery. They are different questions and must not be collapsed.",
+  "sources": [
+    {
+      "track": "B",
+      "role": "base ledger (B00 skeleton)",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+      "note": "self; the B00 rows are preserved unchanged except where this refresh records a delivered artifact digest"
+    },
+    {
+      "track": "C",
+      "role": "C handoff ledger merged into consumer_edges",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/handoffs/dependencies-c.json",
+      "sha256": "505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b",
+      "schema": "acp2.experience.dependencies-c.v1",
+      "generated_at": "2026-10-22T19:14:00Z",
+      "merged_rows": 5,
+      "merge_rule": "C rows describe what C consumes FROM B; they are recorded as consumer_edges (producer=B, consumer=C) and never inverted into producer edges for B"
+    },
+    {
+      "track": "A",
+      "role": "A cross-track dependency ledger",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "repo_relative_equivalent": "docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "sha256": null,
+      "status": "NOT_VERIFIED",
+      "reason": "blocked_fixture",
+      "observed_at": "2026-10-22",
+      "observed": "the file does not exist in the A worktree; A has delivered only science/baseline.md and science/path-map.md",
+      "handling": "recorded as not_verified (never fabricated); B14b/H3 closes when A publishes the file with artifact id/version/digest/readiness and AND/OR relations"
+    }
+  ],
+  "not_verified": [
+    {
+      "id": "A-CROSS-TRACK-DEPENDENCIES-ABSENT",
+      "track": "A",
+      "expected_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "repo_relative_equivalent": "docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "status": "NOT_VERIFIED",
+      "reason": "blocked_fixture",
+      "blocks": [
+        "B03 complete A-edge validation",
+        "B14b H3 aggregate",
+        "B26b H7"
+      ],
+      "closing_owner": "A (producer) / B14b (merge)",
+      "closing_condition": "the file exists at the expected path, parses, and its rows declare producer, consumer, artifact, version, digest_or_pending, readiness and an explicit AND/OR relation",
+      "never_do": "do not invent A rows, do not copy A node ids from this plan as if A had published them"
+    }
+  ],
+  "consumer_edges": [
+    {
+      "consumer": "C/T-01 and every downstream C todo",
+      "producer": "B00",
+      "artifact": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+      "version": "1.0.0",
+      "digest_or_pending": "sha256:fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": "baseline-lock.json exists and carries candidate_id/evidence_root/final_debug_candidate",
+      "supersedes_c_row": "B00:baseline-lock"
+    },
+    {
+      "consumer": "C/T-01 and every C evidence row",
+      "producer": "B00",
+      "artifact": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": "manifest.json exists at the contract root (C's row looked for runtime/manifest.json, which was never the path)",
+      "observed_correction": "the authoritative path is docs/reference/next-change/acp2-contracts/manifest.json; runtime/manifest.json does not and will not exist",
+      "supersedes_c_row": "B00:manifest/evidence_root",
+      "digest_note": "self-referential: its digest moves on every manifest write, so the edge records PENDING and the manifest records its own rule"
+    },
+    {
+      "consumer": "C/T-04, C/T-11, C/T-12",
+      "producer": "B02a",
+      "artifact": "<server-root>/acp2-tools",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": {
+        "node": "<server-root>/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+        "pnpm": "<server-root>/acp2-tools/pnpm",
+        "dsh": "<server-root>/acp2-tools/deepseek-harness",
+        "evidence": "reports/acp2_implementation/bb45a46/B/B02/b-runtime.json"
+      },
+      "supersedes_c_row": "B02a:tools-root"
+    },
+    {
+      "consumer": "C/T-01 acceptance, C harness fixture/live routing",
+      "producer": "B02a",
+      "artifact": "role interpreters",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": {
+        "B": "<acp2-dev>/venvs/b/bin/python",
+        "browser": "<acp2-dev>/venvs/browser/bin/python",
+        "evidence": "reports/acp2_implementation/bb45a46/B/B02/role-interpreters.json"
+      },
+      "supersedes_c_row": "B02a:role-interpreters"
+    },
+    {
+      "consumer": "C/T-08, C/T-17, C/T-21, C/T-31, C/T-38",
+      "producer": "B02a",
+      "artifact": "browser venv (. [browser] extra)",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": {
+        "browser_python": "<acp2-dev>/venvs/browser/bin/python",
+        "chromium_launch_owner": "C T-08 (never a B02a acceptance condition)",
+        "evidence": "reports/acp2_implementation/bb45a46/B/B02/browser-env.json"
+      },
+      "supersedes_c_row": "B02a:browser-venv"
+    }
+  ]
 }

@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
   "contract_version": "1.0.0",
-  "contract_digest": "556d38a3c3f25a78694ee456b175d616d491abc1a0790b1c0d4312e7c82db9ac",
+  "contract_digest": "cbd6580c5d0b404657952c520760cf7320c279854814ab9717fe9356c06179b1",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -169,28 +169,32 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "84c12d646917955ae784d662b50ca624c9cb51cb72f49337e58c629ff57c5495"
+      "sha256": "e423dff0e707639f1fea0f9b7fa402339df5df5f7a852f3ed20d447ef9e54f85",
+      "delivered_by": "B00"
     },
     {
       "id": "baseline-lock",
       "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "db909c034429fff2422f0df620d5d9be06c1cdda6930216eddcb05f693cfc668"
+      "sha256": "fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+      "delivered_by": "B00"
     },
     {
       "id": "lint-baseline",
       "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "f370af4f5052d88925bd67bb5e46442c0d60d525c660484338cef3c1f2a6ffe6"
+      "sha256": "f370af4f5052d88925bd67bb5e46442c0d60d525c660484338cef3c1f2a6ffe6",
+      "delivered_by": "B00"
     },
     {
       "id": "dependencies",
       "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "40fe672eaf66910087e3ebab6d8c575eb6363974d503b99b5e82d4d01405a035"
+      "sha256": "96862edd6534614bfa64620f170161c7cbad6c2117d941dd215e49ab9131c4ac",
+      "delivered_by": "B00"
     },
     {
       "id": "final-debug-patch",
@@ -198,74 +202,128 @@
       "owner": "B",
       "status": "delivered",
       "sha256": "95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181",
-      "digest_target": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json"
+      "digest_target": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json",
+      "delivered_by": "B00"
     },
     {
       "id": "shared-change-request-template",
       "path": "docs/reference/next-change/acp2-contracts/runtime/shared-change-request.template.md",
       "owner": "B",
       "status": "planned",
-      "note": "Template file exists for B01/B03 use; contract freeze deferred."
+      "delivered_by": "B01",
+      "note": "The template file exists (B00) and is used by A/C to request shared-file changes, but it is not a frozen wire contract: B01 may freeze it when the harness consumes it. A file existing is not delivery."
     },
     {
       "id": "acceptance-harness",
       "path": "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B01",
+      "sha256": "93536b91c026fa67660551d7232d5bd8cb1c3401e72b7472694c45f1a5a2f026"
     },
     {
       "id": "acceptance-result-schema",
       "path": "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B01",
+      "sha256": "9c14f1f50bbbba5733a493b8d018e15d6ee137d49c29b3a9121fda1f6a9108ea"
     },
     {
       "id": "application-api",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "a9f7e741007029638b64e069d918746f7105c2bf99c97dc1e9c3818cdcc0d4a4"
+    },
+    {
+      "id": "entry-call-table",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md",
+      "owner": "B",
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "811bb39e433ef3d23c5d8ffa6b34153f13d80f61b931e2dc891e894885363da3"
+    },
+    {
+      "id": "p2-research-operations",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+      "owner": "B",
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c"
     },
     {
       "id": "mcp-launch-schema",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "191569bf318048de8ca6364a7a30bbf419f4ce8be658d10837f159e1427df619"
+    },
+    {
+      "id": "mcp-launch-template",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+      "owner": "B",
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "71a966ddc6051a33d9570e745364fe97a4af7011b2400fb2bc1e024caaae5293"
+    },
+    {
+      "id": "canonical-digest-vectors",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json",
+      "owner": "B",
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "ce889df114c3138b60cb23ee7dcf3b53cf4246343b5c7a3a3e2549b2c6c87358"
     },
     {
       "id": "science-binding",
       "path": "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "93a8615939182c7f9897723a1f4e7a96364f55222fe68982ef945f1d11c99c2a"
     },
     {
       "id": "control-and-data",
       "path": "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "75169a703ab6d3e0ef0e95ee08aecca755c01d5ab880f1f7e2ef929016442b0d"
     },
     {
       "id": "admission-approval",
       "path": "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "7cbd97ee055a10eec2de475b9eb54d46e8c1e2c0950ca7cd1d347b5958edbb94"
     },
     {
       "id": "controller-topology",
       "path": "docs/reference/next-change/acp2-contracts/runtime/controller-topology.v1.json",
       "owner": "B",
-      "status": "planned"
-    },
-    {
-      "id": "samples",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/samples/",
-      "owner": "B",
-      "status": "planned"
+      "status": "planned",
+      "delivered_by": "B04a"
     },
     {
       "id": "fallback-deferral",
       "path": "docs/reference/next-change/acp2-contracts/runtime/fallback-deferral.json",
       "owner": "B",
-      "status": "planned"
+      "status": "delivered",
+      "delivered_by": "B03",
+      "sha256": "40be4642bf9d22f510df238bd3a92ba571e9d75edb2beef39cee38a7c26aed50"
+    },
+    {
+      "id": "samples",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/samples/",
+      "owner": "B",
+      "status": "delivered",
+      "digest_target": "docs/reference/next-change/acp2-contracts/runtime/samples/manifest.json",
+      "delivered_by": "B03",
+      "sha256": "d37dcfab39f2181e4ca9533267eac156fc84ca8772e6831a9a8d9108a1fc852e"
     }
   ],
   "deferred_capabilities": [
@@ -391,9 +449,10 @@
     "scripts/acceptance/validate_acp2_contracts.py"
   ],
   "digest_rules": {
-    "manifest_self": "sha256 of canonical compact JSON (sort_keys=True, separators=(\",\", \":\")) of this manifest with contracts[id=\"manifest\"].sha256 set to \"\".",
-    "delivered_contracts": "sha256 of the file bytes.",
-    "final_debug_bundle": "sha256 of runtime/final-debug-patch/manifest.json."
+    "manifest_self": "sha256 of canonical compact JSON (json.dumps(sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)) of this manifest with contracts[id=\"manifest\"].sha256 set to \"\".",
+    "delivered_contracts": "sha256 of the file bytes; for a directory contract the digest is over its digest_target (runtime/samples/manifest.json), and that file itself lists every sample sha256.",
+    "final_debug_bundle": "sha256 of runtime/final-debug-patch/manifest.json.",
+    "merged_contract_digest": "contract_digest = sha256 over sorted lines '<repo-root-relative path> <sha256>\\n' for every contract with status=delivered, excluding the two self-referential files manifest.json and runtime/baseline-lock.json. Recompute at every stage freeze; the validator enforces it."
   },
   "drift": [
     {
@@ -534,6 +593,24 @@
       "count": 90,
       "historical_count": 24,
       "handling": "Snapshot stored verbatim; dirty tree is never the baseline."
+    },
+    {
+      "id": "D-B03-01",
+      "kind": "contract_digest_not_reproducible",
+      "source": "B00 stored contract_digest vs the documented rule applied to the delivered set",
+      "description": "The value stored by B00 (556d38a3...) is not reproducible from any delivered-subset reading of the documented rule, so B03 recomputes contract_digest from the documented rule and the validator now enforces it. The rule text is authoritative, not the inherited number.",
+      "stored_at_b00": "556d38a3c3f25a78694ee456b175d616d491abc1a0790b1c0d4312e7c82db9ac",
+      "recomputed_by": "B03 (validator-enforced)",
+      "handling": "never restate the inherited number; recompute at each freeze and let the validator fail on mismatch"
+    },
+    {
+      "id": "D-B03-02",
+      "kind": "a_dependency_fixture_absent",
+      "source": "A science/cross-track-dependencies.json",
+      "description": "A's cross-track dependency file does not exist; the A edge is recorded as NOT_VERIFIED / blocked_fixture with the exact expected path.",
+      "expected_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "status": "NOT_VERIFIED",
+      "handling": "runtime/dependencies.json not_verified[0]; B14b/H3 closes it. No A row is fabricated."
     }
   ],
   "normative_sync": {
@@ -568,6 +645,54 @@
         ]
       }
     ],
-    "note": "Appended without restructuring existing content; these files remain untracked planning assets and are not part of the B00 commit."
-  }
+    "note": "Appended without restructuring existing content; these files remain untracked planning assets and are not part of the B00 commit.",
+    "b03": {
+      "section": "## B03 sync (2026-10-22)",
+      "status": "appended",
+      "covers": [
+        "application_api",
+        "entry_call_table",
+        "p2_entry_and_versioned_mcp_extension",
+        "cdxml_deferral",
+        "dependency_ledger"
+      ],
+      "documents": [
+        "docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md",
+        "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
+        "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md"
+      ]
+    }
+  },
+  "contract_version_history": [
+    {
+      "version": "1.0.0",
+      "stage": "B00",
+      "note": "initial freeze"
+    },
+    {
+      "version": "1.0.0",
+      "stage": "B03",
+      "note": "additive delivery of planned contracts; no already-delivered wire field changed, so the version is NOT bumped"
+    }
+  ],
+  "b01_deliverables": [
+    "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md",
+    "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+    "scripts/acceptance/acp2_runtime.py",
+    "tests/test_acp2_runtime_acceptance_harness.py"
+  ],
+  "b03_deliverables": [
+    "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md",
+    "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+    "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/fallback-deferral.json",
+    "docs/reference/next-change/acp2-contracts/runtime/samples/",
+    "tests/test_acp2_runtime_contracts.py"
+  ]
 }

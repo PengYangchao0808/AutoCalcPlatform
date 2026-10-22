@@ -1,0 +1,25 @@
+{
+  "sample_id": "prepare.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "prepare",
+  "payload": {
+    "schema_version": 1,
+    "purpose": "artifact",
+    "task_ref": {
+      "task_id": "20261022_001_demo",
+      "attempt": 1,
+      "release": {
+        "release_id": "rel-1",
+        "release_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "artifact_id": "freq_log",
+    "attempt": 1,
+    "generation": 1,
+    "idempotency_key": "idem-prep-01"
+  },
+  "expected": {
+    "valid": true
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "schema": "acp2.runtime.admission-approval.v1",
+  "contract_version": "1.0.0",
+  "frozen_at": "2026-10-22",
+  "owner": "B",
+  "status": "delivered",
+  "scope": "Admission + approval. The P1 subset is the delivered single-resource admission/quota vocabulary; the P2 extension adds persistent proposal approval and cumulative budget settlement. P2 fields are additive: a P1 client ignores them and P1 semantics never change.",
+  "p1": {
+    "implementation_status": "delivered",
+    "modules": [
+      "src/acp_services/runtime/admission.py",
+      "src/acp_services/runtime/quota.py",
+      "src/acp_services/runtime/usage.py",
+      "src/acp_services/runtime/metering_policy.py",
+      "src/acp_services/runtime/metering_decoupling.py"
+    ],
+    "admission_request": {
+      "required": ["principal_id", "project_id", "job_id"],
+      "fields": {
+        "principal_id": {"type": "string", "description": "server-resolved principal"},
+        "project_id": {"type": "string"},
+        "job_id": {"type": "string"},
+        "key_id": {"type": ["string", "null"]},
+        "cores": {"type": "integer", "minimum": 0, "unit": "core"},
+        "memory_mb": {"type": "integer", "minimum": 0, "unit": "megabyte"},
+        "duration_s": {"type": "integer", "minimum": 0, "unit": "second"},
+        "storage_bytes": {"type": "integer", "minimum": 0, "unit": "byte"},
+        "queue": {"type": ["string", "null"]},
+        "node": {"type": ["string", "null"]}
+      }
+    },
+    "admission_decision": {
+      "required": ["allowed", "reason_code", "mode", "policy_version"],
+      "fields": {
+        "allowed": {"type": "boolean"},
+        "reason_code": {"type": "string", "enum": ["admitted", "usage_only", "no_policy_version", "unbounded_request", "hard_limit_unavailable", "queue_not_allowed", "node_not_allowed", "exceeds_cores", "exceeds_memory", "exceeds_duration", "exceeds_storage", "exceeds_concurrency", "capacity_cores", "capacity_memory", "capacity_storage", "capacity_concurrency", "reservation_not_found", "reservation_released", "policy_version_changed"]},
+        "detail": {"type": "string"},
+        "reservation_id": {"type": ["string", "null"]},
+        "mode": {"type": "string", "enum": ["quota-only", "usage-only"]},
+        "policy_version": {"type": "string"}
+      }
+    },
+    "reservation_states": ["reserved", "dispatched", "paused", "queued", "released"],
+    "reservation_hold_semantics": {
+      "reserved": ["cores", "memory", "storage"],
+      "dispatched": ["cores", "memory", "storage"],
+      "paused": ["memory", "storage"],
+      "queued": ["storage", "concurrency"],
+      "released": []
+    },
+    "rules": [
+      "an executable upper bound is mandatory in quota-only mode; an unbounded request is refused (unbounded_request), never silently admitted",
+      "usage-only must be explicitly requested by an administrator; it is never a fallback from a failed quota-only admission",
+      "admission happens once per attempt, before dispatch",
+      "release happens exactly once on terminal state or pre-dispatch refusal",
+      "quota checks and reservations are transactional; a race never over-admits"
+    ],
+    "p1_request_fields_do_not_include": ["proposal", "approval", "budget_accumulation", "model tokens"],
+    "model_token_note": "P1 does not proxy or enforce model token budgets. A model provider budget proxy is C-owned (C T-13) and is not a Runtime resource ledger."
+  },
+  "p2_additive": {
+    "implementation_status": "planned",
+    "owners": {"approval": "B16", "cumulative budget": "B17"},
+    "compatibility_rule": "every P2 field is optional and namespaced under its own object; a P1 reader ignores it and a P2 writer never changes the meaning of a P1 field",
+    "approval": {
+      "resource": "Proposal/ResearchRecord approval (typed Data resource for the record; Runtime for the approval facts)",
+      "request_fields": {
+        "approval_ref": {"type": "string", "required": true, "pattern": "^ap_[A-Za-z0-9._:-]{4,123}$"},
+        "proposal_ref": {"type": "string", "required": true},
+        "plan_digest": {"type": "string", "required": true, "pattern": "^sha256:[0-9a-f]{64}$", "description": "the approval binds the frozen scientific plan; a plan change invalidates the approval"},
+        "requester_ref": {"type": "string", "description": "server-resolved requesting principal"},
+        "approver_ref": {"type": ["string", "null"], "description": "server-resolved approving principal; never a payload claim"},
+        "status": {"type": "string", "required": true, "enum": ["pending", "approved", "rejected", "revoked", "expired"]},
+        "revision": {"type": "integer", "required": true, "minimum": 1},
+        "requested_at": {"type": "string", "format": "date-time"},
+        "decided_at": {"type": ["string", "null"], "format": "date-time"},
+        "expires_at": {"type": ["string", "null"], "format": "date-time"},
+        "reason": {"type": ["string", "null"]}
+      },
+      "rules": [
+        "at most one pending approval per (proposal_ref, plan_digest); a duplicate request replays the existing approval_ref",
+        "the approver identity comes from the authenticated channel and must hold the approval permission; a payload approver/role/tenant is refused (access_denied, params.rule=approver_identity_from_payload)",
+        "an approval authorizes exactly one plan_digest; a different digest requires a new approval",
+        "revoke is terminal for future submits; an already-dispatched attempt is governed by control semantics, not by the approval",
+        "reject/revoke keep the record readable (append-only history), never delete it",
+        "an approval decision is one CAS on expected_revision"
+      ],
+      "state_transitions": [
+        {"from": "pending", "to": "approved", "intent": "approve"},
+        {"from": "pending", "to": "rejected", "intent": "reject"},
+        {"from": "approved", "to": "revoked", "intent": "revoke"},
+        {"from": "pending", "to": "expired", "intent": "expire"}
+      ],
+      "authorization": "read: scope read; request: scope write; decide/revoke: approval permission with a verified human principal"
+    },
+    "cumulative_budget": {
+      "objects": ["budget", "reservation", "usage_fact", "settlement"],
+      "fields": {
+        "budget_id": {"type": "string"},
+        "scope": {"type": "string", "enum": ["principal", "project", "proposal"]},
+        "limit_units": {"type": "string", "description": "canonical decimal string (no float)"},
+        "unit": {"type": "string", "enum": ["core_second", "byte_second", "count"]},
+        "reserved_units": {"type": "string"},
+        "consumed_units": {"type": "string"},
+        "settled_units": {"type": "string"},
+        "policy_version": {"type": "string"},
+        "meter_ref": {"type": ["string", "null"]}
+      },
+      "rules": [
+        "authorize before reserve; reserve before dispatch; settle after terminal",
+        "a cumulative cap is never exceeded by concurrent submissions (transactional check)",
+        "usage facts are recorded separately from the scientific result; a metering failure never blocks completion",
+        "a duplicate or out-of-order usage fact is idempotent per (attempt, meter_ref, fact_id)",
+        "released capacity returns to the ledger exactly once",
+        "budget exhaustion is authorization (access_denied), never a scientific failure"
+      ]
+    },
+    "waiting": {
+      "kinds": ["approval", "budget"],
+      "rule": "waiting is reported as a reason on status plus a bounded cursor query; a client never infers waiting from silence",
+      "status_field": {"waiting": {"kind": "approval|budget", "since": "date-time", "reason": "string", "ref": "string|null"}},
+      "cursor": {"opaque": true, "max_age_s": 900, "bounded_limit": 200, "max_wait_s": 60}
+    },
+    "submit_precondition_chain": ["proposal approved for plan_digest", "budget admitted and reserved", "submit"],
+    "refusal_order": ["authorization", "invalid-parameter", "conflict", "unsupported", "not-prepared", "retryable"],
+    "error_mapping": {
+      "no_approval": {"class": "authorization", "code": "access_denied", "params": {"rule": "approval_required"}},
+      "revoked_approval": {"class": "authorization", "code": "access_denied", "params": {"rule": "approval_revoked"}},
+      "plan_changed": {"class": "conflict", "code": "revision_conflict", "params": {"rule": "approved_plan_digest_mismatch"}},
+      "budget_exhausted": {"class": "authorization", "code": "access_denied", "params": {"rule": "budget_exhausted"}},
+      "duplicate_pending": {"class": "conflict", "code": "revision_conflict", "params": {"rule": "approval_already_pending"}}
+    }
+  },
+  "samples": {
+    "root": "runtime/samples/admission-approval",
+    "positive": ["p1-admission-request.positive.json", "p2-approval-decision.positive.json"],
+    "negative": ["p1-unbounded-request.negative.json", "p2-model-approver.negative.json", "p2-plan-digest-mismatch.negative.json"]
+  }
+}

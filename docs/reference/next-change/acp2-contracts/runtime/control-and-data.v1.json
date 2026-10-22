@@ -1,0 +1,524 @@
+{
+  "schema": "acp2.runtime.control-and-data.v1",
+  "contract_version": "1.0.0",
+  "frozen_at": "2026-10-22",
+  "owner": "B",
+  "status": "delivered",
+  "scope": "P1 control, artifact, idempotency and budget fields. P2 adds approval/budget accumulation in runtime/admission-approval.v1.json; this file stays the P1 subset.",
+  "control": {
+    "commands": [
+      "pause",
+      "unpause",
+      "continue",
+      "cancel",
+      "rerun",
+      "edit"
+    ],
+    "intent_owner": "acp_services.runtime.commands.RuntimeCommands (forwards once to JobControlPort)",
+    "state_source": "src/acp_services/store/records.py::JobStatus",
+    "request_fields": {
+      "task_ref": {
+        "type": "object",
+        "required": true,
+        "description": "task_id + attempt + release."
+      },
+      "intent": {
+        "type": "string",
+        "required": true,
+        "enum": [
+          "pause",
+          "unpause",
+          "continue",
+          "cancel",
+          "rerun",
+          "edit"
+        ]
+      },
+      "expected_revision": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0,
+        "description": "CAS guard; a mismatch is conflict (revision_conflict)."
+      },
+      "idempotency_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+      },
+      "target_node": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "continue only."
+      },
+      "project_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "rerun only; must equal the current project."
+      },
+      "extensions": {
+        "type": [
+          "object",
+          "null"
+        ]
+      }
+    },
+    "intents": {
+      "pause": {
+        "allowed_from": [
+          "queued",
+          "starting",
+          "pending",
+          "running"
+        ],
+        "to": "paused",
+        "local": "SIGSTOP to the process group; the process stays registered (no memory/disk release)",
+        "remote": "bstop on the LSF job",
+        "idempotent": "pausing a paused task returns the current snapshot unchanged",
+        "forbidden_from": [
+          "paused",
+          "completed",
+          "failed",
+          "cancelled",
+          "cancelling"
+        ],
+        "poller": "a paused task is skipped by the poller but still counts as active (never deletable)"
+      },
+      "unpause": {
+        "allowed_from": [
+          "paused"
+        ],
+        "to": "running",
+        "local": "SIGCONT",
+        "remote": "bresume"
+      },
+      "continue": {
+        "allowed_from": [
+          "failed",
+          "cancelled"
+        ],
+        "to": "queued",
+        "attempt": "attempt+1 in the same task directory",
+        "target_node": "optional re-pin; an unknown/incapable override is invalid-parameter"
+      },
+      "cancel": {
+        "allowed_from": [
+          "queued",
+          "starting",
+          "pending",
+          "running",
+          "paused",
+          "waiting_review",
+          "cancelling"
+        ],
+        "to": "cancelling then cancelled",
+        "rule": "cancelled is written only after the execution owner confirms the process/remote job stopped (EXECUTION PROTOCOL invariant 2)",
+        "order_local": [
+          "SIGCONT",
+          "SIGTERM",
+          "SIGKILL"
+        ],
+        "order_remote": [
+          "bresume (if paused)",
+          "bkill"
+        ],
+        "terminal": "a terminal record is returned unchanged with already_terminal=true"
+      },
+      "rerun": {
+        "allowed_from": [
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "to": "queued",
+        "attempt": "attempt+1, same task directory; the previous attempt receipt is archived under WORK/00_RUNTIME/attempts/<N>/",
+        "forbidden": "generating a new {name}__rerun directory"
+      },
+      "edit": {
+        "modes": [
+          "in_place",
+          "new_job"
+        ],
+        "requires": [
+          "expected_source_revision",
+          "request_id",
+          "payload_hash",
+          "payload_json"
+        ],
+        "exactly_once_rule": "the same request_id replays the recorded result; a different payload under the same request_id is conflict"
+      }
+    },
+    "transition_rules": [
+      "every write is one CAS through JobStore.transition (revision/status/attempt guards)",
+      "a control intent is never overwritten by a stale poll observation",
+      "a terminal state can never be resurrected by a stale write",
+      "progress writes never carry status/spec/result",
+      "terminal side effects run after the terminal CAS is persisted and are idempotent"
+    ],
+    "response_fields": {
+      "task_ref": {
+        "type": "object",
+        "required": true
+      },
+      "intent": {
+        "type": "string",
+        "required": true
+      },
+      "state": {
+        "type": "string",
+        "required": true,
+        "enum": [
+          "queued",
+          "starting",
+          "pending",
+          "running",
+          "paused",
+          "cancelling",
+          "waiting_review",
+          "cancelled",
+          "completed",
+          "failed"
+        ]
+      },
+      "previous_state": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "revision": {
+        "type": "integer",
+        "required": true,
+        "minimum": 0
+      },
+      "attempt": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "cancel_requested": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      },
+      "already_terminal": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      }
+    }
+  },
+  "artifacts": {
+    "prepare": {
+      "operation_states": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "canceled",
+        "expired"
+      ],
+      "wire_state_failed_alias": "expired maps to ResourceState.failed on the wire (there is no expired wire value)",
+      "availability": [
+        "absent",
+        "preparing",
+        "ready",
+        "unavailable"
+      ],
+      "request_fields": {
+        "purpose": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "artifact",
+            "structure-input"
+          ]
+        },
+        "task_ref": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "required when purpose=artifact"
+        },
+        "artifact_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "attempt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "generation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "content_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "response_fields": {
+        "operation_ref": {
+          "type": [
+            "string",
+            "object"
+          ],
+          "required": true
+        },
+        "availability": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "absent",
+            "preparing",
+            "ready",
+            "unavailable"
+          ]
+        },
+        "artifact_ref": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "idempotent_replay": {
+          "type": "boolean"
+        }
+      },
+      "rule": "prepare is explicit, idempotent, budget-checked and never triggered by a read or a list"
+    },
+    "read": {
+      "request_fields": {
+        "artifact_ref": {
+          "type": "object",
+          "required": true,
+          "fields": [
+            "task_id",
+            "attempt",
+            "artifact_id",
+            "generation",
+            "digest"
+          ]
+        },
+        "max_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608,
+          "default": 262144,
+          "unit": "byte"
+        },
+        "encoding": {
+          "type": "string",
+          "enum": [
+            "identity",
+            "base64"
+          ],
+          "default": "identity"
+        }
+      },
+      "response_fields": {
+        "artifact_ref": {
+          "type": "object",
+          "required": true
+        },
+        "media_type": {
+          "type": "string",
+          "required": true
+        },
+        "size_bytes": {
+          "type": "integer",
+          "required": true,
+          "minimum": 0
+        },
+        "digest": {
+          "type": "string",
+          "required": true,
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "encoding": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "identity",
+            "base64"
+          ]
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "truncated": {
+          "type": "boolean",
+          "required": true
+        }
+      },
+      "rule": "a read never fetches; a miss is not-prepared (resource_not_ready) with retryable=true and a prepare hint",
+      "digest_rule": "the response digest MUST equal the requested artifact_ref.digest; a mismatch is conflict, never a silent serve"
+    },
+    "generation_rule": "task_id + attempt + artifact_id + generation + digest is the only verifiable artifact reference; any subset is insufficient",
+    "path_rule": "relative_path is task-relative; an absolute host path is never returned"
+  },
+  "idempotency": {
+    "scope": "one key per (resolved principal, command, key). A key from another principal is a different operation.",
+    "key_source": "client-supplied or server-derived: sha256 over (plan_digest, entry id, resolved principal)",
+    "window": {
+      "ttl_s": 604800,
+      "durable": true,
+      "note": "the replay record lives in the Controller store, never in a process-local dict"
+    },
+    "rules": [
+      {
+        "case": "same key, same semantic request",
+        "outcome": "return the recorded operation_ref with idempotent_replay=true; create nothing"
+      },
+      {
+        "case": "same key, different plan_digest / payload",
+        "outcome": "conflict (revision_conflict, params.rule=idempotency_key_reuse)"
+      },
+      {
+        "case": "no key supplied",
+        "outcome": "server derives and echoes a key; retry requires the echoed key"
+      },
+      {
+        "case": "client reconnects",
+        "outcome": "the key still deduplicates (no in-connection state authority)"
+      }
+    ],
+    "applies_to": [
+      "submit",
+      "prepare",
+      "analyze (vibration.compute)",
+      "approval request",
+      "approval decision"
+    ]
+  },
+  "budget": {
+    "p1_fields": {
+      "reservation_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "principal_id": {
+        "type": "string",
+        "description": "server-resolved; never from the payload"
+      },
+      "project_id": {
+        "type": "string"
+      },
+      "job_id": {
+        "type": "string"
+      },
+      "cores": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "memory_mb": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "duration_s": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "storage_bytes": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "quota-only",
+          "usage-only"
+        ],
+        "description": "AdmissionMode. quota-only is the research baseline; usage-only must be explicitly requested."
+      },
+      "policy_version": {
+        "type": "string"
+      }
+    },
+    "rules": [
+      "admission precedes execution and happens once per attempt",
+      "a reservation is released when the attempt reaches a terminal state or is refused before execution",
+      "metering is decoupled: a metering failure never changes scientific completion, readability or the job terminal state",
+      "a duplicate or out-of-order receipt never double-meters",
+      "the budget ledger is the only resource authority; a tool must never hold a local budget counter as authority (GAP-B03-03)",
+      "cumulative/reservation settlement is P2 and is specified in runtime/admission-approval.v1.json"
+    ],
+    "admission_outcomes": [
+      "allowed",
+      "denied_quota",
+      "denied_capability",
+      "denied_authorization"
+    ],
+    "error_mapping": {
+      "denied_quota": {
+        "class": "authorization",
+        "code": "access_denied",
+        "note": "a budget refusal is a policy decision, not a transient error"
+      },
+      "denied_capability": {
+        "class": "unsupported",
+        "code": "unsupported_capability"
+      },
+      "denied_authorization": {
+        "class": "authorization",
+        "code": "access_denied"
+      }
+    }
+  },
+  "samples": {
+    "root": "runtime/samples/control-and-data",
+    "positive": [
+      "prepare.positive.json",
+      "read.positive.json",
+      "cancel.positive.json"
+    ],
+    "negative": [
+      "prepare-without-purpose.negative.json",
+      "read-digest-mismatch.negative.json",
+      "idempotency-key-reuse.negative.json"
+    ]
+  }
+}

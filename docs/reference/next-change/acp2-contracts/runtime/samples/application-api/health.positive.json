@@ -1,0 +1,10 @@
+{
+  "sample_id": "health.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "health",
+  "payload": {},
+  "expected": {
+    "valid": true
+  }
+}

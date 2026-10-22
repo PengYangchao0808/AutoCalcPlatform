@@ -1,0 +1,21 @@
+{
+  "sample_id": "cancel.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "cancel",
+  "payload": {
+    "schema_version": 1,
+    "task_ref": {
+      "task_id": "20261022_001_demo",
+      "attempt": 1,
+      "release": {
+        "release_id": "rel-1",
+        "release_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "expected_revision": 2
+  },
+  "expected": {
+    "valid": true
+  }
+}

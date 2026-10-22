@@ -1,0 +1,21 @@
+{
+  "sample_id": "submit.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "submit",
+  "payload": {
+    "schema_version": 1,
+    "workflow": "singlepoint",
+    "input": {
+      "xyz_text": "1\nH\nH 0 0 0"
+    },
+    "method": {
+      "method": "r2SCAN-3c"
+    },
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "idempotency_key": "idem-0001"
+  },
+  "expected": {
+    "valid": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "sample_id": "p1-admission-request.positive",
+  "contract": "admission-approval.v1.json",
+  "kind": "positive",
+  "operation": "p1-admission",
+  "payload": {
+    "principal_id": "u-1",
+    "project_id": "proj-demo",
+    "job_id": "j-1",
+    "cores": 4,
+    "memory_mb": 2000,
+    "duration_s": 3600,
+    "storage_bytes": 1048576,
+    "mode": "quota-only"
+  },
+  "expected": {
+    "valid": true
+  }
+}

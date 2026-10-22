@@ -1,0 +1,985 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acp.local/contracts/runtime/mcp-launch.schema.json",
+  "title": "ACP 2.0 MCP launch descriptor (H1 format contract)",
+  "description": "Format contract for launching the ACP MCP stdio entry against one Controller. This is NOT an executable H2 entry: a template instance is never evidence that the server runs. The eight tool names and input schemas below are frozen for protocol 2025-06-18.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "launch_version",
+    "server",
+    "transport",
+    "protocol_version",
+    "command",
+    "args",
+    "cwd",
+    "env",
+    "controller",
+    "tools",
+    "constraints"
+  ],
+  "properties": {
+    "launch_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Launch descriptor major version."
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "entrypoint"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "acp"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "entrypoint": {
+          "type": "string",
+          "const": "acp_services.entrypoints.mcp"
+        },
+        "contract_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "contract_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "manifest contract_digest the launch expects; a mismatch with health.contract_digest must abort startup."
+        }
+      }
+    },
+    "transport": {
+      "type": "string",
+      "const": "stdio"
+    },
+    "protocol_version": {
+      "type": "string",
+      "const": "2025-06-18"
+    },
+    "command": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "Absolute interpreter path. No shell string, no relative path."
+    },
+    "args": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 32
+    },
+    "cwd": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "Absolute working directory. Never a task work dir."
+    },
+    "env": {
+      "type": "object",
+      "description": "Explicit environment. Values are absolute paths or URLs; credentials are injected by the launcher, never written into this file.",
+      "additionalProperties": false,
+      "required": [
+        "ACP_RUN_ROOT",
+        "ACP_CONTROLLER_URL",
+        "ACP2_MCP_LOG_LEVEL"
+      ],
+      "properties": {
+        "ACP_RUN_ROOT": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "ACP_CONTROLLER_URL": {
+          "type": "string",
+          "pattern": "^http://(127\\.0\\.0\\.1|localhost):[0-9]{2,5}$",
+          "description": "Loopback HTTP Controller target. The MCP process never starts its own Controller."
+        },
+        "ACP2_MCP_LOG_LEVEL": {
+          "type": "string",
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ]
+        },
+        "ACP2_TOOLS": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "ACP_CONFIG": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "PATH": {
+          "type": "string"
+        }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transport",
+        "loopback_only"
+      ],
+      "properties": {
+        "transport": {
+          "type": "string",
+          "const": "loopback-http"
+        },
+        "loopback_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "start_controller": {
+          "type": "boolean",
+          "const": false,
+          "description": "The MCP process must never start a Controller or a scheduler."
+        },
+        "shared_db": {
+          "type": "boolean",
+          "const": false,
+          "description": "Two Controllers over one DB are refused before any worker starts."
+        }
+      }
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "initialize_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 10
+        },
+        "tools_call_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600,
+          "default": 120
+        },
+        "shutdown_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 10
+        }
+      }
+    },
+    "stdio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "framing": {
+          "type": "string",
+          "const": "newline-delimited json-rpc-2.0"
+        },
+        "max_frame_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 67108864,
+          "default": 1048576
+        },
+        "stdout_is_channel_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "logs_to": {
+          "type": "string",
+          "const": "stderr"
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "The frozen P1 allowlist. Exactly eight entries, in this order; names and input schemas are part of the contract.",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/tool"
+      },
+      "x-acp-set-semantics": false
+    },
+    "extensions": {
+      "type": "array",
+      "description": "P2 versioned MCP extensions (see runtime/p2-research-operations.v1.json). Empty for P1.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "negotiated"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "acp.research.v1"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "negotiated": {
+            "type": "boolean",
+            "const": false,
+            "description": "The launch descriptor never forces a negotiated state; negotiation happens in initialize."
+          }
+        }
+      }
+    },
+    "constraints": {
+      "$ref": "#/$defs/constraints"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reference": {
+      "description": "Operation/job reference returned by acp_submit.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "job",
+                "operation"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "task_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "attempt",
+        "release"
+      ],
+      "properties": {
+        "task_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "release_id",
+            "release_digest"
+          ],
+          "properties": {
+            "release_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "release_digest": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        }
+      }
+    },
+    "artifact_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "attempt",
+        "artifact_id",
+        "generation",
+        "digest"
+      ],
+      "properties": {
+        "task_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "artifact_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "relative_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cores": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        },
+        "walltime_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        },
+        "storage_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "submit_fields": {
+      "type": "object",
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "enum": [
+            "Confsearch",
+            "PESsearch",
+            "BatchOptimize",
+            "XtbPathSearch",
+            "OrcaGradient",
+            "XtbConstrainedOpt",
+            "irc",
+            "scan",
+            "tsmode",
+            "casscf",
+            "nmr",
+            "singlepoint",
+            "optimize",
+            "frequency",
+            "xtb_optimize"
+          ]
+        },
+        "input": {
+          "type": "object"
+        },
+        "method": {
+          "type": "object"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "plan_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "proposal_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "description",
+        "side_effects",
+        "inputSchema"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "acp_capabilities",
+            "acp_preflight",
+            "acp_submit",
+            "acp_status",
+            "acp_cancel",
+            "acp_prepare_artifact",
+            "acp_read_artifact",
+            "acp_analyze"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "description": {
+          "type": "string"
+        },
+        "side_effects": {
+          "type": "string",
+          "enum": [
+            "none",
+            "creates_task",
+            "control_intent",
+            "prepare_operation"
+          ]
+        },
+        "required_action": {
+          "type": "string",
+          "enum": [
+            "read",
+            "write",
+            "control"
+          ]
+        },
+        "inputSchema": {
+          "type": "object",
+          "description": "MUST equal $defs.tool_inputs[<name>] verbatim (see the template instance)."
+        }
+      }
+    },
+    "tool_inputs": {
+      "acp_capabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "description": "No arguments. Read-only discovery."
+      },
+      "acp_preflight": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "input"
+        ],
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "input": {
+            "type": "object"
+          },
+          "method": {
+            "type": "object"
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cores": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4096
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4194304
+              },
+              "walltime_s": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 604800
+              },
+              "storage_bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "description": "Zero side effects: no task, no reservation, no metering."
+      },
+      "acp_submit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "input",
+          "plan_digest"
+        ],
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "input": {
+            "type": "object"
+          },
+          "method": {
+            "type": "object"
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cores": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4096
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4194304
+              },
+              "walltime_s": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 604800
+              },
+              "storage_bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "proposal_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+          }
+        },
+        "description": "Creates at most one task attempt. plan_digest is the authorization value."
+      },
+      "acp_status": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "job",
+                      "operation"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "description": "Authoritative snapshot. Holds no connection state."
+      },
+      "acp_cancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "job",
+                      "operation"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Writes one control intent; cancelled only after the execution owner confirms the stop."
+      },
+      "acp_prepare_artifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "purpose"
+        ],
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "artifact",
+              "structure-input"
+            ]
+          },
+          "task_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "task_id",
+              "attempt",
+              "release"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "attempt": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "release": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "release_id",
+                  "release_digest"
+                ],
+                "properties": {
+                  "release_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "release_digest": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "artifact_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+          }
+        },
+        "description": "Explicit prepare only; never triggered implicitly by a read."
+      },
+      "acp_read_artifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifact_ref"
+        ],
+        "properties": {
+          "artifact_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "task_id",
+              "attempt",
+              "artifact_id",
+              "generation",
+              "digest"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "attempt": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "artifact_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "generation": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "size_bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "media_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "relative_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "max_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8388608,
+            "default": 262144
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "identity",
+              "base64"
+            ],
+            "default": "identity"
+          }
+        },
+        "description": "Bounded read of an already-prepared artifact; a miss never fetches."
+      },
+      "acp_analyze": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysis_id",
+          "input_refs",
+          "explicit"
+        ],
+        "properties": {
+          "analysis_id": {
+            "type": "string",
+            "enum": [
+              "vibration.compute",
+              "vibration.analyze"
+            ]
+          },
+          "input_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "task_id",
+                "attempt",
+                "artifact_id",
+                "generation",
+                "digest"
+              ],
+              "properties": {
+                "task_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+                },
+                "attempt": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "artifact_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+                },
+                "generation": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                },
+                "size_bytes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "media_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "relative_path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "minItems": 1
+          },
+          "explicit": {
+            "type": "boolean",
+            "const": true
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "plan_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+          }
+        },
+        "description": "vibration.analyze starts no QC; vibration.compute starts exactly one frequency task and requires plan_digest."
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "no_side_effect_discovery",
+        "stdout_protocol_only",
+        "no_self_controller",
+        "no_implicit_execution",
+        "no_credential_in_descriptor",
+        "tool_call_state_authority"
+      ],
+      "properties": {
+        "no_side_effect_discovery": {
+          "type": "boolean",
+          "const": true,
+          "description": "initialize, tools/list and ping MUST NOT create, modify or delete any file, task, attempt, reservation or budget fact, MUST NOT start a scheduler/worker, and MUST NOT touch the jobs DB for writing."
+        },
+        "stdout_protocol_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_self_controller": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_implicit_execution": {
+          "type": "boolean",
+          "const": true,
+          "description": "No tool may submit a task unless acp_submit/acp_analyze was called explicitly with a plan_digest. No auto-approval. No implicit prepare on read."
+        },
+        "no_credential_in_descriptor": {
+          "type": "boolean",
+          "const": true,
+          "description": "The descriptor contains no password, token, key, cookie or bearer value; credentials are injected by the launcher at process start."
+        },
+        "tool_call_state_authority": {
+          "type": "string",
+          "const": "none",
+          "description": "A tool call derives all state from the Controller; connection-local caches may not become the authority for idempotency, status or approval."
+        },
+        "unknown_field_policy": {
+          "type": "string",
+          "const": "reject"
+        },
+        "max_in_flight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 4
+        }
+      }
+    }
+  }
+}

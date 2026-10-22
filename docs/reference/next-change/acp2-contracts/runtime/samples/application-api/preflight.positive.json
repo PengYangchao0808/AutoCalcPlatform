@@ -1,0 +1,16 @@
+{
+  "sample_id": "preflight.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "preflight",
+  "payload": {
+    "schema_version": 1,
+    "workflow": "singlepoint",
+    "input": {
+      "smiles": "CCO"
+    }
+  },
+  "expected": {
+    "valid": true
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "sample_id": "missing-producer.negative",
+  "contract": "dependencies.json",
+  "kind": "negative",
+  "payload": {
+    "nodes": [
+      {
+        "id": "B",
+        "todo": 2,
+        "depends_on": [],
+        "depends_on_relation": "AND"
+      }
+    ],
+    "external_nodes": [],
+    "external_edges": [
+      {
+        "consumer": "B",
+        "external_id": "C-T99",
+        "artifact": "x",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "relation": "AND"
+      }
+    ]
+  },
+  "expected": {
+    "valid": false,
+    "class": "invalid-parameter",
+    "code": "input_invalid",
+    "violation": "missing_producer",
+    "field": "external_edges[0].external_id"
+  }
+}
