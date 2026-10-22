@@ -55,6 +55,7 @@ Author: QCcalc Team
 from __future__ import annotations
 
 import math
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, get_args
@@ -64,9 +65,13 @@ __all__ = [
     "CLAIM_STATUSES",
     "COORDINATE_ABS_TOLERANCE_ANGSTROM",
     "ELECTRONIC_STATE_CONSISTENCY_VALIDATOR_ID",
+    "ENERGY_COMPARABILITY_VALIDATOR_ID",
     "FREQUENCY_EVIDENCE_VALIDATOR_ID",
     "FREQUENCY_MEMBERSHIP_VALIDATOR_ID",
     "IMAGINARY_MODE_THRESHOLD_CM1",
+    "IRC_ATOM_ORDER_STABILITY_VALIDATOR_ID",
+    "IRC_BIDIRECTIONAL_COMPLETION_VALIDATOR_ID",
+    "IRC_ENDPOINT_IDENTITY_VALIDATOR_ID",
     "LOW_FREQUENCY_THRESHOLD_CM1",
     "METHOD_CONSISTENCY_VALIDATOR_ID",
     "MODE_SELECTION_STATUSES",
@@ -80,14 +85,23 @@ __all__ = [
     "AssessmentReason",
     "ClaimAssessment",
     "ClaimStatus",
+    "EndpointResolution",
+    "EnergyIdentity",
+    "FrozenEndpoint",
+    "IrcConnectivityValidation",
+    "IrcDirectionEvidence",
+    "IrcReactionReference",
     "MappedModeSelection",
     "MethodStateValidation",
     "MissingCheck",
     "StationaryPointValidation",
     "TransitionStateValidation",
     "validate_electronic_state_consistency",
+    "validate_energy_comparability",
     "validate_frequency_evidence",
     "validate_frequency_membership",
+    "validate_irc_bidirectional_completion",
+    "validate_irc_connectivity",
     "validate_method_consistency",
     "validate_method_state_consistency",
     "validate_no_stationary_point_exists",
@@ -113,6 +127,10 @@ STATIONARY_POINT_EXISTENCE_VALIDATOR_ID: Final = "check.stationary_point_existen
 TS_SADDLE_CANDIDATE_VALIDATOR_ID: Final = "check.ts_saddle_candidate"
 TS_MODE_MAPPING_VALIDATOR_ID: Final = "check.ts_mode_mapping"
 TS_CONNECTIVITY_VALIDATOR_ID: Final = "check.ts_connectivity"
+IRC_BIDIRECTIONAL_COMPLETION_VALIDATOR_ID: Final = "check.irc_bidirectional_completion"
+IRC_ENDPOINT_IDENTITY_VALIDATOR_ID: Final = "check.irc_endpoint_identity"
+IRC_ATOM_ORDER_STABILITY_VALIDATOR_ID: Final = "check.irc_atom_order_stability"
+ENERGY_COMPARABILITY_VALIDATOR_ID: Final = "check.energy_comparability"
 
 #: Mapping statuses accepted by :class:`MappedModeSelection`.  Mirrors
 #: ``cccp.analysis.tsmode.contracts.MappingStatus``; only ``resolved`` binds a
@@ -175,9 +193,13 @@ _MISSING_CHECK_IDS: Final = frozenset(
         "geometry_not_stationary",
         "imaginary_mode_count",
         "imaginary_mode_missing",
+        "irc_not_bidirectional",
         "method_identity_missing",
         "missing_irc",
         "partial_output",
+        "reference_state_unspecified",
+        "standard_state_unspecified",
+        "temperature_unspecified",
         "not_executed",
         "validator_unavailable",
     }
@@ -478,6 +500,413 @@ class TransitionStateValidation:
             "thresholds": {
                 "imaginary_mode_threshold_cm1": IMAGINARY_MODE_THRESHOLD_CM1,
             },
+            "validator_version": VALIDATOR_VERSION,
+        }
+
+
+# ── IRC endpoint / connectivity and energy comparability types ─────────────
+
+
+_ENERGY_KINDS: Final = frozenset({"electronic", "enthalpy", "gibbs_free"})
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenEndpoint:
+    """One frozen endpoint target the IRC directions are judged against.
+
+    ``atom_ids`` are the stable scientific atom identities from the reaction
+    contract.  They are optional because a caller may only have a geometry;
+    when present they must be unique and aligned with ``symbols``.
+    """
+
+    endpoint_id: str
+    species_id: str
+    symbols: tuple[str, ...]
+    coordinates: tuple[tuple[float, float, float], ...]
+    atom_ids: tuple[str, ...] = ()
+    charge: int | None = None
+    multiplicity: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.endpoint_id:
+            raise ValueError("endpoint_id must be non-empty")
+        if not self.species_id:
+            raise ValueError("species_id must be non-empty")
+        symbols = tuple(str(symbol).strip() for symbol in self.symbols)
+        if not symbols or any(not symbol for symbol in symbols):
+            raise ValueError("endpoint symbols must be non-empty")
+        coordinates: list[tuple[float, float, float]] = []
+        for row in self.coordinates:
+            values = tuple(float(value) for value in row)
+            if len(values) != 3 or any(not math.isfinite(value) for value in values):
+                raise ValueError("endpoint coordinates must be finite 3-vectors")
+            coordinates.append((values[0], values[1], values[2]))
+        if len(coordinates) != len(symbols):
+            raise ValueError("endpoint symbols/coordinates atom counts do not match")
+        atom_ids = tuple(str(atom_id) for atom_id in self.atom_ids)
+        if atom_ids:
+            if len(atom_ids) != len(symbols):
+                raise ValueError("endpoint atom_ids must align with symbols")
+            if len(set(atom_ids)) != len(atom_ids) or any(not atom_id for atom_id in atom_ids):
+                raise ValueError("endpoint atom_ids must be unique and non-empty")
+        if self.multiplicity is not None and self.multiplicity < 1:
+            raise ValueError("endpoint multiplicity must be >= 1")
+        object.__setattr__(self, "symbols", symbols)
+        object.__setattr__(self, "coordinates", tuple(coordinates))
+        object.__setattr__(self, "atom_ids", atom_ids)
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> FrozenEndpoint:
+        """Build an endpoint from a JSON record."""
+        raw_coordinates = payload.get("coordinates")
+        if not isinstance(raw_coordinates, list):
+            raise ValueError("endpoint coordinates must be a list")
+        coordinates: list[tuple[float, float, float]] = []
+        for index, row in enumerate(raw_coordinates):
+            if not isinstance(row, (list, tuple)) or len(row) != 3:
+                raise ValueError(f"endpoint coordinates[{index}] must be a 3-vector")
+            coordinates.append((float(row[0]), float(row[1]), float(row[2])))
+        raw_symbols = payload.get("symbols")
+        if not isinstance(raw_symbols, list):
+            raise ValueError("endpoint symbols must be a list")
+        raw_atom_ids = payload.get("atom_ids") or []
+        if not isinstance(raw_atom_ids, list):
+            raise ValueError("endpoint atom_ids must be a list")
+        raw_charge = payload.get("charge")
+        raw_multiplicity = payload.get("multiplicity")
+        return cls(
+            endpoint_id=str(payload.get("endpoint_id") or ""),
+            species_id=str(payload.get("species_id") or ""),
+            symbols=tuple(str(symbol) for symbol in raw_symbols),
+            coordinates=tuple(coordinates),
+            atom_ids=tuple(str(atom_id) for atom_id in raw_atom_ids),
+            charge=int(raw_charge) if raw_charge is not None else None,
+            multiplicity=int(raw_multiplicity) if raw_multiplicity is not None else None,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe endpoint record."""
+        return {
+            "endpoint_id": self.endpoint_id,
+            "species_id": self.species_id,
+            "symbols": list(self.symbols),
+            "coordinates": [[float(value) for value in row] for row in self.coordinates],
+            "atom_ids": list(self.atom_ids),
+            "charge": self.charge,
+            "multiplicity": self.multiplicity,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class IrcReactionReference:
+    """Frozen reactant/product endpoints plus the target atom mapping.
+
+    ``atom_mapping`` is a full bijection in the reaction contract's stable
+    atom-id space: ``(reactant_index, product_index)`` pairs.  It is the only
+    statement of "the same target reaction" the connectivity validator accepts;
+    direction labels and visual similarity are never used as substitutes.
+    """
+
+    reactant: FrozenEndpoint
+    product: FrozenEndpoint
+    atom_mapping: tuple[tuple[int, int], ...]
+    reaction_id: str = ""
+
+    def __post_init__(self) -> None:
+        mapping = tuple((int(left), int(right)) for left, right in self.atom_mapping)
+        reactant_count = len(self.reactant.symbols)
+        product_count = len(self.product.symbols)
+        if len(mapping) != reactant_count or len(mapping) != product_count:
+            raise ValueError("atom_mapping must cover every reactant and product atom exactly once")
+        left_indices = [left for left, _ in mapping]
+        right_indices = [right for _, right in mapping]
+        if sorted(left_indices) != list(range(reactant_count)):
+            raise ValueError("atom_mapping reactant indices must be a permutation")
+        if sorted(right_indices) != list(range(product_count)):
+            raise ValueError("atom_mapping product indices must be a permutation")
+        for left, right in mapping:
+            if self.reactant.symbols[left] != self.product.symbols[right]:
+                raise ValueError(
+                    "atom_mapping pairs atoms with different elements at "
+                    f"reactant[{left}] and product[{right}]"
+                )
+        object.__setattr__(self, "atom_mapping", mapping)
+
+    @property
+    def mapping_dict(self) -> dict[int, int]:
+        """Reactant index → product index."""
+        return {left: right for left, right in self.atom_mapping}
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> IrcReactionReference:
+        """Build a frozen reaction reference from a JSON record."""
+        raw_reactant = payload.get("reactant")
+        raw_product = payload.get("product")
+        if not isinstance(raw_reactant, Mapping) or not isinstance(raw_product, Mapping):
+            raise ValueError("reaction reference requires reactant and product records")
+        raw_mapping = payload.get("atom_mapping")
+        if not isinstance(raw_mapping, list):
+            raise ValueError("reaction reference requires an atom_mapping list")
+        pairs: list[tuple[int, int]] = []
+        for index, pair in enumerate(raw_mapping):
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                raise ValueError(f"atom_mapping[{index}] must be a 2-element pair")
+            pairs.append((int(pair[0]), int(pair[1])))
+        return cls(
+            reactant=FrozenEndpoint.from_dict(raw_reactant),
+            product=FrozenEndpoint.from_dict(raw_product),
+            atom_mapping=tuple(pairs),
+            reaction_id=str(payload.get("reaction_id") or ""),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe reference record."""
+        return {
+            "reaction_id": self.reaction_id,
+            "reactant": self.reactant.to_dict(),
+            "product": self.product.to_dict(),
+            "atom_mapping": [[left, right] for left, right in self.atom_mapping],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class EnergyIdentity:
+    """Everything that must match before two energies may be subtracted.
+
+    The record deliberately contains no arithmetic: this validator only decides
+    whether a subtraction would be scientifically meaningful.  ``standard_state``
+    and ``reference_state`` are compared as declared tokens; the existing
+    thermochemistry lexicon is consulted only to record its normalized view, so
+    two different tokens are never treated as equal merely because the lexicon
+    collapses them.
+    """
+
+    energy_hartree: float | None = None
+    energy_kind: str = "electronic"
+    method: str | None = None
+    electronic_state: Mapping[str, Any] | None = None
+    charge: int | None = None
+    multiplicity: int | None = None
+    standard_state: str | None = None
+    reference_state: str | None = None
+    temperature_k: float | None = None
+    pressure_pa: float | None = None
+    energy_unit: str = "hartree"
+
+    def __post_init__(self) -> None:
+        if self.energy_hartree is not None and not math.isfinite(self.energy_hartree):
+            raise ValueError("energy_hartree must be finite when supplied")
+        if self.energy_kind not in _ENERGY_KINDS:
+            raise ValueError(f"energy_kind must be one of {sorted(_ENERGY_KINDS)}")
+        from .question import ENERGY_UNITS
+
+        if self.energy_unit not in ENERGY_UNITS:
+            raise ValueError(f"energy_unit must be one of {sorted(ENERGY_UNITS)}")
+        if self.multiplicity is not None and self.multiplicity < 1:
+            raise ValueError("multiplicity must be >= 1")
+        if self.temperature_k is not None and (
+            not math.isfinite(self.temperature_k) or self.temperature_k <= 0.0
+        ):
+            raise ValueError("temperature_k must be positive and finite")
+        if self.pressure_pa is not None and (
+            not math.isfinite(self.pressure_pa) or self.pressure_pa <= 0.0
+        ):
+            raise ValueError("pressure_pa must be positive and finite")
+        if self.electronic_state is not None:
+            object.__setattr__(self, "electronic_state", dict(self.electronic_state))
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> EnergyIdentity:
+        """Build an energy identity from a JSON record."""
+        raw_state = payload.get("electronic_state")
+        if raw_state is not None and not isinstance(raw_state, Mapping):
+            raise ValueError("electronic_state must be a mapping")
+        return cls(
+            energy_hartree=_optional_float(payload.get("energy_hartree")),
+            energy_kind=str(payload.get("energy_kind") or "electronic"),
+            method=_optional_str(payload.get("method")),
+            electronic_state=dict(raw_state) if raw_state is not None else None,
+            charge=_optional_int(payload.get("charge")),
+            multiplicity=_optional_int(payload.get("multiplicity")),
+            standard_state=_optional_str(payload.get("standard_state")),
+            reference_state=_optional_str(payload.get("reference_state")),
+            temperature_k=_optional_float(payload.get("temperature_k")),
+            pressure_pa=_optional_float(payload.get("pressure_pa")),
+            energy_unit=str(payload.get("energy_unit") or "hartree"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe identity record."""
+        return {
+            "energy_hartree": self.energy_hartree,
+            "energy_kind": self.energy_kind,
+            "method": self.method,
+            "electronic_state": (
+                dict(self.electronic_state) if self.electronic_state is not None else None
+            ),
+            "charge": self.charge,
+            "multiplicity": self.multiplicity,
+            "standard_state": self.standard_state,
+            "reference_state": self.reference_state,
+            "temperature_k": self.temperature_k,
+            "pressure_pa": self.pressure_pa,
+            "energy_unit": self.energy_unit,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class IrcDirectionEvidence:
+    """One IRC direction's native completion evidence."""
+
+    direction: str
+    present: bool = False
+    success: bool | None = None
+    converged: bool | None = None
+    steps: int | None = None
+    termination_status: str | None = None
+    symbols: tuple[str, ...] | None = None
+    coordinates: tuple[tuple[float, float, float], ...] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe direction evidence."""
+        return {
+            "direction": self.direction,
+            "present": self.present,
+            "success": self.success,
+            "converged": self.converged,
+            "steps": self.steps,
+            "termination_status": self.termination_status,
+            "symbols": list(self.symbols) if self.symbols is not None else None,
+            "coordinates": (
+                [[float(value) for value in row] for row in self.coordinates]
+                if self.coordinates is not None
+                else None
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class EndpointResolution:
+    """One IRC endpoint judged against the frozen reactant/product pair.
+
+    ``status`` is the endpoint-identity verdict: ``resolved`` (unique match),
+    ``ambiguous`` (geometry/topology permits more than one target),
+    ``different`` (affirmatively a different species/geometry) or
+    ``unresolved`` (insufficient evidence to map).  ``atom_order_stability``
+    records whether the endpoint's atom order was the reference order or a
+    uniquely resolved permutation; it is never assumed.
+    """
+
+    direction: str
+    status: str
+    target_endpoint_id: str | None = None
+    target_species_id: str | None = None
+    classification: str | None = None
+    rmsd_angstrom: float | None = None
+    connectivity_matches: bool | None = None
+    atom_order_stability: str = "unresolved"
+    atom_mapping: tuple[tuple[int, int], ...] = ()
+    candidate_matches: tuple[dict[str, Any], ...] = ()
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if self.status not in {"resolved", "ambiguous", "different", "unresolved"}:
+            raise ValueError(f"unknown endpoint resolution status {self.status!r}")
+        if self.atom_order_stability not in {
+            "identity",
+            "permutation_resolved",
+            "ambiguous",
+            "unresolved",
+        }:
+            raise ValueError(f"unknown atom-order stability {self.atom_order_stability!r}")
+        object.__setattr__(self, "atom_mapping", tuple(self.atom_mapping))
+        object.__setattr__(self, "candidate_matches", tuple(self.candidate_matches))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe endpoint resolution."""
+        return {
+            "direction": self.direction,
+            "status": self.status,
+            "target_endpoint_id": self.target_endpoint_id,
+            "target_species_id": self.target_species_id,
+            "classification": self.classification,
+            "rmsd_angstrom": self.rmsd_angstrom,
+            "connectivity_matches": self.connectivity_matches,
+            "atom_order_stability": self.atom_order_stability,
+            "atom_mapping": [[left, right] for left, right in self.atom_mapping],
+            "candidate_matches": [dict(match) for match in self.candidate_matches],
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class IrcConnectivityValidation:
+    """Composite bidirectional-IRC connectivity report.
+
+    The connectivity claim is the only claim a report may use as proof; the
+    per-direction and atom-order claims are supporting facts.  A single
+    completed direction can never produce a ``supported`` connectivity claim.
+    """
+
+    forward: IrcDirectionEvidence
+    reverse: IrcDirectionEvidence
+    claims: tuple[ClaimAssessment, ...]
+    forward_resolution: EndpointResolution | None = None
+    reverse_resolution: EndpointResolution | None = None
+    direction_assignment: str | None = None
+    endpoint_atom_order_mapping: tuple[tuple[int, int], ...] = ()
+    effective_atom_mapping: tuple[tuple[int, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "claims", tuple(self.claims))
+        object.__setattr__(
+            self, "endpoint_atom_order_mapping", tuple(self.endpoint_atom_order_mapping)
+        )
+        object.__setattr__(self, "effective_atom_mapping", tuple(self.effective_atom_mapping))
+        if not self.claims:
+            raise ValueError("IRC connectivity validation requires at least one claim")
+
+    @property
+    def connectivity(self) -> ClaimAssessment:
+        """The composite "TS connects the intended endpoints" claim."""
+        claim = self.claim("c-ts-connects-intended-endpoints")
+        if claim is None:  # pragma: no cover - construction invariant
+            raise ValueError("IRC connectivity validation has no connectivity claim")
+        return claim
+
+    @property
+    def status(self) -> ClaimStatus:
+        """Overall connectivity verdict."""
+        return self.connectivity.status
+
+    def claim(self, claim_id: str) -> ClaimAssessment | None:
+        """Return the claim with *claim_id*, or ``None`` when absent."""
+        for claim in self.claims:
+            if claim.claim_id == claim_id:
+                return claim
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe composite report."""
+        return {
+            "status": self.status,
+            "claim_id": self.connectivity.claim_id,
+            "claims": [claim.to_dict() for claim in self.claims],
+            "forward": self.forward.to_dict(),
+            "reverse": self.reverse.to_dict(),
+            "forward_endpoint": (
+                self.forward_resolution.to_dict() if self.forward_resolution is not None else None
+            ),
+            "reverse_endpoint": (
+                self.reverse_resolution.to_dict() if self.reverse_resolution is not None else None
+            ),
+            "direction_assignment": self.direction_assignment,
+            "endpoint_atom_order_mapping": [
+                [left, right] for left, right in self.endpoint_atom_order_mapping
+            ],
+            "effective_atom_mapping": [
+                [left, right] for left, right in self.effective_atom_mapping
+            ],
             "validator_version": VALIDATOR_VERSION,
         }
 
@@ -819,6 +1248,520 @@ def _coerce_mapped_mode(value: Any) -> MappedModeSelection | None:
             getattr(value, "source_artifact_digest", None)
         ),
     )
+
+
+# ── IRC / energy coercion and atom-mapping helpers ─────────────────────────
+
+
+_MAX_MAPPING_CANDIDATES: Final = 256
+_MAX_MAPPING_ASSIGNMENTS: Final = 200_000
+_MAPPING_RMSD_TIE_ANGSTROM: Final = 1.0e-6
+_TERMINAL_DIRECTION_STATUSES: Final = frozenset({"completed", "converged"})
+
+
+@dataclass(frozen=True, slots=True)
+class _MappingResolution:
+    pairs: tuple[tuple[int, int], ...] | None
+    atom_order: str
+    reason: str
+
+
+def _normalize_symbols(symbols: Any) -> list[str]:
+    if not isinstance(symbols, (list, tuple)):
+        raise ValueError("endpoint symbols must be a sequence")
+    normalized = [str(symbol).strip().capitalize() for symbol in symbols]
+    if any(not symbol for symbol in normalized):
+        raise ValueError("endpoint symbols must be non-empty")
+    return normalized
+
+
+def _normalize_coordinates(coordinates: Any) -> tuple[tuple[float, float, float], ...]:
+    if not isinstance(coordinates, (list, tuple)):
+        raise ValueError("endpoint coordinates must be a sequence")
+    rows: list[tuple[float, float, float]] = []
+    for row in coordinates:
+        values = tuple(float(value) for value in row)
+        if len(values) != 3 or any(not math.isfinite(value) for value in values):
+            raise ValueError("endpoint coordinates must be finite 3-vectors")
+        rows.append((values[0], values[1], values[2]))
+    return tuple(rows)
+
+
+def _coordinate_lists(
+    coordinates: tuple[tuple[float, float, float], ...],
+) -> list[list[float]]:
+    return [[float(value) for value in row] for row in coordinates]
+
+
+def _is_heavy_atom(symbol: str) -> bool:
+    return symbol.strip().upper() != "H"
+
+
+def _adjacency(symbols: list[str], edges: set[tuple[int, int]]) -> list[set[int]]:
+    adjacency: list[set[int]] = [set() for _ in symbols]
+    for left, right in edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    return adjacency
+
+
+def _neighborhood_signature(
+    symbols: list[str], adjacency: list[set[int]], index: int
+) -> tuple[tuple[str, ...], int]:
+    return (
+        tuple(sorted(symbols[neighbor] for neighbor in adjacency[index])),
+        len(adjacency[index]),
+    )
+
+
+def _mapping_coordinates(pairs: tuple[tuple[int, int], ...]) -> list[tuple[int, int]]:
+    return list(pairs)
+
+
+def _resolve_atom_mapping(
+    query_symbols: Any,
+    query_coordinates: Any,
+    reference_symbols: Any,
+    reference_coordinates: Any,
+) -> _MappingResolution:
+    """Resolve a stable atom mapping by element, bond topology and geometry.
+
+    The mapping is only returned when the query graph is isomorphic to the
+    reference graph and the chosen isomorphism is the unique best geometric
+    assignment.  Atom order is therefore never assumed: a permuted correct
+    endpoint resolves as ``permutation_resolved`` and a permuted wrong
+    endpoint keeps its own topology (or fails to map), so it cannot create a
+    false connection.
+    """
+    from cccp.calculation.irc_endpoints import (
+        EndpointMatchThresholds,
+        classify_endpoint_geometry,
+        perceive_connectivity,
+    )
+
+    try:
+        query = _normalize_symbols(query_symbols)
+        reference = _normalize_symbols(reference_symbols)
+        query_coords = _normalize_coordinates(query_coordinates)
+        reference_coords = _normalize_coordinates(reference_coordinates)
+    except (TypeError, ValueError) as error:
+        return _MappingResolution(None, "unresolved", f"invalid endpoint structure: {error}")
+    if len(query) != len(query_coords) or len(reference) != len(reference_coords):
+        return _MappingResolution(None, "unresolved", "symbols/coordinates atom count mismatch")
+    if len(query) != len(reference):
+        return _MappingResolution(None, "unresolved", "atom count mismatch")
+    if Counter(query) != Counter(reference):
+        return _MappingResolution(None, "unresolved", "element composition mismatch")
+
+    thresholds = EndpointMatchThresholds()
+    query_edges = perceive_connectivity(query, _coordinate_lists(query_coords), thresholds)
+    reference_edges = perceive_connectivity(
+        reference, _coordinate_lists(reference_coords), thresholds
+    )
+    query_adjacency = _adjacency(query, query_edges)
+    reference_adjacency = _adjacency(reference, reference_edges)
+    query_signatures = [
+        _neighborhood_signature(query, query_adjacency, index) for index in range(len(query))
+    ]
+    reference_signatures = [
+        _neighborhood_signature(reference, reference_adjacency, index)
+        for index in range(len(reference))
+    ]
+    if Counter(query_signatures) != Counter(reference_signatures):
+        return _MappingResolution(None, "unresolved", "bond topology mismatch")
+
+    candidates: list[list[int]] = []
+    for query_index, signature in enumerate(query_signatures):
+        candidates.append(
+            [
+                reference_index
+                for reference_index, reference_signature in enumerate(reference_signatures)
+                if reference_signature == signature
+            ]
+        )
+    order = sorted(
+        range(len(query)),
+        key=lambda index: (
+            len(candidates[index]),
+            0 if _is_heavy_atom(query[index]) else 1,
+            index,
+        ),
+    )
+    raw_mappings: list[dict[int, int]] = []
+    visited = 0
+    truncated = False
+
+    def search(position: int, mapping: dict[int, int], used: frozenset[int]) -> None:
+        nonlocal visited, truncated
+        if truncated or len(raw_mappings) >= _MAX_MAPPING_CANDIDATES:
+            truncated = True
+            return
+        if position == len(order):
+            raw_mappings.append(dict(mapping))
+            return
+        query_index = order[position]
+        for reference_index in candidates[query_index]:
+            if reference_index in used:
+                continue
+            visited += 1
+            if visited > _MAX_MAPPING_ASSIGNMENTS:
+                truncated = True
+                return
+            compatible = True
+            for assigned_query, assigned_reference in mapping.items():
+                if query_adjacency[query_index].__contains__(assigned_query) != (
+                    reference_adjacency[reference_index].__contains__(assigned_reference)
+                ):
+                    compatible = False
+                    break
+            if not compatible:
+                continue
+            mapping[query_index] = reference_index
+            search(position + 1, mapping, used | {reference_index})
+            mapping.pop(query_index, None)
+
+    search(0, {}, frozenset())
+    if truncated:
+        return _MappingResolution(None, "ambiguous", "atom-mapping search exceeded its limit")
+    if not raw_mappings:
+        return _MappingResolution(None, "unresolved", "bond topology mismatch")
+
+    scored: list[tuple[float, tuple[tuple[int, int], ...]]] = []
+    for mapping in raw_mappings:
+        pairs = tuple(sorted(mapping.items()))
+        classification = classify_endpoint_geometry(
+            query,
+            _coordinate_lists(query_coords),
+            reference,
+            _coordinate_lists(reference_coords),
+            thresholds=thresholds,
+            atom_mapping=_mapping_coordinates(pairs),
+        )
+        if not classification.connectivity_matches_reference:
+            continue
+        rmsd = classification.rmsd_to_reference
+        if rmsd is None:
+            continue
+        scored.append((float(rmsd), pairs))
+    if not scored:
+        return _MappingResolution(None, "unresolved", "bond topology mismatch")
+
+    best_rmsd = min(rmsd for rmsd, _ in scored)
+    tied = [pairs for rmsd, pairs in scored if abs(rmsd - best_rmsd) <= _MAPPING_RMSD_TIE_ANGSTROM]
+    heavy_signatures = {
+        tuple((left, right) for left, right in pairs if _is_heavy_atom(query[left]))
+        for pairs in tied
+    }
+    if len(heavy_signatures) > 1:
+        return _MappingResolution(
+            None,
+            "ambiguous",
+            "multiple atom mappings are geometrically indistinguishable",
+        )
+    chosen = min(tied)
+    identity = tuple((index, index) for index in range(len(query)))
+    atom_order = "identity" if chosen == identity else "permutation_resolved"
+    return _MappingResolution(chosen, atom_order, "")
+
+
+def _coerce_energy_identity(value: Any) -> EnergyIdentity | None:
+    if value is None:
+        return None
+    if isinstance(value, EnergyIdentity):
+        return value
+    if isinstance(value, Mapping):
+        return EnergyIdentity.from_dict(value)
+    raise ValueError("energy identity must be an EnergyIdentity or a mapping")
+
+
+def _coerce_irc_reference(value: Any) -> IrcReactionReference | None:
+    if value is None:
+        return None
+    if isinstance(value, IrcReactionReference):
+        return value
+    if isinstance(value, Mapping):
+        return IrcReactionReference.from_dict(value)
+    raise ValueError("IRC reference must be an IrcReactionReference or a mapping")
+
+
+def _direction_value(entry: Any) -> str | None:
+    direction = getattr(entry, "direction", None)
+    if direction is None:
+        return None
+    value = getattr(direction, "value", direction)
+    return str(value)
+
+
+def _direction_field(entry: Any, name: str) -> Any:
+    if isinstance(entry, Mapping):
+        return entry.get(name)
+    return getattr(entry, name, None)
+
+
+def _irc_direction_evidence(
+    irc_result: Any,
+    direction: str,
+    entries: tuple[Any, ...],
+    direction_status: Mapping[str, Any] | None,
+) -> IrcDirectionEvidence:
+    matching = [entry for entry in entries if _direction_value(entry) == direction]
+    if len(matching) != 1:
+        return IrcDirectionEvidence(direction=direction)
+    entry = matching[0]
+    raw_symbols = _direction_field(entry, "symbols")
+    raw_coordinates = _direction_field(entry, "coordinates")
+    symbols: tuple[str, ...] | None = None
+    coordinates: tuple[tuple[float, float, float], ...] | None = None
+    if isinstance(raw_symbols, (list, tuple)):
+        symbols = tuple(str(symbol) for symbol in raw_symbols)
+    if isinstance(raw_coordinates, (list, tuple)):
+        try:
+            coordinates = _normalize_coordinates(raw_coordinates)
+        except (TypeError, ValueError):
+            coordinates = None
+    raw_converged = _direction_field(entry, "converged")
+    raw_success = _direction_field(entry, "success")
+    raw_steps = _direction_field(entry, "steps")
+    native_status = None
+    if direction_status is not None:
+        value = direction_status.get(direction)
+        native_status = str(value) if value is not None else None
+    return IrcDirectionEvidence(
+        direction=direction,
+        present=True,
+        success=raw_success if isinstance(raw_success, bool) else None,
+        converged=raw_converged if isinstance(raw_converged, bool) else None,
+        steps=raw_steps if isinstance(raw_steps, int) and not isinstance(raw_steps, bool) else None,
+        termination_status=native_status,
+        symbols=symbols,
+        coordinates=coordinates,
+    )
+
+
+def _endpoint_candidate_summary(
+    endpoint: FrozenEndpoint,
+    resolution: _MappingResolution,
+    classification: Any | None,
+) -> dict[str, Any]:
+    status = "unresolved"
+    if resolution.pairs is None:
+        status = (
+            "different"
+            if resolution.reason
+            in {
+                "atom count mismatch",
+                "element composition mismatch",
+                "bond topology mismatch",
+            }
+            else "ambiguous"
+            if resolution.atom_order == "ambiguous"
+            else "unresolved"
+        )
+    elif classification is not None:
+        if not classification.connectivity_matches_reference:
+            status = "different"
+        elif classification.verdict == "MATCH":
+            status = "resolved"
+        elif classification.verdict == "CLOSE":
+            status = "ambiguous"
+        else:
+            status = "different"
+    return {
+        "endpoint_id": endpoint.endpoint_id,
+        "species_id": endpoint.species_id,
+        "status": status,
+        "classification": None if classification is None else classification.verdict,
+        "rmsd_angstrom": None if classification is None else classification.rmsd_to_reference,
+        "connectivity_matches": (
+            None if classification is None else classification.connectivity_matches_reference
+        ),
+        "atom_order_stability": resolution.atom_order,
+        "atom_mapping": [[left, right] for left, right in (resolution.pairs or ())],
+        "reason": resolution.reason,
+    }
+
+
+def _resolve_direction_endpoint(
+    direction: str,
+    evidence: IrcDirectionEvidence,
+    reference: IrcReactionReference,
+) -> EndpointResolution:
+    from cccp.calculation.irc_endpoints import classify_endpoint_geometry
+
+    if evidence.symbols is None or evidence.coordinates is None:
+        return EndpointResolution(
+            direction=direction,
+            status="unresolved",
+            reason="the direction carries no final endpoint structure",
+        )
+    summaries: list[dict[str, Any]] = []
+    for endpoint in (reference.reactant, reference.product):
+        mapping = _resolve_atom_mapping(
+            evidence.symbols,
+            evidence.coordinates,
+            endpoint.symbols,
+            endpoint.coordinates,
+        )
+        classification = None
+        if mapping.pairs is not None:
+            classification = classify_endpoint_geometry(
+                list(evidence.symbols),
+                _coordinate_lists(evidence.coordinates),
+                list(endpoint.symbols),
+                _coordinate_lists(endpoint.coordinates),
+                atom_mapping=_mapping_coordinates(mapping.pairs),
+            )
+        summaries.append(_endpoint_candidate_summary(endpoint, mapping, classification))
+    reactant_summary, product_summary = summaries
+    reactant_status = str(reactant_summary["status"])
+    product_status = str(product_summary["status"])
+
+    target_summary: dict[str, Any] | None = None
+    status = "unresolved"
+    reason = ""
+    if reactant_status == "resolved" and product_status == "resolved":
+        status = "ambiguous"
+        reason = "the endpoint matches both frozen endpoints"
+    elif reactant_status == "resolved" and product_status == "different":
+        target_summary, status = reactant_summary, "resolved"
+    elif product_status == "resolved" and reactant_status == "different":
+        target_summary, status = product_summary, "resolved"
+    elif reactant_status == "resolved" or product_status == "resolved":
+        status = "ambiguous"
+        reason = "one frozen endpoint matches while the other remains inconclusive"
+    elif "different" in {reactant_status, product_status}:
+        status = "different"
+        reason = "neither frozen endpoint is reproduced by the final structure"
+    elif "ambiguous" in {reactant_status, product_status}:
+        status = "ambiguous"
+        reason = "the endpoint mapping is ambiguous"
+    else:
+        reason = "the endpoint structure could not be mapped to the frozen targets"
+
+    return EndpointResolution(
+        direction=direction,
+        status=status,
+        target_endpoint_id=(
+            str(target_summary["endpoint_id"]) if target_summary is not None else None
+        ),
+        target_species_id=(
+            str(target_summary["species_id"]) if target_summary is not None else None
+        ),
+        classification=(None if target_summary is None else target_summary["classification"]),
+        rmsd_angstrom=(None if target_summary is None else target_summary["rmsd_angstrom"]),
+        connectivity_matches=(
+            None if target_summary is None else target_summary["connectivity_matches"]
+        ),
+        atom_order_stability=(
+            "unresolved" if target_summary is None else str(target_summary["atom_order_stability"])
+        ),
+        atom_mapping=(
+            ()
+            if target_summary is None
+            else tuple((int(pair[0]), int(pair[1])) for pair in target_summary["atom_mapping"])
+        ),
+        candidate_matches=tuple(summaries),
+        reason=reason,
+    )
+
+
+def _invert_pairs(pairs: tuple[tuple[int, int], ...]) -> dict[int, int]:
+    return {right: left for left, right in pairs}
+
+
+def _irc_entries(irc_result: Any) -> tuple[Any, ...] | None:
+    payload = _payload(irc_result)
+    raw = getattr(payload, "directions", None)
+    if raw is None and isinstance(payload, Mapping):
+        raw = payload.get("directions")
+    if raw is None:
+        return None
+    if not isinstance(raw, (list, tuple)):
+        return None
+    return tuple(raw)
+
+
+def _irc_direction_status(irc_result: Any) -> Mapping[str, Any] | None:
+    metadata = getattr(irc_result, "metadata", None)
+    if not isinstance(metadata, Mapping):
+        return None
+    statuses = metadata.get("direction_status")
+    if not isinstance(statuses, Mapping):
+        return None
+    return {str(key): value for key, value in statuses.items()}
+
+
+def _endpoint_identity_claim(
+    direction: str,
+    resolution: EndpointResolution | None,
+) -> ClaimAssessment:
+    claim_id = f"c-irc-{direction}-endpoint"
+    statement = (
+        f"The IRC {direction} direction reaches exactly one frozen reactant/product "
+        "endpoint with a stable atom mapping."
+    )
+    validator_id = IRC_ENDPOINT_IDENTITY_VALIDATOR_ID
+    details: dict[str, Any] = {
+        "direction": direction,
+        "resolution": None if resolution is None else resolution.to_dict(),
+    }
+    if resolution is None:
+        return _inconclusive(
+            claim_id,
+            statement,
+            validator_id,
+            "irc_not_bidirectional",
+            f"the IRC result carries no {direction} direction evidence",
+            details=details,
+        )
+    if resolution.status == "resolved":
+        return _supported(claim_id, statement, validator_id, details=details)
+    if resolution.status == "different":
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=(
+                "The final structure is affirmatively not the frozen endpoint: "
+                f"{resolution.reason or 'endpoint geometry or bond topology differs'}.",
+            ),
+        )
+    return _inconclusive(
+        claim_id,
+        statement,
+        validator_id,
+        "partial_output",
+        resolution.reason or "the endpoint identity could not be resolved",
+        details=details,
+    )
+
+
+def _effective_reaction_mapping(
+    forward: EndpointResolution,
+    reverse: EndpointResolution,
+    *,
+    swap: bool,
+) -> dict[int, int] | None:
+    if not forward.atom_mapping or not reverse.atom_mapping:
+        return None
+    forward_map = dict(forward.atom_mapping)
+    reverse_map = dict(reverse.atom_mapping)
+    if not swap:
+        effective: dict[int, int] = {}
+        for endpoint_index, reactant_index in forward_map.items():
+            product_index = reverse_map.get(endpoint_index)
+            if product_index is None:
+                return None
+            effective[reactant_index] = product_index
+        return effective
+    product_to_reactant: dict[int, int] = {}
+    for endpoint_index, product_index in forward_map.items():
+        reactant_target = reverse_map.get(endpoint_index)
+        if reactant_target is None:
+            return None
+        product_to_reactant[product_index] = reactant_target
+    return _invert_pairs(tuple(sorted(product_to_reactant.items())))
 
 
 # ── individual validators ──────────────────────────────────────────────────
@@ -1610,21 +2553,25 @@ def validate_ts_connectivity(
     transition_state: TransitionStateValidation | None,
     *,
     irc_result: Any | None = None,
+    reference: Any | None = None,
 ) -> ClaimAssessment:
     """Decide whether the transition state connects the intended endpoints.
 
     Mode evidence never proves connectivity: one imaginary mode plus a mapped
     mode identifies a local saddle candidate only.  Without bidirectional IRC
     evidence the claim is ``inconclusive`` with the frozen ``missing_irc``
-    check.  IRC endpoint validation itself is delivered by A-16b, so a supplied
-    IRC result is recorded as ``not_evaluated`` rather than misread here.
+    check.  With an IRC result and a frozen reaction reference, the claim is
+    delegated to :func:`validate_irc_connectivity`; an IRC result without a
+    reference remains ``not_evaluated`` because endpoint identity cannot be
+    judged against a target that was never supplied.
 
     Args:
         transition_state: Optional composite saddle-candidate validation.
-        irc_result: Optional IRC result reserved for the A-16b validator.
+        irc_result: Optional IRC result.
+        reference: Optional :class:`IrcReactionReference` or equivalent record.
 
     Returns:
-        A four-valued :class:`ClaimAssessment` that is never ``supported``.
+        A four-valued :class:`ClaimAssessment`.
     """
     claim_id = "c-ts-connects-intended-endpoints"
     statement = (
@@ -1645,14 +2592,20 @@ def validate_ts_connectivity(
         ),
     }
     if irc_result is not None:
-        return _not_evaluated(
-            claim_id,
-            statement,
-            validator_id,
-            "validator_unavailable",
-            "IRC endpoint connectivity validation is not part of the A-16a validator",
-            details=details,
-        )
+        if reference is None:
+            return _not_evaluated(
+                claim_id,
+                statement,
+                validator_id,
+                "validator_unavailable",
+                "IRC endpoint validation requires a frozen reactant/product reference",
+                details=details,
+            )
+        return validate_irc_connectivity(
+            irc_result,
+            reference,
+            transition_state=transition_state,
+        ).connectivity
     return _inconclusive(
         claim_id,
         statement,
@@ -1666,6 +2619,734 @@ def validate_ts_connectivity(
             "endpoint mapping is required (A-16b).",
         ),
     )
+
+
+def validate_irc_bidirectional_completion(irc_result: Any | None) -> ClaimAssessment:
+    """Decide whether one IRC result completed both requested directions.
+
+    Completion requires a present forward and reverse direction, ``success``
+    and ``converged`` true on both, a native positive step count and both final
+    structures.  A one-sided or partially converged result is never a
+    connectivity refutation: it is missing evidence.
+    """
+    claim_id = "c-irc-bidirectional-complete"
+    statement = (
+        "The IRC result contains a completed forward direction and a completed "
+        "reverse direction, each with native steps and a final structure."
+    )
+    validator_id = IRC_BIDIRECTIONAL_COMPLETION_VALIDATOR_ID
+
+    if irc_result is None:
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            "no IRC result was supplied",
+        )
+    task = _task_name(irc_result)
+    if task != "irc":
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            f"result task is {task!r}, not 'irc'",
+            details={"task": task},
+        )
+    if _status_name(irc_result) != "completed":
+        return _inconclusive(
+            claim_id,
+            statement,
+            validator_id,
+            "partial_output",
+            "the IRC task did not report a completed run",
+            details={"task_status": _status_name(irc_result)},
+        )
+    entries = _irc_entries(irc_result)
+    if entries is None:
+        return _inconclusive(
+            claim_id,
+            statement,
+            validator_id,
+            "partial_output",
+            "the IRC result carries no typed per-direction payload",
+        )
+    direction_status = _irc_direction_status(irc_result)
+    forward = _irc_direction_evidence(irc_result, "forward", entries, direction_status)
+    reverse = _irc_direction_evidence(irc_result, "reverse", entries, direction_status)
+    details: dict[str, Any] = {
+        "forward": forward.to_dict(),
+        "reverse": reverse.to_dict(),
+        "direction_status": (
+            None
+            if direction_status is None
+            else {str(key): str(value) for key, value in direction_status.items()}
+        ),
+        "task_complete": getattr(irc_result, "complete", None),
+    }
+    for evidence in (forward, reverse):
+        if not evidence.present:
+            return _inconclusive(
+                claim_id,
+                statement,
+                validator_id,
+                "irc_not_bidirectional",
+                f"the IRC result carries no {evidence.direction} direction",
+                details=details,
+            )
+        if (
+            evidence.termination_status is not None
+            and evidence.termination_status not in _TERMINAL_DIRECTION_STATUSES
+        ):
+            return _inconclusive(
+                claim_id,
+                statement,
+                validator_id,
+                "irc_not_bidirectional",
+                f"the {evidence.direction} direction terminated as {evidence.termination_status!r}",
+                details=details,
+            )
+        if evidence.success is not True:
+            return _inconclusive(
+                claim_id,
+                statement,
+                validator_id,
+                "irc_not_bidirectional",
+                f"the {evidence.direction} direction did not succeed",
+                details=details,
+            )
+        if evidence.converged is not True:
+            return _inconclusive(
+                claim_id,
+                statement,
+                validator_id,
+                "irc_not_bidirectional",
+                f"the {evidence.direction} direction did not converge",
+                details=details,
+            )
+        if evidence.steps is None or evidence.steps < 1:
+            return _inconclusive(
+                claim_id,
+                statement,
+                validator_id,
+                "partial_output",
+                f"the {evidence.direction} direction carries no native step count",
+                details=details,
+            )
+        if (
+            evidence.symbols is None
+            or evidence.coordinates is None
+            or len(evidence.symbols) != len(evidence.coordinates)
+        ):
+            return _inconclusive(
+                claim_id,
+                statement,
+                validator_id,
+                "partial_output",
+                f"the {evidence.direction} direction carries no complete final structure",
+                details=details,
+            )
+    if getattr(irc_result, "complete", None) is False:
+        return _inconclusive(
+            claim_id,
+            statement,
+            validator_id,
+            "irc_not_bidirectional",
+            "the IRC task reports incomplete scientific output",
+            details=details,
+        )
+    return _supported(claim_id, statement, validator_id, details=details)
+
+
+def validate_irc_connectivity(
+    irc_result: Any | None,
+    reference: Any,
+    *,
+    transition_state: TransitionStateValidation | None = None,
+) -> IrcConnectivityValidation:
+    """Prove connectivity from bidirectional IRC endpoints and a frozen mapping.
+
+    The two directions must each reach one of the frozen endpoints, the two
+    targets must be opposite, and the composed endpoint mapping must equal the
+    frozen reactant→product atom mapping.  Direction labels may be swapped
+    (which physical direction is called "forward" is a convention) but only
+    when that composed mapping proves the same target reaction.  A single
+    completed direction is ``inconclusive``; an endpoint that is affirmatively
+    a different species/topology is ``refuted``.
+    """
+    frozen = _coerce_irc_reference(reference)
+    if frozen is None:
+        raise ValueError("IRC connectivity validation requires a frozen reaction reference")
+
+    completion = validate_irc_bidirectional_completion(irc_result)
+    entries = _irc_entries(irc_result) or ()
+    direction_status = _irc_direction_status(irc_result)
+    forward = _irc_direction_evidence(irc_result, "forward", entries, direction_status)
+    reverse = _irc_direction_evidence(irc_result, "reverse", entries, direction_status)
+    forward_resolution = (
+        _resolve_direction_endpoint("forward", forward, frozen) if forward.present else None
+    )
+    reverse_resolution = (
+        _resolve_direction_endpoint("reverse", reverse, frozen) if reverse.present else None
+    )
+    forward_claim = _endpoint_identity_claim("forward", forward_resolution)
+    reverse_claim = _endpoint_identity_claim("reverse", reverse_resolution)
+
+    details: dict[str, Any] = {
+        "reference_reaction_id": frozen.reaction_id,
+        "frozen_atom_mapping": [[left, right] for left, right in frozen.atom_mapping],
+        "completion_status": completion.status,
+        "ts_candidate_status": None if transition_state is None else transition_state.status,
+        "forward_endpoint": (None if forward_resolution is None else forward_resolution.to_dict()),
+        "reverse_endpoint": (None if reverse_resolution is None else reverse_resolution.to_dict()),
+    }
+
+    if transition_state is not None and transition_state.status == "refuted":
+        connectivity = _refuted(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            details=details,
+            notes=(
+                "The transition-state candidate itself is refuted, so it cannot "
+                "carry a connectivity claim.",
+            ),
+        )
+        atom_order_claim = _irc_atom_order_claim(forward, reverse)
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            (),
+            (),
+        )
+
+    if completion.status != "supported":
+        connectivity = ClaimAssessment(
+            claim_id="c-ts-connects-intended-endpoints",
+            statement=(
+                "The transition state connects the intended reactant and product "
+                "(proven connectivity, not a local mode observation)."
+            ),
+            status=completion.status,
+            reason=completion.reason,
+            validator_id=TS_CONNECTIVITY_VALIDATOR_ID,
+            validator_version=VALIDATOR_VERSION,
+            missing_checks=completion.missing_checks,
+            details=details,
+            notes=(
+                "A one-sided or incomplete IRC path cannot prove bidirectional "
+                "connectivity; this is missing evidence, not a refutation.",
+            ),
+        )
+        atom_order_claim = _irc_atom_order_claim(forward, reverse)
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            (),
+            (),
+        )
+
+    if transition_state is not None and transition_state.status != "supported":
+        connectivity = ClaimAssessment(
+            claim_id="c-ts-connects-intended-endpoints",
+            statement=(
+                "The transition state connects the intended reactant and product "
+                "(proven connectivity, not a local mode observation)."
+            ),
+            status=(
+                "not_evaluated" if transition_state.status == "not_evaluated" else "inconclusive"
+            ),
+            reason=(
+                "not_checked" if transition_state.status == "not_evaluated" else "missing_evidence"
+            ),
+            validator_id=TS_CONNECTIVITY_VALIDATOR_ID,
+            validator_version=VALIDATOR_VERSION,
+            missing_checks=transition_state.candidate.missing_checks
+            or (
+                MissingCheck(
+                    "partial_output",
+                    "the transition-state candidate is not supported",
+                ),
+            ),
+            details=details,
+            notes=(
+                "The transition-state candidate prerequisite is not supported; "
+                "endpoint evidence alone does not promote it.",
+            ),
+        )
+        atom_order_claim = _irc_atom_order_claim(forward, reverse)
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            (),
+            (),
+        )
+
+    atom_order_claim = _irc_atom_order_claim(forward, reverse)
+    if forward.symbols is None or reverse.symbols is None:
+        connectivity = _inconclusive(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            "partial_output",
+            "the two directions do not both carry final structures",
+            details=details,
+        )
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            (),
+            (),
+        )
+    if forward.symbols != reverse.symbols:
+        connectivity = _inconclusive(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            "partial_output",
+            "the forward and reverse endpoints do not share the task atom order",
+            details=details,
+        )
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            (),
+            (),
+        )
+
+    endpoint_order = tuple((index, index) for index in range(len(forward.symbols)))
+    if forward_resolution is None or reverse_resolution is None:
+        connectivity = _inconclusive(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            "partial_output",
+            "an endpoint structure is absent",
+            details=details,
+        )
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            endpoint_order,
+            (),
+        )
+    resolutions = (forward_resolution, reverse_resolution)
+    if any(resolution.status == "different" for resolution in resolutions):
+        connectivity = _refuted(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            details=details,
+            notes=(
+                "At least one final endpoint is affirmatively a different species or "
+                "bond topology than the frozen targets.",
+            ),
+        )
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            endpoint_order,
+            (),
+        )
+    if any(resolution.status != "resolved" for resolution in resolutions):
+        connectivity = _inconclusive(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            "partial_output",
+            "at least one endpoint identity is ambiguous",
+            details=details,
+        )
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            endpoint_order,
+            (),
+        )
+
+    forward_target = forward_resolution.target_endpoint_id
+    reverse_target = reverse_resolution.target_endpoint_id
+    if {forward_target, reverse_target} != {"reactant", "product"}:
+        connectivity = _refuted(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            details=details,
+            notes=(
+                "Both IRC directions reach the same frozen endpoint; a bidirectional "
+                "path requires opposite targets.",
+            ),
+        )
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            None,
+            endpoint_order,
+            (),
+        )
+
+    swapped = forward_target == "product"
+    effective = _effective_reaction_mapping(
+        forward_resolution,
+        reverse_resolution,
+        swap=swapped,
+    )
+    details["direction_assignment"] = "swapped" if swapped else "nominal"
+    details["effective_atom_mapping"] = (
+        None if effective is None else [[left, right] for left, right in sorted(effective.items())]
+    )
+    if effective != frozen.mapping_dict:
+        connectivity = _refuted(
+            "c-ts-connects-intended-endpoints",
+            "The transition state connects the intended reactant and product "
+            "(proven connectivity, not a local mode observation).",
+            TS_CONNECTIVITY_VALIDATOR_ID,
+            details=details,
+            notes=(
+                "The composed endpoint atom mapping does not reproduce the frozen "
+                "reactant→product mapping, so the path does not prove the same "
+                "target reaction.",
+            ),
+        )
+        return _irc_validation_result(
+            forward,
+            reverse,
+            (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+            forward_resolution,
+            reverse_resolution,
+            "swapped" if swapped else "nominal",
+            endpoint_order,
+            () if effective is None else tuple(sorted(effective.items())),
+        )
+
+    connectivity = _supported(
+        "c-ts-connects-intended-endpoints",
+        "The transition state connects the intended reactant and product "
+        "(proven connectivity, not a local mode observation).",
+        TS_CONNECTIVITY_VALIDATOR_ID,
+        details=details,
+        notes=(
+            "Direction labels are a convention; the swapped assignment is accepted "
+            "only because the composed mapping equals the frozen target mapping.",
+        )
+        if swapped
+        else (),
+    )
+    return _irc_validation_result(
+        forward,
+        reverse,
+        (completion, forward_claim, reverse_claim, atom_order_claim, connectivity),
+        forward_resolution,
+        reverse_resolution,
+        "swapped" if swapped else "nominal",
+        endpoint_order,
+        tuple(sorted(effective.items())),
+    )
+
+
+def _irc_atom_order_claim(
+    forward: IrcDirectionEvidence,
+    reverse: IrcDirectionEvidence,
+) -> ClaimAssessment:
+    claim_id = "c-irc-atom-order-stable"
+    statement = (
+        "The forward and reverse IRC endpoints share one stable atom order that "
+        "maps to the frozen endpoint identities without positional assumptions."
+    )
+    validator_id = IRC_ATOM_ORDER_STABILITY_VALIDATOR_ID
+    details: dict[str, Any] = {
+        "forward_symbols": list(forward.symbols) if forward.symbols is not None else None,
+        "reverse_symbols": list(reverse.symbols) if reverse.symbols is not None else None,
+    }
+    if forward.symbols is None or reverse.symbols is None:
+        return _inconclusive(
+            claim_id,
+            statement,
+            validator_id,
+            "partial_output",
+            "both endpoint structures are required to test atom-order stability",
+            details=details,
+        )
+    if tuple(forward.symbols) != tuple(reverse.symbols):
+        return _inconclusive(
+            claim_id,
+            statement,
+            validator_id,
+            "partial_output",
+            "the two IRC directions do not share the task atom order",
+            details=details,
+        )
+    return _supported(claim_id, statement, validator_id, details=details)
+
+
+def _irc_validation_result(
+    forward: IrcDirectionEvidence,
+    reverse: IrcDirectionEvidence,
+    claims: tuple[ClaimAssessment, ...],
+    forward_resolution: EndpointResolution | None,
+    reverse_resolution: EndpointResolution | None,
+    direction_assignment: str | None,
+    endpoint_atom_order_mapping: tuple[tuple[int, int], ...],
+    effective_atom_mapping: tuple[tuple[int, int], ...],
+) -> IrcConnectivityValidation:
+    return IrcConnectivityValidation(
+        forward=forward,
+        reverse=reverse,
+        claims=claims,
+        forward_resolution=forward_resolution,
+        reverse_resolution=reverse_resolution,
+        direction_assignment=direction_assignment,
+        endpoint_atom_order_mapping=endpoint_atom_order_mapping,
+        effective_atom_mapping=effective_atom_mapping,
+    )
+
+
+def validate_energy_comparability(
+    left: Any | None,
+    right: Any | None,
+) -> ClaimAssessment:
+    """Decide whether two energies share a subtraction-compatible identity.
+
+    The check never performs the subtraction.  It refuses (``refuted``) any
+    declared difference in method, electronic state, charge, multiplicity,
+    standard state, reference state, energy kind or unit; it returns
+    ``inconclusive`` when a required identity field is missing, and
+    ``not_evaluated`` when there is no energy value at all.  Standard-state
+    tokens are compared as declared; the existing thermochemistry normalizer is
+    used only to record its lexicon view, never to make two different tokens
+    equal.
+    """
+    from cccp.qc.thermo_normalize import normalize_standard_state
+
+    claim_id = "c-energy-identities-comparable"
+    statement = (
+        "The two energies share the method, electronic state, reference state "
+        "and standard state required for a meaningful subtraction."
+    )
+    validator_id = ENERGY_COMPARABILITY_VALIDATOR_ID
+
+    left_identity = _coerce_energy_identity(left)
+    right_identity = _coerce_energy_identity(right)
+    if left_identity is None or right_identity is None:
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            "both energy identities are required",
+        )
+    details: dict[str, Any] = {
+        "left": left_identity.to_dict(),
+        "right": right_identity.to_dict(),
+        "subtraction_performed": False,
+    }
+    if left_identity.energy_hartree is None or right_identity.energy_hartree is None:
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            "at least one side carries no energy value",
+            details=details,
+        )
+
+    differing: list[str] = []
+    missing: list[MissingCheck] = []
+
+    def compare_declared(field_name: str, left_value: Any, right_value: Any) -> None:
+        if left_value is None and right_value is None:
+            return
+        if left_value is None or right_value is None:
+            missing.append(
+                MissingCheck(
+                    "partial_output",
+                    f"{field_name} is declared on only one side",
+                )
+            )
+            return
+        if left_value != right_value:
+            differing.append(field_name)
+
+    def compare_required(field_name: str, left_value: Any, right_value: Any, check_id: str) -> None:
+        if left_value is None or right_value is None:
+            missing.append(
+                MissingCheck(
+                    check_id,
+                    f"{field_name} is not declared on both sides",
+                )
+            )
+            return
+        if left_value != right_value:
+            differing.append(field_name)
+
+    compare_required(
+        "method",
+        left_identity.method,
+        right_identity.method,
+        "method_identity_missing",
+    )
+    compare_required(
+        "energy_kind",
+        left_identity.energy_kind,
+        right_identity.energy_kind,
+        "partial_output",
+    )
+    compare_required(
+        "energy_unit",
+        left_identity.energy_unit,
+        right_identity.energy_unit,
+        "partial_output",
+    )
+    compare_required(
+        "standard_state",
+        left_identity.standard_state.strip().lower()
+        if left_identity.standard_state is not None
+        else None,
+        right_identity.standard_state.strip().lower()
+        if right_identity.standard_state is not None
+        else None,
+        "standard_state_unspecified",
+    )
+    compare_required(
+        "reference_state",
+        left_identity.reference_state,
+        right_identity.reference_state,
+        "reference_state_unspecified",
+    )
+    compare_declared("charge", left_identity.charge, right_identity.charge)
+    compare_declared("multiplicity", left_identity.multiplicity, right_identity.multiplicity)
+    compare_declared("temperature_k", left_identity.temperature_k, right_identity.temperature_k)
+    compare_declared("pressure_pa", left_identity.pressure_pa, right_identity.pressure_pa)
+
+    left_state = _state_identity_view(
+        dict(left_identity.electronic_state) if left_identity.electronic_state is not None else None
+    )
+    right_state = _state_identity_view(
+        dict(right_identity.electronic_state)
+        if right_identity.electronic_state is not None
+        else None
+    )
+    details["left_electronic_state"] = left_state
+    details["right_electronic_state"] = right_state
+    if left_state is None or right_state is None:
+        missing.append(
+            MissingCheck(
+                "electronic_state_unresolved",
+                "an electronic-state identity is not declared on both sides",
+            )
+        )
+    else:
+        common = sorted(set(left_state) & set(right_state))
+        details["compared_state_fields"] = common
+        if not common:
+            missing.append(
+                MissingCheck(
+                    "electronic_state_unresolved",
+                    "the two electronic-state blocks share no comparable field",
+                )
+            )
+        else:
+            differing.extend(
+                f"electronic_state.{field_name}"
+                for field_name in common
+                if left_state[field_name] != right_state[field_name]
+            )
+
+    details["standard_state_lexicon"] = {
+        "left_raw": left_identity.standard_state,
+        "right_raw": right_identity.standard_state,
+        "left_normalized": (
+            None
+            if left_identity.standard_state is None
+            else normalize_standard_state(left_identity.standard_state)
+        ),
+        "right_normalized": (
+            None
+            if right_identity.standard_state is None
+            else normalize_standard_state(right_identity.standard_state)
+        ),
+        "comparison_basis": "declared token, not the collapsed lexicon token",
+    }
+    if "standard_state" in differing:
+        details["standard_state_note"] = (
+            "The thermochemistry lexicon collapses these tokens; the validator "
+            "deliberately refuses the subtraction on the declared states."
+        )
+    details["differing_fields"] = sorted(set(differing))
+    details["missing_fields"] = sorted({check.check_id for check in missing})
+    if differing:
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=(
+                "Energies from different identities cannot be subtracted: "
+                + ", ".join(sorted(set(differing))),
+            ),
+        )
+    if missing:
+        deduplicated: dict[tuple[str, str], MissingCheck] = {}
+        for check in missing:
+            deduplicated[(check.check_id, check.reason)] = check
+        return ClaimAssessment(
+            claim_id=claim_id,
+            statement=statement,
+            status="inconclusive",
+            reason="missing_evidence",
+            validator_id=validator_id,
+            validator_version=VALIDATOR_VERSION,
+            missing_checks=tuple(deduplicated.values()),
+            details=details,
+            notes=(
+                "The energies cannot be refused, but their comparability is not "
+                "established either.",
+            ),
+        )
+    return _supported(claim_id, statement, validator_id, details=details)
 
 
 def validate_no_stationary_point_exists(optimize_result: Any | None) -> ClaimAssessment:
@@ -2019,3 +3700,22 @@ def _max_component_delta(
 
 def _optional_str(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError("numeric value must not be a boolean")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError("numeric value must be finite")
+    return result
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError("integer value must not be a boolean")
+    return int(value)

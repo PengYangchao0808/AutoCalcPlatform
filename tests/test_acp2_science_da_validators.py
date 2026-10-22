@@ -33,7 +33,12 @@ from cccp.analysis.research import (
     TS_MODE_MAPPING_VALIDATOR_ID,
     TS_SADDLE_CANDIDATE_VALIDATOR_ID,
     VALIDATOR_VERSION,
+    EnergyIdentity,
+    IrcReactionReference,
     MappedModeSelection,
+    validate_energy_comparability,
+    validate_irc_bidirectional_completion,
+    validate_irc_connectivity,
     validate_no_stationary_point_exists,
     validate_optimization_convergence,
     validate_transition_state,
@@ -351,3 +356,270 @@ def test_validator_outputs_are_json_safe_and_namespaced() -> None:
     assert validate_no_stationary_point_exists(None).status == "not_evaluated"
     assert TS_SADDLE_CANDIDATE_VALIDATOR_ID == "check.ts_saddle_candidate"
     assert TS_MODE_MAPPING_VALIDATOR_ID == "check.ts_mode_mapping"
+
+
+# ── A-16b: bidirectional IRC endpoint/connectivity ─────────────────────────
+
+
+def _reference() -> IrcReactionReference:
+    return IrcReactionReference.from_dict(_load_json(FIXTURES / "irc-endpoint-reference.json"))
+
+
+def _energy_cases() -> dict[str, Any]:
+    return _load_json(FIXTURES / "energy-comparability-cases.json")["cases"]
+
+
+def test_constructed_irc_reference_covers_every_atom_once() -> None:
+    reference = _reference()
+    assert reference.reaction_id.endswith("butadiene_ethene_cyclohexene.v1")
+    assert reference.mapping_dict == {left: right for left, right in reference.atom_mapping}
+    assert len(reference.atom_mapping) == len(reference.reactant.symbols) == 16
+    assert reference.reactant.atom_ids[0] == "butadiene:bd_c1"
+    assert reference.product.atom_ids[-1] == "cyclohexene:cy_h10"
+    for left, right in reference.atom_mapping:
+        assert reference.reactant.symbols[left] == reference.product.symbols[right]
+
+
+def test_two_direction_irc_supports_connectivity_with_endpoint_mapping() -> None:
+    reference = _reference()
+    irc = _result("irc-two-direction.json")
+
+    completion = validate_irc_bidirectional_completion(irc)
+    assert completion.status == "supported"
+    assert completion.details["forward"]["steps"] == 12
+    assert completion.details["reverse"]["steps"] == 14
+    assert completion.details["direction_status"] == {
+        "forward": "completed",
+        "reverse": "completed",
+    }
+
+    validation = validate_irc_connectivity(irc, reference)
+    assert validation.status == "supported"
+    assert validation.connectivity.status == "supported"
+    assert validation.direction_assignment == "swapped"
+    assert validation.forward_resolution is not None
+    assert validation.reverse_resolution is not None
+    assert validation.forward_resolution.target_endpoint_id == "product"
+    assert validation.reverse_resolution.target_endpoint_id == "reactant"
+    assert validation.forward_resolution.atom_order_stability == "permutation_resolved"
+    assert validation.reverse_resolution.atom_order_stability == "identity"
+    assert dict(validation.effective_atom_mapping) == reference.mapping_dict
+
+    print("\nQA HAPPY — constructed bidirectional IRC")
+    print(f"  connectivity status     {validation.status}")
+    print(f"  direction assignment    {validation.direction_assignment}")
+    for direction, resolution in (
+        ("forward", validation.forward_resolution),
+        ("reverse", validation.reverse_resolution),
+    ):
+        print(
+            f"  {direction:<7} target        {resolution.target_endpoint_id} "
+            f"(rmsd {resolution.rmsd_angstrom:.6f} A, order {resolution.atom_order_stability})"
+        )
+    print(f"  effective mapping       {list(validation.effective_atom_mapping)}")
+
+
+def test_one_sided_irc_is_inconclusive_never_supported() -> None:
+    reference = _reference()
+    irc = _result("irc-one-direction.json")
+
+    completion = validate_irc_bidirectional_completion(irc)
+    assert completion.status == "inconclusive"
+    assert completion.status != "supported"
+    assert {check.check_id for check in completion.missing_checks} == {"irc_not_bidirectional"}
+
+    validation = validate_irc_connectivity(irc, reference)
+    assert validation.status == "inconclusive"
+    assert validation.status not in {"supported", "refuted"}
+    assert {check.check_id for check in validation.connectivity.missing_checks} == {
+        "irc_not_bidirectional"
+    }
+    assert validation.reverse.present is False
+
+    print("\nQA FAILURE — one IRC direction dropped")
+    print(f"  connectivity status     {validation.status}")
+    print(
+        f"  missing checks          {[c.check_id for c in validation.connectivity.missing_checks]}"
+    )
+
+
+def test_wrong_endpoint_is_refuted() -> None:
+    reference = _reference()
+    validation = validate_irc_connectivity(_result("irc-wrong-endpoint.json"), reference)
+    assert validation.status == "refuted"
+    assert validation.connectivity.reason == "contradiction"
+    assert validation.forward_resolution is not None
+    assert validation.reverse_resolution is not None
+    assert validation.forward_resolution.target_endpoint_id == "product"
+    assert validation.reverse_resolution.status == "different"
+    assert validation.reverse_resolution.target_endpoint_id is None
+    assert validation.claim("c-irc-reverse-endpoint") is not None
+    assert validation.claim("c-irc-reverse-endpoint").status == "refuted"
+
+
+def test_atom_order_permutation_does_not_create_a_false_connection() -> None:
+    reference = _reference()
+    wrong = validate_irc_connectivity(_result("irc-wrong-endpoint-permuted.json"), reference)
+    assert wrong.status == "refuted"
+    assert wrong.connectivity.status != "supported"
+
+    correct = validate_irc_connectivity(
+        _result("irc-two-direction-permuted-endpoint.json"), reference
+    )
+    assert correct.status == "supported"
+    assert correct.reverse_resolution is not None
+    assert correct.reverse_resolution.atom_order_stability == "permutation_resolved"
+    assert correct.forward_resolution is not None
+    assert correct.forward_resolution.atom_order_stability == "permutation_resolved"
+    assert dict(correct.effective_atom_mapping) == reference.mapping_dict
+    assert correct.claim("c-irc-atom-order-stable").status == "supported"
+
+
+def test_direction_swap_is_allowed_only_when_the_mapping_proves_the_target() -> None:
+    reference = _reference()
+    swapped = validate_irc_connectivity(_result("irc-swapped-two-direction.json"), reference)
+    assert swapped.status == "supported"
+    assert swapped.direction_assignment == "nominal"
+    assert swapped.forward_resolution is not None
+    assert swapped.forward_resolution.target_endpoint_id == "reactant"
+    assert swapped.reverse_resolution is not None
+    assert swapped.reverse_resolution.target_endpoint_id == "product"
+    assert dict(swapped.effective_atom_mapping) == reference.mapping_dict
+
+    # A bijective but wrong target mapping (two hydrogens swapped) must refute
+    # the same endpoint evidence: labels/geometry alone are not the proof.
+    wrong_pairs = list(reference.atom_mapping)
+    product_for_reactant = {left: right for left, right in wrong_pairs}
+    swapped_reactants = [
+        index for index, _ in wrong_pairs if reference.reactant.symbols[index] == "H"
+    ][:2]
+    left_a, left_b = swapped_reactants
+    right_a = product_for_reactant[left_a]
+    right_b = product_for_reactant[left_b]
+    wrong_pairs = [
+        (left, right_b if left == left_a else right_a if left == left_b else right)
+        for left, right in wrong_pairs
+    ]
+    wrong_reference = IrcReactionReference(
+        reactant=reference.reactant,
+        product=reference.product,
+        atom_mapping=tuple(wrong_pairs),
+        reaction_id=reference.reaction_id,
+    )
+    refused = validate_irc_connectivity(_result("irc-swapped-two-direction.json"), wrong_reference)
+    assert refused.status == "refuted"
+    assert "does not reproduce the frozen" in " ".join(refused.connectivity.notes)
+
+
+def test_ts_connectivity_delegates_to_irc_validation_with_a_reference() -> None:
+    validation = validate_transition_state(
+        _result("ts-one-imaginary-result.json"),
+        MappedModeSelection(6),
+    )
+    connectivity = validate_ts_connectivity(
+        validation,
+        irc_result=_result("irc-two-direction.json"),
+        reference=_reference(),
+    )
+    assert connectivity.status == "supported"
+    assert connectivity.validator_id == TS_CONNECTIVITY_VALIDATOR_ID
+
+    refused = validate_ts_connectivity(
+        validation,
+        irc_result=_result("irc-two-direction.json"),
+    )
+    assert refused.status == "not_evaluated"
+    assert {check.check_id for check in refused.missing_checks} == {"validator_unavailable"}
+
+
+def test_irc_connectivity_report_is_json_safe() -> None:
+    validation = validate_irc_connectivity(_result("irc-two-direction.json"), _reference())
+    report = validation.to_dict()
+    assert json.loads(json.dumps(report)) == report
+    assert report["status"] == "supported"
+    assert report["direction_assignment"] == "swapped"
+    assert len(report["effective_atom_mapping"]) == 16
+    assert report["forward_endpoint"]["target_endpoint_id"] == "product"
+    assert report["reverse_endpoint"]["target_endpoint_id"] == "reactant"
+    for claim in report["claims"]:
+        assert claim["validator"]["validator_id"].startswith("check.")
+        assert claim["validator"]["kind"] == "deterministic"
+
+
+# ── A-16b: energy comparability ────────────────────────────────────────────
+
+
+def test_energy_comparability_cases_are_refused_or_supported_as_declared() -> None:
+    cases = _energy_cases()
+    for name, case in cases.items():
+        assessment = validate_energy_comparability(case["left"], case["right"])
+        assert assessment.status == case["expected_status"], (name, assessment.to_dict())
+        assert assessment.details["subtraction_performed"] is False
+        assert assessment.validator_id == "check.energy_comparability"
+
+    comparable = validate_energy_comparability(
+        cases["comparable"]["left"], cases["comparable"]["right"]
+    )
+    assert comparable.status == "supported"
+    assert comparable.details["standard_state_lexicon"]["left_normalized"] == "1atm"
+    assert comparable.details["standard_state_lexicon"]["comparison_basis"] == (
+        "declared token, not the collapsed lexicon token"
+    )
+
+
+def test_different_method_state_or_reference_is_refused() -> None:
+    expected = {
+        "different_method": "method",
+        "different_electronic_state": "electronic_state.state_id",
+        "different_standard_state": "standard_state",
+        "different_reference_state": "reference_state",
+        "wrong_charge": "charge",
+        "mixed_energy_kind": "energy_kind",
+        "different_unit": "energy_unit",
+    }
+    cases = _energy_cases()
+    for name, field_name in expected.items():
+        assessment = validate_energy_comparability(cases[name]["left"], cases[name]["right"])
+        assert assessment.status == "refuted", name
+        assert field_name in assessment.details["differing_fields"], name
+        assert "cannot be subtracted" in " ".join(assessment.notes)
+
+
+def test_missing_identity_is_inconclusive_and_missing_energy_not_evaluated() -> None:
+    cases = _energy_cases()
+    missing_standard = validate_energy_comparability(
+        cases["missing_standard_state"]["left"], cases["missing_standard_state"]["right"]
+    )
+    assert missing_standard.status == "inconclusive"
+    assert "standard_state_unspecified" in {
+        check.check_id for check in missing_standard.missing_checks
+    }
+
+    missing_state = validate_energy_comparability(
+        cases["missing_state"]["left"], cases["missing_state"]["right"]
+    )
+    assert missing_state.status == "inconclusive"
+    assert "electronic_state_unresolved" in {
+        check.check_id for check in missing_state.missing_checks
+    }
+
+    missing_energy = validate_energy_comparability(
+        cases["missing_energy"]["left"], cases["missing_energy"]["right"]
+    )
+    assert missing_energy.status == "not_evaluated"
+    assert missing_energy.status != "inconclusive"
+    assert {check.check_id for check in missing_energy.missing_checks} == {"not_executed"}
+
+    assert validate_energy_comparability(None, None).status == "not_evaluated"
+
+
+def test_energy_identity_round_trips_and_rejects_bad_records() -> None:
+    identity = EnergyIdentity.from_dict(_energy_cases()["comparable"]["left"])
+    assert identity.to_dict() == _energy_cases()["comparable"]["left"]
+    assert json.loads(json.dumps(identity.to_dict())) == identity.to_dict()
+    with pytest.raises(ValueError):
+        EnergyIdentity(energy_kind="not_a_kind")
+    with pytest.raises(ValueError):
+        EnergyIdentity(energy_unit="hartree_per_atom")
+    with pytest.raises(ValueError):
+        EnergyIdentity(temperature_k=0.0)

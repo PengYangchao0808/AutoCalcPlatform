@@ -1,0 +1,401 @@
+{
+  "cases": {
+    "comparable": {
+      "expected_status": "supported",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "same declared identity",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "different_electronic_state": {
+      "expected_status": "refuted",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "different electronic state",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "t1",
+          "target_multiplicity": 3
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "different_method": {
+      "expected_status": "refuted",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "different method",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "r2SCAN-3c",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "different_reference_state": {
+      "expected_status": "refuted",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "different reference state",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "finite_basis_fci",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "different_standard_state": {
+      "expected_status": "refuted",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "different standard state",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1M",
+        "temperature_k": 298.15
+      }
+    },
+    "different_unit": {
+      "expected_status": "refuted",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "different unit",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "kcal_per_mol",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "missing_energy": {
+      "expected_status": "not_evaluated",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "no energy value",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": null,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "missing_standard_state": {
+      "expected_status": "inconclusive",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "standard state not declared",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": null,
+        "temperature_k": 298.15
+      }
+    },
+    "missing_state": {
+      "expected_status": "inconclusive",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "electronic state not declared",
+      "right": {
+        "charge": 0,
+        "electronic_state": null,
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "mixed_energy_kind": {
+      "expected_status": "refuted",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "electronic vs free energy",
+      "right": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "gibbs_free",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    },
+    "wrong_charge": {
+      "expected_status": "refuted",
+      "left": {
+        "charge": 0,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      "note": "different total charge",
+      "right": {
+        "charge": -1,
+        "electronic_state": {
+          "state_id": "s0",
+          "target_multiplicity": 1
+        },
+        "energy_hartree": -234.5,
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "isolated_molecule",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      }
+    }
+  },
+  "constructed": true,
+  "description": "Constructed energy identities for the A-16b comparability validator. No energy was computed or subtracted; values are placeholders.",
+  "schema": "acp2.science.energy-comparability-cases",
+  "schema_version": 1
+}
