@@ -1,0 +1,70 @@
+{
+  "built_at_utc": "2026-10-22T15:20:00Z",
+  "candidate_label": "bb45a46",
+  "client_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a",
+  "client_revision_kind": "C-owned RPH/client",
+  "client_revision_source": "<acp2-dev>/C HEAD (Plan C checkout)",
+  "client_revision_status": "clean",
+  "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+  "contract_digest_source": "GET http://127.0.0.1:18765/api/health on the H2 Controller (contract_version 1.1.0)",
+  "contract_version": "1.1.0",
+  "env_digest": "2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc",
+  "env_digest_rule": "sha256 of <acp2-dev>/data/b/acceptance-env.sh",
+  "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+  "harness_revision_b07_rule": "sha256 of the B07-updated harness actually used for the env-runtime/topology receipts (<repo>/scripts/acceptance/acp2_runtime.py); B07 adds only the env-runtime body",
+  "harness_revision_b07_run": "37af66de5058608395052f8902330650e5329eb6f0965306a205b6741e00fed9",
+  "harness_revision_rule": "sha256 of scripts/acceptance/acp2_runtime.py in the H2 candidate tree (<acp2-dev>/B)",
+  "notes": [
+    "H2 is a clean commit whose tree equals main f67f90f (B00-B06 delivered work) without the pre-existing dirty post-freeze edits.",
+    "H3 must build the P1 test candidate, not extend this H2 candidate.",
+    "Client revision is C HEAD recorded for identity only; B does not sign C DSH/model/browser rows."
+  ],
+  "schema": "acp2.h2-candidate.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "server_commit_message": "chore(acceptance): freeze the H2 test candidate from B00-B06",
+  "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "server_revision_kind": "git-commit",
+  "server_source": "<acp2-dev>/B",
+  "server_tree": "eb54b1a28a9922ffd2917758cc35530cc346af90",
+  "server_tree_equals_main_f67f90f_tree": true,
+  "server_worktree_status_porcelain_empty": true,
+  "tested_matrix": {
+    "acp_doctor": {
+      "evidence": "B/B07/doctor/acp-doctor.log",
+      "gaps": 4,
+      "result": "PASS"
+    },
+    "chromium_launch": {
+      "owner": "C T-08",
+      "result": "NOT_VERIFIED"
+    },
+    "controller_health_contract": {
+      "detail": "candidate_revision H2, contract_digest 67073115...",
+      "result": "PASS"
+    },
+    "dsh_real_handshake": {
+      "owner": "C T-11/T-12",
+      "result": "NOT_VERIFIED"
+    },
+    "fixture_registry": {
+      "evidence": "B/fixture-runs.json",
+      "result": "PASS"
+    },
+    "local_controller_two_adapter_topology": {
+      "evidence": "B/B07/topology/topology-summary.json",
+      "result": "PASS"
+    },
+    "local_orca_minimal_probe": {
+      "evidence": "B/B07/environment/orca-h2-probe/h2.out",
+      "result": "PASS"
+    },
+    "local_run_root": {
+      "detail": "xfs <acp2-dev>/data/b/run-root; production 8765 and /var/lib/acp/runs untouched",
+      "result": "PASS"
+    },
+    "lsf_client_queue_ssh": {
+      "prerequisite": "LSF client (bsub/bjobs/bhosts, LSF_ENVDIR) and configured test node absent",
+      "result": "NOT_VERIFIED"
+    }
+  }
+}

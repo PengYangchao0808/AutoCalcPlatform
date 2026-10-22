@@ -227,7 +227,7 @@ def test_a_compatibility_fields_and_owner_prefix() -> None:
 
 def test_check_only_validates_summary_and_artifacts(tmp_path: Path) -> None:
     out = tmp_path / "out"
-    stub = _run("--scenario", "env-runtime", "--out", str(out))
+    stub = _run("--scenario", "package-install", "--out", str(out))
     assert stub.returncode == 2
     summary = out / "summary.json"
     valid = _run("--check-only", str(summary))
@@ -309,7 +309,7 @@ def test_help_dry_run_and_check_only_are_not_scenario_pass(
     assert "DRY-RUN" in dry.stdout
 
     stub_out = tmp_path / "stub"
-    stub = _run("--scenario", "env-runtime", "--out", str(stub_out))
+    stub = _run("--scenario", "package-install", "--out", str(stub_out))
     assert stub.returncode == 2
     summary = stub_out / "summary.json"
     before = summary.read_text(encoding="utf-8")

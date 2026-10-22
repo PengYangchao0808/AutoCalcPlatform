@@ -1,0 +1,21 @@
+INFO:cccp.config:Loaded defaults from: <acp2-dev>/B/config/defaults.yaml
+No remote nodes configured — running local capability checks (local/standalone deployment).
+
+Local capability report (usage=local, tier=local-single)
+  PASS（10）：
+    - software:orca — /home/<user>/orca611/orca（source=config）
+    - software:xtb — /home/<user>/xtb-dist/bin/xtb（source=config）
+    - software:crest — /home/<user>/crest/crest（source=config）
+    - software:censo — /home/<user>/anaconda3/bin/censo（source=config）
+    - software:shermo — /home/<user>/Shermo_2.6.1/Shermo（source=config）
+    - software:isostat — /home/<user>/molclus_1.14_Linux/isostat（source=config）
+    - software:molclus — /home/<user>/molclus_1.14_Linux/molclus（source=config）
+    - run_root — /home/<user>/.local/share/acp/runs — 就绪
+    - store — /home/<user>/.local/share/acp/runs/acp_jobs.db
+    - config — merged configuration loaded
+  FAIL（0）：
+    - （无）
+  NOT_VERIFIED（0）：
+    - （无）
+
+Local doctor finished: all checks passed

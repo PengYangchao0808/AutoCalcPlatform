@@ -1,0 +1,141 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "schema=acp2.b07.environment.v1",
+      "name": "environment_record_schema",
+      "status": "PASS"
+    },
+    {
+      "detail": "path=/home/<user>/orca611/orca sha256=d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1",
+      "name": "local_orca_real_binary",
+      "status": "PASS"
+    },
+    {
+      "detail": "record states /usr/bin/orca is the GNOME screen reader and is never QC ORCA",
+      "name": "forbidden_usr_bin_orca",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=PASS termination=****ORCA TERMINATED NORMALLY**** energy=-1.116759307204 wall_clock_s=0.32",
+      "name": "local_orca_minimal_probe",
+      "status": "PASS"
+    },
+    {
+      "detail": "orca/xtb/crest/censo/shermo each have a version, sha256 and real path",
+      "name": "local_scientific_software_inventory",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_root=<acp2-dev>/data/b/run-root fstype=xfs cores=40 memory=66796507136",
+      "name": "local_run_root",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit=0 summary=10 PASS / 0 FAIL / 0 NOT_VERIFIED gaps=4",
+      "name": "acp_doctor",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=NOT_VERIFIED remote_job_attempted=False prerequisite=Install/initialize the LSF client environment (LSF_ENVDIR; bsub/bjobs/bhosts/bqueues on PATH) and configure a test node (host, SSH host-key identity/credential,",
+      "name": "lsf_gap_honestly_recorded",
+      "status": "PASS"
+    },
+    {
+      "detail": "rows=9 unique=9 arithmetic_ok=True lsf_timeout_seconds=2400",
+      "name": "fixture_registry",
+      "status": "PASS"
+    },
+    {
+      "detail": "server=58d81ec5ec528577692e6c1aa300c46fbf3b43c6 client=ef86091ef338551ebb42c07ebd14fbc81c90901a harness=41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff contract=67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4 env=2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc",
+      "name": "h2_candidate_record",
+      "status": "PASS"
+    },
+    {
+      "detail": "env_server=58d81ec5ec528577692e6c1aa300c46fbf3b43c6 env_digest=2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc file=<acp2-dev>/data/b/acceptance-env.sh",
+      "name": "h2_candidate_environment_binding",
+      "status": "PASS"
+    },
+    {
+      "detail": "overall=OPEN rows=15 missing=[]",
+      "name": "p0_evidence_matrix",
+      "status": "PASS"
+    },
+    {
+      "detail": "health_candidate=58d81ec5ec528577692e6c1aa300c46fbf3b43c6 health_contract=67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4 tasks_before=2 tasks_after=2",
+      "name": "controller_health_binding",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "37af66de5058608395052f8902330650e5329eb6f0965306a205b6741e00fed9",
+    "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6"
+  },
+  "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "command": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "env-runtime",
+    "--controller",
+    "http://127.0.0.1:18765",
+    "--out",
+    "<repo>/reports/acp2_implementation/bb45a46/B/B07",
+    "--timeout",
+    "180"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "<repo>",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "discover",
+    "acceptance.target": "local",
+    "b07.controller_binding": {
+      "health": {
+        "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+        "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+        "contract_digest_scope": "delivered-contract-set",
+        "contract_version": "1.1.0",
+        "read_only": true,
+        "schema_version": 1,
+        "started_at": "2026-10-22T15:36:59.072850Z",
+        "status": "ok"
+      },
+      "task_count_after": 2,
+      "task_count_before": 2
+    },
+    "b07.doctor_log": "<repo>/reports/acp2_implementation/bb45a46/B/B07/doctor/acp-doctor.log",
+    "b07.environment_record": "<repo>/reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
+    "b07.evidence_bases": [
+      "<repo>/reports/acp2_implementation/bb45a46/B"
+    ],
+    "b07.fixture_rows": 9,
+    "b07.fixture_runs": "<repo>/reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+    "b07.h2_candidate_record": "<repo>/reports/acp2_implementation/bb45a46/B/environment/h2-candidate.json",
+    "b07.lsf_log": "<repo>/reports/acp2_implementation/bb45a46/B/B07/lsf/lsf-probe.log",
+    "b07.lsf_timeout_seconds": 2400,
+    "b07.orca_probe": "<repo>/reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.out",
+    "b07.p0_matrix": "<repo>/reports/acp2_implementation/bb45a46/B/B07/p0-matrix.json"
+  },
+  "finished_at": "2026-10-22T15:37:00Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261022T153700Z-399291-8bb987a9",
+  "scenario": "env-runtime",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T15:37:00Z",
+  "submission_id": null,
+  "usage": null
+}

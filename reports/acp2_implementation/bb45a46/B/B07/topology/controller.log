@@ -1,0 +1,58 @@
+INFO:     Started server process [365514]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18765 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18765
+  Run root      : <acp2-dev>/data/b/run-root
+  Poll interval : 30s
+  Docs (Swagger): http://127.0.0.1:18765/docs
+  Reload        : off
+
+INFO:     127.0.0.1:46304 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46316 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43600 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43666 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43650 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43696 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43750 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43712 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43720 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43770 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43748 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43762 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43774 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43778 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43806 - "POST /api/v1/preflight HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43812 - "GET /api/v1/operations/op_b06_missing HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43794 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43818 - "POST /api/v1/preflight HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43834 - "GET /api/v1/operations/op_b06_missing HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43816 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43838 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43840 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43848 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43854 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43856 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43866 - "POST /api/v1/preflight HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43880 - "POST /api/v1/preflight HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43890 - "GET /api/v1/jobs/b06-missing-job HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43892 - "GET /api/v1/jobs/b06-missing-job HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43894 - "GET /api/v1/jobs/b06-missing-job/prepared/catalog?attempt=1&expected_revision=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43902 - "GET /api/v1/jobs/b06-missing-job/prepared/catalog?attempt=1&expected_revision=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:43904 - "POST /api/v1/jobs/b06-missing-job/analyze HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:43908 - "POST /api/v1/jobs/b06-missing-job/analyze HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:43922 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43930 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43942 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43952 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58678 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40524 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50290 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34456 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34478 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34482 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34486 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [365514]

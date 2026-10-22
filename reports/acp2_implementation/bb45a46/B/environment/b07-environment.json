@@ -1,0 +1,220 @@
+{
+  "candidate": {
+    "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+    "source": "<acp2-dev>/B",
+    "tree": "eb54b1a28a9922ffd2917758cc35530cc346af90",
+    "tree_equals_main_f67f90f": true,
+    "worktree_status_porcelain_empty": true
+  },
+  "doctor": {
+    "command": [
+      "<acp2-dev>/venvs/b/bin/python",
+      "-m",
+      "acp",
+      "doctor",
+      "--log-level",
+      "INFO"
+    ],
+    "cwd": "<acp2-dev>/data/b/controller-config",
+    "exit_code": 0,
+    "gaps": [
+      "run_root/store rows validate /home/<user>/.local/share/acp/runs (platform default), not the acceptance run root <acp2-dev>/data/b/run-root. H2 `src/acp/core/paths.py::resolve_run_root` ignores deployment.params.run_root unless passed explicitly; the test Controller must pass --run-root explicitly.",
+      "No remote node is configured (cluster.nodes=[]), so doctor does not check LSF, SSH identity, queue, remote Python/software, release root or a remote work directory. LSF remains NOT_VERIFIED.",
+      "Doctor performs binary-path/sanity checks only; it does not prove dynamic libraries, licenses or scientific execution. The ORCA H2/STO-3G probe is the execution evidence; non-ORCA executables were only version-probed.",
+      "Doctor does not check Playwright/Chromium; that is C T-08 and is NOT_VERIFIED here."
+    ],
+    "raw_log": "reports/acp2_implementation/bb45a46/B/B07/doctor/acp-doctor.log",
+    "summary": "10 PASS / 0 FAIL / 0 NOT_VERIFIED"
+  },
+  "env_handoff": {
+    "file": "<acp2-dev>/data/b/acceptance-env.sh",
+    "mode": "0o600",
+    "note": "recomputed after the H2 ACP_CANDIDATE_REVISION update",
+    "sha256": "2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc"
+  },
+  "evidence": {
+    "doctor": "reports/acp2_implementation/bb45a46/B/B07/doctor/acp-doctor.log",
+    "host_facts": "reports/acp2_implementation/bb45a46/B/B07/environment/host-facts.log",
+    "lsf": "reports/acp2_implementation/bb45a46/B/B07/lsf/lsf-probe.log",
+    "orca_facts": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-facts.log",
+    "orca_probe_dir": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/",
+    "tool_version_probes": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/"
+  },
+  "forbidden_binary": {
+    "file_type": "Python script, ASCII text executable",
+    "observed": "Python script / GNOME Orca screen reader (package orca-40.3-1.el9.noarch)",
+    "path": "/usr/bin/orca",
+    "rule": "/usr/bin/orca is the GNOME screen reader and must never be used as QC ORCA. The controller config pins /home/<user>/orca611/orca.",
+    "use_as_qc_orca": false
+  },
+  "gaps": [
+    "LSF/remote capability: NOT_VERIFIED (no bsub/bjobs/bhosts/LSF_ENVDIR; acceptance cluster is local-only).",
+    "C real DSH handshake: NOT_VERIFIED (C T-11/T-12 not delivered; B does not sign C rows).",
+    "Chromium launch: NOT_VERIFIED (C T-08 not signed by B).",
+    "Doctor run_root/store do not target the acceptance run root on the H2 candidate; Controller uses explicit --run-root.",
+    "Non-ORCA scientific executables have version probes only, not real scientific runs."
+  ],
+  "generated_at_utc": "2026-10-22T15:18:52Z",
+  "host": {
+    "arch": "x86_64",
+    "cores": 40,
+    "cpu_model": "Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz",
+    "glibc": "2.34",
+    "hostname": "redacted-host",
+    "kernel": "5.14.0-687.56.1.el9_8.x86_64",
+    "memory_total_bytes": 66796507136,
+    "memory_total_gib": 62.2,
+    "os": "Rocky Linux 9.8 (Blue Onyx)",
+    "production_run_root": "/var/lib/acp/runs",
+    "production_run_root_touched": false,
+    "run_root": "<acp2-dev>/data/b/run-root",
+    "run_root_free_bytes": 51068715008,
+    "run_root_free_gib": 47.56,
+    "run_root_fstype": "xfs"
+  },
+  "limits": {
+    "cores_total": 40,
+    "disk_free_gib_on_run_root": 47.56,
+    "max_jobs": 4,
+    "memory_total_gib": 62.2,
+    "quota_note": "Machine totals are a ceiling, not a B02-imposed quota. B07 submits no expensive job.",
+    "round_budget_id": "acp2-plan-b-round-20261022",
+    "singlepoint_fixture_budget": {
+      "cores": 1,
+      "memory_mb": 1024,
+      "walltime_s": 60
+    }
+  },
+  "lsf": {
+    "ACP_LSF_NODE": null,
+    "LSF_ENVDIR": null,
+    "LSF_LIBDIR": null,
+    "acceptance_cluster": {
+      "execution_mode": "local",
+      "nodes": []
+    },
+    "client_binaries": {
+      "bhosts": "ABSENT",
+      "bjobs": "ABSENT",
+      "bqueues": "ABSENT",
+      "bsub": "ABSENT",
+      "lsid": "ABSENT"
+    },
+    "prerequisite": "Install/initialize the LSF client environment (LSF_ENVDIR; bsub/bjobs/bhosts/bqueues on PATH) and configure a test node (host, SSH host-key identity/credential, queue, remote Python/software, release root, independent remote work dir) in the acceptance controller config.",
+    "raw_log": "reports/acp2_implementation/bb45a46/B/B07/lsf/lsf-probe.log",
+    "remote_job_attempted": false,
+    "ssh": "/usr/bin/ssh (OpenSSH_9.9p1)",
+    "status": "NOT_VERIFIED"
+  },
+  "path_observation": "xTB/CREST/CENSO/Shermo/Isostat/Molclus are not on PATH, but their configured absolute paths exist, execute, and pass `acp doctor` binary sanity. The earlier \u201cabsent\u201d note was a PATH-only observation, not a missing-install fact.",
+  "schema": "acp2.b07.environment.v1",
+  "software": {
+    "censo": {
+      "interpreter": "python script (#!/usr/bin/env python3)",
+      "license_observation": "ran `--version`; license text not audited",
+      "mode": "0755",
+      "name": "CENSO",
+      "on_path": false,
+      "path": "/home/<user>/anaconda3/bin/censo",
+      "sha256": "cb1ad178fbdb2d37f9acccfad25e93995c396aa5d0296454986147f185382a69",
+      "size_bytes": 229,
+      "source": "config",
+      "version": "3.0.8 (ENSO 2.0.1)",
+      "version_probe": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/censo.log"
+    },
+    "crest": {
+      "license_observation": "ran `--version`; license text not audited",
+      "mode": "0755",
+      "name": "CREST",
+      "on_path": false,
+      "path": "/home/<user>/crest/crest",
+      "sha256": "45ad4e82016f2805c05373c1494f97096365a438d0bdbe1e556be09d91d92a03",
+      "size_bytes": 79244784,
+      "source": "config",
+      "version": "3.0.2",
+      "version_probe": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/crest.log"
+    },
+    "isostat": {
+      "mode": "0744",
+      "name": "Isostat",
+      "on_path": false,
+      "path": "/home/<user>/molclus_1.14_Linux/isostat",
+      "sha256": "1605925c66bcbe8ea555b2c66d1d013744547e8c7fbd95c3e4eaf2a535d2bd28",
+      "size_bytes": 2818965,
+      "source": "config",
+      "version": "2022-May-28 component",
+      "version_probe": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/isostat.log"
+    },
+    "molclus": {
+      "mode": "0744",
+      "name": "Molclus",
+      "on_path": false,
+      "path": "/home/<user>/molclus_1.14_Linux/molclus",
+      "sha256": "a27724c2b9181b4ffa0e71062fcd49f441f24aa84dd6d9dcc4f5c896b9c563ec",
+      "size_bytes": 1132947,
+      "source": "config",
+      "version": "last update 2026-Apr-1",
+      "version_probe": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/molclus.log"
+    },
+    "orca": {
+      "elf_magic_verified": true,
+      "file_type": "ELF 64-bit LSB executable, x86-64, dynamically linked",
+      "ldd_ok": true,
+      "license": {
+        "license_file": "/home/<user>/orca611/Third_Party_Licenses_Academic_6.1.pdf",
+        "license_file_sha256": "16f68a456fe4ef576ed037c2abc1d471336da9a02fedab9216f2f0c50cfea974",
+        "observation": "Academic 6.1 license bundle present; the minimal probe ran without a license server/token checkout. Legal terms are the deployment owner\u2019s responsibility and were not audited by B07."
+      },
+      "mode": "0755",
+      "name": "ORCA",
+      "path": "/home/<user>/orca611/orca",
+      "probe": {
+        "evidence_note": "Tiny H2/STO-3G probe only; never a large job and never a fake binary.",
+        "exit_code": 0,
+        "final_single_point_energy_hartree": -1.116759307204,
+        "input": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.inp",
+        "input_sha256": "54eda43c33d45e7a5a65a516843cadf06b3e9c211c0d751b7c918859890579c1",
+        "max_rss_kb": 113920,
+        "method": "STO-3G SP",
+        "molecule": "H2",
+        "status": "PASS",
+        "stderr": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.err",
+        "stderr_sha256": "4647f7094c041b78ba63b1d03d48ac810a8312817cceff256e8683c8be1335d3",
+        "stdout": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.out",
+        "stdout_sha256": "4447a5bf6b40b07d0b421842fcc9578219fbbcddefb86532a23a1c1ca779d16d",
+        "termination_line": "****ORCA TERMINATED NORMALLY****",
+        "total_run_time": "0 days 0 hours 0 minutes 0 seconds 302 msec",
+        "wall_clock_s": 0.32
+      },
+      "sha256": "d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1",
+      "size_bytes": 43977904,
+      "source": "config",
+      "version": "6.1.1",
+      "version_line": "Program Version 6.1.1  -  RELEASE   -"
+    },
+    "shermo": {
+      "license_observation": "ran version banner; settings.ini absent so defaults used; license text not audited",
+      "mode": "0744",
+      "name": "Shermo",
+      "on_path": false,
+      "path": "/home/<user>/Shermo_2.6.1/Shermo",
+      "sha256": "82c607f9703ffb41a79143b0df4c2a5ec7e716fbb2870eeda830e70eb733b2dd",
+      "size_bytes": 1519547,
+      "source": "config",
+      "version": "2.6.1 (2025-Oct-20)",
+      "version_probe": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/shermo.log"
+    },
+    "xtb": {
+      "license_observation": "ran `--version`; license text not audited",
+      "mode": "0755",
+      "name": "xTB",
+      "on_path": false,
+      "path": "/home/<user>/xtb-dist/bin/xtb",
+      "sha256": "debf27a9e0fa4bfb5ca75aafe4b90d8211f08ec2f4a482f375a4987212eaa12a",
+      "size_bytes": 63253248,
+      "source": "config",
+      "version": "6.7.1 (edcfbbe)",
+      "version_probe": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/xtb.log"
+    }
+  }
+}
