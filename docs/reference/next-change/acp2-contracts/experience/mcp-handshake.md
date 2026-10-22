@@ -268,3 +268,148 @@ Then T-11 is a single `c_accept mcp-live 300` re-run: the same body exercises
 the stdlib probe, the official-client schema snapshot, all five matrix rows and
 the task-count invariant. Until then the row remains `NOT_VERIFIED` and this
 document must not be cited as an H2 PASS.
+
+---
+
+# T-12 section — official DSH MCP plugin profiles and tool discovery (C08)
+
+- **Owner:** C (experience / RPH)
+- **Scenario:** `dsh-discovery-live`
+  (`scripts/acceptance/acp2_experience_scenario_dsh_discovery_live.py`)
+- **Primary evidence run:**
+  `$ACP2_EVIDENCE/C/dsh-discovery-live/dsh-discovery-live-20261022T200600Z-634944/main/`
+- **Receipt result at capture time:** `NOT_VERIFIED`, reason
+  `controller_unavailable`, exit `2` (39 PASS, 3 NOT_VERIFIED, 0 FAIL)
+- **H2 status:** **NOT closed by this row.** T-14 owns the H2 receipt.
+
+## 1. Overlays (C-owned, shipped under the bundle)
+
+| Profile | Overlay | SHA-256 |
+| --- | --- | --- |
+| web | `rph/packages/dsh-bundle/profiles/web.cordis.yml` | `ca9294b0c50b60425306375b1f69376aec756fd42de52295ed5b5b2b5f7449a4` |
+| headless | `rph/packages/dsh-bundle/profiles/headless.cordis.yml` | `2d8141461bcec91d772f9d3a8daae5c59c17948e9ec0e667877659007ecc4513` |
+
+Both are a top-level Cordis patch array. The new entry uses `insert`
+semantics (never a deep merge):
+
+```yaml
+- insert:
+    - id: acp-mcp-acceptance
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: acp
+        transport: stdio
+        # command/args/cwd/env are byte-equal to B05 mcp-launch.json
+        failOnStartupError: true
+```
+
+`command/args/cwd/env` were compared field-by-field against
+`B/B05/mcp-launch.json` (sha256
+`ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046`) in both
+the overlay source and the composed `--dump-config` tree: **equal**.
+
+The web profile also ships one research preset (`rph-research`) with persona,
+time context and `todo_write` only, disables the shipped shell-bearing presets
+(`preset-standard`, `preset-ptc`, `preset-minimal`, `preset-cordis`), and makes
+`rph-research` the default. The headless profile disables `tool-bash`,
+`tool-pwsh`, `tool-jobs`, `bash-sandbox` and `pwsh-sandbox`; `shell-env` stays
+because the permission-presets row injects the `shell` service (it registers
+no tool).
+
+## 2. `--dump-config` (redacted, boot-free)
+
+| Profile | Exit | Redacted archive | SHA-256 | bytes |
+| --- | --- | --- | --- | --- |
+| web | 0 | `dsh-effective-config.web.redacted.yml` | `f10c51f439244921aab65e0886634c502ab6da98702442f3a2c673b802767bae` | 46604 |
+| headless | 0 | `dsh-effective-config.headless.redacted.yml` | `ac78ad502ff3aa6235b03c702f8f299f99a215aa62af5e06ad1488c333bff483` | 13567 |
+
+Only the redacted copies are archived; the unredacted dump is never written to
+disk. `--dump-config` does not evaluate `!!js`, so no credential value is
+expanded; the redactor still masks secret-shaped keys, bearer tokens and
+`?token=` values, and the scenario asserts no live environment secret value
+occurs in the archive.
+
+## 3. Live model-visible snapshot (real registration)
+
+`scripts/acceptance/acp2_dsh_tool_snapshot.mjs` boots the frozen profile through
+`apps/cli/src/profile-boot.ts::runProfile` and reads the live `ctx.tools`
+registry. For web it mounts the default preset through the public
+`agentPresets.mount` + `createScope` APIs and reads `schemas(scopeOf)`; for
+headless the global registry is the model-visible set. Tool origin is captured
+from the first `packages/**` stack frame of `ToolRuntime.prototype.register`
+(resolved to the nearest `package.json` name), so presence is registration,
+not a source scan.
+
+| Profile | Scope | Tools visible at capture | Result |
+| --- | --- | --- | --- |
+| web | `agent-preset:rph-research` | `working_directory`, `todo_write` | no exec, no MCP (plugin failed) |
+| headless | `global` | 21 non-exec native tools (`read`/`glob`/`grep`/`todo_write`/`web_*`/delegation/…); no `bash`/`pwsh`/`job_*`/`ssh`/`terminal` | no exec, no MCP (plugin failed) |
+
+No `mcp__acp__*` tool appears in either live snapshot because the MCP server
+exits before `initialize` (next section). The snapshot is still a real
+registration snapshot: the negative rows are absence after an executed
+registration attempt, not a code-scan prediction.
+
+## 4. Registration attempt — `NOT_VERIFIED(controller_unavailable)`
+
+`failOnStartupError: true` is set in both overlays. Both entries reach
+`fiber_state = FAILED`; the loader prints, and the scenario archives, the exact
+stderr:
+
+```
+2026-10-23 04:06:07,495 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused
+SdkError: Connection closed
+```
+
+`GET http://127.0.0.1:18765/api/health` was connection-refused before and after
+the run; C did not start a Controller, submit a task, or touch `:8765`.
+Therefore `registration.official_plugin`, `registration.eight_p1_tools` and
+`registration.source_plugin` are `NOT_VERIFIED` with that stderr. They are not
+PASS by assumption and not FAIL: the missing prerequisite is B's Controller
+(`B-req-18`). When the plugin registers, the scenario asserts exactly the eight
+P1 names `mcp__acp__` + `P1_TOOLS` and `source_plugin =
+@deepseek-ai/dsh-mcp-client`; a failed registration with a reachable Controller
+is FAIL.
+
+## 5. Web binding
+
+Started with `--host 127.0.0.1 --port <ephemeral> --no-open` (captured port
+53061, never 8765). An HTTP GET to `127.0.0.1:<port>/` returned 401 (the
+auth fence, i.e. listening); an HTTP GET to the host's non-loopback IPv4
+(`10.16.5.157:<port>/`) was `ECONNREFUSED`. Loopback binding is observed, not
+inferred from config.
+
+## 6. Negatives (executed, explicit failure)
+
+| Fixture | Observation | Verdict |
+| --- | --- | --- |
+| bad `command` (`/nonexistent/acp2-missing-python`) | entry `FAILED`; stderr `Error: spawn /nonexistent/acp2-missing-python ENOENT`; zero `mcp__` tools | **PASS** (explicit, no silent start) |
+| incompatible protocol (stdio stub rejects every version) | client sent `initialize` `2025-11-25`; stub answered `-32602`, `data.code=unsupported_protocol_version`; entry `FAILED`; zero `mcp__` tools | **PASS** (explicit) |
+
+The stub is a test fixture written into the evidence directory; it is never
+part of the shipped profile and exposes no QC capability.
+
+## 7. Finding F1 — still OPEN; B must reconcile before H2
+
+T-12 does not silently adopt either schema shape. The T-11 `schema-drift.json`
+remains the recorded source: B05 descriptor vs B's archived live `tools/list`
+differ for all eight tools (`additionalProperties` and required fields). C
+could not independently confirm the live shape because the Controller is down.
+`f1-schema-mismatch.json` records `status: OPEN`, `owner: B`,
+`must_reconcile_before: H2`, `c_live_confirmation:
+NOT_VERIFIED(controller_unavailable)`.
+
+## 8. P2 extension policy
+
+No additional tool is advertised. `extensions` in B05 is empty, the P2 rows
+remain `NOT_VERIFIED(b03_handoff)`, and the snapshot asserts a single
+`mcp__acp__` namespace. The eight P1 tools are the current contract, not a
+permanent ceiling.
+
+## 9. What unblocks T-12
+
+Same prerequisite as T-11: B runs the isolated Controller on
+`127.0.0.1:18765` and resolves F1. A single `c_accept dsh-discovery-live 300`
+then exercises the same body: registration, eight-tool allowlist, no-exec and
+both negatives. This document and the scenario must not be cited as an H2 PASS
+until that run is green.
