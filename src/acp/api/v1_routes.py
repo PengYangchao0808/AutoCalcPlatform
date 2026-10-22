@@ -6673,6 +6673,7 @@ def get_stage_task(task_id: str, request: Request) -> StageTaskModel:
 @router.post(
     "/jobs/{job_id}/artifacts/{artifact_id}/run-irc",
     response_model=V1JobCreatedResponse,
+    response_model_exclude_unset=True,
     status_code=202,
 )
 def run_irc_from_artifact(
