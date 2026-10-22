@@ -1,0 +1,11 @@
+# B02 import source — 2026-10-22T19:35:23+08:00
+sys.executable: /ACPServer/acp2-development/venvs/b/bin/python
+sys.path[0:6]: ['', '/usr/lib64/python311.zip', '/usr/lib64/python3.11', '/usr/lib64/python3.11/lib-dynload', '/ACPServer/acp2-development/venvs/b/lib64/python3.11/site-packages', '/ACPServer/acp2-development/B/src']
+acp.__file__ = /ACPServer/acp2-development/B/src/acp/__init__.py
+cccp.__file__ = /ACPServer/acp2-development/B/src/cccp/__init__.py
+acp_services.__file__ = /ACPServer/acp2-development/B/src/acp_services/__init__.py
+acp.version: 0.2.0
+--- check user-site duplicate
+['/ACPServer/acp2-development/venvs/b/lib64/python3.11/site-packages', '/ACPServer/acp2-development/venvs/b/lib/python3.11/site-packages', '/home/xieningke/.local/lib/python3.11/site-packages', '/usr/lib64/python3.11/site-packages', '/usr/lib/python3.11/site-packages']
+drwxr-xr-x.   3 xieningke xieningke      167 10月 18 20:18 acp-0.2.0.dist-info
+-rw-r--r--.   1 xieningke xieningke       32 10月 18 20:18 __editable__.acp-0.2.0.pth

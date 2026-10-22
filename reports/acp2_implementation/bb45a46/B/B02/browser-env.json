@@ -1,0 +1,12 @@
+{
+  "ACP2_BROWSER_PYTHON": "/ACPServer/acp2-development/venvs/browser/bin/python",
+  "chromium_launch_owner": "C T-08 H2 (not a B02 prerequisite)",
+  "chromium_launched": false,
+  "evidence": "browser-extra.log",
+  "extra": "browser (playwright==1.63.0)",
+  "install_command": "/ACPServer/acp2-development/venvs/browser/bin/python -m pip install 'playwright==1.63.0'",
+  "install_state": "already satisfied (playwright 1.63.0 importable)",
+  "playwright_file": "/ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py",
+  "playwright_version": "1.63.0",
+  "python_version": "3.11.13"
+}
