@@ -12,7 +12,10 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "profiles"
+  ],
   "scripts": {
     "build": "tsc -b"
   },
