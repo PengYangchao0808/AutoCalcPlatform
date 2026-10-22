@@ -745,3 +745,32 @@ option, optgroup {
   }
   #job-modal .source-section-nav .input-mode-tabs { width: 100%; }
 }
+
+/* Manual Research entry (T-17): science-question panel */
+.science-question-panel { flex: 0 0 auto; max-height: 52vh; }
+.science-question-panel .panel-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 14px; }
+.science-question-demo-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: var(--editor-weight-medium);
+}
+.science-question-demo-badge[hidden] { display: none; }
+.science-question-note { font-size: 11px; color: var(--text-soft); margin: 2px 0 8px; }
+.science-question-section { font-size: 12px; font-weight: var(--editor-weight-strong); color: var(--text-secondary); margin: 12px 0 4px; }
+.science-question-row { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.science-question-label { font-size: 12px; color: var(--text-secondary); }
+.science-question-required { color: var(--red); }
+.science-question-hint { font-size: 11px; color: var(--text-soft); }
+.science-question-source { font-size: 10px; line-height: 1.35; color: var(--text-soft); font-family: var(--mono); word-break: break-all; }
+.science-question-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.science-question-status { font-size: 12px; color: var(--text-secondary); margin: 6px 0; min-height: 16px; }
+.science-question-detail { border-top: 1px solid var(--border-subtle); margin-top: 10px; padding-top: 8px; font-size: 12px; color: var(--text-secondary); }
+.science-question-detail h3 { font-size: 12px; margin: 0 0 6px; }
+.science-question-block h4 { font-size: 11px; margin: 8px 0 2px; color: var(--text-soft); font-weight: var(--editor-weight-medium); }
+.science-question-block ul { margin: 0; padding-left: 16px; }
+.science-question-block li { font-family: var(--mono); font-size: 11px; word-break: break-all; }
+.science-question-err { color: var(--red); font-size: 11px; margin-top: 6px; }
