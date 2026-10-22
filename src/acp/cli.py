@@ -2751,6 +2751,11 @@ def _handle_task_execute(args: argparse.Namespace) -> int:
                 "status": fresh.status.value,
                 "job_id": fresh.id,
                 "work_dir": fresh.work_dir,
+                "task_ref": {
+                    "task_id": fresh.id,
+                    "job_id": fresh.id,
+                    "attempt": fresh.attempt,
+                },
             }
         )
         return 0 if not fresh.status.is_terminal or fresh.status.value == "completed" else 1
@@ -2765,12 +2770,22 @@ def _handle_task_query(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     run_root = _task_run_root(args)
     store = _task_store(run_root)
+    from acp_services.entrypoints.status_projection import project_task_status
+
     if args.job:
         record = store.get(args.job)
         if record is None:
             _emit_task({"command": "query", "status": "not_found", "job_id": args.job})
             return 1
-        _emit_task({"command": "query", "status": "ok", "job": record.to_dict()})
+        raw = record.to_dict()
+        _emit_task(
+            {
+                "command": "query",
+                "status": "ok",
+                "job": raw,
+                "projection": project_task_status(raw, fallback_task_id=record.id),
+            }
+        )
         return 0
     records = store.list(status=args.status, limit=args.limit)
     _emit_task(
@@ -2787,6 +2802,9 @@ def _handle_task_query(args: argparse.Namespace) -> int:
                     "attempt": row.attempt,
                 }
                 for row in records
+            ],
+            "projections": [
+                project_task_status(row.to_dict(), fallback_task_id=row.id) for row in records
             ],
         }
     )
@@ -2930,18 +2948,28 @@ def _controller_error(args: argparse.Namespace, exc: Any) -> int:
 def _handle_task_query_controller(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     from acp_services.entrypoints.controller_client import ControllerClientError
+    from acp_services.entrypoints.status_projection import project_task_status
 
     client = _task_controller_client(args.controller)
     try:
         if args.job:
             snapshot = client.status(args.job)
-            _emit_task({"command": "query", "status": "ok", "job": dict(snapshot.raw)})
+            raw = dict(snapshot.raw)
+            _emit_task(
+                {
+                    "command": "query",
+                    "status": "ok",
+                    "job": raw,
+                    "projection": project_task_status(raw, fallback_task_id=snapshot.task_id),
+                }
+            )
             return 0
         payload = client.list_tasks(status=args.status, limit=args.limit)
     except ControllerClientError as exc:
         return _controller_error(args, exc)
     jobs = payload.get("jobs") if isinstance(payload, Mapping) else None
     rows = jobs if isinstance(jobs, list) else []
+    row_maps = [row for row in rows if isinstance(row, Mapping)]
     _emit_task(
         {
             "command": "query",
@@ -2955,9 +2983,9 @@ def _handle_task_query_controller(args: argparse.Namespace) -> int:
                     "work_dir": row.get("work_dir"),
                     "attempt": row.get("attempt"),
                 }
-                for row in rows
-                if isinstance(row, Mapping)
+                for row in row_maps
             ],
+            "projections": [project_task_status(row) for row in row_maps],
         }
     )
     return 0
@@ -3006,6 +3034,13 @@ def _handle_task_execute_controller(args: argparse.Namespace) -> int:
             "status": state,
             "job_id": job_id,
             "work_dir": record.get("work_dir"),
+            "task_ref": record.get("task_ref")
+            or {
+                "task_id": job_id,
+                "job_id": job_id,
+                "attempt": record.get("attempt", 1),
+            },
+            "plan_digest": record.get("plan_digest"),
         }
     )
     return 0 if state in {"queued", "pending", "starting", "running", "completed"} else 1

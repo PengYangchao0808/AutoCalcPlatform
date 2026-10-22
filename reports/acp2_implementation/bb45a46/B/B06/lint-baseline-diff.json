@@ -1,0 +1,24 @@
+{
+  "scope": "B06 changed Python files",
+  "changed_python_files": [
+    "scripts/acceptance/acp2_runtime.py",
+    "scripts/acceptance/validate_acp2_contracts.py",
+    "src/acp/api/v1_routes.py",
+    "src/acp/api/v1_schemas.py",
+    "src/acp/cli.py",
+    "src/acp/services_mcp_bootstrap.py",
+    "src/acp_services/entrypoints/application_params.py",
+    "src/acp_services/entrypoints/controller_client.py",
+    "src/acp_services/entrypoints/machine_output.py",
+    "src/acp_services/entrypoints/mcp.py",
+    "src/acp_services/entrypoints/status_projection.py",
+    "src/acp_services/runtime/analysis_capabilities.py",
+    "tests/test_acp2_runtime_contracts.py",
+    "tests/test_acp2_runtime_mcp_backends.py"
+  ],
+  "baseline_diagnostics": 552,
+  "changed_file_diagnostics": 2,
+  "new": [],
+  "result": "PASS",
+  "whole_tree_note": "The checkout is intentionally dirty (pre-existing post-freeze edits). Whole-tree drift outside B06 scope: []"
+}

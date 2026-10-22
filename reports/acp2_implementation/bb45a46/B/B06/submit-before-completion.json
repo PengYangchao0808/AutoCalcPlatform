@@ -1,0 +1,11 @@
+{
+  "job_id": "20261022_223248_001_b06-evidence",
+  "elapsed_s": 0.1868,
+  "state_at_response": "queued",
+  "task_ref": {
+    "task_id": "20261022_223248_001_b06-evidence",
+    "job_id": "20261022_223248_001_b06-evidence",
+    "attempt": 1
+  },
+  "proof": "submit returned a durable task_ref in 0.1868 s; status was non-terminal at response"
+}

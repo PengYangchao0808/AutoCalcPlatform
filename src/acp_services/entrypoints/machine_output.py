@@ -340,7 +340,11 @@ _PEM_RE = re.compile(
 #: Pure-lowercase-hex digests (sha256 plan/step identities, ``v2:`` prefixes
 #: carry their own hex) are *not* secrets and survive so consumers can keep
 #: operation/diagnostic identity.
-_OPAQUE_RE = re.compile(r"\b(?![0-9a-f]{32,}\b)[A-Za-z0-9_\-]{32,}\b")
+_OPAQUE_RE = re.compile(
+    r"\b(?![0-9a-f]{32,}\b)"
+    r"(?!(?:op|operation|job|task)_[0-9a-f]{16,}\b)"
+    r"[A-Za-z0-9_\-]{32,}\b"
+)
 
 
 def _redact_secrets(text: str) -> str:

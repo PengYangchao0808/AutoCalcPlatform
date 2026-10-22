@@ -333,6 +333,7 @@ class UnsupportedError(ControllerClientError):
 _HTTP_ERRORS: dict[int, tuple[str, type[ControllerClientError]]] = {
     400: ("input_invalid", InvalidParameterError),
     403: ("access_denied", AuthorizationError),
+    404: ("resource_not_ready", NotPreparedError),
     409: ("revision_conflict", ConflictError),
     422: ("unsupported_capability", UnsupportedError),
     425: ("resource_not_ready", NotPreparedError),
@@ -536,20 +537,55 @@ class ControllerClient:
         data = self._request_json("POST", f"/api/v1/jobs/{quoted}/{intent}", body or None)
         return _as_mapping(data, "control")
 
+    def operation(
+        self,
+        operation_ref: str | Mapping[str, Any],
+        *,
+        extensions: Mapping[str, Any] | None = None,
+    ) -> Mapping[str, Any]:
+        """Read one persistent prepare-operation projection (query-only)."""
+        del extensions  # no request body on a read
+        if isinstance(operation_ref, Mapping):
+            operation_ref = (
+                operation_ref.get("operation_id")
+                or operation_ref.get("id")
+                or operation_ref.get("operation_ref")
+                or ""
+            )
+        operation_id = str(operation_ref or "").strip()
+        if not operation_id:
+            raise InvalidParameterError(
+                "operation_ref must carry a non-empty operation_id",
+                params={"field": "operation_ref"},
+            )
+        quoted = urllib.parse.quote(operation_id, safe="")
+        data = self._request_json("GET", f"/api/v1/operations/{quoted}")
+        return _as_mapping(data, "operation")
+
     def prepare(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         """Explicitly prepare one artifact (never implicit, never a science submit)."""
         task_ref = request.get("task_ref")
         task_id = _task_id_of(task_ref) if task_ref is not None else ""
         if not task_id:
+            fallback = request.get("job_id")
+            if isinstance(fallback, str) and fallback:
+                task_id = fallback
+        if not task_id:
             raise InvalidParameterError(
-                "prepare requires task_ref.task_id", params={"field": "task_ref"}
+                "prepare requires task_ref.task_id or job_id",
+                params={"field": "task_ref"},
             )
         quoted = urllib.parse.quote(task_id, safe="")
         data = self._request_json("POST", f"/api/v1/jobs/{quoted}/prepare", dict(request))
         return _as_mapping(data, "prepare")
 
     def read(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Bounded read of an already-prepared artifact (no fetch on miss)."""
+        """Bounded read of an already-prepared artifact (no fetch on miss).
+
+        ``artifact_ref`` is the frozen reference.  ``resource`` (or the
+        ``artifact_id`` itself for the five switch resources) selects the
+        prepared cache resource; a miss maps to :class:`NotPreparedError`.
+        """
         artifact_ref = request.get("artifact_ref")
         if not isinstance(artifact_ref, Mapping):
             raise InvalidParameterError(
@@ -557,17 +593,24 @@ class ControllerClient:
             )
         task_id = _task_id_of(artifact_ref)
         artifact_id = str(artifact_ref.get("artifact_id") or "")
-        if not artifact_id:
+        resource = str(request.get("resource") or artifact_id or "")
+        if not resource:
             raise InvalidParameterError(
                 "read requires artifact_ref.artifact_id", params={"field": "artifact_id"}
             )
         query: dict[str, Any] = {}
-        for key in ("max_bytes", "encoding"):
+        for key in ("max_bytes", "encoding", "relative_path", "offset", "limit"):
             if request.get(key) is not None:
                 query[key] = request[key]
+        attempt = request.get("attempt", artifact_ref.get("attempt"))
+        if attempt is not None:
+            query["attempt"] = attempt
+        generation = artifact_ref.get("generation")
+        if generation is not None:
+            query.setdefault("expected_revision", generation)
         quoted_task = urllib.parse.quote(task_id, safe="")
-        quoted_artifact = urllib.parse.quote(artifact_id, safe="")
-        path = f"/api/v1/jobs/{quoted_task}/prepared/{quoted_artifact}"
+        quoted_resource = urllib.parse.quote(resource, safe="")
+        path = f"/api/v1/jobs/{quoted_task}/prepared/{quoted_resource}"
         if query:
             path += "?" + urllib.parse.urlencode(query)
         data = self._request_json("GET", path)
@@ -585,8 +628,13 @@ class ControllerClient:
             first = input_refs[0]
         task_id = _task_id_of(first) if first is not None else ""
         if not task_id:
+            fallback = request.get("job_id")
+            if isinstance(fallback, str) and fallback:
+                task_id = fallback
+        if not task_id:
             raise InvalidParameterError(
-                "analyze requires input_refs[0].task_id", params={"field": "input_refs"}
+                "analyze requires input_refs[0].task_id or job_id",
+                params={"field": "input_refs"},
             )
         quoted = urllib.parse.quote(task_id, safe="")
         data = self._request_json("POST", f"/api/v1/jobs/{quoted}/analyze", dict(request))
@@ -611,6 +659,7 @@ def _error_from_http(exc: urllib.error.HTTPError) -> ControllerClientError:
     code = default_code
     params: dict[str, Any] = {}
     message = f"Controller returned HTTP {exc.code} for {exc.url}"
+    retryable: bool | None = None
     try:
         raw = exc.read()
     except OSError:  # a broken error body must not mask the status code
@@ -621,7 +670,14 @@ def _error_from_http(exc: urllib.error.HTTPError) -> ControllerClientError:
         except (UnicodeDecodeError, json.JSONDecodeError):
             document = None
         detail = document.get("detail") if isinstance(document, Mapping) else None
-        if isinstance(detail, str) and detail:
+        if isinstance(detail, list):
+            # FastAPI request-model validation: an invalid-parameter outcome,
+            # not an unsupported capability.
+            error_cls = InvalidParameterError
+            code = "input_invalid"
+            message = "request validation failed"
+            params = {"errors": detail[:5]}
+        elif isinstance(detail, str) and detail:
             message = detail
         elif isinstance(detail, Mapping):
             if isinstance(detail.get("code"), str):
@@ -630,4 +686,13 @@ def _error_from_http(exc: urllib.error.HTTPError) -> ControllerClientError:
                 message = detail["message"]
             if isinstance(detail.get("params"), Mapping):
                 params = dict(detail["params"])
-    return error_cls(message, code=code, params=params)
+            if isinstance(detail.get("retryable"), bool):
+                retryable = detail["retryable"]
+    # ``not_prepared`` is a distinct request-outcome class: the artifact/cache
+    # exists in principle but its body is not prepared.  A 404 for an unknown
+    # operation is the same class (never an empty success).
+    lowered = f"{code} {message}".lower()
+    if "not_prepared" in lowered or code == "resource_not_ready":
+        error_cls = NotPreparedError
+        code = "resource_not_ready"
+    return error_cls(message, code=code, params=params, retryable=retryable)

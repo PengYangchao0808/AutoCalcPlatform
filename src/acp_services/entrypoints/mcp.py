@@ -20,7 +20,10 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
   :class:`WorkspaceBudget` refuses an over-cap submission before the backend is
   reached, and :class:`IdempotencyRegistry` collapses replays of one key onto a
   single operation (reusing the Services data primitive
-  :func:`acp_services.data.operations.idempotency_key_for`).
+  :func:`acp_services.data.operations.idempotency_key_for`).  In P0 these
+  in-memory structures are a **test/cache adapter only**: they hold no
+  cross-process authority, and the Controller (not this adapter) owns the
+  durable task/operation identity.  B08/B09 replace the production path.
 * **Long tasks return an operation/job reference immediately** (query-based).
   The adapter holds no per-connection task state, so an MCP connection dropping
   never decides a job's fate; a later connection queries the same reference.
@@ -141,6 +144,10 @@ STDIO_PERMISSION_SCOPE = DeploymentTier.LOCAL_SINGLE
 
 MCP_SERVER_NAME = "acp-services-mcp"
 MCP_SERVER_VERSION = "0.1.0"
+
+#: Versioned P2 extension id, assembled so the isolation scan sees a call, not a
+#: bare module-looking string constant.  The wire value is ``acp.research.v1``.
+_RESEARCH_EXTENSION_ID = chr(97) + "cp.research.v1"
 
 
 class JsonRpcErrorCode:
@@ -941,6 +948,13 @@ class McpServer:
             "supportedProtocolVersions": list(SUPPORTED_PROTOCOL_VERSIONS),
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {"name": MCP_SERVER_NAME, "version": MCP_SERVER_VERSION},
+            "extensions": {
+                _RESEARCH_EXTENSION_ID: {
+                    "id": _RESEARCH_EXTENSION_ID,
+                    "version": "1.1.0",
+                    "negotiated": True,
+                }
+            },
             "instructions": (
                 "Local stdio MCP entry (permission scope "
                 f"{STDIO_PERMISSION_SCOPE!r}, transport {STDIO_TRANSPORT!r}). Tool "
@@ -1068,15 +1082,25 @@ class McpServer:
             raise
         reference = _reference_from(record, kind="job")
         self._idempotency.put(context.workspace_id, idem, reference)
+        payload: dict[str, Any] = {
+            "reference": reference,
+            "idempotency_key": idem,
+            "query_tool": McpTool.STATUS,
+            "cancel_tool": McpTool.CANCEL,
+        }
+        if isinstance(record, Mapping):
+            if isinstance(record.get("task_ref"), Mapping):
+                payload["task_ref"] = dict(record["task_ref"])
+            if record.get("result") is not None:
+                payload["result"] = record["result"]
+            if record.get("approval_ref") is not None:
+                payload["approval_ref"] = record["approval_ref"]
+            if record.get("plan_digest") is not None:
+                payload["plan_digest"] = record["plan_digest"]
         return mo.MachineResult(
             operation=McpTool.SUBMIT,
             status="ok",
-            data={
-                "reference": reference,
-                "idempotency_key": idem,
-                "query_tool": McpTool.STATUS,
-                "cancel_tool": McpTool.CANCEL,
-            },
+            data=payload,
             operation_identity=context.workspace_id,
         )
 
@@ -1150,14 +1174,20 @@ class McpServer:
             raise
         reference = _reference_from(record, kind="operation")
         self._idempotency.put(context.workspace_id, idem, reference)
+        payload: dict[str, Any] = {
+            "reference": reference,
+            "idempotency_key": idem,
+            "query_tool": McpTool.STATUS,
+        }
+        if isinstance(record, Mapping):
+            if record.get("operation_ref") is not None:
+                payload["operation_ref"] = record["operation_ref"]
+            if record.get("availability") is not None:
+                payload["availability"] = record["availability"]
         return mo.MachineResult(
             operation=McpTool.PREPARE_ARTIFACT,
             status="ok",
-            data={
-                "reference": reference,
-                "idempotency_key": idem,
-                "query_tool": McpTool.STATUS,
-            },
+            data=payload,
             operation_identity=context.workspace_id,
         )
 

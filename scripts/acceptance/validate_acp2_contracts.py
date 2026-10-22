@@ -68,6 +68,9 @@ DELIVERED_IDS_BY_STAGE = {
     "B04a": {
         "controller-topology",
     },
+    "B06": {
+        "cross-track-requests",
+    },
 }
 EXPECTED_TODOS = {
     "B00",

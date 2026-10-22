@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://acp.local/contracts/runtime/mcp-launch.schema.json",
   "title": "ACP 2.0 MCP launch descriptor (H1 format contract)",
-  "description": "Format contract for launching the ACP MCP stdio entry against one Controller. This is NOT an executable H2 entry: a template instance is never evidence that the server runs. The eight tool names and input schemas below are frozen for protocol 2025-06-18.",
+  "description": "Format contract for launching the ACP MCP stdio entry against one Controller. This is NOT an executable H2 entry: a template instance is never evidence that the server runs. The eight P1 tool names and input schemas below are frozen for protocol 2025-06-18. The additive acp.research.v1 extension is advertised in the MCP initialize result; the launch descriptor never forces a negotiated state.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -241,6 +241,43 @@
     },
     "constraints": {
       "$ref": "#/$defs/constraints"
+    },
+    "initialize": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Additive B-req-01 declaration of the versioned extension the server advertises in its MCP initialize result. The client still negotiates at runtime; this block never forces a negotiated state.",
+      "properties": {
+        "extensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "acp.research.v1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "version",
+                "negotiated"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "const": "acp.research.v1"
+                },
+                "version": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+                },
+                "negotiated": {
+                  "type": "boolean",
+                  "const": true,
+                  "description": "The accepted P1 contract realises this extension in initialize."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
