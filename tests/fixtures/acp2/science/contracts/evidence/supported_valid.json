@@ -1,0 +1,59 @@
+{
+  "claims": [
+    {
+      "claim_id": "c-true-minimum",
+      "limitations": [
+        "lim-single-conformer"
+      ],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "conformer_specific",
+        "conditions": "conformer A, gas phase",
+        "subject": "stationary_point_kind"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/freq.out",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "8400cd1b95d74ca3baf4179d8718974345fd5ecef70422fca359039ee2787c0f"
+          },
+          "quantity": "harmonic_frequencies",
+          "role": "native_output",
+          "units": "cm-1"
+        }
+      ],
+      "statement": "The optimized geometry is a true minimum (no imaginary frequencies).",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.imaginary_mode_count",
+        "validator_version": "1.0.0"
+      }
+    }
+  ],
+  "execution": {
+    "argv": [
+      "orca",
+      "freq.inp"
+    ],
+    "exit_code": 0,
+    "terminal_state": "completed"
+  },
+  "limitations": [
+    {
+      "affected_claim_ids": [
+        "c-true-minimum"
+      ],
+      "description": "Only conformer A was evaluated; other conformers may not be minima.",
+      "limitation_id": "lim-single-conformer"
+    }
+  ],
+  "report_id": "report-supported-valid",
+  "schema_version": 1,
+  "subject": {
+    "description": "Synthetic fixture for the ACP2 evidence contract.",
+    "subject_id": "run-fixture-supported",
+    "subject_kind": "calculation_result"
+  }
+}
