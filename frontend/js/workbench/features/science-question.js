@@ -680,7 +680,7 @@ window.ACPScienceQuestion = (function () {
       '<div class="science-question-row" id="sq-row-structure">' +
       '<label class="science-question-label" for="sq-structure">' +
       escapeHtml(tr("manual.structure", "输入结构 (XYZ)")) + "</label>" +
-      '<textarea id="sq-structure" class="modal-input" rows="7" spellcheck="false">' +
+      '<textarea id="sq-structure" class="modal-input" rows="10" spellcheck="false">' +
       escapeHtml(state.structure.xyz) + "</textarea>" +
       '<div class="science-question-hint">' +
       escapeHtml(tr("manual.structure_hint", "粘贴 XYZ 文本，或使用演示结构")) + "</div>" +

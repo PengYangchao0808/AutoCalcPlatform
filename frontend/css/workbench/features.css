@@ -765,6 +765,13 @@ option, optgroup {
 .science-question-label { font-size: 12px; color: var(--text-secondary); }
 .science-question-required { color: var(--red); }
 .science-question-hint { font-size: 11px; color: var(--text-soft); }
+.science-question-row #sq-structure {
+  min-height: 11rem;
+  resize: vertical;
+  overflow-y: auto;
+  font-family: var(--mono);
+  line-height: 1.6;
+}
 .science-question-source { font-size: 10px; line-height: 1.35; color: var(--text-soft); font-family: var(--mono); word-break: break-all; }
 .science-question-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .science-question-status { font-size: 12px; color: var(--text-secondary); margin: 6px 0; min-height: 16px; }
