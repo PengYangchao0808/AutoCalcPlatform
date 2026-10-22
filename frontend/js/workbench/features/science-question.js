@@ -27,7 +27,7 @@ window.ACPScienceQuestion = (function () {
 
   var DEMO_BADGE_TEXT = "演示数据";
   var DEMO_PROJECT_ID = "demo-project";
-  var DEFAULT_FIELDS = ["method", "charge", "multiplicity", "solvent"];
+  var DEFAULT_FIELDS = ["method", "charge", "multiplicity", "solvent", "temperature", "standardState"];
 
   // Fixture capability catalog + run artifacts. Used only when the platform
   // is unreachable (no model / no service configured) or when a fixture
@@ -166,6 +166,18 @@ window.ACPScienceQuestion = (function () {
     detailError: null,
     submitCalls: 0,
     status: "",
+    // T-23 / C17a QuestionSpec binding: frozen P2 input range, conditions,
+    // human confirmations/approximations and the input revision. Identity
+    // values are never silently filled — absent stays null ("未指定").
+    spec: {
+      inputFormat: "structure_upload",
+      inputFormatStatus: "accepted",
+      conditions: { solvent: null, temperature: null, standardState: null },
+      humanConfirmations: [],
+      approximations: [],
+      inputRevision: 1,
+      reactionView: null,
+    },
   };
 
   var domDoc = null;
@@ -276,6 +288,14 @@ window.ACPScienceQuestion = (function () {
         label: tr("manual.solvent", "溶剂"), required: true, visible: true,
         value: values.solvent, source: sources.solvent,
       },
+      temperature: {
+        label: tr("manual.temperature", "温度"), required: false, visible: true,
+        value: values.temperature, source: sources.temperature,
+      },
+      standardState: {
+        label: tr("manual.standard_state", "标准态"), required: false, visible: true,
+        value: values.standardState, source: sources.standardState,
+      },
     };
   }
 
@@ -289,6 +309,8 @@ window.ACPScienceQuestion = (function () {
     if (!state.question) return false;
     if (!resolveQuestionWorkflow(state.question.question_id, workflowCatalog())) return false;
     if (!state.structure.xyz) return false;
+    if (state.spec.inputFormatStatus === "DEFERRED") return false;
+    if (openReactionClarifications().length) return false;
     if (state.defaults.values.method == null || state.defaults.values.method === "") return false;
     if (!isIntLike(state.defaults.values.charge, -1000)) return false;
     if (!isIntLike(state.defaults.values.multiplicity, 1)) return false;
@@ -347,6 +369,10 @@ window.ACPScienceQuestion = (function () {
   function setValue(field, value) {
     if (DEFAULT_FIELDS.indexOf(field) === -1) return getState();
     state.defaults.values[field] = value;
+    if (field === "solvent") state.spec.conditions.solvent = value;
+    if (field === "temperature") state.spec.conditions.temperature = value;
+    if (field === "standardState") state.spec.conditions.standardState = value;
+    state.spec.inputRevision += 1;
     state.preflight = { ran: false, ok: false, error: null, body: null };
     var submitEl = domDoc ? domDoc.getElementById("sq-submit") : null;
     if (submitEl) submitEl.disabled = true;
@@ -369,7 +395,82 @@ window.ACPScienceQuestion = (function () {
     return setStructure(FIXTURES.structure);
   }
 
+  function classifyInputFormat(format) {
+    if (typeof window.classifyReactionInputFormat === "function") {
+      return window.classifyReactionInputFormat(format);
+    }
+    var key = String(format == null ? "" : format).toLowerCase();
+    if (key === "cdxml") {
+      return {
+        format: key,
+        status: "DEFERRED",
+        supported: false,
+        claim: "not_supported_until_A-req-02_and_B-req-09",
+      };
+    }
+    return { format: key, status: "unverified", supported: false, claim: "p2_policy_module_absent" };
+  }
+
+  function setInputFormat(format) {
+    var classification = classifyInputFormat(format);
+    state.spec.inputFormat = classification.format;
+    state.spec.inputFormatStatus = classification.status;
+    if (classification.status === "DEFERRED") state.preview = null;
+    state.spec.inputRevision += 1;
+    state.preflight = { ran: false, ok: false, error: null, body: null };
+    render();
+    return getState();
+  }
+
+  function recordHumanConfirmation(item) {
+    item = item || {};
+    var record = {
+      item: item.item != null ? String(item.item) : "",
+      value: item.value != null ? String(item.value) : "",
+      note: item.note != null ? String(item.note) : "",
+      inputRevision: state.spec.inputRevision,
+    };
+    state.spec.humanConfirmations.push(record);
+    state.spec.inputRevision += 1;
+    render();
+    return record;
+  }
+
+  function recordApproximation(item) {
+    item = item || {};
+    var record = {
+      item: item.item != null ? String(item.item) : "",
+      approximation: item.approximation != null ? String(item.approximation) : "",
+      note: item.note != null ? String(item.note) : "",
+      inputRevision: state.spec.inputRevision,
+    };
+    state.spec.approximations.push(record);
+    state.spec.inputRevision += 1;
+    render();
+    return record;
+  }
+
+  function setReactionSpecView(view) {
+    state.spec.reactionView = view ? Object.assign({}, view) : null;
+    render();
+    return getState();
+  }
+
+  function openReactionClarifications() {
+    var view = state.spec.reactionView;
+    if (!view || !Array.isArray(view.clarifications)) return [];
+    return view.clarifications.filter(function (item) {
+      return item && item.status === "open";
+    });
+  }
+
   function previewStructure() {
+    if (state.spec.inputFormatStatus === "DEFERRED") {
+      return Promise.reject(new Error(
+        "science-question: input format " + state.spec.inputFormat +
+        " is DEFERRED (A-req-02 / B-req-09) — never parsed into a structure"
+      ));
+    }
     if (!deps.wizardEndpoints || typeof deps.wizardEndpoints.parseStructure !== "function") {
       return Promise.reject(new Error("science-question: init({wizardEndpoints}) required"));
     }
@@ -600,6 +701,15 @@ window.ACPScienceQuestion = (function () {
         : null,
       detailError: state.detailError,
       status: state.status,
+      spec: {
+        inputFormat: state.spec.inputFormat,
+        inputFormatStatus: state.spec.inputFormatStatus,
+        conditions: Object.assign({}, state.spec.conditions),
+        humanConfirmations: state.spec.humanConfirmations.map(function (item) { return Object.assign({}, item); }),
+        approximations: state.spec.approximations.map(function (item) { return Object.assign({}, item); }),
+        inputRevision: state.spec.inputRevision,
+        reactionView: state.spec.reactionView ? Object.assign({}, state.spec.reactionView) : null,
+      },
     };
   }
 
@@ -620,6 +730,63 @@ window.ACPScienceQuestion = (function () {
     if (!root) return;
     root.innerHTML = renderForm();
     wireForm();
+  }
+
+  function renderSpecSummary() {
+    var spec = state.spec;
+    var view = spec.reactionView;
+    var e = escapeHtml;
+    function unspecified(value) {
+      return value == null ? tr("manual.unspecified", "未指定 (unspecified)") : String(value);
+    }
+    var html = '<div class="science-question-section" id="sq-spec-title">' +
+      tr("manual.spec_title", "反应/问题规格 (QuestionSpec / ReactionSpec)") + "</div>";
+    html += '<div class="science-question-note" id="sq-spec-input-policy">' +
+      e(tr("manual.input_policy", "P2 输入范围 (frozen): MOL / SDF / SMILES + 结构上传；CDXML: DEFERRED（未交付，不支持 ChemDraw 起点）")) +
+      " · " + e(tr("manual.input_format", "当前输入格式: {format} ({status})", {
+        format: spec.inputFormat, status: spec.inputFormatStatus,
+      })) + "</div>";
+    if (view) {
+      html += '<div class="science-question-note" id="sq-spec-kind">' +
+        e(tr("manual.reaction_kind", "反应类型: {kind}", { kind: view.kindLabel || view.kind || "-" })) +
+        " · " + e(view.kindDistinction || "") + "</div>";
+      var steps = Array.isArray(view.candidateSteps) ? view.candidateSteps : [];
+      html += '<div class="science-question-note" id="sq-spec-steps">' +
+        e(tr("manual.candidate_steps", "候选基元步骤 (candidate elementary steps): {count}", { count: steps.length })) +
+        "</div>";
+      var mapping = view.atomMapping || { status: "-", stale: false };
+      html += '<div class="science-question-note" id="sq-spec-mapping">' +
+        e(tr("manual.atom_mapping", "原子映射: {status}", { status: mapping.status })) +
+        (mapping.stale ? " · STALE" : "") + "</div>";
+      html += '<div class="science-question-note" id="sq-spec-charge-spin">' +
+        e(tr("manual.charge_spin", "电荷/自旋 (charge/spin): ")) +
+        e((view.chargeSpin || []).map(function (item) {
+          return (item.ref || item.label || "?") + "=" + unspecified(item.charge) + "/" + unspecified(item.multiplicity);
+        }).join(" · ") || "-") + "</div>";
+      html += '<div class="science-question-note" id="sq-spec-stereo">' +
+        e(tr("manual.stereo", "立体 (stereo): ")) +
+        e((view.stereo || []).map(function (item) {
+          return (item.ref || item.label || "?") + "=" + unspecified(item.stereo);
+        }).join(" · ") || "-") + "</div>";
+    }
+    html += '<div class="science-question-note" id="sq-spec-conditions">' +
+      e(tr("manual.conditions", "溶剂/温度/标准态 (solvent/temperature/standard state): ")) +
+      e("solvent " + unspecified(spec.conditions.solvent) +
+        " · temperature " + unspecified(spec.conditions.temperature) +
+        " · standard state " + unspecified(spec.conditions.standardState)) + "</div>";
+    var confirmations = spec.humanConfirmations.map(function (item) {
+      return "confirmed " + item.item + "=" + item.value + " @rev " + item.inputRevision;
+    }).concat(spec.approximations.map(function (item) {
+      return "approximation " + item.item + "=" + item.approximation + " @rev " + item.inputRevision;
+    }));
+    html += '<div class="science-question-note" id="sq-spec-confirmations">' +
+      e(tr("manual.confirmations", "人工确认/近似 (human confirmations/approximations): ")) +
+      e(confirmations.join(" · ") || tr("manual.none", "无")) + "</div>";
+    html += '<div class="science-question-note" id="sq-spec-input-revision">' +
+      e(tr("manual.input_revision", "输入版本 (input revision): {revision}", {
+        revision: spec.inputRevision,
+      })) + "</div>";
+    return html;
   }
 
   function renderForm() {
@@ -709,6 +876,13 @@ window.ACPScienceQuestion = (function () {
       fieldRow("solvent", fields.solvent,
         '<input id="sq-solvent" class="modal-input" type="text" required value="' +
         escapeHtml(fields.solvent.value) + '">') +
+      fieldRow("temperature", fields.temperature,
+        '<input id="sq-temperature" class="modal-input" type="text" value="' +
+        escapeHtml(fields.temperature.value == null ? "" : fields.temperature.value) + '">') +
+      fieldRow("standardState", fields.standardState,
+        '<input id="sq-standardState" class="modal-input" type="text" value="' +
+        escapeHtml(fields.standardState.value == null ? "" : fields.standardState.value) + '">') +
+      renderSpecSummary() +
       '<div class="science-question-actions" id="sq-actions">' +
       '<button type="button" class="btn ghost" id="sq-discover">' +
       escapeHtml(tr("manual.discover", "发现能力")) + "</button>" +
@@ -736,7 +910,7 @@ window.ACPScienceQuestion = (function () {
       var submitEl = domDoc.getElementById("sq-submit");
       if (submitEl) submitEl.disabled = true;
     });
-    ["method", "charge", "multiplicity", "solvent"].forEach(function (field) {
+    ["method", "charge", "multiplicity", "solvent", "temperature", "standardState"].forEach(function (field) {
       on("sq-" + field, "input", function (event) {
         setValue(field, event.target.value);
       });
@@ -834,6 +1008,12 @@ window.ACPScienceQuestion = (function () {
     getState: getState,
     demoBadgeVisible: demoBadgeVisible,
     render: render,
+    classifyInputFormat: classifyInputFormat,
+    setInputFormat: setInputFormat,
+    recordHumanConfirmation: recordHumanConfirmation,
+    recordApproximation: recordApproximation,
+    setReactionSpecView: setReactionSpecView,
+    openReactionClarifications: openReactionClarifications,
   };
 })();
 
