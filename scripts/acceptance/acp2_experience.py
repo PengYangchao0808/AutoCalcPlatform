@@ -321,7 +321,14 @@ def redact(value: Any, *, key: str | None = None) -> Any:
         cleaned: dict[str, Any] = {}
         for child_key, child_value in value.items():
             if isinstance(child_key, str) and SECRET_KEY_RE.search(child_key):
-                cleaned[child_key] = MASK
+                # A numeric count or boolean under a token-shaped key
+                # (``usage.total_tokens``) is a measurement, not a credential.
+                # Masking it would erase the budget evidence the receipt
+                # contract requires.
+                if isinstance(child_value, (int, float, bool)):
+                    cleaned[child_key] = child_value
+                else:
+                    cleaned[child_key] = MASK
             else:
                 cleaned[child_key] = redact(child_value, key=child_key)
         return cleaned
