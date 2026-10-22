@@ -20,10 +20,10 @@
   "attempt": null,
   "candidate": {
     "client_revision": null,
-    "harness_revision": "7a344c0a9bce5adfb8a34e0d829f1c3995029a7f8ad4313842d9895215b051f2",
-    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "21610bc1b071d58f367cd04c4f65edb4d2153a5b"
   },
-  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "candidate_revision": "21610bc1b071d58f367cd04c4f65edb4d2153a5b",
   "command": [
     "/usr/bin/python3.11",
     "<repo>/scripts/acceptance/acp2_runtime.py",
@@ -43,7 +43,7 @@
   "extensions": {
     "acceptance.operation_class": "discover",
     "acceptance.target": "local",
-    "b04a.candidate_revision": "a3ff3c5c4725d3e5bec8a7cb196b81c85a0da45e",
+    "b04a.candidate_revision": "21610bc1b071d58f367cd04c4f65edb4d2153a5b",
     "b04a.contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488",
     "b04a.contract_version": "1.0.0",
     "b04a.controller": "http://127.0.0.1:18765",
@@ -52,7 +52,7 @@
     "b04a.tools": 8,
     "b04a.workflows": 15
   },
-  "finished_at": "2026-10-22T13:11:33Z",
+  "finished_at": "2026-10-22T13:35:41Z",
   "job_id": null,
   "manifest_generation": null,
   "negotiated_protocol": null,
@@ -62,12 +62,12 @@
   "reason": null,
   "release_id": null,
   "result": "PASS",
-  "run_id": "20261022T131133Z-4173936-a1997f0d",
+  "run_id": "20261022T133541Z-13842-f9fac578",
   "scenario": "entry-readonly",
   "schema": "acp2.acceptance.v1",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "scope": "IN_SCOPE",
-  "started_at": "2026-10-22T13:11:33Z",
+  "started_at": "2026-10-22T13:35:41Z",
   "submission_id": null,
   "usage": null
 }

@@ -1366,11 +1366,17 @@ def write_result(
     refs: dict[str, Any] | None = None,
     usage: dict[str, Any] | None = None,
     extensions: dict[str, Any] | None = None,
+    candidate_revision: str | None = None,
+    server_revision: str | None = None,
 ) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     reference_values = {key: None for key in PLATFORM_REF_KEYS}
     if refs:
         reference_values.update(refs)
+    if candidate_revision is None:
+        candidate_revision = os.environ.get("ACP_CANDIDATE_REVISION", BASELINE_CANDIDATE_REVISION)
+    if server_revision is None:
+        server_revision = SERVER_CANDIDATE_REVISION
     document: dict[str, Any] = {
         "schema": ACCEPTANCE_SCHEMA,
         "schema_dialect": SCHEMA_DIALECT,
@@ -1379,9 +1385,9 @@ def write_result(
         "scenario": scenario,
         "phase": phase,
         "run_id": run_id,
-        "candidate_revision": os.environ.get("ACP_CANDIDATE_REVISION", BASELINE_CANDIDATE_REVISION),
+        "candidate_revision": candidate_revision,
         "candidate": {
-            "server_revision": SERVER_CANDIDATE_REVISION,
+            "server_revision": server_revision,
             "client_revision": None,
             "harness_revision": harness_revision(),
         },
@@ -1465,6 +1471,54 @@ def _controller_task_count(controller: str, timeout: float) -> int:
     payload = _http_json(controller.rstrip("/") + "/api/v1/jobs?limit=1000", timeout)
     jobs = payload.get("jobs") if isinstance(payload, dict) else None
     return len(jobs) if isinstance(jobs, list) else 0
+
+
+def resolve_candidate_identity(
+    evidence_kind: str, controller: str | None, timeout: float
+) -> tuple[str, str, str | None]:
+    """Bind live receipt identity to the running Controller's health revision.
+
+    ``entry-readonly`` and every other live scenario take both the top-level
+    ``candidate_revision`` and ``candidate.server_revision`` from
+    ``GET /api/health``.  Fixture/aggregate evidence keeps the frozen baseline
+    defaults.  If ``ACP_CANDIDATE_REVISION`` is exported and disagrees with the
+    Controller, the caller must FAIL the run with the returned named reason
+    ``candidate_revision_mismatch:<env_value>!=<health_value>``.
+    """
+
+    env_revision = os.environ.get("ACP_CANDIDATE_REVISION")
+    if evidence_kind != "live":
+        return (
+            env_revision or BASELINE_CANDIDATE_REVISION,
+            SERVER_CANDIDATE_REVISION,
+            None,
+        )
+    health_revision: str | None = None
+    if controller and controller_reachable(controller):
+        try:
+            health = _http_json(controller.rstrip("/") + "/api/health", timeout)
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
+            health = None
+        if isinstance(health, dict):
+            value = health.get("candidate_revision")
+            if isinstance(value, str) and value:
+                health_revision = value
+    if health_revision is None:
+        # A live prerequisite that cannot reach the Controller (for example
+        # ``controller_unreachable``) has no health identity to bind to; keeps the
+        # declared fallback so the NOT_VERIFIED receipt still validates.
+        return (
+            env_revision or BASELINE_CANDIDATE_REVISION,
+            SERVER_CANDIDATE_REVISION,
+            None,
+        )
+    if env_revision is not None and env_revision != health_revision:
+        return (
+            health_revision,
+            health_revision,
+            f"candidate_revision_mismatch:{env_revision}!={health_revision}",
+        )
+    return health_revision, health_revision, None
 
 
 def _run_entry_readonly(
@@ -1651,6 +1705,17 @@ def _write_prerequisite_result(
     started_at = _utcnow()
     finished_at = _utcnow()
     run_id = _new_run_id()
+    timeout = args.timeout if args.timeout is not None else phase.timeout
+    candidate_revision, server_revision, identity_error = resolve_candidate_identity(
+        _evidence_kind_for_phase(phase_name), args.controller, timeout
+    )
+    result = "NOT_VERIFIED"
+    exit_code = EXIT_NOT_VERIFIED
+    reason_value = reason
+    if identity_error is not None:
+        result = "FAIL"
+        exit_code = EXIT_FAIL
+        reason_value = identity_error
     run_path, _ = write_result(
         Path(args.out),
         scenario=spec.scenario,
@@ -1658,13 +1723,15 @@ def _write_prerequisite_result(
         run_id=run_id,
         started_at=started_at,
         finished_at=finished_at,
-        result="NOT_VERIFIED",
-        reason=reason,
-        exit_code=EXIT_NOT_VERIFIED,
+        result=result,
+        reason=reason_value,
+        exit_code=exit_code,
         command=dry_run_commands(spec, phase_name, phase, args),
         evidence_kind=_evidence_kind_for_phase(phase_name),
         assertions=[{"name": "prerequisite", "status": "NOT_VERIFIED", "detail": reason}],
         extensions={"b01.skeleton": True, "b01.prerequisite_failure": reason},
+        candidate_revision=candidate_revision,
+        server_revision=server_revision,
     )
     errors = validate_receipt(
         json.loads(run_path.read_text(encoding="utf-8")), verify_artifacts=False
@@ -1674,6 +1741,9 @@ def _write_prerequisite_result(
             "INTERNAL: prerequisite receipt is invalid: " + "; ".join(errors),
             file=sys.stderr,
         )
+        return EXIT_FAIL
+    if result == "FAIL":
+        print(f"FAIL: {reason_value}", file=sys.stderr)
         return EXIT_FAIL
     print(f"NOT_VERIFIED: {reason}", file=sys.stderr)
     return EXIT_NOT_VERIFIED
@@ -1692,6 +1762,10 @@ def execute_scenario(
     ledger = CleanupLedger()
     command = [sys.executable, str(SCRIPT_PATH), *sys.argv[1:]]
     outcome: dict[str, Any] = {}
+    evidence_kind = _evidence_kind_for_phase(phase_name)
+    candidate_revision, server_revision, identity_error = resolve_candidate_identity(
+        evidence_kind, args.controller, timeout
+    )
 
     if spec.scenario == "entry-readonly":
 
@@ -1749,6 +1823,10 @@ def execute_scenario(
         ]
     if timeout_record is not None:
         extensions["b01.timeout_cleanup"] = "timeout-cleanup.json"
+    if identity_error is not None:
+        result = "FAIL"
+        reason = identity_error
+        code = EXIT_FAIL
     run_path, _ = write_result(
         out_dir,
         scenario=spec.scenario,
@@ -1760,9 +1838,11 @@ def execute_scenario(
         reason=reason,
         exit_code=code,
         command=command,
-        evidence_kind=_evidence_kind_for_phase(phase_name),
+        evidence_kind=evidence_kind,
         assertions=assertions,
         extensions=extensions,
+        candidate_revision=candidate_revision,
+        server_revision=server_revision,
     )
     errors = validate_receipt(
         json.loads(run_path.read_text(encoding="utf-8")), verify_artifacts=False
