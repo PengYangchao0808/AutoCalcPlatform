@@ -2592,12 +2592,19 @@ function createReactionSpecState() {
     approximations: [],
     inputRevision: 1,
     inputFormats: [],
+    // T-24: ambiguity-confirmation matrix state. `clarificationResolutions`
+    // maps a stable clarification field_path to the user's explicit decision;
+    // `parseErrors` records parse failures as ERRORs (never an empty structure).
+    clarificationResolutions: {},
+    parseErrors: [],
   };
 }
 
 function ensureReactionSpecState(state) {
   var target = state || ensureReactionDefinitionState();
   if (!target.spec) target.spec = createReactionSpecState();
+  if (!target.spec.clarificationResolutions) target.spec.clarificationResolutions = {};
+  if (!Array.isArray(target.spec.parseErrors)) target.spec.parseErrors = [];
   return target.spec;
 }
 
@@ -2610,6 +2617,7 @@ function addReactionSpecParticipant(state, side, entry) {
   var list = side === "product" ? spec.products : spec.reactants;
   var participant = createReactionSpecParticipant(entry);
   list.push(participant);
+  invalidateReactionSpecResolutions(spec);
   spec.inputRevision += 1;
   return participant;
 }
@@ -2625,6 +2633,7 @@ function addReactionSpecCandidateStep(state, step) {
     note: step.note != null ? String(step.note) : "",
   };
   spec.candidateSteps.push(entry);
+  invalidateReactionSpecResolutions(spec);
   spec.inputRevision += 1;
   return entry;
 }
@@ -2635,6 +2644,7 @@ function setReactionSpecKind(state, kind) {
     throw new Error("reaction spec kind must be net_reaction or elementary_step");
   }
   spec.kind = kind;
+  invalidateReactionSpecResolutions(spec);
   spec.inputRevision += 1;
   return spec.kind;
 }
@@ -2642,6 +2652,7 @@ function setReactionSpecKind(state, kind) {
 function setReactionSpecSubmitAs(state, submitAs) {
   var spec = ensureReactionSpecState(state);
   spec.submitAs = String(submitAs || "single_ts");
+  invalidateReactionSpecResolutions(spec);
   spec.inputRevision += 1;
   return spec.submitAs;
 }
@@ -2653,6 +2664,7 @@ function setReactionSpecConditions(state, conditions) {
   if (hasOwnField(conditions, "solvent")) spec.conditions.solvent = conditions.solvent;
   if (hasOwnField(conditions, "temperature")) spec.conditions.temperature = conditions.temperature;
   if (hasOwnField(conditions, "standardState")) spec.conditions.standardState = conditions.standardState;
+  invalidateReactionSpecResolutions(spec);
   spec.inputRevision += 1;
   return spec.conditions;
 }
@@ -2665,6 +2677,9 @@ function hasOwnField(object, key) {
 // reference and NEVER parsed — in particular it must never come back as an
 // empty-atom structure. Accepted formats are recorded by reference; xyz-like
 // content may be read for display labels only via parseXyzAtoms.
+// A parse failure (parseResult.ok=false, non-empty errors, or an atomless
+// result) is surfaced as an ERROR record and blocks submit; it must never
+// degrade into an empty structure.
 function adoptReactionSpecInput(state, input) {
   var spec = ensureReactionSpecState(state);
   input = input || {};
@@ -2676,8 +2691,19 @@ function adoptReactionSpecInput(state, input) {
     supported: classification.supported,
     role: input.role != null ? String(input.role) : null,
     structure: null,
+    error: null,
   };
+  invalidateReactionSpecResolutions(spec);
+  var parseResult = input.parseResult || null;
   if (classification.status === REACTION_INPUT_STATUS_DEFERRED) {
+    if (parseResult) {
+      var deferredFailure = reactionParseResultFailure(parseResult);
+      if (deferredFailure) {
+        record.status = REACTION_INPUT_STATUS_ERROR;
+        record.error = deferredFailure;
+        spec.parseErrors.push({ input_id: record.input_id, format: record.format, error: deferredFailure });
+      }
+    }
     // Deferred: keep the reference, parse nothing, create no structure.
     spec.inputFormats.push(record);
     spec.inputRevision += 1;
@@ -2686,23 +2712,61 @@ function adoptReactionSpecInput(state, input) {
   if (classification.status !== REACTION_INPUT_STATUS_ACCEPTED) {
     throw new Error("reaction input format outside the frozen P2 range: " + classification.format);
   }
-  if (input.content != null && classification.format === "structure_upload" && typeof parseXyzAtoms === "function") {
-    var atoms = parseXyzAtoms(String(input.content));
+  if (parseResult) {
+    var parseFailure = reactionParseResultFailure(parseResult);
+    if (parseFailure) {
+      record.status = REACTION_INPUT_STATUS_ERROR;
+      record.error = parseFailure;
+      spec.parseErrors.push({ input_id: record.input_id, format: record.format, error: parseFailure });
+      spec.inputFormats.push(record);
+      spec.inputRevision += 1;
+      return record;
+    }
     record.structure = {
-      atomCount: atoms.length,
-      atomLabels: atoms.map(function (atom) { return atom.elem || "?"; }),
+      atomCount: Number(parseResult.atomCount != null ? parseResult.atomCount : 0),
+      atomLabels: Array.isArray(parseResult.atomLabels) ? parseResult.atomLabels.slice() : [],
     };
+    spec.inputFormats.push(record);
+    spec.inputRevision += 1;
+    return record;
+  }
+  if (input.content != null && classification.format === "structure_upload" && typeof parseXyzAtoms === "function") {
+    var atoms = null;
+    var parseThrew = null;
+    try {
+      atoms = parseXyzAtoms(String(input.content));
+    } catch (error) {
+      parseThrew = String((error && error.message) || error);
+    }
+    if (parseThrew != null || !Array.isArray(atoms) || atoms.length === 0) {
+      record.status = REACTION_INPUT_STATUS_ERROR;
+      record.error = parseThrew != null ? parseThrew : "parse produced no atoms";
+      spec.parseErrors.push({ input_id: record.input_id, format: record.format, error: record.error });
+    } else {
+      record.structure = {
+        atomCount: atoms.length,
+        atomLabels: atoms.map(function (atom) { return atom.elem || "?"; }),
+      };
+    }
   }
   spec.inputFormats.push(record);
   spec.inputRevision += 1;
   return record;
 }
 
+function reactionParseResultFailure(parseResult) {
+  if (!parseResult || parseResult.ok === true) {
+    var errors = (parseResult && parseResult.errors) || [];
+    return errors.length ? String(errors[0]) : null;
+  }
+  var messages = (parseResult && parseResult.errors) || [];
+  return String(messages[0] || "parse failed");
+}
+
 function validateReactionSpec(state, options) {
   var spec = ensureReactionSpecState(state);
   options = options || {};
   var errors = [];
-  var clarifications = [];
 
   if (!spec.products.length) {
     errors.push({
@@ -2770,43 +2834,48 @@ function validateReactionSpec(state, options) {
     }
   }
 
-  // A net multi-step reaction entered as a single TS is a clarification item,
-  // never a silent submit.
-  var submitAs = options.submitAs || spec.submitAs || "single_ts";
-  if (spec.kind === REACTION_SPEC_KIND_NET && spec.candidateSteps.length > 1 && submitAs === "single_ts") {
-    clarifications.push({
-      clarification_id: "clar-net-multi-step-single-ts",
-      field_path: "reaction.candidate_steps",
-      prompt: "净反应包含多个基元步骤 (net reaction with " + spec.candidateSteps.length +
-        " candidate elementary steps)：请拆分为基元步骤，或显式确认单 TS 近似。",
-      status: "open",
-      options: [
-        { value: "split_steps", label: "拆分为基元步骤 (split into elementary steps)" },
-        { value: "confirm_single_ts", label: "确认单 TS 近似 (confirm single-TS approximation)" },
-      ],
-      answer: null,
-      revision: 0,
+  // A parse failure is an ERROR, never a silent empty structure and never a
+  // submit (T-24).
+  spec.parseErrors.forEach(function (failure) {
+    errors.push({
+      code: "parse_error",
+      message: "input " + (failure.input_id || "?") + " (" + (failure.format || "?") + ") failed to parse: " + failure.error,
+      path: "reaction.inputs",
     });
-  }
+  });
 
-  return { ok: errors.length === 0 && clarifications.length === 0, errors: errors, clarifications: clarifications };
+  // The ambiguity-confirmation matrix (T-24) plus the net-vs-single-TS trap:
+  // every generated item must be explicitly confirmed or marked as an
+  // approximation before submit. Open items block (ok=false).
+  var clarifications = collectReactionSpecClarifications(spec);
+  var openCount = clarifications.filter(function (item) {
+    return item.status === "open";
+  }).length;
+
+  return {
+    ok: errors.length === 0 && openCount === 0,
+    errors: errors,
+    clarifications: clarifications,
+    openClarifications: openCount,
+  };
 }
 
 function canSubmitReactionSpec(state, options) {
   return validateReactionSpec(state, options).ok;
 }
 
-// Submit gate: rejects go back as errors, open clarifications (e.g. a net
-// multi-step reaction entered as a single TS) never return a submit action.
+// Submit gate: rejects go back as errors, unresolved clarifications (the
+// ambiguity matrix and the net multi-step prompt) never return a submit
+// action — confirming or approximating them is the user's, never the code's.
 function evaluateReactionSpecSubmit(state, options) {
   var result = validateReactionSpec(state, options);
   if (result.errors.length) {
     return { action: "reject", errors: result.errors, clarifications: result.clarifications };
   }
-  if (result.clarifications.length) {
+  if (result.openClarifications) {
     return { action: "clarify", errors: [], clarifications: result.clarifications };
   }
-  return { action: "submit", errors: [], clarifications: [] };
+  return { action: "submit", errors: [], clarifications: result.clarifications };
 }
 
 // Incremental edit entry point. Atom labels / references, mapping and stereo
@@ -2817,6 +2886,7 @@ function applyReactionSpecEdit(state, edit) {
   var spec = ensureReactionSpecState(state);
   edit = edit || {};
   var report = { preserved: { atomLabels: true, atomMap: true, stereo: true }, stale: [], inputRevision: null };
+  invalidateReactionSpecResolutions(spec);
   var side = edit.side === "product" ? "products" : "reactants";
   var list = spec[side];
   var index = typeof edit.index === "number" ? edit.index : -1;
@@ -2893,6 +2963,8 @@ function recordReactionSpecConfirmation(state, item) {
     value: item.value != null ? String(item.value) : "",
     note: item.note != null ? String(item.note) : "",
     inputRevision: spec.inputRevision,
+    editedAt: item.editedAt != null ? String(item.editedAt) : new Date().toISOString(),
+    editorRef: item.editor_ref != null ? String(item.editor_ref) : (item.editorRef != null ? String(item.editorRef) : null),
   };
   spec.humanConfirmations.push(record);
   spec.inputRevision += 1;
@@ -2907,6 +2979,8 @@ function recordReactionSpecApproximation(state, item) {
     approximation: item.approximation != null ? String(item.approximation) : "",
     note: item.note != null ? String(item.note) : "",
     inputRevision: spec.inputRevision,
+    editedAt: item.editedAt != null ? String(item.editedAt) : new Date().toISOString(),
+    editorRef: item.editor_ref != null ? String(item.editor_ref) : (item.editorRef != null ? String(item.editorRef) : null),
   };
   spec.approximations.push(record);
   spec.inputRevision += 1;
@@ -2970,6 +3044,8 @@ function describeReactionSpec(state) {
     inputRevision: spec.inputRevision,
     inputFormats: spec.inputFormats.map(function (item) { return Object.assign({}, item); }),
     inputPolicy: reactionInputFormatPolicy(),
+    clarifications: collectReactionSpecClarifications(spec),
+    parseErrors: spec.parseErrors.map(function (item) { return Object.assign({}, item); }),
   };
 }
 
@@ -3044,8 +3120,358 @@ function renderReactionSpecPanel() {
   html += '<div class="mech-spec-block" id="mech-spec-input-revision"><strong>' +
     e(t("mech.spec.input_revision") || "输入版本 (input revision)") + ":</strong> " +
     e(String(view.inputRevision)) + "</div>";
+  html += '<div class="mech-spec-block" id="mech-spec-clarifications"><strong>' +
+    e(t("mech.spec.clarifications") || "化学歧义澄清 (chemistry clarifications)") + "</strong><ul>" +
+    (view.clarifications.map(function (item) {
+      return "<li>" + e(item.field_path + " · " + item.status +
+        (item.answer == null ? "" : " · answer " + item.answer) + " · rev " + item.revision) +
+        '<div class="mech-inline-note">' + e(item.prompt) + "</div></li>";
+    }).join("") || "<li>—</li>") + "</ul></div>";
+  if (view.parseErrors.length) {
+    html += '<div class="mech-spec-block mech-spec-error" id="mech-spec-parse-errors"><strong>' +
+      e(t("mech.spec.parse_errors") || "解析失败 (parse errors)") + "</strong><ul>" +
+      view.parseErrors.map(function (item) {
+        return "<li>" + e((item.input_id || "?") + " (" + (item.format || "?") + "): " + item.error) + "</li>";
+      }).join("") + "</ul></div>";
+  }
   container.innerHTML = html;
   if (window.ACPScienceQuestion && typeof window.ACPScienceQuestion.setReactionSpecView === "function") {
     window.ACPScienceQuestion.setReactionSpecView(view);
   }
+}
+
+// ── Chemistry ambiguity confirmation and negative inputs (T-24 / C17b) ──
+// Clarification-item matrix with STABLE view-model field names. Every item is
+// an object whose keys are EXACTLY the `clarifications.items` fields of
+// experience/view-model.schema.json (clarification_id, field_path, prompt,
+// status, options, answer, revision). The stable field_path values are
+// missing_stereo / missing_conditions / mapping_ambiguity /
+// unknown_multiplicity plus the existing reaction.candidate_steps
+// net-vs-elementary item. Each item must be explicitly confirmed or marked as
+// an approximation by the user before submit; the decision and the input
+// revision are then written into the proposal payload with the frozen
+// experience/proposal.schema.json field names (human_edits / question_revision
+// / reaction_revision) — never a parallel shape.
+
+var REACTION_INPUT_STATUS_ERROR = "ERROR";
+
+var REACTION_CLARIFICATION_FIELD_PATHS = [
+  "reaction.candidate_steps",
+  "missing_stereo",
+  "missing_conditions",
+  "mapping_ambiguity",
+  "unknown_multiplicity",
+];
+
+var REACTION_CLARIFICATION_ITEM_FIELDS = [
+  "clarification_id",
+  "field_path",
+  "prompt",
+  "status",
+  "options",
+  "answer",
+  "revision",
+];
+
+var REACTION_CLARIFICATION_IDS = {
+  "reaction.candidate_steps": "clar-net-multi-step-single-ts",
+  "missing_stereo": "clar-missing-stereo",
+  "missing_conditions": "clar-missing-conditions",
+  "mapping_ambiguity": "clar-mapping-ambiguity",
+  "unknown_multiplicity": "clar-unknown-multiplicity",
+};
+
+var REACTION_CLARIFICATION_OPTIONS = {
+  "reaction.candidate_steps": {
+    confirm: "split_steps",
+    confirmLabel: "拆分为基元步骤 (split into elementary steps)",
+    approximate: "confirm_single_ts",
+    approximateLabel: "确认单 TS 近似 (confirm single-TS approximation)",
+  },
+  "missing_stereo": {
+    confirm: "confirm_no_stereo",
+    confirmLabel: "确认无立体 (confirm no stereo)",
+    approximate: "approximate",
+    approximateLabel: "标注立体近似 (mark stereo approximation)",
+  },
+  "missing_conditions": {
+    confirm: "confirm_conditions",
+    confirmLabel: "确认条件 (confirm conditions)",
+    approximate: "approximate",
+    approximateLabel: "标注条件近似 (mark conditions approximation)",
+  },
+  "mapping_ambiguity": {
+    confirm: "confirm_mapping",
+    confirmLabel: "确认映射 (confirm mapping)",
+    approximate: "approximate",
+    approximateLabel: "标注映射近似 (mark mapping approximation)",
+  },
+  "unknown_multiplicity": {
+    confirm: "provide_multiplicity",
+    confirmLabel: "提供显式多重度 (provide explicit multiplicity)",
+    approximate: "approximate",
+    approximateLabel: "标注多重度近似 (mark multiplicity approximation)",
+  },
+};
+
+var REACTION_PROPOSAL_FIELDS = [
+  "proposal_id",
+  "project_id",
+  "question_ref",
+  "question_revision",
+  "reaction_ref",
+  "reaction_revision",
+  "hypothesis",
+  "recipe_digest",
+  "plan_definition_digest",
+  "science",
+  "budget",
+  "approval_ref",
+  "allowed_change_scope",
+  "round",
+  "decision",
+  "created_at",
+  "human_edits",
+  "approval_status",
+  "updated_at",
+  "display_name",
+];
+
+var REACTION_PROPOSAL_HUMAN_EDIT_FIELDS = ["edited_at", "field_path", "editor_ref", "note"];
+
+function reactionSpecClarificationFields() {
+  return REACTION_CLARIFICATION_FIELD_PATHS.slice();
+}
+
+function reactionSpecClarificationItemFields() {
+  return REACTION_CLARIFICATION_ITEM_FIELDS.slice();
+}
+
+function reactionSpecProposalFields() {
+  return REACTION_PROPOSAL_FIELDS.slice();
+}
+
+function reactionSpecProposalHumanEditFields() {
+  return REACTION_PROPOSAL_HUMAN_EDIT_FIELDS.slice();
+}
+
+// Input mutators invalidate prior decisions: a confirmation or approximation
+// recorded against an older input revision is stale and is rejected (the item
+// reopens) instead of silently covering the new input.
+function invalidateReactionSpecResolutions(spec) {
+  spec.clarificationResolutions = {};
+}
+
+function reactionResolutionVisible(spec, fieldPath, resolution) {
+  if (resolution.mode === "approximation") {
+    return spec.approximations.some(function (record) {
+      return record && record.item === fieldPath && record.approximation != null && String(record.approximation) !== "";
+    });
+  }
+  return spec.humanConfirmations.some(function (record) {
+    return record && record.item === fieldPath && record.value != null && String(record.value) !== "";
+  });
+}
+
+function reactionMappingAmbiguity(spec) {
+  if (spec.atomMapping.stale) return "atom mapping is stale";
+  if (spec.atomMapping.status === "ambiguous") return "atom mapping status is ambiguous";
+  var byReactant = {};
+  var byProduct = {};
+  (spec.atomMapping.pairs || []).forEach(function (pair) {
+    if (!Array.isArray(pair) || pair.length < 2) return;
+    var r = pair[0];
+    var p = pair[1];
+    if (r == null || p == null) return;
+    if (!byReactant[r]) byReactant[r] = [];
+    if (!byProduct[p]) byProduct[p] = [];
+    if (byReactant[r].indexOf(p) === -1) byReactant[r].push(p);
+    if (byProduct[p].indexOf(r) === -1) byProduct[p].push(r);
+  });
+  var conflicts = [];
+  Object.keys(byReactant).forEach(function (r) {
+    if (byReactant[r].length > 1) conflicts.push("reactant atom " + r + " -> products [" + byReactant[r].join(", ") + "]");
+  });
+  Object.keys(byProduct).forEach(function (p) {
+    if (byProduct[p].length > 1) conflicts.push("product atom " + p + " <- reactants [" + byProduct[p].join(", ") + "]");
+  });
+  return conflicts.length ? "cross-side pairing conflict: " + conflicts.join("; ") : null;
+}
+
+function reactionClarificationItem(spec, fieldPath, prompt) {
+  var options = REACTION_CLARIFICATION_OPTIONS[fieldPath];
+  var item = {
+    clarification_id: REACTION_CLARIFICATION_IDS[fieldPath],
+    field_path: fieldPath,
+    prompt: prompt,
+    status: "open",
+    options: [
+      { value: options.confirm, label: options.confirmLabel },
+      { value: options.approximate, label: options.approximateLabel },
+    ],
+    answer: null,
+    revision: 0,
+  };
+  var resolution = spec.clarificationResolutions[fieldPath];
+  if (resolution && reactionResolutionVisible(spec, fieldPath, resolution)) {
+    item.status = resolution.mode === "approximation" ? "waived" : "answered";
+    item.answer = resolution.answer;
+    item.revision = resolution.revision;
+  }
+  return item;
+}
+
+function collectReactionSpecClarifications(spec) {
+  var items = [];
+  function missingRefs(predicate) {
+    return spec.reactants.concat(spec.products).filter(predicate).map(function (participant) {
+      return participant.ref || participant.label || "?";
+    });
+  }
+
+  // Net reaction with multiple elementary steps: an explicit prompt, never a
+  // silent single-TS submit. Flipping submitAs or passing options.submitAs
+  // cannot bypass it — only an explicit user decision can.
+  if (spec.kind === REACTION_SPEC_KIND_NET && spec.candidateSteps.length > 1) {
+    items.push(reactionClarificationItem(spec, "reaction.candidate_steps",
+      "净反应包含多个基元步骤 (net reaction with " + spec.candidateSteps.length +
+      " candidate elementary steps)：请拆分为基元步骤，或显式确认单 TS 近似。"));
+  }
+
+  var stereoMissing = missingRefs(function (participant) { return participant.stereo == null; });
+  if (stereoMissing.length) {
+    items.push(reactionClarificationItem(spec, "missing_stereo",
+      "组分缺立体信息 (stereo unspecified for: " + stereoMissing.join(", ") +
+      ")：请显式确认无立体或标注近似，禁止自动补全。"));
+  }
+
+  var conditionMissing = [];
+  if (spec.conditions.solvent == null) conditionMissing.push("solvent");
+  if (spec.conditions.temperature == null) conditionMissing.push("temperature");
+  if (spec.conditions.standardState == null) conditionMissing.push("standard state");
+  if (conditionMissing.length) {
+    items.push(reactionClarificationItem(spec, "missing_conditions",
+      "反应条件未完整指定 (missing conditions: " + conditionMissing.join(", ") +
+      ")：请显式确认或标注近似。"));
+  }
+
+  var mappingProblem = reactionMappingAmbiguity(spec);
+  if (mappingProblem) {
+    items.push(reactionClarificationItem(spec, "mapping_ambiguity",
+      "原子映射存在歧义 (atom mapping ambiguity — " + mappingProblem +
+      ")：请显式确认映射或标注近似。"));
+  }
+
+  var multMissing = missingRefs(function (participant) { return participant.multiplicity == null; });
+  if (multMissing.length) {
+    items.push(reactionClarificationItem(spec, "unknown_multiplicity",
+      "组分自旋多重度未知 (multiplicity unknown for: " + multMissing.join(", ") +
+      ")：必须显式输入，禁止默认补全。"));
+  }
+
+  return items;
+}
+
+// Explicit user decision on one clarification item. mode "confirm" records a
+// human confirmation; mode "approximation" records a VISIBLE approximation —
+// an approximation can never be entered as a confirmation and can never be
+// empty (a hidden/omitted approximation leaves the item open and submit
+// blocked). unknown_multiplicity additionally requires an explicit value.
+function resolveReactionSpecClarification(state, resolution) {
+  var spec = ensureReactionSpecState(state);
+  resolution = resolution || {};
+  var fieldPath = resolution.field_path != null ? String(resolution.field_path) : "";
+  if (REACTION_CLARIFICATION_FIELD_PATHS.indexOf(fieldPath) === -1) {
+    return { ok: false, error: "unknown_clarification_field", field_path: fieldPath };
+  }
+  var current = collectReactionSpecClarifications(spec).filter(function (item) {
+    return item.field_path === fieldPath;
+  })[0];
+  if (!current) {
+    return { ok: false, error: "no_such_clarification", field_path: fieldPath };
+  }
+  var mode = resolution.mode != null ? String(resolution.mode) : "";
+  if (mode !== "confirm" && mode !== "approximation") {
+    return { ok: false, error: "mode_must_be_confirm_or_approximation", field_path: fieldPath };
+  }
+  var options = REACTION_CLARIFICATION_OPTIONS[fieldPath];
+  var answer = mode === "approximation" ? options.approximate : options.confirm;
+  var explicitValue = resolution.value != null ? String(resolution.value) : "";
+  if (mode === "confirm" && explicitValue === options.approximate) {
+    return { ok: false, error: "approximation_required", field_path: fieldPath };
+  }
+  if (mode === "confirm" && fieldPath === "unknown_multiplicity" && explicitValue === "") {
+    return { ok: false, error: "explicit_input_required", field_path: fieldPath };
+  }
+  var approximationValue = resolution.approximation != null ? String(resolution.approximation) : "";
+  if (mode === "approximation" && approximationValue === "") {
+    return { ok: false, error: "approximation_required", field_path: fieldPath };
+  }
+  var record;
+  if (mode === "approximation") {
+    record = recordReactionSpecApproximation(state, {
+      item: fieldPath,
+      approximation: approximationValue,
+      note: resolution.note != null ? String(resolution.note) : "",
+      editor_ref: resolution.editor_ref,
+    });
+  } else {
+    record = recordReactionSpecConfirmation(state, {
+      item: fieldPath,
+      value: explicitValue !== "" ? explicitValue : answer,
+      note: resolution.note != null ? String(resolution.note) : "",
+      editor_ref: resolution.editor_ref,
+    });
+  }
+  spec.clarificationResolutions[fieldPath] = {
+    mode: mode,
+    answer: answer,
+    revision: record.inputRevision,
+    value: mode === "confirm" ? record.value : record.approximation,
+    note: record.note,
+  };
+  var resolved = collectReactionSpecClarifications(spec).filter(function (item) {
+    return item.field_path === fieldPath;
+  })[0];
+  return { ok: true, field_path: fieldPath, record: record, clarification: resolved };
+}
+
+// Proposal payload writer: the confirmation/approximation records and the
+// input revision go into the frozen proposal.schema.json shape (human_edits /
+// question_revision / reaction_revision). Any base key outside the frozen
+// property set is rejected — no parallel shape.
+function buildReactionSpecProposalInput(spec, base) {
+  spec = spec || {};
+  base = base || {};
+  Object.keys(base).forEach(function (key) {
+    if (REACTION_PROPOSAL_FIELDS.indexOf(key) === -1) {
+      throw new Error("proposal payload field outside proposal.schema.json: " + key);
+    }
+  });
+  var inputRevision = Number(spec.inputRevision != null ? spec.inputRevision : 0);
+  var reactionRevision = spec.reactionInputRevision != null
+    ? Number(spec.reactionInputRevision)
+    : (base.reaction_revision != null ? Number(base.reaction_revision) : inputRevision);
+  var humanEdits = [];
+  function pushEdit(record, kind) {
+    var fieldPath = record.item != null ? String(record.item) : "";
+    var note = kind === "approximation"
+      ? "approximation " + fieldPath + "=" + String(record.approximation) + " (input revision " + record.inputRevision + ")"
+      : "confirmed " + fieldPath + "=" + String(record.value) + " (input revision " + record.inputRevision + ")";
+    if (record.note) note += " · " + record.note;
+    humanEdits.push({
+      edited_at: record.editedAt != null ? String(record.editedAt) : new Date().toISOString(),
+      field_path: fieldPath,
+      editor_ref: record.editorRef != null ? String(record.editorRef) : "unspecified",
+      note: note,
+    });
+  }
+  (spec.humanConfirmations || []).forEach(function (record) { pushEdit(record, "confirmation"); });
+  (spec.approximations || []).forEach(function (record) { pushEdit(record, "approximation"); });
+  var payload = {};
+  Object.keys(base).forEach(function (key) { payload[key] = base[key]; });
+  payload.question_revision = base.question_revision != null ? Number(base.question_revision) : inputRevision;
+  payload.reaction_revision = reactionRevision;
+  payload.human_edits = humanEdits;
+  return payload;
 }

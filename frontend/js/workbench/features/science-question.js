@@ -177,6 +177,7 @@ window.ACPScienceQuestion = (function () {
       approximations: [],
       inputRevision: 1,
       reactionView: null,
+      parseError: null,
     },
   };
 
@@ -310,6 +311,8 @@ window.ACPScienceQuestion = (function () {
     if (!resolveQuestionWorkflow(state.question.question_id, workflowCatalog())) return false;
     if (!state.structure.xyz) return false;
     if (state.spec.inputFormatStatus === "DEFERRED") return false;
+    if (state.spec.parseError) return false;
+    if (reactionViewParseErrors().length) return false;
     if (openReactionClarifications().length) return false;
     if (state.defaults.values.method == null || state.defaults.values.method === "") return false;
     if (!isIntLike(state.defaults.values.charge, -1000)) return false;
@@ -386,6 +389,7 @@ window.ACPScienceQuestion = (function () {
       xyz: String(structure.xyz || structure.xyzText || ""),
     };
     state.preview = null;
+    state.spec.parseError = null;
     state.preflight = { ran: false, ok: false, error: null, body: null };
     render();
     return getState();
@@ -456,12 +460,50 @@ window.ACPScienceQuestion = (function () {
     return getState();
   }
 
+  function reactionViewParseErrors() {
+    var view = state.spec.reactionView;
+    return (view && Array.isArray(view.parseErrors)) ? view.parseErrors.slice() : [];
+  }
+
+  // A clarification is only ever closed by a VISIBLE user decision. A
+  // resolved item whose confirmation record is omitted or whose approximation
+  // was hidden is treated as open again — hidden approximations never unblock
+  // submit (T-24).
   function openReactionClarifications() {
     var view = state.spec.reactionView;
     if (!view || !Array.isArray(view.clarifications)) return [];
+    var confirmations = Array.isArray(view.humanConfirmations) ? view.humanConfirmations : [];
+    var approximations = Array.isArray(view.approximations) ? view.approximations : [];
     return view.clarifications.filter(function (item) {
-      return item && item.status === "open";
+      if (!item) return false;
+      if (item.status === "open" || item.answer == null) return true;
+      if (item.status === "waived") {
+        return !approximations.some(function (record) {
+          return record && record.item === item.field_path && record.approximation != null && String(record.approximation) !== "";
+        });
+      }
+      return !confirmations.some(function (record) {
+        return record && record.item === item.field_path && record.value != null && String(record.value) !== "";
+      });
     });
+  }
+
+  // Proposal payload writer for the question side: delegates to the single
+  // frozen-shape builder in reaction-builder (no parallel shape). The merged
+  // records bag carries both the question-side and the bound reaction-side
+  // confirmations/approximations.
+  function proposalInput(base) {
+    if (typeof window.buildReactionSpecProposalInput !== "function") {
+      throw new Error("science-question: buildReactionSpecProposalInput (reaction-builder.js) required");
+    }
+    var view = state.spec.reactionView;
+    var bag = {
+      humanConfirmations: state.spec.humanConfirmations.concat((view && view.humanConfirmations) || []),
+      approximations: state.spec.approximations.concat((view && view.approximations) || []),
+      inputRevision: state.spec.inputRevision,
+      reactionInputRevision: view && view.inputRevision != null ? view.inputRevision : null,
+    };
+    return window.buildReactionSpecProposalInput(bag, base);
   }
 
   function previewStructure() {
@@ -480,9 +522,25 @@ window.ACPScienceQuestion = (function () {
       filename: (state.structure.name || "manual_input") + ".xyz",
     })).then(function (body) {
       var first = body && Array.isArray(body.structures) ? body.structures[0] : null;
+      var errors = (body && Array.isArray(body.errors)) ? body.errors.slice() : [];
+      var atomCount = first && first.atom_count != null ? first.atom_count : null;
+      var parseFailed = !(body && body.ok === true) || errors.length > 0 || atomCount == null || Number(atomCount) === 0;
+      if (parseFailed) {
+        // A parse failure is surfaced as an ERROR and blocks submit. It must
+        // never degrade into an empty structure (T-24).
+        var message = errors.length ? errors.join("; ") : "structure parse failed (no atoms)";
+        state.spec.parseError = { message: message, errors: errors };
+        state.preview = {
+          ok: false, atomCount: null, moleculeName: null, charge: null, multiplicity: null,
+        };
+        state.status = tr("manual.parse_failed", "结构解析失败：{message}", { message: message });
+        render();
+        return state.preview;
+      }
+      state.spec.parseError = null;
       state.preview = {
-        ok: !!(body && body.ok === true),
-        atomCount: first && first.atom_count != null ? first.atom_count : null,
+        ok: true,
+        atomCount: atomCount,
         moleculeName: first && first.name ? first.name : null,
         charge: first && first.charge != null ? first.charge : null,
         multiplicity: first && first.multiplicity != null ? first.multiplicity : null,
@@ -709,6 +767,8 @@ window.ACPScienceQuestion = (function () {
         approximations: state.spec.approximations.map(function (item) { return Object.assign({}, item); }),
         inputRevision: state.spec.inputRevision,
         reactionView: state.spec.reactionView ? Object.assign({}, state.spec.reactionView) : null,
+        parseError: state.spec.parseError ? Object.assign({}, state.spec.parseError) : null,
+        openClarifications: openReactionClarifications().map(function (item) { return Object.assign({}, item); }),
       },
     };
   }
@@ -779,9 +839,28 @@ window.ACPScienceQuestion = (function () {
     }).concat(spec.approximations.map(function (item) {
       return "approximation " + item.item + "=" + item.approximation + " @rev " + item.inputRevision;
     }));
+    if (view) {
+      confirmations = confirmations.concat((view.humanConfirmations || []).map(function (item) {
+        return "confirmed " + item.item + "=" + item.value + " @rev " + item.inputRevision;
+      })).concat((view.approximations || []).map(function (item) {
+        return "approximation " + item.item + "=" + item.approximation + " @rev " + item.inputRevision;
+      }));
+    }
     html += '<div class="science-question-note" id="sq-spec-confirmations">' +
       e(tr("manual.confirmations", "人工确认/近似 (human confirmations/approximations): ")) +
       e(confirmations.join(" · ") || tr("manual.none", "无")) + "</div>";
+    var clarifications = (view && Array.isArray(view.clarifications)) ? view.clarifications : [];
+    html += '<div class="science-question-note" id="sq-spec-clarifications">' +
+      e(tr("manual.clarifications", "化学歧义澄清 (chemistry clarifications): ")) +
+      e(clarifications.map(function (item) {
+        return item.field_path + "=" + item.status + (item.answer == null ? "" : " (" + item.answer + ")");
+      }).join(" · ") || tr("manual.none", "无")) + "</div>";
+    if (spec.parseError) {
+      html += '<div class="science-question-err" id="sq-parse-error">' +
+        e(tr("manual.parse_error", "解析错误 (parse error): {message}", {
+          message: spec.parseError.message,
+        })) + "</div>";
+    }
     html += '<div class="science-question-note" id="sq-spec-input-revision">' +
       e(tr("manual.input_revision", "输入版本 (input revision): {revision}", {
         revision: spec.inputRevision,
@@ -1014,6 +1093,8 @@ window.ACPScienceQuestion = (function () {
     recordApproximation: recordApproximation,
     setReactionSpecView: setReactionSpecView,
     openReactionClarifications: openReactionClarifications,
+    reactionViewParseErrors: reactionViewParseErrors,
+    proposalInput: proposalInput,
   };
 })();
 

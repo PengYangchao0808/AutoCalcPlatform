@@ -252,6 +252,9 @@ module.exports.register = async function (h) {
     const R = setupReaction(h);
     const state = makeState();
     addBasicReaction(R, state);
+    R.sandbox.setReactionSpecConditions(state, {
+      solvent: "water", temperature: "298.15 K", standardState: "1 atm",
+    });
     R.sandbox.setReactionSpecKind(state, "net_reaction");
     R.sandbox.addReactionSpecCandidateStep(state, { step_id: "step-1", reactant_refs: ["r1"], product_refs: ["p1"] });
     R.sandbox.addReactionSpecCandidateStep(state, { step_id: "step-2", reactant_refs: ["r1"], product_refs: ["p1"] });
@@ -471,5 +474,404 @@ module.exports.register = async function (h) {
       "bound reaction kind is shown in the question panel");
     assert(html.indexOf("DEFERRED") !== -1, "input policy shows CDXML DEFERRED");
     assert(html.indexOf("input revision") !== -1, "input revision is shown");
+  });
+
+  // ── T-24 / C17b: chemistry ambiguity confirmation and negative inputs ──
+
+  const REPO = path.resolve(FRONTEND, "..");
+  const CONTRACTS = path.join(REPO, "docs", "reference", "next-change", "acp2-contracts", "experience");
+  const VIEW_MODEL_SCHEMA = path.join(CONTRACTS, "view-model.schema.json");
+  const PROPOSAL_SCHEMA = path.join(CONTRACTS, "proposal.schema.json");
+
+  function addFullySpecifiedBut(R, state, gaps) {
+    const S = R.sandbox;
+    const withGap = (entry, gapName) => Object.assign({}, entry, gaps[gapName] || {});
+    S.addReactionSpecParticipant(state, "reactant", withGap({
+      ref: "r1", charge: 0, multiplicity: 1, stereo: "E", atomLabels: ["C1"], atomMap: [1],
+    }, "reactant"));
+    S.addReactionSpecParticipant(state, "product", withGap({
+      ref: "p1", charge: 0, multiplicity: 1, stereo: "R", atomLabels: ["C1"], atomMap: [1],
+    }, "product"));
+    if (!gaps.skipConditions) {
+      S.setReactionSpecConditions(state, {
+        solvent: "water", temperature: "298.15 K", standardState: "1 atm",
+      });
+    }
+    return state;
+  }
+
+  await test("unconfirmed clarification blocks submit: missing_stereo must be explicitly confirmed", async () => {
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    const state = addFullySpecifiedBut(R, makeState(), { product: { stereo: null } });
+    const result = S.validateReactionSpec(state);
+    assertEq(result.errors.length, 0, JSON.stringify(result.errors));
+    assertEq(result.clarifications.length, 1, JSON.stringify(result.clarifications));
+    assertEq(result.clarifications[0].field_path, "missing_stereo");
+    assertEq(result.clarifications[0].status, "open");
+    assertEq(result.clarifications[0].answer, null);
+    assertEq(result.ok, false);
+    assertEq(S.canSubmitReactionSpec(state), false);
+    assertEq(S.evaluateReactionSpecSubmit(state).action, "clarify");
+    const q = setupQuestion();
+    await q.Q.discover();
+    q.Q.loadDemoStructure();
+    await q.Q.runPreflight();
+    q.Q.setReactionSpecView(S.describeReactionSpec(state));
+    assertEq(q.Q.canSubmit(), false, "an unconfirmed clarification must block submit");
+    let rejected = false;
+    await q.Q.submit().catch(() => { rejected = true; });
+    assert(rejected, "submit must refuse an unconfirmed clarification");
+    assertEq(q.submitCalls.length, 0, "zero submit adapter calls while unconfirmed");
+    const resolved = S.resolveReactionSpecClarification(state, {
+      field_path: "missing_stereo", mode: "confirm", value: "confirm_no_stereo",
+      note: "explicit user confirmation", editor_ref: "user-1",
+    });
+    assertEq(resolved.ok, true);
+    assertEq(resolved.clarification.status, "answered");
+    assertEq(resolved.clarification.answer, "confirm_no_stereo");
+    assert(resolved.record.inputRevision >= 1, "the decision carries the input revision");
+    assertEq(S.canSubmitReactionSpec(state), true);
+    assertEq(S.evaluateReactionSpecSubmit(state).action, "submit");
+    q.Q.setReactionSpecView(S.describeReactionSpec(state));
+    assertEq(q.Q.canSubmit(), true, "an explicit confirmation unblocks submit");
+  });
+
+  await test("approximation hidden/omitted blocks submit: missing_conditions approximation must stay visible", async () => {
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    const state = addFullySpecifiedBut(R, makeState(), { skipConditions: true });
+    const result = S.validateReactionSpec(state);
+    assertEq(result.clarifications.length, 1, JSON.stringify(result.clarifications));
+    assertEq(result.clarifications[0].field_path, "missing_conditions");
+    const omitted = S.resolveReactionSpecClarification(state, {
+      field_path: "missing_conditions", mode: "approximation",
+    });
+    assertEq(omitted.ok, false);
+    assertEq(omitted.error, "approximation_required", "an omitted approximation is never accepted");
+    assertEq(S.canSubmitReactionSpec(state), false, "an omitted approximation must not resolve");
+    const resolved = S.resolveReactionSpecClarification(state, {
+      field_path: "missing_conditions", mode: "approximation",
+      approximation: "298.15 K, 1 atm, gas phase", note: "standard ambient", editor_ref: "user-1",
+    });
+    assertEq(resolved.ok, true);
+    assertEq(resolved.clarification.status, "waived");
+    const view = S.describeReactionSpec(state);
+    assertEq(view.approximations.length, 1);
+    assertEq(view.approximations[0].item, "missing_conditions");
+    assert(view.approximations[0].approximation.indexOf("298.15") !== -1, "the approximation is visible");
+    assertEq(S.canSubmitReactionSpec(state), true, "a visible approximation resolves the item");
+    state.spec.approximations = [];
+    const afterHide = S.validateReactionSpec(state);
+    assertEq(afterHide.clarifications[0].status, "open", "a hidden approximation reopens the item");
+    assertEq(S.canSubmitReactionSpec(state), false, "hidden approximations never unblock submit");
+    const q = setupQuestion();
+    await q.Q.discover();
+    q.Q.loadDemoStructure();
+    await q.Q.runPreflight();
+    const hiddenView = {
+      kind: "net_reaction", kindLabel: "净反应 (net reaction)", candidateSteps: [],
+      atomMapping: { status: "mapped", stale: false, pairs: [] },
+      chargeSpin: [{ ref: "r1", charge: 0, multiplicity: 1 }],
+      stereo: [{ ref: "r1", stereo: "E" }],
+      humanConfirmations: [],
+      approximations: [],
+      parseErrors: [],
+      clarifications: [{
+        clarification_id: "clar-missing-conditions",
+        field_path: "missing_conditions",
+        prompt: "missing conditions",
+        status: "waived",
+        options: [{ value: "confirm_conditions", label: "confirm" }, { value: "approximate", label: "approximate" }],
+        answer: "approximate",
+        revision: 3,
+      }],
+    };
+    q.Q.setReactionSpecView(hiddenView);
+    assertEq(q.Q.openReactionClarifications().length, 1, "a hidden approximation is treated as open");
+    assertEq(q.Q.canSubmit(), false);
+    let rejected = false;
+    await q.Q.submit().catch(() => { rejected = true; });
+    assert(rejected, "submit must refuse a hidden approximation");
+    assertEq(q.submitCalls.length, 0);
+    hiddenView.approximations = [{
+      item: "missing_conditions", approximation: "298.15 K, 1 atm, gas phase", note: "", inputRevision: 3,
+    }];
+    q.Q.setReactionSpecView(hiddenView);
+    assertEq(q.Q.openReactionClarifications().length, 0);
+    assertEq(q.Q.canSubmit(), true, "a visible approximation unblocks submit");
+  });
+
+  await test("CDXML parse error shows error and no submit", async () => {
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    const state = makeState();
+    const record = S.adoptReactionSpecInput(state, {
+      input_id: "cdxml-1", format: "cdxml", content: "<cdxml>broken</cdxml>",
+      parseResult: { ok: false, errors: ["cdxml parse failure"], structures: [] },
+    });
+    assertEq(record.status, "ERROR");
+    assertEq(record.error, "cdxml parse failure");
+    assertEq(record.structure, null, "a parse failure must never degrade to an empty structure");
+    assertEq(R.parseCalls.length, 0, "CDXML content never reaches parseXyzAtoms");
+    const result = S.validateReactionSpec(state);
+    assert(result.errors.some((error) => error.code === "parse_error"),
+      "the parse failure surfaces as an error: " + JSON.stringify(result.errors));
+    assertEq(S.evaluateReactionSpecSubmit(state).action, "reject");
+    assertEq(S.canSubmitReactionSpec(state), false);
+    const q = setupQuestion();
+    q.Q.init({
+      wizardEndpoints: {
+        parseStructure: () => Promise.resolve({
+          ok: false, detected_format: "cdxml", errors: ["cdxml parse failure"], warnings: [], structures: [],
+        }),
+      },
+    });
+    await q.Q.discover();
+    q.Q.loadDemoStructure();
+    const preview = await q.Q.previewStructure();
+    assertEq(preview.ok, false);
+    assertEq(preview.atomCount, null, "no empty structure is created from a failed parse");
+    const qState = q.Q.getState();
+    assertEq(qState.spec.parseError.message, "cdxml parse failure");
+    assert(q.bodyHtml().indexOf("cdxml parse failure") !== -1, "the parse error is shown");
+    await q.Q.runPreflight();
+    assertEq(q.Q.canSubmit(), false, "a parse error blocks submit");
+    let rejected = false;
+    await q.Q.submit().catch(() => { rejected = true; });
+    assert(rejected, "submit must refuse after a parse error");
+    assertEq(q.submitCalls.length, 0, "no submit after a CDXML parse error");
+  });
+
+  await test("mapping ambiguity (cross-side pairing) is surfaced: mapping_ambiguity", async () => {
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    const state = addFullySpecifiedBut(R, makeState(), {});
+    S.applyReactionSpecEdit(state, { type: "set_mapping", pairs: [[0, 0], [0, 1], [1, 1]], status: "mapped" });
+    const result = S.validateReactionSpec(state);
+    assertEq(result.errors.length, 0, JSON.stringify(result.errors));
+    assertEq(result.clarifications.length, 1, JSON.stringify(result.clarifications));
+    assertEq(result.clarifications[0].field_path, "mapping_ambiguity");
+    assert(result.clarifications[0].prompt.indexOf("cross-side pairing conflict") !== -1,
+      result.clarifications[0].prompt);
+    assertEq(result.clarifications[0].status, "open");
+    assertEq(result.ok, false, "an unresolved mapping ambiguity blocks submit");
+    assertEq(S.evaluateReactionSpecSubmit(state).action, "clarify");
+    const staleState = addFullySpecifiedBut(R, makeState(), {});
+    S.applyReactionSpecEdit(staleState, { type: "replace_structure", side: "product", index: 0, atomCount: 7 });
+    const staleResult = S.validateReactionSpec(staleState);
+    assert(staleResult.clarifications.some((item) => item.field_path === "mapping_ambiguity"),
+      "a stale mapping is ambiguous too: " + JSON.stringify(staleResult.clarifications));
+  });
+
+  await test("unknown multiplicity requires explicit input: unknown_multiplicity", async () => {
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    const state = addFullySpecifiedBut(R, makeState(), { reactant: { multiplicity: null } });
+    const result = S.validateReactionSpec(state);
+    assertEq(result.clarifications.length, 1, JSON.stringify(result.clarifications));
+    assertEq(result.clarifications[0].field_path, "unknown_multiplicity");
+    const empty = S.resolveReactionSpecClarification(state, {
+      field_path: "unknown_multiplicity", mode: "confirm",
+    });
+    assertEq(empty.ok, false);
+    assertEq(empty.error, "explicit_input_required", "unknown multiplicity demands explicit input");
+    assertEq(state.spec.reactants[0].multiplicity, null, "no auto-fill of the unknown multiplicity");
+    assertEq(S.canSubmitReactionSpec(state), false);
+    const resolved = S.resolveReactionSpecClarification(state, {
+      field_path: "unknown_multiplicity", mode: "confirm", value: "1", note: "user supplied singlet",
+    });
+    assertEq(resolved.ok, true);
+    assertEq(resolved.record.value, "1");
+    assertEq(resolved.clarification.answer, "provide_multiplicity");
+    assertEq(state.spec.reactants[0].multiplicity, null,
+      "the participant identity stays untouched until an explicit edit");
+    assertEq(S.canSubmitReactionSpec(state), true);
+  });
+
+  await test("net multi-step prompt cannot be bypassed: reaction.candidate_steps", async () => {
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    const state = addFullySpecifiedBut(R, makeState(), {});
+    S.addReactionSpecCandidateStep(state, { step_id: "step-1", reactant_refs: ["r1"], product_refs: ["p1"] });
+    S.addReactionSpecCandidateStep(state, { step_id: "step-2", reactant_refs: ["r1"], product_refs: ["p1"] });
+    S.setReactionSpecSubmitAs(state, "split_steps");
+    let result = S.validateReactionSpec(state);
+    assertEq(result.clarifications.length, 1, JSON.stringify(result.clarifications));
+    assertEq(result.clarifications[0].field_path, "reaction.candidate_steps");
+    assertEq(result.clarifications[0].status, "open", "flipping submitAs cannot bypass the prompt");
+    assertEq(S.evaluateReactionSpecSubmit(state).action, "clarify");
+    assertEq(S.evaluateReactionSpecSubmit(state, { submitAs: "split_steps" }).action, "clarify",
+      "an options.submitAs override cannot bypass the prompt");
+    assertEq(S.canSubmitReactionSpec(state, { submitAs: "multi_ts" }), false);
+    const smuggled = S.resolveReactionSpecClarification(state, {
+      field_path: "reaction.candidate_steps", mode: "confirm", value: "confirm_single_ts",
+    });
+    assertEq(smuggled.ok, false);
+    assertEq(smuggled.error, "approximation_required", "a single-TS approximation cannot pass as a confirmation");
+    assertEq(S.validateReactionSpec(state).clarifications[0].status, "open");
+    const q = setupQuestion();
+    await q.Q.discover();
+    q.Q.loadDemoStructure();
+    await q.Q.runPreflight();
+    q.Q.setReactionSpecView(S.describeReactionSpec(state));
+    let rejected = false;
+    await q.Q.submit().catch(() => { rejected = true; });
+    assert(rejected, "the net multi-step prompt cannot be bypassed");
+    assertEq(q.submitCalls.length, 0);
+    const resolved = S.resolveReactionSpecClarification(state, {
+      field_path: "reaction.candidate_steps", mode: "approximation",
+      approximation: "single_ts", note: "user declared single-TS approximation",
+    });
+    assertEq(resolved.ok, true);
+    assertEq(resolved.clarification.status, "waived");
+    assertEq(resolved.clarification.answer, "confirm_single_ts");
+    assertEq(S.canSubmitReactionSpec(state), true);
+    S.addReactionSpecCandidateStep(state, { step_id: "step-3", reactant_refs: ["r1"], product_refs: ["p1"] });
+    const afterEdit = S.validateReactionSpec(state);
+    assertEq(afterEdit.clarifications[0].status, "open", "a stale answer is rejected after the input changes");
+    assertEq(S.canSubmitReactionSpec(state), false);
+  });
+
+  await test("clarification item field names match view-model.schema.json", async () => {
+    const schema = JSON.parse(fs.readFileSync(VIEW_MODEL_SCHEMA, "utf8"));
+    const itemSchema = schema.properties.clarifications.items;
+    const expectedKeys = Object.keys(itemSchema.properties).sort();
+    assertEq(itemSchema.required.slice().sort(), expectedKeys,
+      "every view-model clarification field is required");
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    assertEq(S.reactionSpecClarificationItemFields().slice().sort(), expectedKeys);
+    assertEq(S.reactionSpecClarificationFields().slice().sort(),
+      ["mapping_ambiguity", "missing_conditions", "missing_stereo", "reaction.candidate_steps", "unknown_multiplicity"]);
+    const state = makeState();
+    S.addReactionSpecParticipant(state, "reactant", {
+      ref: "r1", charge: 0, multiplicity: null, stereo: null, atomLabels: ["C1"], atomMap: [1],
+    });
+    S.addReactionSpecParticipant(state, "product", {
+      ref: "p1", charge: 0, multiplicity: null, stereo: null, atomLabels: ["C1"], atomMap: [1],
+    });
+    S.addReactionSpecCandidateStep(state, { step_id: "step-1", reactant_refs: ["r1"], product_refs: ["p1"] });
+    S.addReactionSpecCandidateStep(state, { step_id: "step-2", reactant_refs: ["r1"], product_refs: ["p1"] });
+    S.applyReactionSpecEdit(state, { type: "set_mapping", pairs: [[0, 0], [0, 1]], status: "mapped" });
+    const result = S.validateReactionSpec(state);
+    assertEq(result.clarifications.map((item) => item.field_path).sort(),
+      ["mapping_ambiguity", "missing_conditions", "missing_stereo", "reaction.candidate_steps", "unknown_multiplicity"],
+      "the full clarification matrix is generated: " + JSON.stringify(result.clarifications));
+    result.clarifications.forEach((item) => {
+      assertEq(Object.keys(item).sort(), expectedKeys,
+        "clarification fields must match view-model exactly: " + item.field_path);
+      item.options.forEach((option) => {
+        assertEq(Object.keys(option).sort(), ["label", "value"]);
+      });
+      assert(["open", "answered", "waived"].indexOf(item.status) !== -1, "status enum: " + item.status);
+      assertEq(item.revision, 0);
+    });
+  });
+
+  await test("proposal payload writes confirmations, approximations and the input revision with frozen proposal.schema.json field names", async () => {
+    const schema = JSON.parse(fs.readFileSync(PROPOSAL_SCHEMA, "utf8"));
+    const proposalFields = Object.keys(schema.properties).sort();
+    const humanEditFields = Object.keys(schema.$defs.human_edit.properties).sort();
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    assertEq(S.reactionSpecProposalFields().slice().sort(), proposalFields);
+    assertEq(S.reactionSpecProposalHumanEditFields().slice().sort(), humanEditFields);
+    const state = addFullySpecifiedBut(R, makeState(), {
+      product: { stereo: null }, skipConditions: true,
+    });
+    S.resolveReactionSpecClarification(state, {
+      field_path: "missing_stereo", mode: "confirm", value: "confirm_no_stereo",
+      note: "no stereo centers", editor_ref: "user-1",
+    });
+    S.resolveReactionSpecClarification(state, {
+      field_path: "missing_conditions", mode: "approximation",
+      approximation: "298.15 K, 1 atm", note: "standard ambient", editor_ref: "user-1",
+    });
+    const revisionAfterDecisions = state.spec.inputRevision;
+    const payload = S.buildReactionSpecProposalInput(state.spec, {
+      proposal_id: "prop-1",
+      project_id: "proj-1",
+      question_ref: "question-1",
+      question_revision: 2,
+      reaction_ref: "reaction-1",
+      hypothesis: "the cycloaddition proceeds via a single TS",
+      recipe_digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      plan_definition_digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      science: {},
+      budget: {},
+      approval_ref: null,
+      allowed_change_scope: { mode: "none", finite_substitutions: [] },
+      round: 0,
+      decision: "proposed",
+      created_at: "2026-10-23T00:00:00Z",
+      human_edits: [],
+    });
+    schema.required.forEach((field) => {
+      assert(Object.prototype.hasOwnProperty.call(payload, field), "missing required proposal field: " + field);
+    });
+    Object.keys(payload).forEach((key) => {
+      assert(proposalFields.indexOf(key) !== -1, "parallel proposal shape key: " + key);
+    });
+    assertEq(payload.question_revision, 2);
+    assertEq(payload.reaction_revision, revisionAfterDecisions, "the input revision is written into the proposal");
+    assertEq(payload.human_edits.length, 2);
+    payload.human_edits.forEach((edit) => {
+      assertEq(Object.keys(edit).sort(), humanEditFields);
+      assertEq(edit.editor_ref, "user-1");
+    });
+    const confirmEdit = payload.human_edits.filter((edit) => edit.field_path === "missing_stereo")[0];
+    assert(confirmEdit.note.indexOf("confirmed missing_stereo=confirm_no_stereo (input revision ") !== -1,
+      confirmEdit.note);
+    const approxEdit = payload.human_edits.filter((edit) => edit.field_path === "missing_conditions")[0];
+    assert(approxEdit.note.indexOf("approximation missing_conditions=298.15 K, 1 atm (input revision ") !== -1,
+      approxEdit.note);
+  });
+
+  await test("a parallel proposal shape is rejected", async () => {
+    const R = setupReaction(h);
+    const S = R.sandbox;
+    let threw = false;
+    try {
+      S.buildReactionSpecProposalInput({ inputRevision: 1, humanConfirmations: [], approximations: [] }, {
+        proposal_id: "prop-1",
+        confirmations: [],
+        approximations: [],
+      });
+    } catch (error) {
+      threw = true;
+      assert(String(error.message).indexOf("proposal.schema.json") !== -1, String(error.message));
+    }
+    assert(threw, "a parallel proposal shape must be rejected");
+    const q = setupQuestion();
+    let failClosed = false;
+    try {
+      q.Q.proposalInput({ proposal_id: "prop-1" });
+    } catch (error) {
+      failClosed = true;
+    }
+    assert(failClosed, "the question side fails closed without the single frozen-shape builder");
+    q.sandbox.buildReactionSpecProposalInput = S.buildReactionSpecProposalInput;
+    q.Q.recordHumanConfirmation({ item: "charge", value: "0", note: "explicit", editor_ref: "user-1" });
+    const payload = q.Q.proposalInput({
+      proposal_id: "prop-2",
+      project_id: "proj-1",
+      question_ref: "question-1",
+      reaction_ref: "reaction-1",
+      hypothesis: "h",
+      recipe_digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      plan_definition_digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      science: {},
+      budget: {},
+      approval_ref: null,
+      allowed_change_scope: { mode: "none", finite_substitutions: [] },
+      round: 0,
+      decision: "proposed",
+      created_at: "2026-10-23T00:00:00Z",
+      human_edits: [],
+    });
+    assertEq(payload.question_revision, q.Q.getState().spec.inputRevision);
+    assertEq(payload.human_edits.length, 1);
+    assertEq(payload.human_edits[0].field_path, "charge");
   });
 };
