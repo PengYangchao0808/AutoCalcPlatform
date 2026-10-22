@@ -1,0 +1,156 @@
+{
+  "constructed": true,
+  "fixture_id": "diels-alder-irc-scenario-constructed-a18",
+  "note": "CONSTRUCTED NEGATIVE FIXTURE \u2014 the IRC selection names attempt 2 while the snapshot binding attempt is 1. The harness must reject an old-attempt artifact.",
+  "run_id": "da-research-live",
+  "schema": "acp2.science.constructed-snapshot",
+  "snapshot": {
+    "artifacts": [
+      {
+        "path": "ts-optimized.xyz",
+        "role": "optimized_structure",
+        "sha256": "sha256:ddae58527d99bbc8c1b6a763b2ff5a4a98a1f8f8f783b3601d990a675e420024"
+      },
+      {
+        "path": "ts-optimize-result.json",
+        "role": "provenance",
+        "sha256": "sha256:a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd"
+      },
+      {
+        "path": "ts-frequency-result.json",
+        "role": "provenance",
+        "sha256": "sha256:ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8"
+      },
+      {
+        "path": "candidate-selection.json",
+        "role": "provenance",
+        "sha256": "sha256:e876c865ca7ca43ecebee0233d165f46ee3430e3cb9b012b7b7c42f245b05c34"
+      },
+      {
+        "path": "irc/irc-result.json",
+        "role": "provenance",
+        "sha256": "sha256:c384515ed6e6dd1f93ec582db5707028d214f890e538ad8b3c33908369bde760"
+      },
+      {
+        "path": "irc/irc-reference.json",
+        "role": "provenance",
+        "sha256": "sha256:118a9d8324e2a801d785e25cead3d2f7ff4758bef693b1fd43ded5224611cce7"
+      },
+      {
+        "path": "irc/irc-selection-old-attempt.json",
+        "role": "provenance",
+        "sha256": "sha256:35b21d338bb9b78266e276af61abc6974f8721263decf41d85709202936bd123"
+      }
+    ],
+    "generation": "constructed-gen-a18-0001",
+    "platform": {
+      "binding": {
+        "attempt": 1,
+        "job_id": "constructed-da-ts-job",
+        "release_id": "constructed-release-a17",
+        "submission_id": "constructed-submission-a17",
+        "task_ref": "constructed-da-ts-task"
+      },
+      "constructed": true,
+      "execution": {
+        "artifact_id": "B20a-exec:da-execution-artifacts",
+        "attempt": 1,
+        "b20a_ready": {
+          "artifact_id": "B20a-ready:da-execution-interface-preflight",
+          "cited_as_execution_evidence": false,
+          "note": "B20a-ready is the execution interface/preflight only."
+        },
+        "irc_expected_path": "two_direction",
+        "producer": "B20a-exec",
+        "semantic_candidate": "B.B20a.exec",
+        "step_receipts": [
+          {
+            "receipt_id": "constructed-receipt-opt-1",
+            "status": "completed",
+            "step_id": "ts_optimize"
+          },
+          {
+            "receipt_id": "constructed-receipt-freq-1",
+            "status": "completed",
+            "step_id": "ts_frequency"
+          },
+          {
+            "receipt_id": "constructed-receipt-irc-1",
+            "status": "completed",
+            "step_id": "irc"
+          },
+          {
+            "receipt_id": "constructed-receipt-endpoints-1",
+            "status": "completed",
+            "step_id": "endpoint_assignment"
+          }
+        ],
+        "sub_deliverable": "22b"
+      },
+      "export": {
+        "authorized": true,
+        "export_eligible": true,
+        "frozen": true,
+        "revoked": false,
+        "snapshot_id": "constructed-da-ts-snapshot"
+      },
+      "owner": "B"
+    },
+    "read_root": "ts-scenario/artifacts",
+    "scientific_identity": {
+      "atom_mapping": {
+        "left_to_right": {
+          "butadiene:bd_c1": "cyclohexene:cy_c1",
+          "butadiene:bd_c2": "cyclohexene:cy_c2",
+          "butadiene:bd_c3": "cyclohexene:cy_c3",
+          "butadiene:bd_c4": "cyclohexene:cy_c4",
+          "butadiene:bd_h1": "cyclohexene:cy_h1",
+          "butadiene:bd_h2": "cyclohexene:cy_h2",
+          "butadiene:bd_h3": "cyclohexene:cy_h3",
+          "butadiene:bd_h4": "cyclohexene:cy_h4",
+          "butadiene:bd_h5": "cyclohexene:cy_h5",
+          "butadiene:bd_h6": "cyclohexene:cy_h6",
+          "ethene:et_c1": "cyclohexene:cy_c5",
+          "ethene:et_c2": "cyclohexene:cy_c6",
+          "ethene:et_h1": "cyclohexene:cy_h7",
+          "ethene:et_h2": "cyclohexene:cy_h8",
+          "ethene:et_h3": "cyclohexene:cy_h9",
+          "ethene:et_h4": "cyclohexene:cy_h10"
+        },
+        "right_to_left": {
+          "cyclohexene:cy_c1": "butadiene:bd_c1",
+          "cyclohexene:cy_c2": "butadiene:bd_c2",
+          "cyclohexene:cy_c3": "butadiene:bd_c3",
+          "cyclohexene:cy_c4": "butadiene:bd_c4",
+          "cyclohexene:cy_c5": "ethene:et_c1",
+          "cyclohexene:cy_c6": "ethene:et_c2",
+          "cyclohexene:cy_h1": "butadiene:bd_h1",
+          "cyclohexene:cy_h10": "ethene:et_h4",
+          "cyclohexene:cy_h2": "butadiene:bd_h2",
+          "cyclohexene:cy_h3": "butadiene:bd_h3",
+          "cyclohexene:cy_h4": "butadiene:bd_h4",
+          "cyclohexene:cy_h5": "butadiene:bd_h5",
+          "cyclohexene:cy_h6": "butadiene:bd_h6",
+          "cyclohexene:cy_h7": "ethene:et_h1",
+          "cyclohexene:cy_h8": "ethene:et_h2",
+          "cyclohexene:cy_h9": "ethene:et_h3"
+        },
+        "unmapped_left": [],
+        "unmapped_right": []
+      },
+      "basis": "def2-TZVP",
+      "electronic_state": {
+        "charge": 0,
+        "multiplicity": 1,
+        "state_id": "state.singlet.s0"
+      },
+      "energy_unit": "hartree",
+      "method": "wB97X-D4",
+      "structure_sha256": "sha256:ddae58527d99bbc8c1b6a763b2ff5a4a98a1f8f8f783b3601d990a675e420024"
+    },
+    "snapshot_id": "constructed-snapshot-irc-old-attempt",
+    "snapshot_schema": "acp2.science.artifact-snapshot",
+    "snapshot_schema_version": 1
+  },
+  "source": "tests/fixtures/acp2/science/diels_alder/v1/ts-scenario/constructed-snapshot-irc-old-attempt.json"
+}

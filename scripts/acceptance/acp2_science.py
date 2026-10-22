@@ -6,7 +6,7 @@ path/budget ``--dry-run`` and the project's ``0=PASS, 1=FAIL, 2=NOT_VERIFIED,
 3=usage`` exit-code contract.  ``--help`` and ``--dry-run`` never create a work
 root, start a job or produce a scenario ``PASS``.
 
-Three scenarios are implemented.  ``science:installed-singlepoint`` calls the
+Four scenarios are implemented.  ``science:installed-singlepoint`` calls the
 public ``cccp.calculation.run_singlepoint`` task core (the single execution
 station) inside an independent native work root and re-parses the native output
 locally.  ``science:validate-artifacts`` consumes an already-prepared,
@@ -19,8 +19,12 @@ Diels-Alder candidate snapshot: it confirms the registered ``da-runtime`` and
 ``da-research-live`` ids, validates the frozen reactant/product geometry and
 small budget, keeps every candidate selection/rejection reason and the bounded
 search range, and runs the TS/frequency validators.  ``B20a-ready`` is the
-execution interface, never execution evidence.  No scenario launches a second
-QC job.
+execution interface, never execution evidence.  ``science:validate-da-irc``
+consumes the B20a-exec forward/reverse IRC results for the same TS identity,
+checks native steps/termination/final structures, verifies both endpoints by
+stable atom mapping and bond topology (not visual similarity), and keeps
+one-sided or mapped-ambiguous paths ``inconclusive``.  No scenario launches a
+second QC job.
 
 The remaining scenarios record ``NOT_VERIFIED`` for their own todo.  The
 harness never starts a controller, scheduler, job or production run root, and
@@ -91,6 +95,7 @@ _DIGEST_PATTERN = r"^(?:sha256:)?[0-9a-f]{64}$"
 SINGLEPOINT_ALIAS = "installed-singlepoint"
 ARTIFACT_ALIAS = "validate-artifacts"
 DA_TS_ALIAS = "validate-da-ts"
+DA_IRC_ALIAS = "validate-da-irc"
 H2_HANDOFF_RELPATH = "docs/reference/next-change/acp2-contracts/science/handoff-H2.json"
 PRODUCTION_RUN_ROOTS = ("/var/lib/acp/runs",)
 
@@ -105,6 +110,7 @@ DA_EXECUTION_SUB_DELIVERABLE = "22b"
 DA_EXECUTION_SEMANTIC_CANDIDATE = "B.B20a.exec"
 DA_READY_ARTIFACT_ID = "B20a-ready:da-execution-interface-preflight"
 DA_CANDIDATE_SCHEMA = "acp2.science.da-candidate-selection"
+DA_IRC_SELECTION_SCHEMA = "acp2.science.da-irc-selection"
 DA_STARTING_STRUCTURE_SOURCES = frozenset(
     {"user_input", "frozen_known_candidate", "generated_candidate"}
 )
@@ -4064,6 +4070,40 @@ def _print_da_ts_report(report: Mapping[str, Any]) -> None:
         )
 
 
+def _da_snapshot_fixture_identity_check(
+    snapshot: Any,
+    fixture_validation: Mapping[str, Any],
+) -> dict[str, Any]:
+    fixture_science = fixture_validation.get("science_parameters") or {}
+    fixture_state = fixture_science.get("electronic_state") or {}
+    contradictions: list[str] = []
+    identity = snapshot.science_identity
+    if identity.method != fixture_science.get("method"):
+        contradictions.append(
+            f"snapshot method {identity.method!r} differs from the frozen fixture method "
+            f"{fixture_science.get('method')!r}"
+        )
+    if identity.basis != fixture_science.get("basis"):
+        contradictions.append(
+            f"snapshot basis {identity.basis!r} differs from the frozen fixture basis "
+            f"{fixture_science.get('basis')!r}"
+        )
+    if identity.electronic_state.charge != fixture_state.get("charge"):
+        contradictions.append("snapshot charge differs from the frozen fixture state")
+    if identity.electronic_state.multiplicity != fixture_state.get("target_multiplicity"):
+        contradictions.append("snapshot multiplicity differs from the frozen fixture state")
+    if fixture_state.get("state_id") and (
+        identity.electronic_state.state_id != fixture_state.get("state_id")
+    ):
+        contradictions.append("snapshot state_id differs from the frozen fixture state")
+    return {
+        "status": "FAIL" if contradictions else "PASS",
+        "contradictions": contradictions,
+        "snapshot": identity.to_dict(),
+        "fixture": fixture_science,
+    }
+
+
 def _execute_validate_da_ts(
     args: argparse.Namespace,
     spec: ScenarioSpec,
@@ -4287,49 +4327,21 @@ def _execute_validate_da_ts(
         }
     )
 
-    fixture_science = fixture_validation.get("science_parameters") or {}
-    fixture_state = fixture_science.get("electronic_state") or {}
-    identity_contradictions: list[str] = []
-    identity = snapshot.science_identity
-    if identity.method != fixture_science.get("method"):
-        identity_contradictions.append(
-            f"snapshot method {identity.method!r} differs from the frozen fixture method "
-            f"{fixture_science.get('method')!r}"
-        )
-    if identity.basis != fixture_science.get("basis"):
-        identity_contradictions.append(
-            f"snapshot basis {identity.basis!r} differs from the frozen fixture basis "
-            f"{fixture_science.get('basis')!r}"
-        )
-    if identity.electronic_state.charge != fixture_state.get("charge"):
-        identity_contradictions.append("snapshot charge differs from the frozen fixture state")
-    if identity.electronic_state.multiplicity != fixture_state.get("target_multiplicity"):
-        identity_contradictions.append(
-            "snapshot multiplicity differs from the frozen fixture state"
-        )
-    if fixture_state.get("state_id") and (
-        identity.electronic_state.state_id != fixture_state.get("state_id")
-    ):
-        identity_contradictions.append("snapshot state_id differs from the frozen fixture state")
-    extra["snapshot_fixture_identity"] = {
-        "status": "FAIL" if identity_contradictions else "PASS",
-        "contradictions": identity_contradictions,
-        "snapshot": identity.to_dict(),
-        "fixture": fixture_science,
-    }
+    identity_check = _da_snapshot_fixture_identity_check(snapshot, fixture_validation)
+    extra["snapshot_fixture_identity"] = identity_check
     assertions.append(
         {
             "name": "snapshot_fixture_identity",
-            "status": "FAIL" if identity_contradictions else "PASS",
-            "detail": "; ".join(identity_contradictions) or None,
+            "status": identity_check["status"],
+            "detail": "; ".join(identity_check["contradictions"]) or None,
         }
     )
-    if identity_contradictions:
+    if identity_check["contradictions"]:
         return finish(
             result="FAIL",
             exit_code=EXIT_FAIL,
             reason="snapshot identity contradicts the frozen fixture: "
-            + "; ".join(identity_contradictions),
+            + "; ".join(identity_check["contradictions"]),
             extra_json={"fixture-validation.json": fixture_validation},
         )
 
@@ -4990,6 +5002,1114 @@ def _execute_validate_artifacts(
     )
 
 
+# ── A-18: Diels-Alder bidirectional IRC scenario ───────────────────────────
+
+
+def _da_irc_selection_document(
+    snapshot: Any,
+) -> tuple[dict[str, Any] | None, list[str], list[str]]:
+    documents: list[dict[str, Any]] = []
+    gaps: list[str] = []
+    contradictions: list[str] = []
+    for artifact in snapshot.artifacts:
+        if artifact.role != "provenance":
+            continue
+        try:
+            document = json.loads(artifact.resolved_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            contradictions.append(f"{artifact.relative_path}: unreadable provenance JSON: {exc}")
+            continue
+        if isinstance(document, Mapping) and document.get("schema") == DA_IRC_SELECTION_SCHEMA:
+            documents.append(dict(document))
+    if not documents:
+        gaps.append(
+            f"snapshot carries no B20a-exec IRC-selection artifact ({DA_IRC_SELECTION_SCHEMA!r})"
+        )
+    elif len(documents) > 1:
+        contradictions.append(
+            f"snapshot carries {len(documents)} IRC-selection artifacts; exactly one is required"
+        )
+    return (documents[0] if len(documents) == 1 else None), gaps, contradictions
+
+
+def _da_named_json(
+    snapshot: Any,
+    relative_path: Any,
+    expected_sha256: Any,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str], list[str]]:
+    gaps: list[str] = []
+    contradictions: list[str] = []
+    if not isinstance(relative_path, str) or not relative_path:
+        return None, None, ["named provenance path is missing"], contradictions
+    artifact = next(
+        (item for item in snapshot.artifacts if item.relative_path == relative_path),
+        None,
+    )
+    if artifact is None:
+        return None, None, [f"snapshot declares no artifact at {relative_path!r}"], contradictions
+    if isinstance(expected_sha256, str) and expected_sha256:
+        normalized = (
+            expected_sha256
+            if expected_sha256.startswith("sha256:")
+            else f"sha256:{expected_sha256}"
+        )
+        if normalized != artifact.declared_sha256:
+            contradictions.append(
+                f"{relative_path}: selection digest {normalized} differs from the "
+                f"snapshot digest {artifact.declared_sha256}"
+            )
+    try:
+        document = json.loads(artifact.resolved_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        contradictions.append(f"{relative_path}: unreadable JSON: {exc}")
+        return None, artifact, gaps, contradictions
+    if not isinstance(document, Mapping):
+        contradictions.append(f"{relative_path}: JSON must be an object")
+        return None, artifact, gaps, contradictions
+    return dict(document), artifact, gaps, contradictions
+
+
+def _da_result_electronic_state(result: Any) -> dict[str, Any] | None:
+    metadata = getattr(result, "metadata", None)
+    if isinstance(metadata, Mapping):
+        state = metadata.get("electronic_state")
+        if isinstance(state, Mapping):
+            return dict(state)
+    payload = getattr(result, "payload", None)
+    state = getattr(payload, "electronic_state", None)
+    if isinstance(state, Mapping):
+        return dict(state)
+    return None
+
+
+def _normalise_sha(value: Any) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    return value if value.startswith("sha256:") else f"sha256:{value}"
+
+
+def _da_irc_selection_validation(
+    document: Mapping[str, Any],
+    *,
+    snapshot: Any,
+    binding_attempt: Any,
+    fixture_document: Mapping[str, Any],
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    contradictions: list[str] = []
+    attempt = document.get("attempt")
+    if isinstance(attempt, bool) or not isinstance(attempt, int):
+        reasons.append("IRC-selection attempt must be an integer")
+    elif binding_attempt is not None and attempt != binding_attempt:
+        contradictions.append(
+            f"IRC-selection attempt {attempt} differs from the current snapshot attempt "
+            f"{binding_attempt}; old-attempt selection records are rejected"
+        )
+    if document.get("producer") != "B20a-exec":
+        reasons.append("IRC-selection producer must be 'B20a-exec'")
+    selection_reason = document.get("selection_reason")
+    if not isinstance(selection_reason, str) or not selection_reason.strip():
+        reasons.append("IRC-selection selection_reason must be a non-empty string")
+
+    identity = snapshot.science_identity
+    ts_identity = document.get("ts_identity")
+    if not isinstance(ts_identity, Mapping):
+        reasons.append("IRC-selection ts_identity must be a JSON object")
+        ts_identity = {}
+    if not isinstance(ts_identity.get("candidate_id"), str) or not ts_identity.get("candidate_id"):
+        reasons.append("ts_identity.candidate_id is missing")
+    if _normalise_sha(ts_identity.get("structure_sha256")) != identity.structure_sha256:
+        contradictions.append(
+            "ts_identity.structure_sha256 does not match the snapshot TS structure"
+        )
+    if ts_identity.get("method") != identity.method:
+        contradictions.append("ts_identity.method differs from the snapshot method")
+    ts_state = ts_identity.get("electronic_state")
+    if not isinstance(ts_state, Mapping):
+        reasons.append("ts_identity.electronic_state must be a JSON object")
+        ts_state = {}
+    if ts_state.get("state_id") != identity.electronic_state.state_id:
+        contradictions.append("ts_identity.electronic_state.state_id differs from the snapshot")
+    if ts_state.get("target_multiplicity") != identity.electronic_state.multiplicity:
+        contradictions.append(
+            "ts_identity.electronic_state.target_multiplicity differs from the snapshot"
+        )
+    if ts_identity.get("attempt") != binding_attempt:
+        contradictions.append("ts_identity.attempt differs from the current snapshot attempt")
+
+    cross_attempt = document.get("cross_attempt_provenance")
+    if not isinstance(cross_attempt, Mapping):
+        reasons.append("IRC-selection cross_attempt_provenance must be a JSON object")
+        cross_attempt = {}
+    if cross_attempt.get("attempt") != binding_attempt:
+        contradictions.append("cross_attempt_provenance.attempt differs from the snapshot attempt")
+    for key in ("release_id", "submission_id"):
+        value = cross_attempt.get(key)
+        if not isinstance(value, str) or not value:
+            reasons.append(f"cross_attempt_provenance.{key} is missing")
+
+    optimization_performed = document.get("endpoint_optimization_performed")
+    endpoint_optimization: dict[str, Any]
+    if not isinstance(optimization_performed, bool):
+        reasons.append("endpoint_optimization_performed must be a boolean")
+        endpoint_optimization = {"performed": None}
+    elif optimization_performed is False:
+        note = document.get("endpoint_optimization_note")
+        endpoint_optimization = {
+            "performed": False,
+            "endpoints_may_not_be_minima": True,
+            "note": (
+                note
+                if isinstance(note, str) and note.strip()
+                else "No endpoint optimization was performed; endpoints may not be minima."
+            ),
+        }
+    else:
+        raw_optimization = document.get("endpoint_optimization")
+        if not isinstance(raw_optimization, Mapping):
+            reasons.append("endpoint_optimization is required when performed=true")
+            endpoint_optimization = {"performed": True}
+        else:
+            endpoint_optimization = dict(raw_optimization)
+            if endpoint_optimization.get("performed") is not True:
+                contradictions.append("endpoint_optimization.performed must be true")
+            if endpoint_optimization.get("method") != identity.method:
+                contradictions.append("endpoint optimization method differs from the snapshot")
+            if endpoint_optimization.get("state_id") != identity.electronic_state.state_id:
+                contradictions.append("endpoint optimization state differs from the snapshot")
+
+    bond_changes = document.get("bond_changes")
+    if not isinstance(bond_changes, list) or not bond_changes:
+        reasons.append("IRC-selection bond_changes must be a non-empty list")
+        bond_changes = []
+    normalized_changes: list[dict[str, Any]] = []
+    for index, change in enumerate(bond_changes):
+        if not isinstance(change, Mapping):
+            contradictions.append(f"bond_changes[{index}] must be a JSON object")
+            continue
+        if not isinstance(change.get("change_type"), str):
+            contradictions.append(f"bond_changes[{index}].change_type is missing")
+        if not isinstance(change.get("left_atoms"), list) or not isinstance(
+            change.get("right_atoms"), list
+        ):
+            contradictions.append(f"bond_changes[{index}] must name left_atoms and right_atoms")
+        normalized_changes.append(dict(change))
+    reaction = fixture_document.get("reaction")
+    expected_counts = {
+        "bond_change_count": reaction.get("bond_change_count")
+        if isinstance(reaction, Mapping)
+        else None,
+        "formed_bonds": reaction.get("formed_bonds") if isinstance(reaction, Mapping) else None,
+        "changed_bonds": reaction.get("changed_bonds") if isinstance(reaction, Mapping) else None,
+        "broken_bonds": reaction.get("broken_bonds") if isinstance(reaction, Mapping) else None,
+    }
+    actual_counts = {
+        "bond_change_count": len(normalized_changes),
+        "formed_bonds": sum(
+            1 for item in normalized_changes if item.get("change_type") == "formed"
+        ),
+        "changed_bonds": sum(
+            1 for item in normalized_changes if item.get("change_type") == "changed"
+        ),
+        "broken_bonds": sum(
+            1 for item in normalized_changes if item.get("change_type") in {"broken", "break"}
+        ),
+    }
+    if expected_counts["bond_change_count"] is not None and (
+        actual_counts["bond_change_count"] != expected_counts["bond_change_count"]
+    ):
+        contradictions.append(
+            "bond_changes count does not match the frozen reaction: "
+            f"{actual_counts['bond_change_count']} vs {expected_counts['bond_change_count']}"
+        )
+    for key in ("formed_bonds", "changed_bonds", "broken_bonds"):
+        if expected_counts[key] is not None and actual_counts[key] != expected_counts[key]:
+            contradictions.append(
+                f"{key} does not match the frozen reaction: "
+                f"{actual_counts[key]} vs {expected_counts[key]}"
+            )
+
+    provenance = {
+        "irc_provenance": document.get("irc_provenance"),
+        "irc_provenance_sha256": document.get("irc_provenance_sha256"),
+        "irc_reference": document.get("irc_reference"),
+        "irc_reference_sha256": document.get("irc_reference_sha256"),
+        "ts_optimize_provenance": document.get("ts_optimize_provenance"),
+        "ts_optimize_provenance_sha256": document.get("ts_optimize_provenance_sha256"),
+        "ts_frequency_provenance": document.get("ts_frequency_provenance"),
+        "ts_frequency_provenance_sha256": document.get("ts_frequency_provenance_sha256"),
+        "ts_candidate_selection": document.get("ts_candidate_selection"),
+        "ts_candidate_selection_sha256": document.get("ts_candidate_selection_sha256"),
+    }
+    for key, value in provenance.items():
+        if not isinstance(value, str) or not value:
+            reasons.append(f"IRC-selection {key} is missing")
+
+    expected_path = document.get("expected_path")
+    if expected_path not in {"two_direction", "one_sided"}:
+        reasons.append("IRC-selection expected_path must be 'two_direction' or 'one_sided'")
+
+    status = "FAIL" if contradictions else "NOT_VERIFIED" if reasons else "PASS"
+    return {
+        "status": status,
+        "reasons": reasons,
+        "contradictions": contradictions,
+        "attempt": attempt,
+        "selection_reason": selection_reason,
+        "ts_identity": dict(ts_identity),
+        "cross_attempt_provenance": dict(cross_attempt),
+        "endpoint_optimization": endpoint_optimization,
+        "bond_changes": normalized_changes,
+        "bond_change_counts": actual_counts,
+        "expected_counts": expected_counts,
+        "provenance": provenance,
+        "expected_path": expected_path,
+        "constructed": document.get("constructed") is True,
+        "raw_document": dict(document),
+    }
+
+
+def _da_irc_provenance_check(
+    irc_result: Any,
+    *,
+    snapshot: Any,
+    selection: Mapping[str, Any],
+    binding_attempt: Any,
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    contradictions: list[str] = []
+    metadata = getattr(irc_result, "metadata", None)
+    if not isinstance(metadata, Mapping):
+        reasons.append("IRC TaskResult carries no metadata for cross-attempt provenance")
+        metadata = {}
+    attempt = metadata.get("attempt")
+    if isinstance(attempt, bool) or not isinstance(attempt, int):
+        reasons.append("IRC metadata.attempt must be an integer")
+    elif binding_attempt is not None and attempt != binding_attempt:
+        contradictions.append(
+            f"IRC metadata.attempt {attempt} differs from the snapshot attempt {binding_attempt}"
+        )
+    cross_attempt = metadata.get("cross_attempt")
+    expected_cross = selection.get("cross_attempt_provenance") or {}
+    if not isinstance(cross_attempt, Mapping):
+        reasons.append("IRC metadata.cross_attempt must be a JSON object")
+        cross_attempt = {}
+    for key in ("release_id", "submission_id"):
+        if cross_attempt.get(key) != expected_cross.get(key):
+            contradictions.append(
+                f"IRC metadata.cross_attempt.{key} differs from the IRC selection"
+            )
+    source_structure = _normalise_sha(metadata.get("source_structure_sha256"))
+    if source_structure is None:
+        reasons.append("IRC metadata.source_structure_sha256 is missing")
+    elif source_structure != snapshot.science_identity.structure_sha256:
+        contradictions.append(
+            "IRC metadata source structure differs from the snapshot TS structure"
+        )
+    irc_ts_identity = metadata.get("ts_identity")
+    expected_ts_identity = selection.get("ts_identity") or {}
+    if not isinstance(irc_ts_identity, Mapping):
+        reasons.append("IRC metadata.ts_identity must be a JSON object")
+        irc_ts_identity = {}
+    if irc_ts_identity.get("candidate_id") != expected_ts_identity.get("candidate_id"):
+        contradictions.append("IRC metadata.ts_identity.candidate_id differs from the selection")
+    if (
+        _normalise_sha(irc_ts_identity.get("structure_sha256"))
+        != snapshot.science_identity.structure_sha256
+    ):
+        contradictions.append("IRC metadata.ts_identity.structure_sha256 differs from the snapshot")
+    if irc_ts_identity.get("method") != snapshot.science_identity.method:
+        contradictions.append("IRC metadata.ts_identity.method differs from the snapshot")
+    state = _da_result_electronic_state(irc_result)
+    if state is None:
+        reasons.append("IRC TaskResult carries no electronic-state identity")
+        state = {}
+    if state.get("state_id") != snapshot.science_identity.electronic_state.state_id:
+        contradictions.append("IRC state_id differs from the snapshot TS state")
+    if state.get("target_multiplicity") != snapshot.science_identity.electronic_state.multiplicity:
+        contradictions.append("IRC multiplicity differs from the snapshot TS state")
+    method = getattr(getattr(irc_result, "provenance", None), "method", None)
+    if not isinstance(method, str) or not method:
+        reasons.append("IRC TaskResult declares no method")
+    elif method != snapshot.science_identity.method:
+        contradictions.append(
+            f"IRC method {method!r} differs from the snapshot method "
+            f"{snapshot.science_identity.method!r}"
+        )
+    status = "FAIL" if contradictions else "NOT_VERIFIED" if reasons else "PASS"
+    return {
+        "status": status,
+        "reasons": reasons,
+        "contradictions": contradictions,
+        "attempt": attempt,
+        "cross_attempt": dict(cross_attempt),
+        "source_structure_sha256": source_structure,
+        "ts_identity": dict(irc_ts_identity),
+        "method": method,
+        "electronic_state": dict(state),
+    }
+
+
+def _da_irc_h4_readiness(
+    *,
+    constructed: bool,
+    real_run: bool,
+    scenario_result: str,
+    ts_status: str,
+    completion_status: str,
+    connectivity_status: str,
+    endpoints_may_not_be_minima: bool,
+) -> dict[str, Any]:
+    ts_closed = real_run and not constructed and ts_status == "supported"
+    irc_closed = (
+        real_run
+        and not constructed
+        and completion_status == "supported"
+        and connectivity_status == "supported"
+    )
+    rows = [
+        {
+            "row_id": "H4-01-valid-ts",
+            "requirement": "A real valid TS: one imaginary mode and a mapped mode.",
+            "scenario_result": scenario_result,
+            "claim_status": ts_status,
+            "state": "closed" if ts_closed else "open",
+            "reason": (
+                "the real TS candidate is supported"
+                if ts_closed
+                else "constructed or unsupported TS evidence; H4 needs a real valid TS"
+            ),
+        },
+        {
+            "row_id": "H4-02-bidirectional-irc",
+            "requirement": "Bidirectional IRC with both specified endpoints reached.",
+            "scenario_result": scenario_result,
+            "claim_status": connectivity_status,
+            "state": "closed" if irc_closed else "open",
+            "reason": (
+                "the real bidirectional IRC reached both endpoints"
+                if irc_closed
+                else (
+                    f"completion is {completion_status} and connectivity is "
+                    f"{connectivity_status}; a one-sided or constructed path stays open"
+                )
+            ),
+        },
+        {
+            "row_id": "H4-03-endpoint-connectivity",
+            "requirement": "Endpoint geometry and bond-topology mapping prove the declared path.",
+            "scenario_result": scenario_result,
+            "claim_status": connectivity_status,
+            "state": "closed" if irc_closed else "open",
+            "reason": (
+                "the real endpoint mapping reproduces the frozen reactant->product mapping"
+                if irc_closed
+                else "endpoint connectivity is not supported by real bidirectional IRC evidence"
+            ),
+        },
+        {
+            "row_id": "H4-04-comparable-energy",
+            "requirement": "Activation energy is comparable under frozen conditions and units.",
+            "scenario_result": "NOT_VERIFIED",
+            "claim_status": "not_evaluated",
+            "state": "open",
+            "reason": (
+                "A-19 owns the thermochemistry/comparability validation; no energy is claimed here."
+            ),
+        },
+        {
+            "row_id": "H4-05-honest-negatives",
+            "requirement": (
+                "Honest negative cases are recorded; inconclusive/failed never becomes positive."
+            ),
+            "scenario_result": scenario_result,
+            "claim_status": "not_evaluated",
+            "state": "open" if constructed or not real_run else "closed",
+            "reason": (
+                "the constructed or real scenario recorded its honest negative outcome; "
+                "no example structure substitutes for real evidence"
+                if constructed or not real_run
+                else "the real scenario recorded its negative cases honestly"
+            ),
+        },
+    ]
+    closed = all(row["state"] == "closed" for row in rows)
+    positive = ts_closed and irc_closed
+    return {
+        "closed": closed,
+        "status": "closed" if closed else "open",
+        "positive_evidence": positive,
+        "real_run": real_run,
+        "endpoints_may_not_be_minima": endpoints_may_not_be_minima,
+        "rows": rows,
+        "reason": (
+            "H4 requires a real valid TS, bidirectional IRC with both endpoints, comparable "
+            "energies and honest negatives. Energy is not validated here, so H4 stays open."
+        ),
+    }
+
+
+def _print_da_irc_report(report: Mapping[str, Any]) -> None:
+    print("DA bidirectional IRC report")
+    print(f"  scenario result: {report.get('scenario_result')}")
+    print(f"  claim status: {report.get('claim_status')}")
+    h4 = report.get("h4") or {}
+    print(f"  H4 readiness: {h4.get('status')} (closed={h4.get('closed')})")
+    print(f"  TS candidate status: {report.get('ts_status')}")
+    print(f"  IRC completion: {report.get('completion_status')}")
+    print(f"  direction assignment: {report.get('direction_assignment')}")
+    print(f"  endpoint optimization: {report.get('endpoint_optimization')}")
+    for label in ("forward", "reverse"):
+        endpoint = report.get(f"{label}_endpoint") or {}
+        print(
+            f"  {label:<7} endpoint: {endpoint.get('target_endpoint_id')} "
+            f"(species {endpoint.get('target_species_id')}, status {endpoint.get('status')}, "
+            f"rmsd {endpoint.get('rmsd_angstrom')}, order {endpoint.get('atom_order_stability')})"
+        )
+        print(f"  {label:<7} mapping: {endpoint.get('atom_mapping')}")
+    print(f"  effective mapping: {report.get('effective_atom_mapping')}")
+    print(f"  connectivity: {report.get('connectivity_status')}")
+    for row in h4.get("rows") or []:
+        print(
+            f"  {row.get('row_id')}: scenario={row.get('scenario_result')} "
+            f"claim={row.get('claim_status')} state={row.get('state')}"
+        )
+
+
+def _execute_validate_da_irc(
+    args: argparse.Namespace,
+    spec: ScenarioSpec,
+    plan: dict[str, Any],
+    *,
+    started_at: str,
+    argv: list[str],
+) -> int:
+    """Validate B20a-exec bidirectional IRC for the current TS without running a job."""
+    receipt = _receipt_protocol()
+    fixture_path = Path(args.fixture)
+    extra: dict[str, Any] = {
+        "scenario_implementation": "A-18",
+        "fixture_path": str(fixture_path),
+        "input_manifest_path": plan.get("input_manifest_path"),
+        "platform_registry": None,
+        "constructed_fixture": False,
+        "real_run": False,
+        "execution_provenance": None,
+        "fixture_validation": None,
+        "irc_selection": None,
+        "irc_completion": None,
+        "irc_connectivity": None,
+        "ts_validation": None,
+        "methods_state": None,
+        "identity_check": None,
+        "endpoint_optimization": None,
+        "bond_changes": None,
+        "direction_assignment": None,
+        "forward_endpoint": None,
+        "reverse_endpoint": None,
+        "effective_atom_mapping": None,
+        "scientific_claim": None,
+        "claims": None,
+        "scenario_result": None,
+        "claim_status": None,
+        "connectivity_status": None,
+        "h4": None,
+        "example_ts_substituted": False,
+        "second_da_job_started": False,
+        "b20a_ready_cited_as_execution_evidence": False,
+        "b20a_exec_artifact_id": None,
+        "b20a_exec_sub_deliverable": None,
+        "b20a_exec_semantic_candidate": None,
+    }
+    assertions: list[dict[str, Any]] = []
+    export_check: PlatformExportCheck | None = None
+
+    def finish(
+        *,
+        result: str,
+        exit_code: int,
+        reason: str,
+        extra_json: Mapping[str, Any] | None = None,
+        extra_artifacts: list[dict[str, Any]] | None = None,
+    ) -> int:
+        extra["scenario_result"] = result
+        assertions.append({"name": "scenario_executed", "status": result, "detail": reason})
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=reason,
+            started_at=started_at,
+            argv=argv,
+            result=result,
+            exit_code=exit_code,
+            assertions=assertions,
+            platform_export=export_check,
+            extra=extra,
+            extra_json=extra_json,
+            extra_artifacts=extra_artifacts,
+        )
+
+    snapshot_payload, constructed, unpack_errors = _unpack_snapshot(plan, fixture_path.parent)
+    if snapshot_payload is None:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="artifact snapshot is unusable: " + "; ".join(unpack_errors),
+        )
+    extra["constructed_fixture"] = constructed
+    export_check = check_platform_export(snapshot_payload)
+    if not export_check.eligible:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="platform export rejected: " + "; ".join(export_check.reasons),
+        )
+    try:
+        fixture_document = _load_json(fixture_path)
+    except _InvalidInputError as exc:
+        print(f"usage error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if (
+        not isinstance(fixture_document, Mapping)
+        or fixture_document.get("task_kind") != "diels_alder"
+    ):
+        print(
+            "usage error: validate-da-irc requires the Diels-Alder v1 fixture-manifest.json",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+
+    fixture_validation = _validate_da_fixture(fixture_path)
+    extra["fixture_validation"] = fixture_validation
+    assertions.append(
+        {
+            "name": "frozen_fixture_geometry_and_budget",
+            "status": fixture_validation["status"],
+            "detail": "; ".join(fixture_validation["contradictions"]) or None,
+        }
+    )
+    if fixture_validation["status"] != "PASS":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=(
+                "the frozen DA fixture is contradictory: "
+                + "; ".join(fixture_validation["contradictions"])
+            ),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    registry = _platform_registry_view(
+        plan.get("platform_registry_path"),
+        plan.get("platform_registry"),
+        required_ids=DA_REQUIRED_REGISTRY_IDS,
+    )
+    extra["platform_registry"] = registry
+    extra["constructed_fixture"] = bool(constructed or registry.get("constructed"))
+    assertions.append(
+        {
+            "name": "platform_registry_registration",
+            "status": "PASS" if registry.get("registered") else "NOT_VERIFIED",
+            "detail": "; ".join(registry.get("reasons") or []) or None,
+        }
+    )
+    if not registry.get("registered"):
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="registered DA run prerequisite missing: " + "; ".join(registry["reasons"]),
+        )
+
+    platform = snapshot_payload.get("platform")
+    binding = platform.get("binding") if isinstance(platform, Mapping) else None
+    binding_attempt = binding.get("attempt") if isinstance(binding, Mapping) else None
+    execution = _da_execution_provenance(platform, binding_attempt)
+    extra["execution_provenance"] = execution
+    extra["b20a_exec_artifact_id"] = execution.get("artifact_id")
+    extra["b20a_exec_sub_deliverable"] = execution.get("sub_deliverable")
+    extra["b20a_exec_semantic_candidate"] = execution.get("semantic_candidate")
+    extra["b20a_ready_cited_as_execution_evidence"] = bool(
+        execution.get("b20a_ready_cited_as_execution_evidence")
+    )
+    assertions.append(
+        {
+            "name": "b20a_exec_execution_evidence",
+            "status": execution["status"],
+            "detail": "; ".join(execution["contradictions"] or execution["reasons"]) or None,
+        }
+    )
+    if execution["status"] == "FAIL":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="B20a-exec provenance rejected: " + "; ".join(execution["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if execution["status"] != "PASS":
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="B20a-exec execution evidence missing: " + "; ".join(execution["reasons"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    try:
+        from cccp.analysis.research.artifact_manifest import (
+            ArtifactSnapshotError,
+            load_verified_snapshot,
+        )
+    except ImportError as exc:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason=f"CCCP science consumer unavailable: {type(exc).__name__}: {exc}",
+        )
+    try:
+        snapshot, digests = load_verified_snapshot(snapshot_payload)
+    except ArtifactSnapshotError as exc:
+        extra["snapshot_error"] = {"type": type(exc).__name__, "message": str(exc)}
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"snapshot content rejected ({type(exc).__name__}): {exc}",
+        )
+    digest_table = [row.to_dict() for row in digests]
+    extra["snapshot"] = {
+        "snapshot_id": snapshot.snapshot_id,
+        "generation": snapshot.generation,
+        "read_root": str(snapshot.read_root),
+        "snapshot_schema": snapshot.snapshot_schema,
+        "snapshot_schema_version": snapshot.snapshot_schema_version,
+        "constructed": constructed,
+        "artifact_digests": digest_table,
+        "scientific_identity": snapshot.science_identity.to_dict(),
+    }
+    extra["real_run"] = not extra["constructed_fixture"]
+    assertions.append(
+        {
+            "name": "snapshot_content_digest",
+            "status": "PASS",
+            "detail": f"{len(digest_table)} artifacts verified against their declared digests",
+        }
+    )
+
+    identity_check = _da_snapshot_fixture_identity_check(snapshot, fixture_validation)
+    extra["identity_check"] = identity_check
+    assertions.append(
+        {
+            "name": "snapshot_fixture_identity",
+            "status": identity_check["status"],
+            "detail": "; ".join(identity_check["contradictions"]) or None,
+        }
+    )
+    if identity_check["contradictions"]:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="snapshot identity contradicts the frozen fixture: "
+            + "; ".join(identity_check["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    selection_document, selection_gaps, selection_contradictions = _da_irc_selection_document(
+        snapshot
+    )
+    if selection_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="IRC-selection artifact rejected: " + "; ".join(selection_contradictions),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if selection_document is None:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="IRC-selection evidence missing: " + "; ".join(selection_gaps),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    selection = _da_irc_selection_validation(
+        selection_document,
+        snapshot=snapshot,
+        binding_attempt=binding_attempt,
+        fixture_document=fixture_document,
+    )
+    extra["irc_selection"] = {
+        key: value for key, value in selection.items() if key != "raw_document"
+    }
+    extra["endpoint_optimization"] = selection["endpoint_optimization"]
+    extra["bond_changes"] = selection["bond_changes"]
+    assertions.append(
+        {
+            "name": "irc_selection_and_bond_changes",
+            "status": selection["status"],
+            "detail": "; ".join(selection["contradictions"] or selection["reasons"]) or None,
+        }
+    )
+    if selection["status"] == "FAIL":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="IRC selection rejected: " + "; ".join(selection["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if selection["status"] != "PASS":
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="IRC-selection evidence incomplete: " + "; ".join(selection["reasons"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    candidate_document, candidate_gaps, candidate_contradictions = _da_candidate_document(snapshot)
+    if candidate_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="TS candidate-selection artifact rejected: "
+            + "; ".join(candidate_contradictions),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if candidate_document is None:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="TS candidate-selection evidence missing: " + "; ".join(candidate_gaps),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    candidate = _da_candidate_validation(candidate_document, fixture_document, binding_attempt)
+    if candidate["status"] == "FAIL":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="TS candidate selection rejected: " + "; ".join(candidate["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if candidate["status"] != "PASS" or candidate["selected_candidate"] is None:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="TS candidate-selection evidence incomplete: "
+            + "; ".join(candidate["reasons"] or ["no selected TS candidate"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    selection_provenance = selection["provenance"]
+    candidate_paths_consistent = selection_provenance["ts_optimize_provenance"] == candidate[
+        "provenance"
+    ].get("ts_optimize_provenance") and selection_provenance[
+        "ts_frequency_provenance"
+    ] == candidate["provenance"].get("ts_frequency_provenance")
+    candidate_selection_path = selection_provenance["ts_candidate_selection"]
+    candidate_selection_present = any(
+        artifact.relative_path == candidate_selection_path for artifact in snapshot.artifacts
+    )
+    if not (candidate_paths_consistent and candidate_selection_present):
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=(
+                "IRC-selection TS provenance does not match the TS candidate-selection artifact"
+            ),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    optimize_result, optimize_artifact, optimize_gaps, optimize_contradictions = _da_named_result(
+        snapshot,
+        selection["provenance"]["ts_optimize_provenance"],
+        selection["provenance"]["ts_optimize_provenance_sha256"],
+    )
+    frequency_result, frequency_artifact, frequency_gaps, frequency_contradictions = (
+        _da_named_result(
+            snapshot,
+            selection["provenance"]["ts_frequency_provenance"],
+            selection["provenance"]["ts_frequency_provenance_sha256"],
+        )
+    )
+    irc_result, irc_artifact, irc_gaps, irc_contradictions = _da_named_result(
+        snapshot,
+        selection["provenance"]["irc_provenance"],
+        selection["provenance"]["irc_provenance_sha256"],
+    )
+    reference_document, reference_artifact, reference_gaps, reference_contradictions = (
+        _da_named_json(
+            snapshot,
+            selection["provenance"]["irc_reference"],
+            selection["provenance"]["irc_reference_sha256"],
+        )
+    )
+    provenance_contradictions = (
+        optimize_contradictions
+        + frequency_contradictions
+        + irc_contradictions
+        + reference_contradictions
+    )
+    provenance_gaps = optimize_gaps + frequency_gaps + irc_gaps + reference_gaps
+    assertions.append(
+        {
+            "name": "irc_and_ts_provenance_artifacts",
+            "status": (
+                "FAIL"
+                if provenance_contradictions
+                else "NOT_VERIFIED"
+                if provenance_gaps
+                else "PASS"
+            ),
+            "detail": "; ".join(provenance_contradictions or provenance_gaps) or None,
+        }
+    )
+    if provenance_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="IRC/TS provenance artifact rejected: " + "; ".join(provenance_contradictions),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if (
+        provenance_gaps
+        or optimize_result is None
+        or frequency_result is None
+        or irc_result is None
+        or reference_document is None
+    ):
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="IRC/TS provenance artifact missing: " + "; ".join(provenance_gaps),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if optimize_result.task is None or optimize_result.task.value != "optimize":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="the named TS optimization artifact is not an 'optimize' TaskResult",
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if frequency_result.task is None or frequency_result.task.value != "frequency":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="the named TS frequency artifact is not a 'frequency' TaskResult",
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if irc_result.task is None or irc_result.task.value != "irc":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="the named IRC artifact is not an 'irc' TaskResult",
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    geometry_check = _da_optimized_geometry_check(snapshot, optimize_result)
+    extra["ts_geometry"] = geometry_check
+    assertions.append(
+        {
+            "name": "ts_geometry_identity",
+            "status": geometry_check["status"],
+            "detail": "; ".join(geometry_check["contradictions"] or geometry_check["gaps"]) or None,
+        }
+    )
+    if geometry_check["contradictions"]:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="TS geometry identity rejected: " + "; ".join(geometry_check["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if geometry_check["gaps"]:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="TS geometry identity incomplete: " + "; ".join(geometry_check["gaps"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    irc_provenance = _da_irc_provenance_check(
+        irc_result,
+        snapshot=snapshot,
+        selection=selection,
+        binding_attempt=binding_attempt,
+    )
+    extra["irc_provenance"] = irc_provenance
+    assertions.append(
+        {
+            "name": "irc_method_state_and_cross_attempt_provenance",
+            "status": irc_provenance["status"],
+            "detail": "; ".join(irc_provenance["contradictions"] or irc_provenance["reasons"])
+            or None,
+        }
+    )
+    if irc_provenance["status"] == "FAIL":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="IRC method/state or cross-attempt provenance rejected: "
+            + "; ".join(irc_provenance["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if irc_provenance["status"] != "PASS":
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="IRC method/state or cross-attempt provenance incomplete: "
+            + "; ".join(irc_provenance["reasons"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    try:
+        from cccp.analysis.research.validators import (
+            IrcReactionReference,
+            validate_irc_bidirectional_completion,
+            validate_irc_connectivity,
+            validate_method_state_consistency,
+            validate_transition_state,
+        )
+    except ImportError as exc:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason=f"CCCP science validators unavailable: {type(exc).__name__}: {exc}",
+        )
+    try:
+        reference = IrcReactionReference.from_dict(reference_document)
+    except (TypeError, ValueError) as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"IRC endpoint reference rejected: {exc}",
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    transition_state = validate_transition_state(
+        frequency_result,
+        candidate["mapped_mode"],
+        optimize_result=optimize_result,
+    )
+    method_state = validate_method_state_consistency(optimize_result, frequency_result)
+    identity_check = _science_identity_consistency(snapshot, optimize_result, frequency_result)
+    completion = validate_irc_bidirectional_completion(irc_result)
+    irc_validation = validate_irc_connectivity(
+        irc_result,
+        reference,
+        transition_state=transition_state,
+    )
+    connectivity = irc_validation.connectivity
+    claims = [claim.to_dict() for claim in transition_state.claims]
+    claims.extend(claim.to_dict() for claim in method_state.claims)
+    claims.extend(claim.to_dict() for claim in irc_validation.claims)
+    claim_status = connectivity.status
+    if identity_check["contradictions"] or method_state.status == "refuted":
+        claim_status = "refuted"
+    elif connectivity.status == "supported" and (
+        method_state.status != "supported" or identity_check["gaps"]
+    ):
+        claim_status = "inconclusive"
+    scientific_claim = {
+        "claim_id": connectivity.claim_id,
+        "status": claim_status,
+        "reason": connectivity.reason,
+        "statement": connectivity.statement,
+        "ts_status": transition_state.status,
+        "completion_status": completion.status,
+        "connectivity_status": connectivity.status,
+        "method_state_status": method_state.status,
+        "direction_assignment": irc_validation.direction_assignment,
+        "endpoint_optimization": selection["endpoint_optimization"],
+        "bond_change_counts": selection["bond_change_counts"],
+        "identity_check": identity_check,
+        "irc_provenance": irc_provenance,
+        "constructed": constructed,
+    }
+    h4 = _da_irc_h4_readiness(
+        constructed=constructed,
+        real_run=bool(extra["real_run"]),
+        scenario_result="PASS",
+        ts_status=transition_state.status,
+        completion_status=completion.status,
+        connectivity_status=connectivity.status,
+        endpoints_may_not_be_minima=bool(
+            selection["endpoint_optimization"].get("endpoints_may_not_be_minima")
+        ),
+    )
+    extra["ts_validation"] = transition_state.to_dict()
+    extra["methods_state"] = method_state.to_dict()
+    extra["irc_completion"] = completion.to_dict()
+    extra["irc_connectivity"] = irc_validation.to_dict()
+    extra["direction_assignment"] = irc_validation.direction_assignment
+    extra["forward_endpoint"] = (
+        None
+        if irc_validation.forward_resolution is None
+        else irc_validation.forward_resolution.to_dict()
+    )
+    extra["reverse_endpoint"] = (
+        None
+        if irc_validation.reverse_resolution is None
+        else irc_validation.reverse_resolution.to_dict()
+    )
+    extra["effective_atom_mapping"] = [list(pair) for pair in irc_validation.effective_atom_mapping]
+    extra["scientific_claim"] = scientific_claim
+    extra["claims"] = claims
+    extra["claim_status"] = claim_status
+    extra["connectivity_status"] = connectivity.status
+    extra["h4"] = h4
+    _print_da_irc_report(
+        {
+            "scenario_result": "PASS",
+            "claim_status": claim_status,
+            "h4": h4,
+            "ts_status": transition_state.status,
+            "completion_status": completion.status,
+            "direction_assignment": irc_validation.direction_assignment,
+            "endpoint_optimization": selection["endpoint_optimization"],
+            "forward_endpoint": extra["forward_endpoint"],
+            "reverse_endpoint": extra["reverse_endpoint"],
+            "effective_atom_mapping": extra["effective_atom_mapping"],
+            "connectivity_status": connectivity.status,
+        }
+    )
+    if claim_status == "supported":
+        reason = (
+            "B20a-exec bidirectional IRC validation completed: both endpoints map to the "
+            "frozen reactant/product and the target atom mapping is reproduced; H4 remains "
+            "open pending comparable energies"
+        )
+    elif claim_status == "inconclusive":
+        reason = (
+            "B20a-exec bidirectional IRC validation completed with an inconclusive claim "
+            f"({completion.status} completion, {connectivity.status} connectivity); H4 remains open"
+        )
+    else:
+        reason = (
+            "B20a-exec bidirectional IRC validation completed and refuted the claim; "
+            + "; ".join(
+                str(item) for item in (identity_check["contradictions"] or connectivity.notes)
+            )
+        )
+    return finish(
+        result="PASS",
+        exit_code=EXIT_PASS,
+        reason=reason,
+        extra_json={
+            "fixture-validation.json": fixture_validation,
+            "irc-selection.json": selection["raw_document"],
+            "irc-reference.json": reference_document,
+            "irc-completion.json": completion.to_dict(),
+            "irc-connectivity.json": irc_validation.to_dict(),
+            "scientific-claim.json": scientific_claim,
+            "h4-readiness.json": h4,
+            "artifact-digests.json": digest_table,
+        },
+        extra_artifacts=[
+            entry
+            for entry in (
+                _artifact_entry(artifact.resolved_path) for artifact in snapshot.artifacts
+            )
+            if entry is not None
+        ],
+    )
+
+
 def _execute(
     args: argparse.Namespace,
     spec: ScenarioSpec,
@@ -5053,6 +6173,8 @@ def _execute(
         return _execute_validate_artifacts(args, spec, plan, started_at=started_at, argv=argv)
     if spec.alias == DA_TS_ALIAS:
         return _execute_validate_da_ts(args, spec, plan, started_at=started_at, argv=argv)
+    if spec.alias == DA_IRC_ALIAS:
+        return _execute_validate_da_irc(args, spec, plan, started_at=started_at, argv=argv)
 
     platform_export: PlatformExportCheck | None = None
     if spec.requires_input_manifest:
@@ -5214,7 +6336,8 @@ def _help_epilog() -> str:
             "                         (dsh-optfreq-live)",
             "  validate-da-ts         --input-manifest + --platform-registry",
             "                         (da-runtime, da-research-live)",
-            "  validate-da-irc        --input-manifest",
+            "  validate-da-irc        --input-manifest + --platform-registry",
+            "                         (da-runtime, da-research-live)",
             "  validate-da-report     --input-manifest",
             "Optional flags:",
             "  --timeout   positive seconds (default 600)",
@@ -5239,6 +6362,9 @@ def _help_epilog() -> str:
             " --platform-registry registry.json --out evidence/",
             "  acp2_science.py --scenario science:validate-da-ts --fixture"
             " diels_alder/v1/fixture-manifest.json --input-manifest b20a-exec.json"
+            " --platform-registry registry.json --out evidence/",
+            "  acp2_science.py --scenario science:validate-da-irc --fixture"
+            " diels_alder/v1/fixture-manifest.json --input-manifest b20a-exec-irc.json"
             " --platform-registry registry.json --out evidence/",
         ]
     )

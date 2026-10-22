@@ -357,7 +357,8 @@ def test_candidate_range_exceeding_the_frozen_cap_is_fail(tmp_path: Path) -> Non
     root = tmp_path / "root"
     root.mkdir()
     for path in source.iterdir():
-        (root / path.name).write_bytes(path.read_bytes())
+        if path.is_file():
+            (root / path.name).write_bytes(path.read_bytes())
     selection = json.loads((root / "candidate-selection.json").read_text(encoding="utf-8"))
     selection["search_range"]["max_ts_candidates"] = 2
     (root / "candidate-selection.json").write_text(
