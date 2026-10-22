@@ -2,9 +2,11 @@
 
 This package initializer contains **no implementation and no side effects**.
 The reaction and question contracts live in :mod:`cccp.analysis.research.reaction`
-and :mod:`cccp.analysis.research.question`, and the artifact-snapshot content
-reader lives in :mod:`cccp.analysis.research.artifact_manifest`; this module only
-re-exports their public names.  Generic names that exist in both modules (``SCHEMA_VERSION``,
+and :mod:`cccp.analysis.research.question`, the artifact-snapshot content
+reader lives in :mod:`cccp.analysis.research.artifact_manifest` and the
+deterministic stationary-point checks live in
+:mod:`cccp.analysis.research.validators`; this module only re-exports their
+public names.  Generic names that exist in both modules (``SCHEMA_VERSION``,
 ``STANDARD_STATES``) are exported once from :mod:`~cccp.analysis.research.reaction`;
 the question-specific constants remain available through the ``question``
 submodule.
@@ -21,6 +23,7 @@ from __future__ import annotations
 from . import artifact_manifest as artifact_manifest
 from . import question as question
 from . import reaction as reaction
+from . import validators as validators
 from .artifact_manifest import (
     ARTIFACT_ROLES,
     SNAPSHOT_SCHEMA,
@@ -95,27 +98,64 @@ from .reaction import (
     canonical_json,
     read_historical_reaction,
 )
+from .validators import (
+    ATOM_COUNT_TOLERANCE,
+    COORDINATE_ABS_TOLERANCE_ANGSTROM,
+    ELECTRONIC_STATE_CONSISTENCY_VALIDATOR_ID,
+    FREQUENCY_EVIDENCE_VALIDATOR_ID,
+    FREQUENCY_MEMBERSHIP_VALIDATOR_ID,
+    IMAGINARY_MODE_THRESHOLD_CM1,
+    LOW_FREQUENCY_THRESHOLD_CM1,
+    METHOD_CONSISTENCY_VALIDATOR_ID,
+    OPTIMIZATION_CONVERGENCE_VALIDATOR_ID,
+    STATIONARY_POINT_VALIDATOR_ID,
+    VALIDATOR_VERSION,
+    AssessmentReason,
+    ClaimAssessment,
+    ClaimStatus,
+    MethodStateValidation,
+    MissingCheck,
+    StationaryPointValidation,
+    validate_electronic_state_consistency,
+    validate_frequency_evidence,
+    validate_frequency_membership,
+    validate_method_consistency,
+    validate_method_state_consistency,
+    validate_optimization_convergence,
+    validate_stationary_point,
+)
 
 __all__ = [
     "ARTIFACT_ROLES",
+    "ATOM_COUNT_TOLERANCE",
     "ATOM_ID_SCHEMES",
     "BOND_CHANGE_TYPES",
     "CLAIM_STATUSES",
     "COMPATIBILITY_REQUIREMENTS",
+    "COORDINATE_ABS_TOLERANCE_ANGSTROM",
+    "ELECTRONIC_STATE_CONSISTENCY_VALIDATOR_ID",
     "ENERGY_UNITS",
     "EVIDENCE_TYPES",
+    "FREQUENCY_EVIDENCE_VALIDATOR_ID",
+    "FREQUENCY_MEMBERSHIP_VALIDATOR_ID",
+    "IMAGINARY_MODE_THRESHOLD_CM1",
     "INPUT_FORMATS",
+    "LOW_FREQUENCY_THRESHOLD_CM1",
+    "METHOD_CONSISTENCY_VALIDATOR_ID",
+    "OPTIMIZATION_CONVERGENCE_VALIDATOR_ID",
     "PHASES",
     "QUESTION_TYPES",
     "REACTION_SCOPES",
     "SCHEMA_VERSION",
     "SNAPSHOT_SCHEMA",
     "SNAPSHOT_SCHEMA_VERSION",
+    "STATIONARY_POINT_VALIDATOR_ID",
     "STRUCTURE_ROLES",
     "STANDARD_STATES",
     "STEREO_BOND_CONFIGURATIONS",
     "STEREO_CENTER_CONFIGURATIONS",
     "STEREO_STATUSES",
+    "VALIDATOR_VERSION",
     "ArtifactContentUnavailableError",
     "ArtifactDigest",
     "ArtifactDigestMismatchError",
@@ -126,10 +166,13 @@ __all__ = [
     "ArtifactSnapshot",
     "ArtifactSnapshotError",
     "ArtifactStructuralMismatchError",
+    "AssessmentReason",
     "AtomIdentityError",
     "AtomMapping",
     "BondChange",
     "BondChangeError",
+    "ClaimAssessment",
+    "ClaimStatus",
     "ComparisonConditions",
     "Conditions",
     "DuplicateMapError",
@@ -140,6 +183,8 @@ __all__ = [
     "InventedStereoError",
     "MapCoverageError",
     "MapInverseError",
+    "MethodStateValidation",
+    "MissingCheck",
     "MissingProductError",
     "MissingReactantError",
     "Question",
@@ -151,6 +196,7 @@ __all__ = [
     "ReactionForbiddenFieldError",
     "ReactionSchemaError",
     "ReactionTypeError",
+    "StationaryPointValidation",
     "StereoCenter",
     "StereoContradictionError",
     "StereoDoubleBond",
@@ -168,4 +214,12 @@ __all__ = [
     "reaction",
     "read_historical_question",
     "read_historical_reaction",
+    "validate_electronic_state_consistency",
+    "validate_frequency_evidence",
+    "validate_frequency_membership",
+    "validate_method_consistency",
+    "validate_method_state_consistency",
+    "validate_optimization_convergence",
+    "validate_stationary_point",
+    "validators",
 ]

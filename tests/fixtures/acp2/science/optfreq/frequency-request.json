@@ -1,0 +1,46 @@
+{
+  "charge": 0,
+  "electronic_state": {
+    "label": "closed-shell singlet ground state",
+    "reference_state_id": "",
+    "spatial_symmetry": "auto",
+    "spin_mode": "auto",
+    "state_id": "s0",
+    "target_multiplicity": 1
+  },
+  "level": {
+    "basis": "def2-SVP",
+    "method": "wB97X-D4"
+  },
+  "multiplicity": 1,
+  "resources": {},
+  "schema_version": 1,
+  "structure": {
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.757,
+        0.586
+      ],
+      [
+        0.0,
+        -0.757,
+        0.586
+      ]
+    ],
+    "path": "optimized.xyz",
+    "role": "minimum",
+    "source": "constructed ACP2 A-11a optfreq fixture",
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ]
+  },
+  "task": "frequency"
+}

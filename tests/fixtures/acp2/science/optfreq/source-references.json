@@ -1,0 +1,105 @@
+{
+  "constructed": true,
+  "fixture_id": "optfreq-water-wb97xd4-def2svp",
+  "note": "Every source is a constructed fixture or a synthetic real-format output. No artifact here is a real QC run; real artifacts arrive only in A-11b.",
+  "schema": "acp2.science.source-references",
+  "schema_version": 1,
+  "sources": [
+    {
+      "artifact_path": "initial.xyz",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "1a21db8d08a35e5dcc961cf47ac2b688a5014dbcf8e35e7db34303ea81d376c7"
+      },
+      "quantity": "geometry",
+      "role": "input_structure",
+      "source_id": "initial_structure",
+      "units": "angstrom"
+    },
+    {
+      "artifact_path": "optimized.xyz",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "d6c40b0505e559882ef4bf81f50953b5c205f851613ac5cfa99a54852016e7db"
+      },
+      "quantity": "geometry",
+      "role": "optimized_structure",
+      "source_id": "optimized_structure",
+      "units": "angstrom"
+    },
+    {
+      "artifact_path": "optimize-request.json",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ab6bffc93a15a9da94d5282a63ca54b24bb50563028f49dc87a870559a4bbf2e"
+      },
+      "quantity": null,
+      "role": "request",
+      "source_id": "optimize_request",
+      "units": null
+    },
+    {
+      "artifact_path": "frequency-request.json",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "06a10f77445318637eb1e4e96c4f3f936e3b6bc78730e4efb07b98380be18383"
+      },
+      "quantity": null,
+      "role": "request",
+      "source_id": "frequency_request",
+      "units": null
+    },
+    {
+      "artifact_path": "synthetic/frequency-minimum.out",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "18242c85912c14168a85fd30bdf5c4a83b650541158d12bb80d58a3413e6c0ae"
+      },
+      "quantity": "harmonic_frequencies",
+      "role": "frequency_output",
+      "source_id": "frequency_native_output",
+      "units": "cm-1"
+    },
+    {
+      "artifact_path": "synthetic/optimize-minimum.out",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "e2631d27d2a70778160734ce94012df4f7608603ca12db8b1fc69cd474ef5a84"
+      },
+      "quantity": "final_single_point_energy",
+      "role": "native_output",
+      "source_id": "optimize_native_output",
+      "units": "hartree"
+    },
+    {
+      "artifact_path": "synthetic/optimize-converged-result.json",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "1a55cf19ce224f70831d231eb75e8b31d286c239b3c908124a1852f8fb372d0d"
+      },
+      "quantity": "optimized_geometry",
+      "role": "standardized_product",
+      "source_id": "converged_optimize_result",
+      "units": "hartree"
+    },
+    {
+      "artifact_path": "synthetic/frequency-minimum-result.json",
+      "constructed": true,
+      "digest": {
+        "algorithm": "sha256",
+        "value": "a71980fba259861c340323993ff4a9e9f26462eea6c912b36459fb812eafcdde"
+      },
+      "quantity": "harmonic_frequencies",
+      "role": "standardized_product",
+      "source_id": "minimum_frequency_result",
+      "units": "cm-1"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "artifacts": [],
+  "complete": true,
+  "coordinates": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.757,
+      0.586
+    ],
+    [
+      0.0,
+      -0.757,
+      0.586
+    ]
+  ],
+  "energy_hartree": -76.419737,
+  "errors": [],
+  "frequencies": [],
+  "metadata": {},
+  "payload": {
+    "electronic_state": {
+      "spin_mode": "auto",
+      "state_id": "s0",
+      "state_status": "not_verified",
+      "target_multiplicity": 1
+    },
+    "optimization_status": "converged"
+  },
+  "provenance": {
+    "backend": "orca",
+    "input_signature": "initial.xyz",
+    "method": "wB97X-D4",
+    "version": "unknown"
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ],
+  "task": "optimize"
+}
