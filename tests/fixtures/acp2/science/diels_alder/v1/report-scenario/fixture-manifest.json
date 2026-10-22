@@ -1,0 +1,26 @@
+{
+  "constructed": true,
+  "file_digests": {
+    "constructed-evidence-report-completed-insufficient.json": "b7dd0632540788540eef154a26f67ec588924ba518ca7c465cb8ce41e12bedf3",
+    "constructed-evidence-report-digest-mismatch.json": "2bfb68330a718a707ad9e0c6903dd24e638a5f291980439f6ba910f4218b01a3",
+    "constructed-evidence-report-missing-source.json": "5390249e6ec34312474fae65c70cec61bb7771e0343700086172b378bf107b45",
+    "constructed-evidence-report-model-validator.json": "34ab184d59d2285a4558fd886bdb524f9dbe525aed504df2d1ed0b92c4e0d6e4",
+    "constructed-evidence-report-no-provenance.json": "f11ee907ef9974a5b302710044f87dea1e16a119939b822a58213eaf83c8c4b9",
+    "constructed-evidence-report-unknown-status.json": "69b27d42c99c5d2443908208b268138d092f7f616ea0a4c3153238ecc0afa816",
+    "constructed-evidence-report.json": "fe35ae336d6373ebcc29bf34a16a49f2b2b5036f8f626e3a6afdcd50a2515ec4"
+  },
+  "fixture_files": {
+    "completed_insufficient_report": "constructed-evidence-report-completed-insufficient.json",
+    "digest_mismatch_report": "constructed-evidence-report-digest-mismatch.json",
+    "missing_source_report": "constructed-evidence-report-missing-source.json",
+    "model_validator_report": "constructed-evidence-report-model-validator.json",
+    "no_provenance_report": "constructed-evidence-report-no-provenance.json",
+    "unknown_status_report": "constructed-evidence-report-unknown-status.json",
+    "valid_report": "constructed-evidence-report.json"
+  },
+  "fixture_id": "diels-alder-report-scenario-constructed-a19b",
+  "note": "Constructed A-19b evidence-report fixtures. No B20a-exec artifact, platform registry, QC run or real report is claimed.",
+  "real_run": false,
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1
+}
