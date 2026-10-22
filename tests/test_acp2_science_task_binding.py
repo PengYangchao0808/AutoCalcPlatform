@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import cccp.calculation as calculation_package
 from cccp.calculation.capabilities import BUILTIN_CAPABILITY_IDS
 from cccp.calculation.capabilities.contracts import (
     TASK_KINDS,
@@ -40,7 +41,13 @@ from cccp.calculation.capabilities.task_binding import (
     bind_task_kind,
     build_task_request,
 )
-from cccp.calculation.requests import OptimizeOptions, TaskKind, TaskRequest
+from cccp.calculation.requests import (
+    OptimizeOptions,
+    TaskKind,
+    TaskRequest,
+    XtbConstrainedOptOptions,
+)
+from cccp.calculation.results import XtbConstrainedOptPayload
 
 _RUNNERS: dict[str, tuple[str, str]] = {
     "singlepoint": ("cccp.calculation.tasks.singlepoint", "run_singlepoint"),
@@ -316,3 +323,43 @@ def test_optimization_mode_role_mismatch_fails_preflight() -> None:
 def test_request_for_another_task_is_rejected() -> None:
     with pytest.raises(ScientificPreconditionError):
         bind_capability("electronic.energy", _request_payload("frequency"))
+
+
+def test_package_root_exposes_all_fifteen_task_cores() -> None:
+    package_exports = calculation_package.__all__
+
+    for task_kind in TASK_KINDS:
+        export_name = f"run_{task_kind}"
+        assert export_name in package_exports, (
+            f"{export_name} missing from cccp.calculation.__all__"
+        )
+        runner = getattr(calculation_package, export_name)
+        assert callable(runner), f"{export_name} is not callable"
+        module = importlib.import_module(f"cccp.calculation.tasks.{task_kind}")
+        assert runner is getattr(module, export_name)
+
+
+def test_xtb_constrained_opt_package_exports_are_the_defined_objects() -> None:
+    assert callable(calculation_package.run_xtb_constrained_opt)
+    assert isinstance(calculation_package.XtbConstrainedOptOptions, type)
+    assert isinstance(calculation_package.XtbConstrainedOptPayload, type)
+
+    assert calculation_package.XtbConstrainedOptOptions is XtbConstrainedOptOptions
+    assert calculation_package.XtbConstrainedOptPayload is XtbConstrainedOptPayload
+
+    tasks_module = importlib.import_module("cccp.calculation.tasks.xtb_constrained_opt")
+    assert calculation_package.run_xtb_constrained_opt is tasks_module.run_xtb_constrained_opt
+
+
+def test_lazy_export_table_covers_every_task_kind() -> None:
+    from cccp.calculation import _LAZY_EXPORTS
+
+    for task_kind in TASK_KINDS:
+        assert _LAZY_EXPORTS[f"run_{task_kind}"] == f"tasks.{task_kind}"
+
+    assert _LAZY_EXPORTS["run_xtb_constrained_opt"] == "tasks.xtb_constrained_opt"
+    assert _LAZY_EXPORTS["XtbConstrainedOptOptions"] == "requests"
+    assert _LAZY_EXPORTS["XtbConstrainedOptPayload"] == "results"
+
+    targets = {_LAZY_EXPORTS[f"run_{task_kind}"] for task_kind in TASK_KINDS}
+    assert len(targets) == len(TASK_KINDS)
