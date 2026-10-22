@@ -600,10 +600,24 @@
       "children": [],
       "artifact": {
         "id": "acp2:artifact:B06",
-        "version": "1.0.0",
-        "digest_or_pending": "PENDING",
-        "readiness": "contract_ready",
-        "delivery_status": "planned"
+        "version": "1.1.0",
+        "digest_or_pending": "sha256:8ae24108c8b3e653b1ac48ccad8fcc18c5d09192faf6c717debdc6d0910aee8a",
+        "readiness": "implementation_ready",
+        "delivery_status": "planned",
+        "digest_target": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "contract_delivery": "delivered",
+        "delivered_contracts": [
+          "application-api.v1.json (additive 1.1.0)",
+          "entry-call-table.v1.md",
+          "mcp-launch.schema.json",
+          "mcp-launch.template.json",
+          "cross-track-requests.v1.json"
+        ],
+        "evidence_contract": {
+          "path": "docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json",
+          "sha256": "sha256:89745da73977dcc7ac8fd87d88bd194701f944d2ee4d9a365ac232e710b26d70"
+        },
+        "remaining_gap": "B08 durable idempotency, B09 admission/authorizer expansion, B10a HTTP TaskRef projection, B12 real artifact lifecycle; GAP-B03-02 re-owned to B12 and HTTP GET reads to B10a"
       }
     },
     {
@@ -2183,9 +2197,9 @@
       "free_text_or_allowed": false
     }
   },
-  "refreshed_by": "B03",
-  "refreshed_at": "2026-10-22",
-  "refresh_stage": "H1 (B00 skeleton + B03 merge of C rows and the A gap)",
+  "refreshed_by": "B06",
+  "refreshed_at": "2026-10-22T00:00:00Z",
+  "refresh_stage": "B06",
   "delivery_status_semantics": "artifact.delivery_status tracks ACCEPTANCE delivery (planned|blocked) and stays inside the frozen manifest common_enums. Contract publication is tracked by artifact.readiness + artifact.digest_or_pending + artifact.contract_delivery. They are different questions and must not be collapsed.",
   "sources": [
     {

@@ -1,0 +1,112 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "acp.research.v1 negotiated with version 1.1.0",
+      "name": "initialize_research_extension",
+      "status": "PASS"
+    },
+    {
+      "detail": "tools=['acp_analyze', 'acp_cancel', 'acp_capabilities', 'acp_preflight', 'acp_prepare_artifact', 'acp_read_artifact', 'acp_status', 'acp_submit']",
+      "name": "tools_allowlist",
+      "status": "PASS"
+    },
+    {
+      "detail": "acp_capabilities returned status=ok with the eight tools",
+      "name": "capabilities_via_controller",
+      "status": "PASS"
+    },
+    {
+      "detail": "dry_run=true executed=false would_create_task=false",
+      "name": "preflight_zero_side_effects",
+      "status": "PASS"
+    },
+    {
+      "detail": "acp_status returned resource_not_ready",
+      "name": "status_missing_is_not_prepared",
+      "status": "PASS"
+    },
+    {
+      "detail": "acp_read_artifact returned resource_not_ready",
+      "name": "read_before_prepare_is_not_prepared",
+      "status": "PASS"
+    },
+    {
+      "detail": "implicit analyze returned input_invalid",
+      "name": "analyze_requires_explicit",
+      "status": "PASS"
+    },
+    {
+      "detail": "unregistered analysis did not run science",
+      "name": "analyze_registry_gated",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=2 after=2",
+      "name": "task_count_unchanged",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+    "server_revision": "a0185b15c546fbd07919326d581fab13e05000fa"
+  },
+  "candidate_revision": "a0185b15c546fbd07919326d581fab13e05000fa",
+  "command": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "mcp-stdio",
+    "--controller",
+    "http://127.0.0.1:18765",
+    "--launch",
+    "reports/acp2_implementation/bb45a46/B/B06/mcp-launch.json",
+    "--out",
+    "<repo>/reports/acp2_implementation/bb45a46/B/B06/mcp",
+    "--timeout",
+    "240"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "<repo>",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "discover",
+    "acceptance.target": "local",
+    "b06.adapter_exit_code": 0,
+    "b06.mcp_launch": "reports/acp2_implementation/bb45a46/B/B06/mcp-launch.json",
+    "b06.protocol_version": "2025-06-18",
+    "b06.task_count_after": 2,
+    "b06.task_count_before": 2,
+    "b06.tools": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ]
+  },
+  "finished_at": "2026-10-22T14:48:25Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261022T144824Z-255589-7943adce",
+  "scenario": "mcp-stdio",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:48:24Z",
+  "submission_id": null,
+  "usage": null
+}

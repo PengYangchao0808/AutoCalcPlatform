@@ -26,9 +26,11 @@ import copy
 import hashlib
 import json
 import os
+import queue
 import re
 import shlex
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -51,7 +53,7 @@ SUMMARY_SCHEMA = "acp2.acceptance.summary.v1"
 SAMPLES_SCHEMA = "acp2.acceptance.samples.v1"
 SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 SUPPORTED_CONTRACT_MAJOR = "1"
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "1.1.0"
 
 BASELINE_CANDIDATE_REVISION = "096cdffe9a3817d8ee443d824830d87ec6e07bc2"
 SERVER_CANDIDATE_REVISION = (
@@ -1467,6 +1469,31 @@ def _http_json(url: str, timeout: float) -> Any:
     return json.loads(raw.decode("utf-8"))
 
 
+def _http_json_post(url: str, payload: dict[str, Any], timeout: float) -> Any:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read()
+    return json.loads(raw.decode("utf-8"))
+
+
+def _http_error_body(url: str, timeout: float) -> tuple[int, Any]:
+    try:
+        _http_json(url, timeout)
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            body = raw.decode("utf-8", errors="replace")
+        return int(exc.code), body
+    return 200, None
+
+
 def _controller_task_count(controller: str, timeout: float) -> int:
     payload = _http_json(controller.rstrip("/") + "/api/v1/jobs?limit=1000", timeout)
     jobs = payload.get("jobs") if isinstance(payload, dict) else None
@@ -1532,10 +1559,20 @@ def _run_entry_readonly(
         "acceptance.target": "local",
         "b04a.controller": base,
     }
+    preflight_request = {
+        "schema_version": 1,
+        "workflow": "singlepoint",
+        "input": {"xyz_text": "2\nH2\nH 0 0 0\nH 0 0 0.74\n"},
+        "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1},
+    }
     try:
         before = _controller_task_count(base, timeout)
         health = _http_json(base + "/api/health", timeout)
         capabilities = _http_json(base + "/api/capabilities", timeout)
+        preflight = _http_json_post(base + "/api/v1/preflight", preflight_request, timeout)
+        missing_status, missing_body = _http_error_body(
+            base + "/api/v1/operations/op_b06_missing", timeout
+        )
         after = _controller_task_count(base, timeout)
     except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
         extensions["b04a.entry_readonly"] = f"request_failed: {exc}"
@@ -1564,6 +1601,23 @@ def _run_entry_readonly(
         and isinstance(tools, list)
         and set(tools) == set(MCP_TOOLS)
     )
+    preflight_ok = (
+        isinstance(preflight, dict)
+        and preflight.get("schema_version") == 1
+        and preflight.get("would_create_task") is False
+        and preflight.get("would_reserve") is False
+        and (
+            preflight.get("plan_digest") is None
+            or str(preflight.get("plan_digest")).startswith("sha256:")
+        )
+    )
+    missing_detail = missing_body.get("detail") if isinstance(missing_body, dict) else None
+    missing_ok = (
+        missing_status == 404
+        and isinstance(missing_detail, dict)
+        and missing_detail.get("code") == "resource_not_ready"
+        and "not_prepared" in str(missing_detail.get("message", ""))
+    )
     assertions.extend(
         [
             {
@@ -1575,6 +1629,18 @@ def _run_entry_readonly(
                 "name": "capabilities_workflows_backends_limits_tools",
                 "status": "PASS" if capabilities_ok else "FAIL",
                 "detail": "workflows/backends/limits present and exactly the eight P1 tools",
+            },
+            {
+                "name": "preflight_zero_side_effects",
+                "status": "PASS" if preflight_ok else "FAIL",
+                "detail": "would_create_task=false would_reserve=false; plan_digest is a sha256",
+            },
+            {
+                "name": "missing_operation_is_not_prepared",
+                "status": "PASS" if missing_ok else "FAIL",
+                "detail": (
+                    f"status={missing_status} code={missing_detail and missing_detail.get('code')}"
+                ),
             },
             {
                 "name": "task_count_unchanged",
@@ -1592,9 +1658,328 @@ def _run_entry_readonly(
             "b04a.candidate_revision": health.get("candidate_revision"),
             "b04a.contract_version": health.get("contract_version"),
             "b04a.contract_digest": health.get("contract_digest"),
+            "b06.preflight_digest": preflight.get("plan_digest"),
+            "b06.missing_operation_status": missing_status,
         }
     )
-    passed = health_ok and capabilities_ok and before == after
+    passed = health_ok and capabilities_ok and preflight_ok and missing_ok and before == after
+    return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
+
+
+class _McpStdioProbe:
+    """Synchronous newline-delimited JSON-RPC probe for one real adapter."""
+
+    def __init__(self, launch: dict[str, Any], timeout: float) -> None:
+        self._timeout = timeout
+        self._queue: queue.Queue[bytes | None] = queue.Queue()
+        self._stderr: list[str] = []
+        command = launch.get("command")
+        argv = launch.get("args")
+        cwd = launch.get("cwd")
+        env = launch.get("env") or {}
+        if not isinstance(command, str) or not Path(command).is_absolute():
+            raise ValueError("command must be an absolute executable path")
+        if not isinstance(argv, list) or not all(isinstance(item, str) for item in argv):
+            raise ValueError("args must be a JSON list of strings")
+        if not isinstance(cwd, str) or not Path(cwd).is_absolute():
+            raise ValueError("cwd must be an absolute directory")
+        if not isinstance(env, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in env.items()
+        ):
+            raise ValueError("env must map strings to strings")
+        merged_env = {**os.environ, **env}
+        self.proc = subprocess.Popen(
+            [command, *argv],
+            cwd=cwd,
+            env=merged_env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
+        self._reader = threading.Thread(target=self._read_stdout, daemon=True)
+        self._reader.start()
+        self._err_reader = threading.Thread(target=self._read_stderr, daemon=True)
+        self._err_reader.start()
+
+    def _read_stdout(self) -> None:
+        assert self.proc.stdout is not None
+        while True:
+            line = self.proc.stdout.readline()
+            if not line:
+                self._queue.put(None)
+                return
+            self._queue.put(line)
+
+    def _read_stderr(self) -> None:
+        assert self.proc.stderr is not None
+        for line in self.proc.stderr:
+            self._stderr.append(line.decode("utf-8", errors="replace"))
+
+    def send(self, message: dict[str, Any]) -> None:
+        assert self.proc.stdin is not None
+        self.proc.stdin.write((json.dumps(message) + "\n").encode("utf-8"))
+        self.proc.stdin.flush()
+
+    def request(self, request_id: int, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        self.send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
+        deadline = time.monotonic() + self._timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"no response for {method}")
+            try:
+                raw = self._queue.get(timeout=remaining)
+            except queue.Empty:
+                raise TimeoutError(f"no response for {method}") from None
+            if raw is None:
+                raise RuntimeError(f"adapter closed stdout during {method}")
+            message = json.loads(raw)
+            if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+                raise ValueError("not a JSON-RPC 2.0 object")
+            if "id" not in message and "method" in message:
+                continue
+            if message.get("id") != request_id:
+                raise ValueError("unexpected response id")
+            if "error" in message:
+                raise RuntimeError(f"{method}: {message['error']}")
+            return message["result"]
+
+    def close(self) -> int:
+        if self.proc.stdin is not None:
+            self.proc.stdin.close()
+        try:
+            return self.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            self.proc.terminate()
+            try:
+                return self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                return self.proc.wait(timeout=5)
+
+    def stderr_text(self) -> str:
+        return "".join(self._stderr)
+
+
+def _run_mcp_stdio(
+    controller: str, launch_path: str, timeout: float
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """Launch the real stdio adapter and prove every call reached the Controller."""
+    base = controller.rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "discover",
+        "acceptance.target": "local",
+        "b06.mcp_launch": str(launch_path),
+    }
+    probe: _McpStdioProbe | None = None
+    try:
+        launch = json.loads(Path(launch_path).read_text(encoding="utf-8"))
+        if not isinstance(launch, dict):
+            raise ValueError("launch descriptor must be a JSON object")
+        before = _controller_task_count(base, timeout)
+        probe = _McpStdioProbe(launch, timeout)
+        initialized = probe.request(
+            1,
+            "initialize",
+            {
+                "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                "capabilities": {},
+                "clientInfo": {"name": "acp2-b06-probe", "version": "1"},
+            },
+        )
+        probe.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        listed = probe.request(2, "tools/list", {})
+        tools = listed.get("tools") if isinstance(listed, dict) else None
+        tool_names = {tool.get("name") for tool in tools or [] if isinstance(tool, dict)}
+        capabilities = probe.request(
+            3,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {}},
+        )
+        preflight = probe.request(
+            4,
+            "tools/call",
+            {
+                "name": "acp_preflight",
+                "arguments": {
+                    "workflow": "singlepoint",
+                    "input": {"xyz_text": "2\nH2\nH 0 0 0\nH 0 0 0.74\n"},
+                    "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1},
+                },
+            },
+        )
+        status_missing = probe.request(
+            5,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "b06-missing-job"}},
+        )
+        read_missing = probe.request(
+            6,
+            "tools/call",
+            {
+                "name": "acp_read_artifact",
+                "arguments": {
+                    "artifact_ref": {
+                        "task_id": "b06-missing-job",
+                        "attempt": 1,
+                        "artifact_id": "catalog",
+                        "generation": 1,
+                        "digest": "sha256:" + "0" * 64,
+                    }
+                },
+            },
+        )
+        analyze_implicit = probe.request(
+            7,
+            "tools/call",
+            {
+                "name": "acp_analyze",
+                "arguments": {
+                    "analysis_id": "vibration.analyze",
+                    "input_refs": [{"task_id": "b06-missing-job"}],
+                    "explicit": False,
+                },
+            },
+        )
+        analyze_unsupported = probe.request(
+            8,
+            "tools/call",
+            {
+                "name": "acp_analyze",
+                "arguments": {
+                    "analysis_id": "vibration.analyze",
+                    "input_refs": [{"task_id": "b06-missing-job"}],
+                    "explicit": True,
+                },
+            },
+        )
+        after = _controller_task_count(base, timeout)
+        exit_code = probe.close()
+        probe = None
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+    ) as exc:
+        extensions["b06.mcp_stdio"] = f"probe_failed: {exc}"
+        assertions.append({"name": "mcp_stdio_probe", "status": "FAIL", "detail": str(exc)})
+        if probe is not None:
+            probe.close()
+        return EXIT_FAIL, assertions, extensions
+
+    extension = (initialized.get("extensions") or {}).get("acp.research.v1") or {}
+    initialized_ok = (
+        initialized.get("protocolVersion") == launch.get("protocol_version", "2025-06-18")
+        and extension.get("negotiated") is True
+        and extension.get("version") == "1.1.0"
+    )
+    tools_ok = tool_names == set(MCP_TOOLS)
+    capabilities_data = capabilities.get("structuredContent", {})
+    capabilities_ok = (
+        capabilities.get("isError") is False
+        and capabilities_data.get("status") == "ok"
+        and set(capabilities_data.get("data", {}).get("tools") or []) == set(MCP_TOOLS)
+    )
+    preflight_data = preflight.get("structuredContent", {})
+    preflight_ok = (
+        preflight.get("isError") is False
+        and preflight_data.get("dry_run") is True
+        and preflight_data.get("data", {}).get("executed") is False
+        and preflight_data.get("data", {}).get("estimate", {}).get("would_create_task") is False
+    )
+    status_ok = (
+        status_missing.get("isError") is True
+        and status_missing.get("structuredContent", {}).get("error", {}).get("code")
+        == "resource_not_ready"
+    )
+    read_ok = (
+        read_missing.get("isError") is True
+        and read_missing.get("structuredContent", {}).get("error", {}).get("code")
+        == "resource_not_ready"
+    )
+    analyze_implicit_ok = (
+        analyze_implicit.get("isError") is True
+        and analyze_implicit.get("structuredContent", {}).get("error", {}).get("code")
+        == "input_invalid"
+    )
+    analyze_unsupported_ok = analyze_unsupported.get("isError") is True and analyze_unsupported.get(
+        "structuredContent", {}
+    ).get("error", {}).get("code") in {"unsupported_capability", "resource_not_ready"}
+    assertions.extend(
+        [
+            {
+                "name": "initialize_research_extension",
+                "status": "PASS" if initialized_ok else "FAIL",
+                "detail": "acp.research.v1 negotiated with version 1.1.0",
+            },
+            {
+                "name": "tools_allowlist",
+                "status": "PASS" if tools_ok else "FAIL",
+                "detail": f"tools={sorted(tool_names)}",
+            },
+            {
+                "name": "capabilities_via_controller",
+                "status": "PASS" if capabilities_ok else "FAIL",
+                "detail": "acp_capabilities returned status=ok with the eight tools",
+            },
+            {
+                "name": "preflight_zero_side_effects",
+                "status": "PASS" if preflight_ok else "FAIL",
+                "detail": "dry_run=true executed=false would_create_task=false",
+            },
+            {
+                "name": "status_missing_is_not_prepared",
+                "status": "PASS" if status_ok else "FAIL",
+                "detail": "acp_status returned resource_not_ready",
+            },
+            {
+                "name": "read_before_prepare_is_not_prepared",
+                "status": "PASS" if read_ok else "FAIL",
+                "detail": "acp_read_artifact returned resource_not_ready",
+            },
+            {
+                "name": "analyze_requires_explicit",
+                "status": "PASS" if analyze_implicit_ok else "FAIL",
+                "detail": "implicit analyze returned input_invalid",
+            },
+            {
+                "name": "analyze_registry_gated",
+                "status": "PASS" if analyze_unsupported_ok else "FAIL",
+                "detail": "unregistered analysis did not run science",
+            },
+            {
+                "name": "task_count_unchanged",
+                "status": "PASS" if before == after else "FAIL",
+                "detail": f"before={before} after={after}",
+            },
+        ]
+    )
+    extensions.update(
+        {
+            "b06.task_count_before": before,
+            "b06.task_count_after": after,
+            "b06.adapter_exit_code": exit_code,
+            "b06.tools": sorted(tool_names),
+            "b06.protocol_version": initialized.get("protocolVersion"),
+        }
+    )
+    passed = (
+        initialized_ok
+        and tools_ok
+        and capabilities_ok
+        and preflight_ok
+        and status_ok
+        and read_ok
+        and analyze_implicit_ok
+        and analyze_unsupported_ok
+        and before == after
+        and exit_code == 0
+    )
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
 
 
@@ -1776,6 +2161,17 @@ def execute_scenario(
             return code_value
 
         handler = entry_readonly
+    elif spec.scenario == "mcp-stdio":
+
+        def mcp_stdio(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_mcp_stdio(
+                args.controller, str(args.launch), timeout
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            return code_value
+
+        handler = mcp_stdio
     else:
         handler = _b01_stub_handler(spec)
 
@@ -1793,7 +2189,7 @@ def execute_scenario(
         reason = f"timeout after {timeout}s; cleanup record saved"
         result = "NOT_VERIFIED"
         code = EXIT_NOT_VERIFIED
-    elif spec.scenario == "entry-readonly":
+    elif spec.scenario in {"entry-readonly", "mcp-stdio"}:
         result = "PASS" if code == EXIT_PASS else "FAIL"
         failed = [
             item["name"] for item in outcome.get("assertions", []) if item.get("status") != "PASS"
@@ -1806,7 +2202,7 @@ def execute_scenario(
             if code == EXIT_NOT_VERIFIED
             else ("PASS" if code == EXIT_PASS else "FAIL")
         )
-    if spec.scenario == "entry-readonly":
+    if spec.scenario in {"entry-readonly", "mcp-stdio"}:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
     else:

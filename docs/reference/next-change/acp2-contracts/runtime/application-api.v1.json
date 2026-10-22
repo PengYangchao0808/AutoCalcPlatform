@@ -1,6 +1,6 @@
 {
   "schema": "acp2.runtime.application-api.v1",
-  "contract_version": "1.0.0",
+  "contract_version": "1.1.0",
   "frozen_at": "2026-10-22",
   "owner": "B",
   "status": "delivered",
@@ -1135,6 +1135,46 @@
               "null"
             ],
             "description": "Namespaced extension metadata (unknown_field_policy U4); opaque to the platform and never influences execution."
+          },
+          "proposal_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Research Proposal reference (B-req-01). Additive v1.1.0 field; approval semantics remain B16."
+          },
+          "budget": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Research launch budget (B-req-01). unit is explicit and timeout_s is required when the object is present.",
+            "fields": {
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "task_count",
+                  "core_hours",
+                  "walltime_s"
+                ],
+                "description": "Explicit budget unit; never an implicit default."
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of units (task_count/core_hours) when applicable."
+              },
+              "timeout_s": {
+                "type": "integer",
+                "minimum": 1,
+                "unit": "s",
+                "description": "Whole-launch timeout in seconds."
+              }
+            },
+            "required": [
+              "unit",
+              "timeout_s"
+            ]
           }
         }
       },
@@ -1146,7 +1186,8 @@
           "operation_ref",
           "state",
           "plan_digest",
-          "idempotency_key"
+          "idempotency_key",
+          "result"
         ],
         "fields": {
           "schema_version": {
@@ -1203,6 +1244,20 @@
               "null"
             ],
             "description": "Persisted submission record id (remote execution)."
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "accepted"
+            ],
+            "description": "B-req-01 research launch acknowledgement; accepted means one durable task_ref exists, never that science completed."
+          },
+          "approval_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "B-req-01 approval reference; null until B16 persists approval facts."
           }
         }
       },
@@ -2175,9 +2230,9 @@
         "entrypoint_file": "src/acp/cli.py:2555",
         "application_command": "status",
         "use_case": "status snapshot",
-        "conformance": "gap",
+        "conformance": "conformant",
         "gap_id": "GAP-B03-01",
-        "note": "reads JobStore.get/list directly (private Result read path); owner B06/B10a"
+        "note": "local and Controller rows both pass through acp_services.entrypoints.status_projection.project_task_status; the legacy job/jobs fields are preserved additively"
       },
       {
         "entry": "cli:acp task pause",
@@ -2335,66 +2390,96 @@
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:958",
         "application_command": "capabilities",
         "use_case": "CapabilityPort.capabilities",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03",
-        "note": "calls an injected port adapter directly; B06 binds it to the application command"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
       },
       {
         "entry": "mcp:acp_preflight",
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:971",
         "application_command": "preflight",
         "use_case": "PreflightPort.preflight",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
       },
       {
         "entry": "mcp:acp_submit",
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:983",
         "application_command": "submit",
         "use_case": "SubmitPort.submit",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03",
-        "note": "in-connection _idempotency dict is connection state authority; B05/B06 must remove it"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
       },
       {
         "entry": "mcp:acp_status",
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:1022",
         "application_command": "status",
         "use_case": "StatusPort.get",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
       },
       {
         "entry": "mcp:acp_cancel",
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:1044",
         "application_command": "cancel",
         "use_case": "CancelPort.cancel",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
       },
       {
         "entry": "mcp:acp_prepare_artifact",
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:1063",
         "application_command": "prepare",
         "use_case": "ArtifactPort.prepare",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
       },
       {
         "entry": "mcp:acp_read_artifact",
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:1108",
         "application_command": "read",
         "use_case": "ArtifactPort.read",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
       },
       {
         "entry": "mcp:acp_analyze",
         "entrypoint_file": "src/acp_services/entrypoints/mcp.py:1121",
         "application_command": "analyze",
         "use_case": "AnalyzePort.analyze",
-        "conformance": "gap",
-        "gap_id": "GAP-B03-03"
+        "conformance": "conformant",
+        "note": "bound through acp.services_mcp_bootstrap -> ControllerClient -> one application command"
+      },
+      {
+        "entry": "http:POST /api/v1/preflight",
+        "entrypoint_file": "src/acp/api/v1_routes.py:preflight_request",
+        "application_command": "preflight",
+        "use_case": "zero-side-effect task/method validation + plan_digest",
+        "conformance": "conformant",
+        "note": "creates no task/prepare/QC/reservation"
+      },
+      {
+        "entry": "http:POST /api/v1/jobs/{job_id}/prepare",
+        "entrypoint_file": "src/acp/api/v1_routes.py:prepare_artifact",
+        "application_command": "prepare",
+        "use_case": "PrepareOperationService.enqueue",
+        "conformance": "conformant",
+        "note": "explicit only; returns a persistent operation_ref"
+      },
+      {
+        "entry": "http:GET /api/v1/operations/{operation_id}",
+        "entrypoint_file": "src/acp/api/v1_routes.py:get_operation",
+        "application_command": "status",
+        "use_case": "prepare-operation projection",
+        "conformance": "conformant",
+        "note": "query-only; missing operation is resource_not_ready/not_prepared"
+      },
+      {
+        "entry": "http:POST /api/v1/jobs/{job_id}/analyze",
+        "entrypoint_file": "src/acp/api/v1_routes.py:analyze_job",
+        "application_command": "analyze",
+        "use_case": "AnalysisCapabilityRegistry gate",
+        "conformance": "conformant",
+        "note": "explicit=true; unsupported_capability until A registers a handler"
       }
     ],
     "gaps": [
@@ -2409,8 +2494,9 @@
           "http:GET /api/v1/jobs/{job_id}/detail"
         ],
         "description": "Reads resolve JobManager/JobStore directly instead of one status command.",
-        "owner": "B06 (bind) with B10a (TaskRef projection)",
-        "closing_gate": "entry-readonly + three-entry scenarios read the same TaskRef facts"
+        "owner": "B06 (query projection) with B10a (HTTP TaskRef projection)",
+        "closing_gate": "CLI local and controller query emit the same project_task_status projection; HTTP GET rows remain read-only adapters re-owned to B10a",
+        "status": "closed_for_query_projection"
       },
       {
         "id": "GAP-B03-02",
@@ -2419,8 +2505,9 @@
           "cli:acp task export"
         ],
         "description": "Reads RESULT/result_manifest.json directly and resolves --job through JobStore.",
-        "owner": "B06 with B12",
-        "closing_gate": "artifact scenario reads only through read/prepare"
+        "owner": "B12",
+        "closing_gate": "artifact scenario reads only through read/prepare; B06 ships only the read/prepare shells",
+        "status": "reowned"
       },
       {
         "id": "GAP-B03-03",
@@ -2436,8 +2523,9 @@
           "mcp:acp_analyze"
         ],
         "description": "MCP tools call injected port adapters (and hold an in-connection idempotency dict) instead of the application command.",
-        "owner": "B05/B06",
-        "closing_gate": "mcp-stdio scenario: submit replay after reconnect yields the same task_ref"
+        "owner": "B06",
+        "closing_gate": "mcp-stdio scenario: all eight tools cross ControllerClient into one application command; durable replay remains B08",
+        "status": "closed"
       },
       {
         "id": "GAP-B03-04",
@@ -2447,9 +2535,11 @@
         ],
         "description": "No entry accepts a Controller target yet; ControllerClient does not exist.",
         "owner": "B04a",
-        "closing_gate": "entry-readonly launches two adapters against one Controller and the task count is unchanged"
+        "closing_gate": "entry-readonly + mcp-stdio against one Controller; task count unchanged",
+        "status": "closed"
       }
-    ]
+    ],
+    "audit_note": "All eight MCP tools are bound to the Controller; CLI query emits the shared projection. HTTP GET reads remain read-only adapters re-owned to B10a and the CLI export manifest read is re-owned to B12, so the audit is intentionally PARTIAL, not a blanket PASS."
   },
   "p2_research_operations": {
     "path": "runtime/p2-research-operations.v1.json",
@@ -2522,5 +2612,31 @@
     "root": "runtime/samples",
     "manifest": "runtime/samples/manifest.json",
     "requirement": "every contract in this directory has at least one positive and one negative sample; a contract without a negative sample may not be frozen"
+  },
+  "b_req_01": {
+    "request_id": "B-req-01",
+    "status": "satisfied",
+    "additive_within": "v1",
+    "fields": [
+      "submit.request.proposal_ref",
+      "submit.request.plan_digest",
+      "submit.request.budget{unit,timeout_s,count}",
+      "submit.response.task_ref{job_id,attempt,release_id}",
+      "submit.response.result",
+      "submit.response.approval_ref",
+      "initialize.extensions.acp.research.v1"
+    ],
+    "project_claim": "server-resolved; an unknown/mismatched payload project is access_denied(rule=project_scope_mismatch); a client tenant/role/approver claim is never trusted",
+    "approval_semantics": "B16 owns approval persistence; approval_ref may be null until then"
+  },
+  "mcp_extensions": {
+    "acp.research.v1": {
+      "negotiated_in": "initialize",
+      "version": "1.1.0",
+      "tool_name_prefix": "acp_research_",
+      "p1_tool_allowlist_unchanged": true,
+      "descriptor_schema": "runtime/mcp-launch.schema.json",
+      "note": "The eight P1 tool names and input schemas are unchanged; the P2 extension adds namespaced tools and advertises its id/version in initialize."
+    }
   }
 }

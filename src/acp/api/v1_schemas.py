@@ -344,6 +344,12 @@ class V1JobCreateRequest(BaseModel):
     molecule_name: str = ""
     task_name: str = ""
     remark: str = ""
+    schema_version: int = 1
+    plan_digest: str | None = None
+    proposal_ref: str | None = None
+    proposal_digest: str | None = None
+    budget: dict[str, Any] | None = None
+    idempotency_key: str | None = None
 
     @field_validator("node_tags")
     @classmethod
@@ -526,6 +532,18 @@ class V1JobCreatedResponse(BaseModel):
     status: str
     workflow: str
     project_id: str | None = None
+    schema_version: int = 1
+    attempt: int = 1
+    release_id: str | None = None
+    release_digest: str | None = None
+    task_ref: dict[str, Any] | None = None
+    operation_ref: str | dict[str, Any] | None = None
+    plan_digest: str | None = None
+    proposal_digest: str | None = None
+    approval_ref: str | None = None
+    result: str = "accepted"
+    idempotency_key: str | None = None
+    idempotent_replay: bool = False
 
 
 class JobMoveRequest(BaseModel):
@@ -1888,6 +1906,39 @@ class EnergyGraphResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class V1PreflightRequest(BaseModel):
+    schema_version: int = 1
+    workflow: str
+    input: dict[str, Any] = Field(default_factory=dict)
+    method: dict[str, Any] = Field(default_factory=dict)
+    resources: dict[str, Any] = Field(default_factory=dict)
+    project_id: str | None = None
+    extensions: dict[str, Any] | None = None
+
+
+class V1PrepareRequest(BaseModel):
+    schema_version: int = 1
+    purpose: Literal["artifact", "structure-input"]
+    task_ref: dict[str, Any] | None = None
+    job_id: str | None = None
+    artifact_id: str | None = None
+    attempt: int | None = Field(default=None, ge=1)
+    generation: int | None = Field(default=None, ge=1)
+    expected_revision: int | None = Field(default=None, ge=0)
+    relative_path: str | None = None
+    idempotency_key: str | None = None
+
+
+class V1AnalyzeRequest(BaseModel):
+    schema_version: int = 1
+    analysis_id: str
+    input_refs: list[dict[str, Any]] = Field(default_factory=list)
+    explicit: bool = False
+    parameters: dict[str, Any] | None = None
+    plan_digest: str | None = None
+    idempotency_key: str | None = None
+
+
 __all__ = [
     "ArtifactListResponse",
     "ArtifactModel",
@@ -1992,6 +2043,9 @@ __all__ = [
     "V1JobRecordModel",
     "V1JobRerunRequest",
     "V1JobSpecModel",
+    "V1AnalyzeRequest",
+    "V1PreflightRequest",
+    "V1PrepareRequest",
     "V1SoftwareCandidate",
     "V1SoftwareDiscoveryResponse",
     "V1SoftwareEntry",

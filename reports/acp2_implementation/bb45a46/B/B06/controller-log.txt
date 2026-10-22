@@ -1,0 +1,31 @@
+INFO:     Started server process [255506]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18765 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18765
+  Run root      : <acp2-dev>/data/b/run-root
+  Poll interval : 30s
+  Docs (Swagger): http://127.0.0.1:18765/docs
+  Reload        : off
+
+INFO:     127.0.0.1:37384 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37422 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37434 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37450 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37466 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37482 - "POST /api/v1/preflight HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37494 - "GET /api/v1/operations/op_b06_missing HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:37502 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37540 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37546 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51354 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51356 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51372 - "POST /api/v1/preflight HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51382 - "GET /api/v1/jobs/b06-missing-job HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51392 - "GET /api/v1/jobs/b06-missing-job/prepared/catalog?attempt=1&expected_revision=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51402 - "POST /api/v1/jobs/b06-missing-job/analyze HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:51414 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [255506]

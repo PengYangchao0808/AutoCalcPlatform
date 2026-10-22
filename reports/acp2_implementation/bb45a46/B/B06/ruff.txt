@@ -1,0 +1,7 @@
+ruff check (exit 1)
+src/acp/api/v1_schemas.py:1358:101: E501 Line too long (105 > 100)
+src/acp/api/v1_schemas.py:1813:101: E501 Line too long (112 > 100)
+Found 2 errors.
+
+ruff format --check (exit 0)
+14 files already formatted

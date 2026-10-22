@@ -1,0 +1,131 @@
+"""One task/operation status projection shared by CLI, HTTP and MCP.
+
+B06 (plan ``.omo/plans/acp2-parallel-plan-b-runtime.md`` todo 7) closes
+``GAP-B03-01`` for the machine query path: the local CLI used to read the
+``JobStore`` row directly while the Controller path returned the HTTP row.  Both
+now pass their source row through :func:`project_task_status`, so the same
+logical task yields the same projection regardless of which entry answered.
+
+The projection is intentionally a **normalisation**, not a second authority:
+it never writes, never resolves a resource and never fills a fact the source row
+did not carry.  Missing values stay missing.  The module is stdlib-only and
+imports no :mod:`acp` code.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
+__all__ = ["STATUS_SCHEMA_VERSION", "project_operation_status", "project_task_status"]
+
+#: Wire version of the projection (additive fields only).
+STATUS_SCHEMA_VERSION = 1
+
+
+def _as_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _task_id(payload: Mapping[str, Any], fallback: str = "") -> str:
+    for key in ("task_id", "id", "job_id"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return fallback
+
+
+def project_task_status(
+    payload: Mapping[str, Any] | None,
+    *,
+    fallback_task_id: str = "",
+) -> dict[str, Any]:
+    """Project one task row onto the frozen status snapshot shape.
+
+    Args:
+        payload: A ``JobRecord.to_dict()`` mapping or the Controller's
+            ``GET /api/v1/jobs/{id}`` row.
+        fallback_task_id: Id to use when the row itself carries none.
+
+    Returns:
+        A JSON-safe projection carrying ``schema_version``, ``task_ref``,
+        ``state`` (and the legacy ``status`` alias), ``revision``,
+        ``updated_at`` and the pass-through read-only facts present in the row.
+    """
+    row = dict(payload or {})
+    task_id = _task_id(row, fallback_task_id)
+    attempt = _as_int(row.get("attempt"))
+    if attempt is None:
+        attempt = 1
+    revision = _as_int(row.get("revision"))
+    state = row.get("state") or row.get("status") or "unknown"
+    task_ref: dict[str, Any] = {
+        "task_id": task_id,
+        "job_id": task_id,
+        "attempt": attempt,
+    }
+    release_id = row.get("release_id")
+    if isinstance(release_id, str) and release_id:
+        task_ref["release"] = {
+            "release_id": release_id,
+            "release_digest": row.get("release_digest"),
+        }
+    projection: dict[str, Any] = {
+        "schema_version": STATUS_SCHEMA_VERSION,
+        "task_id": task_id,
+        "job_id": task_id,
+        "task_ref": task_ref,
+        "state": str(state),
+        "status": str(state),
+        "attempt": attempt,
+        "revision": revision,
+        "updated_at": row.get("updated_at"),
+        "workflow": row.get("workflow"),
+        "project_id": row.get("project_id"),
+        "work_dir": row.get("work_dir"),
+    }
+    for key in (
+        "state_reason",
+        "waiting",
+        "artifacts",
+        "error",
+        "plan_digest",
+        "submission_id",
+        "release_id",
+        "release_digest",
+        "name",
+        "task_name",
+    ):
+        if key in row:
+            projection[key] = row[key]
+    return projection
+
+
+def project_operation_status(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Project one prepare-operation row onto its frozen read-only shape."""
+    row = dict(payload or {})
+    operation_id = str(row.get("operation_id") or "")
+    projection: dict[str, Any] = {
+        "schema_version": STATUS_SCHEMA_VERSION,
+        "operation_id": operation_id,
+        "operation_ref": {"kind": "operation", "id": operation_id},
+        "idempotency_key": row.get("idempotency_key"),
+        "job_id": row.get("job_id"),
+        "attempt": row.get("attempt"),
+        "resource_id": row.get("resource_id"),
+        "resource_kind": row.get("resource_kind"),
+        "state": row.get("state"),
+        "availability": row.get("availability"),
+        "freshness": row.get("freshness"),
+        "basis_revision": row.get("basis_revision", row.get("resource_generation", 0)),
+        "expected_revision": row.get("expected_revision", row.get("resource_generation", 0)),
+        "observed_at": row.get("observed_at", row.get("updated_at")),
+        "updated_at": row.get("updated_at"),
+        "error": row.get("error"),
+        "bytes": row.get("bytes"),
+        "sha256": row.get("sha256"),
+        "purpose": (row.get("payload") or {}).get("purpose"),
+    }
+    return projection

@@ -805,7 +805,7 @@ def _contract_digest(manifest: dict[str, Any]) -> str:
 
 
 def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) -> None:
-    assert manifest["contract_version"] == "1.0.0"
+    assert manifest["contract_version"] == "1.1.0"
     delivered = {entry["id"]: entry for entry in manifest["contracts"]}
     b03_ids = {
         "application-api",
@@ -831,9 +831,44 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
         assert sha256_bytes(path.read_bytes()) == entry["sha256"], contract_id
     for entry in manifest["contracts"]:
         if entry["status"] == "delivered":
-            assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a"}
+            assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a", "B06"}
         else:
             assert "sha256" not in entry
+
+
+def test_cross_track_requests_are_recorded_and_owned(manifest: dict[str, Any]) -> None:
+    path = RUNTIME / "cross-track-requests.v1.json"
+    contract = load_json(path)
+    assert contract["schema"] == "acp2.runtime.cross-track-requests.v1"
+    requests = {row["request_id"]: row for row in contract["requests"]}
+    assert {"B-req-01", "B-req-06", "B-req-07"} <= set(requests)
+    for row in contract["requests"]:
+        assert row["from"] in {"A", "B", "C", "integration"}
+        assert row["owner"]
+        assert row["status"] in {"open", "satisfied", "deferred", "not_verified"}
+        assert row["step"]
+        assert row["expected"]
+        assert row["evidence"]
+    assert requests["B-req-01"]["status"] == "satisfied"
+    assert requests["B-req-07"]["status"] == "satisfied"
+    assert requests["B-req-06"]["status"] == "open"
+    delivered = {entry["id"]: entry for entry in manifest["contracts"]}
+    assert delivered["cross-track-requests"]["delivered_by"] == "B06"
+
+
+def test_application_api_v1_1_research_fields_are_additive() -> None:
+    api = load_json(RUNTIME / "application-api.v1.json")
+    assert api["contract_version"] == "1.1.0"
+    submit = api["operations"]["submit"]
+    for name in ("proposal_ref", "plan_digest", "budget"):
+        assert name in submit["request"]["fields"], name
+    assert submit["request"]["fields"]["budget"]["required"] == ["unit", "timeout_s"]
+    for name in ("task_ref", "result", "approval_ref"):
+        assert name in submit["response"]["fields"], name
+    extension = api["mcp_extensions"]["acp.research.v1"]
+    assert extension["negotiated_in"] == "initialize"
+    assert extension["version"] == "1.1.0"
+    assert extension["p1_tool_allowlist_unchanged"] is True
 
 
 def test_manifest_contract_digest_and_self_digest(manifest: dict[str, Any]) -> None:

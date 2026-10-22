@@ -18,7 +18,7 @@ import sqlite3
 import threading
 import urllib.parse
 from collections import Counter, OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -158,6 +158,7 @@ from acp.api.v1_schemas import (
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
+    V1AnalyzeRequest,
     V1EditDiffEntry,
     V1EditDraftResponse,
     V1EditPreviewRequest,
@@ -179,6 +180,8 @@ from acp.api.v1_schemas import (
     V1JobRecordModel,
     V1JobRerunRequest,
     V1JobSpecModel,
+    V1PreflightRequest,
+    V1PrepareRequest,
     V1SamplingFrameResponse,
     V1SoftwareCandidate,
     V1SoftwareDiscoveryResponse,
@@ -2293,6 +2296,17 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             status_code=400,
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        normalize_submit,
+    )
+
+    try:
+        normalize_submit(req.model_dump(exclude_none=True))
+    except ApplicationParamError as exc:
+        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+    if _is_research_launch(req):
+        req.project_id = _research_project(manager, req.project_id)
     req.method = _expand_method_electronic_state(req.method)
     _validate_simple_method_cli(req.workflow, req.method)
     _validate_scan_submission(req.workflow, req.method, req.input)
@@ -2385,11 +2399,31 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         _apply_auto_tag_rules_on_submit(manager, record)
     except Exception:  # noqa: BLE001 — rule errors must never fail submission
         pass
+    attempt = int(getattr(record, "attempt", 1) or 1)
+    release_id = getattr(record, "release_id", None)
+    task_ref: dict[str, Any] = {
+        "task_id": record.id,
+        "job_id": record.id,
+        "attempt": attempt,
+    }
+    if isinstance(release_id, str) and release_id:
+        task_ref["release"] = {
+            "release_id": release_id,
+            "release_digest": getattr(record, "release_digest", None),
+        }
     return V1JobCreatedResponse(
         job_id=record.id,
         status=record.status.value,
         workflow=record.spec.workflow,
         project_id=record.project_id,
+        attempt=attempt,
+        release_id=release_id if isinstance(release_id, str) else None,
+        release_digest=getattr(record, "release_digest", None),
+        task_ref=task_ref,
+        plan_digest=req.plan_digest,
+        proposal_digest=req.proposal_digest,
+        result="accepted",
+        idempotency_key=req.idempotency_key,
     )
 
 
@@ -7711,6 +7745,395 @@ def get_prepared_resource(
         return Response(content=result.data, media_type="application/octet-stream")
     assert result.snapshot is not None
     return JSONResponse(content=result.snapshot.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# B06 additive application-command routes
+# ---------------------------------------------------------------------------
+
+
+def _command_error(
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    params: dict[str, Any] | None = None,
+    retryable: bool | None = None,
+) -> HTTPException:
+    detail: dict[str, Any] = {"code": code, "message": message}
+    if params:
+        detail["params"] = params
+    if retryable is not None:
+        detail["retryable"] = retryable
+    return HTTPException(status_code=status_code, detail=detail)
+
+
+def _plan_digest(payload: Mapping[str, Any]) -> str:
+    from acp_services.entrypoints.application_params import normalize_preflight
+
+    normalized = normalize_preflight(payload)
+    canonical = json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _research_project(manager: JobManager, project_id: str | None) -> str | None:
+    """Resolve a research launch project claim server-side.
+
+    A research launch never trusts a payload project claim blindly: an unknown
+    project is ``access_denied`` with ``rule=project_scope_mismatch``.  Legacy
+    (non-research) submissions keep their historical behaviour.
+    """
+    if project_id is None:
+        return None
+    project = manager.projects.get_project(project_id)
+    if project is None:
+        raise _command_error(
+            403,
+            "access_denied",
+            "project_scope_mismatch",
+            params={"rule": "project_scope_mismatch", "path": "project_id"},
+        )
+    return project_id
+
+
+def _is_research_launch(req: Any) -> bool:
+    return bool(
+        getattr(req, "proposal_ref", None)
+        or getattr(req, "budget", None)
+        or getattr(req, "proposal_digest", None)
+        or getattr(req, "plan_digest", None)
+    )
+
+
+@router.post("/preflight")
+def preflight_request(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
+    """Zero-side-effect feasibility preflight for a would-be submit.
+
+    Runs only the existing synchronous task/method validation.  It creates no
+    task, no attempt, no prepare operation and no reservation, and it never
+    starts science.
+    """
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        normalize_preflight,
+    )
+
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        action="read",
+        resource_id="preflight",
+    )
+    if req.workflow not in ALL_WORKFLOWS:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"Unsupported workflow '{req.workflow}'",
+            params={"field": "workflow", "allowed": list(PUBLIC_WORKFLOWS)},
+        )
+    payload = req.model_dump(exclude_none=True)
+    try:
+        normalize_preflight(payload)
+    except ApplicationParamError as exc:
+        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+    try:
+        _validate_simple_method_cli(req.workflow, req.method)
+        _validate_scan_submission(req.workflow, req.method, req.input)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+        raise _command_error(
+            int(exc.status_code),
+            str(detail.get("code") or "input_invalid"),
+            str(detail.get("message") or exc.detail),
+            params=dict(detail.get("params") or {}),
+        ) from exc
+    manager = _manager(request)
+    project_id = _research_project(manager, req.project_id)
+    spec = JobSpec(
+        workflow=req.workflow,
+        input=req.input,
+        method=req.method,
+        resources=req.resources,
+        project_id=project_id,
+    )
+    reasons: list[dict[str, Any]] = []
+    feasible = True
+    try:
+        validate_execution_request(spec)
+    except ExecutionTargetError as exc:
+        feasible = False
+        reasons.append(
+            {"code": getattr(exc, "code", None) or "execution_mode_conflict", "message": str(exc)}
+        )
+    digest = _plan_digest(payload) if feasible else None
+    return {
+        "schema_version": 1,
+        "feasible": feasible,
+        "reasons": reasons,
+        "plan_digest": digest,
+        "plan_summary": {
+            "workflow": req.workflow,
+            "steps": 1,
+            "project_id": project_id,
+        },
+        "estimate": dict(req.resources or {}),
+        "admission": None,
+        "would_create_task": False,
+        "would_reserve": False,
+    }
+
+
+def _operation_response(record: Any, *, purpose: str) -> dict[str, Any]:
+    contract = record.to_contract()
+    operation_ref = {"kind": "operation", "id": record.operation_id}
+    payload = dict(record.payload or {})
+    response: dict[str, Any] = {
+        "schema_version": 1,
+        "purpose": purpose,
+        "operation_ref": operation_ref,
+        "operation_id": record.operation_id,
+        "idempotency_key": record.idempotency_key,
+        "job_id": record.job_id,
+        "attempt": record.attempt,
+        "resource_id": record.resource_id,
+        "resource_kind": record.resource_kind,
+        "state": contract.state.value,
+        "availability": contract.availability.value,
+        "freshness": contract.freshness.value,
+        "basis_revision": contract.basis_revision,
+        "expected_revision": contract.expected_revision,
+        "observed_at": contract.observed_at,
+        "error": contract.error,
+        "bytes": contract.bytes,
+        "sha256": contract.sha256,
+        "updated_at": record.updated_at,
+        "idempotent_replay": False,
+    }
+    artifact_id = str(payload.get("artifact_id") or "")
+    if artifact_id:
+        response["artifact_ref"] = {
+            "task_id": record.job_id,
+            "attempt": record.attempt,
+            "artifact_id": artifact_id,
+            "generation": record.resource_generation,
+            "digest": record.resource_digest,
+            "relative_path": payload.get("relative_path") or None,
+        }
+    return response
+
+
+@router.post("/jobs/{job_id}/prepare")
+def prepare_artifact(
+    job_id: str,
+    req: V1PrepareRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Explicitly enqueue one persistent prepare operation.
+
+    The operation is durable (``data_operations`` row) and deduplicated by its
+    frozen content identity.  The route never fetches a remote body itself and
+    never starts science; a later explicit read is cache-only.
+    """
+    from acp_services.data.contracts import ResourceKind
+    from acp_services.data.operations import (
+        PrepareOperationConflictError,
+        PrepareOperationError,
+        PrepareRequest,
+    )
+    from acp_services.entrypoints.application_params import ApplicationParamError, normalize_prepare
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: job {job_id!r} does not exist",
+            params={"job_id": job_id},
+            retryable=True,
+        )
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        action="write",
+        resource_id=req.artifact_id or req.purpose,
+    )
+    payload = req.model_dump(exclude_none=True)
+    try:
+        normalized = normalize_prepare(payload)
+    except ApplicationParamError as exc:
+        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+    claimed = normalized.get("job_id") or (normalized.get("task_ref") or {}).get("task_id")
+    if claimed and claimed != job_id:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            "prepare target does not match the job in the path",
+            params={"path_job_id": job_id, "claimed_job_id": claimed},
+        )
+    task_ref = normalized.get("task_ref") or {}
+    attempt = int(normalized.get("attempt") or task_ref.get("attempt") or record.attempt or 1)
+    purpose = str(normalized["purpose"])
+    artifact_id = str(normalized.get("artifact_id") or "")
+    relative_path = str(normalized.get("relative_path") or "")
+    workflow = str(record.spec.workflow or "")
+    if purpose == "artifact":
+        resource_id = artifact_id
+        resource_kind = ResourceKind.ARTIFACT
+    else:
+        resource_id = f"structure-input:{relative_path or 'input.xyz'}"
+        resource_kind = ResourceKind.INPUT
+    identity = f"{job_id}\x1f{attempt}\x1f{resource_id}".encode()
+    resource_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "prepare service is not available",
+            retryable=True,
+        )
+    prepare_request = PrepareRequest(
+        job_id=job_id,
+        attempt=attempt,
+        resource_id=resource_id,
+        resource_kind=resource_kind,
+        resource_digest=resource_digest,
+        permission_scope="local-single",
+        resource_generation=int(normalized.get("generation") or 0),
+        payload={
+            "purpose": purpose,
+            "workflow": workflow,
+            "job_id": job_id,
+            "attempt": attempt,
+            "artifact_id": artifact_id,
+            "relative_path": relative_path,
+        },
+        client_idempotency_key=str(normalized.get("idempotency_key") or ""),
+    )
+    try:
+        operation = service.enqueue(prepare_request)
+    except PrepareOperationConflictError as exc:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "idempotency_key_reuse"},
+        ) from exc
+    except PrepareOperationError as exc:
+        raise _command_error(503, "backend_unavailable", str(exc), retryable=True) from exc
+    return _operation_response(operation, purpose=purpose)
+
+
+@router.get("/operations/{operation_id}")
+def get_operation(operation_id: str, request: Request) -> dict[str, Any]:
+    """Return one persistent prepare-operation projection (query-only)."""
+    manager = _manager(request)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        action="read",
+        resource_id=operation_id,
+    )
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "prepare service is not available",
+            retryable=True,
+        )
+    record = service.get(operation_id)
+    if record is None:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: unknown operation {operation_id!r}",
+            params={"operation_id": operation_id},
+            retryable=True,
+        )
+    purpose = str((record.payload or {}).get("purpose") or "artifact")
+    return _operation_response(record, purpose=purpose)
+
+
+@router.post("/jobs/{job_id}/analyze")
+def analyze_job(
+    job_id: str,
+    req: V1AnalyzeRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Registry-gated explicit analysis; unsupported until A registers it."""
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        normalize_analyze,
+    )
+    from acp_services.runtime.analysis_capabilities import (
+        ANALYSIS_CAPABILITY_IDS,
+        DEFAULT_ANALYSIS_REGISTRY,
+    )
+
+    manager = _manager(request)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        job_id=job_id,
+        action="write",
+        resource_id=req.analysis_id,
+    )
+    payload = req.model_dump(exclude_none=True)
+    try:
+        normalized = normalize_analyze(payload)
+    except ApplicationParamError as exc:
+        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+    if req.analysis_id not in ANALYSIS_CAPABILITY_IDS:
+        raise _command_error(
+            422,
+            "unsupported_capability",
+            f"unknown analysis capability {req.analysis_id!r}",
+            params={"field": "analysis_id", "allowed": list(ANALYSIS_CAPABILITY_IDS)},
+        )
+    capability = DEFAULT_ANALYSIS_REGISTRY.get(req.analysis_id)
+    if capability is None or capability.handler is None:
+        raise _command_error(
+            422,
+            "unsupported_capability",
+            f"analysis capability {req.analysis_id!r} is not registered",
+            params={
+                "analysis_id": req.analysis_id,
+                "registered": capability is not None,
+                "owner": "A",
+                "rule": "analysis_capability_not_registered",
+            },
+        )
+    record = manager.get(job_id)
+    if record is None:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: job {job_id!r} does not exist",
+            params={"job_id": job_id},
+            retryable=True,
+        )
+    try:
+        result = capability.handler(normalized)
+    except NotImplementedError as exc:
+        raise _command_error(
+            422,
+            "unsupported_capability",
+            f"analysis capability {req.analysis_id!r} is not implemented",
+            params={"analysis_id": req.analysis_id, "owner": "B12"},
+        ) from exc
+    return {
+        "schema_version": 1,
+        "analysis_id": req.analysis_id,
+        "started": req.analysis_id == "vibration.compute",
+        "task_ref": None,
+        "operation_ref": None,
+        "result": dict(result),
+        "evidence_refs": [],
+    }
 
 
 __all__ = ["router"]
