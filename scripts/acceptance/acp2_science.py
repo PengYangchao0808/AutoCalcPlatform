@@ -6,7 +6,7 @@ path/budget ``--dry-run`` and the project's ``0=PASS, 1=FAIL, 2=NOT_VERIFIED,
 3=usage`` exit-code contract.  ``--help`` and ``--dry-run`` never create a work
 root, start a job or produce a scenario ``PASS``.
 
-Two scenarios are implemented.  ``science:installed-singlepoint`` calls the
+Three scenarios are implemented.  ``science:installed-singlepoint`` calls the
 public ``cccp.calculation.run_singlepoint`` task core (the single execution
 station) inside an independent native work root and re-parses the native output
 locally.  ``science:validate-artifacts`` consumes an already-prepared,
@@ -14,7 +14,13 @@ platform-authorized optimize/frequency artifact snapshot: it confirms the
 registered ``dsh-optfreq-live`` id against an explicitly supplied platform
 registry record, verifies the snapshot content through
 ``cccp.analysis.research.artifact_manifest`` and runs the frozen
-stationary-point validators.  It never launches a second QC job.
+stationary-point validators.  ``science:validate-da-ts`` audits a B20a-exec
+Diels-Alder candidate snapshot: it confirms the registered ``da-runtime`` and
+``da-research-live`` ids, validates the frozen reactant/product geometry and
+small budget, keeps every candidate selection/rejection reason and the bounded
+search range, and runs the TS/frequency validators.  ``B20a-ready`` is the
+execution interface, never execution evidence.  No scenario launches a second
+QC job.
 
 The remaining scenarios record ``NOT_VERIFIED`` for their own todo.  The
 harness never starts a controller, scheduler, job or production run root, and
@@ -57,6 +63,7 @@ import os
 import re
 import shutil
 import sys
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -83,12 +90,24 @@ _DIGEST_PATTERN = r"^(?:sha256:)?[0-9a-f]{64}$"
 
 SINGLEPOINT_ALIAS = "installed-singlepoint"
 ARTIFACT_ALIAS = "validate-artifacts"
+DA_TS_ALIAS = "validate-da-ts"
 H2_HANDOFF_RELPATH = "docs/reference/next-change/acp2-contracts/science/handoff-H2.json"
 PRODUCTION_RUN_ROOTS = ("/var/lib/acp/runs",)
 
 #: The platform registry is owned by the platform and is not published to A.
 #: A supplies only the lookup; it never invents the id or a registry row.
 REGISTERED_OPT_FREQ_RUN_ID = "dsh-optfreq-live"
+DA_RUNTIME_RUN_ID = "da-runtime"
+DA_RESEARCH_LIVE_RUN_ID = "da-research-live"
+DA_REQUIRED_REGISTRY_IDS = (DA_RUNTIME_RUN_ID, DA_RESEARCH_LIVE_RUN_ID)
+DA_EXECUTION_ARTIFACT_ID = "B20a-exec:da-execution-artifacts"
+DA_EXECUTION_SUB_DELIVERABLE = "22b"
+DA_EXECUTION_SEMANTIC_CANDIDATE = "B.B20a.exec"
+DA_READY_ARTIFACT_ID = "B20a-ready:da-execution-interface-preflight"
+DA_CANDIDATE_SCHEMA = "acp2.science.da-candidate-selection"
+DA_STARTING_STRUCTURE_SOURCES = frozenset(
+    {"user_input", "frozen_known_candidate", "generated_candidate"}
+)
 PLATFORM_REGISTRY_SCHEMA = "acp2.science.platform-registry"
 CONSTRUCTED_SNAPSHOT_SCHEMA = "acp2.science.constructed-snapshot"
 FIXTURE_READ_ROOT_TOKEN = "@fixture"
@@ -813,16 +832,33 @@ def _registry_entry_ids(entries: list[Any]) -> list[str]:
     return ids
 
 
-def _platform_registry_view(path: str | None, document: Any) -> dict[str, Any]:
-    """Confirm the registered run id against an explicitly supplied registry."""
+def _platform_registry_view(
+    path: str | None,
+    document: Any,
+    *,
+    required_ids: tuple[str, ...] = (REGISTERED_OPT_FREQ_RUN_ID,),
+) -> dict[str, Any]:
+    """Confirm the registered run id(s) against an explicitly supplied registry."""
+    required = tuple(dict.fromkeys(required_ids))
     if not path:
+        gap = PLATFORM_REGISTRY_GAP
+        if required != (REGISTERED_OPT_FREQ_RUN_ID,):
+            gap = (
+                "platform registry not supplied: pass --platform-registry <path> for the "
+                "platform-provided registry record so the registered ids "
+                f"{', '.join(repr(item) for item in required)} can be confirmed; the platform "
+                "registry is not published to track A and the harness never invents the ids or "
+                "a row"
+            )
         return {
             "status": "MISSING",
             "registered": False,
             "constructed": None,
             "path": None,
             "ids": [],
-            "reasons": [PLATFORM_REGISTRY_GAP],
+            "required_ids": list(required),
+            "registered_ids": [],
+            "reasons": [gap],
         }
     if not isinstance(document, (Mapping, list)):
         return {
@@ -831,6 +867,8 @@ def _platform_registry_view(path: str | None, document: Any) -> dict[str, Any]:
             "constructed": None,
             "path": path,
             "ids": [],
+            "required_ids": list(required),
+            "registered_ids": [],
             "reasons": ["platform registry must be a JSON object or list"],
         }
     entries = _registry_entries(document)
@@ -841,6 +879,8 @@ def _platform_registry_view(path: str | None, document: Any) -> dict[str, Any]:
             "constructed": None,
             "path": path,
             "ids": [],
+            "required_ids": list(required),
+            "registered_ids": [],
             "reasons": ["platform registry has no entries/runs/records list and no single run id"],
         }
     ids = _registry_entry_ids(entries)
@@ -848,11 +888,13 @@ def _platform_registry_view(path: str | None, document: Any) -> dict[str, Any]:
         (isinstance(document, Mapping) and document.get("constructed") is True)
         or any(isinstance(entry, Mapping) and entry.get("constructed") is True for entry in entries)
     )
-    registered = REGISTERED_OPT_FREQ_RUN_ID in ids
+    registered_ids = [item for item in required if item in ids]
+    missing_ids = [item for item in required if item not in ids]
+    registered = not missing_ids
     reasons: list[str] = []
-    if not registered:
+    for missing in missing_ids:
         reasons.append(
-            f"registered id {REGISTERED_OPT_FREQ_RUN_ID!r} is absent from the supplied "
+            f"registered id {missing!r} is absent from the supplied "
             f"platform registry ({path}); ids seen: {sorted(ids)}"
         )
     return {
@@ -861,6 +903,8 @@ def _platform_registry_view(path: str | None, document: Any) -> dict[str, Any]:
         "constructed": constructed,
         "path": path,
         "ids": ids,
+        "required_ids": list(required),
+        "registered_ids": registered_ids,
         "reasons": reasons,
     }
 
@@ -3149,6 +3193,1453 @@ def _execute_installed_singlepoint(
     )
 
 
+# ── A-17: Diels-Alder transition-state scenario ────────────────────────────
+
+
+def _parse_xyz(path: Path) -> tuple[list[str], list[tuple[float, float, float]]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        raise ValueError(f"{path.name} is empty")
+    atom_count = int(lines[0].strip())
+    atom_lines = [line for line in lines[2:] if line.strip()]
+    if len(atom_lines) != atom_count:
+        raise ValueError(f"{path.name}: declared {atom_count} atoms but found {len(atom_lines)}")
+    symbols: list[str] = []
+    coordinates: list[tuple[float, float, float]] = []
+    for line in atom_lines:
+        fields = line.split()
+        if len(fields) != 4:
+            raise ValueError(f"{path.name}: malformed atom line {line!r}")
+        symbols.append(fields[0])
+        values = tuple(float(value) for value in fields[1:])
+        if len(values) != 3 or any(not math.isfinite(value) for value in values):
+            raise ValueError(f"{path.name}: atom coordinates must be finite 3-vectors")
+        coordinates.append((values[0], values[1], values[2]))
+    return symbols, coordinates
+
+
+def _formula_counts(formula: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    position = 0
+    for match in re.finditer(r"([A-Z][a-z]?)(\d*)", formula):
+        if match.start() != position:
+            raise ValueError(f"malformed formula {formula!r}")
+        symbol, raw_count = match.group(1), match.group(2)
+        counts[symbol] = counts.get(symbol, 0) + (int(raw_count) if raw_count else 1)
+        position = match.end()
+    if position != len(formula) or not counts:
+        raise ValueError(f"malformed formula {formula!r}")
+    return counts
+
+
+def _validate_da_fixture(fixture_path: Path) -> dict[str, Any]:
+    """Validate the frozen reactant/product geometry and the small budget.
+
+    This is the first gate of the DA scenario: a contradictory fixture is a
+    scenario FAIL, never a scientific inconclusive.  It reuses the public
+    reaction/question contracts; it never runs QC and never substitutes a
+    different structure.
+    """
+    from cccp.analysis.research.question import Question
+    from cccp.analysis.research.reaction import Reaction
+    from cccp.analysis.research.validators import (
+        ATOM_COUNT_TOLERANCE,
+        COORDINATE_ABS_TOLERANCE_ANGSTROM,
+        IMAGINARY_MODE_THRESHOLD_CM1,
+        LOW_FREQUENCY_THRESHOLD_CM1,
+        VALIDATOR_VERSION,
+    )
+
+    checks: list[dict[str, Any]] = []
+    contradictions: list[str] = []
+    gaps: list[str] = []
+
+    def check(name: str, status: str, detail: str | None = None) -> None:
+        checks.append({"name": name, "status": status, "detail": detail})
+
+    try:
+        manifest = _load_json(fixture_path)
+    except _InvalidInputError as exc:
+        return {
+            "status": "FAIL",
+            "checks": [{"name": "fixture_manifest", "status": "FAIL", "detail": str(exc)}],
+            "contradictions": [str(exc)],
+            "gaps": [],
+            "geometry": None,
+            "budget": None,
+        }
+    if not isinstance(manifest, Mapping):
+        contradictions.append("fixture manifest must be a JSON object")
+        check("fixture_manifest", "FAIL", contradictions[-1])
+        return {
+            "status": "FAIL",
+            "checks": checks,
+            "contradictions": contradictions,
+            "gaps": gaps,
+            "geometry": None,
+            "budget": None,
+        }
+    if manifest.get("schema") != "acp2.science.fixture-manifest":
+        contradictions.append("fixture schema must be acp2.science.fixture-manifest")
+    if manifest.get("task_kind") != "diels_alder":
+        contradictions.append("fixture task_kind must be 'diels_alder'")
+    if manifest.get("constructed") is not True:
+        contradictions.append("the frozen DA fixture must be labelled constructed=true")
+    if manifest.get("real_run") is not False:
+        contradictions.append("the frozen DA fixture must record real_run=false")
+    check(
+        "fixture_identity",
+        "FAIL" if contradictions else "PASS",
+        "; ".join(contradictions) or None,
+    )
+
+    fixture_files = manifest.get("fixture_files")
+    if not isinstance(fixture_files, Mapping):
+        contradictions.append("fixture_files must be a JSON object")
+        fixture_files = {}
+    file_digests = manifest.get("file_digests")
+    if not isinstance(file_digests, Mapping):
+        contradictions.append("file_digests must be a JSON object")
+        file_digests = {}
+    base = fixture_path.parent
+    file_paths: dict[str, Path] = {}
+    for label, relative in fixture_files.items():
+        if not isinstance(relative, str) or not relative:
+            contradictions.append(f"fixture_files.{label} must be a relative path")
+            continue
+        path = base / relative
+        file_paths[str(label)] = path
+        if not path.is_file():
+            contradictions.append(f"fixture file {relative!r} is absent")
+            continue
+        expected = file_digests.get(relative)
+        if not isinstance(expected, str):
+            contradictions.append(f"file_digests has no digest for {relative!r}")
+            continue
+        actual = _sha256(path)
+        if actual != expected:
+            contradictions.append(f"{relative}: digest {actual} differs from frozen {expected}")
+    check(
+        "fixture_digests",
+        "FAIL" if contradictions else "PASS",
+        "; ".join(contradictions) or None,
+    )
+
+    reaction = None
+    reaction_path = file_paths.get("reaction")
+    if reaction_path is not None and reaction_path.is_file():
+        try:
+            reaction = Reaction.from_dict(_load_json(reaction_path))
+        except Exception as exc:  # noqa: BLE001 - contract errors are data
+            contradictions.append(f"reaction.json rejected by the v1 contract: {exc}")
+    question_path = file_paths.get("question_set")
+    if question_path is not None and question_path.is_file():
+        try:
+            question_document = _load_json(question_path)
+            questions = question_document.get("questions")
+            if not isinstance(questions, list) or not questions:
+                contradictions.append("question.json must carry a non-empty questions list")
+            else:
+                for index, payload in enumerate(questions):
+                    Question.from_dict(payload)
+        except Exception as exc:  # noqa: BLE001 - contract errors are data
+            contradictions.append(f"question.json rejected by the v1 contract: {exc}")
+    check(
+        "reaction_question_contracts",
+        "FAIL" if contradictions else "PASS",
+        "; ".join(contradictions) or None,
+    )
+
+    geometry: dict[str, Any] | None = None
+    reactants_path = file_paths.get("reactants")
+    product_path = file_paths.get("product")
+    if reaction is not None and reactants_path is not None and product_path is not None:
+        try:
+            left_symbols = [symbol for structure in reaction.left for symbol in structure.elements]
+            right_symbols = [
+                symbol for structure in reaction.right for symbol in structure.elements
+            ]
+            reactant_symbols, reactant_coordinates = _parse_xyz(reactants_path)
+            product_symbols, product_coordinates = _parse_xyz(product_path)
+            if reactant_symbols != left_symbols:
+                contradictions.append(
+                    "reactants.xyz atom order differs from the declared left elements order"
+                )
+            if product_symbols != right_symbols:
+                contradictions.append(
+                    "product.xyz atom order differs from the declared right elements order"
+                )
+            if len(reactant_coordinates) != len(reactant_symbols):
+                contradictions.append("reactants.xyz atom count is inconsistent")
+            if len(product_coordinates) != len(product_symbols):
+                contradictions.append("product.xyz atom count is inconsistent")
+            left_formula: dict[str, int] = {}
+            for structure in reaction.left:
+                for symbol, count in _formula_counts(structure.formula).items():
+                    left_formula[symbol] = left_formula.get(symbol, 0) + count
+                if _formula_counts(structure.formula) != _formula_counts(
+                    "".join(structure.elements)
+                ):
+                    contradictions.append(
+                        f"{structure.structure_id}: formula disagrees with its elements"
+                    )
+            right_formula: dict[str, int] = {}
+            for structure in reaction.right:
+                for symbol, count in _formula_counts(structure.formula).items():
+                    right_formula[symbol] = right_formula.get(symbol, 0) + count
+                if _formula_counts(structure.formula) != _formula_counts(
+                    "".join(structure.elements)
+                ):
+                    contradictions.append(
+                        f"{structure.structure_id}: formula disagrees with its elements"
+                    )
+            if left_formula != right_formula:
+                contradictions.append(
+                    f"elements are not conserved: {left_formula} vs {right_formula}"
+                )
+            left_charge = sum(int(structure.charge) for structure in reaction.left)
+            right_charge = sum(int(structure.charge) for structure in reaction.right)
+            if left_charge != right_charge:
+                contradictions.append(
+                    f"net charge is not conserved: left={left_charge} right={right_charge}"
+                )
+            mapping = reaction.atom_mapping.left_to_right
+            if len(set(mapping)) != len(mapping) or len(set(mapping.values())) != len(mapping):
+                contradictions.append("the reaction atom mapping is not one-to-one")
+            geometry = {
+                "reactant_atoms": len(reactant_symbols),
+                "product_atoms": len(product_symbols),
+                "reactant_elements": dict(Counter(reactant_symbols)),
+                "product_elements": dict(Counter(product_symbols)),
+                "net_charge": left_charge,
+                "atom_order_matches_declared": (
+                    reactant_symbols == left_symbols and product_symbols == right_symbols
+                ),
+            }
+        except (OSError, ValueError) as exc:
+            contradictions.append(f"reactant/product geometry rejected: {exc}")
+    check(
+        "reactant_product_geometry",
+        "FAIL" if contradictions else "PASS",
+        "; ".join(contradictions) or None,
+    )
+
+    budget: dict[str, Any] | None = None
+    caps = manifest.get("candidate_cap")
+    resource_budget = manifest.get("resource_budget")
+    run_spec = manifest.get("run_spec")
+    expected_caps = {
+        "max_candidate_paths": 1,
+        "max_ts_candidates": 1,
+        "max_conformers_per_endpoint": 1,
+    }
+    if not isinstance(caps, Mapping):
+        contradictions.append("candidate_cap must be a JSON object")
+        caps = {}
+    for key, expected in expected_caps.items():
+        if caps.get(key) != expected:
+            contradictions.append(f"candidate_cap.{key} must be {expected}")
+    if not isinstance(resource_budget, Mapping):
+        contradictions.append("resource_budget must be a JSON object")
+        resource_budget = {}
+    step_caps = resource_budget.get("step_caps")
+    if not isinstance(step_caps, Mapping):
+        contradictions.append("resource_budget.step_caps must be a JSON object")
+        step_caps = {}
+    expected_step_caps = {
+        "max_attempts_per_step": 2,
+        "max_bsub": 1,
+        "max_candidate_paths": 1,
+        "max_conformers": 1,
+        "max_qc_invocations": 10,
+        "max_task_refs": 10,
+        "max_ts_candidates": 1,
+    }
+    for key, expected in expected_step_caps.items():
+        if step_caps.get(key) != expected:
+            contradictions.append(f"resource_budget.step_caps.{key} must be {expected}")
+    if resource_budget.get("budget_timing_basis") != "unmeasured":
+        contradictions.append(
+            "resource_budget.budget_timing_basis must remain 'unmeasured' before a real run"
+        )
+    if not resource_budget.get("h4_open_consequence"):
+        contradictions.append("resource_budget.h4_open_consequence must state the H4 consequence")
+    if not isinstance(run_spec, Mapping):
+        contradictions.append("run_spec must be a JSON object")
+        run_spec = {}
+    science_seconds = run_spec.get("science_deadline_seconds")
+    export_seconds = run_spec.get("export_budget_seconds")
+    aggregate_seconds = run_spec.get("aggregate_budget_seconds")
+    if (
+        not isinstance(science_seconds, int)
+        or not isinstance(export_seconds, int)
+        or not isinstance(aggregate_seconds, int)
+        or aggregate_seconds != science_seconds + export_seconds
+    ):
+        contradictions.append("run_spec deadlines must satisfy aggregate = science + export")
+    if not run_spec.get("started_at"):
+        contradictions.append("run_spec.started_at must be frozen")
+    queue = run_spec.get("queue_accounting")
+    if (
+        not isinstance(queue, Mapping)
+        or queue.get("queue_wait_counts_toward_total_wall_time") is not True
+    ):
+        contradictions.append("run_spec.queue_accounting must count queue wait in wall time")
+    export_window = run_spec.get("export_window_rule")
+    if (
+        not isinstance(export_window, Mapping)
+        or export_window.get("dispatching_allowed") is not False
+    ):
+        contradictions.append("run_spec.export_window_rule must forbid new dispatch")
+    in_flight = run_spec.get("in_flight_stop_rule")
+    if (
+        not isinstance(in_flight, Mapping)
+        or in_flight.get("requires_stop_confirmation") is not True
+    ):
+        contradictions.append("run_spec.in_flight_stop_rule must require stop confirmation")
+    budget = {
+        "candidate_cap": dict(caps),
+        "step_caps": dict(step_caps),
+        "science_deadline_seconds": science_seconds,
+        "export_budget_seconds": export_seconds,
+        "aggregate_budget_seconds": aggregate_seconds,
+        "started_at": run_spec.get("started_at"),
+        "budget_timing_basis": resource_budget.get("budget_timing_basis"),
+        "small_budget": (
+            step_caps.get("max_qc_invocations") == 10
+            and step_caps.get("max_bsub") == 1
+            and step_caps.get("max_attempts_per_step") == 2
+        ),
+    }
+    check(
+        "frozen_small_budget",
+        "FAIL" if contradictions else "PASS",
+        "; ".join(contradictions) or None,
+    )
+
+    scientific = manifest.get("science_parameters")
+    if not isinstance(scientific, Mapping):
+        contradictions.append("science_parameters must be a JSON object")
+        scientific = {}
+    if scientific.get("method") != "wB97X-D4":
+        contradictions.append("science_parameters.method must be wB97X-D4")
+    if scientific.get("basis") != "def2-TZVP":
+        contradictions.append("science_parameters.basis must be def2-TZVP")
+    if scientific.get("charge") != 0 or scientific.get("multiplicity") != 1:
+        contradictions.append("science_parameters must freeze charge=0 multiplicity=1")
+    state = scientific.get("electronic_state")
+    if not isinstance(state, Mapping):
+        contradictions.append("science_parameters.electronic_state must be a JSON object")
+        state = {}
+    if (
+        state.get("charge") != 0
+        or state.get("target_multiplicity") != 1
+        or not state.get("state_id")
+    ):
+        contradictions.append(
+            "science_parameters.electronic_state must declare charge 0, "
+            "multiplicity 1 and a state_id"
+        )
+    if scientific.get("standard_state") != "1_bar_ideal_gas":
+        contradictions.append("science_parameters.standard_state must be 1_bar_ideal_gas")
+    if scientific.get("temperature_k") != 298.15:
+        contradictions.append("science_parameters.temperature_k must be 298.15")
+    if scientific.get("pressure_pa") != 100000.0:
+        contradictions.append("science_parameters.pressure_pa must be 100000.0")
+    tolerances = manifest.get("tolerances")
+    if not isinstance(tolerances, Mapping):
+        contradictions.append("tolerances must be a JSON object")
+        tolerances = {}
+    expected_tolerances = {
+        "atom_count_tolerance": ATOM_COUNT_TOLERANCE,
+        "coordinate_abs_tolerance_angstrom": COORDINATE_ABS_TOLERANCE_ANGSTROM,
+        "imaginary_mode_threshold_cm1": IMAGINARY_MODE_THRESHOLD_CM1,
+        "low_frequency_threshold_cm1": LOW_FREQUENCY_THRESHOLD_CM1,
+        "validator_version": VALIDATOR_VERSION,
+    }
+    for key, expected in expected_tolerances.items():
+        if tolerances.get(key) != expected:
+            contradictions.append(f"tolerances.{key} must be {expected!r}")
+    check(
+        "frozen_science_identity",
+        "FAIL" if contradictions else "PASS",
+        "; ".join(contradictions) or None,
+    )
+
+    return {
+        "status": "FAIL" if contradictions else "PASS",
+        "checks": checks,
+        "contradictions": contradictions,
+        "gaps": gaps,
+        "geometry": geometry,
+        "budget": budget,
+        "science_parameters": {
+            "method": scientific.get("method"),
+            "basis": scientific.get("basis"),
+            "charge": scientific.get("charge"),
+            "multiplicity": scientific.get("multiplicity"),
+            "electronic_state": dict(state),
+            "standard_state": scientific.get("standard_state"),
+            "temperature_k": scientific.get("temperature_k"),
+            "pressure_pa": scientific.get("pressure_pa"),
+        },
+        "tolerances": dict(tolerances),
+    }
+
+
+def _da_execution_provenance(platform: Any, binding_attempt: Any) -> dict[str, Any]:
+    """Check that the snapshot really points at B20a-exec execution evidence.
+
+    ``B20a-ready`` is only the execution interface/preflight.  It is never
+    accepted as execution evidence; citing it as such is a structural FAIL, not
+    a missing-evidence NOT_VERIFIED.
+    """
+    reasons: list[str] = []
+    contradictions: list[str] = []
+    execution = platform.get("execution") if isinstance(platform, Mapping) else None
+    if not isinstance(execution, Mapping):
+        return {
+            "status": "NOT_VERIFIED",
+            "reasons": [
+                "snapshot.platform.execution is missing: no B20a-exec artifact id or "
+                "semantic candidate is published; B20a-ready is not execution evidence"
+            ],
+            "contradictions": [],
+            "producer": None,
+            "artifact_id": None,
+            "semantic_candidate": None,
+            "attempt": None,
+            "step_receipts": [],
+            "b20a_ready": None,
+        }
+    producer = execution.get("producer")
+    artifact_id = execution.get("artifact_id")
+    sub_deliverable = execution.get("sub_deliverable")
+    semantic_candidate = execution.get("semantic_candidate")
+    attempt = execution.get("attempt")
+    ready = execution.get("b20a_ready")
+    if ready is not None and not isinstance(ready, Mapping):
+        reasons.append("platform.execution.b20a_ready must be a JSON object when present")
+        ready = None
+    if producer == "B20a-ready":
+        contradictions.append("B20a-ready is the execution interface, not execution evidence")
+    if isinstance(artifact_id, str) and artifact_id.startswith("B20a-ready"):
+        contradictions.append("the execution artifact_id cites B20a-ready, not B20a-exec")
+    if isinstance(ready, Mapping) and ready.get("cited_as_execution_evidence") is True:
+        contradictions.append(
+            "platform.execution.b20a_ready is cited as execution evidence; it is only preflight"
+        )
+    if producer != "B20a-exec":
+        reasons.append("platform.execution.producer must be 'B20a-exec'")
+    if artifact_id != DA_EXECUTION_ARTIFACT_ID:
+        reasons.append(f"platform.execution.artifact_id must be {DA_EXECUTION_ARTIFACT_ID!r}")
+    if semantic_candidate != DA_EXECUTION_SEMANTIC_CANDIDATE:
+        reasons.append(
+            f"platform.execution.semantic_candidate must be {DA_EXECUTION_SEMANTIC_CANDIDATE!r}"
+        )
+    if isinstance(attempt, bool) or not isinstance(attempt, int):
+        reasons.append("platform.execution.attempt must be an integer")
+    elif binding_attempt is not None and attempt != binding_attempt:
+        contradictions.append(
+            f"B20a-exec attempt {attempt} differs from the current snapshot attempt "
+            f"{binding_attempt}; old-attempt artifacts are rejected"
+        )
+    receipts = execution.get("step_receipts")
+    if not isinstance(receipts, list) or not receipts:
+        reasons.append("platform.execution.step_receipts must be a non-empty list")
+        receipts = []
+    normalized_receipts: list[dict[str, Any]] = []
+    for index, receipt in enumerate(receipts):
+        if not isinstance(receipt, Mapping):
+            reasons.append(f"platform.execution.step_receipts[{index}] must be a JSON object")
+            continue
+        step_id = receipt.get("step_id")
+        status = receipt.get("status")
+        receipt_id = receipt.get("receipt_id")
+        if not isinstance(step_id, str) or not step_id:
+            reasons.append(f"platform.execution.step_receipts[{index}].step_id is missing")
+        if not isinstance(receipt_id, str) or not receipt_id:
+            reasons.append(f"platform.execution.step_receipts[{index}].receipt_id is missing")
+        if status != "completed":
+            contradictions.append(
+                f"B20a-exec step receipt {step_id!r} has status {status!r}, not 'completed'"
+            )
+        normalized_receipts.append(dict(receipt))
+    status = "FAIL" if contradictions else "NOT_VERIFIED" if reasons else "PASS"
+    return {
+        "status": status,
+        "reasons": reasons,
+        "contradictions": contradictions,
+        "producer": producer,
+        "artifact_id": artifact_id,
+        "sub_deliverable": sub_deliverable,
+        "semantic_candidate": semantic_candidate,
+        "attempt": attempt,
+        "step_receipts": normalized_receipts,
+        "b20a_ready": dict(ready) if isinstance(ready, Mapping) else None,
+        "b20a_ready_cited_as_execution_evidence": bool(
+            isinstance(ready, Mapping) and ready.get("cited_as_execution_evidence") is True
+        ),
+    }
+
+
+def _da_candidate_document(
+    snapshot: Any,
+) -> tuple[dict[str, Any] | None, list[str], list[str]]:
+    documents: list[dict[str, Any]] = []
+    gaps: list[str] = []
+    contradictions: list[str] = []
+    for artifact in snapshot.artifacts:
+        if artifact.role != "provenance":
+            continue
+        try:
+            document = json.loads(artifact.resolved_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            contradictions.append(f"{artifact.relative_path}: unreadable provenance JSON: {exc}")
+            continue
+        if isinstance(document, Mapping) and document.get("schema") == DA_CANDIDATE_SCHEMA:
+            documents.append(dict(document))
+    if not documents:
+        gaps.append(
+            f"snapshot carries no B20a-exec candidate-selection artifact ({DA_CANDIDATE_SCHEMA!r})"
+        )
+    elif len(documents) > 1:
+        contradictions.append(
+            f"snapshot carries {len(documents)} candidate-selection artifacts; "
+            "exactly one is required"
+        )
+    return (documents[0] if len(documents) == 1 else None), gaps, contradictions
+
+
+def _da_candidate_validation(
+    document: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    binding_attempt: Any,
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    contradictions: list[str] = []
+    attempt = document.get("attempt")
+    if isinstance(attempt, bool) or not isinstance(attempt, int):
+        reasons.append("candidate-selection attempt must be an integer")
+    elif binding_attempt is not None and attempt != binding_attempt:
+        contradictions.append(
+            f"candidate-selection attempt {attempt} differs from the current snapshot "
+            f"attempt {binding_attempt}; old-attempt selection records are rejected"
+        )
+
+    source = document.get("starting_structure_source")
+    if source not in DA_STARTING_STRUCTURE_SOURCES:
+        reasons.append(
+            f"starting_structure_source must be one of {sorted(DA_STARTING_STRUCTURE_SOURCES)}"
+        )
+    selection_status = document.get("selection_status")
+    selection_reason = document.get("selection_reason")
+    if not isinstance(selection_reason, str) or not selection_reason.strip():
+        reasons.append("candidate-selection selection_reason must be a non-empty string")
+
+    search_range = document.get("search_range")
+    if not isinstance(search_range, Mapping):
+        reasons.append("candidate-selection search_range must be a bounded JSON object")
+        search_range_view: dict[str, Any] = {}
+    else:
+        search_range_view = dict(search_range)
+        caps = manifest.get("candidate_cap")
+        if not isinstance(caps, Mapping):
+            caps = {}
+        for key in ("max_candidate_paths", "max_ts_candidates", "max_conformers_per_endpoint"):
+            value = search_range.get(key)
+            cap = caps.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                reasons.append(f"search_range.{key} must be a positive integer")
+            elif isinstance(cap, int) and value > cap:
+                contradictions.append(f"search_range.{key}={value} exceeds the frozen cap {cap}")
+        if search_range.get("max_candidate_paths") != 1:
+            reasons.append("search_range.max_candidate_paths must stay at the frozen single path")
+        if search_range.get("max_ts_candidates") != 1:
+            reasons.append(
+                "search_range.max_ts_candidates must stay at the frozen single TS candidate"
+            )
+        if search_range.get("max_conformers_per_endpoint") != 1:
+            reasons.append(
+                "search_range.max_conformers_per_endpoint must stay at the frozen single conformer"
+            )
+
+    raw_candidates = document.get("candidates")
+    if not isinstance(raw_candidates, list):
+        reasons.append("candidate-selection candidates must be a list")
+        raw_candidates = []
+    candidates: list[dict[str, Any]] = []
+    selected: list[dict[str, Any]] = []
+    for index, candidate in enumerate(raw_candidates):
+        if not isinstance(candidate, Mapping):
+            contradictions.append(f"candidates[{index}] must be a JSON object")
+            continue
+        candidate_id = candidate.get("candidate_id")
+        candidate_source = candidate.get("source")
+        candidate_status = candidate.get("status")
+        candidate_reason = candidate.get("reason")
+        if not isinstance(candidate_id, str) or not candidate_id:
+            contradictions.append(f"candidates[{index}].candidate_id is missing")
+        if candidate_source not in DA_STARTING_STRUCTURE_SOURCES:
+            contradictions.append(
+                f"candidates[{index}].source must be one of {sorted(DA_STARTING_STRUCTURE_SOURCES)}"
+            )
+        if candidate_status not in {"selected", "rejected"}:
+            contradictions.append(f"candidates[{index}].status must be 'selected' or 'rejected'")
+        if not isinstance(candidate_reason, str) or not candidate_reason.strip():
+            contradictions.append(
+                f"candidates[{index}].reason must record the selection/rejection reason"
+            )
+        candidates.append(dict(candidate))
+        if candidate_status == "selected":
+            selected.append(dict(candidate))
+    if len(selected) > 1:
+        contradictions.append("more than one candidate is marked selected")
+    selected_id = document.get("selected_candidate_id")
+    if selected:
+        if selected_id != selected[0].get("candidate_id"):
+            contradictions.append(
+                "selected_candidate_id does not match the selected candidate record"
+            )
+        if source != selected[0].get("source"):
+            contradictions.append(
+                "starting_structure_source does not match the selected candidate source"
+            )
+    elif selected_id is not None:
+        contradictions.append("selected_candidate_id is set but no candidate is marked selected")
+    if selection_status == "selected" and not selected:
+        contradictions.append("selection_status is 'selected' but no candidate is selected")
+    if selection_status == "no_candidate" and selected:
+        contradictions.append(
+            "selection_status is 'no_candidate' but a candidate is marked selected"
+        )
+    if selection_status not in {"selected", "no_candidate"}:
+        if selected:
+            contradictions.append(
+                f"selection_status {selection_status!r} disagrees with a selected candidate"
+            )
+        elif selection_status != "no_candidate":
+            reasons.append("selection_status must be 'selected' or 'no_candidate'")
+
+    search_claim = document.get("search_capability_claim", "not_claimed")
+    if source in {"user_input", "frozen_known_candidate"} and search_claim != "not_claimed":
+        contradictions.append(
+            "a user-input or frozen-known starting structure must not claim "
+            "research search capability"
+        )
+    if not selected and search_claim == "supported":
+        contradictions.append(
+            "no selected candidate can support a research search capability claim"
+        )
+
+    mapped_mode = document.get("mapped_mode")
+    if mapped_mode is not None and not isinstance(mapped_mode, Mapping):
+        contradictions.append("mapped_mode must be a JSON object or null")
+    provenance: dict[str, Any] = {}
+    if selected:
+        for key in (
+            "ts_optimize_provenance",
+            "ts_optimize_provenance_sha256",
+            "ts_frequency_provenance",
+            "ts_frequency_provenance_sha256",
+        ):
+            value = document.get(key)
+            if not isinstance(value, str) or not value:
+                reasons.append(f"selected candidate record requires {key}")
+            provenance[key] = value
+    status = "FAIL" if contradictions else "NOT_VERIFIED" if reasons else "PASS"
+    return {
+        "status": status,
+        "reasons": reasons,
+        "contradictions": contradictions,
+        "attempt": attempt,
+        "starting_structure_source": source,
+        "selection_status": selection_status,
+        "selection_reason": selection_reason,
+        "search_range": search_range_view,
+        "candidates": candidates,
+        "selected_candidate_id": selected_id if selected else None,
+        "selected_candidate": selected[0] if selected else None,
+        "mapped_mode": dict(mapped_mode) if isinstance(mapped_mode, Mapping) else None,
+        "search_capability_claim": search_claim,
+        "provenance": provenance,
+        "raw_document": dict(document),
+    }
+
+
+def _da_named_result(
+    snapshot: Any,
+    relative_path: Any,
+    expected_sha256: Any,
+) -> tuple[Any | None, dict[str, Any] | None, list[str], list[str]]:
+    from cccp.calculation.results import TaskResult
+
+    gaps: list[str] = []
+    contradictions: list[str] = []
+    if not isinstance(relative_path, str) or not relative_path:
+        return None, None, ["selected candidate carries no provenance path"], contradictions
+    artifact = next(
+        (item for item in snapshot.artifacts if item.relative_path == relative_path),
+        None,
+    )
+    if artifact is None:
+        return (
+            None,
+            None,
+            [f"snapshot declares no artifact at {relative_path!r}"],
+            contradictions,
+        )
+    if isinstance(expected_sha256, str) and expected_sha256:
+        normalized = (
+            expected_sha256
+            if expected_sha256.startswith("sha256:")
+            else (f"sha256:{expected_sha256}")
+        )
+        if normalized != artifact.declared_sha256:
+            contradictions.append(
+                f"{relative_path}: candidate-selection digest {normalized} differs from the "
+                f"snapshot digest {artifact.declared_sha256}"
+            )
+    try:
+        document = json.loads(artifact.resolved_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        contradictions.append(f"{relative_path}: unreadable TaskResult JSON: {exc}")
+        return None, artifact, gaps, contradictions
+    try:
+        result = TaskResult.from_dict(document)
+    except (TypeError, ValueError) as exc:
+        contradictions.append(f"{relative_path}: invalid TaskResult document: {exc}")
+        return None, artifact, gaps, contradictions
+    return result, artifact, gaps, contradictions
+
+
+def _da_optimized_geometry_check(snapshot: Any, optimize_result: Any) -> dict[str, Any]:
+    from cccp.analysis.research.validators import COORDINATE_ABS_TOLERANCE_ANGSTROM
+
+    gaps: list[str] = []
+    contradictions: list[str] = []
+    artifact = next(
+        (item for item in snapshot.artifacts if item.role == "optimized_structure"),
+        None,
+    )
+    if artifact is None:
+        gaps.append("snapshot declares no optimized_structure artifact")
+    elif artifact.declared_sha256 != snapshot.science_identity.structure_sha256:
+        contradictions.append(
+            "the optimized_structure artifact is not the snapshot scientific_identity structure"
+        )
+    else:
+        try:
+            symbols, coordinates = _parse_xyz(artifact.resolved_path)
+        except (OSError, ValueError) as exc:
+            contradictions.append(f"optimized_structure artifact is unreadable: {exc}")
+            symbols, coordinates = [], []
+        if not optimize_result.symbols or optimize_result.coordinates is None:
+            gaps.append("the TS optimize TaskResult carries no final geometry")
+        elif symbols and list(optimize_result.symbols or ()) != symbols:
+            contradictions.append(
+                "the TS optimize TaskResult atom order differs from the "
+                "optimized_structure artifact"
+            )
+        if coordinates and optimize_result.coordinates is not None:
+            worst = 0.0
+            for left, right in zip(coordinates, optimize_result.coordinates, strict=False):
+                for left_value, right_value in zip(left, right, strict=False):
+                    worst = max(worst, abs(float(left_value) - float(right_value)))
+            if worst > COORDINATE_ABS_TOLERANCE_ANGSTROM:
+                contradictions.append(
+                    "the TS optimize TaskResult geometry differs from the optimized_structure "
+                    f"artifact by {worst:.6f} A (tolerance {COORDINATE_ABS_TOLERANCE_ANGSTROM})"
+                )
+    return {
+        "status": "FAIL" if contradictions else ("NOT_VERIFIED" if gaps else "PASS"),
+        "contradictions": contradictions,
+        "gaps": gaps,
+        "artifact": artifact.to_dict() if artifact is not None else None,
+    }
+
+
+def _da_h4_readiness(
+    *,
+    constructed: bool,
+    real_run: bool,
+    scenario_result: str,
+    claim_status: str,
+    connectivity_status: str,
+    selected_candidate_id: str | None,
+) -> dict[str, Any]:
+    valid_ts_state = (
+        "closed" if real_run and not constructed and claim_status == "supported" else "open"
+    )
+    valid_ts_reason = (
+        "a real valid TS candidate is supported"
+        if valid_ts_state == "closed"
+        else (
+            "constructed fixture: the supported saddle candidate is not a real TS artifact"
+            if claim_status == "supported"
+            else f"claim status is {claim_status}; H4 needs a real valid TS candidate"
+        )
+    )
+    rows = [
+        {
+            "row_id": "H4-01-valid-ts",
+            "requirement": "A real valid TS: one imaginary mode and a mapped mode.",
+            "scenario_result": scenario_result,
+            "claim_status": claim_status,
+            "state": valid_ts_state,
+            "reason": valid_ts_reason,
+            "selected_candidate_id": selected_candidate_id,
+        },
+        {
+            "row_id": "H4-02-bidirectional-irc",
+            "requirement": "Bidirectional IRC with both specified endpoints reached.",
+            "scenario_result": "NOT_VERIFIED",
+            "claim_status": "not_evaluated",
+            "state": "open",
+            "reason": "A-18 owns the bidirectional IRC validation; this scenario does not run IRC.",
+        },
+        {
+            "row_id": "H4-03-endpoint-connectivity",
+            "requirement": "Endpoint geometry and bond-topology mapping prove the declared path.",
+            "scenario_result": "NOT_VERIFIED",
+            "claim_status": connectivity_status,
+            "state": "open",
+            "reason": "Connectivity is inconclusive without bidirectional IRC endpoint evidence.",
+        },
+        {
+            "row_id": "H4-04-comparable-energy",
+            "requirement": "Activation energy is comparable under frozen conditions and units.",
+            "scenario_result": "NOT_VERIFIED",
+            "claim_status": "not_evaluated",
+            "state": "open",
+            "reason": (
+                "A-19 owns the thermochemistry/comparability validation; no energy is claimed here."
+            ),
+        },
+        {
+            "row_id": "H4-05-honest-negatives",
+            "requirement": (
+                "Honest negative cases are recorded; inconclusive/failed never becomes positive."
+            ),
+            "scenario_result": scenario_result,
+            "claim_status": "not_evaluated",
+            "state": "open" if constructed or not real_run else "closed",
+            "reason": (
+                "the constructed harness recorded every rejection reason and kept the claim "
+                "honest; no real negative run exists"
+                if constructed or not real_run
+                else "the real scenario recorded its negative cases honestly"
+            ),
+        },
+    ]
+    positive = valid_ts_state == "closed"
+    return {
+        "closed": False,
+        "status": "open",
+        "positive_evidence": positive,
+        "real_run": real_run,
+        "rows": rows,
+        "reason": (
+            "H4 requires a real valid TS, bidirectional IRC with both endpoints, comparable "
+            "energies and honest negatives. Only the TS scenario was audited here; H4 stays open."
+        ),
+    }
+
+
+def _print_da_ts_report(report: Mapping[str, Any]) -> None:
+    print("DA transition-state report")
+    print(f"  scenario result: {report.get('scenario_result')}")
+    print(f"  claim status: {report.get('claim_status')}")
+    h4 = report.get("h4") or {}
+    print(f"  H4 readiness: {h4.get('status')} (closed={h4.get('closed')})")
+    print(f"  selected candidate: {report.get('selected_candidate_id')}")
+    print(f"  starting structure: {report.get('starting_structure_source')}")
+    claim = report.get("scientific_claim") or {}
+    print(f"  saddle claim: {claim.get('claim_id')} = {claim.get('status')}")
+    print(f"  connectivity: {report.get('connectivity_status')}")
+    for row in h4.get("rows") or []:
+        print(
+            f"  {row.get('row_id')}: scenario={row.get('scenario_result')} "
+            f"claim={row.get('claim_status')} state={row.get('state')}"
+        )
+
+
+def _execute_validate_da_ts(
+    args: argparse.Namespace,
+    spec: ScenarioSpec,
+    plan: dict[str, Any],
+    *,
+    started_at: str,
+    argv: list[str],
+) -> int:
+    """Validate a B20a-exec Diels-Alder TS candidate without running a job."""
+    receipt = _receipt_protocol()
+    fixture_path = Path(args.fixture)
+    extra: dict[str, Any] = {
+        "scenario_implementation": "A-17",
+        "fixture_path": str(fixture_path),
+        "input_manifest_path": plan.get("input_manifest_path"),
+        "platform_registry": None,
+        "constructed_fixture": False,
+        "real_run": False,
+        "execution_provenance": None,
+        "fixture_validation": None,
+        "candidate_selection": None,
+        "candidate_records": None,
+        "search_range": None,
+        "selected_candidate_id": None,
+        "starting_structure_source": None,
+        "scientific_claim": None,
+        "claims": None,
+        "methods_state": None,
+        "connectivity_status": None,
+        "scenario_result": None,
+        "claim_status": None,
+        "h4": None,
+        "example_ts_substituted": False,
+        "second_da_job_started": False,
+        "b20a_ready_cited_as_execution_evidence": False,
+        "b20a_exec_artifact_id": None,
+        "b20a_exec_sub_deliverable": None,
+        "b20a_exec_semantic_candidate": None,
+        "search_capability_claim": "not_claimed",
+        "no_candidate": False,
+    }
+    assertions: list[dict[str, Any]] = []
+    export_check: PlatformExportCheck | None = None
+
+    def finish(
+        *,
+        result: str,
+        exit_code: int,
+        reason: str,
+        extra_json: Mapping[str, Any] | None = None,
+        extra_artifacts: list[dict[str, Any]] | None = None,
+    ) -> int:
+        extra["scenario_result"] = result
+        assertions.append(
+            {
+                "name": "scenario_executed",
+                "status": result,
+                "detail": reason,
+            }
+        )
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=reason,
+            started_at=started_at,
+            argv=argv,
+            result=result,
+            exit_code=exit_code,
+            assertions=assertions,
+            platform_export=export_check,
+            extra=extra,
+            extra_json=extra_json,
+            extra_artifacts=extra_artifacts,
+        )
+
+    snapshot_payload, constructed, unpack_errors = _unpack_snapshot(plan, fixture_path.parent)
+    if snapshot_payload is None:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="artifact snapshot is unusable: " + "; ".join(unpack_errors),
+        )
+    extra["constructed_fixture"] = constructed
+
+    export_check = check_platform_export(snapshot_payload)
+    if not export_check.eligible:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="platform export rejected: " + "; ".join(export_check.reasons),
+        )
+
+    try:
+        fixture_document = _load_json(fixture_path)
+    except _InvalidInputError as exc:
+        print(f"usage error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if (
+        not isinstance(fixture_document, Mapping)
+        or fixture_document.get("task_kind") != "diels_alder"
+    ):
+        print(
+            "usage error: validate-da-ts requires the Diels-Alder v1 fixture-manifest.json",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+
+    fixture_validation = _validate_da_fixture(fixture_path)
+    extra["fixture_validation"] = fixture_validation
+    assertions.append(
+        {
+            "name": "frozen_fixture_geometry_and_budget",
+            "status": fixture_validation["status"],
+            "detail": "; ".join(fixture_validation["contradictions"]) or None,
+        }
+    )
+    if fixture_validation["status"] != "PASS":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=(
+                "the frozen DA fixture is contradictory: "
+                + "; ".join(fixture_validation["contradictions"])
+            ),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    registry = _platform_registry_view(
+        plan.get("platform_registry_path"),
+        plan.get("platform_registry"),
+        required_ids=DA_REQUIRED_REGISTRY_IDS,
+    )
+    extra["platform_registry"] = registry
+    extra["constructed_fixture"] = bool(constructed or registry.get("constructed"))
+    assertions.append(
+        {
+            "name": "platform_registry_registration",
+            "status": "PASS" if registry.get("registered") else "NOT_VERIFIED",
+            "detail": "; ".join(registry.get("reasons") or []) or None,
+        }
+    )
+    if not registry.get("registered"):
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="registered DA run prerequisite missing: " + "; ".join(registry["reasons"]),
+        )
+
+    platform = snapshot_payload.get("platform")
+    binding = platform.get("binding") if isinstance(platform, Mapping) else None
+    binding_attempt = binding.get("attempt") if isinstance(binding, Mapping) else None
+    execution = _da_execution_provenance(platform, binding_attempt)
+    extra["execution_provenance"] = execution
+    extra["b20a_exec_artifact_id"] = execution.get("artifact_id")
+    extra["b20a_exec_sub_deliverable"] = execution.get("sub_deliverable")
+    extra["b20a_exec_semantic_candidate"] = execution.get("semantic_candidate")
+    extra["b20a_ready_cited_as_execution_evidence"] = bool(
+        execution.get("b20a_ready_cited_as_execution_evidence")
+    )
+    assertions.append(
+        {
+            "name": "b20a_exec_execution_evidence",
+            "status": execution["status"],
+            "detail": "; ".join(execution["contradictions"] or execution["reasons"]) or None,
+        }
+    )
+    if execution["status"] == "FAIL":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="B20a-exec provenance rejected: " + "; ".join(execution["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if execution["status"] != "PASS":
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="B20a-exec execution evidence missing: " + "; ".join(execution["reasons"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    try:
+        from cccp.analysis.research.artifact_manifest import (
+            ArtifactSnapshotError,
+            load_verified_snapshot,
+        )
+    except ImportError as exc:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason=f"CCCP science consumer unavailable: {type(exc).__name__}: {exc}",
+        )
+    try:
+        snapshot, digests = load_verified_snapshot(snapshot_payload)
+    except ArtifactSnapshotError as exc:
+        extra["snapshot_error"] = {"type": type(exc).__name__, "message": str(exc)}
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"snapshot content rejected ({type(exc).__name__}): {exc}",
+        )
+    digest_table = [row.to_dict() for row in digests]
+    extra["snapshot"] = {
+        "snapshot_id": snapshot.snapshot_id,
+        "generation": snapshot.generation,
+        "read_root": str(snapshot.read_root),
+        "snapshot_schema": snapshot.snapshot_schema,
+        "snapshot_schema_version": snapshot.snapshot_schema_version,
+        "constructed": constructed,
+        "artifact_digests": digest_table,
+        "scientific_identity": snapshot.science_identity.to_dict(),
+    }
+    extra["real_run"] = not extra["constructed_fixture"]
+    assertions.append(
+        {
+            "name": "snapshot_content_digest",
+            "status": "PASS",
+            "detail": f"{len(digest_table)} artifacts verified against their declared digests",
+        }
+    )
+
+    fixture_science = fixture_validation.get("science_parameters") or {}
+    fixture_state = fixture_science.get("electronic_state") or {}
+    identity_contradictions: list[str] = []
+    identity = snapshot.science_identity
+    if identity.method != fixture_science.get("method"):
+        identity_contradictions.append(
+            f"snapshot method {identity.method!r} differs from the frozen fixture method "
+            f"{fixture_science.get('method')!r}"
+        )
+    if identity.basis != fixture_science.get("basis"):
+        identity_contradictions.append(
+            f"snapshot basis {identity.basis!r} differs from the frozen fixture basis "
+            f"{fixture_science.get('basis')!r}"
+        )
+    if identity.electronic_state.charge != fixture_state.get("charge"):
+        identity_contradictions.append("snapshot charge differs from the frozen fixture state")
+    if identity.electronic_state.multiplicity != fixture_state.get("target_multiplicity"):
+        identity_contradictions.append(
+            "snapshot multiplicity differs from the frozen fixture state"
+        )
+    if fixture_state.get("state_id") and (
+        identity.electronic_state.state_id != fixture_state.get("state_id")
+    ):
+        identity_contradictions.append("snapshot state_id differs from the frozen fixture state")
+    extra["snapshot_fixture_identity"] = {
+        "status": "FAIL" if identity_contradictions else "PASS",
+        "contradictions": identity_contradictions,
+        "snapshot": identity.to_dict(),
+        "fixture": fixture_science,
+    }
+    assertions.append(
+        {
+            "name": "snapshot_fixture_identity",
+            "status": "FAIL" if identity_contradictions else "PASS",
+            "detail": "; ".join(identity_contradictions) or None,
+        }
+    )
+    if identity_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="snapshot identity contradicts the frozen fixture: "
+            + "; ".join(identity_contradictions),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    candidate_document, candidate_gaps, candidate_contradictions = _da_candidate_document(snapshot)
+    if candidate_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="candidate-selection artifact rejected: " + "; ".join(candidate_contradictions),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if candidate_document is None:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="candidate-selection evidence missing: " + "; ".join(candidate_gaps),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    candidate = _da_candidate_validation(candidate_document, fixture_document, binding_attempt)
+    extra["candidate_selection"] = {
+        key: value for key, value in candidate.items() if key != "raw_document"
+    }
+    extra["candidate_records"] = candidate["candidates"]
+    extra["search_range"] = candidate["search_range"]
+    extra["selected_candidate_id"] = candidate["selected_candidate_id"]
+    extra["starting_structure_source"] = candidate["starting_structure_source"]
+    extra["search_capability_claim"] = candidate["search_capability_claim"]
+    assertions.append(
+        {
+            "name": "candidate_selection_reasons",
+            "status": candidate["status"],
+            "detail": "; ".join(candidate["contradictions"] or candidate["reasons"]) or None,
+        }
+    )
+    if candidate["status"] == "FAIL":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="candidate selection rejected: " + "; ".join(candidate["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if candidate["status"] != "PASS":
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="candidate-selection evidence incomplete: " + "; ".join(candidate["reasons"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    selected = candidate["selected_candidate"]
+    if selected is None:
+        extra["no_candidate"] = True
+        claim = {
+            "claim_id": "c-ts-first-order-saddle-candidate",
+            "status": "inconclusive",
+            "reason": "missing_evidence",
+            "statement": (
+                "The B20a-exec candidate search/selection produced no qualified "
+                "transition-state candidate."
+            ),
+            "selection_reason": candidate["selection_reason"],
+            "candidate_reasons": candidate["candidates"],
+            "constructed": constructed,
+        }
+        h4 = _da_h4_readiness(
+            constructed=constructed,
+            real_run=bool(extra["real_run"]),
+            scenario_result="PASS",
+            claim_status="inconclusive",
+            connectivity_status="not_evaluated",
+            selected_candidate_id=None,
+        )
+        extra["scientific_claim"] = claim
+        extra["claims"] = [claim]
+        extra["claim_status"] = "inconclusive"
+        extra["connectivity_status"] = "not_evaluated"
+        extra["h4"] = h4
+        _print_da_ts_report(
+            {
+                "scenario_result": "PASS",
+                "claim_status": "inconclusive",
+                "h4": h4,
+                "selected_candidate_id": None,
+                "starting_structure_source": candidate["starting_structure_source"],
+                "scientific_claim": claim,
+                "connectivity_status": "not_evaluated",
+            }
+        )
+        return finish(
+            result="PASS",
+            exit_code=EXIT_PASS,
+            reason=(
+                "B20a-exec validation completed with no qualified candidate; the honest "
+                "scientific claim is inconclusive and H4 remains open"
+            ),
+            extra_json={
+                "fixture-validation.json": fixture_validation,
+                "candidate-selection.json": candidate["raw_document"],
+                "scientific-claim.json": claim,
+                "h4-readiness.json": h4,
+                "artifact-digests.json": digest_table,
+            },
+            extra_artifacts=[
+                entry
+                for entry in (
+                    _artifact_entry(artifact.resolved_path)
+                    for artifact in snapshot.artifacts
+                    if artifact.role in ("provenance", "optimized_structure")
+                )
+                if entry is not None
+            ],
+        )
+
+    optimize_result, optimize_artifact, optimize_gaps, optimize_contradictions = _da_named_result(
+        snapshot,
+        candidate["provenance"].get("ts_optimize_provenance"),
+        candidate["provenance"].get("ts_optimize_provenance_sha256"),
+    )
+    frequency_result, frequency_artifact, frequency_gaps, frequency_contradictions = (
+        _da_named_result(
+            snapshot,
+            candidate["provenance"].get("ts_frequency_provenance"),
+            candidate["provenance"].get("ts_frequency_provenance_sha256"),
+        )
+    )
+    provenance_contradictions = optimize_contradictions + frequency_contradictions
+    provenance_gaps = optimize_gaps + frequency_gaps
+    assertions.append(
+        {
+            "name": "ts_provenance_artifacts",
+            "status": (
+                "FAIL"
+                if provenance_contradictions
+                else "NOT_VERIFIED"
+                if provenance_gaps
+                else "PASS"
+            ),
+            "detail": "; ".join(provenance_contradictions or provenance_gaps) or None,
+        }
+    )
+    if provenance_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="TS provenance artifact rejected: " + "; ".join(provenance_contradictions),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if provenance_gaps or optimize_result is None or frequency_result is None:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="TS provenance artifact missing: " + "; ".join(provenance_gaps),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if optimize_result.task is None or optimize_result.task.value != "optimize":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="the named TS optimization artifact is not an 'optimize' TaskResult",
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if frequency_result.task is None or frequency_result.task.value != "frequency":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="the named TS frequency artifact is not a 'frequency' TaskResult",
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    geometry_check = _da_optimized_geometry_check(snapshot, optimize_result)
+    extra["ts_geometry"] = geometry_check
+    assertions.append(
+        {
+            "name": "ts_geometry_identity",
+            "status": geometry_check["status"],
+            "detail": "; ".join(geometry_check["contradictions"] or geometry_check["gaps"]) or None,
+        }
+    )
+    if geometry_check["contradictions"]:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="TS geometry identity rejected: " + "; ".join(geometry_check["contradictions"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+    if geometry_check["gaps"]:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="TS geometry identity incomplete: " + "; ".join(geometry_check["gaps"]),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    try:
+        from cccp.analysis.research.validators import (
+            validate_method_state_consistency,
+            validate_transition_state,
+            validate_ts_connectivity,
+        )
+    except ImportError as exc:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason=f"CCCP science validators unavailable: {type(exc).__name__}: {exc}",
+        )
+
+    transition_state = validate_transition_state(
+        frequency_result,
+        candidate["mapped_mode"],
+        optimize_result=optimize_result,
+    )
+    method_state = validate_method_state_consistency(optimize_result, frequency_result)
+    connectivity = validate_ts_connectivity(transition_state)
+    identity_check = _science_identity_consistency(snapshot, optimize_result, frequency_result)
+    claims = [claim.to_dict() for claim in transition_state.claims]
+    claims.extend(claim.to_dict() for claim in method_state.claims)
+    claims.append(connectivity.to_dict())
+    claim_status = transition_state.status
+    if identity_check["contradictions"] or method_state.status == "refuted":
+        claim_status = "refuted"
+    elif transition_state.status in ("inconclusive", "not_evaluated"):
+        claim_status = transition_state.status
+    elif method_state.status != "supported" or identity_check["gaps"]:
+        claim_status = "inconclusive"
+    scientific_claim = {
+        "claim_id": transition_state.candidate.claim_id,
+        "status": claim_status,
+        "reason": transition_state.candidate.reason,
+        "statement": transition_state.candidate.statement,
+        "classification": transition_state.classification,
+        "imaginary_mode_count": transition_state.imaginary_mode_count,
+        "mode_count": transition_state.mode_count,
+        "mapped_mode_index": transition_state.mapped_mode_index,
+        "validator_version": transition_state.to_dict()["validator_version"],
+        "candidate_selection_reason": candidate["selection_reason"],
+        "method_state_status": method_state.status,
+        "connectivity_status": connectivity.status,
+        "identity_check": identity_check,
+        "constructed": constructed,
+    }
+    h4 = _da_h4_readiness(
+        constructed=constructed,
+        real_run=bool(extra["real_run"]),
+        scenario_result="PASS",
+        claim_status=claim_status,
+        connectivity_status=connectivity.status,
+        selected_candidate_id=candidate["selected_candidate_id"],
+    )
+    extra["scientific_claim"] = scientific_claim
+    extra["claims"] = claims
+    extra["methods_state"] = method_state.to_dict()
+    extra["connectivity_status"] = connectivity.status
+    extra["claim_status"] = claim_status
+    extra["h4"] = h4
+    _print_da_ts_report(
+        {
+            "scenario_result": "PASS",
+            "claim_status": claim_status,
+            "h4": h4,
+            "selected_candidate_id": candidate["selected_candidate_id"],
+            "starting_structure_source": candidate["starting_structure_source"],
+            "scientific_claim": scientific_claim,
+            "connectivity_status": connectivity.status,
+        }
+    )
+    if claim_status == "refuted":
+        refutation_details = (
+            identity_check["contradictions"]
+            or list(method_state.to_dict().get("notes") or ())
+            or list(transition_state.candidate.notes)
+            or ["the TS candidate evidence is contradictory"]
+        )
+        reason = "B20a-exec TS validation completed and refuted the candidate: " + "; ".join(
+            str(item) for item in refutation_details
+        )
+    elif claim_status == "supported":
+        reason = (
+            "B20a-exec TS validation completed: the saddle candidate is supported; "
+            "connectivity stays inconclusive without IRC and H4 remains open"
+        )
+    else:
+        reason = (
+            f"B20a-exec TS validation completed: the saddle claim is {claim_status}; "
+            "H4 remains open"
+        )
+    return finish(
+        result="PASS",
+        exit_code=EXIT_PASS,
+        reason=reason,
+        extra_json={
+            "fixture-validation.json": fixture_validation,
+            "candidate-selection.json": candidate["raw_document"],
+            "ts-validation-report.json": transition_state.to_dict(),
+            "scientific-claim.json": scientific_claim,
+            "h4-readiness.json": h4,
+            "artifact-digests.json": digest_table,
+        },
+        extra_artifacts=[
+            entry
+            for entry in (
+                _artifact_entry(artifact.resolved_path)
+                for artifact in (snapshot.artifacts)
+                if artifact.role in ("provenance", "optimized_structure")
+            )
+            if entry is not None
+        ],
+    )
+
+
 def _execute_validate_artifacts(
     args: argparse.Namespace,
     spec: ScenarioSpec,
@@ -3560,6 +5051,8 @@ def _execute(
         return _execute_installed_singlepoint(args, spec, plan, started_at=started_at, argv=argv)
     if spec.alias == ARTIFACT_ALIAS:
         return _execute_validate_artifacts(args, spec, plan, started_at=started_at, argv=argv)
+    if spec.alias == DA_TS_ALIAS:
+        return _execute_validate_da_ts(args, spec, plan, started_at=started_at, argv=argv)
 
     platform_export: PlatformExportCheck | None = None
     if spec.requires_input_manifest:
@@ -3717,15 +5210,19 @@ def _help_epilog() -> str:
             "  --out       evidence directory for result.json and argv.json",
             "Scenario-specific required flags:",
             "  installed-singlepoint  --run-spec",
-            "  validate-artifacts     --input-manifest",
-            "  validate-da-ts         --input-manifest",
+            "  validate-artifacts     --input-manifest + --platform-registry",
+            "                         (dsh-optfreq-live)",
+            "  validate-da-ts         --input-manifest + --platform-registry",
+            "                         (da-runtime, da-research-live)",
             "  validate-da-irc        --input-manifest",
             "  validate-da-report     --input-manifest",
             "Optional flags:",
             "  --timeout   positive seconds (default 600)",
             "  --platform-registry  platform-provided registry record; a real",
             "                       validate-artifacts PASS needs the registered",
-            f"                       id {REGISTERED_OPT_FREQ_RUN_ID!r} there",
+            f"                       id {REGISTERED_OPT_FREQ_RUN_ID!r}; a real",
+            "                       validate-da-ts PASS needs the registered ids",
+            f"                       {DA_RUNTIME_RUN_ID!r} and {DA_RESEARCH_LIVE_RUN_ID!r}",
             "  --dry-run   check paths and budgets only; never creates a work root or job",
             "",
             "Exit codes: 0=PASS, 1=FAIL, 2=NOT_VERIFIED, 3=usage.",
@@ -3739,6 +5236,9 @@ def _help_epilog() -> str:
             " --run-spec run-spec.json --out evidence/ --dry-run",
             "  acp2_science.py --scenario science:validate-artifacts --fixture"
             " fixture-manifest.json --input-manifest authorized-artifacts.json"
+            " --platform-registry registry.json --out evidence/",
+            "  acp2_science.py --scenario science:validate-da-ts --fixture"
+            " diels_alder/v1/fixture-manifest.json --input-manifest b20a-exec.json"
             " --platform-registry registry.json --out evidence/",
         ]
     )
@@ -3795,7 +5295,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "platform-provided registry record used to confirm the registered "
-            f"id {REGISTERED_OPT_FREQ_RUN_ID!r}; absent => NOT_VERIFIED"
+            f"ids {REGISTERED_OPT_FREQ_RUN_ID!r}, {DA_RUNTIME_RUN_ID!r} and "
+            f"{DA_RESEARCH_LIVE_RUN_ID!r}; absent => NOT_VERIFIED"
         ),
     )
     parser.add_argument(
