@@ -439,3 +439,298 @@ raise SystemExit(0 if not heavy else 1)
         check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+# ---------------------------------------------------------------------------
+# A-07b: deterministic compilation and the science identity boundary
+# ---------------------------------------------------------------------------
+
+import hashlib  # noqa: E402
+
+from cccp.calculation.recipes import (  # noqa: E402
+    ApprovalMetadata,
+    CompiledRecipe,
+    InvalidUpstreamDigestError,
+    RecipeInputs,
+    StepExecutionIdentity,
+    UnknownScientificFieldError,
+    UnresolvedOutputRefError,
+    compile_recipe,
+    materialize_step_identity,
+    output_ref_address,
+    read_historical_recipe,
+)
+from cccp.calculation.requests import MethodSpec, StructureInput, TaskRequest  # noqa: E402
+
+
+def _science_inputs(**overrides: Any) -> RecipeInputs:
+    """Return frozen initial inputs with an inline H2 structure."""
+    base: dict[str, Any] = {
+        "structure": StructureInput(
+            coordinates=((0.0, 0.0, 0.0), (0.0, 0.0, 0.74)),
+            symbols=("H", "H"),
+        ),
+        "charge": 0,
+        "multiplicity": 1,
+        "method": MethodSpec(method="r2SCAN-3c"),
+        "provider_versions": {"orca": "6.0.1"},
+    }
+    base.update(overrides)
+    return RecipeInputs(**base)
+
+
+def _compiled(**overrides: Any) -> CompiledRecipe:
+    """Compile the linear recipe with the shared science inputs."""
+    return compile_recipe(_linear_recipe(), _science_inputs(**overrides))
+
+
+def test_compile_twice_is_byte_identical_and_digest_stable() -> None:
+    first = _compiled()
+    second = _compiled()
+
+    assert isinstance(first, CompiledRecipe)
+    assert first.definition_json == second.definition_json
+    assert first.to_json() == second.to_json()
+    assert first.plan_definition_digest == second.plan_definition_digest
+    assert first.schema_digest == second.schema_digest
+    assert first.plan_definition_digest.startswith("v2:")
+    assert first.schema_digest == (
+        "sha256:" + hashlib.sha256(first.definition_json.encode("utf-8")).hexdigest()
+    )
+
+
+def test_each_compute_step_is_typed_task_request() -> None:
+    compiled = _compiled()
+
+    assert compiled.topological_order == ("sp", "opt", "freq")
+    assert [step.task_kind for step in compiled.steps] == ["singlepoint", "optimize", "frequency"]
+    for step in compiled.steps:
+        assert isinstance(step.request, TaskRequest)
+        assert step.request.task.value == step.task_kind
+        assert step.request_view is not None
+        assert step.request_view["task"] == step.task_kind
+
+
+def _digest_with(**overrides: Any) -> str:
+    if "recipe" in overrides:
+        recipe = overrides.pop("recipe")
+        return compile_recipe(recipe, _science_inputs(**overrides)).plan_definition_digest
+    return _compiled(**overrides).plan_definition_digest
+
+
+def test_plan_definition_digest_covers_every_science_field() -> None:
+    base = _compiled().plan_definition_digest
+
+    indexed = OutputRef("sp", "energy", Selector(selector_kind="index", index=0))
+    selector_recipe = _linear_recipe()
+    selector_recipe = Recipe(
+        recipe_id=selector_recipe.recipe_id,
+        applicability=selector_recipe.applicability,
+        steps=(
+            selector_recipe.steps[0],
+            Step(
+                step_id="opt",
+                intent="opt intent",
+                required=True,
+                diagnostic_only=False,
+                capability_ref="geometry.optimize",
+                consumes=(indexed,),
+            ),
+            selector_recipe.steps[2],
+        ),
+        edges=selector_recipe.edges,
+        limits=selector_recipe.limits,
+    )
+
+    variants = [
+        _digest_with(atom_mapping=(1, 0)),
+        _digest_with(method=MethodSpec(method="B3LYP", basis="def2-SVP")),
+        _digest_with(charge=1, multiplicity=2),
+        _digest_with(
+            electronic_state={
+                "state_id": "triplet",
+                "label": "T1",
+                "target_multiplicity": 3,
+            }
+        ),
+        _digest_with(standard_state="1M"),
+        _digest_with(provider_versions={"orca": "6.0.2"}),
+        _digest_with(recipe=selector_recipe),
+    ]
+
+    for digest in variants:
+        assert digest != base
+    assert len(set(variants)) == len(variants)
+
+
+def test_management_fields_never_change_the_definition_digest() -> None:
+    base = _compiled()
+
+    renamed = compile_recipe(
+        _linear_recipe(),
+        _science_inputs(),
+        approval=ApprovalMetadata(
+            approval_ref="approval-001",
+            approval_status="approved",
+            evidence_refs=("evidence/a.json", "evidence/b.json"),
+            display_name="Linear science recipe",
+            timestamp="2026-10-22T00:00:00Z",
+        ),
+    )
+    retitled_recipe = Recipe(
+        recipe_id=base.recipe.recipe_id,
+        applicability=base.recipe.applicability,
+        steps=base.recipe.steps,
+        edges=base.recipe.edges,
+        limits=base.recipe.limits,
+        title="A different display name",
+    )
+    retitled = compile_recipe(retitled_recipe, _science_inputs())
+
+    assert renamed.plan_definition_digest == base.plan_definition_digest
+    assert renamed.to_json() == base.to_json()
+    assert retitled.plan_definition_digest == base.plan_definition_digest
+    assert renamed.approval.display_name == "Linear science recipe"
+
+
+def test_changed_upstream_byte_changes_step_execution_identity() -> None:
+    compiled = _compiled()
+    reference = OutputRef("sp", "energy", _WHOLE)
+    address = output_ref_address(reference)
+    versions = {"orca": "6.0.1"}
+
+    first = materialize_step_identity(compiled, "opt", {address: "a" * 64}, versions)
+    second = materialize_step_identity(compiled, "opt", {address: "b" * 64}, versions)
+
+    assert isinstance(first, StepExecutionIdentity)
+    assert first.execution_identity.startswith("v2:")
+    assert first.execution_identity != second.execution_identity
+    assert first.plan_definition_digest == compiled.plan_definition_digest
+    dependency = first.to_dict()["science"]["dependencies"][0]  # type: ignore[index]
+    assert dependency["digest"] == "sha256:" + "a" * 64
+
+
+def test_changed_dispatch_provider_version_changes_step_identity() -> None:
+    compiled = _compiled()
+    address = output_ref_address(OutputRef("sp", "energy", _WHOLE))
+
+    first = materialize_step_identity(compiled, "opt", {address: "a" * 64}, {"orca": "6.0.1"})
+    second = materialize_step_identity(compiled, "opt", {address: "a" * 64}, {"orca": "6.0.2"})
+
+    assert first.execution_identity != second.execution_identity
+
+
+def test_unresolved_output_ref_selector_fails_at_dispatch() -> None:
+    unresolved = Step(
+        step_id="opt",
+        intent="opt intent",
+        required=True,
+        diagnostic_only=False,
+        capability_ref="geometry.optimize",
+        consumes=(OutputRef("sp", "energy", Selector(selector_kind="index")),),
+    )
+    recipe = Recipe(
+        recipe_id="recipe.unresolved",
+        applicability=Applicability(),
+        steps=(_step("sp", capability="electronic.energy"), unresolved),
+        edges=(Edge("edge.sp_opt", "sp", "opt"),),
+        limits=Limits(max_steps=4),
+    )
+    compiled = compile_recipe(recipe, _science_inputs())
+    address = output_ref_address(unresolved.consumes[0])
+
+    with pytest.raises(UnresolvedOutputRefError) as excinfo:
+        materialize_step_identity(compiled, "opt", {address: "a" * 64}, {})
+    assert excinfo.value.detail["reason"] == "unresolved_output_ref_selector"
+
+
+def test_missing_upstream_digest_fails_at_dispatch() -> None:
+    compiled = _compiled()
+
+    with pytest.raises(UnresolvedOutputRefError) as excinfo:
+        materialize_step_identity(compiled, "opt", {}, {})
+    assert excinfo.value.detail["reason"] == "missing_upstream_digest"
+
+
+def test_invalid_upstream_digest_is_rejected() -> None:
+    compiled = _compiled()
+    address = output_ref_address(OutputRef("sp", "energy", _WHOLE))
+
+    with pytest.raises(InvalidUpstreamDigestError):
+        materialize_step_identity(compiled, "opt", {address: "not-a-digest"}, {})
+
+
+def test_unknown_step_parameter_is_rejected_for_execution() -> None:
+    typo = Step(
+        step_id="sp",
+        intent="single point",
+        required=True,
+        diagnostic_only=False,
+        capability_ref="electronic.energy",
+        parameters={"stabilty_check": True},
+    )
+    recipe = Recipe(
+        recipe_id="recipe.unknown_parameter",
+        applicability=Applicability(),
+        steps=(typo,),
+        edges=(),
+        limits=Limits(max_steps=2),
+    )
+
+    assert validate_recipe(recipe).is_valid is True
+    with pytest.raises(UnknownScientificFieldError) as excinfo:
+        compile_recipe(recipe, _science_inputs())
+    assert excinfo.value.detail["reason"] == "unknown_scientific_field"
+
+
+def test_unknown_recipe_field_is_rejected_for_execution() -> None:
+    payload: dict[str, Any] = _linear_recipe().to_dict()
+    payload["undeclared_science_field"] = "x"
+
+    with pytest.raises(RecipeSchemaError):
+        compile_recipe(payload, _science_inputs())
+
+
+def test_historical_read_preserves_unknown_fields_without_eligibility() -> None:
+    payload: dict[str, Any] = _linear_recipe().to_dict()
+    payload["undeclared_science_field"] = {"kept": True}
+    payload["steps"][0]["undeclared_step_field"] = "also kept"
+
+    historical = read_historical_recipe(payload)
+
+    assert historical.execution_eligible is False
+    assert historical.recovery_eligible is False
+    assert historical.payload["undeclared_science_field"] == {"kept": True}
+    step_payload = historical.payload["steps"][0]
+    assert step_payload["undeclared_step_field"] == "also kept"
+    assert "undeclared_science_field" in historical.unknown_fields
+    assert any("undeclared_step_field" in path for path in historical.unknown_fields)
+
+    with pytest.raises(RecipeSchemaError):
+        compile_recipe(payload, _science_inputs())
+
+
+def test_step_identity_excludes_platform_and_display_fields() -> None:
+    compiled = _compiled()
+    address = output_ref_address(OutputRef("sp", "energy", _WHOLE))
+    identity = materialize_step_identity(
+        compiled,
+        "opt",
+        {address: "a" * 64},
+        {"orca": "6.0.1"},
+    )
+    payload = identity.to_dict()
+
+    forbidden = {"job_id", "display_name", "approval_ref", "approval_status", "evidence_refs"}
+    stack: list[Any] = [payload]
+    seen: set[str] = set()
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            seen.update(str(key) for key in item)
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+    assert forbidden.isdisjoint(seen)
+    assert payload["science"]["dependencies"]  # materialized dependency digests
+    assert payload["science"]["provider_versions"] == {"orca": "6.0.1"}
