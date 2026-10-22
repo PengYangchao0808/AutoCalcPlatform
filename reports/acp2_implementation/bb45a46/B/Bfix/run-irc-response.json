@@ -1,0 +1,6 @@
+{
+  "job_id": "irc-job-001",
+  "status": "queued",
+  "workflow": "irc",
+  "project_id": "uncategorized"
+}
