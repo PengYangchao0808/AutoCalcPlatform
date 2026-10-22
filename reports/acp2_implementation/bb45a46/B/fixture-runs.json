@@ -68,6 +68,7 @@
         "walltime_s": 300
       },
       "cleanup_seconds": 60,
+      "evidence": "B/B11/",
       "evidence_owner": "B11",
       "fixture_id": "fx-lsf-singlepoint-v1",
       "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
@@ -83,16 +84,29 @@
         "method": "r2SCAN-3c",
         "multiplicity": 1
       },
+      "missing_prerequisites": [
+        "ACP_LSF_NODE",
+        "LSF_ENVDIR",
+        "bsub",
+        "bjobs",
+        "bhosts",
+        "bqueues",
+        "ssh_credentials"
+      ],
+      "no_remote_job_attempted": true,
       "note": "Normal-completion LSF fixture only. B13 uses its own control fixture; this row is not reused for control races.",
       "release": null,
       "request_owner": "B",
       "reusable_by": [
-        "B11"
+        "B11",
+        "B14a",
+        "B14b"
       ],
       "scenario_timeout_seconds": 2400,
       "status": "NOT_VERIFIED",
       "submitted_once": false,
       "task": null,
+      "task_ref": null,
       "workflow": "singlepoint"
     },
     {
@@ -306,13 +320,21 @@
   "generated_at_utc": "2026-10-22T15:19:18Z",
   "h2_server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
   "lsf_singlepoint": {
+    "blocked_prerequisite": "LSF client/queue (bsub/bjobs/bhosts, LSF_ENVDIR) and a configured test node are absent; no remote submission attempted.",
     "cleanup_seconds": 60,
+    "evidence": "B/B11/",
     "fixture_id": "fx-lsf-singlepoint-v1",
     "margin_seconds": 120,
     "max_prepare_seconds": 120,
     "max_queue_wait_seconds": 1800,
     "max_run_seconds": 300,
-    "scenario_timeout_seconds": 2400
+    "reusable_by": [
+      "B11",
+      "B14a",
+      "B14b"
+    ],
+    "scenario_timeout_seconds": 2400,
+    "status": "NOT_VERIFIED"
   },
   "lsf_timeout_seconds": 2400,
   "p1_server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",

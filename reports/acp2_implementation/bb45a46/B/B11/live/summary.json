@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "contract_version": "1.1.0",
+  "generated_at": "2026-10-22T20:22:29Z",
+  "runs": [
+    "lsf-singlepoint-live-20261022T202229Z-644324-12963006.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,23 @@
+{
+  "backend": "lsf",
+  "candidate_label": "bb45a46",
+  "capability": "singlepoint",
+  "control_fixture": {
+    "fixture_id": "fx-control-recovery-lsf-v1",
+    "link": "B13 consumes its own control fixture; B11 normal-completion TaskRef is not reused.",
+    "owner": "B13",
+    "status": "NOT_VERIFIED",
+    "task_ref": null
+  },
+  "evidence": "B/B11/",
+  "fixture_id": "fx-lsf-singlepoint-v1",
+  "h3_status": "OPEN",
+  "normal_completion_attempt": null,
+  "normal_completion_task_ref": null,
+  "note": "A missing LSF keeps H3 open. B11 records no TaskRef and does not claim a PASS.",
+  "owner": "B11",
+  "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+  "result": null,
+  "schema": "acp2.h3.matrix-row.v1",
+  "status": "NOT_VERIFIED"
+}
