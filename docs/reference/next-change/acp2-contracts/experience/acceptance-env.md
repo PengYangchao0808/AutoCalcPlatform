@@ -1,13 +1,15 @@
 # C acceptance environment, routing contract and evidence root
 
-Status: **frozen by C/T-04 (C04), 2026-10-22**. Owner: C track.
+Status: **frozen by C/T-04 (C04), 2026-10-22; B00/B02a adoption by T-04a,
+2026-10-22**. Owner: C track.
 Canonical live file: `/ACPServer/acp2-development/data/acceptance-env-c.sh` (`chmod 600`).
 This document is the human-readable companion to that file and to
 `dsh-compatibility.json` in this directory.
 
-> This is **C acceptance**, never B acceptance. B00 published no
-> `runtime/baseline-lock.json`, so nothing here may be reported as a B-signed
-> baseline. See "Evidence-root resolution" below.
+> This is **C acceptance**, not a re-signing of B acceptance. B00's committed
+> `runtime/baseline-lock.json` / `manifest.json` (commit `ac43c16`) and B02a's
+> environment (commit `0dee16f`) are adopted by digest. See
+> "Evidence-root resolution" below.
 
 ## 1. Installed toolchain (isolated, no system replacement)
 
@@ -36,26 +38,31 @@ The system Node at `/home/xieningke/.opencode/bin/node` (v20.19.0) is untouched.
 Only the acceptance shell prepends `$ACP2_NODE_HOME/bin` and
 `$ACP2_TOOLS/pnpm/node_modules/.bin` to `PATH`.
 
-Install/build evidence:
+Install/build evidence (historical, pre-adoption root):
 `/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04/`.
+New product evidence is written under the adopted
+`/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/`.
 
 ## 2. Exported variables
 
 All values are absolute. No credentials are exported.
 
 ```
+ACP2_PROJECT_ROOT       /ACPServer/AutoCalcPlatform            (resolves B00 project-relative roots)
 ACP2_C_SOURCE            /ACPServer/acp2-development/C
 ACP2_A_SOURCE            /ACPServer/acp2-development/A          (read-only; C never reads it)
 ACP2_INTEGRATION_SOURCE  /ACPServer/acp2-development/integration
 ACP2_SOURCE              $ACP2_INTEGRATION_SOURCE               (alias, one meaning)
-ACP2_TOOLS               /ACPServer/acp2-tools
-ACP2_DATA_ROOT           /ACPServer/acp2-development/data
+ACP2_TOOLS               /ACPServer/acp2-tools                 (C Node/DSH root; B02a uses .../venvs)
+ACP2_DATA_ROOT           /ACPServer/acp2-development/data      (B02a's own root is .../data/b)
 ACP2_DSH_SOURCE          /ACPServer/acp2-tools/deepseek-harness
 ACP2_DSH_LOADER          file://…/tsx@4.23.13/.../esm/index.mjs
 ACP2_DSH_HOME            $ACP2_DATA_ROOT/dsh-home
 ACP2_DSH_WORKSPACE       $ACP2_DATA_ROOT/research-workspace
 ACP2_DSH_OVERLAYS        $ACP2_CONTRACTS/experience/dsh-overlays
-ACP2_EVIDENCE            /ACPServer/acp2-development/evidence   (provisional)
+ACP2_BASELINE_LOCK       $ACP2_PROJECT_ROOT/docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json
+ACP2_EVIDENCE            /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46   (adopted B00 root)
+ACP2_PROVISIONAL_EVIDENCE /ACPServer/acp2-development/evidence  (historical alias only; rejected)
 ACP2_CONTRACTS           $ACP2_C_SOURCE/docs/reference/next-change/acp2-contracts
 ACP2_C_PYTHON            venvs/c/bin/python
 ACP2_INTEGRATION_PYTHON  venvs/integration/bin/python
@@ -65,11 +72,19 @@ ACP2_NODE_HOME           /ACPServer/acp2-tools/node-v22.19.0-linux-x64
 PLAYWRIGHT_BROWSERS_PATH $ACP2_TOOLS/playwright-browsers
 ```
 
-Interpreters are provisional: B02a delivered no role interpreters, so
-`venvs/{c,integration,browser}` were created by C/T-01. Their imports are
-asserted to resolve inside the matching source (`venvs/c` → `$ACP2_C_SOURCE`,
-`venvs/integration` → `$ACP2_INTEGRATION_SOURCE`, `venvs/browser` → its own
-`sys.prefix`). This is `NOT_VERIFIED(b02a_handoff)`.
+`ACP2_TOOLS` intentionally diverges from B02a: B02a's
+`data/b/acceptance-env.sh` sets `ACP2_TOOLS=/ACPServer/acp2-development/venvs`
+(B's Python role-venv root), while C keeps `/ACPServer/acp2-tools` for the
+T-04 Node/pnpm/DSH/browser toolchain. The roots are not unified; the three role
+interpreters still point into B02a's venv root.
+
+Role interpreters are B02a handoff (commit `0dee16f`, readiness
+`integration_ready`): B02a's `role-interpreters.json` declares these exact paths
+and asserts every module resolves inside the matching source
+(`venvs/c` → `$ACP2_C_SOURCE`, `venvs/integration` → `$ACP2_INTEGRATION_SOURCE`,
+`venvs/browser` → its own `sys.prefix`). C created the venvs during T-01
+bootstrap; B02a verified them. Chromium is **not** installed (C/T-08 owns it and
+B02a is not accepted on Chromium launch).
 
 ## 3. Scenario registry and `ACP2_LIVE_SCENARIOS`
 
@@ -140,8 +155,8 @@ this environment and prints only
 
 Order of checks:
 
-1. `ACP2_CONTRACTS` must be non-empty, and the evidence root must resolve
-   (section 6), otherwise `2`.
+1. `ACP2_CONTRACTS` must be non-empty, and the adopted B00 evidence root must
+   resolve (section 6), otherwise `2`.
 2. Fewer than two arguments → `3`.
 3. `route_select` decides the interpreter/source; usage errors → `3`.
 4. `run_id` = `$ACP2_RUN_ID`, else `<scenario>-<UTC timestamp>-<pid>`.
@@ -160,21 +175,36 @@ Order of checks:
 `ACP2_RS_FORWARD` carries the forwarded flags; `--out`/`--timeout` are captured
 by `c_accept` so the harness receives exactly one of each.
 
-## 6. Evidence-root resolution (B00 handoff)
+## 6. Evidence-root resolution (adopted B00 baseline)
 
-`c_accept` resolves the evidence root in this order:
+`c_accept` reads B00's committed `runtime/baseline-lock.json` — first
+`$ACP2_CONTRACTS/runtime/baseline-lock.json` when present, otherwise
+`$ACP2_BASELINE_LOCK` (the project-level contracts path). It resolves and
+asserts:
 
-1. **B-bound mode** — if `$ACP2_CONTRACTS/runtime/baseline-lock.json` exists,
-   `$ACP2_EVIDENCE` must equal its `evidence_root` exactly; otherwise `2`.
-   The run is not stamped provisional.
-2. **Provisional mode** — if no lock exists, `$ACP2_EVIDENCE` must equal
-   `/ACPServer/acp2-development/evidence`, the provisional root frozen in
-   `experience/ownership.md`. Every run root receives `not_verified.json`
-   containing `NOT_VERIFIED(b00_handoff)`, and `ACP2_NOT_VERIFIED` is exported.
-   This is never presented as B acceptance.
+1. Absolute `evidence_root` → must equal `$ACP2_EVIDENCE` exactly.
+2. Project-relative `evidence_root` → `$ACP2_PROJECT_ROOT/<value>` (normalized)
+   must equal `$ACP2_EVIDENCE` exactly.
+3. `evidence_roots.C`, when present, must equal the resolved root + `/C`
+   (resolved absolute or project-relative the same way).
+4. On any mismatch `c_accept` prints the reason and returns `2`; it never fakes
+   a PASS.
+5. On success it exports `ACP2_EVIDENCE_BINDING=b00_project_root` and writes no
+   provisional `not_verified` stamp.
 
-Both branches were exercised: matching lock → proceeds to the harness check,
-mismatched lock → `2`; missing lock + non-provisional root → `2`.
+Adopted values: `evidence_root=reports/acp2_implementation/bb45a46`,
+`$ACP2_EVIDENCE=/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46`,
+`evidence_roots.C=reports/acp2_implementation/bb45a46/C` →
+`/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C`.
+A missing lock fails closed with `2`. The old provisional root
+`/ACPServer/acp2-development/evidence` is retained only as
+`$ACP2_PROVISIONAL_EVIDENCE` documentation and is rejected.
+
+Exercised branches: real lock + adopted root → proceeds to the harness check;
+old provisional root → `2` evidence-root mismatch; lock copy without
+`evidence_root` → `2`; relative lock against a wrong `ACP2_PROJECT_ROOT` → `2`;
+wrong `evidence_roots.C` → `2`; absolute-value lock → proceeds to the harness
+check; missing lock → `2`.
 
 ## 7. `dsh_acceptance <web|headless> [app args...]`
 
@@ -204,13 +234,15 @@ Smoke evidence: `dsh_acceptance headless --help` exits 0 (21 stdout lines);
 
 ## 9. Not verified / open
 
-* `NOT_VERIFIED(b00_handoff)` — no `runtime/baseline-lock.json`, `manifest.json`
-  or B-signed evidence root.
-* `NOT_VERIFIED(b02a_handoff)` — tools root, data root and role interpreters are
-  C-provisional; B02a delivered nothing. Node/pnpm/DSH install itself is fully
-  verified and does not depend on B02a.
-* `c_accept <scenario>` product PASS is **not** claimed here: the Harness
-  (`scripts/acceptance/acp2_experience.py`) is delivered by T-06/T-07. At freeze
-  time `c_accept` correctly returns `2` `NOT_VERIFIED(harness_not_delivered)`.
+* B00 handoff adopted (commit `ac43c16`): `baseline-lock.json`,
+  `manifest.json` and the absolute evidence root are verified; no stale B00
+  handoff gate remains.
+* B02a environment adopted (commit `0dee16f`): tools root, data root, role
+  interpreters and browser venv are `integration_ready`. `ACP2_TOOLS`
+  intentionally diverges from B02a's venv root (section 2).
+* `NOT_VERIFIED(harness_not_delivered)` — `scripts/acceptance/acp2_experience.py`
+  is delivered by C T-06/T-07. At adoption time `c_accept` correctly returns `2`.
+* `NOT_VERIFIED(chromium_not_installed)` — Chromium install/launch is C T-08;
+  B02a only verified the browser venv can import playwright.
+* `c_accept <scenario>` product PASS is **not** claimed here.
 * No `route.json` is written by this todo; T-07 owns the formal route record.
-* Chromium is not installed; `playwright install` was not run (T-08 owns it).

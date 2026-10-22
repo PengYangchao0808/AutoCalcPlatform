@@ -1,12 +1,16 @@
 {
   "schema": "acp2.experience.dependencies-c.v1",
   "generated_at": "2026-10-22T19:14:00Z",
+  "updated_at": "2026-10-22T20:15:00Z",
   "generated_by": "C/T-01 (acp2-plan-c-rph-workbench)",
+  "updated_by": "C/T-04a (acp2-plan-c-rph-workbench)",
   "consumer_track": "C",
-  "owner_boundary": "C writes this file only because B has not delivered runtime/dependencies.json; it is NOT the B-owned runtime dependency manifest.",
+  "owner_boundary": "C maintains this consumer-side handoff view; the authoritative B dependency manifest is docs/reference/next-change/acp2-contracts/runtime/dependencies.json (B single-writer). C never edits the B-owned file.",
   "source_plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
   "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
   "candidate_revision": "75a8f08a06b5528b310b26bd309940e99d9cd9bd",
+  "b00_commit": "ac43c16",
+  "b02a_commit": "0dee16f",
   "readiness_vocabulary": [
     "contract_ready",
     "implementation_ready",
@@ -17,20 +21,39 @@
     "planned",
     "blocked"
   ],
-  "readiness_ladder": "not_entered for every row below because the producer artifact is absent; readiness is recorded as blocked to make that explicit and is never promoted without producer evidence.",
+  "readiness_ladder": "B00 baseline-lock/manifest are promoted to verified on the committed B00 blobs (commit ac43c16). B02a environment rows are promoted to integration_ready on the B02a env and role-interpreter evidence (commit 0dee16f; Chromium launch excluded). No row is promoted without producer evidence.",
   "not_verified": [
-    "NOT_VERIFIED(b00_handoff)",
-    "NOT_VERIFIED(b02a_handoff)"
+    "NOT_VERIFIED(harness_not_delivered): scripts/acceptance/acp2_experience.py is C T-06/T-07 scope and is absent at adoption time",
+    "NOT_VERIFIED(chromium_not_installed): Chromium install/launch is C T-08 scope; B02a only verified the browser venv can import playwright"
   ],
+  "in_flight_not_consumed": {
+    "rule": "Only committed blobs were read (git show HEAD:<path>). Uncommitted working-tree edits, deletions and samples are never consumed as delivery.",
+    "paths": [
+      {
+        "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+        "consumed": false,
+        "sha256_committed": "96862edd6534614bfa64620f170161c7cbad6c2117d941dd215e49ab9131c4ac",
+        "observed": "HEAD blob is authoritative; working-tree porcelain for this path was empty at adoption time, and any earlier in-flight edit was ignored"
+      },
+      {
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/**",
+        "consumed": false,
+        "observed": "No working-tree deletion was present at adoption time; the committed manifest.json/samples digest remains authoritative"
+      }
+    ]
+  },
   "rows": {
     "B00:baseline-lock": {
       "producer": "B00",
       "consumer": "C/T-01 (and every downstream C todo)",
       "artifact": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
-      "readiness": "blocked",
-      "readiness_ladder": "not_entered",
-      "delivery_status": "blocked",
-      "delivered": false,
+      "readiness": "verified",
+      "readiness_ladder": "producer_evidence_verified",
+      "delivery_status": "planned",
+      "delivered": true,
+      "commit": "ac43c16",
+      "sha256": "fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B00/baseline-lock.json",
       "requires": [
         "B00 publishes docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
         "baseline-lock.json contains a candidate_id field",
@@ -39,40 +62,53 @@
       ],
       "observed": {
         "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
-        "exists": false,
-        "note": "No docs/reference/next-change/acp2-contracts/ directory exists in the main checkout."
-      },
-      "not_verified": "NOT_VERIFIED(b00_handoff)"
+        "exists": true,
+        "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+        "evidence_root": "reports/acp2_implementation/bb45a46",
+        "evidence_root_is_project_relative": true,
+        "evidence_root_absolute": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+        "evidence_roots_c": "reports/acp2_implementation/bb45a46/C",
+        "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+        "verification": "1906/1906",
+        "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+      }
     },
     "B00:manifest/evidence_root": {
       "producer": "B00",
       "consumer": "C/T-01 (evidence root) and every C evidence row",
-      "artifact": "docs/reference/next-change/acp2-contracts/runtime/manifest.json",
-      "readiness": "blocked",
-      "readiness_ladder": "not_entered",
-      "delivery_status": "blocked",
-      "delivered": false,
+      "artifact": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "readiness": "verified",
+      "readiness_ladder": "producer_evidence_verified",
+      "delivery_status": "planned",
+      "delivered": true,
+      "commit": "ac43c16",
+      "sha256": "b83919a71f55c4131b4daa7e82b13369863aa495e951665178f9be63c1b78769",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
       "requires": [
-        "B00 publishes docs/reference/next-change/acp2-contracts/runtime/manifest.json",
+        "B00 publishes docs/reference/next-change/acp2-contracts/manifest.json",
         "manifest.json registers the absolute evidence_root used by C product evidence",
         "manifest.json registers the candidate_id that owns that evidence root",
         "manifest.json evidence_root equals baseline-lock.json evidence_root"
       ],
       "observed": {
-        "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/manifest.json",
-        "exists": false,
-        "note": "C provisionally uses /ACPServer/acp2-development/evidence and marks it PROVISIONAL - B00 must confirm or reassign."
-      },
-      "not_verified": "NOT_VERIFIED(b00_handoff)"
+        "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/manifest.json",
+        "exists": true,
+        "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+        "evidence_root_absolute": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+        "note": "Adopted absolute root equals B02a's ACP2_EVIDENCE value."
+      }
     },
     "B02a:tools-root": {
       "producer": "B02a",
       "consumer": "C/T-04, C/T-11, C/T-12 (Node/pnpm/DSH/browser tooling)",
-      "artifact": "/ACPServer/acp2-tools",
-      "readiness": "blocked",
-      "readiness_ladder": "not_entered",
-      "delivery_status": "blocked",
-      "delivered": false,
+      "artifact": "/ACPServer/acp2-development/venvs",
+      "readiness": "integration_ready",
+      "readiness_ladder": "producer_evidence_verified",
+      "delivery_status": "planned",
+      "delivered": true,
+      "commit": "0dee16f",
+      "sha256": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
       "requires": [
         "B02a publishes a tools root path",
         "B02a registers the tools root in runtime/dependencies.json",
@@ -81,21 +117,25 @@
         "B02a provides the frozen DSH checkout revision"
       ],
       "observed": {
-        "path": "/ACPServer/acp2-tools",
+        "path": "/ACPServer/acp2-development/venvs",
         "exists": true,
-        "empty": true,
-        "note": "Directory was created by C/T-01 bootstrap only; it contains no B02a-delivered tooling."
-      },
-      "not_verified": "NOT_VERIFIED(b02a_handoff)"
+        "b_env_acp2_tools": "/ACPServer/acp2-development/venvs",
+        "c_env_acp2_tools": "/ACPServer/acp2-tools",
+        "divergence": "Intentional. B02a's root holds Python role venvs; C's root holds the T-04 Node/pnpm/DSH/browser toolchain. Neither replaces the other.",
+        "note": "The artifact/sha256 fields identify the B02a env handoff file data/b/acceptance-env.sh."
+      }
     },
     "B02a:role-interpreters": {
       "producer": "B02a",
       "consumer": "C/T-01 acceptance, C harness fixture/live routing",
       "artifact": "role interpreters for C and integration",
-      "readiness": "blocked",
-      "readiness_ladder": "not_entered",
-      "delivery_status": "blocked",
-      "delivered": false,
+      "readiness": "integration_ready",
+      "readiness_ladder": "producer_evidence_verified",
+      "delivery_status": "planned",
+      "delivered": true,
+      "commit": "0dee16f",
+      "sha256": "4ed3f5b76ce7e20822841d125c97426b9e8e838ec03f8749c5ffc993e3d04cd7",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B02/role-interpreters.json",
       "requires": [
         "B02a publishes ACP2_C_PYTHON path",
         "B02a publishes ACP2_INTEGRATION_PYTHON path",
@@ -106,27 +146,31 @@
         "c_python": {
           "path": "/ACPServer/acp2-development/venvs/c/bin/python",
           "exists": true,
-          "provenance": "created by C/T-01, not delivered by B02a",
-          "acp_import": "/ACPServer/acp2-development/C/src/acp/__init__.py"
+          "import_source_assertion": "PASS",
+          "acp_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+          "provenance": "created by C/T-01 bootstrap; B02a verified it in role-interpreters.json"
         },
         "integration_python": {
           "path": "/ACPServer/acp2-development/venvs/integration/bin/python",
           "exists": true,
-          "provenance": "created by C/T-01, not delivered by B02a",
-          "acp_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py"
+          "import_source_assertion": "PASS",
+          "acp_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+          "provenance": "created by C/T-01 bootstrap; B02a verified it in role-interpreters.json"
         },
-        "note": "C provisionally created these interpreters so the track can proceed; this is not acceptance of B02a."
-      },
-      "not_verified": "NOT_VERIFIED(b02a_handoff)"
+        "note": "sha256 is that of the B02 role-interpreters evidence file."
+      }
     },
     "B02a:browser-venv": {
       "producer": "B02a",
       "consumer": "C/T-08 (Chromium install and real launch), C/T-17/T-21/T-31/T-38",
       "artifact": "browser venv with the .[browser] extra",
-      "readiness": "blocked",
-      "readiness_ladder": "not_entered",
-      "delivery_status": "blocked",
-      "delivered": false,
+      "readiness": "integration_ready",
+      "readiness_ladder": "producer_evidence_verified",
+      "delivery_status": "planned",
+      "delivered": true,
+      "commit": "0dee16f",
+      "sha256": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B02/browser-env.json",
       "requires": [
         "B02a publishes ACP2_BROWSER_PYTHON path",
         "B02a installs the .[browser] extra into that environment",
@@ -135,12 +179,11 @@
       "observed": {
         "path": "/ACPServer/acp2-development/venvs/browser/bin/python",
         "exists": true,
-        "provenance": "created by C/T-01 with playwright==1.63.0; not delivered by B02a",
-        "playwright_import": "/ACPServer/acp2-development/venvs/browser/lib/python3.11/site-packages/playwright/__init__.py",
+        "playwright_import": "/ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py",
+        "playwright_version": "1.63.0",
         "chromium_installed": false,
         "note": "Chromium installation and launch belong to C/T-08, not B02a. B02a must not be accepted on Chromium launch."
-      },
-      "not_verified": "NOT_VERIFIED(b02a_handoff)"
+      }
     }
   }
 }
