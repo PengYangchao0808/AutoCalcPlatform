@@ -1,0 +1,180 @@
+{
+  "testsuites": [
+    {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "4",
+      "skipped": "13",
+      "tests": "10075",
+      "time": "1922.374",
+      "timestamp": "2026-10-22T00:12:37.741506+08:00",
+      "hostname": "redacted-host"
+    }
+  ],
+  "original_759_missing": [],
+  "original_759_not_passed": [],
+  "original_759_verified": 759,
+  "source_files_checked": 19,
+  "source_drift": [],
+  "failures": [
+    {
+      "classname": "tests.test_acp_frontend_browser",
+      "name": "test_nmr_canvas_survives_success",
+      "kind": "failure",
+      "message": "playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot read properties of undefined (reading 'instance')\n    at eval (eval at evaluate (:311:30), <anonymous>:68:63)\n    at async <anonymous>:337:30"
+    },
+    {
+      "classname": "tests.test_acp_frontend_browser",
+      "name": "test_vibration_cold_start_arrows_in_real_browser",
+      "kind": "failure",
+      "message": "AssertionError: scene instance not created (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}\nassert False"
+    },
+    {
+      "classname": "tests.test_acp_frontend_browser",
+      "name": "test_vibration_animation_frames_combo_hide_remount_teardown",
+      "kind": "failure",
+      "message": "AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}\nassert (False)"
+    },
+    {
+      "classname": "tests.test_acp_frontend_browser",
+      "name": "test_vibration_two_instances_do_not_share_state",
+      "kind": "failure",
+      "message": "AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}\nassert (False)"
+    }
+  ],
+  "skips": [
+    {
+      "classname": "tests.test_acp_nmr_fchl_availability",
+      "name": "test_real_compiled_qml_reports_qml_state",
+      "reason": "NOT_VERIFIED: compiled qml kernel not importable — the real-qml state was not exercised; skipped, never counted as a pass (qml needs numpy<2 + Fortran)"
+    },
+    {
+      "classname": "tests.test_acp_nmr_fchl_fragments",
+      "name": "test_real_openbabel_radius3_fragmentation_case",
+      "reason": "NOT_VERIFIED: openbabel python bindings not importable — the real radius-3 fragmentation was not executed; skipped, never counted as a pass (install 'openbabel>=3.1' to verify)"
+    },
+    {
+      "classname": "tests.test_acp_nmr_fchl_golden",
+      "name": "test_layer2_kernel_qml_parity_vs_frozen_numpy_golden",
+      "reason": "NOT_VERIFIED: compiled qml kernel not importable — the qml parity layer was not executed; skipped, never counted as a pass (install qml on numpy<2 to verify)"
+    },
+    {
+      "classname": "tests.test_acp_nmr_proton_processor",
+      "name": "test_real_instrument_proton_fixture_is_not_verified",
+      "reason": "NOT_VERIFIED: no real proton Bruker dataset in tests/fixtures/ (searched proton_real / bruker_proton_real / bruker_proton); the real-instrument multiplet-vs-annotation layer is not executed — synthetic hand-built + synthetic-FID layers remain binding"
+    },
+    {
+      "classname": "tests.test_acp_nmr_report_schema",
+      "name": "test_json_and_xlsx_carry_same_numbers",
+      "reason": "could not import 'openpyxl': No module named 'openpyxl'"
+    },
+    {
+      "classname": "tests.test_acp_nmr_report_schema",
+      "name": "test_xlsx_split_r2_rows_mirror_json",
+      "reason": "could not import 'openpyxl': No module named 'openpyxl'"
+    },
+    {
+      "classname": "tests.test_pes_live_status_api_integration",
+      "name": "test_live_pes_projection_from_store_row",
+      "reason": "Pass --run-slow or --run-integration to run"
+    },
+    {
+      "classname": "tests.test_remote_execution_integrity_live",
+      "name": "test_live_storage_identity_same_and_cross_project",
+      "reason": "live scenarios require --run-integration (or --run-slow)"
+    },
+    {
+      "classname": "tests.test_remote_execution_integrity_live",
+      "name": "test_live_release_upgrade_leaves_bound_tree_unchanged",
+      "reason": "live scenarios require --run-integration (or --run-slow)"
+    },
+    {
+      "classname": "tests.test_remote_execution_integrity_live",
+      "name": "test_live_cancel_confirmation_bkill_then_bjobs",
+      "reason": "live scenarios require --run-integration (or --run-slow)"
+    },
+    {
+      "classname": "tests.test_remote_phase1_integration",
+      "name": "test_ssh_connect_and_run",
+      "reason": "Requires ACP_REMOTE_PASSWORD_COMPUTE_01 env var for real SSH node"
+    },
+    {
+      "classname": "tests.test_remote_phase1_integration",
+      "name": "test_sftp_roundtrip",
+      "reason": "Requires ACP_REMOTE_PASSWORD_COMPUTE_01 env var for real SSH node"
+    },
+    {
+      "classname": "tests.test_remote_phase1_integration",
+      "name": "test_codesyncer_real",
+      "reason": "Requires ACP_REMOTE_PASSWORD_COMPUTE_01 env var for real SSH node"
+    }
+  ],
+  "existing_e2e_artifact_restored": true,
+  "full_command": "PYTHONPATH=src:. <venv>/bin/python -m pytest -m 'not slow' -q --disable-warnings --junitxml=/tmp/acp-architecture-assessment-20261022-nonslow-normalized.xml",
+  "full_exit_code": 1,
+  "full_counts": {
+    "passed": 10058,
+    "failed": 4,
+    "skipped": 13,
+    "deselected": 95,
+    "warnings": 29
+  },
+  "node": {
+    "passed": 329,
+    "failed": 0,
+    "exit_code": 0,
+    "command": "ACP_PYTHON=<venv>/bin/python node frontend/js/module_tests/run_all.js"
+  },
+  "ruff_roots": {
+    "exit_code": 0,
+    "scope": [
+      "src/acp_services",
+      "src/cccp/analysis",
+      "src/cccp/calculation/products"
+    ]
+  },
+  "format_roots": {
+    "exit_code": 0,
+    "files": 160
+  },
+  "ruff_additional_touched": {
+    "exit_code": 0,
+    "files": 9
+  },
+  "format_additional_touched": {
+    "exit_code": 1,
+    "failure_files": [
+      "src/acp/calculations/batch/options.py"
+    ],
+    "HEAD_stdin_check_exit": 1,
+    "current_stdin_check_exit": 1
+  },
+  "compileall": {
+    "python": "<venv>/bin/python",
+    "exit_code": 0,
+    "scope": "src"
+  },
+  "git_diff_check": {
+    "exit_code": 0
+  },
+  "debug_archive_hash_check": {
+    "files": 29,
+    "mismatch": []
+  },
+  "additional_xlsx": {
+    "python": "/usr/bin/python3.11",
+    "passed": 2,
+    "failed": 0,
+    "exit_code": 0,
+    "part_of_full_skip_count": true
+  },
+  "new_unbound_Exception_handlers": {
+    "path": "src/acp/scheduler/manager.py",
+    "HEAD_count": 42,
+    "current_count": 44,
+    "added_lines": [
+      2032,
+      5020
+    ]
+  }
+}

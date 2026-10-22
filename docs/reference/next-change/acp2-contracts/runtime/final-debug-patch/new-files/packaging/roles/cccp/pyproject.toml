@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cccp"
+dynamic = ["version"]
+description = "ACP computational chemistry library"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "numpy>=2.1.0", "rdkit>=2022.09.1", "pyyaml>=6.0", "scipy>=1.10",
+    "matplotlib>=3.7", "openpyxl>=3.1", "typing-extensions>=4.1",
+]
+
+[project.optional-dependencies]
+nmr = ["nmrglue>=0.10", "openbabel>=3.1", "qml>=0.4"]
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cccp", "cccp.*"]
+
+[tool.setuptools.package-data]
+"cccp.analysis.nmr" = ["model_assets/*"]
+"cccp" = ["py.typed"]
