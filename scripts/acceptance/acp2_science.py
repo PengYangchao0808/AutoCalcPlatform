@@ -104,6 +104,25 @@ P1_TEST_CANDIDATE_GAP = (
 )
 NATIVE_ENERGY_TOLERANCE_HARTREE = 1.0e-6
 NATIVE_FREQUENCY_TOLERANCE_CM1 = 1.0e-6
+
+#: B07's frozen LSF/DA deadline components.  A derives the harness timeout from
+#: these values and never substitutes an independent fixed timeout.
+FROZEN_DEADLINE_KEYS = (
+    "max_queue_wait_seconds",
+    "max_run_seconds",
+    "max_prepare_seconds",
+    "cleanup_seconds",
+)
+CROSSCHECK_RECORD_SCHEMA = "acp2.science.platform-run-records"
+CROSSCHECK_REPORT_SCHEMA = "acp2.science.platform-record-crosscheck"
+CROSSCHECK_RUN_KINDS = ("completed_science_run", "control_cancel_run")
+CROSSCHECK_COMPLETED = "completed_science_run"
+CROSSCHECK_CANCELLED = "control_cancel_run"
+CROSSCHECK_SCIENCE_TOLERANCE = {
+    "energy_hartree_abs": NATIVE_ENERGY_TOLERANCE_HARTREE,
+    "frequency_cm1_abs": NATIVE_FREQUENCY_TOLERANCE_CM1,
+}
+
 _PLACEHOLDER_RUN_KEYS = frozenset(
     {"", "none", "null", "tbd", "todo", "placeholder", "unapproved", "not-issued"}
 )
@@ -121,6 +140,12 @@ _NATIVE_MARKERS: dict[str, tuple[re.Pattern[str], re.Pattern[str] | None]] = {
         re.compile(r"normal termination|finished", re.IGNORECASE),
     ),
 }
+_SOFTWARE_VERSION_PATTERNS = (
+    re.compile(r"\bORCA\s+([0-9]+(?:\.[0-9A-Za-z]+)+)"),
+    re.compile(r"\bxtb(?:\s+version)?\s+([0-9]+(?:\.[0-9A-Za-z]+)+)", re.IGNORECASE),
+)
+_VIBRATION_LINE = re.compile(r"^\s*\d+:\s+([-+]?\d+(?:\.\d*)?)\s+cm\*\*-1", re.MULTILINE)
+_NORMAL_MODE_ROW = re.compile(r"^\s*\d+\s+[-+]?\d+\.\d+", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -1802,7 +1827,1090 @@ def _native_output_from_result(result: Any) -> Path | None:
     return None
 
 
+def derive_timeout_from_frozen(
+    frozen_deadlines: Any,
+    *,
+    client_request_seconds: float | None = None,
+) -> dict[str, Any]:
+    """Derive the harness timeout from B07's frozen deadline components.
+
+    Queue wait, scientific runtime, prepare and cleanup are summed into the
+    overall acceptance deadline.  The client request deadline is reported
+    separately and is never folded into the QC timeout.  Missing values stay
+    ``NOT_VERIFIED`` and malformed values fail; no default is invented.
+    """
+    report: dict[str, Any] = {
+        "status": "NOT_VERIFIED",
+        "source": "B07 frozen deadlines",
+        "keys": list(FROZEN_DEADLINE_KEYS),
+        "components": {},
+        "timeout_seconds": None,
+        "deadlines": {},
+        "gaps": [],
+        "malformed": [],
+    }
+    if not isinstance(frozen_deadlines, Mapping):
+        report["gaps"].append(
+            "B07 frozen deadlines not supplied; required keys: " + ", ".join(FROZEN_DEADLINE_KEYS)
+        )
+        for key in FROZEN_DEADLINE_KEYS:
+            report["gaps"].append(f"frozen deadline {key} is missing")
+        return report
+    malformed = False
+    for key in FROZEN_DEADLINE_KEYS:
+        value = frozen_deadlines.get(key)
+        if value is None:
+            report["gaps"].append(f"frozen deadline {key} is missing")
+            continue
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or float(value) < 0
+        ):
+            report["malformed"].append(
+                f"frozen deadline {key} must be a non-negative finite number"
+            )
+            malformed = True
+            continue
+        report["components"][key] = float(value)
+    if malformed:
+        report["status"] = "FAIL"
+        return report
+    if report["gaps"]:
+        return report
+    total = math.fsum(report["components"][key] for key in FROZEN_DEADLINE_KEYS)
+    report["status"] = "OK"
+    report["timeout_seconds"] = total
+    report["deadlines"] = {
+        "queue_wait_seconds": report["components"]["max_queue_wait_seconds"],
+        "scientific_runtime_seconds": report["components"]["max_run_seconds"],
+        "prepare_seconds": report["components"]["max_prepare_seconds"],
+        "cleanup_seconds": report["components"]["cleanup_seconds"],
+        "client_request_seconds": client_request_seconds,
+        "overall_acceptance_seconds": total,
+    }
+    return report
+
+
+def _crosscheck_document(records: Any) -> tuple[list[Any], dict[str, Any]]:
+    if isinstance(records, Mapping):
+        document = dict(records)
+        for key in ("records", "rows", "runs"):
+            value = document.get(key)
+            if isinstance(value, list):
+                return value, document
+        if isinstance(document.get("task_ref"), str):
+            return [document], document
+        return [], document
+    if isinstance(records, list):
+        return records, {}
+    return [], {}
+
+
+def _crosscheck_integration_status() -> dict[str, Any]:
+    source = os.environ.get("ACP2_INTEGRATION_SOURCE")
+    interpreter = os.environ.get("ACP2_INTEGRATION_PYTHON")
+    a_source = os.environ.get("ACP2_A_SOURCE")
+    a_python = os.environ.get("ACP2_A_PYTHON")
+    gaps: list[str] = []
+    if not source:
+        gaps.append("$ACP2_INTEGRATION_SOURCE is not set")
+    if not interpreter:
+        gaps.append("$ACP2_INTEGRATION_PYTHON is not set")
+    if source and a_source and Path(source).resolve() == Path(a_source).resolve():
+        gaps.append("$ACP2_INTEGRATION_SOURCE must be distinct from $ACP2_A_SOURCE")
+    if interpreter and a_python and Path(interpreter).resolve() == Path(a_python).resolve():
+        gaps.append("$ACP2_INTEGRATION_PYTHON must be distinct from $ACP2_A_PYTHON")
+    return {
+        "status": "OK" if not gaps else "NOT_VERIFIED",
+        "available": not gaps,
+        "source": source,
+        "interpreter": interpreter,
+        "a_source": a_source,
+        "a_python": a_python,
+        "gaps": gaps,
+    }
+
+
+def _crosscheck_environment(record: Mapping[str, Any]) -> dict[str, Any]:
+    raw = record.get("environment")
+    environment = dict(raw) if isinstance(raw, Mapping) else {}
+    software = environment.get("software")
+    software_mapping = dict(software) if isinstance(software, Mapping) else {}
+    return {
+        "source": environment.get("source"),
+        "interpreter": environment.get("interpreter"),
+        "software_name": software_mapping.get("name"),
+        "software_version": software_mapping.get("version"),
+        "method": environment.get("method"),
+        "basis": environment.get("basis"),
+        "input_sha256": environment.get("input_sha256"),
+    }
+
+
+def _crosscheck_path(raw: Any, root: Path) -> Path | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    path = Path(raw)
+    return path if path.is_absolute() else root / path
+
+
+def _crosscheck_parse_native(text: str) -> dict[str, Any]:
+    energy = _parse_native_energy(text, None)
+    software_version = None
+    for pattern in _SOFTWARE_VERSION_PATTERNS:
+        match = pattern.search(text)
+        if match is not None:
+            software_version = match.group(1)
+            break
+    frequencies: list[float] = []
+    for raw in _VIBRATION_LINE.findall(text):
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        if value != 0.0:
+            frequencies.append(value)
+    return {
+        "energy_found": bool(energy.get("found")),
+        "energy_hartree": energy.get("energy_hartree"),
+        "normal_termination": bool(energy.get("normal_termination")),
+        "software": energy.get("software"),
+        "software_version": software_version,
+        "frequencies_cm1": frequencies,
+        "normal_modes_section": "NORMAL MODES" in text,
+        "normal_mode_rows": len(_NORMAL_MODE_ROW.findall(text)),
+    }
+
+
+def _crosscheck_artifact_rows(
+    record: Mapping[str, Any],
+    root: Path,
+    attempt: int,
+) -> tuple[list[dict[str, Any]], list[str], list[str], dict[str, Path], dict[str, str]]:
+    rows: list[dict[str, Any]] = []
+    contradictions: list[str] = []
+    gaps: list[str] = []
+    paths_by_role: dict[str, Path] = {}
+    texts_by_role: dict[str, str] = {}
+    raw_artifacts = record.get("artifacts")
+    if not isinstance(raw_artifacts, list) or not raw_artifacts:
+        gaps.append("record declares no artifacts")
+        return rows, contradictions, gaps, paths_by_role, texts_by_role
+    for raw in raw_artifacts:
+        if not isinstance(raw, Mapping):
+            contradictions.append("artifact entry is not a JSON object")
+            continue
+        role = raw.get("role")
+        declared = raw.get("sha256")
+        artifact_attempt = raw.get("attempt")
+        path = _crosscheck_path(raw.get("path"), root)
+        status = "PASS"
+        actual_sha256: str | None = None
+        size_bytes: int | None = None
+        if not isinstance(role, str) or not role:
+            contradictions.append("artifact role is missing")
+            status = "FAIL"
+        if not isinstance(declared, str) or not _is_digest(declared):
+            contradictions.append(f"artifact {role!r} sha256 is not sha256:<64 hex>")
+            status = "FAIL"
+        if path is None:
+            gaps.append(f"artifact {role!r} path is missing")
+            status = "NOT_VERIFIED"
+        elif not path.is_file():
+            gaps.append(f"artifact {role!r} is not a readable file: {path}")
+            status = "NOT_VERIFIED"
+        else:
+            actual_sha256 = _sha256(path)
+            size_bytes = path.stat().st_size
+            if isinstance(declared, str) and _is_digest(declared):
+                expected = declared.removeprefix("sha256:")
+                if actual_sha256 != expected:
+                    contradictions.append(
+                        f"artifact {role!r} SHA-256 mismatch: declared {expected}, "
+                        f"actual {actual_sha256} ({path})"
+                    )
+                    status = "FAIL"
+            if isinstance(role, str) and role in ("native_output", "frequency_output"):
+                try:
+                    texts_by_role[role] = path.read_text(encoding="utf-8", errors="replace")
+                    paths_by_role[role] = path
+                except OSError as exc:
+                    gaps.append(f"artifact {role!r} cannot be read as text: {exc}")
+                    status = "NOT_VERIFIED"
+        if artifact_attempt is not None:
+            try:
+                artifact_attempt_int = int(artifact_attempt)
+            except (TypeError, ValueError):
+                contradictions.append(f"artifact {role!r} attempt is not an integer")
+                status = "FAIL"
+            else:
+                if artifact_attempt_int < attempt:
+                    contradictions.append(
+                        f"cached artifact {role!r} from an older attempt "
+                        f"(artifact attempt {artifact_attempt_int}, record attempt {attempt})"
+                    )
+                    status = "FAIL"
+                elif artifact_attempt_int != attempt:
+                    contradictions.append(
+                        f"artifact {role!r} attempt {artifact_attempt_int} differs from "
+                        f"record attempt {attempt}"
+                    )
+                    status = "FAIL"
+        rows.append(
+            {
+                "record_id": record.get("record_id"),
+                "role": role,
+                "path": str(path) if path is not None else raw.get("path"),
+                "declared_sha256": declared,
+                "actual_sha256": actual_sha256,
+                "size_bytes": size_bytes,
+                "attempt": artifact_attempt,
+                "status": status,
+            }
+        )
+    return rows, contradictions, gaps, paths_by_role, texts_by_role
+
+
+def _crosscheck_task_results(
+    raw_results: Any,
+    environment: Mapping[str, Any],
+    native: Mapping[str, Any],
+    frequency_native: Mapping[str, Any] | None,
+    tolerance: Mapping[str, float],
+) -> dict[str, Any]:
+    from cccp.calculation.results import TaskResult
+
+    checks: list[dict[str, Any]] = []
+    contradictions: list[str] = []
+    gaps: list[str] = []
+    summary: dict[str, Any] = {}
+    results: dict[str, Any] = {}
+    if not isinstance(raw_results, list) or not raw_results:
+        gaps.append("record carries no TaskResult document: full scientific body missing")
+        return {
+            "checks": checks,
+            "contradictions": contradictions,
+            "gaps": gaps,
+            "results": summary,
+            "energy_hartree": None,
+        }
+    for raw in raw_results:
+        if not isinstance(raw, Mapping):
+            contradictions.append("TaskResult document is not a JSON object")
+            continue
+        try:
+            result = TaskResult.from_dict(dict(raw))
+        except (TypeError, ValueError) as exc:
+            contradictions.append(f"invalid TaskResult document: {type(exc).__name__}: {exc}")
+            continue
+        task = result.task.value
+        if task in results:
+            contradictions.append(f"duplicate {task} TaskResult in record")
+            continue
+        results[task] = result
+    if not results:
+        gaps.append("record carries no parseable TaskResult document")
+    energy_tolerance = float(tolerance["energy_hartree_abs"])
+    frequency_tolerance = float(tolerance["frequency_cm1_abs"])
+    native_energy = native.get("energy_hartree")
+    for task, result in results.items():
+        summary[task] = {
+            "status": result.status,
+            "complete": result.complete,
+            "method": getattr(result.provenance, "method", None),
+            "software_version": getattr(result.provenance, "version", None),
+            "energy_hartree": result.energy_hartree,
+            "frequencies_cm1": [float(value) for value in result.frequencies],
+        }
+        if result.status != "completed":
+            contradictions.append(f"{task} TaskResult status is {result.status!r}, not completed")
+        if not result.complete:
+            contradictions.append(f"{task} TaskResult declares an incomplete scientific body")
+        if not result.symbols or not result.coordinates:
+            gaps.append(f"{task} TaskResult carries no complete coordinates/symbols")
+        provenance = result.provenance
+        if provenance is None:
+            gaps.append(f"{task} TaskResult declares no provenance")
+        else:
+            if provenance.method != environment.get("method"):
+                contradictions.append(
+                    f"{task} TaskResult method {provenance.method!r} differs from record "
+                    f"method {environment.get('method')!r}"
+                )
+            if not provenance.version or provenance.version == "unknown":
+                gaps.append(f"{task} TaskResult provenance.version is unknown")
+            elif provenance.version != environment.get("software_version"):
+                contradictions.append(
+                    f"{task} TaskResult software version {provenance.version!r} differs from "
+                    f"record software version {environment.get('software_version')!r}"
+                )
+        if result.energy_hartree is None or not math.isfinite(float(result.energy_hartree)):
+            gaps.append(f"{task} TaskResult exposes no finite energy")
+        elif native_energy is None:
+            gaps.append(f"native output exposes no final energy to compare with {task}")
+        else:
+            delta = abs(float(result.energy_hartree) - float(native_energy))
+            if delta > energy_tolerance:
+                contradictions.append(
+                    f"{task} TaskResult energy differs from the native output by "
+                    f"{delta:.3e} Ha (tolerance {energy_tolerance:.3e})"
+                )
+        if task == "optimize":
+            optimization_status = getattr(result.payload, "optimization_status", None)
+            if optimization_status is not None and optimization_status != "converged":
+                contradictions.append(
+                    f"optimize TaskResult reports optimization_status {optimization_status!r}"
+                )
+        if task == "frequency":
+            if not result.frequencies:
+                gaps.append("frequency TaskResult carries no vibrational frequencies")
+            analysis = getattr(result.payload, "analysis", None)
+            if analysis is None:
+                gaps.append("frequency payload carries no analysis (auxiliary products missing)")
+            else:
+                mode_vectors = getattr(analysis, "mode_vectors", None)
+                mode_frequencies = getattr(analysis, "mode_frequencies", None)
+                ir_intensities = getattr(analysis, "ir_intensities", None)
+                if not mode_vectors:
+                    gaps.append("frequency payload carries no normal-mode vectors")
+                if not mode_frequencies:
+                    gaps.append("frequency payload carries no mode-frequency table")
+                if ir_intensities is None or len(ir_intensities) != len(result.frequencies):
+                    gaps.append("frequency payload IR intensities do not cover every reported mode")
+            if frequency_native is None:
+                gaps.append("record carries no frequency_output native product")
+            else:
+                native_frequencies = [
+                    float(value) for value in frequency_native.get("frequencies_cm1", [])
+                ]
+                if not native_frequencies:
+                    gaps.append("frequency native output exposes no vibrational frequencies")
+                elif len(native_frequencies) != len(result.frequencies):
+                    contradictions.append(
+                        "frequency native mode count differs from the TaskResult "
+                        f"({len(native_frequencies)} vs {len(result.frequencies)})"
+                    )
+                else:
+                    deltas = [
+                        abs(left - right)
+                        for left, right in zip(native_frequencies, result.frequencies, strict=True)
+                    ]
+                    if any(delta > frequency_tolerance for delta in deltas):
+                        contradictions.append(
+                            "frequency native modes differ from the TaskResult beyond "
+                            f"{frequency_tolerance:.3e} cm-1"
+                        )
+                if not frequency_native.get("normal_modes_section"):
+                    gaps.append("frequency native output carries no NORMAL MODES section")
+                elif int(frequency_native.get("normal_mode_rows") or 0) <= 0:
+                    gaps.append("frequency native output carries no normal-mode rows")
+    required = ["optimize", "frequency"] if frequency_native is not None else ["optimize"]
+    for task in required:
+        if task not in results:
+            gaps.append(f"record carries no {task} TaskResult")
+    checks.append(
+        {
+            "name": "task_results",
+            "status": "FAIL" if contradictions else ("NOT_VERIFIED" if gaps else "PASS"),
+            "detail": "; ".join(contradictions or gaps) or None,
+        }
+    )
+    energy = next(
+        (
+            float(result.energy_hartree)
+            for result in results.values()
+            if result.energy_hartree is not None
+        ),
+        None,
+    )
+    return {
+        "checks": checks,
+        "contradictions": contradictions,
+        "gaps": gaps,
+        "results": summary,
+        "energy_hartree": energy,
+    }
+
+
+def _crosscheck_completed_science(
+    record: Mapping[str, Any],
+    *,
+    root: Path,
+    attempt: int,
+    environment: Mapping[str, Any],
+    tolerance: Mapping[str, float],
+) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    contradictions: list[str] = []
+    gaps: list[str] = []
+    artifact_rows, artifact_contradictions, artifact_gaps, paths, texts = _crosscheck_artifact_rows(
+        record, root, attempt
+    )
+    contradictions.extend(artifact_contradictions)
+    gaps.extend(artifact_gaps)
+    native_text = texts.get("native_output")
+    frequency_text = texts.get("frequency_output")
+    native: dict[str, Any] = {}
+    frequency_native: dict[str, Any] | None = None
+    if native_text is None:
+        gaps.append("record carries no readable native_output product")
+    else:
+        native = _crosscheck_parse_native(native_text)
+        if not native["energy_found"]:
+            gaps.append("native output exposes no independently parsed final energy")
+        if not native["normal_termination"]:
+            contradictions.append("native output does not report normal termination")
+        method = environment.get("method")
+        if not isinstance(method, str) or not method:
+            gaps.append("record declares no actual method")
+        elif method.lower() not in native_text.lower():
+            gaps.append(f"native output does not state the actual method {method!r}")
+        basis = environment.get("basis")
+        if isinstance(basis, str) and basis and basis.lower() not in native_text.lower():
+            gaps.append(f"native output does not state the actual basis {basis!r}")
+        version = native.get("software_version")
+        if not version:
+            gaps.append("native output does not state the software version")
+        elif version != environment.get("software_version"):
+            contradictions.append(
+                f"native software version {version!r} differs from record software version "
+                f"{environment.get('software_version')!r}"
+            )
+    if frequency_text is not None:
+        frequency_native = _crosscheck_parse_native(frequency_text)
+    task_report = _crosscheck_task_results(
+        record.get("task_results"), environment, native, frequency_native, tolerance
+    )
+    checks.extend(task_report["checks"])
+    contradictions.extend(task_report["contradictions"])
+    gaps.extend(task_report["gaps"])
+    checks.insert(
+        0,
+        {
+            "name": "artifact_digests",
+            "status": (
+                "FAIL"
+                if any(row["status"] == "FAIL" for row in artifact_rows)
+                else (
+                    "NOT_VERIFIED"
+                    if any(row["status"] == "NOT_VERIFIED" for row in artifact_rows)
+                    else "PASS"
+                )
+            ),
+            "detail": f"{len(artifact_rows)} artifact(s) hashed against declared SHA-256",
+        },
+    )
+    checks.insert(
+        1,
+        {
+            "name": "native_output",
+            "status": ("FAIL" if contradictions else ("NOT_VERIFIED" if gaps else "PASS")),
+            "detail": "; ".join(contradictions or gaps) or None,
+        },
+    )
+    return {
+        "checks": checks,
+        "contradictions": contradictions,
+        "gaps": gaps,
+        "artifact_rows": artifact_rows,
+        "paths_by_role": paths,
+        "native": native,
+        "frequency_native": frequency_native,
+        "task_results": task_report,
+        "energy_hartree": task_report["energy_hartree"],
+    }
+
+
+def _crosscheck_receipt(platform: Mapping[str, Any]) -> str | None:
+    receipt = platform.get("receipt")
+    if not isinstance(receipt, Mapping):
+        return "receipt is missing"
+    if receipt.get("present") is not True:
+        return "receipt.present must be true"
+    digest = receipt.get("sha256")
+    if not isinstance(digest, str) or not _is_digest(digest):
+        return "receipt.sha256 must be a sha256:<64 hex> digest"
+    return None
+
+
+def _crosscheck_lsf_evidence(
+    record: Mapping[str, Any],
+    *,
+    constructed: bool,
+    timeout: Mapping[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+    platform = record.get("platform")
+    platform_mapping = dict(platform) if isinstance(platform, Mapping) else {}
+    if constructed:
+        reasons.append("real bsub/bjobs/submission/receipt evidence (record is constructed)")
+    else:
+        commands = platform_mapping.get("commands")
+        command_text = ""
+        if isinstance(commands, list):
+            command_text = " ".join(
+                " ".join(str(part) for part in command.get("argv", []))
+                for command in commands
+                if isinstance(command, Mapping)
+            ).lower()
+            for command in commands:
+                if not isinstance(command, Mapping):
+                    reasons.append("platform command record is not a JSON object")
+                    continue
+                exit_code = command.get("exit_code")
+                if isinstance(exit_code, bool) or not isinstance(exit_code, int):
+                    reasons.append("platform command record has no integer exit_code")
+        else:
+            reasons.append("real bsub/bjobs command records are missing")
+        if "bsub" not in command_text:
+            reasons.append("real bsub command and exit code are missing")
+        if "bjobs" not in command_text:
+            reasons.append("real bjobs reconciliation command and exit code are missing")
+        submission_id = platform_mapping.get("submission_id")
+        if not isinstance(submission_id, str) or not submission_id:
+            reasons.append("submission_id is missing")
+        receipt_gap = _crosscheck_receipt(platform_mapping)
+        if receipt_gap is not None:
+            reasons.append(receipt_gap)
+    if timeout.get("status") != "OK":
+        for gap in timeout.get("gaps", []):
+            reasons.append(str(gap))
+        for malformed in timeout.get("malformed", []):
+            reasons.append(str(malformed))
+    return reasons
+
+
+def _crosscheck_compare(
+    left: Mapping[str, Any],
+    right: Mapping[str, Any],
+    tolerance: Mapping[str, float],
+) -> dict[str, Any]:
+    if left.get("comparison_key") != right.get("comparison_key"):
+        return {
+            "left": left.get("record_id"),
+            "right": right.get("record_id"),
+            "status": "not_comparable",
+            "reason": "different environment/method/version/input",
+            "delta_hartree": None,
+            "tolerance_hartree": float(tolerance["energy_hartree_abs"]),
+        }
+    left_energy = left.get("energy_hartree")
+    right_energy = right.get("energy_hartree")
+    if left_energy is None or right_energy is None:
+        return {
+            "left": left.get("record_id"),
+            "right": right.get("record_id"),
+            "status": "not_comparable",
+            "reason": "one record exposes no comparable energy",
+            "delta_hartree": None,
+            "tolerance_hartree": float(tolerance["energy_hartree_abs"]),
+        }
+    delta = abs(float(left_energy) - float(right_energy))
+    return {
+        "left": left.get("record_id"),
+        "right": right.get("record_id"),
+        "status": "equal" if delta <= float(tolerance["energy_hartree_abs"]) else "differing",
+        "reason": None,
+        "delta_hartree": delta,
+        "tolerance_hartree": float(tolerance["energy_hartree_abs"]),
+    }
+
+
+def _crosscheck_mark_failed(row: dict[str, Any], message: str) -> None:
+    row["contradictions"].append(message)
+    row["status"] = "FAIL"
+
+
+def crosscheck_local_lsf_records(
+    records: Any,
+    *,
+    frozen_deadlines: Any = None,
+    tolerance: Any = None,
+    root: str | Path | None = None,
+) -> dict[str, Any]:
+    """Cross-check platform Local/LSF records against the native science bytes.
+
+    A record set is either a list of record objects or an object with a
+    ``records``/``rows``/``runs`` list.  Every real record must carry the
+    platform Loc/ LSF evidence, the frozen B07 deadlines and the
+    ``$ACP2_INTEGRATION_SOURCE``/``$ACP2_INTEGRATION_PYTHON`` pair; a
+    constructed record is labelled ``constructed: true`` and can prove the code
+    path but never a real run.  Returned rows are PASS, FAIL, NOT_VERIFIED or
+    STALE_REJECTED; a cancelled run is checked for its terminal state, stop
+    confirmation and receipt instead of a completed scientific result.
+    """
+    raw_records, document = _crosscheck_document(records)
+    record_root = Path(root) if root is not None else _repo_root()
+    constructed_set = document.get("constructed") is True or any(
+        isinstance(raw, Mapping) and raw.get("constructed") is True for raw in raw_records
+    )
+    deadline_source = (
+        frozen_deadlines if frozen_deadlines is not None else document.get("frozen_deadlines")
+    )
+    client_request_seconds = document.get("client_request_seconds")
+    if (
+        isinstance(client_request_seconds, bool)
+        or not isinstance(client_request_seconds, (int, float))
+        or not math.isfinite(float(client_request_seconds))
+        or float(client_request_seconds) < 0
+    ):
+        client_request_seconds = None
+    timeout = derive_timeout_from_frozen(
+        deadline_source, client_request_seconds=client_request_seconds
+    )
+    tolerance_map = dict(CROSSCHECK_SCIENCE_TOLERANCE)
+    raw_tolerance = tolerance if tolerance is not None else document.get("tolerance")
+    if isinstance(raw_tolerance, Mapping):
+        for key in tolerance_map:
+            value = raw_tolerance.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+                tolerance_map[key] = float(value)
+    integration = _crosscheck_integration_status()
+    revisions = {
+        "server_revision": document.get("server_revision"),
+        "client_revision": document.get("client_revision"),
+        "harness_revision": _sha256(SCRIPT_PATH),
+        "harness_path": str(SCRIPT_PATH),
+    }
+    task_ref_kinds: dict[str, set[str]] = {}
+    for raw in raw_records:
+        if not isinstance(raw, Mapping):
+            continue
+        task_ref = raw.get("task_ref")
+        run_kind = raw.get("run_kind")
+        if isinstance(task_ref, str) and run_kind in CROSSCHECK_RUN_KINDS:
+            task_ref_kinds.setdefault(task_ref, set()).add(str(run_kind))
+    conflicting_refs = {task_ref for task_ref, kinds in task_ref_kinds.items() if len(kinds) > 1}
+    row_reports: list[dict[str, Any]] = []
+    stale_responses: list[dict[str, Any]] = []
+    cache: dict[str, dict[str, Any]] = {}
+    last_sequence: dict[str, int] = {}
+    for index, raw in enumerate(raw_records):
+        if not isinstance(raw, Mapping):
+            row_reports.append(
+                {
+                    "record_id": f"record-{index}",
+                    "status": "FAIL",
+                    "gaps": [],
+                    "contradictions": ["record is not a JSON object"],
+                    "checks": [],
+                    "digest_table": [],
+                }
+            )
+            continue
+        record = dict(raw)
+        record_id = str(record.get("record_id") or f"record-{index}")
+        task_ref = record.get("task_ref")
+        task_ref_text = task_ref if isinstance(task_ref, str) else ""
+        run_kind = record.get("run_kind")
+        scheduler = str(record.get("scheduler") or "local").lower()
+        attempt_raw = record.get("attempt", 1)
+        try:
+            attempt = int(attempt_raw)
+        except (TypeError, ValueError):
+            attempt = 0
+        sequence_raw = record.get("sequence", index)
+        try:
+            sequence = int(sequence_raw)
+        except (TypeError, ValueError):
+            sequence = index
+        constructed = record.get("constructed", constructed_set) is True
+        gaps: list[str] = []
+        contradictions: list[str] = []
+        checks: list[dict[str, Any]] = []
+        environment = _crosscheck_environment(record)
+        row: dict[str, Any] = {
+            "record_id": record_id,
+            "task_ref": task_ref_text or None,
+            "attempt": attempt,
+            "run_kind": run_kind,
+            "scheduler": scheduler,
+            "constructed": constructed,
+            "status": "NOT_VERIFIED",
+            "gaps": gaps,
+            "contradictions": contradictions,
+            "checks": checks,
+            "digest_table": [],
+            "energy_hartree": None,
+            "comparison_key": [
+                environment.get("source"),
+                environment.get("interpreter"),
+                environment.get("software_name"),
+                environment.get("software_version"),
+                environment.get("method"),
+                environment.get("basis"),
+                environment.get("input_sha256"),
+            ],
+        }
+        if task_ref_text and task_ref_text in conflicting_refs:
+            contradictions.append(
+                "completed_science_run and control_cancel_run must use different TaskRefs "
+                f"(both use {task_ref_text!r})"
+            )
+        if attempt <= 0:
+            contradictions.append("attempt must be a positive integer")
+        if task_ref_text and sequence <= last_sequence.get(task_ref_text, -1):
+            row["status"] = "STALE_REJECTED"
+            row["reason"] = (
+                f"out-of-order/stale response: sequence {sequence} is not newer than the "
+                f"last applied sequence {last_sequence[task_ref_text]}"
+            )
+            stale_responses.append(
+                {
+                    "record_id": record_id,
+                    "task_ref": task_ref_text,
+                    "sequence": sequence,
+                    "last_applied_sequence": last_sequence[task_ref_text],
+                }
+            )
+            row_reports.append(row)
+            continue
+        if task_ref_text:
+            last_sequence[task_ref_text] = sequence
+        if not constructed:
+            if not integration["available"]:
+                gaps.extend(integration["gaps"])
+            if not revisions["server_revision"]:
+                gaps.append("server_revision is not recorded")
+            if not revisions["client_revision"]:
+                gaps.append("client_revision is not recorded")
+        cache_spec = record.get("cache")
+        cache_mapping = dict(cache_spec) if isinstance(cache_spec, Mapping) else {}
+        cache_state = str(cache_mapping.get("state") or "cold")
+        previous = cache.get(task_ref_text) if task_ref_text else None
+        if cache_state not in ("cold", "warm", "evicted"):
+            contradictions.append(f"cache.state {cache_state!r} is not cold/warm/evicted")
+        elif cache_state == "evicted":
+            cache.pop(task_ref_text, None)
+            checks.append(
+                {
+                    "name": "cache_eviction_rebuild",
+                    "status": "PASS",
+                    "detail": "cache entry evicted and rebuilt from the current attempt",
+                }
+            )
+        elif cache_state == "warm":
+            if previous is None:
+                gaps.append("warm cache declared but no prior cached entry exists")
+            elif int(previous["attempt"]) < attempt:
+                contradictions.append(
+                    "cross-attempt replacement must evict the cache: cached artifact from "
+                    f"attempt {previous['attempt']} while record attempt is {attempt}"
+                )
+        if cache_state == "cold":
+            checks.append(
+                {
+                    "name": "cold_cache",
+                    "status": "PASS",
+                    "detail": "first read for this TaskRef populated the cache",
+                }
+            )
+        restart_of = record.get("controller_restart_of")
+        if restart_of is not None:
+            reference = next(
+                (item for item in row_reports if item.get("record_id") == restart_of), None
+            )
+            if reference is None:
+                gaps.append(f"controller restart references unknown record {restart_of!r}")
+            elif reference.get("task_ref") != task_ref_text or reference.get("attempt") != attempt:
+                contradictions.append("controller restart must not create a new TaskRef or attempt")
+            else:
+                checks.append(
+                    {
+                        "name": "controller_restart_identity",
+                        "status": "PASS",
+                        "detail": f"restart reuses TaskRef {task_ref_text!r} attempt {attempt}",
+                    }
+                )
+        if run_kind == CROSSCHECK_COMPLETED:
+            if record.get("terminal_state") != "COMPLETED":
+                contradictions.append("completed_science_run terminal_state must be COMPLETED")
+            science = _crosscheck_completed_science(
+                record,
+                root=record_root,
+                attempt=attempt,
+                environment=environment,
+                tolerance=tolerance_map,
+            )
+            checks.extend(science["checks"])
+            contradictions.extend(science["contradictions"])
+            gaps.extend(science["gaps"])
+            row["digest_table"] = science["artifact_rows"]
+            row["energy_hartree"] = science["energy_hartree"]
+            row["science"] = {
+                "native": science["native"],
+                "frequency_native": science["frequency_native"],
+                "task_results": science["task_results"]["results"],
+            }
+            artifact_digests = {
+                str(item.get("role")): item.get("declared_sha256")
+                for item in science["artifact_rows"]
+            }
+            if restart_of is not None:
+                reference = next(
+                    (item for item in row_reports if item.get("record_id") == restart_of), None
+                )
+                if reference is not None:
+                    reference_digests = {
+                        str(item.get("role")): item.get("declared_sha256")
+                        for item in reference.get("digest_table", [])
+                    }
+                    if reference_digests != artifact_digests:
+                        contradictions.append(
+                            "controller restart returned different artifact digests"
+                        )
+            if task_ref_text and not contradictions:
+                cache[task_ref_text] = {
+                    "attempt": attempt,
+                    "digests": artifact_digests,
+                    "energy_hartree": row["energy_hartree"],
+                    "sequence": sequence,
+                }
+        elif run_kind == CROSSCHECK_CANCELLED:
+            if record.get("terminal_state") != "CANCELLED":
+                contradictions.append("control_cancel_run terminal_state must be CANCELLED")
+            platform = record.get("platform")
+            platform_mapping = dict(platform) if isinstance(platform, Mapping) else {}
+            stop_confirmation = platform_mapping.get("stop_confirmation")
+            if not isinstance(stop_confirmation, Mapping):
+                gaps.append("cancelled run has no stop confirmation")
+            elif stop_confirmation.get("confirmed") is not True:
+                gaps.append("cancelled run stop confirmation is not confirmed")
+            elif stop_confirmation.get("observed_state") != "CANCELLED":
+                gaps.append("cancelled run stop confirmation does not observe the CANCELLED state")
+            receipt_gap = _crosscheck_receipt(platform_mapping)
+            if receipt_gap is not None:
+                gaps.append(f"cancelled run {receipt_gap}")
+            row["control"] = {
+                "terminal_state": record.get("terminal_state"),
+                "stop_confirmation": stop_confirmation,
+                "requires_completed_science": False,
+            }
+            checks.append(
+                {
+                    "name": "control_cancel_terminal_state",
+                    "status": "PASS" if not gaps else "NOT_VERIFIED",
+                    "detail": "cancelled run needs terminal state/stop confirmation/receipt only",
+                }
+            )
+        else:
+            contradictions.append(
+                f"run_kind {run_kind!r} is not one of {', '.join(CROSSCHECK_RUN_KINDS)}"
+            )
+        if scheduler in ("lsf", "remote"):
+            lsf_gaps = _crosscheck_lsf_evidence(record, constructed=constructed, timeout=timeout)
+            gaps.extend(lsf_gaps)
+            timing = record.get("timing")
+            timing_mapping = dict(timing) if isinstance(timing, Mapping) else {}
+            row["timings"] = {
+                "queue_wait_seconds": timing_mapping.get("queue_wait_seconds"),
+                "scientific_runtime_seconds": timing_mapping.get("run_seconds"),
+                "prepare_seconds": timing_mapping.get("prepare_seconds"),
+                "cleanup_seconds": timing_mapping.get("cleanup_seconds"),
+                "client_request_seconds": timing_mapping.get("client_request_seconds"),
+                "overall_acceptance_seconds": timeout.get("timeout_seconds"),
+            }
+            if timeout.get("status") == "OK":
+                components = timeout["components"]
+                for label, timing_key, frozen_key in (
+                    ("queue wait", "queue_wait_seconds", "max_queue_wait_seconds"),
+                    ("scientific runtime", "run_seconds", "max_run_seconds"),
+                    ("prepare", "prepare_seconds", "max_prepare_seconds"),
+                    ("cleanup", "cleanup_seconds", "cleanup_seconds"),
+                ):
+                    value = timing_mapping.get(timing_key)
+                    if value is None:
+                        continue
+                    if (
+                        isinstance(value, bool)
+                        or not isinstance(value, (int, float))
+                        or not math.isfinite(float(value))
+                        or float(value) < 0
+                    ):
+                        contradictions.append(f"{label} timing is not a non-negative number")
+                    elif float(value) > float(components[frozen_key]):
+                        contradictions.append(
+                            f"{label} {float(value)}s exceeds the frozen "
+                            f"{frozen_key} {components[frozen_key]}s"
+                        )
+            if not lsf_gaps:
+                checks.append(
+                    {
+                        "name": "lsf_submission_evidence",
+                        "status": "PASS",
+                        "detail": "real bsub/bjobs/submission/receipt and frozen deadlines present",
+                    }
+                )
+        if contradictions:
+            row["status"] = "FAIL"
+        elif gaps:
+            row["status"] = "NOT_VERIFIED"
+        else:
+            row["status"] = "PASS"
+        row_reports.append(row)
+    comparisons: list[dict[str, Any]] = []
+    by_id = {row["record_id"]: row for row in row_reports}
+    for row in row_reports:
+        if row["run_kind"] != CROSSCHECK_COMPLETED or row["status"] == "STALE_REJECTED":
+            continue
+        raw = next(
+            (
+                item
+                for item in raw_records
+                if isinstance(item, Mapping)
+                and str(item.get("record_id") or "") == row["record_id"]
+            ),
+            None,
+        )
+        if raw is None:
+            continue
+        compare_with = raw.get("compare_with") or raw.get("numeric_equality_with")
+        if not isinstance(compare_with, list):
+            continue
+        for target_id in compare_with:
+            target = by_id.get(str(target_id))
+            if target is None:
+                row["gaps"].append(f"numeric comparison target {target_id!r} is not a record")
+                continue
+            comparison = _crosscheck_compare(row, target, tolerance_map)
+            comparisons.append(comparison)
+            if comparison["status"] == "not_comparable":
+                _crosscheck_mark_failed(
+                    row,
+                    "numeric equality across differing methods/versions is refused "
+                    f"({row['record_id']} vs {target['record_id']}: {comparison['reason']})",
+                )
+            elif comparison["status"] == "differing":
+                _crosscheck_mark_failed(
+                    row,
+                    "same-environment records differ beyond the frozen tolerance "
+                    f"({comparison['delta_hartree']:.3e} Ha)",
+                )
+    grouped: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in row_reports:
+        if row["run_kind"] != CROSSCHECK_COMPLETED or row["status"] in (
+            "STALE_REJECTED",
+            "FAIL",
+        ):
+            continue
+        if row.get("energy_hartree") is None:
+            continue
+        grouped.setdefault(tuple(row["comparison_key"]), []).append(row)
+    for group in grouped.values():
+        for left_index, left in enumerate(group):
+            for right in group[left_index + 1 :]:
+                comparison = _crosscheck_compare(left, right, tolerance_map)
+                comparisons.append(comparison)
+                if comparison["status"] == "differing":
+                    _crosscheck_mark_failed(
+                        left,
+                        "same-environment records differ beyond the frozen tolerance "
+                        f"({comparison['delta_hartree']:.3e} Ha)",
+                    )
+                    _crosscheck_mark_failed(
+                        right,
+                        "same-environment records differ beyond the frozen tolerance "
+                        f"({comparison['delta_hartree']:.3e} Ha)",
+                    )
+    contradictions_global: list[str] = []
+    if any(row["status"] == "FAIL" for row in row_reports):
+        status = "FAIL"
+    elif not row_reports:
+        status = "NOT_VERIFIED"
+        contradictions_global.append(
+            "no platform Local/LSF records supplied; nothing can be cross-checked"
+        )
+    elif any(row["status"] == "NOT_VERIFIED" for row in row_reports):
+        status = "NOT_VERIFIED"
+    else:
+        status = "PASS"
+    cache_summary = {
+        "states": sorted(
+            {
+                str((item.get("cache") or {}).get("state") or "cold")
+                for item in raw_records
+                if isinstance(item, Mapping) and isinstance(item.get("cache"), Mapping)
+            }
+        ),
+        "entries": len(cache),
+        "cold": sum(
+            1
+            for row in row_reports
+            if any(check.get("name") == "cold_cache" for check in row.get("checks", []))
+        ),
+        "evicted": sum(
+            1
+            for row in row_reports
+            if any(check.get("name") == "cache_eviction_rebuild" for check in row.get("checks", []))
+        ),
+        "restarts": sum(
+            1
+            for row in row_reports
+            if any(
+                check.get("name") == "controller_restart_identity"
+                for check in row.get("checks", [])
+            )
+        ),
+    }
+    return {
+        "schema": CROSSCHECK_REPORT_SCHEMA,
+        "constructed": constructed_set,
+        "status": status,
+        "rows": row_reports,
+        "digest_table": [entry for row in row_reports for entry in row.get("digest_table", [])],
+        "numeric_comparisons": comparisons,
+        "stale_responses": stale_responses,
+        "cache": cache_summary,
+        "timeout": timeout,
+        "tolerance": tolerance_map,
+        "revisions": revisions,
+        "integration": integration,
+        "gaps": contradictions_global,
+        "contradictions": contradictions_global,
+        "real_rows": (
+            "NOT_VERIFIED" if not any(not row["constructed"] for row in row_reports) else status
+        ),
+    }
+
+
+def print_crosscheck_report(report: Mapping[str, Any]) -> None:
+    """Print the cross-check verdict, digest table and numeric comparisons."""
+    print(f"crosscheck status: {report.get('status')} (constructed={report.get('constructed')})")
+    for row in report.get("rows", []):
+        print(
+            f"  {row.get('record_id')}: {row.get('status')} "
+            f"[{row.get('run_kind')}/{row.get('scheduler')}]"
+        )
+        for entry in row.get("digest_table", []):
+            print(
+                f"    {entry.get('role')}: {entry.get('actual_sha256')} "
+                f"(declared {entry.get('declared_sha256')}, attempt {entry.get('attempt')})"
+            )
+        for message in row.get("contradictions", []):
+            print(f"    contradiction: {message}")
+        for message in row.get("gaps", []):
+            print(f"    gap: {message}")
+    for comparison in report.get("numeric_comparisons", []):
+        print(
+            f"  compare {comparison.get('left')} vs {comparison.get('right')}: "
+            f"{comparison.get('status')}"
+        )
+    timeout = report.get("timeout") or {}
+    print(f"  harness timeout: {timeout.get('timeout_seconds')} (status {timeout.get('status')})")
+
+
 def _execution_timeout(args: argparse.Namespace, run_spec: Mapping[str, Any]) -> float:
+    frozen = run_spec.get("frozen_deadlines")
+    budget = run_spec.get("budget")
+    if frozen is None and isinstance(budget, Mapping):
+        frozen = budget.get("frozen_deadlines")
+    if frozen is not None:
+        derived = derive_timeout_from_frozen(frozen)
+        if derived["status"] == "OK" and derived["timeout_seconds"] is not None:
+            return float(derived["timeout_seconds"])
+        return 0.0
     timeout = float(args.timeout)
     deadlines = (run_spec.get("budget") or {}).get("deadlines")
     if isinstance(deadlines, Mapping):
