@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "481a1390b19aba4b7f1dfd8618be38fa74d31c3a0b83793e5dffb6fb90af6694",
+      "sha256": "c0f41741a5c6b30475911aeaba87d3fd4967da14868664e2fa70119f3872cc48",
       "delivered_by": "B00"
     },
     {
@@ -177,7 +177,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+      "sha256": "fa3fb5601f32a20744c61a2bb06a9717f4233296c3268fe65ec6e6239b10542a",
       "delivered_by": "B00"
     },
     {
