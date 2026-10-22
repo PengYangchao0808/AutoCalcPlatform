@@ -1,0 +1,918 @@
+{
+  "artifacts": [
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
+      "sha256": "14658f7a87e4d92bba822c5967273a49ce86c842b2022f7b0aa90f04d32c5f3e",
+      "size_bytes": 3249
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
+      "sha256": "cebfaa915aa8c979f4042ae452f8c4eb02131b2695decb10f6523adc5de742cb",
+      "size_bytes": 5064
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
+      "sha256": "a8051db6a8e86c1b9392c46566a18c96d976a394f98042deaf4ed7455bdd6e89",
+      "size_bytes": 3403
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
+      "sha256": "24e6d72bb05baf406ef7461d1e283d60646f25e864ed40eeb4d3ba761a2973db",
+      "size_bytes": 2384
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
+      "sha256": "161d8a91632f3b01d55debdfef9f5e303b3cc73e94fdaef2bd66ce7e160a1d2e",
+      "size_bytes": 3059
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
+      "sha256": "1ae6cf3e9bd1f15faf54c414a17942418fe5abe866127fff8a514b5f68cc39ad",
+      "size_bytes": 4867
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
+      "sha256": "0cc20449f5f18ae00f69a01ee3efe7c675e6bfe478fa8922f148b5082a397e70",
+      "size_bytes": 12614
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
+      "sha256": "5d187a3c926573c0460f270109d679af568bec9aab5f5578ca48ec1e7bd13cd2",
+      "size_bytes": 9587
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
+      "sha256": "e2b44830ff6d5dd2e5afad7a102b8eac30403af4f43b39b75232e22516363ccb",
+      "size_bytes": 22737
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
+      "sha256": "71b39452ff60d28230c74e0a2af3dce4ed1d91e3b228b016a9d538b8cbfa00a4",
+      "size_bytes": 15342
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/h2/env-reuse-variables.txt",
+      "sha256": "26a6b3dada91f9850713dbfe7581ab5387105df9f63e88948ce9566a62b7d521",
+      "size_bytes": 3182
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/h2/env-reuse-newshell-check.txt",
+      "sha256": "ca9731ad1233bb282132edfbb9ce7369c0532d2853c6888688a7934cdb0969ea",
+      "size_bytes": 848
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "run_id=baseline-20261022T140927Z-117944 finished_at=2026-10-22T14:09:32Z",
+      "name": "h2.p0.baseline",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_id=contracts-20261022T140749Z-114132 finished_at=2026-10-22T14:07:49Z",
+      "name": "h2.p0.contracts",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_id=workspace-20261022T140756Z-114553 finished_at=2026-10-22T14:08:01Z",
+      "name": "h2.p0.workspace",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_id=harness-selftest-t13-20261022T214307Z finished_at=2026-10-22T21:43:08Z",
+      "name": "h2.p0.harness-selftest",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_id=node-dsh-install-20261022T140818Z-115914 finished_at=2026-10-22T14:08:20Z",
+      "name": "h2.p0.node-dsh-install",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_id=browser-install-20261022T223020Z-701925 finished_at=2026-10-22T22:30:22Z",
+      "name": "h2.p0.browser-install",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_id=bridge-contract-20261022T150332Z-301445 finished_at=2026-10-22T15:03:45Z",
+      "name": "h2.p0.bridge-contract",
+      "status": "PASS"
+    },
+    {
+      "detail": "run_id=mcp-live-20261022T183515Z-569902 finished_at=2026-10-22T18:35:17Z reason=controller_unavailable",
+      "name": "h2.p0.mcp-live",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "run_id=dsh-discovery-live-20261022T204231Z-649186 finished_at=2026-10-22T20:42:47Z reason=controller_unavailable",
+      "name": "h2.p0.dsh-discovery-live",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "run_id=model-live-verify2-20261022T222152Z finished_at=2026-10-22T22:22:05Z reason=no_model_credential|controller_unavailable:no_approved_provider_configured;GET http://127.0.0.1:18765/api/health -> URLError: <urlopen error [Errno 111] Connection refused>",
+      "name": "h2.p0.model-live",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "mcp-live,dsh-discovery-live,model-live",
+      "name": "h2.gap_scenarios",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+    "harness_revision": "5a29a7c2988d2f1832ee3c095105749d6d7c6c5d0d06f8b31c28098dde514636",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+  "command": [
+    "<acp2-dev>/venvs/c/bin/python",
+    "<repo>/reports/acp2_implementation/bb45a46/C/h2/build_h2_receipt.py"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "<repo>",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.required_child_phases": [
+      "experience:fixture",
+      "experience:live"
+    ],
+    "experience.env_reuse_newshell_check": "<repo>/reports/acp2_implementation/bb45a46/C/h2/env-reuse-newshell-check.txt",
+    "experience.env_reuse_variables": "<repo>/reports/acp2_implementation/bb45a46/C/h2/env-reuse-variables.txt",
+    "experience.gap_scenarios": [
+      "mcp-live",
+      "dsh-discovery-live",
+      "model-live"
+    ],
+    "experience.h2_c_side_open": true,
+    "experience.h2_total_signoff_owner": "B",
+    "experience.rows": {
+      "baseline": {
+        "artifacts": [
+          {
+            "path": "node-suite.txt",
+            "sha256": "4130c9e5195d396b9f24609f45488a288ea762be87a2163fe3dd1e6e478c3eb3",
+            "size_bytes": 264
+          },
+          {
+            "path": "baseline.json",
+            "sha256": "5a223a0ec14555251baa077e7c97245ddd129438b093df5fd8ee2576b52a71a8",
+            "size_bytes": 550
+          }
+        ],
+        "candidate": {
+          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/c/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "baseline",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main"
+        ],
+        "cwd": "<repo>",
+        "exit_code": 0,
+        "finished_at": "2026-10-22T14:09:32Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/c/bin/python",
+        "phase": "experience:fixture",
+        "product_import": "<acp2-dev>/C/src/acp/__init__.py",
+        "reason": null,
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
+        "result": "PASS",
+        "run_id": "baseline-20261022T140927Z-117944",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T14:09:27Z",
+        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "usage": null
+      },
+      "bridge-contract": {
+        "artifacts": [
+          {
+            "path": "p2-research-operations.v1.json",
+            "sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+            "size_bytes": 13247
+          },
+          {
+            "path": "bridge-map.json",
+            "sha256": "63aa7e3f0ba6176004e77df25268805fac1c675deeaf7659f90f75e3cb9510ea",
+            "size_bytes": 5560
+          },
+          {
+            "path": "tool-allowlist.json",
+            "sha256": "edc7184f420c8a6bb892bf639977863447b397db30f5f2d82e22dca3b49eebc4",
+            "size_bytes": 1287
+          },
+          {
+            "path": "rph-test.log",
+            "sha256": "f69061b2db63ad6543567265cd39703ea7d59d41dd76a332aeed78fc951fe530",
+            "size_bytes": 7570
+          },
+          {
+            "path": "rph-gates.log",
+            "sha256": "7534d2217f640354cf8b653770dbc99903891adbb64390560975c9bb7c373d71",
+            "size_bytes": 9225
+          },
+          {
+            "path": "bridge-mutants.log",
+            "sha256": "ec96311129bffdc2e83be4f9c0e31898e42f06a16e3762b8f8f3094d5468a9a0",
+            "size_bytes": 2721
+          },
+          {
+            "path": "bridge-negative-evidence.json",
+            "sha256": "2f5a45180df273f76d20e14d65c12082a21de84697fcae3181e2e7712287604e",
+            "size_bytes": 643
+          },
+          {
+            "path": "bridge-contract-report.json",
+            "sha256": "583774bcffdac3c2fa82a9bc78076094c6ea12cad67315adb137c6465308dab6",
+            "size_bytes": 2844
+          }
+        ],
+        "candidate": {
+          "client_revision": "4fa39bb309d0230c88164268df02a87bb2922e7a",
+          "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/c/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "bridge-contract",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main"
+        ],
+        "cwd": "<acp2-dev>/C",
+        "exit_code": 0,
+        "finished_at": "2026-10-22T15:03:45Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/c/bin/python",
+        "phase": "experience:fixture",
+        "product_import": "<acp2-dev>/C/src/acp/__init__.py",
+        "reason": null,
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
+        "result": "PASS",
+        "run_id": "bridge-contract-20261022T150332Z-301445",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T15:03:32Z",
+        "test_revision": "4fa39bb309d0230c88164268df02a87bb2922e7a",
+        "usage": null
+      },
+      "browser-install": {
+        "artifacts": [
+          {
+            "path": "chromium-launch.log",
+            "sha256": "3aea5c2eb89b119a33799656d79d5031b98be8e8c69c2197a0c50f9578c6c964",
+            "size_bytes": 1468
+          },
+          {
+            "path": "chromium-page.png",
+            "sha256": "c6be7061335fe5060bcb20a457f677691b339ae659413219bdefc41ad57b5684",
+            "size_bytes": 11202
+          },
+          {
+            "path": "browser-launch.json",
+            "sha256": "d73ab2f0e21dace32e2ec46a16573d4e35322f0bbd081ffd98fbe784c56dd873",
+            "size_bytes": 1725
+          }
+        ],
+        "candidate": {
+          "client_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+          "harness_revision": "99ac06c63b47d04745003e7765a2cc31ef988e426f9ee11a667afd9abda068c4",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/c/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "browser-install",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main"
+        ],
+        "cwd": "<repo>",
+        "exit_code": 0,
+        "finished_at": "2026-10-22T22:30:22Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/c/bin/python",
+        "phase": "experience:fixture",
+        "product_import": "<acp2-dev>/C/src/acp/__init__.py",
+        "reason": null,
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
+        "result": "PASS",
+        "run_id": "browser-install-20261022T223020Z-701925",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T22:30:20Z",
+        "test_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+        "usage": null
+      },
+      "contracts": {
+        "artifacts": [
+          {
+            "path": "contracts-report.json",
+            "sha256": "a0787747da8899c3645a90e77aa7c92a54798a76cc6abedd3f1e76105fd94552",
+            "size_bytes": 2803
+          }
+        ],
+        "candidate": {
+          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/c/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "contracts",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main"
+        ],
+        "cwd": "<repo>",
+        "exit_code": 0,
+        "finished_at": "2026-10-22T14:07:49Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/c/bin/python",
+        "phase": "experience:fixture",
+        "product_import": "<acp2-dev>/C/src/acp/__init__.py",
+        "reason": null,
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
+        "result": "PASS",
+        "run_id": "contracts-20261022T140749Z-114132",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T14:07:49Z",
+        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "usage": null
+      },
+      "dsh-discovery-live": {
+        "artifacts": [
+          {
+            "path": "controller.json",
+            "sha256": "82a37b46920e5388d928343bb3a6fe64a0be4101518a331a087aa8e4343008bd",
+            "size_bytes": 132
+          },
+          {
+            "path": "overlay-identity.json",
+            "sha256": "4b1085934de4a7c89d5aeb07dd26615d87d7eaeb5c973dded02b618a25ee4c2d",
+            "size_bytes": 2596
+          },
+          {
+            "path": "dsh-effective-config.web.redacted.yml",
+            "sha256": "f10c51f439244921aab65e0886634c502ab6da98702442f3a2c673b802767bae",
+            "size_bytes": 46604
+          },
+          {
+            "path": "dump.web.json",
+            "sha256": "2eff20237988d74318324ce17b9fb1115aaf0234f0ab08b820cbe91b82f47140",
+            "size_bytes": 280
+          },
+          {
+            "path": "dsh-effective-config.headless.redacted.yml",
+            "sha256": "ac78ad502ff3aa6235b03c702f8f299f99a215aa62af5e06ad1488c333bff483",
+            "size_bytes": 13567
+          },
+          {
+            "path": "dump.headless.json",
+            "sha256": "694f0d20a9d27d61f4acd089a57e6552b9dcf4c9d782fcb0605c500ac0b1f883",
+            "size_bytes": 285
+          },
+          {
+            "path": "headless-runner-disabled.cordis.yml",
+            "sha256": "232986f15fe8bc8214fe8d59af4f3a3e3ee52b46ccf23f3a279736c24dbf86bb",
+            "size_bytes": 182
+          },
+          {
+            "path": "tool-snapshot.web.invocation.json",
+            "sha256": "0c45161dea28ff6787a36574f56c41817db7eae1270c6d50083f30c4df904776",
+            "size_bytes": 3636
+          },
+          {
+            "path": "tool-snapshot.web.json",
+            "sha256": "b6a3fd48a3e82ca4879271bb3957fbc43bb2630d4aa405fa1870c144a6c80600",
+            "size_bytes": 6560
+          },
+          {
+            "path": "tool-snapshot.headless.invocation.json",
+            "sha256": "ccf66c4f1691c5dcba132325d25bd15e55a7d9007dadbb628895ec2ec4d3256b",
+            "size_bytes": 3704
+          },
+          {
+            "path": "tool-snapshot.headless.json",
+            "sha256": "a144244d4b3184300bea690cc697e1ec1809e002dfe63aedcf69d9895c0bfb69",
+            "size_bytes": 33520
+          },
+          {
+            "path": "registration.json",
+            "sha256": "d14807223d8ad9adab4cd83255d8c04ada426d683cd075f8405f10b7a0f34553",
+            "size_bytes": 1422
+          },
+          {
+            "path": "negative/bad-command.cordis.yml",
+            "sha256": "05de7ee26b8ccdcdb253196698ea967d185d52f425248060c6338aeae365d077",
+            "size_bytes": 1147
+          },
+          {
+            "path": "negative/bad-command.invocation.json",
+            "sha256": "4324bc33cd5f4086b2c6eb93156bc410356a57a78875476190c06b3354de55c8",
+            "size_bytes": 2986
+          },
+          {
+            "path": "negative/tool-snapshot.bad-command.json",
+            "sha256": "963ebb583b2d69396fa18e9897cae5447be0fd9687f9b953e67292bf27116688",
+            "size_bytes": 33053
+          },
+          {
+            "path": "negative/incompatible_protocol_stub.py",
+            "sha256": "2f0fa1bc14c7c17d019cc65f821c4af461199babc3f76def6dfda15f251f41f2",
+            "size_bytes": 1457
+          },
+          {
+            "path": "negative/incompatible-protocol.cordis.yml",
+            "sha256": "74dbec079cd2453eaff80c9430abdfc752e55f73bc1aea49d2aaa9707121d383",
+            "size_bytes": 1140
+          },
+          {
+            "path": "negative/incompatible-protocol.invocation.json",
+            "sha256": "1f0eace51e477995794cba54d3b8da3a2a28957c962d6531098b50992be051e1",
+            "size_bytes": 4148
+          },
+          {
+            "path": "negative/incompatible-protocol.wire.jsonl",
+            "sha256": "ac8caa47682050be4c161059698ca01fd72316e8e8ce424ba43f77d2556b8749",
+            "size_bytes": 879
+          },
+          {
+            "path": "negative/tool-snapshot.incompatible-protocol.json",
+            "sha256": "51c349479a5217a8c12a399cdd1ca794aa52320cb3f207c2566e11e384896b24",
+            "size_bytes": 34149
+          },
+          {
+            "path": "f1-schema-mismatch.json",
+            "sha256": "fc8b4096600e4db7af3d1cbdbf90a424a2df3b0077e914f47fec173c96cf9867",
+            "size_bytes": 871
+          },
+          {
+            "path": "cleanup.json",
+            "sha256": "927478aeb3ec3bc0c58657dc66f0be1e9cf5dcdeb1d2455a269e569b3d07aeab",
+            "size_bytes": 364
+          },
+          {
+            "path": "dsh-discovery-summary.json",
+            "sha256": "58f3a70434ac39dc827549f2e71b9f0b272866ed23fd3b0a796759e3020aac41",
+            "size_bytes": 7835
+          }
+        ],
+        "candidate": {
+          "client_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+          "harness_revision": "f1935c19e3ed1397394b68339872a84f7d40ad130b088c5fbad7dc9f5126e89c",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/integration/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "dsh-discovery-live",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main"
+        ],
+        "cwd": "<acp2-dev>/C",
+        "exit_code": 2,
+        "finished_at": "2026-10-22T20:42:47Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/integration/bin/python",
+        "phase": "experience:live",
+        "product_import": "<acp2-dev>/integration/src/acp/__init__.py",
+        "reason": "controller_unavailable",
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
+        "result": "NOT_VERIFIED",
+        "run_id": "dsh-discovery-live-20261022T204231Z-649186",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T20:42:31Z",
+        "test_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+        "usage": null
+      },
+      "harness-selftest": {
+        "artifacts": [
+          {
+            "path": "pytest.log",
+            "sha256": "ada987c472bd501920443b11a53c3768f0ebe8aa55d3c353e18c34b0c2b1901f",
+            "size_bytes": 99
+          }
+        ],
+        "candidate": {
+          "client_revision": "2b56235a9900b73ce7d7f52ec260f9ea4a4b7cec",
+          "harness_revision": "3d2336581fe60cd8ba63fbb40d6e235f52327d751b7c4ee04c91ba3818c376a6",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/c/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "harness-selftest",
+          "--timeout",
+          "120",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main"
+        ],
+        "cwd": "<acp2-dev>/C",
+        "exit_code": 0,
+        "finished_at": "2026-10-22T21:43:08Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/c/bin/python",
+        "phase": "experience:fixture",
+        "product_import": "<acp2-dev>/C/src/acp/__init__.py",
+        "reason": null,
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
+        "result": "PASS",
+        "run_id": "harness-selftest-t13-20261022T214307Z",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T21:43:07Z",
+        "test_revision": "2b56235a9900b73ce7d7f52ec260f9ea4a4b7cec",
+        "usage": null
+      },
+      "mcp-live": {
+        "artifacts": [
+          {
+            "path": "launch-identity.json",
+            "sha256": "8bf2a7c4994687f43c264f1870b2a6df1939f4abb4227993180b02bff3816464",
+            "size_bytes": 27611
+          },
+          {
+            "path": "controller.json",
+            "sha256": "002ef00817c52c5aab221a1177fd8974f83fb2a58e5a89a9a6757fccc5e3fec0",
+            "size_bytes": 1197
+          },
+          {
+            "path": "schema-drift.json",
+            "sha256": "11cfc845e118572eb4948ebd9d0a26a3455a0cd23d3b4be72e593fab2f5e1d58",
+            "size_bytes": 3259
+          },
+          {
+            "path": "stdlib-probe-invocation.json",
+            "sha256": "634173ce8fa29d65ef31b9dd3cf8e1ff0757befd6cdfd4e209a9c9a12a22e6bd",
+            "size_bytes": 1526
+          },
+          {
+            "path": "stdlib-probe/wire.jsonl",
+            "sha256": "f9dd0cc94318b5df50a743716884b36b1895cf930f9ff744d7e001477a1dfe76",
+            "size_bytes": 214
+          },
+          {
+            "path": "stdlib-probe/stderr.log",
+            "sha256": "404e6c58885ad5faafdd30df9d56bc3e56e668f284471b65d86d65db39aa4709",
+            "size_bytes": 172
+          },
+          {
+            "path": "stdlib-probe/process.json",
+            "sha256": "dae492dc854f33d727ef7572ecdfe2d3d22ffa3e2feb1321bc9d0bd073c67886",
+            "size_bytes": 32
+          },
+          {
+            "path": "dsh-client-invocation.json",
+            "sha256": "352f5e5e5d642c452de3920456d2db22d30fc2d837e9f5f86bf1c885b1df1bb5",
+            "size_bytes": 524
+          },
+          {
+            "path": "dsh-client/dsh-client.json",
+            "sha256": "65ca2f7b342299725c8ce5d8d454c7bb28b38ba1942decf3d7600021201e5438",
+            "size_bytes": 3298
+          },
+          {
+            "path": "dsh-client/wire.jsonl",
+            "sha256": "fe4493b19c546a899ef3e8f6e1cd736e0e3d4674107479481405118b9e236192",
+            "size_bytes": 195
+          },
+          {
+            "path": "cleanup.json",
+            "sha256": "c106826f980abf7edb1232b5a77dcc82cf5375bfe51aa2beb8870ad4a4a70d67",
+            "size_bytes": 242
+          },
+          {
+            "path": "mcp-live-summary.json",
+            "sha256": "c84b3d1886c7352c90c02354e4b56d51e683d1869aa71064cdbbb3ee42a2bd60",
+            "size_bytes": 3246
+          },
+          {
+            "path": "tool-schemas.json",
+            "sha256": "6032c1d16cf341677513dbd3bddf169f550f5a32b9512350841b84b0322c84e1",
+            "size_bytes": 13621
+          }
+        ],
+        "candidate": {
+          "client_revision": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+          "harness_revision": "642c2643c9db7bebcbe90d69ff24d6560a3f4ac1ee278e585e407ecd99c8c36f",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/integration/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "mcp-live",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main"
+        ],
+        "cwd": "<acp2-dev>/C",
+        "exit_code": 2,
+        "finished_at": "2026-10-22T18:35:17Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/integration/bin/python",
+        "phase": "experience:live",
+        "product_import": "<acp2-dev>/integration/src/acp/__init__.py",
+        "reason": "controller_unavailable",
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
+        "result": "NOT_VERIFIED",
+        "run_id": "mcp-live-20261022T183515Z-569902",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T18:35:15Z",
+        "test_revision": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+        "usage": null
+      },
+      "model-live": {
+        "artifacts": [
+          {
+            "path": "t13a-proxy-selftest.log",
+            "sha256": "359fa74b461059ee277e29f24be72ac606016d8fc69566f6fc8d0f7f9b070ab8",
+            "size_bytes": 666
+          },
+          {
+            "path": "t13a-selftest-summary.json",
+            "sha256": "75bfd3e07e72de9a4be10eaae2380abbacc0731cc2c0e824af94fbf580a70e11",
+            "size_bytes": 11054
+          },
+          {
+            "path": "<repo>/reports/acp2_implementation/bb45a46/C/model-live/b-real-call/model-live-verify2-20261022T222152Z/prerequisites.json",
+            "sha256": "7efbdfc58385980f2d25113562b7b1145f51edc6be54a41861096e3f422e211b",
+            "size_bytes": 1398
+          }
+        ],
+        "candidate": {
+          "client_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+          "harness_revision": "31e4ec61f4441e823ca031afba6ce070f360be627aafa587067cdeb194224352",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/integration/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "model-live",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main"
+        ],
+        "cwd": "<acp2-dev>/C",
+        "exit_code": 2,
+        "finished_at": "2026-10-22T22:22:05Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/integration/bin/python",
+        "phase": "experience:live",
+        "product_import": "<acp2-dev>/integration/src/acp/__init__.py",
+        "reason": "no_model_credential|controller_unavailable:no_approved_provider_configured;GET http://127.0.0.1:18765/api/health -> URLError: <urlopen error [Errno 111] Connection refused>",
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
+        "result": "NOT_VERIFIED",
+        "run_id": "model-live-verify2-20261022T222152Z",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T22:21:53Z",
+        "test_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+        "usage": {
+          "batch_id": null,
+          "caps": {
+            "input_tokens": 150000,
+            "model_requests": 12,
+            "output_tokens": 30000
+          },
+          "input_tokens": 0,
+          "input_tokens_estimated": 0,
+          "input_tokens_reported": 0,
+          "ledger_path": "<acp2-dev>/data/budget/ledger.json",
+          "ledger_present": false,
+          "model_calls": 0,
+          "output_tokens": 0,
+          "output_tokens_unknown_events": 0,
+          "scenario_budget_id": "model-live",
+          "selftest": {
+            "checks_passed": 56,
+            "checks_total": 56,
+            "data_root": "<repo>/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z",
+            "ledger_path": "<repo>/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z/budget/ledger.json",
+            "model_requests": 12,
+            "status": "PASS",
+            "thirteenth_refused": true,
+            "upstream_calls": 35
+          },
+          "tool_calls": 0,
+          "tool_results": 0,
+          "total_tokens": 0,
+          "total_tokens_complete": true,
+          "unknown_usage_events": 0
+        }
+      },
+      "node-dsh-install": {
+        "artifacts": [
+          {
+            "path": "node-dsh-install.json",
+            "sha256": "c2746bb2c3eaaa8b9ce126ebc96171ad6255e46b5a4beb726992d53c6809b889",
+            "size_bytes": 257
+          }
+        ],
+        "candidate": {
+          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/c/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "node-dsh-install",
+          "--timeout",
+          "1200",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main"
+        ],
+        "cwd": "<repo>",
+        "exit_code": 0,
+        "finished_at": "2026-10-22T14:08:20Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/c/bin/python",
+        "phase": "experience:fixture",
+        "product_import": "<acp2-dev>/C/src/acp/__init__.py",
+        "reason": null,
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
+        "result": "PASS",
+        "run_id": "node-dsh-install-20261022T140818Z-115914",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T14:08:18Z",
+        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "usage": null
+      },
+      "workspace": {
+        "artifacts": [
+          {
+            "path": "workspace.log",
+            "sha256": "8a5b7b084caa9072dcd16bff53be232dc5bcf4cd980cb69d33e3cb45c7f2ff47",
+            "size_bytes": 3931
+          }
+        ],
+        "candidate": {
+          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+          "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+        },
+        "command": [
+          "<acp2-dev>/venvs/c/bin/python",
+          "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+          "--scenario",
+          "workspace",
+          "--timeout",
+          "300",
+          "--out",
+          "<repo>/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main"
+        ],
+        "cwd": "<repo>",
+        "exit_code": 0,
+        "finished_at": "2026-10-22T14:08:01Z",
+        "harness_path": "<acp2-dev>/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "<acp2-dev>/venvs/c/bin/python",
+        "phase": "experience:fixture",
+        "product_import": "<acp2-dev>/C/src/acp/__init__.py",
+        "reason": null,
+        "receipt_path": "<repo>/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
+        "result": "PASS",
+        "run_id": "workspace-20261022T140756Z-114553",
+        "scope": "IN_SCOPE",
+        "started_at": "2026-10-22T14:07:56Z",
+        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "usage": null
+      }
+    },
+    "experience.run_kind": "p0-closeout-aggregate",
+    "experience.scenario_key": "h2",
+    "experience.sub_scenarios": [
+      "baseline",
+      "contracts",
+      "workspace",
+      "harness-selftest",
+      "node-dsh-install",
+      "browser-install",
+      "bridge-contract",
+      "mcp-live",
+      "dsh-discovery-live",
+      "model-live"
+    ]
+  },
+  "finished_at": "2026-10-22T22:34:04Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "aggregate",
+  "reason": "h2_c_side_open: 3 of 10 P0 scenarios not PASS: mcp-live=NOT_VERIFIED(controller_unavailable); dsh-discovery-live=NOT_VERIFIED(controller_unavailable); model-live=NOT_VERIFIED(no_model_credential|controller_unavailable:no_approved_provider_configured;GET http://127.0.0.1:18765/api/health -> URLError: <urlopen error [Errno 111] Connection refused>). H2 C side stays open until every P0 scenario is PASS; total H2 sign-off belongs to B.",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "h2-c-closeout-20261022T223404Z-704517",
+  "scenario": "experience:h2",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T22:34:04Z",
+  "sub_results": [
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
+      "result": "PASS",
+      "run_id": "baseline-20261022T140927Z-117944",
+      "scenario": "experience:baseline"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
+      "result": "PASS",
+      "run_id": "contracts-20261022T140749Z-114132",
+      "scenario": "experience:contracts"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
+      "result": "PASS",
+      "run_id": "workspace-20261022T140756Z-114553",
+      "scenario": "experience:workspace"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
+      "result": "PASS",
+      "run_id": "harness-selftest-t13-20261022T214307Z",
+      "scenario": "experience:harness-selftest"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
+      "result": "PASS",
+      "run_id": "node-dsh-install-20261022T140818Z-115914",
+      "scenario": "experience:node-dsh-install"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
+      "result": "PASS",
+      "run_id": "browser-install-20261022T223020Z-701925",
+      "scenario": "experience:browser-install"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
+      "result": "PASS",
+      "run_id": "bridge-contract-20261022T150332Z-301445",
+      "scenario": "experience:bridge-contract"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:live",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
+      "result": "NOT_VERIFIED",
+      "run_id": "mcp-live-20261022T183515Z-569902",
+      "scenario": "experience:mcp-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:live",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
+      "result": "NOT_VERIFIED",
+      "run_id": "dsh-discovery-live-20261022T204231Z-649186",
+      "scenario": "experience:dsh-discovery-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:live",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
+      "result": "NOT_VERIFIED",
+      "run_id": "model-live-verify2-20261022T222152Z",
+      "scenario": "experience:model-live"
+    }
+  ],
+  "submission_id": null,
+  "usage": null
+}
