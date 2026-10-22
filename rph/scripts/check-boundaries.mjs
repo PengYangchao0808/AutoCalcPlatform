@@ -92,8 +92,10 @@ const findings = [];
 const scanned = [];
 
 for (const pkg of PACKAGES) {
-  const srcDir = join(ROOT, "packages", pkg, "src");
-  const files = walk(srcDir);
+  const sourceDirs = ["src", "skills"].map((name) =>
+    join(ROOT, "packages", pkg, name),
+  );
+  const files = sourceDirs.flatMap((dir) => walk(dir));
   if (files.length === 0) {
     findings.push({ package: pkg, file: "-", rule: "missing_src", detail: "no source files" });
     continue;
