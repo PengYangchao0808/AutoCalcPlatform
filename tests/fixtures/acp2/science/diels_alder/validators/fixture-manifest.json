@@ -1,0 +1,43 @@
+{
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1,
+  "fixture_id": "diels-alder-validators-constructed-a16a",
+  "constructed": true,
+  "description": "Constructed transition-state/frequency fixtures for the A-16a deterministic validators. No QC subprocess ran and no real transition state is claimed.",
+  "run_key": null,
+  "live_validation_gap": "No real transition-state or frequency artifact was produced or consumed by A-16a; todo 33 (A-17) owns real DA validation.",
+  "thresholds": {
+    "claim_statuses": [
+      "supported",
+      "refuted",
+      "inconclusive",
+      "not_evaluated"
+    ],
+    "imaginary_mode_threshold_cm1": 0.0,
+    "validator_version": "1.0.0"
+  },
+  "files": {
+    "mode-selection.json": "resolved native printed mode 6 with constructed provenance",
+    "mode-selection-wrong-position.json": "negative: array position 0 instead of native printed mode 6",
+    "mode-selection-ambiguous.json": "negative: unresolved mapping status",
+    "mode-selection-array-index.json": "negative: only the ambiguous 'index' key is present",
+    "ts-one-imaginary.out": "synthetic ORCA-shaped output with exactly one imaginary mode (native index 6)",
+    "ts-one-imaginary-result.json": "frozen TaskResult produced by parsing ts-one-imaginary.out",
+    "ts-multiple-imaginary.out": "synthetic ORCA-shaped output with two imaginary modes (native indices 6 and 7)",
+    "ts-multiple-imaginary-result.json": "frozen TaskResult produced by parsing ts-multiple-imaginary.out",
+    "ts-missing-frequency.out": "synthetic ORCA-shaped output with normal modes but no frequency list",
+    "ts-missing-frequency-result.json": "frozen TaskResult produced by parsing ts-missing-frequency.out"
+  },
+  "file_digests": {
+    "mode-selection.json": "f6e7dffb377c4752be356a9b8f07d39a3877ed0fe83bb4a0d256cc9d49ea23e6",
+    "mode-selection-wrong-position.json": "d450782a7767f430790e880c5670b9aebdd01af5694a4b4d72998191cdcefd74",
+    "mode-selection-ambiguous.json": "941680cc4fb11554cce2c93b0315f04160c8bd1cc213676378c408c2ad695edc",
+    "mode-selection-array-index.json": "6f4d88430ff3b6dbcd66a547e1dac09c78567510f6db87754436758f00b9d2f8",
+    "ts-one-imaginary.out": "31de337b98fa45ae954fe59a33935c559868ee4ccacd5c6db33f3a63831eed94",
+    "ts-one-imaginary-result.json": "1a6edf2888a5f15eaa12d7cafdd323b2700a87054017dcbda68945c74ba31736",
+    "ts-multiple-imaginary.out": "930535f087f9c957a4b92cca759cb63169e4dbb7bb74eecc9f0d01ace9b31fac",
+    "ts-multiple-imaginary-result.json": "7e16ad56e9fd3656bf7c82c7b4f243f93a18885a0f4996a68b2d6dbd87e7353c",
+    "ts-missing-frequency.out": "430939e298ea31df35941f51499b6b974464e305095c0b4c8ef3a8a5d4ddef87",
+    "ts-missing-frequency-result.json": "c3f506d0dc0e1c2e81b38b492abe06e5ff7a01809b94ddb2f75de256eb811f66"
+  }
+}
