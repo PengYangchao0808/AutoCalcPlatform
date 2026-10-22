@@ -56,11 +56,12 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, get_args
 
 __all__ = [
+    "ACTIVATION_ENERGY_COMPARABILITY_VALIDATOR_ID",
     "ATOM_COUNT_TOLERANCE",
     "CLAIM_STATUSES",
     "COORDINATE_ABS_TOLERANCE_ANGSTROM",
@@ -76,13 +77,16 @@ __all__ = [
     "METHOD_CONSISTENCY_VALIDATOR_ID",
     "MODE_SELECTION_STATUSES",
     "OPTIMIZATION_CONVERGENCE_VALIDATOR_ID",
+    "REACTANT_STOICHIOMETRY_VALIDATOR_ID",
     "STATIONARY_POINT_EXISTENCE_VALIDATOR_ID",
     "STATIONARY_POINT_VALIDATOR_ID",
     "TS_CONNECTIVITY_VALIDATOR_ID",
     "TS_MODE_MAPPING_VALIDATOR_ID",
     "TS_SADDLE_CANDIDATE_VALIDATOR_ID",
     "VALIDATOR_VERSION",
+    "ActivationEnergyValidation",
     "AssessmentReason",
+    "BarrierEnergyRecord",
     "ClaimAssessment",
     "ClaimStatus",
     "EndpointResolution",
@@ -96,6 +100,8 @@ __all__ = [
     "MissingCheck",
     "StationaryPointValidation",
     "TransitionStateValidation",
+    "energy_identity_from_thermochemistry",
+    "validate_activation_energy_comparability",
     "validate_electronic_state_consistency",
     "validate_energy_comparability",
     "validate_frequency_evidence",
@@ -131,6 +137,8 @@ IRC_BIDIRECTIONAL_COMPLETION_VALIDATOR_ID: Final = "check.irc_bidirectional_comp
 IRC_ENDPOINT_IDENTITY_VALIDATOR_ID: Final = "check.irc_endpoint_identity"
 IRC_ATOM_ORDER_STABILITY_VALIDATOR_ID: Final = "check.irc_atom_order_stability"
 ENERGY_COMPARABILITY_VALIDATOR_ID: Final = "check.energy_comparability"
+ACTIVATION_ENERGY_COMPARABILITY_VALIDATOR_ID: Final = "check.activation_energy_comparability"
+REACTANT_STOICHIOMETRY_VALIDATOR_ID: Final = "check.reactant_stoichiometry_completeness"
 
 #: Mapping statuses accepted by :class:`MappedModeSelection`.  Mirrors
 #: ``cccp.analysis.tsmode.contracts.MappingStatus``; only ``resolved`` binds a
@@ -751,6 +759,242 @@ class EnergyIdentity:
             "temperature_k": self.temperature_k,
             "pressure_pa": self.pressure_pa,
             "energy_unit": self.energy_unit,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class BarrierEnergyRecord:
+    """One species' energy identities for an activation-barrier comparison.
+
+    ``electronic`` and ``free_energy`` are deliberately separate slots: an
+    activation barrier is always built from one kind only, never from a
+    mixture.  A free-energy value may be a single-conformation Gibbs energy
+    produced by the shared thermochemistry task (the ``gibbs_hartree`` value
+    in the Shermo metadata) or an ensemble total produced by
+    ``cccp.analysis.ensemble.thermo``; this record carries the already
+    normalized value and identity and never recomputes a thermal correction.
+
+    ``species_id`` is the stable scientific identity used by the reaction
+    contract.  ``stoichiometry`` is the positive coefficient of that species
+    on the reactant side; the transition state and product are single species.
+    """
+
+    species_id: str
+    stoichiometry: int = 1
+    electronic: EnergyIdentity | None = None
+    free_energy: EnergyIdentity | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.species_id, str) or not self.species_id:
+            raise ValueError("species_id must be a non-empty string")
+        if isinstance(self.stoichiometry, bool) or not isinstance(self.stoichiometry, int):
+            raise ValueError("stoichiometry must be an integer")
+        if self.stoichiometry < 1:
+            raise ValueError("stoichiometry must be >= 1")
+        if self.electronic is not None and not isinstance(self.electronic, EnergyIdentity):
+            raise ValueError("electronic must be an EnergyIdentity")
+        if self.free_energy is not None and not isinstance(self.free_energy, EnergyIdentity):
+            raise ValueError("free_energy must be an EnergyIdentity")
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> BarrierEnergyRecord:
+        """Build a barrier record from a JSON record.
+
+        ``energy`` is accepted as a single-declaration shorthand and routed by
+        its declared ``energy_kind``.  An already-separated ``electronic`` or
+        ``free_energy`` record always wins, so a caller cannot silently
+        overwrite an explicit kind.
+        """
+        species_id = payload.get("species_id")
+        if not isinstance(species_id, str) or not species_id:
+            raise ValueError("barrier energy record requires a non-empty species_id")
+        electronic = payload.get("electronic")
+        free_energy = payload.get("free_energy")
+        declared = payload.get("energy")
+        if declared is not None:
+            identity = _coerce_energy_identity(declared)
+            if identity is not None:
+                if identity.energy_kind == "electronic" and electronic is None:
+                    electronic = identity
+                elif identity.energy_kind == "gibbs_free" and free_energy is None:
+                    free_energy = identity
+                else:
+                    raise ValueError(
+                        "barrier 'energy' must be an electronic or gibbs_free identity "
+                        "that is not already declared in its own slot"
+                    )
+        return cls(
+            species_id=species_id,
+            stoichiometry=payload.get("stoichiometry", 1),
+            electronic=(None if electronic is None else _coerce_energy_identity(electronic)),
+            free_energy=(None if free_energy is None else _coerce_energy_identity(free_energy)),
+        )
+
+    def identity_for(self, energy_kind: str) -> EnergyIdentity | None:
+        """Return the identity declared in the slot for *energy_kind*."""
+        if energy_kind == "electronic":
+            return self.electronic
+        if energy_kind == "gibbs_free":
+            return self.free_energy
+        raise ValueError(
+            "activation-energy comparability supports 'electronic' and "
+            f"'gibbs_free' slots, got {energy_kind!r}"
+        )
+
+    def other_identity_for(self, energy_kind: str) -> EnergyIdentity | None:
+        """Return the identity in the other slot, when declared."""
+        if energy_kind == "electronic":
+            return self.free_energy
+        if energy_kind == "gibbs_free":
+            return self.electronic
+        raise ValueError(
+            "activation-energy comparability supports 'electronic' and "
+            f"'gibbs_free' slots, got {energy_kind!r}"
+        )
+
+    def declared_kinds(self) -> frozenset[str]:
+        """Return the actual ``energy_kind`` values carried by this record."""
+        kinds = {
+            identity.energy_kind
+            for identity in (self.electronic, self.free_energy)
+            if identity is not None
+        }
+        return frozenset(kinds)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe barrier record."""
+        return {
+            "species_id": self.species_id,
+            "stoichiometry": self.stoichiometry,
+            "electronic": (None if self.electronic is None else self.electronic.to_dict()),
+            "free_energy": (None if self.free_energy is None else self.free_energy.to_dict()),
+            "declared_kinds": sorted(self.declared_kinds()),
+        }
+
+
+def energy_identity_from_thermochemistry(
+    payload: Any | None,
+    *,
+    method: str | None,
+    electronic_state: Mapping[str, Any] | None,
+    charge: int | None = None,
+    multiplicity: int | None = None,
+    reference_state: str | None = None,
+    temperature_k: float | None = None,
+    pressure_pa: float | None = None,
+    energy_unit: str = "hartree",
+) -> EnergyIdentity | None:
+    """Build a Gibbs identity from the shared thermochemistry result shape.
+
+    *payload* is the ``ThermochemistryPayload`` or ``build_metadata`` shape
+    produced by :mod:`cccp.qc.shermo_adapter`, or an ensemble summary carrying
+    ``total_gibbs_hartree`` from :mod:`cccp.analysis.ensemble.thermo`.  This
+    adapter reads that already-normalized value together with the declared
+    standard state and temperature; it performs no standard-state correction,
+    no unit conversion and no thermal arithmetic.
+    It returns ``None`` when the payload carries no Gibbs value, so an
+    incomplete thermochemistry step can never be turned into an invented
+    free-energy barrier.
+
+    The caller supplies the method/electronic-state identity because the
+    thermochemistry task itself carries only the frequency provenance.
+    """
+    if payload is None:
+        return None
+
+    def value(name: str) -> Any:
+        if isinstance(payload, Mapping):
+            return payload.get(name)
+        return getattr(payload, name, None)
+
+    gibbs = value("gibbs_hartree")
+    if gibbs is None:
+        gibbs = value("free_energy_hartree")
+    if gibbs is None:
+        gibbs = value("total_gibbs_hartree")
+    if gibbs is None:
+        return None
+    standard_state = value("standard_state")
+    if temperature_k is None:
+        temperature_k = value("temperature_k")
+    if pressure_pa is None:
+        pressure_pa = value("pressure_pa")
+    return EnergyIdentity(
+        energy_hartree=float(gibbs),
+        energy_kind="gibbs_free",
+        method=method,
+        electronic_state=(dict(electronic_state) if electronic_state is not None else None),
+        charge=charge,
+        multiplicity=multiplicity,
+        standard_state=standard_state if isinstance(standard_state, str) else None,
+        reference_state=reference_state,
+        temperature_k=None if temperature_k is None else float(temperature_k),
+        pressure_pa=None if pressure_pa is None else float(pressure_pa),
+        energy_unit=energy_unit,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ActivationEnergyValidation:
+    """Electronic and Gibbs activation barriers plus their identity checks.
+
+    The two barriers are independent claims.  A supported electronic barrier
+    never implies a free-energy barrier: the free-energy claim is only
+    ``supported`` when every participant carries complete, standardized
+    thermochemistry.  ``status`` is the composite report status and therefore
+    reports ``not_evaluated`` when, for example, the electronic barrier is
+    supported but no thermochemistry exists.  Callers must read
+    :attr:`electronic_barrier` and :attr:`free_energy_barrier` separately.
+    """
+
+    reactant_stoichiometry: ClaimAssessment
+    electronic_barrier: ClaimAssessment
+    free_energy_barrier: ClaimAssessment
+    details: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def claims(self) -> tuple[ClaimAssessment, ClaimAssessment, ClaimAssessment]:
+        """All claims in report order."""
+        return (
+            self.reactant_stoichiometry,
+            self.electronic_barrier,
+            self.free_energy_barrier,
+        )
+
+    @property
+    def status(self) -> ClaimStatus:
+        """Composite status: refuted dominates, then missing evidence."""
+        statuses = {claim.status for claim in self.claims}
+        if "refuted" in statuses:
+            return "refuted"
+        if "inconclusive" in statuses:
+            return "inconclusive"
+        if "not_evaluated" in statuses:
+            return "not_evaluated"
+        return "supported"
+
+    @property
+    def free_energy_claimed(self) -> bool:
+        """Whether a free-energy barrier is actually supported."""
+        return self.free_energy_barrier.status == "supported"
+
+    def claim(self, claim_id: str) -> ClaimAssessment | None:
+        """Return the claim with *claim_id*, or ``None`` when absent."""
+        for claim in self.claims:
+            if claim.claim_id == claim_id:
+                return claim
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-safe activation-energy report."""
+        return {
+            "status": self.status,
+            "claims": [claim.to_dict() for claim in self.claims],
+            "reactant_stoichiometry": self.reactant_stoichiometry.to_dict(),
+            "electronic_barrier": self.electronic_barrier.to_dict(),
+            "free_energy_barrier": self.free_energy_barrier.to_dict(),
+            "details": dict(self.details),
+            "validator_version": VALIDATOR_VERSION,
         }
 
 
@@ -3347,6 +3591,730 @@ def validate_energy_comparability(
             ),
         )
     return _supported(claim_id, statement, validator_id, details=details)
+
+
+def _coerce_barrier_record(value: Any, *, role: str) -> BarrierEnergyRecord | None:
+    if value is None:
+        return None
+    if isinstance(value, BarrierEnergyRecord):
+        return value
+    if isinstance(value, EnergyIdentity):
+        return _barrier_record_from_identity(role, value)
+    if isinstance(value, Mapping):
+        if "species_id" not in value and ("energy_kind" in value or "energy_hartree" in value):
+            return _barrier_record_from_identity(role, EnergyIdentity.from_dict(value))
+        payload = dict(value)
+        payload.setdefault("species_id", role)
+        return BarrierEnergyRecord.from_dict(payload)
+    raise ValueError(
+        f"barrier participant {role!r} must be a BarrierEnergyRecord, EnergyIdentity or mapping"
+    )
+
+
+def _barrier_record_from_identity(
+    species_id: str,
+    identity: EnergyIdentity,
+) -> BarrierEnergyRecord:
+    if identity.energy_kind == "electronic":
+        return BarrierEnergyRecord(species_id=species_id, electronic=identity)
+    if identity.energy_kind == "gibbs_free":
+        return BarrierEnergyRecord(species_id=species_id, free_energy=identity)
+    raise ValueError(
+        "activation-energy comparability supports electronic and gibbs_free "
+        f"identities, got {identity.energy_kind!r}"
+    )
+
+
+def _coerce_barrier_records(
+    values: Any,
+    *,
+    role: str,
+) -> tuple[BarrierEnergyRecord, ...]:
+    if values is None:
+        return ()
+    if isinstance(values, (str, bytes)):
+        raise ValueError(f"{role} participants must be records, not a string")
+    if isinstance(values, (BarrierEnergyRecord, EnergyIdentity, Mapping)):
+        record = _coerce_barrier_record(values, role=role)
+        if record is None:  # pragma: no cover - guarded by the isinstance branch
+            return ()
+        return (record,)
+    try:
+        items = tuple(values)
+    except TypeError as exc:
+        raise ValueError(f"{role} participants must be a sequence") from exc
+    records: list[BarrierEnergyRecord] = []
+    for index, item in enumerate(items):
+        record = _coerce_barrier_record(item, role=f"{role}[{index}]")
+        if record is None:
+            raise ValueError(f"{role}[{index}] must not be None")
+        records.append(record)
+    return tuple(records)
+
+
+def _normalize_required_reactants(
+    required: Mapping[str, int] | Sequence[str] | None,
+) -> dict[str, int] | None:
+    if required is None:
+        return None
+    normalized: dict[str, int] = {}
+    items: Any
+    if isinstance(required, Mapping):
+        items = required.items()
+    else:
+        if isinstance(required, (str, bytes)):
+            raise ValueError("required_reactants must be a mapping or a sequence of ids")
+        items = ((str(species), 1) for species in required)
+    for species, coefficient in items:
+        if not isinstance(species, str) or not species:
+            raise ValueError("required reactant species must be a non-empty string")
+        if isinstance(coefficient, bool) or not isinstance(coefficient, int):
+            raise ValueError(f"required coefficient for {species!r} must be an integer")
+        if coefficient < 1:
+            raise ValueError(f"required coefficient for {species!r} must be >= 1")
+        normalized[species] = normalized.get(species, 0) + coefficient
+    return normalized
+
+
+def _supplied_reactant_counts(
+    reactants: tuple[BarrierEnergyRecord, ...],
+) -> dict[str, int]:
+    supplied: dict[str, int] = {}
+    for record in reactants:
+        supplied[record.species_id] = supplied.get(record.species_id, 0) + record.stoichiometry
+    return supplied
+
+
+def _reactant_stoichiometry_claim(
+    reactants: tuple[BarrierEnergyRecord, ...],
+    required: dict[str, int] | None,
+    reaction_id: str | None,
+) -> ClaimAssessment:
+    claim_id = "c-reactant-stoichiometry-complete"
+    statement = (
+        "Every reactant component declared by the reaction is present with its "
+        "stoichiometric coefficient, so the reactant side of the activation-energy "
+        "subtraction is complete."
+    )
+    validator_id = REACTANT_STOICHIOMETRY_VALIDATOR_ID
+    supplied = _supplied_reactant_counts(reactants)
+    details: dict[str, Any] = {
+        "reaction_id": reaction_id,
+        "required_reactants": None if required is None else dict(sorted(required.items())),
+        "supplied_reactants": dict(sorted(supplied.items())),
+        "stoichiometry_scope": (
+            "component presence and coefficients; atom counts are not parsed here"
+        ),
+    }
+    if required is None:
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            "no required reactant set was declared, so completeness was not checked",
+            details=details,
+        )
+    if not required:
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            "the declared required reactant set is empty",
+            details=details,
+        )
+    missing = sorted(set(required) - set(supplied))
+    unexpected = sorted(set(supplied) - set(required))
+    coefficients = {
+        species: {"required": required[species], "supplied": supplied[species]}
+        for species in sorted(set(required) & set(supplied))
+        if required[species] != supplied[species]
+    }
+    details.update(
+        {
+            "missing_components": missing,
+            "unexpected_components": unexpected,
+            "coefficient_mismatches": coefficients,
+        }
+    )
+    if missing or unexpected or coefficients:
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=(
+                "The supplied reactant component set is incomplete or different "
+                "from the declared reaction.",
+            ),
+        )
+    return _supported(claim_id, statement, validator_id, details=details)
+
+
+def _barrier_participants(
+    reactants: tuple[BarrierEnergyRecord, ...],
+    transition_state: BarrierEnergyRecord | None,
+    product: BarrierEnergyRecord | None,
+) -> tuple[tuple[str, str, BarrierEnergyRecord | None], ...]:
+    participants: list[tuple[str, str, BarrierEnergyRecord | None]] = [
+        ("reactant", f"reactant:{record.species_id}", record) for record in reactants
+    ]
+    participants.append(("transition_state", "transition_state", transition_state))
+    if product is not None:
+        participants.append(("product", f"product:{product.species_id}", product))
+    return tuple(participants)
+
+
+def _slot_presence(
+    participants: tuple[tuple[str, str, BarrierEnergyRecord | None], ...],
+    energy_kind: str,
+) -> dict[str, Any]:
+    present: list[str] = []
+    missing: list[str] = []
+    for _role, label, record in participants:
+        if record is not None and record.identity_for(energy_kind) is not None:
+            present.append(label)
+        else:
+            missing.append(label)
+    return {
+        "energy_kind": energy_kind,
+        "complete": not missing,
+        "any_present": bool(present),
+        "present_count": len(present),
+        "participant_count": len(participants),
+        "present": present,
+        "missing": missing,
+    }
+
+
+def _declared_energy_kinds(
+    participants: tuple[tuple[str, str, BarrierEnergyRecord | None], ...],
+) -> frozenset[str]:
+    kinds: set[str] = set()
+    for _role, _label, record in participants:
+        if record is not None:
+            kinds.update(record.declared_kinds())
+    return frozenset(kinds)
+
+
+def _participant_energy_rows(
+    participants: tuple[tuple[str, str, BarrierEnergyRecord | None], ...],
+    energy_kind: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for role, label, record in participants:
+        identity = None if record is None else record.identity_for(energy_kind)
+        rows.append(
+            {
+                "role": role,
+                "label": label,
+                "species_id": None if record is None else record.species_id,
+                "stoichiometry": None if record is None else record.stoichiometry,
+                "slot": energy_kind,
+                "declared_energy_kind": (None if identity is None else identity.energy_kind),
+                "energy_hartree": None if identity is None else identity.energy_hartree,
+                "identity_present": identity is not None,
+            }
+        )
+    return rows
+
+
+def _combine_identity_assessments(
+    claim_id: str,
+    statement: str,
+    validator_id: str,
+    assessments: tuple[ClaimAssessment, ...],
+    details: dict[str, Any],
+    notes: tuple[str, ...],
+) -> ClaimAssessment:
+    if not assessments:
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            "no participant identities were available for comparison",
+            details=details,
+        )
+    statuses = {assessment.status for assessment in assessments}
+    if "refuted" in statuses:
+        differing: set[str] = set()
+        for assessment in assessments:
+            raw = assessment.details.get("differing_fields", ())
+            if isinstance(raw, (list, tuple)):
+                differing.update(str(field) for field in raw)
+        details = {**details, "differing_fields": sorted(differing)}
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=notes
+            + (
+                "Energies from different identities cannot be subtracted: "
+                + ", ".join(sorted(differing)),
+            ),
+        )
+    if statuses & {"inconclusive", "not_evaluated"}:
+        status: ClaimStatus = "inconclusive" if "inconclusive" in statuses else "not_evaluated"
+        reason: AssessmentReason = "missing_evidence" if status == "inconclusive" else "not_checked"
+        missing = _merge_missing_checks(list(assessments))
+        if not missing:
+            missing = (
+                MissingCheck(
+                    "not_executed",
+                    "the identity comparison did not produce missing-check evidence",
+                ),
+            )
+        return ClaimAssessment(
+            claim_id=claim_id,
+            statement=statement,
+            status=status,
+            reason=reason,
+            validator_id=validator_id,
+            validator_version=VALIDATOR_VERSION,
+            missing_checks=missing,
+            details=details,
+            notes=notes,
+        )
+    return _supported(claim_id, statement, validator_id, details=details, notes=notes)
+
+
+def _standard_state_rows(
+    participants: tuple[tuple[str, str, BarrierEnergyRecord | None], ...],
+    normalize_standard_state: Any,
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    rows: list[dict[str, Any]] = []
+    unsupported: list[str] = []
+    absent: list[str] = []
+    for _role, label, record in participants:
+        identity = None if record is None else record.free_energy
+        raw = None if identity is None else identity.standard_state
+        normalized = None if raw is None else normalize_standard_state(raw)
+        lossless = (
+            raw is not None
+            and normalized is not None
+            and raw.strip().lower().replace(" ", "") == normalized.lower()
+        )
+        rows.append(
+            {
+                "label": label,
+                "declared": raw,
+                "normalized": normalized,
+                "normalization_is_lossless": lossless,
+            }
+        )
+        if raw is None:
+            absent.append(label)
+        elif not lossless:
+            unsupported.append(label)
+    return rows, unsupported, absent
+
+
+def _barrier_claim(
+    *,
+    energy_kind: str,
+    claim_id: str,
+    statement: str,
+    participants: tuple[tuple[str, str, BarrierEnergyRecord | None], ...],
+    presence: Mapping[str, Any],
+    other_presence: Mapping[str, Any],
+    mixed: bool,
+    declared_kinds: frozenset[str],
+    stoichiometry: ClaimAssessment,
+    reaction_id: str | None,
+    normalize_standard_state: Any,
+) -> ClaimAssessment:
+    validator_id = ACTIVATION_ENERGY_COMPARABILITY_VALIDATOR_ID
+    details: dict[str, Any] = {
+        "reaction_id": reaction_id,
+        "barrier_kind": energy_kind,
+        "barrier_unit": None,
+        "barrier_value": None,
+        "barrier_expression": None,
+        "subtraction_performed": False,
+        "claim_scope": (
+            "the declared reactant -> transition state -> product reaction only; "
+            "no claim about other paths, conformers, global minima or species "
+            "outside the supplied records"
+        ),
+        "participants": _participant_energy_rows(participants, energy_kind),
+        "presence": dict(presence),
+        "other_kind_presence": dict(other_presence),
+        "declared_energy_kinds": sorted(declared_kinds),
+        "participant_identities_complete": presence["complete"],
+        "thermochemistry_complete": (presence["complete"] if energy_kind == "gibbs_free" else None),
+    }
+
+    if mixed:
+        details["mixed_energy_kinds"] = True
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=(
+                "Electronic and free energies are never subtracted together; no "
+                "barrier is reported from a mixed-kind participant set.",
+            ),
+        )
+
+    if stoichiometry.status == "refuted":
+        details["mixed_energy_kinds"] = False
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=(
+                "The reactant side is incomplete or different from the declared "
+                "reaction, so no meaningful barrier may be subtracted.",
+            ),
+        )
+
+    if not presence["complete"]:
+        details["mixed_energy_kinds"] = False
+        missing_labels = list(presence["missing"])
+        if energy_kind == "gibbs_free":
+            check_id = "frequency_not_computed"
+            if not presence["any_present"]:
+                return _not_evaluated(
+                    claim_id,
+                    statement,
+                    validator_id,
+                    check_id,
+                    "no thermochemistry was supplied, so no free-energy barrier may be claimed",
+                    details=details,
+                )
+            return _inconclusive(
+                claim_id,
+                statement,
+                validator_id,
+                check_id,
+                "thermochemistry is incomplete for: " + ", ".join(missing_labels),
+                details=details,
+            )
+        check_id = "not_executed"
+        if not presence["any_present"]:
+            return _not_evaluated(
+                claim_id,
+                statement,
+                validator_id,
+                check_id,
+                "no electronic energies were supplied",
+                details=details,
+            )
+        return _inconclusive(
+            claim_id,
+            statement,
+            validator_id,
+            "partial_output",
+            "electronic identities are incomplete for: " + ", ".join(missing_labels),
+            details=details,
+        )
+
+    details["mixed_energy_kinds"] = False
+    mismatched_slots: list[dict[str, Any]] = []
+    for _role, label, record in participants:
+        assert record is not None
+        identity = record.identity_for(energy_kind)
+        assert identity is not None
+        if identity.energy_kind != energy_kind:
+            mismatched_slots.append(
+                {
+                    "label": label,
+                    "slot": energy_kind,
+                    "declared_energy_kind": identity.energy_kind,
+                }
+            )
+    if mismatched_slots:
+        details["kind_mismatched_slots"] = mismatched_slots
+        details["differing_fields"] = ["energy_kind"]
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=(
+                "A participant identity is declared in the wrong energy-kind slot; "
+                "no barrier is reported from mixed kinds.",
+            ),
+        )
+
+    transition_state = next(
+        record for role, _label, record in participants if role == "transition_state"
+    )
+    assert transition_state is not None
+    ts_identity = transition_state.identity_for(energy_kind)
+    assert ts_identity is not None
+    if transition_state.stoichiometry != 1:
+        details["transition_state_stoichiometry"] = transition_state.stoichiometry
+        return _refuted(
+            claim_id,
+            statement,
+            validator_id,
+            details=details,
+            notes=("The transition state must be a single species (coefficient 1).",),
+        )
+
+    assessments: list[ClaimAssessment] = []
+    for role, _label, record in participants:
+        if role == "transition_state":
+            continue
+        assert record is not None
+        identity = record.identity_for(energy_kind)
+        assert identity is not None
+        assessments.append(validate_energy_comparability(ts_identity, identity))
+    details["identity_assessments"] = [assessment.to_dict() for assessment in assessments]
+    combined = _combine_identity_assessments(
+        claim_id,
+        statement,
+        validator_id,
+        tuple(assessments),
+        details,
+        (),
+    )
+    if combined.status != "supported":
+        return combined
+    details = dict(combined.details)
+
+    if energy_kind == "gibbs_free":
+        state_rows, unsupported, absent = _standard_state_rows(
+            participants, normalize_standard_state
+        )
+        details["standard_state_lexicon"] = state_rows
+        if unsupported or absent:
+            affected = sorted(set(unsupported) | set(absent))
+            details["unstandardized_standard_state"] = affected
+            if len(affected) < len(participants):
+                return _inconclusive(
+                    claim_id,
+                    statement,
+                    validator_id,
+                    "standard_state_unspecified",
+                    "the free-energy standard state is not standardized for: "
+                    + ", ".join(affected),
+                    details=details,
+                )
+            return _not_evaluated(
+                claim_id,
+                statement,
+                validator_id,
+                "standard_state_unspecified",
+                "no free-energy standard state can be standardized by the "
+                "thermochemistry contract without inventing a token; only the "
+                "electronic barrier may be reported",
+                details=details,
+            )
+        temperatures = [
+            record.free_energy.temperature_k
+            for _role, _label, record in participants
+            if record is not None and record.free_energy is not None
+        ]
+        details["declared_temperatures_k"] = temperatures
+        if temperatures and all(value is None for value in temperatures):
+            return _not_evaluated(
+                claim_id,
+                statement,
+                validator_id,
+                "temperature_unspecified",
+                "no free-energy participant declares a temperature",
+                details=details,
+            )
+
+    reactant_terms: list[tuple[BarrierEnergyRecord, float]] = []
+    for role, _label, record in participants:
+        if role != "reactant":
+            continue
+        assert record is not None
+        identity = record.identity_for(energy_kind)
+        assert identity is not None
+        energy = identity.energy_hartree
+        if energy is None:  # pragma: no cover - pairwise guards this
+            return _not_evaluated(
+                claim_id,
+                statement,
+                validator_id,
+                "not_executed",
+                "a reactant carries no energy value",
+                details=details,
+            )
+        reactant_terms.append((record, float(energy)))
+    ts_energy = ts_identity.energy_hartree
+    if ts_energy is None:  # pragma: no cover - pairwise guards this
+        return _not_evaluated(
+            claim_id,
+            statement,
+            validator_id,
+            "not_executed",
+            "the transition state carries no energy value",
+            details=details,
+        )
+
+    reactant_sum = math.fsum(record.stoichiometry * energy for record, energy in reactant_terms)
+    barrier_value = float(ts_energy) - reactant_sum
+    symbol = "E" if energy_kind == "electronic" else "G"
+    terms = " + ".join(
+        f"{record.stoichiometry}*{symbol}({record.species_id})"
+        for record, _energy in reactant_terms
+    )
+    details.update(
+        {
+            "barrier_unit": ts_identity.energy_unit,
+            "barrier_value": barrier_value,
+            "barrier_expression": f"{symbol}(TS) - [{terms}]",
+            "subtraction_performed": True,
+            "reactant_energy_sum": reactant_sum,
+            "transition_state_energy": float(ts_energy),
+        }
+    )
+    return _supported(
+        claim_id,
+        statement,
+        validator_id,
+        details=details,
+    )
+
+
+def validate_activation_energy_comparability(
+    reactants: Any | None,
+    transition_state: Any | None,
+    product: Any | None = None,
+    *,
+    required_reactants: Mapping[str, int] | Sequence[str] | None = None,
+    reaction_id: str | None = None,
+) -> ActivationEnergyValidation:
+    """Check whether electronic and Gibbs activation barriers may be computed.
+
+    The participants are :class:`BarrierEnergyRecord` objects (or mappings /
+    :class:`EnergyIdentity` values) for every reactant component, the
+    transition state and the product.  Each barrier is built only from
+    identities of its own kind: electronic energies produce an electronic
+    barrier and Gibbs free energies produce a free-energy barrier.  The
+    function delegates every pairwise identity comparison to
+    :func:`validate_energy_comparability`, so method, electronic state,
+    temperature, standard state, reference state, charge/multiplicity and
+    energy kind/unit are checked by the existing single implementation.
+
+    Reactant stoichiometry is checked against ``required_reactants`` when it is
+    declared.  A missing or unexpected component, or a coefficient mismatch,
+    refuses both barriers because the reactant sum would be wrong.
+
+    Incomplete thermochemistry never becomes a free-energy claim: the
+    electronic barrier is still reported, while the free-energy claim is
+    ``not_evaluated``/``inconclusive`` with no barrier value.  A free-energy
+    barrier additionally requires a standard-state token that the existing
+    thermochemistry contract can emit without inventing an equivalence
+    (``1atm``/``1M``); an unstandardizable token keeps the electronic barrier
+    and makes no free-energy claim.
+
+    Args:
+        reactants: Reactant component records, or one record.
+        transition_state: The transition-state record, or ``None``.
+        product: The product record, or ``None`` when the product identity is
+            unavailable.
+        required_reactants: Declared species-to-coefficient map (or a sequence
+            of species ids with coefficient 1).
+        reaction_id: Optional reaction identity recorded in the evidence.
+
+    Returns:
+        An :class:`ActivationEnergyValidation` with separate stoichiometry,
+        electronic-barrier and free-energy-barrier claims.
+    """
+    from cccp.qc.thermo_normalize import normalize_standard_state
+
+    reactant_records = _coerce_barrier_records(reactants, role="reactant")
+    transition_state_record = _coerce_barrier_record(transition_state, role="transition_state")
+    product_record = _coerce_barrier_record(product, role="product")
+    required = _normalize_required_reactants(required_reactants)
+    participants = _barrier_participants(reactant_records, transition_state_record, product_record)
+    stoichiometry = _reactant_stoichiometry_claim(reactant_records, required, reaction_id)
+
+    electronic_presence = _slot_presence(participants, "electronic")
+    free_energy_presence = _slot_presence(participants, "gibbs_free")
+    declared_kinds = _declared_energy_kinds(participants)
+    electronic_only = any(
+        record is not None and record.declared_kinds() == frozenset({"electronic"})
+        for _role, _label, record in participants
+    )
+    free_only = any(
+        record is not None and record.declared_kinds() == frozenset({"gibbs_free"})
+        for _role, _label, record in participants
+    )
+    mixed = (
+        electronic_only
+        and free_only
+        and not electronic_presence["complete"]
+        and not free_energy_presence["complete"]
+    )
+
+    electronic_barrier = _barrier_claim(
+        energy_kind="electronic",
+        claim_id="c-electronic-activation-barrier-comparable",
+        statement=(
+            "Within the declared reaction and its shared electronic identity, "
+            "the electronic activation barrier E(TS) - sum(nu_i * E(reactant_i)) "
+            "is comparable; this is not a free-energy barrier and carries no "
+            "thermal or entropic claim."
+        ),
+        participants=participants,
+        presence=electronic_presence,
+        other_presence=free_energy_presence,
+        mixed=mixed,
+        declared_kinds=declared_kinds,
+        stoichiometry=stoichiometry,
+        reaction_id=reaction_id,
+        normalize_standard_state=normalize_standard_state,
+    )
+    free_energy_barrier = _barrier_claim(
+        energy_kind="gibbs_free",
+        claim_id="c-free-energy-activation-barrier-comparable",
+        statement=(
+            "Within the declared reaction, temperature and standard state, the "
+            "Gibbs free-energy activation barrier G(TS) - sum(nu_i * G(reactant_i)) "
+            "is comparable; this claim is limited to complete, standardized "
+            "thermochemistry for every participant."
+        ),
+        participants=participants,
+        presence=free_energy_presence,
+        other_presence=electronic_presence,
+        mixed=mixed,
+        declared_kinds=declared_kinds,
+        stoichiometry=stoichiometry,
+        reaction_id=reaction_id,
+        normalize_standard_state=normalize_standard_state,
+    )
+
+    details: dict[str, Any] = {
+        "reaction_id": reaction_id,
+        "claim_scope": (
+            "activation barriers for the declared reactant -> transition state -> "
+            "product reaction only; no claim about other paths, conformers, "
+            "global minima or species outside the supplied records"
+        ),
+        "stoichiometry_scope": (
+            "component presence and coefficients; atom counts are not parsed here"
+        ),
+        "declared_energy_kinds": sorted(declared_kinds),
+        "mixed_energy_kinds": mixed,
+        "electronic_barrier_status": electronic_barrier.status,
+        "free_energy_barrier_status": free_energy_barrier.status,
+        "electronic_barrier_value": electronic_barrier.details.get("barrier_value"),
+        "free_energy_barrier_value": free_energy_barrier.details.get("barrier_value"),
+        "free_energy_claimed": free_energy_barrier.status == "supported",
+        "subtraction_performed": bool(
+            electronic_barrier.details.get("subtraction_performed")
+            or free_energy_barrier.details.get("subtraction_performed")
+        ),
+        "validator_version": VALIDATOR_VERSION,
+    }
+    return ActivationEnergyValidation(
+        reactant_stoichiometry=stoichiometry,
+        electronic_barrier=electronic_barrier,
+        free_energy_barrier=free_energy_barrier,
+        details=details,
+    )
 
 
 def validate_no_stationary_point_exists(optimize_result: Any | None) -> ClaimAssessment:
