@@ -1,0 +1,281 @@
+[
+  {
+    "cell": null,
+    "code": "N806",
+    "end_location": {
+      "column": 9,
+      "row": 55
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 55
+    },
+    "message": "Variable `Chem` in function should be lowercase",
+    "name": "non-lowercase-variable-in-function",
+    "noqa_row": 55,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/non-lowercase-variable-in-function"
+  },
+  {
+    "cell": null,
+    "code": "N806",
+    "end_location": {
+      "column": 18,
+      "row": 55
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 11,
+      "row": 55
+    },
+    "message": "Variable `AllChem` in function should be lowercase",
+    "name": "non-lowercase-variable-in-function",
+    "noqa_row": 55,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/non-lowercase-variable-in-function"
+  },
+  {
+    "cell": null,
+    "code": "N806",
+    "end_location": {
+      "column": 9,
+      "row": 127
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 127
+    },
+    "message": "Variable `Chem` in function should be lowercase",
+    "name": "non-lowercase-variable-in-function",
+    "noqa_row": 127,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/non-lowercase-variable-in-function"
+  },
+  {
+    "cell": null,
+    "code": "N806",
+    "end_location": {
+      "column": 18,
+      "row": 127
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 11,
+      "row": 127
+    },
+    "message": "Variable `AllChem` in function should be lowercase",
+    "name": "non-lowercase-variable-in-function",
+    "noqa_row": 127,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/non-lowercase-variable-in-function"
+  },
+  {
+    "cell": null,
+    "code": "N806",
+    "end_location": {
+      "column": 9,
+      "row": 405
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 405
+    },
+    "message": "Variable `Chem` in function should be lowercase",
+    "name": "non-lowercase-variable-in-function",
+    "noqa_row": 405,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/non-lowercase-variable-in-function"
+  },
+  {
+    "cell": null,
+    "code": "N806",
+    "end_location": {
+      "column": 18,
+      "row": 405
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 11,
+      "row": 405
+    },
+    "message": "Variable `AllChem` in function should be lowercase",
+    "name": "non-lowercase-variable-in-function",
+    "noqa_row": 405,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/non-lowercase-variable-in-function"
+  },
+  {
+    "cell": null,
+    "code": "N803",
+    "end_location": {
+      "column": 41,
+      "row": 436
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 32,
+      "row": 436
+    },
+    "message": "Argument name `Chem` should be lowercase",
+    "name": "invalid-argument-name",
+    "noqa_row": 436,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/invalid-argument-name"
+  },
+  {
+    "cell": null,
+    "code": "N803",
+    "end_location": {
+      "column": 48,
+      "row": 463
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 39,
+      "row": 463
+    },
+    "message": "Argument name `Chem` should be lowercase",
+    "name": "invalid-argument-name",
+    "noqa_row": 463,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/invalid-argument-name"
+  },
+  {
+    "cell": null,
+    "code": "N803",
+    "end_location": {
+      "column": 62,
+      "row": 463
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/embedding.py",
+    "fix": null,
+    "location": {
+      "column": 50,
+      "row": 463
+    },
+    "message": "Argument name `AllChem` should be lowercase",
+    "name": "invalid-argument-name",
+    "noqa_row": 463,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/invalid-argument-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 32,
+      "row": 635
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/parsers.py",
+    "fix": null,
+    "location": {
+      "column": 31,
+      "row": 635
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 635,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "N802",
+    "end_location": {
+      "column": 14,
+      "row": 680
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/structure/parsers.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 680
+    },
+    "message": "Function name `Path_safe` should be lowercase",
+    "name": "invalid-function-name",
+    "noqa_row": 680,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/invalid-function-name"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 33,
+      "row": 16
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/xtbmd/energy_filter.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 16
+          }
+        }
+      ],
+      "message": "Remove unused import: `numpy.typing.NDArray`"
+    },
+    "location": {
+      "column": 26,
+      "row": 16
+    },
+    "message": "`numpy.typing.NDArray` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 16,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 18,
+      "row": 19
+    },
+    "filename": "/ACPServer/AutoCalcPlatform/src/cccp/analysis/xtbmd/energy_filter.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from cccp.analysis.xtbmd.trajectory import (\n    _match_isomers_frame,\n    _parse_title_energy_hartree,\n    _read_trajectory,\n)",
+          "end_location": {
+            "column": 2,
+            "row": 23
+          },
+          "location": {
+            "column": 1,
+            "row": 18
+          }
+        }
+      ],
+      "message": "Remove unused import: `cccp.analysis.xtbmd.trajectory._aligned_rmsd`"
+    },
+    "location": {
+      "column": 5,
+      "row": 19
+    },
+    "message": "`cccp.analysis.xtbmd.trajectory._aligned_rmsd` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 19,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  }
+]

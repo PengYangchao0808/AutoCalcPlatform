@@ -1,0 +1,3244 @@
+{
+  "artifacts": [
+    {
+      "bytes": 3560926,
+      "path": "frontend/F1",
+      "sha256": "024895337c4e0ef24c82f1b56ec075fa6dc1182ef2363eef3fc1edcd6dec0132"
+    }
+  ],
+  "candidate_patch_sha256": "ffba7728ba70800c06b3b254acc529bc286b594a30768328e3b39c72b3546863",
+  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "cell": {
+    "browser": {
+      "api_responses": [
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v1/projects"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v1/workflow-catalog"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v1/status"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v1/maintenance/disk-usage"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v1/jobs/20261021_232648_002_four-combo-F1S1/detail"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v1/jobs/20261021_232648_002_four-combo-F1S1/files"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v1/jobs/20261021_232648_002_four-combo-F1S1/logs?lines=300"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40217/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=false"
+        }
+      ],
+      "chromium": "153.0.8010.12",
+      "facts": {
+        "jobVisible": true,
+        "jobsArray": true,
+        "workflows": 15
+      },
+      "failed_requests": [],
+      "ok": true,
+      "page_errors": [],
+      "result": "PASS"
+    },
+    "demo_cli": {
+      "argv": [
+        "python",
+        "-m",
+        "acp.cli",
+        "task",
+        "execute",
+        "--workflow",
+        "fake",
+        "..."
+      ],
+      "artifacts": [
+        "8bb81512-6065-4878-a5d4-7e9207416bf9.completed.json",
+        "8bb81512-6065-4878-a5d4-7e9207416bf9.started.json",
+        "da517fdb-d1df-4aad-b977-4c3f6e23148f.completed.json",
+        "da517fdb-d1df-4aad-b977-4c3f6e23148f.started.json",
+        "e76e9b2e-e2b3-4253-824f-96a53634eca5.completed.json",
+        "e76e9b2e-e2b3-4253-824f-96a53634eca5.started.json",
+        "events.jsonl",
+        "input_preview.xyz",
+        "job.json",
+        "state.json"
+      ],
+      "exit_code": 0,
+      "ok": true,
+      "status": "completed",
+      "stderr_tail": [],
+      "work_dir": "/tmp/acp-four-kjbjijik/run_S1/demo_cli/uncategorized/four-combo-S1_fake",
+      "workflow": "fake"
+    },
+    "frontend": {
+      "assets": [
+        {
+          "path": "/js/vendor/3Dmol-2.5.5.min.js",
+          "status": 200
+        },
+        {
+          "path": "/css/workbench/base.css",
+          "status": 200
+        },
+        {
+          "path": "/css/workbench/layout.css",
+          "status": 200
+        },
+        {
+          "path": "/css/workbench/queue-detail.css",
+          "status": 200
+        },
+        {
+          "path": "/css/workbench/energy.css",
+          "status": 200
+        },
+        {
+          "path": "/css/workbench/wizard.css",
+          "status": 200
+        }
+      ],
+      "html_bytes": 78495,
+      "index_status": 200,
+      "ok": true
+    },
+    "frontend_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "frontend_sha256": "024895337c4e0ef24c82f1b56ec075fa6dc1182ef2363eef3fc1edcd6dec0132",
+    "legacy": [
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "Confsearch"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                          [--save-config SAVE_CONFIG]",
+          "                          [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run Confsearch: error: one of the arguments --input/-i --batch-file is required"
+        ],
+        "workflow": "Confsearch"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "PESsearch"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "2026-10-21 23:26:23,486 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml",
+          "2026-10-21 23:26:23,799 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
+        ],
+        "workflow": "PESsearch"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "BatchOptimize"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                             [--batch-roles-json BATCH_ROLES_JSON]",
+          "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run BatchOptimize: error: one of the arguments --from-job --from-artifact --items-file is required"
+        ],
+        "workflow": "BatchOptimize"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "XtbPathSearch"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                             [--register]",
+          "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run XtbPathSearch: error: the following arguments are required: --path-config"
+        ],
+        "workflow": "XtbPathSearch"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "XtbConstrainedOpt"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                                 [--config CONFIG] [--register]",
+          "                                 [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run XtbConstrainedOpt: error: the following arguments are required: --opt-config"
+        ],
+        "workflow": "XtbConstrainedOpt"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "tsmode"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                      [--config CONFIG]",
+          "                      [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+          "acp run tsmode: error: the following arguments are required: --source-bundle, --source-mode-index"
+        ],
+        "workflow": "tsmode"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "acp.cli",
+          "run",
+          "nmr"
+        ],
+        "exit_code": 2,
+        "legacy_entry_selected": true,
+        "ok": true,
+        "stderr_tail": [
+          "                   [--log-file LOG_FILE] [--charge CHARGE]",
+          "                   [--multiplicity MULTIPLICITY] [--save-config SAVE_CONFIG]",
+          "acp run nmr: error: the following arguments are required: --input"
+        ],
+        "workflow": "nmr"
+      }
+    ],
+    "legacy_ordinary": [
+      {
+        "cases": [
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "Confsearch",
+              "--input",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+              "--protocol",
+              "xtb-crest",
+              "--profile",
+              "light",
+              "--refinement-policy",
+              "screen",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--temperature",
+              "310",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/completed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "completed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 0,
+            "ok": true,
+            "received": [
+              {
+                "request": {
+                  "backend": "native",
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "energy_window": null,
+                  "input_source": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                  "levels": null,
+                  "max_conformers": null,
+                  "md_params": {},
+                  "multiplicity": 1,
+                  "name": null,
+                  "nproc": 2,
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/completed",
+                  "preset": null,
+                  "profile": "light",
+                  "protocol": "xtb-crest",
+                  "refinement_policy": "screen",
+                  "solvent": null,
+                  "temperature": 310.0
+                },
+                "workflow": "Confsearch"
+              }
+            ],
+            "stderr": "",
+            "stdout": "2026-10-21 23:26:29,187 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:29,204 [INFO] acp.cli: Confsearch completed (xtb-crest + screen)\n2026-10-21 23:26:29,204 [INFO] acp.cli:   Conformers  : 0\n2026-10-21 23:26:29,204 [INFO] acp.cli:   Manifest    : None\n2026-10-21 23:26:29,204 [INFO] acp.cli:   G1 gate     : None\n"
+          },
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "Confsearch",
+              "--input",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+              "--protocol",
+              "xtb-crest",
+              "--profile",
+              "light",
+              "--refinement-policy",
+              "screen",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--temperature",
+              "310",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/failed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "failed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 1,
+            "ok": true,
+            "received": [
+              {
+                "request": {
+                  "backend": "native",
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "energy_window": null,
+                  "input_source": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                  "levels": null,
+                  "max_conformers": null,
+                  "md_params": {},
+                  "multiplicity": 1,
+                  "name": null,
+                  "nproc": 2,
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/failed",
+                  "preset": null,
+                  "profile": "light",
+                  "protocol": "xtb-crest",
+                  "refinement_policy": "screen",
+                  "solvent": null,
+                  "temperature": 310.0
+                },
+                "workflow": "Confsearch"
+              }
+            ],
+            "stderr": "",
+            "stdout": ""
+          }
+        ],
+        "driver_command": [
+          "/opt/acp/venv/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+          "--child",
+          "--worktree",
+          "/tmp/acp-four-kjbjijik/F1",
+          "--workflow",
+          "Confsearch",
+          "--run-root",
+          "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch"
+        ],
+        "driver_exit_code": 0,
+        "ok": true,
+        "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+        "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "real_qc": "NOT_VERIFIED",
+        "result": "PASS",
+        "scheduler_background_publication": "NOT_VERIFIED",
+        "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+        "workflow": "Confsearch"
+      },
+      {
+        "cases": [
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "PESsearch",
+              "--input",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+              "--coordinate",
+              "0,1,0.8,1.2",
+              "--points",
+              "5",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/completed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "completed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 0,
+            "ok": true,
+            "received": [
+              {
+                "args": [],
+                "kwargs": {
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "coordinate": {
+                    "atoms": [
+                      0,
+                      1
+                    ],
+                    "end": 1.2,
+                    "kind": "distance",
+                    "n_points": 5,
+                    "start": 0.8,
+                    "unit": "angstrom",
+                    "values": []
+                  },
+                  "input_xyz": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                  "multiplicity": 1,
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/completed",
+                  "reaction": null,
+                  "strategy": "guided-scan"
+                },
+                "workflow": "PESsearch"
+              }
+            ],
+            "stderr": "",
+            "stdout": "2026-10-21 23:26:29,948 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:29,963 [INFO] acp.cli: PESsearch completed: 0 TS + 0 INT candidates\n2026-10-21 23:26:29,963 [INFO] acp.cli:   Manifest    : None\n"
+          },
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "PESsearch",
+              "--input",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+              "--coordinate",
+              "0,1,0.8,1.2",
+              "--points",
+              "5",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/failed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "failed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 1,
+            "ok": true,
+            "received": [
+              {
+                "args": [],
+                "kwargs": {
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "coordinate": {
+                    "atoms": [
+                      0,
+                      1
+                    ],
+                    "end": 1.2,
+                    "kind": "distance",
+                    "n_points": 5,
+                    "start": 0.8,
+                    "unit": "angstrom",
+                    "values": []
+                  },
+                  "input_xyz": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                  "multiplicity": 1,
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/failed",
+                  "reaction": null,
+                  "strategy": "guided-scan"
+                },
+                "workflow": "PESsearch"
+              }
+            ],
+            "stderr": "",
+            "stdout": ""
+          }
+        ],
+        "driver_command": [
+          "/opt/acp/venv/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+          "--child",
+          "--worktree",
+          "/tmp/acp-four-kjbjijik/F1",
+          "--workflow",
+          "PESsearch",
+          "--run-root",
+          "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch"
+        ],
+        "driver_exit_code": 0,
+        "ok": true,
+        "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+        "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "real_qc": "NOT_VERIFIED",
+        "result": "PASS",
+        "scheduler_background_publication": "NOT_VERIFIED",
+        "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+        "workflow": "PESsearch"
+      },
+      {
+        "cases": [
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "BatchOptimize",
+              "--items-file",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+              "--profile",
+              "opt_only",
+              "--method",
+              "r2SCAN-3c",
+              "--opt-max-iter",
+              "9",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/completed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "completed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 0,
+            "ok": true,
+            "received": [
+              {
+                "args": [
+                  "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                ],
+                "kwargs": {
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "electronic_state": null,
+                  "layout_mode": "batch",
+                  "methods": {
+                    "frequency_basis": "",
+                    "frequency_method": "",
+                    "minimum_basis": "",
+                    "minimum_method": "r2SCAN-3c",
+                    "minimum_opt_convergence": "tight",
+                    "minimum_opt_initial_hessian": "auto",
+                    "minimum_opt_max_iter": 9,
+                    "minimum_opt_max_rescue": 2,
+                    "minimum_opt_recalc_hess": "auto",
+                    "minimum_opt_rescue_policy": "adaptive",
+                    "minimum_opt_trust_radius": null,
+                    "minimum_scf_convergence": "tight",
+                    "minimum_scf_max_iter": 300,
+                    "minimum_scf_strategy": "normal",
+                    "opt_convergence": "tight",
+                    "opt_initial_hessian": "auto",
+                    "opt_max_iter": 9,
+                    "opt_max_rescue": 2,
+                    "opt_recalc_hess": "auto",
+                    "opt_rescue_policy": "adaptive",
+                    "opt_trust_radius": null,
+                    "optimization_basis": "",
+                    "optimization_method": "r2SCAN-3c",
+                    "pressure": 1.0,
+                    "scale_factor": 0.9905,
+                    "scf_convergence": "tight",
+                    "scf_damp": false,
+                    "scf_damp_fac": 0.5,
+                    "scf_max_iter": 300,
+                    "scf_orbital_inherit": true,
+                    "scf_shift": false,
+                    "scf_shift_fac": 0.3,
+                    "scf_strategy": "normal",
+                    "single_point_basis": "",
+                    "single_point_method": "r2SCAN-3c",
+                    "temperature": 298.15,
+                    "transition_state_basis": "",
+                    "transition_state_method": "r2SCAN-3c",
+                    "transition_state_opt_convergence": "tight",
+                    "transition_state_opt_initial_hessian": "calculate",
+                    "transition_state_opt_max_iter": 9,
+                    "transition_state_opt_max_rescue": 2,
+                    "transition_state_opt_recalc_hess": 5,
+                    "transition_state_opt_rescue_policy": "adaptive",
+                    "transition_state_opt_trust_radius": 0.3,
+                    "transition_state_scf_convergence": "tight",
+                    "transition_state_scf_max_iter": 300,
+                    "transition_state_scf_strategy": "normal"
+                  },
+                  "multiplicity": 1,
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/completed",
+                  "profile": "opt_only",
+                  "select": null
+                },
+                "workflow": "BatchOptimize"
+              }
+            ],
+            "stderr": "",
+            "stdout": "2026-10-21 23:26:30,706 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:30,720 [INFO] acp.cli: BatchOptimize completed: profile=opt_only\n2026-10-21 23:26:30,720 [INFO] acp.cli:   Manifest: None\n"
+          },
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "BatchOptimize",
+              "--items-file",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+              "--profile",
+              "opt_only",
+              "--method",
+              "r2SCAN-3c",
+              "--opt-max-iter",
+              "9",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/failed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "failed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 1,
+            "ok": true,
+            "received": [
+              {
+                "args": [
+                  "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                ],
+                "kwargs": {
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "electronic_state": null,
+                  "layout_mode": "batch",
+                  "methods": {
+                    "frequency_basis": "",
+                    "frequency_method": "",
+                    "minimum_basis": "",
+                    "minimum_method": "r2SCAN-3c",
+                    "minimum_opt_convergence": "tight",
+                    "minimum_opt_initial_hessian": "auto",
+                    "minimum_opt_max_iter": 9,
+                    "minimum_opt_max_rescue": 2,
+                    "minimum_opt_recalc_hess": "auto",
+                    "minimum_opt_rescue_policy": "adaptive",
+                    "minimum_opt_trust_radius": null,
+                    "minimum_scf_convergence": "tight",
+                    "minimum_scf_max_iter": 300,
+                    "minimum_scf_strategy": "normal",
+                    "opt_convergence": "tight",
+                    "opt_initial_hessian": "auto",
+                    "opt_max_iter": 9,
+                    "opt_max_rescue": 2,
+                    "opt_recalc_hess": "auto",
+                    "opt_rescue_policy": "adaptive",
+                    "opt_trust_radius": null,
+                    "optimization_basis": "",
+                    "optimization_method": "r2SCAN-3c",
+                    "pressure": 1.0,
+                    "scale_factor": 0.9905,
+                    "scf_convergence": "tight",
+                    "scf_damp": false,
+                    "scf_damp_fac": 0.5,
+                    "scf_max_iter": 300,
+                    "scf_orbital_inherit": true,
+                    "scf_shift": false,
+                    "scf_shift_fac": 0.3,
+                    "scf_strategy": "normal",
+                    "single_point_basis": "",
+                    "single_point_method": "r2SCAN-3c",
+                    "temperature": 298.15,
+                    "transition_state_basis": "",
+                    "transition_state_method": "r2SCAN-3c",
+                    "transition_state_opt_convergence": "tight",
+                    "transition_state_opt_initial_hessian": "calculate",
+                    "transition_state_opt_max_iter": 9,
+                    "transition_state_opt_max_rescue": 2,
+                    "transition_state_opt_recalc_hess": 5,
+                    "transition_state_opt_rescue_policy": "adaptive",
+                    "transition_state_opt_trust_radius": 0.3,
+                    "transition_state_scf_convergence": "tight",
+                    "transition_state_scf_max_iter": 300,
+                    "transition_state_scf_strategy": "normal"
+                  },
+                  "multiplicity": 1,
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/failed",
+                  "profile": "opt_only",
+                  "select": null
+                },
+                "workflow": "BatchOptimize"
+              }
+            ],
+            "stderr": "",
+            "stdout": ""
+          }
+        ],
+        "driver_command": [
+          "/opt/acp/venv/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+          "--child",
+          "--worktree",
+          "/tmp/acp-four-kjbjijik/F1",
+          "--workflow",
+          "BatchOptimize",
+          "--run-root",
+          "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize"
+        ],
+        "driver_exit_code": 0,
+        "ok": true,
+        "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+        "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "real_qc": "NOT_VERIFIED",
+        "result": "PASS",
+        "scheduler_background_publication": "NOT_VERIFIED",
+        "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+        "workflow": "BatchOptimize"
+      },
+      {
+        "cases": [
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "XtbPathSearch",
+              "--path-config",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/completed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "completed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 0,
+            "ok": true,
+            "received": [
+              {
+                "args": [
+                  {
+                    "provenance": {
+                      "adapter_version": "ordinary-cli-acceptance"
+                    },
+                    "reaction_id": "acceptance-path",
+                    "recipe": {
+                      "extra_args": [],
+                      "gfn_level": 2,
+                      "path_inp_text": "$path\n nrun=1\n npoint=5\n anopt=3\n$end\n",
+                      "seed": 7,
+                      "threads": 2,
+                      "timeout_seconds": 60,
+                      "uhf": 0
+                    },
+                    "schema_version": "pes2ts_xtb_path_request_v1",
+                    "source": {
+                      "charge": 0,
+                      "end_xyz": "3\nwater minimum\nO 0 0 0\nH 0.8586 0 0.5043\nH -0.8586 0 0.5043\n",
+                      "multiplicity": 1,
+                      "source_type": "xyz_text_pair",
+                      "start_xyz": "3\nwater minimum\nO 0 0 0\nH 0.7586 0 0.5043\nH -0.7586 0 0.5043\n"
+                    }
+                  }
+                ],
+                "kwargs": {
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/completed"
+                },
+                "workflow": "XtbPathSearch"
+              }
+            ],
+            "stderr": "",
+            "stdout": "2026-10-21 23:26:31,425 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:31,439 [INFO] acp.cli: XtbPathSearch completed\n2026-10-21 23:26:31,440 [INFO] acp.cli:   Frames      : N/A\n2026-10-21 23:26:31,440 [INFO] acp.cli:   Manifest    : N/A\n2026-10-21 23:26:31,440 [INFO] acp.cli:   PES profile : N/A\n"
+          },
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "XtbPathSearch",
+              "--path-config",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/failed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "failed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 1,
+            "ok": true,
+            "received": [
+              {
+                "args": [
+                  {
+                    "provenance": {
+                      "adapter_version": "ordinary-cli-acceptance"
+                    },
+                    "reaction_id": "acceptance-path",
+                    "recipe": {
+                      "extra_args": [],
+                      "gfn_level": 2,
+                      "path_inp_text": "$path\n nrun=1\n npoint=5\n anopt=3\n$end\n",
+                      "seed": 7,
+                      "threads": 2,
+                      "timeout_seconds": 60,
+                      "uhf": 0
+                    },
+                    "schema_version": "pes2ts_xtb_path_request_v1",
+                    "source": {
+                      "charge": 0,
+                      "end_xyz": "3\nwater minimum\nO 0 0 0\nH 0.8586 0 0.5043\nH -0.8586 0 0.5043\n",
+                      "multiplicity": 1,
+                      "source_type": "xyz_text_pair",
+                      "start_xyz": "3\nwater minimum\nO 0 0 0\nH 0.7586 0 0.5043\nH -0.7586 0 0.5043\n"
+                    }
+                  }
+                ],
+                "kwargs": {
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/failed"
+                },
+                "workflow": "XtbPathSearch"
+              }
+            ],
+            "stderr": "",
+            "stdout": ""
+          }
+        ],
+        "driver_command": [
+          "/opt/acp/venv/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+          "--child",
+          "--worktree",
+          "/tmp/acp-four-kjbjijik/F1",
+          "--workflow",
+          "XtbPathSearch",
+          "--run-root",
+          "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch"
+        ],
+        "driver_exit_code": 0,
+        "ok": true,
+        "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+        "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "real_qc": "NOT_VERIFIED",
+        "result": "PASS",
+        "scheduler_background_publication": "NOT_VERIFIED",
+        "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+        "workflow": "XtbPathSearch"
+      },
+      {
+        "cases": [
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "XtbConstrainedOpt",
+              "--opt-config",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/completed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "completed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 0,
+            "ok": true,
+            "received": [
+              {
+                "args": [
+                  {
+                    "provenance": {
+                      "point_id": "acceptance-point"
+                    },
+                    "reaction_id": "acceptance-constraint",
+                    "recipe": {
+                      "constraints": [
+                        {
+                          "atoms": [
+                            0,
+                            1
+                          ],
+                          "kind": "distance",
+                          "target": 1.0,
+                          "unit": "angstrom"
+                        }
+                      ],
+                      "force_constant": 10.0,
+                      "gfn_level": 2,
+                      "max_cycle": 20,
+                      "opt_level": "normal",
+                      "physical_sp": false,
+                      "threads": 2,
+                      "timeout_seconds": 60
+                    },
+                    "schema_version": "pes2ts_xtb_constrained_opt_request_v1",
+                    "source": {
+                      "charge": 0,
+                      "elements": [
+                        "O",
+                        "H",
+                        "H"
+                      ],
+                      "geometry": [
+                        [
+                          0,
+                          0,
+                          0
+                        ],
+                        [
+                          0.7586,
+                          0,
+                          0.5043
+                        ],
+                        [
+                          -0.7586,
+                          0,
+                          0.5043
+                        ]
+                      ],
+                      "multiplicity": 1
+                    }
+                  }
+                ],
+                "kwargs": {
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/completed"
+                },
+                "workflow": "XtbConstrainedOpt"
+              }
+            ],
+            "stderr": "",
+            "stdout": "2026-10-21 23:26:32,165 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:32,180 [INFO] acp.cli: XtbConstrainedOpt completed\n2026-10-21 23:26:32,180 [INFO] acp.cli:   Converged   : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   E_effective : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   E_physical  : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   Manifest    : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   Evidence    : N/A\n"
+          },
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "XtbConstrainedOpt",
+              "--opt-config",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/failed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "failed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 1,
+            "ok": true,
+            "received": [
+              {
+                "args": [
+                  {
+                    "provenance": {
+                      "point_id": "acceptance-point"
+                    },
+                    "reaction_id": "acceptance-constraint",
+                    "recipe": {
+                      "constraints": [
+                        {
+                          "atoms": [
+                            0,
+                            1
+                          ],
+                          "kind": "distance",
+                          "target": 1.0,
+                          "unit": "angstrom"
+                        }
+                      ],
+                      "force_constant": 10.0,
+                      "gfn_level": 2,
+                      "max_cycle": 20,
+                      "opt_level": "normal",
+                      "physical_sp": false,
+                      "threads": 2,
+                      "timeout_seconds": 60
+                    },
+                    "schema_version": "pes2ts_xtb_constrained_opt_request_v1",
+                    "source": {
+                      "charge": 0,
+                      "elements": [
+                        "O",
+                        "H",
+                        "H"
+                      ],
+                      "geometry": [
+                        [
+                          0,
+                          0,
+                          0
+                        ],
+                        [
+                          0.7586,
+                          0,
+                          0.5043
+                        ],
+                        [
+                          -0.7586,
+                          0,
+                          0.5043
+                        ]
+                      ],
+                      "multiplicity": 1
+                    }
+                  }
+                ],
+                "kwargs": {
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/failed"
+                },
+                "workflow": "XtbConstrainedOpt"
+              }
+            ],
+            "stderr": "",
+            "stdout": ""
+          }
+        ],
+        "driver_command": [
+          "/opt/acp/venv/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+          "--child",
+          "--worktree",
+          "/tmp/acp-four-kjbjijik/F1",
+          "--workflow",
+          "XtbConstrainedOpt",
+          "--run-root",
+          "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt"
+        ],
+        "driver_exit_code": 0,
+        "ok": true,
+        "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+        "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "real_qc": "NOT_VERIFIED",
+        "result": "PASS",
+        "scheduler_background_publication": "NOT_VERIFIED",
+        "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+        "workflow": "XtbConstrainedOpt"
+      },
+      {
+        "cases": [
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "tsmode",
+              "--source-bundle",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+              "--source-mode-index",
+              "6",
+              "--max-steps",
+              "9",
+              "--recalc-hess",
+              "0",
+              "--trust-radius",
+              "0.2",
+              "--allow-unverified-mapping",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/completed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "completed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 0,
+            "ok": true,
+            "received": [
+              {
+                "bundle": {
+                  "elements": [
+                    "C",
+                    "N",
+                    "H"
+                  ],
+                  "hessian_sha256": "7dd266577567c38bb2419aa5293a10cfe0e77d99ab8acdf4eaf9510874501334",
+                  "n_atoms": 3
+                },
+                "request": {
+                  "final_frequency": true,
+                  "optimization": {
+                    "convergence": null,
+                    "initial_hessian": "read_source",
+                    "max_iterations": 9,
+                    "recalc_hess": 0,
+                    "require_verified_mapping": false,
+                    "retry_limit": 2,
+                    "trust_radius": 0.2
+                  },
+                  "request_id": "",
+                  "resources": {
+                    "mem": "2GB",
+                    "nproc": 2
+                  },
+                  "source": {
+                    "kind": "bundle_file"
+                  },
+                  "source_mode_index": 6
+                },
+                "task_root": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/completed/bundle",
+                "workflow": "tsmode"
+              }
+            ],
+            "stderr": "",
+            "stdout": "2026-10-21 23:26:32,926 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:32,972 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:32,986 [INFO] acp.cli: TS Mode completed\n"
+          },
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "tsmode",
+              "--source-bundle",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+              "--source-mode-index",
+              "6",
+              "--max-steps",
+              "9",
+              "--recalc-hess",
+              "0",
+              "--trust-radius",
+              "0.2",
+              "--allow-unverified-mapping",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/failed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "failed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 1,
+            "ok": true,
+            "received": [
+              {
+                "bundle": {
+                  "elements": [
+                    "C",
+                    "N",
+                    "H"
+                  ],
+                  "hessian_sha256": "7dd266577567c38bb2419aa5293a10cfe0e77d99ab8acdf4eaf9510874501334",
+                  "n_atoms": 3
+                },
+                "request": {
+                  "final_frequency": true,
+                  "optimization": {
+                    "convergence": null,
+                    "initial_hessian": "read_source",
+                    "max_iterations": 9,
+                    "recalc_hess": 0,
+                    "require_verified_mapping": false,
+                    "retry_limit": 2,
+                    "trust_radius": 0.2
+                  },
+                  "request_id": "",
+                  "resources": {
+                    "mem": "2GB",
+                    "nproc": 2
+                  },
+                  "source": {
+                    "kind": "bundle_file"
+                  },
+                  "source_mode_index": 6
+                },
+                "task_root": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/failed/bundle",
+                "workflow": "tsmode"
+              }
+            ],
+            "stderr": "",
+            "stdout": ""
+          }
+        ],
+        "driver_command": [
+          "/opt/acp/venv/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+          "--child",
+          "--worktree",
+          "/tmp/acp-four-kjbjijik/F1",
+          "--workflow",
+          "tsmode",
+          "--run-root",
+          "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode"
+        ],
+        "driver_exit_code": 0,
+        "ok": true,
+        "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+        "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "real_qc": "NOT_VERIFIED",
+        "result": "PASS",
+        "scheduler_background_publication": "NOT_VERIFIED",
+        "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+        "workflow": "tsmode"
+      },
+      {
+        "cases": [
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "nmr",
+              "--input",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+              "--spectrum",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+              "--nuclei",
+              "1H",
+              "--nmr-method",
+              "mPW1PW91",
+              "--nmr-basis",
+              "6-311G(d)",
+              "--max-conformers",
+              "2",
+              "--boltzmann-temp",
+              "310",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/completed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "completed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 0,
+            "ok": true,
+            "received": [
+              {
+                "args": [],
+                "kwargs": {
+                  "boltzmann_temp": 310.0,
+                  "bruker": null,
+                  "bruker_references": null,
+                  "candidate_metadata": null,
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "conformer_preset": "censo-light",
+                  "enumerate_stereoisomers": false,
+                  "error_model": "goodman-legacy",
+                  "ewin": 6.0,
+                  "input_sources": [
+                    "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                  ],
+                  "max_conformers": 2,
+                  "multiplicity": 1,
+                  "nmr_basis": "6-311G(d)",
+                  "nmr_method": "mPW1PW91",
+                  "nproc": 2,
+                  "nuclei": [
+                    "1H"
+                  ],
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/completed",
+                  "solvent": "chloroform",
+                  "solvent_model": "cpcm",
+                  "spectrum": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                  "stereocenters": null,
+                  "tms_13c": null,
+                  "tms_1h": null
+                },
+                "workflow": "nmr"
+              }
+            ],
+            "stderr": "",
+            "stdout": "2026-10-21 23:26:34,243 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:34,265 [INFO] acp.cli: NMR + DP4/DP5 workflow completed successfully\n2026-10-21 23:26:34,265 [INFO] acp.cli:   Candidates        : N/A\n2026-10-21 23:26:34,265 [INFO] acp.cli:   Report JSON       : N/A\n2026-10-21 23:26:34,265 [INFO] acp.cli:   Report XLSX       : N/A\n2026-10-21 23:26:34,266 [INFO] acp.cli:   Error model       : N/A\n"
+          },
+          {
+            "command": [
+              "/opt/acp/venv/bin/python",
+              "-m",
+              "acp.cli",
+              "run",
+              "nmr",
+              "--input",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+              "--spectrum",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+              "--nuclei",
+              "1H",
+              "--nmr-method",
+              "mPW1PW91",
+              "--nmr-basis",
+              "6-311G(d)",
+              "--max-conformers",
+              "2",
+              "--boltzmann-temp",
+              "310",
+              "--charge",
+              "0",
+              "--multiplicity",
+              "1",
+              "--output",
+              "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/failed",
+              "--nproc",
+              "2",
+              "--mem",
+              "2GB"
+            ],
+            "controlled_scientific_status": "failed",
+            "error": null,
+            "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+            "exit_code": 1,
+            "ok": true,
+            "received": [
+              {
+                "args": [],
+                "kwargs": {
+                  "boltzmann_temp": 310.0,
+                  "bruker": null,
+                  "bruker_references": null,
+                  "candidate_metadata": null,
+                  "charge": 0,
+                  "config": {
+                    "resources": {
+                      "isostat_gdis": 1.0,
+                      "mem": "2GB",
+                      "nproc": 2,
+                      "orca_maxcore_safety": 0.8
+                    }
+                  },
+                  "conformer_preset": "censo-light",
+                  "enumerate_stereoisomers": false,
+                  "error_model": "goodman-legacy",
+                  "ewin": 6.0,
+                  "input_sources": [
+                    "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                  ],
+                  "max_conformers": 2,
+                  "multiplicity": 1,
+                  "nmr_basis": "6-311G(d)",
+                  "nmr_method": "mPW1PW91",
+                  "nproc": 2,
+                  "nuclei": [
+                    "1H"
+                  ],
+                  "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/failed",
+                  "solvent": "chloroform",
+                  "solvent_model": "cpcm",
+                  "spectrum": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                  "stereocenters": null,
+                  "tms_13c": null,
+                  "tms_1h": null
+                },
+                "workflow": "nmr"
+              }
+            ],
+            "stderr": "",
+            "stdout": ""
+          }
+        ],
+        "driver_command": [
+          "/opt/acp/venv/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+          "--child",
+          "--worktree",
+          "/tmp/acp-four-kjbjijik/F1",
+          "--workflow",
+          "nmr",
+          "--run-root",
+          "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr"
+        ],
+        "driver_exit_code": 0,
+        "ok": true,
+        "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+        "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "real_qc": "NOT_VERIFIED",
+        "result": "PASS",
+        "scheduler_background_publication": "NOT_VERIFIED",
+        "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+        "workflow": "nmr"
+      }
+    ],
+    "service": {
+      "availability_missing_code": 404,
+      "detail_missing_code": 404,
+      "jobs_code": 200,
+      "jobs_count": 0,
+      "jobs_type": "dict",
+      "ok": true,
+      "status_code": 200,
+      "status_keys": [
+        "host",
+        "port",
+        "python",
+        "queue",
+        "run_root",
+        "service",
+        "status",
+        "uptime_seconds",
+        "version",
+        "wsl"
+      ],
+      "workflow_ids": [
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
+        "XtbPathSearch",
+        "XtbConstrainedOpt",
+        "OrcaGradient",
+        "nmr",
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "tsmode",
+        "casscf",
+        "xtb_optimize"
+      ],
+      "workflows_code": 200,
+      "workflows_count": 15
+    },
+    "service_config_sha256": "4de5f3094ebdb9ec33c6ccd106f79f027966e38890509f6217c38e8011227b69",
+    "service_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "submission": {
+      "created": true,
+      "detail_status": 200,
+      "files_status": 200,
+      "final_status": "completed",
+      "has_state_json": true,
+      "job_id": "20261021_232648_002_four-combo-F1S1",
+      "list_status": 200,
+      "listed": true,
+      "missing_detail_status": 404,
+      "ok": true
+    }
+  },
+  "environment": {
+    "cell_origin_port": 40217,
+    "python": "3.11.13",
+    "repo": "/ACPServer/AutoCalcPlatform",
+    "service_port": 60525
+  },
+  "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+  "f1_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "harness": "four_combinations.py",
+  "harness_version": "3",
+  "metrics": {
+    "block_size_bytes": 32768,
+    "browser": null,
+    "cache": null,
+    "db_writes": null,
+    "p50_ms": null,
+    "p95_ms": null,
+    "remote_io": null,
+    "requests": 0
+  },
+  "not_verified_reason": null,
+  "result": "PASS",
+  "scenario": "F1/S1",
+  "schema": "acp.acceptance.harness.v1",
+  "scope": "IN_SCOPE",
+  "skip_reason": null,
+  "steps": [
+    {
+      "assertions": [
+        {
+          "actual": {
+            "availability_missing_code": 404,
+            "detail_missing_code": 404,
+            "jobs_code": 200,
+            "jobs_count": 0,
+            "jobs_type": "dict",
+            "ok": true,
+            "status_code": 200,
+            "status_keys": [
+              "host",
+              "port",
+              "python",
+              "queue",
+              "run_root",
+              "service",
+              "status",
+              "uptime_seconds",
+              "version",
+              "wsl"
+            ],
+            "workflow_ids": [
+              "Confsearch",
+              "PESsearch",
+              "BatchOptimize",
+              "XtbPathSearch",
+              "XtbConstrainedOpt",
+              "OrcaGradient",
+              "nmr",
+              "singlepoint",
+              "optimize",
+              "frequency",
+              "scan",
+              "irc",
+              "tsmode",
+              "casscf",
+              "xtb_optimize"
+            ],
+            "workflows_code": 200,
+            "workflows_count": 15
+          },
+          "expected": "old surface 200; missing 400/404",
+          "name": "old_surface",
+          "ok": true
+        }
+      ],
+      "command": "GET F1/S1 service /api/status /api/workflows /api/v1/jobs",
+      "exit_code": 0,
+      "id": "service_probe",
+      "ok": true
+    },
+    {
+      "assertions": [
+        {
+          "assets": [
+            {
+              "path": "/js/vendor/3Dmol-2.5.5.min.js",
+              "status": 200
+            },
+            {
+              "path": "/css/workbench/base.css",
+              "status": 200
+            },
+            {
+              "path": "/css/workbench/layout.css",
+              "status": 200
+            },
+            {
+              "path": "/css/workbench/queue-detail.css",
+              "status": 200
+            },
+            {
+              "path": "/css/workbench/energy.css",
+              "status": 200
+            },
+            {
+              "path": "/css/workbench/wizard.css",
+              "status": 200
+            }
+          ],
+          "html_bytes": 78495,
+          "index_status": 200,
+          "ok": true
+        }
+      ],
+      "command": "GET F1/S1 cell-origin / + referenced js/css",
+      "exit_code": 0,
+      "id": "frontend_load",
+      "ok": true
+    },
+    {
+      "assertions": [
+        {
+          "created": true,
+          "detail_status": 200,
+          "files_status": 200,
+          "final_status": "completed",
+          "has_state_json": true,
+          "job_id": "20261021_232648_002_four-combo-F1S1",
+          "list_status": 200,
+          "listed": true,
+          "missing_detail_status": 404,
+          "ok": true
+        }
+      ],
+      "command": "POST F1/S1 cell-origin /api/jobs (fake), poll, detail/files",
+      "exit_code": 0,
+      "id": "api_submission",
+      "ok": true
+    },
+    {
+      "assertions": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "Confsearch"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                          [--save-config SAVE_CONFIG]",
+            "                          [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run Confsearch: error: one of the arguments --input/-i --batch-file is required"
+          ],
+          "workflow": "Confsearch"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "PESsearch"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "2026-10-21 23:26:23,486 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml",
+            "2026-10-21 23:26:23,799 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
+          ],
+          "workflow": "PESsearch"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "BatchOptimize"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                             [--batch-roles-json BATCH_ROLES_JSON]",
+            "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run BatchOptimize: error: one of the arguments --from-job --from-artifact --items-file is required"
+          ],
+          "workflow": "BatchOptimize"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "XtbPathSearch"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                             [--register]",
+            "                             [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run XtbPathSearch: error: the following arguments are required: --path-config"
+          ],
+          "workflow": "XtbPathSearch"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "XtbConstrainedOpt"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                                 [--config CONFIG] [--register]",
+            "                                 [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run XtbConstrainedOpt: error: the following arguments are required: --opt-config"
+          ],
+          "workflow": "XtbConstrainedOpt"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "tsmode"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                      [--config CONFIG]",
+            "                      [--log-level {DEBUG,INFO,WARNING,ERROR}]",
+            "acp run tsmode: error: the following arguments are required: --source-bundle, --source-mode-index"
+          ],
+          "workflow": "tsmode"
+        },
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "run",
+            "nmr"
+          ],
+          "exit_code": 2,
+          "legacy_entry_selected": true,
+          "ok": true,
+          "stderr_tail": [
+            "                   [--log-file LOG_FILE] [--charge CHARGE]",
+            "                   [--multiplicity MULTIPLICITY] [--save-config SAVE_CONFIG]",
+            "acp run nmr: error: the following arguments are required: --input"
+          ],
+          "workflow": "nmr"
+        }
+      ],
+      "command": "python -m acp.cli run <legacy> (missing-argument form)",
+      "exit_code": 0,
+      "id": "legacy_cli_missing_args",
+      "ok": true
+    },
+    {
+      "assertions": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "acp.cli",
+            "task",
+            "execute",
+            "--workflow",
+            "fake",
+            "..."
+          ],
+          "artifacts": [
+            "8bb81512-6065-4878-a5d4-7e9207416bf9.completed.json",
+            "8bb81512-6065-4878-a5d4-7e9207416bf9.started.json",
+            "da517fdb-d1df-4aad-b977-4c3f6e23148f.completed.json",
+            "da517fdb-d1df-4aad-b977-4c3f6e23148f.started.json",
+            "e76e9b2e-e2b3-4253-824f-96a53634eca5.completed.json",
+            "e76e9b2e-e2b3-4253-824f-96a53634eca5.started.json",
+            "events.jsonl",
+            "input_preview.xyz",
+            "job.json",
+            "state.json"
+          ],
+          "exit_code": 0,
+          "ok": true,
+          "status": "completed",
+          "stderr_tail": [],
+          "work_dir": "/tmp/acp-four-kjbjijik/run_S1/demo_cli/uncategorized/four-combo-S1_fake",
+          "workflow": "fake"
+        }
+      ],
+      "command": "python -m acp.cli task execute --workflow fake",
+      "exit_code": 0,
+      "id": "demo_cli_submission",
+      "ok": true
+    },
+    {
+      "assertions": [
+        {
+          "api_responses": [
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v1/projects"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v1/workflow-catalog"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v1/status"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v1/maintenance/disk-usage"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v1/jobs/20261021_232648_002_four-combo-F1S1/detail"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v1/jobs/20261021_232648_002_four-combo-F1S1/files"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v1/jobs/20261021_232648_002_four-combo-F1S1/logs?lines=300"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40217/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=false"
+            }
+          ],
+          "chromium": "153.0.8010.12",
+          "facts": {
+            "jobVisible": true,
+            "jobsArray": true,
+            "workflows": 15
+          },
+          "failed_requests": [],
+          "ok": true,
+          "page_errors": [],
+          "result": "PASS"
+        }
+      ],
+      "command": "Chromium F1/S1 cell-origin /; actual bootstrap + refreshJobs",
+      "exit_code": 0,
+      "id": "frontend_browser",
+      "ok": true,
+      "result": "PASS"
+    },
+    {
+      "assertions": [
+        {
+          "cases": [
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "Confsearch",
+                "--input",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                "--protocol",
+                "xtb-crest",
+                "--profile",
+                "light",
+                "--refinement-policy",
+                "screen",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--temperature",
+                "310",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/completed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "completed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 0,
+              "ok": true,
+              "received": [
+                {
+                  "request": {
+                    "backend": "native",
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "energy_window": null,
+                    "input_source": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                    "levels": null,
+                    "max_conformers": null,
+                    "md_params": {},
+                    "multiplicity": 1,
+                    "name": null,
+                    "nproc": 2,
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/completed",
+                    "preset": null,
+                    "profile": "light",
+                    "protocol": "xtb-crest",
+                    "refinement_policy": "screen",
+                    "solvent": null,
+                    "temperature": 310.0
+                  },
+                  "workflow": "Confsearch"
+                }
+              ],
+              "stderr": "",
+              "stdout": "2026-10-21 23:26:29,187 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:29,204 [INFO] acp.cli: Confsearch completed (xtb-crest + screen)\n2026-10-21 23:26:29,204 [INFO] acp.cli:   Conformers  : 0\n2026-10-21 23:26:29,204 [INFO] acp.cli:   Manifest    : None\n2026-10-21 23:26:29,204 [INFO] acp.cli:   G1 gate     : None\n"
+            },
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "Confsearch",
+                "--input",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                "--protocol",
+                "xtb-crest",
+                "--profile",
+                "light",
+                "--refinement-policy",
+                "screen",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--temperature",
+                "310",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/failed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "failed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 1,
+              "ok": true,
+              "received": [
+                {
+                  "request": {
+                    "backend": "native",
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "energy_window": null,
+                    "input_source": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                    "levels": null,
+                    "max_conformers": null,
+                    "md_params": {},
+                    "multiplicity": 1,
+                    "name": null,
+                    "nproc": 2,
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch/failed",
+                    "preset": null,
+                    "profile": "light",
+                    "protocol": "xtb-crest",
+                    "refinement_policy": "screen",
+                    "solvent": null,
+                    "temperature": 310.0
+                  },
+                  "workflow": "Confsearch"
+                }
+              ],
+              "stderr": "",
+              "stdout": ""
+            }
+          ],
+          "driver_command": [
+            "/opt/acp/venv/bin/python",
+            "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+            "--child",
+            "--worktree",
+            "/tmp/acp-four-kjbjijik/F1",
+            "--workflow",
+            "Confsearch",
+            "--run-root",
+            "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/Confsearch"
+          ],
+          "driver_exit_code": 0,
+          "ok": true,
+          "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+          "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "real_qc": "NOT_VERIFIED",
+          "result": "PASS",
+          "scheduler_background_publication": "NOT_VERIFIED",
+          "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+          "workflow": "Confsearch"
+        },
+        {
+          "cases": [
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "PESsearch",
+                "--input",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                "--coordinate",
+                "0,1,0.8,1.2",
+                "--points",
+                "5",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/completed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "completed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 0,
+              "ok": true,
+              "received": [
+                {
+                  "args": [],
+                  "kwargs": {
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "coordinate": {
+                      "atoms": [
+                        0,
+                        1
+                      ],
+                      "end": 1.2,
+                      "kind": "distance",
+                      "n_points": 5,
+                      "start": 0.8,
+                      "unit": "angstrom",
+                      "values": []
+                    },
+                    "input_xyz": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                    "multiplicity": 1,
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/completed",
+                    "reaction": null,
+                    "strategy": "guided-scan"
+                  },
+                  "workflow": "PESsearch"
+                }
+              ],
+              "stderr": "",
+              "stdout": "2026-10-21 23:26:29,948 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:29,963 [INFO] acp.cli: PESsearch completed: 0 TS + 0 INT candidates\n2026-10-21 23:26:29,963 [INFO] acp.cli:   Manifest    : None\n"
+            },
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "PESsearch",
+                "--input",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                "--coordinate",
+                "0,1,0.8,1.2",
+                "--points",
+                "5",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/failed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "failed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 1,
+              "ok": true,
+              "received": [
+                {
+                  "args": [],
+                  "kwargs": {
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "coordinate": {
+                      "atoms": [
+                        0,
+                        1
+                      ],
+                      "end": 1.2,
+                      "kind": "distance",
+                      "n_points": 5,
+                      "start": 0.8,
+                      "unit": "angstrom",
+                      "values": []
+                    },
+                    "input_xyz": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                    "multiplicity": 1,
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch/failed",
+                    "reaction": null,
+                    "strategy": "guided-scan"
+                  },
+                  "workflow": "PESsearch"
+                }
+              ],
+              "stderr": "",
+              "stdout": ""
+            }
+          ],
+          "driver_command": [
+            "/opt/acp/venv/bin/python",
+            "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+            "--child",
+            "--worktree",
+            "/tmp/acp-four-kjbjijik/F1",
+            "--workflow",
+            "PESsearch",
+            "--run-root",
+            "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/PESsearch"
+          ],
+          "driver_exit_code": 0,
+          "ok": true,
+          "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+          "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "real_qc": "NOT_VERIFIED",
+          "result": "PASS",
+          "scheduler_background_publication": "NOT_VERIFIED",
+          "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+          "workflow": "PESsearch"
+        },
+        {
+          "cases": [
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "BatchOptimize",
+                "--items-file",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+                "--profile",
+                "opt_only",
+                "--method",
+                "r2SCAN-3c",
+                "--opt-max-iter",
+                "9",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/completed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "completed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 0,
+              "ok": true,
+              "received": [
+                {
+                  "args": [
+                    "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                  ],
+                  "kwargs": {
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "electronic_state": null,
+                    "layout_mode": "batch",
+                    "methods": {
+                      "frequency_basis": "",
+                      "frequency_method": "",
+                      "minimum_basis": "",
+                      "minimum_method": "r2SCAN-3c",
+                      "minimum_opt_convergence": "tight",
+                      "minimum_opt_initial_hessian": "auto",
+                      "minimum_opt_max_iter": 9,
+                      "minimum_opt_max_rescue": 2,
+                      "minimum_opt_recalc_hess": "auto",
+                      "minimum_opt_rescue_policy": "adaptive",
+                      "minimum_opt_trust_radius": null,
+                      "minimum_scf_convergence": "tight",
+                      "minimum_scf_max_iter": 300,
+                      "minimum_scf_strategy": "normal",
+                      "opt_convergence": "tight",
+                      "opt_initial_hessian": "auto",
+                      "opt_max_iter": 9,
+                      "opt_max_rescue": 2,
+                      "opt_recalc_hess": "auto",
+                      "opt_rescue_policy": "adaptive",
+                      "opt_trust_radius": null,
+                      "optimization_basis": "",
+                      "optimization_method": "r2SCAN-3c",
+                      "pressure": 1.0,
+                      "scale_factor": 0.9905,
+                      "scf_convergence": "tight",
+                      "scf_damp": false,
+                      "scf_damp_fac": 0.5,
+                      "scf_max_iter": 300,
+                      "scf_orbital_inherit": true,
+                      "scf_shift": false,
+                      "scf_shift_fac": 0.3,
+                      "scf_strategy": "normal",
+                      "single_point_basis": "",
+                      "single_point_method": "r2SCAN-3c",
+                      "temperature": 298.15,
+                      "transition_state_basis": "",
+                      "transition_state_method": "r2SCAN-3c",
+                      "transition_state_opt_convergence": "tight",
+                      "transition_state_opt_initial_hessian": "calculate",
+                      "transition_state_opt_max_iter": 9,
+                      "transition_state_opt_max_rescue": 2,
+                      "transition_state_opt_recalc_hess": 5,
+                      "transition_state_opt_rescue_policy": "adaptive",
+                      "transition_state_opt_trust_radius": 0.3,
+                      "transition_state_scf_convergence": "tight",
+                      "transition_state_scf_max_iter": 300,
+                      "transition_state_scf_strategy": "normal"
+                    },
+                    "multiplicity": 1,
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/completed",
+                    "profile": "opt_only",
+                    "select": null
+                  },
+                  "workflow": "BatchOptimize"
+                }
+              ],
+              "stderr": "",
+              "stdout": "2026-10-21 23:26:30,706 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:30,720 [INFO] acp.cli: BatchOptimize completed: profile=opt_only\n2026-10-21 23:26:30,720 [INFO] acp.cli:   Manifest: None\n"
+            },
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "BatchOptimize",
+                "--items-file",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+                "--profile",
+                "opt_only",
+                "--method",
+                "r2SCAN-3c",
+                "--opt-max-iter",
+                "9",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/failed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "failed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 1,
+              "ok": true,
+              "received": [
+                {
+                  "args": [
+                    "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                  ],
+                  "kwargs": {
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "electronic_state": null,
+                    "layout_mode": "batch",
+                    "methods": {
+                      "frequency_basis": "",
+                      "frequency_method": "",
+                      "minimum_basis": "",
+                      "minimum_method": "r2SCAN-3c",
+                      "minimum_opt_convergence": "tight",
+                      "minimum_opt_initial_hessian": "auto",
+                      "minimum_opt_max_iter": 9,
+                      "minimum_opt_max_rescue": 2,
+                      "minimum_opt_recalc_hess": "auto",
+                      "minimum_opt_rescue_policy": "adaptive",
+                      "minimum_opt_trust_radius": null,
+                      "minimum_scf_convergence": "tight",
+                      "minimum_scf_max_iter": 300,
+                      "minimum_scf_strategy": "normal",
+                      "opt_convergence": "tight",
+                      "opt_initial_hessian": "auto",
+                      "opt_max_iter": 9,
+                      "opt_max_rescue": 2,
+                      "opt_recalc_hess": "auto",
+                      "opt_rescue_policy": "adaptive",
+                      "opt_trust_radius": null,
+                      "optimization_basis": "",
+                      "optimization_method": "r2SCAN-3c",
+                      "pressure": 1.0,
+                      "scale_factor": 0.9905,
+                      "scf_convergence": "tight",
+                      "scf_damp": false,
+                      "scf_damp_fac": 0.5,
+                      "scf_max_iter": 300,
+                      "scf_orbital_inherit": true,
+                      "scf_shift": false,
+                      "scf_shift_fac": 0.3,
+                      "scf_strategy": "normal",
+                      "single_point_basis": "",
+                      "single_point_method": "r2SCAN-3c",
+                      "temperature": 298.15,
+                      "transition_state_basis": "",
+                      "transition_state_method": "r2SCAN-3c",
+                      "transition_state_opt_convergence": "tight",
+                      "transition_state_opt_initial_hessian": "calculate",
+                      "transition_state_opt_max_iter": 9,
+                      "transition_state_opt_max_rescue": 2,
+                      "transition_state_opt_recalc_hess": 5,
+                      "transition_state_opt_rescue_policy": "adaptive",
+                      "transition_state_opt_trust_radius": 0.3,
+                      "transition_state_scf_convergence": "tight",
+                      "transition_state_scf_max_iter": 300,
+                      "transition_state_scf_strategy": "normal"
+                    },
+                    "multiplicity": 1,
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize/failed",
+                    "profile": "opt_only",
+                    "select": null
+                  },
+                  "workflow": "BatchOptimize"
+                }
+              ],
+              "stderr": "",
+              "stdout": ""
+            }
+          ],
+          "driver_command": [
+            "/opt/acp/venv/bin/python",
+            "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+            "--child",
+            "--worktree",
+            "/tmp/acp-four-kjbjijik/F1",
+            "--workflow",
+            "BatchOptimize",
+            "--run-root",
+            "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/BatchOptimize"
+          ],
+          "driver_exit_code": 0,
+          "ok": true,
+          "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+          "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "real_qc": "NOT_VERIFIED",
+          "result": "PASS",
+          "scheduler_background_publication": "NOT_VERIFIED",
+          "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+          "workflow": "BatchOptimize"
+        },
+        {
+          "cases": [
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "XtbPathSearch",
+                "--path-config",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/completed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "completed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 0,
+              "ok": true,
+              "received": [
+                {
+                  "args": [
+                    {
+                      "provenance": {
+                        "adapter_version": "ordinary-cli-acceptance"
+                      },
+                      "reaction_id": "acceptance-path",
+                      "recipe": {
+                        "extra_args": [],
+                        "gfn_level": 2,
+                        "path_inp_text": "$path\n nrun=1\n npoint=5\n anopt=3\n$end\n",
+                        "seed": 7,
+                        "threads": 2,
+                        "timeout_seconds": 60,
+                        "uhf": 0
+                      },
+                      "schema_version": "pes2ts_xtb_path_request_v1",
+                      "source": {
+                        "charge": 0,
+                        "end_xyz": "3\nwater minimum\nO 0 0 0\nH 0.8586 0 0.5043\nH -0.8586 0 0.5043\n",
+                        "multiplicity": 1,
+                        "source_type": "xyz_text_pair",
+                        "start_xyz": "3\nwater minimum\nO 0 0 0\nH 0.7586 0 0.5043\nH -0.7586 0 0.5043\n"
+                      }
+                    }
+                  ],
+                  "kwargs": {
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/completed"
+                  },
+                  "workflow": "XtbPathSearch"
+                }
+              ],
+              "stderr": "",
+              "stdout": "2026-10-21 23:26:31,425 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:31,439 [INFO] acp.cli: XtbPathSearch completed\n2026-10-21 23:26:31,440 [INFO] acp.cli:   Frames      : N/A\n2026-10-21 23:26:31,440 [INFO] acp.cli:   Manifest    : N/A\n2026-10-21 23:26:31,440 [INFO] acp.cli:   PES profile : N/A\n"
+            },
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "XtbPathSearch",
+                "--path-config",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/failed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "failed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 1,
+              "ok": true,
+              "received": [
+                {
+                  "args": [
+                    {
+                      "provenance": {
+                        "adapter_version": "ordinary-cli-acceptance"
+                      },
+                      "reaction_id": "acceptance-path",
+                      "recipe": {
+                        "extra_args": [],
+                        "gfn_level": 2,
+                        "path_inp_text": "$path\n nrun=1\n npoint=5\n anopt=3\n$end\n",
+                        "seed": 7,
+                        "threads": 2,
+                        "timeout_seconds": 60,
+                        "uhf": 0
+                      },
+                      "schema_version": "pes2ts_xtb_path_request_v1",
+                      "source": {
+                        "charge": 0,
+                        "end_xyz": "3\nwater minimum\nO 0 0 0\nH 0.8586 0 0.5043\nH -0.8586 0 0.5043\n",
+                        "multiplicity": 1,
+                        "source_type": "xyz_text_pair",
+                        "start_xyz": "3\nwater minimum\nO 0 0 0\nH 0.7586 0 0.5043\nH -0.7586 0 0.5043\n"
+                      }
+                    }
+                  ],
+                  "kwargs": {
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch/failed"
+                  },
+                  "workflow": "XtbPathSearch"
+                }
+              ],
+              "stderr": "",
+              "stdout": ""
+            }
+          ],
+          "driver_command": [
+            "/opt/acp/venv/bin/python",
+            "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+            "--child",
+            "--worktree",
+            "/tmp/acp-four-kjbjijik/F1",
+            "--workflow",
+            "XtbPathSearch",
+            "--run-root",
+            "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbPathSearch"
+          ],
+          "driver_exit_code": 0,
+          "ok": true,
+          "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+          "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "real_qc": "NOT_VERIFIED",
+          "result": "PASS",
+          "scheduler_background_publication": "NOT_VERIFIED",
+          "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+          "workflow": "XtbPathSearch"
+        },
+        {
+          "cases": [
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "XtbConstrainedOpt",
+                "--opt-config",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/completed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "completed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 0,
+              "ok": true,
+              "received": [
+                {
+                  "args": [
+                    {
+                      "provenance": {
+                        "point_id": "acceptance-point"
+                      },
+                      "reaction_id": "acceptance-constraint",
+                      "recipe": {
+                        "constraints": [
+                          {
+                            "atoms": [
+                              0,
+                              1
+                            ],
+                            "kind": "distance",
+                            "target": 1.0,
+                            "unit": "angstrom"
+                          }
+                        ],
+                        "force_constant": 10.0,
+                        "gfn_level": 2,
+                        "max_cycle": 20,
+                        "opt_level": "normal",
+                        "physical_sp": false,
+                        "threads": 2,
+                        "timeout_seconds": 60
+                      },
+                      "schema_version": "pes2ts_xtb_constrained_opt_request_v1",
+                      "source": {
+                        "charge": 0,
+                        "elements": [
+                          "O",
+                          "H",
+                          "H"
+                        ],
+                        "geometry": [
+                          [
+                            0,
+                            0,
+                            0
+                          ],
+                          [
+                            0.7586,
+                            0,
+                            0.5043
+                          ],
+                          [
+                            -0.7586,
+                            0,
+                            0.5043
+                          ]
+                        ],
+                        "multiplicity": 1
+                      }
+                    }
+                  ],
+                  "kwargs": {
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/completed"
+                  },
+                  "workflow": "XtbConstrainedOpt"
+                }
+              ],
+              "stderr": "",
+              "stdout": "2026-10-21 23:26:32,165 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:32,180 [INFO] acp.cli: XtbConstrainedOpt completed\n2026-10-21 23:26:32,180 [INFO] acp.cli:   Converged   : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   E_effective : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   E_physical  : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   Manifest    : N/A\n2026-10-21 23:26:32,180 [INFO] acp.cli:   Evidence    : N/A\n"
+            },
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "XtbConstrainedOpt",
+                "--opt-config",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/failed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "failed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 1,
+              "ok": true,
+              "received": [
+                {
+                  "args": [
+                    {
+                      "provenance": {
+                        "point_id": "acceptance-point"
+                      },
+                      "reaction_id": "acceptance-constraint",
+                      "recipe": {
+                        "constraints": [
+                          {
+                            "atoms": [
+                              0,
+                              1
+                            ],
+                            "kind": "distance",
+                            "target": 1.0,
+                            "unit": "angstrom"
+                          }
+                        ],
+                        "force_constant": 10.0,
+                        "gfn_level": 2,
+                        "max_cycle": 20,
+                        "opt_level": "normal",
+                        "physical_sp": false,
+                        "threads": 2,
+                        "timeout_seconds": 60
+                      },
+                      "schema_version": "pes2ts_xtb_constrained_opt_request_v1",
+                      "source": {
+                        "charge": 0,
+                        "elements": [
+                          "O",
+                          "H",
+                          "H"
+                        ],
+                        "geometry": [
+                          [
+                            0,
+                            0,
+                            0
+                          ],
+                          [
+                            0.7586,
+                            0,
+                            0.5043
+                          ],
+                          [
+                            -0.7586,
+                            0,
+                            0.5043
+                          ]
+                        ],
+                        "multiplicity": 1
+                      }
+                    }
+                  ],
+                  "kwargs": {
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt/failed"
+                  },
+                  "workflow": "XtbConstrainedOpt"
+                }
+              ],
+              "stderr": "",
+              "stdout": ""
+            }
+          ],
+          "driver_command": [
+            "/opt/acp/venv/bin/python",
+            "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+            "--child",
+            "--worktree",
+            "/tmp/acp-four-kjbjijik/F1",
+            "--workflow",
+            "XtbConstrainedOpt",
+            "--run-root",
+            "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/XtbConstrainedOpt"
+          ],
+          "driver_exit_code": 0,
+          "ok": true,
+          "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+          "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "real_qc": "NOT_VERIFIED",
+          "result": "PASS",
+          "scheduler_background_publication": "NOT_VERIFIED",
+          "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+          "workflow": "XtbConstrainedOpt"
+        },
+        {
+          "cases": [
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "tsmode",
+                "--source-bundle",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+                "--source-mode-index",
+                "6",
+                "--max-steps",
+                "9",
+                "--recalc-hess",
+                "0",
+                "--trust-radius",
+                "0.2",
+                "--allow-unverified-mapping",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/completed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "completed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 0,
+              "ok": true,
+              "received": [
+                {
+                  "bundle": {
+                    "elements": [
+                      "C",
+                      "N",
+                      "H"
+                    ],
+                    "hessian_sha256": "7dd266577567c38bb2419aa5293a10cfe0e77d99ab8acdf4eaf9510874501334",
+                    "n_atoms": 3
+                  },
+                  "request": {
+                    "final_frequency": true,
+                    "optimization": {
+                      "convergence": null,
+                      "initial_hessian": "read_source",
+                      "max_iterations": 9,
+                      "recalc_hess": 0,
+                      "require_verified_mapping": false,
+                      "retry_limit": 2,
+                      "trust_radius": 0.2
+                    },
+                    "request_id": "",
+                    "resources": {
+                      "mem": "2GB",
+                      "nproc": 2
+                    },
+                    "source": {
+                      "kind": "bundle_file"
+                    },
+                    "source_mode_index": 6
+                  },
+                  "task_root": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/completed/bundle",
+                  "workflow": "tsmode"
+                }
+              ],
+              "stderr": "",
+              "stdout": "2026-10-21 23:26:32,926 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:32,972 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:32,986 [INFO] acp.cli: TS Mode completed\n"
+            },
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "tsmode",
+                "--source-bundle",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+                "--source-mode-index",
+                "6",
+                "--max-steps",
+                "9",
+                "--recalc-hess",
+                "0",
+                "--trust-radius",
+                "0.2",
+                "--allow-unverified-mapping",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/failed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "failed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 1,
+              "ok": true,
+              "received": [
+                {
+                  "bundle": {
+                    "elements": [
+                      "C",
+                      "N",
+                      "H"
+                    ],
+                    "hessian_sha256": "7dd266577567c38bb2419aa5293a10cfe0e77d99ab8acdf4eaf9510874501334",
+                    "n_atoms": 3
+                  },
+                  "request": {
+                    "final_frequency": true,
+                    "optimization": {
+                      "convergence": null,
+                      "initial_hessian": "read_source",
+                      "max_iterations": 9,
+                      "recalc_hess": 0,
+                      "require_verified_mapping": false,
+                      "retry_limit": 2,
+                      "trust_radius": 0.2
+                    },
+                    "request_id": "",
+                    "resources": {
+                      "mem": "2GB",
+                      "nproc": 2
+                    },
+                    "source": {
+                      "kind": "bundle_file"
+                    },
+                    "source_mode_index": 6
+                  },
+                  "task_root": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode/failed/bundle",
+                  "workflow": "tsmode"
+                }
+              ],
+              "stderr": "",
+              "stdout": ""
+            }
+          ],
+          "driver_command": [
+            "/opt/acp/venv/bin/python",
+            "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+            "--child",
+            "--worktree",
+            "/tmp/acp-four-kjbjijik/F1",
+            "--workflow",
+            "tsmode",
+            "--run-root",
+            "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/tsmode"
+          ],
+          "driver_exit_code": 0,
+          "ok": true,
+          "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+          "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "real_qc": "NOT_VERIFIED",
+          "result": "PASS",
+          "scheduler_background_publication": "NOT_VERIFIED",
+          "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+          "workflow": "tsmode"
+        },
+        {
+          "cases": [
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "nmr",
+                "--input",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+                "--spectrum",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                "--nuclei",
+                "1H",
+                "--nmr-method",
+                "mPW1PW91",
+                "--nmr-basis",
+                "6-311G(d)",
+                "--max-conformers",
+                "2",
+                "--boltzmann-temp",
+                "310",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/completed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "completed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 0,
+              "ok": true,
+              "received": [
+                {
+                  "args": [],
+                  "kwargs": {
+                    "boltzmann_temp": 310.0,
+                    "bruker": null,
+                    "bruker_references": null,
+                    "candidate_metadata": null,
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "conformer_preset": "censo-light",
+                    "enumerate_stereoisomers": false,
+                    "error_model": "goodman-legacy",
+                    "ewin": 6.0,
+                    "input_sources": [
+                      "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                    ],
+                    "max_conformers": 2,
+                    "multiplicity": 1,
+                    "nmr_basis": "6-311G(d)",
+                    "nmr_method": "mPW1PW91",
+                    "nproc": 2,
+                    "nuclei": [
+                      "1H"
+                    ],
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/completed",
+                    "solvent": "chloroform",
+                    "solvent_model": "cpcm",
+                    "spectrum": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                    "stereocenters": null,
+                    "tms_13c": null,
+                    "tms_1h": null
+                  },
+                  "workflow": "nmr"
+                }
+              ],
+              "stderr": "",
+              "stdout": "2026-10-21 23:26:34,243 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-kjbjijik/F1/config/defaults.yaml\n2026-10-21 23:26:34,265 [INFO] acp.cli: NMR + DP4/DP5 workflow completed successfully\n2026-10-21 23:26:34,265 [INFO] acp.cli:   Candidates        : N/A\n2026-10-21 23:26:34,265 [INFO] acp.cli:   Report JSON       : N/A\n2026-10-21 23:26:34,265 [INFO] acp.cli:   Report XLSX       : N/A\n2026-10-21 23:26:34,266 [INFO] acp.cli:   Error model       : N/A\n"
+            },
+            {
+              "command": [
+                "/opt/acp/venv/bin/python",
+                "-m",
+                "acp.cli",
+                "run",
+                "nmr",
+                "--input",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+                "--spectrum",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                "--nuclei",
+                "1H",
+                "--nmr-method",
+                "mPW1PW91",
+                "--nmr-basis",
+                "6-311G(d)",
+                "--max-conformers",
+                "2",
+                "--boltzmann-temp",
+                "310",
+                "--charge",
+                "0",
+                "--multiplicity",
+                "1",
+                "--output",
+                "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/failed",
+                "--nproc",
+                "2",
+                "--mem",
+                "2GB"
+              ],
+              "controlled_scientific_status": "failed",
+              "error": null,
+              "execution_entry": "acp.cli.main(argv), with the documented science-boundary patch",
+              "exit_code": 1,
+              "ok": true,
+              "received": [
+                {
+                  "args": [],
+                  "kwargs": {
+                    "boltzmann_temp": 310.0,
+                    "bruker": null,
+                    "bruker_references": null,
+                    "candidate_metadata": null,
+                    "charge": 0,
+                    "config": {
+                      "resources": {
+                        "isostat_gdis": 1.0,
+                        "mem": "2GB",
+                        "nproc": 2,
+                        "orca_maxcore_safety": 0.8
+                      }
+                    },
+                    "conformer_preset": "censo-light",
+                    "enumerate_stereoisomers": false,
+                    "error_model": "goodman-legacy",
+                    "ewin": 6.0,
+                    "input_sources": [
+                      "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                    ],
+                    "max_conformers": 2,
+                    "multiplicity": 1,
+                    "nmr_basis": "6-311G(d)",
+                    "nmr_method": "mPW1PW91",
+                    "nproc": 2,
+                    "nuclei": [
+                      "1H"
+                    ],
+                    "output_dir": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/failed",
+                    "solvent": "chloroform",
+                    "solvent_model": "cpcm",
+                    "spectrum": "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                    "stereocenters": null,
+                    "tms_13c": null,
+                    "tms_1h": null
+                  },
+                  "workflow": "nmr"
+                }
+              ],
+              "stderr": "",
+              "stdout": ""
+            }
+          ],
+          "driver_command": [
+            "/opt/acp/venv/bin/python",
+            "/ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py",
+            "--child",
+            "--worktree",
+            "/tmp/acp-four-kjbjijik/F1",
+            "--workflow",
+            "nmr",
+            "--run-root",
+            "/tmp/acp-four-kjbjijik/run_S1/ordinary_cli/nmr"
+          ],
+          "driver_exit_code": 0,
+          "ok": true,
+          "product_cli": "/tmp/acp-four-kjbjijik/F1/src/acp/cli.py",
+          "product_cli_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "real_qc": "NOT_VERIFIED",
+          "result": "PASS",
+          "scheduler_background_publication": "NOT_VERIFIED",
+          "scope": "ordinary CLI parser/handler/request dispatch + controlled science boundary; no real QC or scheduler background publication",
+          "workflow": "nmr"
+        }
+      ],
+      "command": "/opt/acp/venv/bin/python /ACPServer/AutoCalcPlatform/scripts/acceptance/ordinary_legacy_cli.py --worktree /tmp/acp-four-kjbjijik/F1 --run-root /tmp/acp-four-kjbjijik/run_S1/ordinary_cli",
+      "exit_code": 0,
+      "id": "legacy_ordinary_submissions",
+      "ok": true,
+      "result": "PASS"
+    }
+  ]
+}

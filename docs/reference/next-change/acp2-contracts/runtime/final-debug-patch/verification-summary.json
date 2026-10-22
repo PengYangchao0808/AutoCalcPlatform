@@ -1,0 +1,82 @@
+{
+  "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "full_result": "PASS",
+  "full_summary": "10082 passed, 11 skipped, 95 deselected, 28 warnings in 1942.42s (0:32:22)",
+  "full_counts": {
+    "passed": 10082,
+    "skipped": 11,
+    "failed": 0
+  },
+  "original_759_passed": 759,
+  "runtime_source_drift": [],
+  "post_freeze_nonruntime_drift": [
+    {
+      "path": ".omo/plans/acp2-parallel-plan-b-runtime.md",
+      "frozen": "9c3e680d2505a837be4a60eed77d31d52f5211a2844a12f73833d4f91bf16647",
+      "current": "c4cf98867dcd55f2659ec80b152afa16582248a25683fcaaf489b93618a7a043"
+    },
+    {
+      "path": ".omo/plans/acp2-plan-c-rph-workbench.md",
+      "frozen": "9f8a4c1eda58bee4e09aa47383d2f3a76a11fe5f0935df9e9b949e75aa6244d3",
+      "current": "2fc752cca50b27c9bea82dc3c4b24f53d16654da0ca0ef76add08acc5050a575"
+    }
+  ],
+  "existing_e2e_marker_restored": true,
+  "skips": [
+    {
+      "classname": "tests.test_acp_nmr_fchl_availability",
+      "name": "test_real_compiled_qml_reports_qml_state",
+      "reason": "NOT_VERIFIED: compiled qml kernel not importable — the real-qml state was not exercised; skipped, never counted as a pass (qml needs numpy<2 + Fortran)"
+    },
+    {
+      "classname": "tests.test_acp_nmr_fchl_fragments",
+      "name": "test_real_openbabel_radius3_fragmentation_case",
+      "reason": "NOT_VERIFIED: openbabel python bindings not importable — the real radius-3 fragmentation was not executed; skipped, never counted as a pass (install 'openbabel>=3.1' to verify)"
+    },
+    {
+      "classname": "tests.test_acp_nmr_fchl_golden",
+      "name": "test_layer2_kernel_qml_parity_vs_frozen_numpy_golden",
+      "reason": "NOT_VERIFIED: compiled qml kernel not importable — the qml parity layer was not executed; skipped, never counted as a pass (install qml on numpy<2 to verify)"
+    },
+    {
+      "classname": "tests.test_acp_nmr_proton_processor",
+      "name": "test_real_instrument_proton_fixture_is_not_verified",
+      "reason": "NOT_VERIFIED: no real proton Bruker dataset in tests/fixtures/ (searched proton_real / bruker_proton_real / bruker_proton); the real-instrument multiplet-vs-annotation layer is not executed — synthetic hand-built + synthetic-FID layers remain binding"
+    },
+    {
+      "classname": "tests.test_pes_live_status_api_integration",
+      "name": "test_live_pes_projection_from_store_row",
+      "reason": "Pass --run-slow or --run-integration to run"
+    },
+    {
+      "classname": "tests.test_remote_execution_integrity_live",
+      "name": "test_live_storage_identity_same_and_cross_project",
+      "reason": "live scenarios require --run-integration (or --run-slow)"
+    },
+    {
+      "classname": "tests.test_remote_execution_integrity_live",
+      "name": "test_live_release_upgrade_leaves_bound_tree_unchanged",
+      "reason": "live scenarios require --run-integration (or --run-slow)"
+    },
+    {
+      "classname": "tests.test_remote_execution_integrity_live",
+      "name": "test_live_cancel_confirmation_bkill_then_bjobs",
+      "reason": "live scenarios require --run-integration (or --run-slow)"
+    },
+    {
+      "classname": "tests.test_remote_phase1_integration",
+      "name": "test_ssh_connect_and_run",
+      "reason": "Requires ACP_REMOTE_PASSWORD_COMPUTE_01 env var for real SSH node"
+    },
+    {
+      "classname": "tests.test_remote_phase1_integration",
+      "name": "test_sftp_roundtrip",
+      "reason": "Requires ACP_REMOTE_PASSWORD_COMPUTE_01 env var for real SSH node"
+    },
+    {
+      "classname": "tests.test_remote_phase1_integration",
+      "name": "test_codesyncer_real",
+      "reason": "Requires ACP_REMOTE_PASSWORD_COMPUTE_01 env var for real SSH node"
+    }
+  ]
+}

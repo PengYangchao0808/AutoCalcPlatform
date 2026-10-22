@@ -1,0 +1,99 @@
+{
+  "orphan_refuses": true,
+  "data": [
+    {
+      "case": "R06_real_fetcher",
+      "closed": true,
+      "detail": "fetched",
+      "real_fetcher_remote_paths": [
+        "/remote/j1/RESULT/result_manifest.json"
+      ]
+    },
+    {
+      "case": "R07_shared_mutex_snapshot",
+      "writer_blocked_before_open": true,
+      "requested_attempt": 1,
+      "returned": "ATTEMPT_1",
+      "current_body": "ATTEMPT_2",
+      "closed": true
+    },
+    {
+      "case": "R08_evicted_requeue",
+      "prior_successes": 0,
+      "availability_without_body": "absent",
+      "same_operation": false,
+      "state_after_queue": "queued",
+      "pending_count": 1,
+      "rebuild_scheduled": true
+    },
+    {
+      "case": "R08_evicted_requeue",
+      "prior_successes": 1000,
+      "availability_without_body": "absent",
+      "same_operation": false,
+      "state_after_queue": "queued",
+      "pending_count": 1,
+      "rebuild_scheduled": true
+    },
+    {
+      "case": "R09_frequency_mode_prepare",
+      "transient_failure_first": false,
+      "first_prepared": true,
+      "final_prepared": true,
+      "final_detail": "fetched",
+      "modes_cached": true,
+      "modes_download_calls": 1,
+      "correct": true
+    },
+    {
+      "case": "R09_frequency_mode_prepare",
+      "transient_failure_first": true,
+      "first_prepared": false,
+      "final_prepared": true,
+      "final_detail": "fetched",
+      "modes_cached": true,
+      "modes_download_calls": 2,
+      "correct": true
+    }
+  ],
+  "bounded": {
+    "same_block_identity": false,
+    "block_sizes": [
+      3,
+      5
+    ],
+    "spliced_policy_rejected": true,
+    "honest_adoptable": [
+      true,
+      true
+    ]
+  },
+  "integration_cases": 759,
+  "four_combinations": {
+    "all_pass": false,
+    "result": "FAIL",
+    "scenarios": [
+      {
+        "result": "FAIL",
+        "scenario": "F0/S0",
+        "skip_reason": null
+      },
+      {
+        "result": "FAIL",
+        "scenario": "F1/S0",
+        "skip_reason": null
+      },
+      {
+        "result": "PASS",
+        "scenario": "F0/S1",
+        "skip_reason": null
+      },
+      {
+        "result": "PASS",
+        "scenario": "F1/S1",
+        "skip_reason": null
+      }
+    ],
+    "schema": "acp.acceptance.summary.v1"
+  }
+}

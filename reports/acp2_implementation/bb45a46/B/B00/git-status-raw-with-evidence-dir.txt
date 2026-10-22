@@ -1,0 +1,91 @@
+ M README.md
+ M docs/ACP_Architecture_Adjustment_Plan_20261016.md
+ M frontend/js/module_tests/nmr_viewer.test.js
+ M frontend/js/workbench/features/nmr.js
+ M pyproject.toml
+ M scripts/acceptance/four_combinations.py
+ M scripts/install_systemd.sh
+ M src/acp/api/server.py
+ M src/acp/calculations/attempt_freeze.py
+ M src/acp/calculations/attempt_publication.py
+ M src/acp/calculations/batch/options.py
+ M src/acp/cli.py
+ M src/acp/init_wizard/answers.py
+ M src/acp/init_wizard/flows.py
+ M src/acp/init_wizard/plan.py
+ M src/acp/scheduler/manager.py
+ M src/acp/scheduler/remote/runner.py
+ M src/acp/services_data_bootstrap.py
+ M src/acp_services/data/operations.py
+ M src/acp_services/data/read_root.py
+ M src/acp_services/runtime/attempt_freeze.py
+ M src/acp_services/runtime/isolation.py
+ M src/acp_services/runtime/worker.py
+ M src/acp_services/worker_bootstrap.py
+ M src/acp_services/workspace/boundary.py
+ M src/cccp/analysis/bounded/identity.py
+ M src/cccp/analysis/bounded/manifest.py
+ M src/cccp/analysis/bounded/multiresolution.py
+ M tests/baseline/refactor-evidence/e2e-task-root.txt
+ M tests/baseline/services-evidence/migration_ledger.md
+ M tests/baseline/services-evidence/packaging_rollout_receipts.md
+ M tests/baseline/services-evidence/public_shim_inventory.md
+ M tests/test_acp_frontend_browser.py
+ M tests/test_acp_init_cli.py
+ M tests/test_acp_wizard_browser.py
+ M tests/test_services_chain_switch.py
+ M tests/test_services_init_unified.py
+ M tests/test_services_local_boundary.py
+ M tests/test_services_worker_bootstrap.py
+?? docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md
+?? docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R2_20261021.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R4_20261022.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md
+?? docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R6_20261022.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md
+?? docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md
+?? docs/reference/next-change/examples/
+?? packaging/
+?? reports/acp2_implementation/
+?? reports/architecture_acceptance_20261019/
+?? reports/architecture_current_20261022/
+?? reports/architecture_debug_20261021/
+?? reports/architecture_quality_review_20261022/
+?? reports/architecture_recheck_20261021/
+?? reports/architecture_recheck_20261021_r2/
+?? reports/architecture_repair_20261022/
+?? scripts/acceptance/browser_runtime.py
+?? scripts/acceptance/check_release_artifacts.py
+?? scripts/acceptance/compatibility_checks.py
+?? scripts/acceptance/ordinary_legacy_cli.py
+?? scripts/acceptance/release_role_probe.py
+?? scripts/build_release.py
+?? src/acp_services/runtime/attempt_recovery.py
+?? src/acp_services/runtime/cgroup.py
+?? tests/test_acceptance_compatibility_checks.py
+?? tests/test_acceptance_ordinary_legacy_cli.py
+?? tests/test_architecture_recheck_20261021.py
+?? tests/test_batch_cli_method_forwarding.py
+?? tests/test_cccp_bounded_multiresolution_identity.py
+?? tests/test_services_attempt_recovery.py
+?? tests/test_services_cgroup_attempt_recovery.py
+?? tests/test_services_prepare_recheck_fixes.py
+?? tests/test_services_worker_artifact_root.py

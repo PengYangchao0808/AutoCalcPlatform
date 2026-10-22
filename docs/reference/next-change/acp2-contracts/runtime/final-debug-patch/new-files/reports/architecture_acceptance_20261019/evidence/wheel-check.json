@@ -1,0 +1,36 @@
+{
+  "exit_code": 0,
+  "scope": "current root single wheel; independent CCCP configuration not applied",
+  "build_tool_source": "PYTHONPATH=/tmp/opencode/builddeps; pre-existing local tools; no network install",
+  "first_attempt": "NOT_VERIFIED: default environment missing wheel build dependency (see wheel-build.log)",
+  "wheel": "acp-0.2.0-py3-none-any.whl",
+  "sha256": "550600ebf240cda3f0c49d9edc82ad58f148b695414b1c07a24b2bc4d70b6810",
+  "size_bytes": 46139577,
+  "asset_count": 8,
+  "asset_files": [
+    "cccp/analysis/nmr/model_assets/LICENSE-DP5",
+    "cccp/analysis/nmr/model_assets/NOTICE.md",
+    "cccp/analysis/nmr/model_assets/atomic_reps.gz",
+    "cccp/analysis/nmr/model_assets/c_w_kde_mean_s_0.025.p",
+    "cccp/analysis/nmr/model_assets/folded_scaled_errors.p",
+    "cccp/analysis/nmr/model_assets/frag_reps.gz",
+    "cccp/analysis/nmr/model_assets/i_w_kde_mean_s_0.025.p",
+    "cccp/analysis/nmr/model_assets/tms_references.txt"
+  ],
+  "asset_digest_matches": {
+    "atomic_reps.gz": true,
+    "frag_reps.gz": true,
+    "i_w_kde_mean_s_0.025.p": true,
+    "folded_scaled_errors.p": true,
+    "c_w_kde_mean_s_0.025.p": true,
+    "tms_references.txt": true,
+    "LICENSE-DP5": true,
+    "NOTICE.md": true
+  },
+  "top_level_packages": [
+    "acp",
+    "acp_services",
+    "cccp"
+  ],
+  "frontend_files": []
+}
