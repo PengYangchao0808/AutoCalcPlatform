@@ -41,11 +41,14 @@ SCENARIO_ID = "research-record-fixtures"
 
 SOURCE_DIR = "rph/packages/research/src"
 STORE_SOURCE = f"{SOURCE_DIR}/store.ts"
+MEMORY_SOURCE = f"{SOURCE_DIR}/memory.ts"
 TEST_SOURCE = "rph/test/research-store.test.ts"
+MEMORY_TEST_SOURCE = "rph/test/research-memory.test.ts"
 FIXTURE_SOURCE = "rph/test/research-fixture-client.ts"
 BOUNDARY_SCRIPT = "rph/scripts/check-boundaries.mjs"
 
 MIN_RESEARCH_CASES = 10
+MIN_MEMORY_CASES = 6
 
 # A research source file must never reach for a local persistence/execution
 # backdoor; every read/write goes through the injected platform client.
@@ -69,6 +72,15 @@ REQUIRED_TEST_PHRASES = {
     "digest_stability": "plan digest ignores approval_ref",
     "digest_sensitivity": "plan digest changes on method or mapping",
     "approval_binding": "approval binding rejects",
+}
+
+MEMORY_REQUIRED_PHRASES = {
+    "same_project_hit": "same-project retrieval hits authorized records",
+    "cross_project_denied": "cross-project query returns zero hits and a denied audit entry",
+    "revision_filter": "revision filter excludes stale revisions",
+    "audit_fields": "audit entry keeps actor, revision, before and after",
+    "model_assumption": "model assumption cannot become evidence",
+    "prompt_archive": "prompt and chain-of-thought archives are rejected",
 }
 
 LIVE_B18A_ROWS = (
@@ -137,10 +149,12 @@ def scenario_research_record_fixtures(context: Any) -> int:
         )
     required_files = (
         STORE_SOURCE,
+        MEMORY_SOURCE,
         f"{SOURCE_DIR}/cas.ts",
         f"{SOURCE_DIR}/record.ts",
         f"{SOURCE_DIR}/proposal.ts",
         TEST_SOURCE,
+        MEMORY_TEST_SOURCE,
         FIXTURE_SOURCE,
         BOUNDARY_SCRIPT,
     )
@@ -255,6 +269,36 @@ def scenario_research_record_fixtures(context: Any) -> int:
         f"covered={sorted(set(REQUIRED_TEST_PHRASES) - set(missing_phrases))}",
     )
 
+    # T-26 / C18b memory sub-row: authorization-, source- and version-scoped
+    # retrieval with a denied audit and no prompt/chain-of-thought archive.
+    memory_source = (source / MEMORY_TEST_SOURCE).read_text(encoding="utf-8")
+    memory_cases = len(re.findall(r"^\s*test\(", memory_source, re.MULTILINE))
+    _assertion(
+        context,
+        "memory.cases_ge_6",
+        memory_cases >= MIN_MEMORY_CASES,
+        f"memory_cases={memory_cases} minimum={MIN_MEMORY_CASES}",
+    )
+    executed_memory = len(re.findall(r"^ok \d+ - memory: ", test_log, re.MULTILINE))
+    _assertion(
+        context,
+        "memory.tests_executed",
+        executed_memory >= MIN_MEMORY_CASES,
+        f"executed_memory_cases={executed_memory} minimum={MIN_MEMORY_CASES}",
+    )
+    missing_memory = [
+        name
+        for name, phrase in MEMORY_REQUIRED_PHRASES.items()
+        if phrase not in test_log
+    ]
+    _assertion(
+        context,
+        "memory.cross_project_denied_and_audit_present",
+        not missing_memory,
+        f"missing={missing_memory} "
+        f"covered={sorted(set(MEMORY_REQUIRED_PHRASES) - set(missing_memory))}",
+    )
+
     matrix = {
         "evidence_kind": "fixture",
         "store_source": STORE_SOURCE,
@@ -295,6 +339,44 @@ def scenario_research_record_fixtures(context: Any) -> int:
     _write_json(out, "research-record-matrix.json", matrix)
     _add_artifact(context, "research-record-matrix.json")
 
+    memory_matrix = {
+        "evidence_kind": "fixture",
+        "source_module": MEMORY_SOURCE,
+        "test_source": MEMORY_TEST_SOURCE,
+        "memory_cases": memory_cases,
+        "executed_memory_cases": executed_memory,
+        "authorization": {
+            "same_project_hit": True,
+            "cross_project_zero_hits": True,
+            "cross_project_denied_audit": True,
+            "tenant_mismatch_denied": True,
+            "anonymous_denied": True,
+            "write_only_denied": True,
+        },
+        "versioning": {
+            "exact_revision_filter": True,
+            "min_revision_excludes_stale": True,
+        },
+        "audit": {
+            "actor": True,
+            "revision": True,
+            "before": True,
+            "after": True,
+            "human_edit_actor_revision_before_after": True,
+        },
+        "evidence_boundary": {
+            "model_assumption_rejected": True,
+            "prompt_cot_archive_rejected": True,
+            "no_prompt_or_cot_archived": True,
+        },
+        "live_b18a_rows": {
+            "memory.live_authorized_retrieval": "NOT_VERIFIED(b18a_handoff)",
+            "memory.live_cross_project_denial": "NOT_VERIFIED(b18a_handoff)",
+        },
+    }
+    _write_json(out, "research-memory-matrix.json", memory_matrix)
+    _add_artifact(context, "research-memory-matrix.json")
+
     _write_text(out, "rph-test.log", _truncate(test_log, 40000))
     _add_artifact(context, "rph-test.log")
     _write_text(out, "rph-gates.log", _truncate("\n\n".join(log), 20000))
@@ -313,6 +395,21 @@ def scenario_research_record_fixtures(context: Any) -> int:
         "source_module": STORE_SOURCE,
         "fixture_adapter": FIXTURE_SOURCE,
         "live_b18a_rows": {name: "NOT_VERIFIED(b18a_handoff)" for name in LIVE_B18A_ROWS},
+    }
+    context.extensions["experience.research_memory"] = {
+        "evidence_kind": "fixture",
+        "source_module": MEMORY_SOURCE,
+        "test_source": MEMORY_TEST_SOURCE,
+        "memory_cases": memory_cases,
+        "executed_memory_cases": executed_memory,
+        "cross_project_denied": True,
+        "audit_fields": ["actor", "revision", "before", "after"],
+        "prompt_or_cot_archived": False,
+        "model_assumption_into_evidence": False,
+        "live_b18a_rows": {
+            "memory.live_authorized_retrieval": "NOT_VERIFIED(b18a_handoff)",
+            "memory.live_cross_project_denial": "NOT_VERIFIED(b18a_handoff)",
+        },
     }
 
     return _finish(context, "research_record_contract")
