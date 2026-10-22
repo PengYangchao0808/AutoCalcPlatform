@@ -1,0 +1,53 @@
+{
+  "launch_version": 1,
+  "server": {
+    "name": "acp",
+    "version": "0.2.0",
+    "entrypoint": "acp_services.entrypoints.mcp",
+    "contract_version": "1.1.0",
+    "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4"
+  },
+  "transport": "stdio",
+  "protocol_version": "2025-06-18",
+  "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "args": [
+    "-m",
+    "acp",
+    "mcp",
+    "serve",
+    "--transport",
+    "stdio",
+    "--controller",
+    "http://127.0.0.1:18765",
+    "--log-level",
+    "INFO"
+  ],
+  "cwd": "/ACPServer/acp2-development/B/src",
+  "env": {
+    "PYTHONPATH": "/ACPServer/acp2-development/B/src",
+    "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root",
+    "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
+    "ACP_CONFIG": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+    "ACP_CANDIDATE_REVISION": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+    "PATH": "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+  },
+  "controller": {
+    "transport": "loopback-http",
+    "loopback_only": true,
+    "start_controller": false,
+    "shared_db": false
+  },
+  "timeouts": {
+    "initialize_s": 10,
+    "tools_call_s": 120,
+    "shutdown_s": 10
+  },
+  "stdio": {
+    "framing": "newline-delimited json-rpc-2.0",
+    "max_frame_bytes": 1048576,
+    "stdout_is_channel_only": true,
+    "logs_to": "stderr"
+  },
+  "source_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "source_path": "/ACPServer/acp2-development/B/src"
+}

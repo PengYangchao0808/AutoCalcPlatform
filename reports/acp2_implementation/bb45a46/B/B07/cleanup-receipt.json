@@ -1,0 +1,28 @@
+{
+  "controller_pid": 365514,
+  "controller_pids": [
+    365514,
+    399169
+  ],
+  "final_env_runtime_controller": {
+    "log": "reports/acp2_implementation/bb45a46/B/B07/env-runtime-controller.log",
+    "pid": 399169,
+    "port_18765_free": true,
+    "process_gone": true,
+    "signal": "SIGTERM"
+  },
+  "harness_created_tasks": [],
+  "leftover_controller_pids": [],
+  "leftover_mcp_pids": [],
+  "note": "H2 Controller stopped with SIGTERM and reaped; port 18765 verified free via /usr/sbin/ss; production 8765 and /var/lib/acp/runs untouched; no MCP adapter process remains; no task was submitted or cancelled. A second short-lived H2 Controller ran only the final env-runtime scenario and was also stopped with SIGTERM.",
+  "port_18765_free": true,
+  "port_18766_used_by_b07": false,
+  "process_gone": true,
+  "production_8765_alive": true,
+  "production_service_touched": false,
+  "schema": "acp2.acceptance.cleanup.v1",
+  "signal": "SIGTERM",
+  "stopped_at_utc": "2026-10-22T15:37:25Z",
+  "task_count_after": 2,
+  "task_count_before": 2
+}

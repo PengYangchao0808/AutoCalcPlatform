@@ -27,8 +27,8 @@
   },
   "revisions": {
     "server_revision": {
-      "value": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
-      "kind": "source_candidate",
+      "value": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+      "kind": "git-commit",
       "status": "frozen"
     },
     "client_revision": {
@@ -38,9 +38,9 @@
       "owner": "C"
     },
     "harness_revision": {
-      "value": null,
-      "kind": "B01 acceptance harness",
-      "status": "not_delivered",
+      "value": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+      "kind": "B01 acceptance harness file sha256",
+      "status": "frozen",
       "owner": "B"
     },
     "deployment_revision": {
@@ -50,10 +50,10 @@
       "note": "No production deployment or service restart in B00."
     }
   },
-  "contract_digest": "556d38a3c3f25a78694ee456b175d616d491abc1a0790b1c0d4312e7c82db9ac",
+  "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
-  "env_digest": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7",
-  "env_digest_status": "recorded by B02 (acceptance-env.sh sha256)",
+  "env_digest": "2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc",
+  "env_digest_status": "recorded by B07 (acceptance-env.sh sha256 at the H2 freeze)",
   "worktree": {
     "source_checkout": "/ACPServer/AutoCalcPlatform",
     "branch": "feat/frontend-plan1-closure",
@@ -85,14 +85,14 @@
     "H0": "closed-by-B00-manifest-and-baseline-lock; B02 must materialize the commit SHA",
     "production": "NOT_VERIFIED (no deployment in B00)"
   },
-  "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
   "client_revision": null,
-  "harness_revision": null,
+  "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
   "deployment_revision": null,
   "revision_status": {
-    "server_revision": "frozen source candidate (sha256 overlay)",
+    "server_revision": "frozen H2 git commit",
     "client_revision": "C-owned; not delivered at B00",
-    "harness_revision": "B01; not delivered at B00",
+    "harness_revision": "B01 harness file sha256 in the H2 candidate",
     "deployment_revision": "NOT_VERIFIED; no production deployment"
   },
   "materialization": {

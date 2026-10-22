@@ -1548,6 +1548,446 @@ def resolve_candidate_identity(
     return health_revision, health_revision, None
 
 
+B07_FIXTURE_FIELDS = (
+    "fixture_id",
+    "input_digest",
+    "backend",
+    "request_owner",
+    "budget",
+    "max_queue_wait_seconds",
+    "max_run_seconds",
+    "max_prepare_seconds",
+    "cleanup_seconds",
+    "margin_seconds",
+    "scenario_timeout_seconds",
+    "task",
+    "attempt",
+    "release",
+    "status",
+    "evidence_owner",
+    "reusable_by",
+)
+B07_P0_ROWS = (
+    "h2_candidate_record",
+    "local_orca_binary_and_license",
+    "local_scientific_software_inventory",
+    "acp_doctor",
+    "local_run_root",
+    "fixture_registry",
+    "controller_health_contract",
+    "local_controller_two_adapter_topology",
+    "lsf_client_queue_ssh",
+    "c_dsh_real_handshake",
+    "c_chromium_launch",
+    "c_route_json_diagnostic",
+    "c_env_03_node_dsh",
+    "c_env_05_dsh_profile_model",
+    "c_env_08_network",
+)
+
+
+def _b07_bases(out_dir: Path) -> list[Path]:
+    """Candidate evidence bases for the B07 environment records."""
+    bases: list[Path] = [out_dir.resolve().parent]
+    evidence_root = os.environ.get("ACP2_EVIDENCE")
+    if evidence_root:
+        bases.append(Path(evidence_root) / "B")
+    bases.append(REPO_ROOT / "reports" / "acp2_implementation" / "bb45a46" / "B")
+    unique: list[Path] = []
+    for base in bases:
+        if base not in unique:
+            unique.append(base)
+    return unique
+
+
+def _b07_pick(bases: list[Path], relative: str) -> Path | None:
+    for base in bases:
+        candidate = base / relative
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _b07_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, f"unreadable_json:{path}:{exc}"
+    if not isinstance(document, dict):
+        return None, f"not_a_json_object:{path}"
+    return document, None
+
+
+def _b07_repo_path(relative: str) -> Path:
+    path = Path(relative)
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+def _run_env_runtime(
+    out_dir: Path, controller: str | None, timeout: float
+) -> tuple[int, list[dict[str, Any]], dict[str, Any], str | None]:
+    """Verify the real B07 environment record; never promote a missing fact.
+
+    This is a discovery scenario.  It returns PASS only when the H2 candidate
+    record, the Local ORCA execution probe, the doctor raw log, the LSF
+    NOT_VERIFIED prerequisite and the fixture registry all exist and agree.
+    C-owned DSH/browser rows are never signed here.
+    """
+    bases = _b07_bases(out_dir)
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "discover",
+        "acceptance.target": "local",
+        "b07.evidence_bases": [str(base) for base in bases],
+    }
+
+    def add(name: str, ok: bool, detail: str, *, not_verified: bool = False) -> None:
+        assertions.append(
+            {
+                "name": name,
+                "status": "PASS" if ok else ("NOT_VERIFIED" if not_verified else "FAIL"),
+                "detail": detail,
+            }
+        )
+
+    env_path = _b07_pick(bases, "environment/b07-environment.json")
+    h2_path = _b07_pick(bases, "environment/h2-candidate.json")
+    fixture_path = _b07_pick(bases, "fixture-runs.json")
+    p0_path = _b07_pick(bases, "B07/p0-matrix.json") or _b07_pick(bases, "p0-matrix.json")
+    missing = [
+        name
+        for name, path in (
+            ("environment/b07-environment.json", env_path),
+            ("environment/h2-candidate.json", h2_path),
+            ("fixture-runs.json", fixture_path),
+            ("B07/p0-matrix.json", p0_path),
+        )
+        if path is None
+    ]
+    if missing:
+        extensions["b07.missing_records"] = missing
+        add("b07_records_present", False, "missing:" + ",".join(missing), not_verified=True)
+        reason = "environment_record_missing:" + ",".join(missing)
+        return EXIT_NOT_VERIFIED, assertions, extensions, reason
+
+    environment, env_error = _b07_json(env_path)
+    candidate, candidate_error = _b07_json(h2_path)
+    fixture_registry, fixture_error = _b07_json(fixture_path)
+    p0_matrix, p0_error = _b07_json(p0_path)
+    load_errors = [
+        error
+        for error in (env_error, candidate_error, fixture_error, p0_error)
+        if error is not None
+    ]
+    if load_errors:
+        add("b07_records_parse", False, "; ".join(load_errors))
+        reason = "invalid_environment_record:" + "; ".join(load_errors)
+        return EXIT_FAIL, assertions, extensions, reason
+    assert environment is not None and candidate is not None
+    assert fixture_registry is not None and p0_matrix is not None
+
+    add(
+        "environment_record_schema",
+        environment.get("schema") == "acp2.b07.environment.v1",
+        f"schema={environment.get('schema')}",
+    )
+    software = environment.get("software") if isinstance(environment.get("software"), dict) else {}
+    orca = software.get("orca") if isinstance(software.get("orca"), dict) else {}
+    probe = orca.get("probe") if isinstance(orca.get("probe"), dict) else {}
+    expected_orca = "/home/xieningke/orca611/orca"
+    orca_path = str(orca.get("path") or "")
+    orca_ok = (
+        orca_path == expected_orca
+        and orca_path != "/usr/bin/orca"
+        and orca.get("elf_magic_verified") is True
+        and bool(HEX64.match(str(orca.get("sha256") or "")))
+        and Path(orca_path).is_file()
+        and os.access(orca_path, os.X_OK)
+    )
+    add("local_orca_real_binary", orca_ok, f"path={orca_path} sha256={orca.get('sha256')}")
+    add(
+        "forbidden_usr_bin_orca",
+        bool(environment.get("forbidden_binary"))
+        and environment["forbidden_binary"].get("use_as_qc_orca") is False
+        and orca_path != "/usr/bin/orca",
+        "record states /usr/bin/orca is the GNOME screen reader and is never QC ORCA",
+    )
+
+    probe_stdout = _b07_repo_path(str(probe.get("stdout") or ""))
+    probe_input = _b07_repo_path(str(probe.get("input") or ""))
+    probe_ok = (
+        probe.get("status") == "PASS"
+        and probe.get("exit_code") == 0
+        and "ORCA TERMINATED NORMALLY" in str(probe.get("termination_line") or "")
+        and isinstance(probe.get("final_single_point_energy_hartree"), (int, float))
+        and isinstance(probe.get("wall_clock_s"), (int, float))
+        and float(probe.get("wall_clock_s")) < 10.0
+        and probe_stdout.is_file()
+        and sha256_file(probe_stdout) == probe.get("stdout_sha256")
+        and probe_input.is_file()
+        and sha256_file(probe_input) == probe.get("input_sha256")
+    )
+    add(
+        "local_orca_minimal_probe",
+        probe_ok,
+        f"status={probe.get('status')} termination={probe.get('termination_line')} "
+        f"energy={probe.get('final_single_point_energy_hartree')} "
+        f"wall_clock_s={probe.get('wall_clock_s')}",
+    )
+
+    software_ok = all(
+        name in software
+        and isinstance(software[name], dict)
+        and bool(software[name].get("version"))
+        and bool(HEX64.match(str(software[name].get("sha256") or "")))
+        and Path(str(software[name].get("path") or "")).is_file()
+        for name in ("orca", "xtb", "crest", "censo", "shermo")
+    )
+    add(
+        "local_scientific_software_inventory",
+        software_ok,
+        "orca/xtb/crest/censo/shermo each have a version, sha256 and real path",
+    )
+
+    host = environment.get("host") if isinstance(environment.get("host"), dict) else {}
+    run_root = str(host.get("run_root") or "")
+    host_ok = (
+        isinstance(host.get("cores"), int)
+        and int(host["cores"]) > 0
+        and isinstance(host.get("memory_total_bytes"), int)
+        and int(host["memory_total_bytes"]) > 0
+        and host.get("run_root_fstype") == "xfs"
+        and run_root == "/ACPServer/acp2-development/data/b/run-root"
+        and host.get("production_run_root_touched") is False
+    )
+    add(
+        "local_run_root",
+        host_ok,
+        f"run_root={run_root} fstype={host.get('run_root_fstype')} "
+        f"cores={host.get('cores')} memory={host.get('memory_total_bytes')}",
+    )
+
+    doctor = environment.get("doctor") if isinstance(environment.get("doctor"), dict) else {}
+    doctor_log = _b07_repo_path(str(doctor.get("raw_log") or ""))
+    doctor_text = (
+        doctor_log.read_text(encoding="utf-8", errors="replace") if doctor_log.is_file() else ""
+    )
+    doctor_ok = (
+        doctor.get("exit_code") == 0
+        and doctor_log.is_file()
+        and "Local doctor finished: all checks passed" in doctor_text
+        and isinstance(doctor.get("gaps"), list)
+        and bool(doctor["gaps"])
+    )
+    add(
+        "acp_doctor",
+        doctor_ok,
+        f"exit={doctor.get('exit_code')} summary={doctor.get('summary')} "
+        f"gaps={len(doctor.get('gaps') or [])}",
+    )
+
+    lsf = environment.get("lsf") if isinstance(environment.get("lsf"), dict) else {}
+    lsf_log = _b07_repo_path(str(lsf.get("raw_log") or ""))
+    prerequisite = str(lsf.get("prerequisite") or "")
+    lsf_ok = (
+        lsf.get("status") == "NOT_VERIFIED"
+        and lsf.get("remote_job_attempted") is False
+        and "LSF_ENVDIR" in prerequisite
+        and "bsub" in prerequisite
+        and lsf_log.is_file()
+    )
+    add(
+        "lsf_gap_honestly_recorded",
+        lsf_ok,
+        f"status={lsf.get('status')} remote_job_attempted={lsf.get('remote_job_attempted')} "
+        f"prerequisite={prerequisite[:160]}",
+    )
+
+    fixtures = fixture_registry.get("fixtures")
+    fixture_rows = fixtures if isinstance(fixtures, list) else []
+    fixture_ids = [row.get("fixture_id") for row in fixture_rows if isinstance(row, dict)]
+    fields_ok = bool(fixture_rows) and all(
+        isinstance(row, dict) and all(field in row for field in B07_FIXTURE_FIELDS)
+        for row in fixture_rows
+    )
+    arithmetic_ok = True
+    for row in fixture_rows:
+        if not isinstance(row, dict):
+            arithmetic_ok = False
+            continue
+        maxima = [
+            row.get("max_queue_wait_seconds"),
+            row.get("max_run_seconds"),
+            row.get("max_prepare_seconds"),
+            row.get("cleanup_seconds"),
+            row.get("margin_seconds"),
+        ]
+        if row.get("status") == "planned":
+            arithmetic_ok = arithmetic_ok and all(value is None for value in maxima)
+            arithmetic_ok = arithmetic_ok and row.get("scenario_timeout_seconds") is None
+            continue
+        if not all(isinstance(value, int) and value >= 0 for value in maxima):
+            arithmetic_ok = False
+            continue
+        arithmetic_ok = arithmetic_ok and row.get("scenario_timeout_seconds") == sum(maxima)
+    expensive = [
+        (row.get("backend"), row.get("input_digest"))
+        for row in fixture_rows
+        if isinstance(row, dict)
+        and row.get("status") != "planned"
+        and row.get("input_digest") is not None
+    ]
+    fixture_ok = (
+        fixture_registry.get("schema") == "acp2.fixture-runs.v1"
+        and fields_ok
+        and len(fixture_ids) == len(set(fixture_ids))
+        and arithmetic_ok
+        and len(expensive) == len(set(expensive))
+        and fixture_registry.get("lsf_timeout_seconds")
+        == next(
+            (
+                row.get("scenario_timeout_seconds")
+                for row in fixture_rows
+                if isinstance(row, dict) and row.get("fixture_id") == "fx-lsf-singlepoint-v1"
+            ),
+            None,
+        )
+    )
+    add(
+        "fixture_registry",
+        fixture_ok,
+        f"rows={len(fixture_rows)} unique={len(set(fixture_ids))} arithmetic_ok={arithmetic_ok} "
+        f"lsf_timeout_seconds={fixture_registry.get('lsf_timeout_seconds')}",
+    )
+
+    h2_ok = (
+        bool(re.fullmatch(r"[0-9a-f]{40}", str(candidate.get("server_revision") or "")))
+        and (
+            bool(re.fullmatch(r"[0-9a-f]{40}", str(candidate.get("client_revision") or "")))
+            or candidate.get("client_revision") == "NOT_VERIFIED"
+        )
+        and bool(HEX64.match(str(candidate.get("harness_revision") or "")))
+        and bool(HEX64.match(str(candidate.get("contract_digest") or "")))
+        and bool(HEX64.match(str(candidate.get("env_digest") or "")))
+        and isinstance(candidate.get("tested_matrix"), dict)
+    )
+    add(
+        "h2_candidate_record",
+        h2_ok,
+        f"server={candidate.get('server_revision')} client={candidate.get('client_revision')} "
+        f"harness={candidate.get('harness_revision')} contract={candidate.get('contract_digest')} "
+        f"env={candidate.get('env_digest')}",
+    )
+
+    raw_candidate_record = environment.get("candidate")
+    candidate_record = raw_candidate_record if isinstance(raw_candidate_record, dict) else {}
+    env_digest_path = (
+        Path(os.environ.get("ACP2_DATA_ROOT", "/ACPServer/acp2-development/data/b"))
+        / "acceptance-env.sh"
+    )
+    env_digest_ok = (
+        candidate_record.get("server_revision") == candidate.get("server_revision")
+        and env_digest_path.is_file()
+        and sha256_file(env_digest_path) == candidate.get("env_digest")
+    )
+    add(
+        "h2_candidate_environment_binding",
+        env_digest_ok,
+        f"env_server={candidate_record.get('server_revision')} "
+        f"env_digest={candidate.get('env_digest')} file={env_digest_path}",
+    )
+
+    p0_rows = p0_matrix.get("rows")
+    p0_row_list = p0_rows if isinstance(p0_rows, list) else []
+    p0_ids = {row.get("row_id") for row in p0_row_list if isinstance(row, dict)}
+    p0_results_ok = all(
+        isinstance(row, dict)
+        and row.get("result") in RESULT_VALUES
+        and isinstance(row.get("reason"), str)
+        and bool(row.get("raw_log"))
+        for row in p0_row_list
+    )
+    p0_ok = (
+        p0_matrix.get("schema") == "acp2.b07.p0-matrix.v1"
+        and p0_matrix.get("overall_status") in {"OPEN", "CLOSED"}
+        and p0_results_ok
+        and set(B07_P0_ROWS).issubset(p0_ids)
+    )
+    add(
+        "p0_evidence_matrix",
+        p0_ok,
+        f"overall={p0_matrix.get('overall_status')} rows={len(p0_row_list)} "
+        f"missing={sorted(set(B07_P0_ROWS) - p0_ids)}",
+    )
+
+    controller_binding = None
+    if controller:
+        if not controller_reachable(controller):
+            add(
+                "controller_health_binding",
+                False,
+                f"controller_unreachable:{controller}",
+                not_verified=True,
+            )
+            controller_binding = "unreachable"
+        else:
+            try:
+                before = _controller_task_count(controller, timeout)
+                health = _http_json(controller.rstrip("/") + "/api/health", timeout)
+                after = _controller_task_count(controller, timeout)
+            except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
+                add("controller_health_binding", False, f"request_failed:{exc}")
+                controller_binding = "failed"
+            else:
+                health_ok = (
+                    isinstance(health, dict)
+                    and health.get("candidate_revision") == candidate.get("server_revision")
+                    and health.get("contract_digest") == candidate.get("contract_digest")
+                    and before == after
+                )
+                add(
+                    "controller_health_binding",
+                    health_ok,
+                    f"health_candidate="
+                    f"{health.get('candidate_revision') if isinstance(health, dict) else None} "
+                    f"health_contract="
+                    f"{health.get('contract_digest') if isinstance(health, dict) else None} "
+                    f"tasks_before={before} tasks_after={after}",
+                )
+                controller_binding = {
+                    "health": health,
+                    "task_count_before": before,
+                    "task_count_after": after,
+                }
+
+    failed = [item["name"] for item in assertions if item["status"] == "FAIL"]
+    not_verified = [item["name"] for item in assertions if item["status"] == "NOT_VERIFIED"]
+    extensions.update(
+        {
+            "b07.environment_record": str(env_path),
+            "b07.h2_candidate_record": str(h2_path),
+            "b07.fixture_runs": str(fixture_path),
+            "b07.p0_matrix": str(p0_path),
+            "b07.orca_probe": str(probe_stdout),
+            "b07.doctor_log": str(doctor_log),
+            "b07.lsf_log": str(lsf_log),
+            "b07.fixture_rows": len(fixture_rows),
+            "b07.lsf_timeout_seconds": fixture_registry.get("lsf_timeout_seconds"),
+            "b07.controller_binding": controller_binding,
+        }
+    )
+    if failed:
+        return EXIT_FAIL, assertions, extensions, "assertion_failed:" + ",".join(failed)
+    if not_verified:
+        return (
+            EXIT_NOT_VERIFIED,
+            assertions,
+            extensions,
+            "environment_not_verified:" + ",".join(not_verified),
+        )
+    return EXIT_PASS, assertions, extensions, None
+
+
 def _run_entry_readonly(
     controller: str, timeout: float
 ) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
@@ -2161,6 +2601,18 @@ def execute_scenario(
             return code_value
 
         handler = entry_readonly
+    elif spec.scenario == "env-runtime":
+
+        def env_runtime(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions, reason = _run_env_runtime(
+                out_dir, args.controller, timeout
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["reason"] = reason
+            return code_value
+
+        handler = env_runtime
     elif spec.scenario == "mcp-stdio":
 
         def mcp_stdio(_ledger: CleanupLedger) -> int:
@@ -2189,12 +2641,20 @@ def execute_scenario(
         reason = f"timeout after {timeout}s; cleanup record saved"
         result = "NOT_VERIFIED"
         code = EXIT_NOT_VERIFIED
-    elif spec.scenario in {"entry-readonly", "mcp-stdio"}:
-        result = "PASS" if code == EXIT_PASS else "FAIL"
+    elif spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime"}:
+        result = (
+            "PASS"
+            if code == EXIT_PASS
+            else ("NOT_VERIFIED" if code == EXIT_NOT_VERIFIED else "FAIL")
+        )
         failed = [
             item["name"] for item in outcome.get("assertions", []) if item.get("status") != "PASS"
         ]
-        reason = None if result == "PASS" else "assertion_failed:" + ",".join(failed)
+        reason = (
+            None
+            if result == "PASS"
+            else outcome.get("reason") or "assertion_failed:" + ",".join(failed)
+        )
     else:
         reason = f"missing_capability:{spec.missing_capability}"
         result = (
@@ -2202,7 +2662,7 @@ def execute_scenario(
             if code == EXIT_NOT_VERIFIED
             else ("PASS" if code == EXIT_PASS else "FAIL")
         )
-    if spec.scenario in {"entry-readonly", "mcp-stdio"}:
+    if spec.scenario in {"entry-readonly", "mcp-stdio", "env-runtime"}:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
     else:

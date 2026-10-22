@@ -1,0 +1,20 @@
+argv: /home/xieningke/molclus_1.14_Linux/molclus --version
+cwd: /ACPServer/AutoCalcPlatform
+ Molclus: A flexible program for searching cluster configurations and molecular conformations
+ Official website: http://www.keinsci.com/research/molclus.html
+ Developed by Tian Lu (sobereva@sina.com)     Last update: 2026-Apr-1
+ Beijing Kein Research Center for Natural Sciences (http://www.keinsci.com)
+ P-L-E-A-S-E properly cite this code as mentioned in the official site
+ 
+ Trajectory file traj.xyz cannot be found
+ Input the path of trajectory file, e.g. /K-ON/Akiyama_MIO.xyz
+forrtl: severe (24): end-of-file during read, unit -4, file /proc/332555/fd/0
+Image              PC                Routine            Line        Source             
+molclus            000000000041DFBB  Unknown               Unknown  Unknown
+molclus            0000000000445F32  Unknown               Unknown  Unknown
+molclus            0000000000404E0F  Unknown               Unknown  Unknown
+molclus            0000000000404422  Unknown               Unknown  Unknown
+libc.so.6          00007FC41042A610  Unknown               Unknown  Unknown
+libc.so.6          00007FC41042A6C0  __libc_start_main     Unknown  Unknown
+molclus            0000000000404329  Unknown               Unknown  Unknown
+exit_code=24
