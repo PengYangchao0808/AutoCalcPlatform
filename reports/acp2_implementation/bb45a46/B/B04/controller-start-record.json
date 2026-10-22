@@ -1,0 +1,37 @@
+{
+  "schema": "acp2.controller-start-record.v1",
+  "pid": 4173476,
+  "started_at": "2026-10-22T13:11:09Z",
+  "argv": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "-m",
+    "acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18765",
+    "--run-root",
+    "<acp2-dev>/data/b/run-root",
+    "--no-browser"
+  ],
+  "cwd": "<acp2-dev>/data/b/controller-config",
+  "db_path": "<acp2-dev>/data/b/run-root/acp_jobs.db",
+  "run_root": "<acp2-dev>/data/b/run-root",
+  "release": "a3ff3c5c4725d3e5bec8a7cb196b81c85a0da45e",
+  "release_source": "git rev-parse HEAD of <repo> (B04a working tree)",
+  "interpreter": "<acp2-dev>/venvs/b/bin/python",
+  "pythonpath": "<repo>/src",
+  "config": "<acp2-dev>/data/b/controller-config/cccp.yaml",
+  "endpoints": [
+    "http://127.0.0.1:18765/api/health",
+    "http://127.0.0.1:18765/api/capabilities",
+    "http://127.0.0.1:18765/api/status",
+    "http://127.0.0.1:18765/api/v1/jobs"
+  ],
+  "port": 18765,
+  "bind_host": "127.0.0.1",
+  "production_port": 8765,
+  "production_touched": false
+}

@@ -32,6 +32,8 @@ import socket
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -64,6 +66,16 @@ EXIT_USAGE = 3
 RESULT_VALUES = ("PASS", "FAIL", "NOT_VERIFIED")
 SCOPE_VALUES = ("IN_SCOPE", "DEFERRED", "NOT_APPLICABLE")
 EVIDENCE_KINDS = ("fixture", "live", "aggregate")
+MCP_TOOLS = (
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_submit",
+    "acp_status",
+    "acp_cancel",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_analyze",
+)
 OWNER_VALUES = ("B", "A", "C", "integration")
 OPERATION_CLASSES = (
     "submit",
@@ -1442,6 +1454,96 @@ def controller_reachable(controller: str) -> bool:
         return False
 
 
+def _http_json(url: str, timeout: float) -> Any:
+    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read()
+    return json.loads(raw.decode("utf-8"))
+
+
+def _controller_task_count(controller: str, timeout: float) -> int:
+    payload = _http_json(controller.rstrip("/") + "/api/v1/jobs?limit=1000", timeout)
+    jobs = payload.get("jobs") if isinstance(payload, dict) else None
+    return len(jobs) if isinstance(jobs, list) else 0
+
+
+def _run_entry_readonly(
+    controller: str, timeout: float
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """Live read-only probe: capabilities + health, task count unchanged."""
+    base = controller.rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "discover",
+        "acceptance.target": "local",
+        "b04a.controller": base,
+    }
+    try:
+        before = _controller_task_count(base, timeout)
+        health = _http_json(base + "/api/health", timeout)
+        capabilities = _http_json(base + "/api/capabilities", timeout)
+        after = _controller_task_count(base, timeout)
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
+        extensions["b04a.entry_readonly"] = f"request_failed: {exc}"
+        assertions.append({"name": "controller_commands", "status": "FAIL", "detail": str(exc)})
+        return EXIT_FAIL, assertions, extensions
+
+    tools = capabilities.get("tools") if isinstance(capabilities, dict) else None
+    health_ok = (
+        isinstance(health, dict)
+        and health.get("schema_version") == 1
+        and health.get("status") == "ok"
+        and isinstance(health.get("candidate_revision"), str)
+        and bool(health.get("candidate_revision"))
+        and isinstance(health.get("contract_version"), str)
+        and bool(health.get("contract_version"))
+        and isinstance(health.get("contract_digest"), str)
+        and bool(HEX64.match(health.get("contract_digest", "")))
+    )
+    capabilities_ok = (
+        isinstance(capabilities, dict)
+        and capabilities.get("schema_version") == 1
+        and isinstance(capabilities.get("workflows"), list)
+        and bool(capabilities.get("workflows"))
+        and isinstance(capabilities.get("backends"), list)
+        and isinstance(capabilities.get("limits"), dict)
+        and isinstance(tools, list)
+        and set(tools) == set(MCP_TOOLS)
+    )
+    assertions.extend(
+        [
+            {
+                "name": "health_entry_equivalence_facts",
+                "status": "PASS" if health_ok else "FAIL",
+                "detail": "candidate_revision/contract_version/contract_digest present",
+            },
+            {
+                "name": "capabilities_workflows_backends_limits_tools",
+                "status": "PASS" if capabilities_ok else "FAIL",
+                "detail": "workflows/backends/limits present and exactly the eight P1 tools",
+            },
+            {
+                "name": "task_count_unchanged",
+                "status": "PASS" if before == after else "FAIL",
+                "detail": f"before={before} after={after}",
+            },
+        ]
+    )
+    extensions.update(
+        {
+            "b04a.task_count_before": before,
+            "b04a.task_count_after": after,
+            "b04a.workflows": len(capabilities.get("workflows") or []),
+            "b04a.tools": len(tools) if isinstance(tools, list) else 0,
+            "b04a.candidate_revision": health.get("candidate_revision"),
+            "b04a.contract_version": health.get("contract_version"),
+            "b04a.contract_digest": health.get("contract_digest"),
+        }
+    )
+    passed = health_ok and capabilities_ok and before == after
+    return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
+
+
 def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
     if args.out:
         return str(Path(args.out).resolve())
@@ -1465,7 +1567,9 @@ def dry_run_commands(
     if spec.scenario == "env-runtime":
         commands.append(f"{shlex.quote(sys.executable)} -m acp doctor")
     elif spec.scenario == "entry-readonly":
-        commands.append(f"curl -fsS {shlex.quote(controller + '/api/v2/tasks')}")
+        commands.append(f"curl -fsS {shlex.quote(controller + '/api/health')}")
+        commands.append(f"curl -fsS {shlex.quote(controller + '/api/capabilities')}")
+        commands.append(f"curl -fsS {shlex.quote(controller + '/api/v1/jobs?limit=1000')}")
     elif spec.scenario == "mcp-stdio":
         commands.append(
             f"{shlex.quote(sys.executable)} -m acp mcp serve --transport stdio "
@@ -1586,8 +1690,21 @@ def execute_scenario(
     run_id = _new_run_id()
     timeout = args.timeout if args.timeout is not None else phase.timeout
     ledger = CleanupLedger()
-    command = dry_run_commands(spec, phase_name, phase, args)
-    handler = _b01_stub_handler(spec)
+    command = [sys.executable, str(SCRIPT_PATH), *sys.argv[1:]]
+    outcome: dict[str, Any] = {}
+
+    if spec.scenario == "entry-readonly":
+
+        def entry_readonly(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_entry_readonly(args.controller, timeout)
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            return code_value
+
+        handler = entry_readonly
+    else:
+        handler = _b01_stub_handler(spec)
+
     code, timeout_record = run_handler_with_timeout(
         handler,
         timeout,
@@ -1602,6 +1719,12 @@ def execute_scenario(
         reason = f"timeout after {timeout}s; cleanup record saved"
         result = "NOT_VERIFIED"
         code = EXIT_NOT_VERIFIED
+    elif spec.scenario == "entry-readonly":
+        result = "PASS" if code == EXIT_PASS else "FAIL"
+        failed = [
+            item["name"] for item in outcome.get("assertions", []) if item.get("status") != "PASS"
+        ]
+        reason = None if result == "PASS" else "assertion_failed:" + ",".join(failed)
     else:
         reason = f"missing_capability:{spec.missing_capability}"
         result = (
@@ -1609,10 +1732,21 @@ def execute_scenario(
             if code == EXIT_NOT_VERIFIED
             else ("PASS" if code == EXIT_PASS else "FAIL")
         )
-    extensions: dict[str, Any] = {
-        "b01.skeleton": True,
-        "b01.missing_capability": spec.missing_capability,
-    }
+    if spec.scenario == "entry-readonly":
+        extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
+        assertions = list(outcome.get("assertions", []))
+    else:
+        extensions = {
+            "b01.skeleton": True,
+            "b01.missing_capability": spec.missing_capability,
+        }
+        assertions = [
+            {
+                "name": "scenario_implemented",
+                "status": "NOT_VERIFIED",
+                "detail": spec.missing_capability,
+            }
+        ]
     if timeout_record is not None:
         extensions["b01.timeout_cleanup"] = "timeout-cleanup.json"
     run_path, _ = write_result(
@@ -1627,13 +1761,7 @@ def execute_scenario(
         exit_code=code,
         command=command,
         evidence_kind=_evidence_kind_for_phase(phase_name),
-        assertions=[
-            {
-                "name": "scenario_implemented",
-                "status": "NOT_VERIFIED",
-                "detail": spec.missing_capability,
-            }
-        ],
+        assertions=assertions,
         extensions=extensions,
     )
     errors = validate_receipt(
@@ -1645,7 +1773,12 @@ def execute_scenario(
             file=sys.stderr,
         )
         return EXIT_FAIL
-    print(f"NOT_VERIFIED: {reason}", file=sys.stderr)
+    if result == "PASS":
+        print(f"PASS: {spec.scenario}/{phase_name}", file=sys.stderr)
+    elif result == "FAIL":
+        print(f"FAIL: {reason}", file=sys.stderr)
+    else:
+        print(f"NOT_VERIFIED: {reason}", file=sys.stderr)
     return code
 
 

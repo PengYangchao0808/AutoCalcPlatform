@@ -65,6 +65,9 @@ DELIVERED_IDS_BY_STAGE = {
         "canonical-digest-vectors",
         "samples",
     },
+    "B04a": {
+        "controller-topology",
+    },
 }
 EXPECTED_TODOS = {
     "B00",
