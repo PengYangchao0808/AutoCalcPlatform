@@ -1,0 +1,2 @@
+    PID    PPID    PGID STAT                  STARTED CMD
+ 720345  719835  720345 Ssl  Fri Oct 23 06:50:33 2026 <acp2-dev>/venvs/b/bin/python -m acp2_controller_fault --fault-file <repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json -- run serve --host 127.0.0.1 --port 18771 --run-root <acp2-dev>/data/b/run-root-b13 --poll-interval 1 --no-browser

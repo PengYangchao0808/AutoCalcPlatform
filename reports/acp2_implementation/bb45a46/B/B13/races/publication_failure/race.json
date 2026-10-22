@@ -1,0 +1,120 @@
+{
+  "assertions": [],
+  "attempt": 1,
+  "budget": {
+    "cleanup_seconds": 10,
+    "cores": 1,
+    "jobs": 1,
+    "max_orca": 1,
+    "max_prepare_seconds": 60,
+    "memory_mb": 1024,
+    "walltime_s": 90
+  },
+  "budget_row": {
+    "budget": {
+      "cleanup_seconds": 10,
+      "cores": 1,
+      "jobs": 1,
+      "max_orca": 1,
+      "max_prepare_seconds": 60,
+      "memory_mb": 1024,
+      "walltime_s": 90
+    },
+    "orca_pids": [
+      720518
+    ],
+    "pid": 720437,
+    "race_id": "publication_failure",
+    "task_ref": "20261023_065036_001_singlepoint",
+    "timeout_seconds": 180
+  },
+  "evidence": "races/publication_failure",
+  "fault": "publication_failure_after_real_qc",
+  "finished_at": null,
+  "fixture": "h2-hf-sto3g",
+  "input_sha256": "7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe",
+  "kind": "local",
+  "method": {
+    "basis": "STO-3G",
+    "engine": "orca",
+    "functional": "HF"
+  },
+  "pid": 720437,
+  "publication_completed_events": 1,
+  "published_artifacts": [
+    {
+      "path": "published/execution_receipt.json",
+      "sha256": "ae93d78df30baa96e61fb9e1851f37238c5c5819c289e4822b6a1dbf348c81af",
+      "size_bytes": 1753,
+      "source_relative": "execution_receipt.json"
+    },
+    {
+      "path": "published/sp.inp",
+      "sha256": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+      "size_bytes": 161,
+      "source_relative": "sp.inp"
+    },
+    {
+      "path": "published/sp.out",
+      "sha256": "d02824d0e48bae87b56d9f33dbff05df6c5896afcc4a886da27192cd06b6436c",
+      "size_bytes": 42092,
+      "source_relative": "sp.out"
+    },
+    {
+      "path": "published/WORK__00_RUNTIME__task_result.json",
+      "sha256": "0969a7e59c162e5ba12a23f0dd407dd71e7e0bd5780578be01c15b860cf353e2",
+      "size_bytes": 2019,
+      "source_relative": "WORK/00_RUNTIME/task_result.json"
+    },
+    {
+      "path": "published/WORK__00_RUNTIME__frozen__envelope.json",
+      "sha256": "fa03f00edd14ac2883ced6a45f0fa3056a9eb09d6e54be8a93a6621fca98707f",
+      "size_bytes": 1622,
+      "source_relative": "WORK/00_RUNTIME/frozen/envelope.json"
+    },
+    {
+      "path": "published/WORK__00_RUNTIME__events.jsonl",
+      "sha256": "0a800835988842bfe7638061e45621e7748b73ddecd6f49b8889650db026e443",
+      "size_bytes": 3430,
+      "source_relative": "WORK/00_RUNTIME/events.jsonl"
+    },
+    {
+      "path": "published/RESULT__task_result.json",
+      "sha256": "0969a7e59c162e5ba12a23f0dd407dd71e7e0bd5780578be01c15b860cf353e2",
+      "size_bytes": 2019,
+      "source_relative": "RESULT/task_result.json"
+    },
+    {
+      "path": "published/RESULT__scientific_result.json",
+      "sha256": "cea0bb5799a2bf5ba3c708710ed7cef085a4a2425ca96f9e610637606c60dcbe",
+      "size_bytes": 917,
+      "source_relative": "RESULT/scientific_result.json"
+    },
+    {
+      "path": "published/RESULT__result_manifest.json",
+      "sha256": "d7590730a7fddc006637ca40930a8aa0247b829cb5d066a510a4519a9bfd4e03",
+      "size_bytes": 1247,
+      "source_relative": "RESULT/result_manifest.json"
+    },
+    {
+      "path": "published/RESULT__publication_state.json",
+      "sha256": "73dfee07c5b0ff9a23a283a9b62768ab80c3039b40a19a61e606ffdde7d4a027",
+      "size_bytes": 102,
+      "source_relative": "RESULT/publication_state.json"
+    }
+  ],
+  "qc_pids_after_retry": [
+    720518
+  ],
+  "qc_pids_before_retry": [
+    720518
+  ],
+  "race_id": "publication_failure",
+  "release_id": "98e0695545d668e6",
+  "started_at": "2026-10-22T22:50:35.656071Z",
+  "status": "NOT_VERIFIED",
+  "submission_id": "sub_4ac3725810011ae9",
+  "task_count_before": 12,
+  "task_ref": "20261023_065036_001_singlepoint",
+  "timeout_seconds": 180
+}

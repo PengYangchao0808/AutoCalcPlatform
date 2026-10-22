@@ -30,6 +30,7 @@ import queue
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -39,7 +40,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -4892,6 +4893,2534 @@ def _run_artifact(
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
 
 
+# ---------------------------------------------------------------------------
+# B13 — control/recovery: real Local fault rows + separate LSF control fixture
+# ---------------------------------------------------------------------------
+
+#: B10's frozen P1 test candidate; every B13 race uses this Controller code.
+B13_CANDIDATE_REVISION = "10eb71e4bc1811054c9d19ae4fd71d974e027f8a"
+B13_CONTRACT_DIGEST = "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4"
+
+#: The LSF control fixture is registered separately from B11's normal row.
+B13_LSF_CONTROL_FIXTURE_ID = "fx-control-recovery-lsf-v1"
+B13_LSF_NORMAL_FIXTURE_ID = "fx-lsf-singlepoint-v1"
+
+#: Fault code raised by ``scripts/acceptance/acp2_controller_fault.py``.
+B13_PUBLICATION_FAULT_CODE = "ACP2_ACCEPTANCE_PUBLICATION_FAULT"
+
+B13_TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
+B13_ACTIVE_CANCEL_STATUSES = frozenset({"cancelling", "cancelled"})
+
+#: Two real fixtures.  H2/STO-3G is used only where the race needs a terminal
+#: row quickly; ethanol/wB97M-V/def2-SVP gives a genuine multi-second Local run
+#: (measured >10 s on the acceptance host) so cancel/EOF/timeout cannot finish
+#: before the control call.
+B13_QUICK_XYZ = (
+    "2\nH2 B13 quick control fixture\nH 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000\n"
+)
+B13_LONG_XYZ = (
+    "9\nethanol B13 long control fixture\n"
+    "C 0.000 0.000 0.000\n"
+    "C 1.520 0.000 0.000\n"
+    "O 2.050 1.250 0.000\n"
+    "H -0.500 0.900 0.000\n"
+    "H -0.500 -0.500 0.800\n"
+    "H -0.500 -0.500 -0.800\n"
+    "H 1.900 -0.600 0.800\n"
+    "H 1.900 -0.600 -0.800\n"
+    "H 2.950 1.150 0.000\n"
+)
+B13_QUICK_LEVEL: dict[str, Any] = {
+    "engine": "orca",
+    "functional": "HF",
+    "basis": "STO-3G",
+}
+B13_LONG_LEVEL: dict[str, Any] = {
+    "engine": "orca",
+    "functional": "wB97M-V",
+    "basis": "def2-SVP",
+}
+
+#: One row per Local fault.  Every row owns a task, PID, timeout and budget;
+#: rows never share a TaskRef.
+B13_LOCAL_RACES: tuple[dict[str, Any], ...] = (
+    {
+        "race_id": "adapter_eof",
+        "fault": "mcp_adapter_eof_sigterm",
+        "fixture": "ethanol-wb97mv-def2svp",
+        "xyz": B13_LONG_XYZ,
+        "level": B13_LONG_LEVEL,
+        "timeout_seconds": 120,
+        "budget": {
+            "walltime_s": 60,
+            "cores": 1,
+            "memory_mb": 1024,
+            "jobs": 1,
+            "max_orca": 1,
+            "max_prepare_seconds": 30,
+            "cleanup_seconds": 10,
+        },
+    },
+    {
+        "race_id": "controller_restart",
+        "fault": "controller_restart_same_db_config_release",
+        "fixture": "h2-hf-sto3g",
+        "xyz": B13_QUICK_XYZ,
+        "level": B13_QUICK_LEVEL,
+        "timeout_seconds": 120,
+        "budget": {
+            "walltime_s": 60,
+            "cores": 1,
+            "memory_mb": 1024,
+            "jobs": 1,
+            "max_orca": 1,
+            "max_prepare_seconds": 30,
+            "cleanup_seconds": 10,
+        },
+    },
+    {
+        "race_id": "publication_failure",
+        "fault": "publication_failure_after_real_qc",
+        "fixture": "h2-hf-sto3g",
+        "xyz": B13_QUICK_XYZ,
+        "level": B13_QUICK_LEVEL,
+        "timeout_seconds": 180,
+        "budget": {
+            "walltime_s": 90,
+            "cores": 1,
+            "memory_mb": 1024,
+            "jobs": 1,
+            "max_orca": 1,
+            "max_prepare_seconds": 60,
+            "cleanup_seconds": 10,
+        },
+    },
+    {
+        "race_id": "cancel_race",
+        "fault": "cancel_confirmed_stop_late_receipt",
+        "fixture": "ethanol-wb97mv-def2svp",
+        "xyz": B13_LONG_XYZ,
+        "level": B13_LONG_LEVEL,
+        "timeout_seconds": 150,
+        "budget": {
+            "walltime_s": 60,
+            "cores": 1,
+            "memory_mb": 1024,
+            "jobs": 1,
+            "max_orca": 1,
+            "max_prepare_seconds": 30,
+            "cleanup_seconds": 10,
+        },
+    },
+    {
+        "race_id": "timeout_cancel",
+        "fault": "client_timeout_then_platform_cancel",
+        "fixture": "ethanol-wb97mv-def2svp",
+        "xyz": B13_LONG_XYZ,
+        "level": B13_LONG_LEVEL,
+        "timeout_seconds": 150,
+        "budget": {
+            "walltime_s": 60,
+            "cores": 1,
+            "memory_mb": 1024,
+            "jobs": 1,
+            "max_orca": 1,
+            "max_prepare_seconds": 30,
+            "cleanup_seconds": 10,
+        },
+    },
+)
+
+
+def _b13_race_specs() -> tuple[dict[str, Any], ...]:
+    """Return the immutable per-fault Local race rows (one task each)."""
+
+    return B13_LOCAL_RACES
+
+
+def _b13_exit_semantics(
+    local_statuses: Sequence[str], lsf_status: str
+) -> tuple[int, str, str | None]:
+    """Decide the scenario exit from the Local rows and the LSF control row.
+
+    The documented contract is:
+
+    * any Local failure -> exit 1 / FAIL (a local fault was not proved);
+    * all Local PASS + LSF PASS -> exit 0 / PASS;
+    * all Local PASS + LSF ``NOT_VERIFIED`` -> exit 2 / NOT_VERIFIED, while the
+      Local PASS assertions stay visible (H3 remains open);
+    * all Local PASS + LSF explicitly ``NOT_REQUIRED`` -> exit 0 / PASS.
+    """
+
+    statuses = [str(item).upper() for item in local_statuses]
+    lsf = str(lsf_status).upper()
+    if any(item == "FAIL" for item in statuses):
+        return EXIT_FAIL, "FAIL", "local_fault_row_failed"
+    if any(item not in {"PASS"} for item in statuses):
+        return EXIT_NOT_VERIFIED, "NOT_VERIFIED", "local_fault_row_not_verified"
+    if lsf == "PASS":
+        return EXIT_PASS, "PASS", None
+    if lsf == "NOT_REQUIRED":
+        return EXIT_PASS, "PASS", None
+    if lsf == "NOT_VERIFIED":
+        return (
+            EXIT_NOT_VERIFIED,
+            "NOT_VERIFIED",
+            "lsf_control_fixture_not_verified",
+        )
+    return EXIT_FAIL, "FAIL", f"unknown_lsf_control_status:{lsf}"
+
+
+def _b13_parse_controller_argv(argv: Sequence[str]) -> dict[str, Any]:
+    """Extract the Controller identity from a real ``/proc/<pid>/cmdline``."""
+
+    tokens = [str(item) for item in argv]
+    result: dict[str, Any] = {
+        "module": None,
+        "port": None,
+        "run_root": None,
+        "fault_file": None,
+        "fault_seam": False,
+    }
+    for index, token in enumerate(tokens):
+        if token == "-m" and index + 1 < len(tokens):
+            result["module"] = tokens[index + 1]
+        if token == "--port" and index + 1 < len(tokens):
+            try:
+                result["port"] = int(tokens[index + 1])
+            except ValueError:
+                result["port"] = None
+        if token.startswith("--port="):
+            try:
+                result["port"] = int(token.split("=", 1)[1])
+            except ValueError:
+                result["port"] = None
+        if token == "--run-root" and index + 1 < len(tokens):
+            result["run_root"] = tokens[index + 1]
+        if token.startswith("--run-root="):
+            result["run_root"] = token.split("=", 1)[1]
+        if token == "--fault-file" and index + 1 < len(tokens):
+            result["fault_file"] = tokens[index + 1]
+    result["fault_seam"] = "acp2_controller_fault" in tokens and bool(result["fault_file"])
+    return result
+
+
+def _b13_listener_pid(port: int) -> int | None:
+    """Find the live process listening on *port* through ``/proc`` (no ``ss``)."""
+
+    inodes: set[str] = set()
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            lines = Path(table).read_text(encoding="utf-8").splitlines()[1:]
+        except OSError:
+            continue
+        for line in lines:
+            fields = line.split()
+            if len(fields) < 10:
+                continue
+            try:
+                local_port = int(fields[1].rsplit(":", 1)[1], 16)
+            except (IndexError, ValueError):
+                continue
+            if local_port == port and fields[3] == "0A":
+                inodes.add(fields[9])
+    if not inodes:
+        return None
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            descriptors = list((proc / "fd").iterdir())
+        except (OSError, PermissionError):
+            continue
+        for descriptor in descriptors:
+            try:
+                target = os.readlink(descriptor)
+            except OSError:
+                continue
+            if target.startswith("socket:[") and target[8:-1] in inodes:
+                return int(proc.name)
+    return None
+
+
+def _b13_read_proc(pid: int) -> dict[str, Any]:
+    """Read argv/cwd/env/stat for *pid* (used to restart the same Controller)."""
+
+    proc = Path("/proc") / str(pid)
+    try:
+        argv = [
+            item.decode("utf-8", "replace")
+            for item in (proc / "cmdline").read_bytes().split(b"\0")
+            if item
+        ]
+    except OSError:
+        argv = []
+    try:
+        cwd = os.readlink(proc / "cwd")
+    except OSError:
+        cwd = ""
+    env: dict[str, str] = {}
+    try:
+        raw_env = (proc / "environ").read_bytes()
+    except OSError:
+        raw_env = b""
+    for item in raw_env.split(b"\0"):
+        if b"=" not in item:
+            continue
+        key, value = item.split(b"=", 1)
+        env[key.decode("utf-8", "replace")] = value.decode("utf-8", "replace")
+    try:
+        stat = (proc / "stat").read_text(encoding="utf-8")
+    except OSError:
+        stat = ""
+    return {"pid": pid, "argv": argv, "cwd": cwd, "env": env, "stat": stat}
+
+
+def _b13_pid_alive(pid: int) -> bool:
+    """True when *pid* exists and is not a zombie."""
+
+    if pid <= 0 or pid == os.getpid():
+        return False
+    try:
+        state = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8").split()
+    except OSError:
+        return False
+    return len(state) > 2 and state[2] != "Z"
+
+
+def _b13_task_processes(work_dir: Path) -> list[int]:
+    """Live processes whose cwd/cmdline is bound to *work_dir* (ORCA included)."""
+
+    try:
+        target = work_dir.resolve().as_posix()
+    except OSError:
+        target = work_dir.as_posix()
+    if not target or target == "/":
+        return []
+    found: list[int] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if pid == os.getpid() or not _b13_pid_alive(pid):
+            continue
+        try:
+            cwd = os.readlink(entry / "cwd")
+        except OSError:
+            cwd = ""
+        if cwd == target or cwd.startswith(target + "/"):
+            found.append(pid)
+            continue
+        try:
+            cmdline = (
+                (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+            )
+        except OSError:
+            continue
+        index = cmdline.find(target)
+        while index >= 0:
+            after = cmdline[index + len(target) :]
+            if not after or after[0].isspace() or after[0] in "'\"),":
+                found.append(pid)
+                break
+            index = cmdline.find(target, index + 1)
+    return sorted(found)
+
+
+def _b13_ps_table(pids: Sequence[int]) -> str:
+    """Best-effort process table text for the timeline evidence."""
+
+    clean = [str(pid) for pid in pids if int(pid) > 0]
+    if not clean:
+        return "no live pid\n"
+    try:
+        completed = subprocess.run(
+            ["ps", "-o", "pid,ppid,pgid,stat,lstart,cmd", "-p", ",".join(clean)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if completed.stdout.strip():
+            return completed.stdout
+    except (OSError, subprocess.SubprocessError):
+        pass
+    lines = []
+    for pid in clean:
+        info = _b13_read_proc(int(pid))
+        lines.append(f"{pid} {info['stat'].strip()} cwd={info['cwd']} argv={info['argv']}")
+    return "\n".join(lines) + "\n"
+
+
+def _b13_write_json(path: Path, document: Any) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def _b13_iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _b13_event_rows(work_dir: Path) -> list[dict[str, Any]]:
+    events = work_dir / "WORK" / "00_RUNTIME" / "events.jsonl"
+    if not events.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in events.read_text(encoding="utf-8").splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
+def _b13_event_count(work_dir: Path, event_type: str) -> int:
+    return sum(1 for row in _b13_event_rows(work_dir) if row.get("type") == event_type)
+
+
+def _b13_publication_complete(work_dir: Path) -> bool:
+    result_dir = work_dir / "RESULT"
+    manifest = result_dir / "result_manifest.json"
+    state = result_dir / "publication_state.json"
+    if not manifest.is_file() or not state.is_file():
+        return False
+    try:
+        payload = json.loads(state.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("complete") is True
+
+
+def _b13_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
+
+
+def _b13_copy_artifacts(work_dir: Path, target_dir: Path) -> list[dict[str, Any]]:
+    """Copy the scientific/receipt artifacts that must survive a failure."""
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    relatives = (
+        "execution_receipt.json",
+        "sp.inp",
+        "sp.out",
+        "WORK/00_RUNTIME/task_result.json",
+        "WORK/00_RUNTIME/frozen/envelope.json",
+        "WORK/00_RUNTIME/events.jsonl",
+        "RESULT/task_result.json",
+        "RESULT/scientific_result.json",
+        "RESULT/result_manifest.json",
+        "RESULT/publication_state.json",
+    )
+    recorded: list[dict[str, Any]] = []
+    for relative in relatives:
+        source = work_dir / relative
+        if not source.is_file():
+            continue
+        target = target_dir / relative.replace("/", "__")
+        shutil.copy2(source, target)
+        recorded.append(
+            {
+                "path": str(target.relative_to(target_dir.parent)),
+                "source_relative": relative,
+                "size_bytes": target.stat().st_size,
+                "sha256": _b13_sha256(target),
+            }
+        )
+    return recorded
+
+
+def _b13_job(base: str, task_id: str, timeout: float) -> dict[str, Any]:
+    payload = _http_json(base + f"/api/v1/jobs/{quote(task_id, safe='')}", timeout)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _b13_wait_for(
+    base: str,
+    task_id: str,
+    timeout: float,
+    predicate: Any,
+    *,
+    interval: float = 0.05,
+) -> tuple[dict[str, Any], bool]:
+    deadline = time.monotonic() + timeout
+    job: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        job = _b13_job(base, task_id, min(timeout, 30))
+        if predicate(job):
+            return job, True
+        time.sleep(interval)
+    return job, False
+
+
+def _b13_wait_running(
+    base: str,
+    task_id: str,
+    timeout: float,
+    *,
+    require_pid: bool = True,
+) -> tuple[dict[str, Any], bool]:
+    def _running(job: dict[str, Any]) -> bool:
+        if str(job.get("status") or "") != "running":
+            return False
+        return not require_pid or bool(job.get("pid"))
+
+    return _b13_wait_for(base, task_id, timeout, _running, interval=0.02)
+
+
+def _b13_wait_terminal(base: str, task_id: str, timeout: float) -> tuple[dict[str, Any], bool]:
+    return _b13_wait_for(
+        base,
+        task_id,
+        timeout,
+        lambda job: str(job.get("status") or "") in B13_TERMINAL_STATUSES,
+        interval=0.05,
+    )
+
+
+def _b13_wait_publication(work_dir: Path, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _b13_publication_complete(work_dir):
+            return True
+        time.sleep(0.1)
+    return _b13_publication_complete(work_dir)
+
+
+def _b13_controller_health(base: str, timeout: float) -> dict[str, Any]:
+    payload = _http_json(base + "/api/health", timeout)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _b13_build_launch(
+    controller: str,
+    run_root: Path,
+    out_dir: Path,
+    explicit_launch: str | None,
+) -> dict[str, Any]:
+    """Return an MCP stdio descriptor bound to the B13 Controller.
+
+    An explicit ``--launch`` wins; otherwise the B10 launch manifest is reused
+    with only Controller/run-root overrides; the final fallback is built from
+    ``ACP2_SOURCE``/``ACP2_B_PYTHON`` so the adapter always runs the P1 code.
+    """
+
+    base = controller.rstrip("/")
+    document: dict[str, Any] = {}
+    if explicit_launch:
+        document = json.loads(Path(explicit_launch).read_text(encoding="utf-8"))
+    else:
+        candidate, _path = _b11_pick_json(out_dir, "B10/mcp-launch-b10.json")
+        if candidate:
+            document = dict(candidate)
+    if document:
+        document = copy.deepcopy(document)
+    else:
+        source = Path(os.environ.get("ACP2_SOURCE", "<acp2-dev>/B"))
+        python = os.environ.get("ACP2_B_PYTHON", sys.executable)
+        document = {
+            "command": python,
+            "args": [
+                "-m",
+                "acp",
+                "mcp",
+                "serve",
+                "--transport",
+                "stdio",
+                "--controller",
+                base,
+                "--log-level",
+                "INFO",
+            ],
+            "cwd": str(source / "src"),
+            "protocol_version": "2025-06-18",
+            "env": {},
+        }
+    args = document.get("args") if isinstance(document.get("args"), list) else []
+    args = [str(item) for item in args]
+    if "--controller" in args:
+        controller_index = args.index("--controller")
+        if controller_index + 1 < len(args):
+            args[controller_index + 1] = base
+        else:
+            args.append(base)
+    else:
+        args.extend(["--controller", base])
+    document["args"] = args
+    env = document.get("env") if isinstance(document.get("env"), dict) else {}
+    env = {str(key): str(value) for key, value in env.items()}
+    env["ACP_CONTROLLER_URL"] = base
+    env["ACP_RUN_ROOT"] = str(run_root)
+    env.setdefault(
+        "ACP_CONFIG",
+        os.environ.get(
+            "ACP_CONFIG",
+            "<acp2-dev>/data/b/controller-config/cccp.yaml",
+        ),
+    )
+    env.setdefault(
+        "CONFSEARCH_ORCA_PATH",
+        os.environ.get("CONFSEARCH_ORCA_PATH", "/home/<user>/orca611/orca"),
+    )
+    env.setdefault(
+        "CONFSEARCH_ORCA_LD_LIBRARY_PATH",
+        os.environ.get(
+            "CONFSEARCH_ORCA_LD_LIBRARY_PATH",
+            "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+        ),
+    )
+    env.setdefault(
+        "LD_LIBRARY_PATH",
+        os.environ.get("LD_LIBRARY_PATH", "/home/<user>/openmpi418/lib:/home/<user>/orca611"),
+    )
+    env.setdefault(
+        "PATH",
+        "<acp2-dev>/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin",
+    )
+    document["env"] = env
+    document.setdefault("command", sys.executable)
+    document.setdefault("args", [])
+    document.setdefault("cwd", str(Path.cwd()))
+    document.setdefault("protocol_version", "2025-06-18")
+    return document
+
+
+def _b13_submit(
+    launch: dict[str, Any],
+    workflow: str,
+    xyz: str,
+    level: dict[str, Any],
+    timeout: float,
+    *,
+    keep_probe: bool = False,
+) -> tuple[str, _McpStdioProbe | None, dict[str, Any], dict[str, Any]]:
+    """Submit exactly one task through the real MCP stdio adapter."""
+
+    probe = _McpStdioProbe(launch, timeout)
+    probe.request(
+        1,
+        "initialize",
+        {
+            "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+            "capabilities": {},
+            "clientInfo": {"name": "acp2-b13-driver", "version": "1"},
+        },
+    )
+    probe.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+    probe.request(2, "tools/list", {})
+    key = "b13-" + uuid.uuid4().hex[:24]
+    submitted = probe.request(
+        3,
+        "tools/call",
+        {
+            "name": "acp_submit",
+            "arguments": {
+                "workflow": workflow,
+                "input": {
+                    "source_type": "xyz_text",
+                    "source": xyz,
+                    "charge": 0,
+                    "multiplicity": 1,
+                },
+                "method": {"levels": {workflow: dict(level)}},
+                "resources": {"cores": 1, "nproc": 1, "mem": "1024MB"},
+                "plan_digest": "sha256:" + "0" * 64,
+                "idempotency_key": key,
+            },
+        },
+    )
+    task_id = _submit_task_id(submitted)
+    if not task_id:
+        probe.close()
+        raise RuntimeError("acp_submit returned no task id")
+    if not keep_probe:
+        probe.close()
+        return task_id, None, submitted, {"idempotency_key": key}
+    return task_id, probe, submitted, {"idempotency_key": key}
+
+
+def _b13_mcp_status(probe: _McpStdioProbe, task_id: str) -> dict[str, Any]:
+    result = probe.request(
+        4,
+        "tools/call",
+        {
+            "name": "acp_status",
+            "arguments": {"reference": {"kind": "job", "id": task_id}},
+        },
+    )
+    if result.get("isError"):
+        raise RuntimeError(f"acp_status error: {result.get('structuredContent')}")
+    data = (result.get("structuredContent") or {}).get("data") or {}
+    if not isinstance(data, dict):
+        raise ValueError("acp_status returned a non-object projection")
+    return data
+
+
+def _b13_cancel_task(base: str, task_id: str, timeout: float) -> tuple[int, dict[str, Any]]:
+    """Issue the platform cancel (never a local ``kill`` of a client)."""
+
+    request = urllib.request.Request(
+        base + f"/api/v1/jobs/{quote(task_id, safe='')}/cancel",
+        data=b"{}",
+        method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+            return int(response.status), json.loads(raw.decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            body = {"detail": raw.decode("utf-8", "replace")}
+        return int(exc.code), body if isinstance(body, dict) else {}
+
+
+class _B13StopWatcher:
+    """Observe the first instant every tracked process belongs to the dead set."""
+
+    def __init__(self, pids: Sequence[int], work_dir: Path) -> None:
+        self.pids = sorted({int(pid) for pid in pids if int(pid) > 0})
+        self.work_dir = work_dir
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="b13-stop-watcher", daemon=True)
+        self.stop_monotonic: float | None = None
+        self.stop_iso: str | None = None
+        self.task_processes_at_stop: list[int] = []
+        self.samples = 0
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self.samples += 1
+            alive = [pid for pid in self.pids if _b13_pid_alive(pid)]
+            task_processes = _b13_task_processes(self.work_dir)
+            if not alive and not task_processes and self.stop_monotonic is None:
+                self.stop_monotonic = time.monotonic()
+                self.stop_iso = _b13_iso_now()
+                self.task_processes_at_stop = task_processes
+                return
+            time.sleep(0.01)
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=5)
+        if self.stop_monotonic is None:
+            if not any(_b13_pid_alive(pid) for pid in self.pids) and not _b13_task_processes(
+                self.work_dir
+            ):
+                self.stop_monotonic = time.monotonic()
+                self.stop_iso = _b13_iso_now()
+                self.task_processes_at_stop = []
+
+    def wait(self, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.stop_monotonic is not None:
+                return True
+            time.sleep(0.02)
+        return self.stop_monotonic is not None
+
+
+def _b13_late_receipt(
+    work_dir: Path,
+    envelope: Mapping[str, Any],
+    *,
+    attempt: int | None = None,
+) -> dict[str, Any]:
+    """Write a late completion receipt claiming the frozen attempt succeeded."""
+
+    receipt_dir = work_dir / "WORK" / "00_RUNTIME"
+    receipt_dir.mkdir(parents=True, exist_ok=True)
+    canonical = work_dir / "execution_receipt.json"
+    if canonical.is_file():
+        shutil.copy2(canonical, receipt_dir / "late_receipt_previous.json")
+    claimed_attempt = int(attempt if attempt is not None else envelope.get("attempt") or 1)
+    task_result = work_dir / "WORK" / "00_RUNTIME" / "task_result.json"
+    result_digest = (
+        "sha256:" + _b13_sha256(task_result) if task_result.is_file() else "sha256:" + "0" * 64
+    )
+    receipt = {
+        "receipt_version": 1,
+        "job_id": str(envelope.get("job_id") or ""),
+        "attempt": claimed_attempt,
+        "submission_id": str(envelope.get("submission_id") or ""),
+        "state": "completed",
+        "result_digest": result_digest,
+        "errors": [],
+        "written_at": _b13_iso_now(),
+        "release_id": str(envelope.get("release_id") or ""),
+        "release_digest": str(envelope.get("release_digest") or ""),
+        "owner": str(envelope.get("owner") or ""),
+        "fencing_token": str(envelope.get("fencing_token") or ""),
+        "plan_identity": str(envelope.get("plan_identity") or ""),
+        "step_identities": list(envelope.get("step_identities") or []),
+        "data_bindings": list(envelope.get("data_bindings") or []),
+        "evidence_digests": {},
+    }
+    _b13_write_json(receipt_dir / "late_receipt.json", receipt)
+    _b13_write_json(canonical, receipt)
+    return receipt
+
+
+def _b13_receipt_gate_probe(
+    source_root: Path,
+    db_path: Path,
+    job_id: str,
+    envelope_path: Path,
+    receipt_path: Path,
+    *,
+    current_attempt: int,
+    old_revision: int,
+    timeout: float,
+) -> dict[str, Any]:
+    """Run the real receipt/CAS gate against the persisted terminal row.
+
+    The probe is a separate process on the P1 source so it cannot be fooled by
+    the harness's own imports.  It proves three independent facts:
+
+    1. the late receipt's *identity* is well formed (same-attempt verify passes);
+    2. an older attempt is rejected (``stale_attempt``);
+    3. the real ``JobStore.transition`` CAS rejects the old write and the row
+       stays ``CANCELLED`` with an unchanged revision.
+    """
+
+    python = os.environ.get("ACP2_B_PYTHON", sys.executable)
+    script = """
+import json
+import sys
+from pathlib import Path
+
+from acp_services.contracts.envelope import ExecutionEnvelope, ExecutionReceipt
+from acp_services.runtime.receipts import verify_receipt
+from acp_services.store.store import JobStateConflictError, JobStore
+
+envelope_path = Path(sys.argv[1])
+receipt_path = Path(sys.argv[2])
+db_path = Path(sys.argv[3])
+job_id = sys.argv[4]
+old_revision = int(sys.argv[5])
+trace = {"proof": "acp2.b13.receipt_cas_gate.v1"}
+try:
+    envelope = ExecutionEnvelope.from_dict(
+        json.loads(envelope_path.read_text(encoding="utf-8"))
+    )
+    receipt = ExecutionReceipt.from_dict(
+        json.loads(receipt_path.read_text(encoding="utf-8"))
+    )
+    common = dict(
+        current_submission_id=envelope.submission_id,
+        current_release_id=envelope.release_id,
+        owner_token=envelope.owner,
+        fencing_token=envelope.fencing_token,
+    )
+    same = verify_receipt(receipt, envelope, current_attempt=envelope.attempt, **common)
+    old = verify_receipt(receipt, envelope, current_attempt=envelope.attempt + 1, **common)
+    trace["same_attempt"] = {"accepted": same.accepted, "code": same.code}
+    trace["old_attempt"] = {"accepted": old.accepted, "code": old.code}
+    store = JobStore(db_path)
+    try:
+        store.transition(
+            job_id,
+            expected_status="cancelling",
+            expected_revision=old_revision,
+            expected_attempt=envelope.attempt,
+            status="completed",
+        )
+    except JobStateConflictError as exc:
+        trace["cas"] = {"rejected": True, "error": "JobStateConflictError", "detail": str(exc)}
+    else:
+        trace["cas"] = {"rejected": False, "error": None, "detail": "CAS unexpectedly accepted"}
+    row = store.get(job_id)
+    trace["row"] = {
+        "status": row.status.value if row is not None else None,
+        "revision": row.revision if row is not None else None,
+        "attempt": row.attempt if row is not None else None,
+    }
+except Exception as exc:
+    trace["error"] = f"{type(exc).__name__}: {exc}"
+print(json.dumps(trace, sort_keys=True))
+"""
+    script_path = envelope_path.parent / "b13_receipt_gate_probe.py"
+    script_path.write_text(script, encoding="utf-8")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(source_root / "src") + (
+        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+    )
+    try:
+        completed = subprocess.run(
+            [
+                python,
+                str(script_path),
+                str(envelope_path),
+                str(receipt_path),
+                str(db_path),
+                job_id,
+                str(old_revision),
+            ],
+            cwd=str(source_root),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=max(30.0, timeout),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    try:
+        document = json.loads(completed.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        document = {
+            "error": "gate probe returned invalid JSON",
+            "stdout": completed.stdout[-2000:],
+            "stderr": completed.stderr[-2000:],
+        }
+    document["exit_code"] = completed.returncode
+    return document if isinstance(document, dict) else {"error": "non-object gate probe"}
+
+
+def _b13_restart_controller(
+    base: str,
+    out_dir: Path,
+    expected_health: Mapping[str, Any],
+    timeout: float,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Stop and restart the same Controller (same DB/config/release)."""
+
+    port = urlparse(base).port or int(os.environ.get("ACP2_CONTROLLER_PORT", "18771"))
+    assertions: list[dict[str, Any]] = []
+    evidence: dict[str, Any] = {"port": port}
+    controller_dir = out_dir / "controller"
+    controller_dir.mkdir(parents=True, exist_ok=True)
+    pid = _b13_listener_pid(port)
+    evidence["pid_before"] = pid
+    if pid is None:
+        assertions.append(
+            {
+                "name": "b13.restart.controller_pid_found",
+                "status": "FAIL",
+                "detail": f"no listener on port {port}",
+            }
+        )
+        return evidence, assertions
+    before = _b13_read_proc(pid)
+    parsed = _b13_parse_controller_argv(before["argv"])
+    evidence["command_before"] = before["argv"]
+    evidence["cwd_before"] = before["cwd"]
+    evidence["parsed_before"] = parsed
+    (controller_dir / "process-table-before.txt").write_text(_b13_ps_table([pid]), encoding="utf-8")
+    _b13_write_json(
+        controller_dir / "controller-before.json",
+        {
+            "pid": pid,
+            "argv": before["argv"],
+            "cwd": before["cwd"],
+            "run_root": parsed.get("run_root"),
+            "fault_file": parsed.get("fault_file"),
+            "health": dict(expected_health),
+        },
+    )
+    assertions.append(
+        {
+            "name": "b13.restart.controller_pid_found",
+            "status": "PASS" if bool(before["argv"]) else "FAIL",
+            "detail": f"pid={pid} port={port}",
+        }
+    )
+    if not parsed.get("argv") and not before["argv"]:
+        return evidence, assertions
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic() + min(30.0, timeout)
+    while time.monotonic() < deadline and _b13_pid_alive(pid):
+        time.sleep(0.05)
+    if _b13_pid_alive(pid):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and _b13_pid_alive(pid):
+            time.sleep(0.05)
+    time.sleep(0.5)
+    stop_ok = not _b13_pid_alive(pid)
+    evidence["stopped"] = stop_ok
+    assertions.append(
+        {
+            "name": "b13.restart.controller_stopped",
+            "status": "PASS" if stop_ok else "FAIL",
+            "detail": f"old_pid={pid} alive={_b13_pid_alive(pid)}",
+        }
+    )
+
+    log_path = controller_dir / f"controller-restart-{int(time.time())}.log"
+    log_handle = log_path.open("w", encoding="utf-8")
+    env = dict(before["env"])
+    env.setdefault("ACP_RUN_ROOT", str(parsed.get("run_root") or ""))
+    try:
+        process = subprocess.Popen(
+            before["argv"],
+            cwd=before["cwd"] or str(Path.cwd()),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log_handle,
+            stderr=log_handle,
+            start_new_session=True,
+        )
+    finally:
+        log_handle.close()
+    evidence["pid_after"] = process.pid
+    evidence["log"] = str(log_path.relative_to(out_dir))
+
+    health: dict[str, Any] = {}
+    healthy = False
+    deadline = time.monotonic() + min(60.0, timeout)
+    while time.monotonic() < deadline:
+        try:
+            health = _b13_controller_health(base, 3)
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
+            health = {}
+        if health.get("status") == "ok":
+            healthy = True
+            break
+        time.sleep(0.2)
+    same_candidate = health.get("candidate_revision") == expected_health.get("candidate_revision")
+    same_contract = health.get("contract_digest") == expected_health.get("contract_digest")
+    evidence["health_after"] = health
+    (controller_dir / "process-table-after.txt").write_text(
+        _b13_ps_table([process.pid]), encoding="utf-8"
+    )
+    _b13_write_json(
+        controller_dir / "controller-after.json",
+        {
+            "pid": process.pid,
+            "argv": before["argv"],
+            "cwd": before["cwd"],
+            "run_root": parsed.get("run_root"),
+            "health": health,
+        },
+    )
+    assertions.extend(
+        [
+            {
+                "name": "b13.restart.health_restored",
+                "status": "PASS" if healthy else "FAIL",
+                "detail": json.dumps(health, sort_keys=True)[:400],
+            },
+            {
+                "name": "b13.restart.same_candidate_revision",
+                "status": "PASS" if same_candidate else "FAIL",
+                "detail": (
+                    f"{expected_health.get('candidate_revision')} -> "
+                    f"{health.get('candidate_revision')}"
+                ),
+            },
+            {
+                "name": "b13.restart.same_contract_digest",
+                "status": "PASS" if same_contract else "FAIL",
+                "detail": (
+                    f"{expected_health.get('contract_digest')} -> {health.get('contract_digest')}"
+                ),
+            },
+            {
+                "name": "b13.restart.new_process_same_argv",
+                "status": "PASS" if process.pid != pid and bool(before["argv"]) else "FAIL",
+                "detail": f"old={pid} new={process.pid}",
+            },
+        ]
+    )
+    return evidence, assertions
+
+
+def _b13_snapshot_task(
+    base: str, task_id: str, timeout: float, *, task_count: int
+) -> dict[str, Any]:
+    """Durable identity + result digest of one task (restart comparison)."""
+
+    job = _b13_job(base, task_id, timeout)
+    work_dir = Path(str(job.get("work_dir") or ""))
+    receipt = _b10_read_json(work_dir / "execution_receipt.json")
+    envelope = _b10_read_json(work_dir / "WORK" / "00_RUNTIME" / "frozen" / "envelope.json")
+    task_result = _b10_read_json(work_dir / "WORK" / "00_RUNTIME" / "task_result.json")
+    manifest = work_dir / "RESULT" / "result_manifest.json"
+    return {
+        "task_id": task_id,
+        "attempt": int(job.get("attempt") or 0),
+        "status": str(job.get("status") or ""),
+        "exit_code": job.get("exit_code"),
+        "revision": job.get("revision"),
+        "release_id": str(receipt.get("release_id") or envelope.get("release_id") or ""),
+        "submission_id": str(receipt.get("submission_id") or envelope.get("submission_id") or ""),
+        "plan_identity": str(receipt.get("plan_identity") or envelope.get("plan_identity") or ""),
+        "result_digest": str(receipt.get("result_digest") or ""),
+        "task_result_digest": str(task_result.get("content_digest") or ""),
+        "manifest_sha256": _b13_sha256(manifest),
+        "publication_complete": _b13_publication_complete(work_dir),
+        "job_started_events": _b13_event_count(work_dir, "job.started"),
+        "process_starting_events": _b13_event_count(work_dir, "process.starting"),
+        "event_lines": len(_b13_event_rows(work_dir)),
+        "task_count": task_count,
+        "work_dir": str(work_dir),
+    }
+
+
+def _b13_row_record(
+    spec: Mapping[str, Any],
+    *,
+    task_id: str = "",
+    attempt: int | None = None,
+    pid: int | None = None,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "race_id": spec["race_id"],
+        "fault": spec["fault"],
+        "kind": "local",
+        "fixture": spec["fixture"],
+        "input_sha256": hashlib.sha256(str(spec["xyz"]).encode("utf-8")).hexdigest(),
+        "method": dict(spec["level"]),
+        "task_ref": task_id or None,
+        "attempt": attempt,
+        "pid": pid,
+        "timeout_seconds": spec["timeout_seconds"],
+        "budget": dict(spec["budget"]),
+        "started_at": _b13_iso_now(),
+        "finished_at": None,
+        "status": "NOT_VERIFIED",
+        "assertions": [],
+        "evidence": None,
+    }
+    if extra:
+        row.update(dict(extra))
+    return row
+
+
+def _b13_finish_row(row: dict[str, Any], assertions: Sequence[Mapping[str, Any]]) -> None:
+    row["assertions"] = [dict(item) for item in assertions]
+    row["finished_at"] = _b13_iso_now()
+    if any(item.get("status") == "FAIL" for item in assertions):
+        row["status"] = "FAIL"
+    elif any(item.get("status") != "PASS" for item in assertions):
+        row["status"] = "NOT_VERIFIED"
+    else:
+        row["status"] = "PASS"
+
+
+def _b13_run_budget(
+    spec: Mapping[str, Any], *, task_id: str, pid: int | None, orca_pids: Sequence[int]
+) -> dict[str, Any]:
+    return {
+        "race_id": spec["race_id"],
+        "task_ref": task_id or None,
+        "pid": pid,
+        "orca_pids": sorted({int(item) for item in orca_pids if int(item) > 0}),
+        "timeout_seconds": spec["timeout_seconds"],
+        "budget": dict(spec["budget"]),
+    }
+
+
+def _b13_race_adapter_eof(
+    base: str, launch: dict[str, Any], out_dir: Path, timeout: float, orca: str
+) -> dict[str, Any]:
+    spec = next(item for item in B13_LOCAL_RACES if item["race_id"] == "adapter_eof")
+    row = _b13_row_record(spec)
+    assertions: list[dict[str, Any]] = []
+    sampler = _B10OrcaSampler(orca)
+    sampler.start()
+    probe: _McpStdioProbe | None = None
+    task_id = ""
+    try:
+        before = _controller_task_count(base, timeout)
+        task_id, probe, _submitted, _meta = _b13_submit(
+            launch,
+            "singlepoint",
+            str(spec["xyz"]),
+            dict(spec["level"]),
+            timeout,
+            keep_probe=True,
+        )
+        row.update({"task_ref": task_id, "task_count_before": before})
+        job, running = _b13_wait_running(base, task_id, min(60.0, timeout))
+        pid = int(job.get("pid") or 0)
+        count_at_running = _controller_task_count(base, timeout)
+        row.update(
+            {
+                "attempt": int(job.get("attempt") or 0),
+                "pid": pid,
+                "task_count_at_running": count_at_running,
+            }
+        )
+        adapter_pid = probe.proc.pid if probe is not None else 0
+        adapter_exit: int | None = None
+        still_running = False
+        pid_alive = False
+        not_cancelled = False
+        after_kill: dict[str, Any] = {}
+        if running and probe is not None:
+            (out_dir / "races" / "adapter_eof").mkdir(parents=True, exist_ok=True)
+            (out_dir / "races" / "adapter_eof" / "process-table-before.txt").write_text(
+                _b13_ps_table([pid, adapter_pid, *sampler.pids]), encoding="utf-8"
+            )
+            probe.proc.terminate()
+            try:
+                adapter_exit = probe.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                probe.proc.kill()
+                adapter_exit = probe.proc.wait(timeout=5)
+            probe = None
+            time.sleep(1.0)
+            after_kill = _b13_job(base, task_id, timeout)
+            still_running = str(after_kill.get("status") or "") == "running"
+            pid_alive = _b13_pid_alive(pid)
+            not_cancelled = str(after_kill.get("status") or "") not in B13_ACTIVE_CANCEL_STATUSES
+            (out_dir / "races" / "adapter_eof" / "process-table-after-adapter-exit.txt").write_text(
+                _b13_ps_table([pid, *sampler.pids]), encoding="utf-8"
+            )
+        reconnect = _McpStdioProbe(launch, timeout)
+        try:
+            reconnect.request(
+                1,
+                "initialize",
+                {
+                    "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                    "capabilities": {},
+                    "clientInfo": {"name": "acp2-b13-eof-reconnect", "version": "1"},
+                },
+            )
+            reconnect.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            reconnect.request(2, "tools/list", {})
+            reread = _b13_mcp_status(reconnect, task_id)
+        finally:
+            reconnect.close()
+        count_after_reconnect = _controller_task_count(base, timeout)
+        same_task = str(reread.get("job_id") or reread.get("task_id") or "") == task_id and int(
+            reread.get("attempt") or 0
+        ) == int(row.get("attempt") or 0)
+        final, terminal = _b13_wait_terminal(base, task_id, min(90.0, timeout))
+        work_dir = Path(str(final.get("work_dir") or ""))
+        sampler.stop()
+        orca_pids = sorted(sampler.pids)
+        started_events = _b13_event_count(work_dir, "job.started")
+        assertions.extend(
+            [
+                {
+                    "name": "b13.adapter_eof.task_was_running",
+                    "status": "PASS" if running and pid_alive else "FAIL",
+                    "detail": f"task={task_id} pid={pid} running={running}",
+                },
+                {
+                    "name": "b13.adapter_eof.adapter_sigterm_delivered",
+                    "status": "PASS" if adapter_exit is not None else "FAIL",
+                    "detail": f"adapter_pid={adapter_pid} exit={adapter_exit}",
+                },
+                {
+                    "name": "b13.adapter_eof.task_kept_running_after_adapter_exit",
+                    "status": "PASS" if still_running and pid_alive and not_cancelled else "FAIL",
+                    "detail": f"status={after_kill.get('status')} pid_alive={pid_alive}",
+                },
+                {
+                    "name": "b13.adapter_eof.reconnect_same_task_no_new_task",
+                    "status": "PASS"
+                    if same_task and count_after_reconnect == int(row["task_count_at_running"])
+                    else "FAIL",
+                    "detail": (
+                        f"same_task={same_task} at_running={row['task_count_at_running']} "
+                        f"after={count_after_reconnect}"
+                    ),
+                },
+                {
+                    "name": "b13.adapter_eof.not_cancelled_by_adapter_exit",
+                    "status": "PASS" if not_cancelled else "FAIL",
+                    "detail": f"status_after_adapter_exit={after_kill.get('status')}",
+                },
+                {
+                    "name": "b13.adapter_eof.task_completed_once",
+                    "status": "PASS"
+                    if terminal and str(final.get("status")) == "completed" and started_events == 1
+                    else "FAIL",
+                    "detail": (
+                        f"terminal={terminal} status={final.get('status')} "
+                        f"job.started={started_events}"
+                    ),
+                },
+                {
+                    "name": "b13.adapter_eof.real_orca_once",
+                    "status": "PASS"
+                    if len(orca_pids) == 1 and sampler.max_concurrent == 1
+                    else "FAIL",
+                    "detail": f"orca_pids={orca_pids} max_concurrent={sampler.max_concurrent}",
+                },
+            ]
+        )
+        row.update(
+            {
+                "adapter_pid": adapter_pid,
+                "adapter_exit": adapter_exit,
+                "task_count_after_reconnect": count_after_reconnect,
+                "running_at_adapter_exit": still_running,
+                "pid_alive_at_adapter_exit": pid_alive,
+                "final_status": final.get("status"),
+                "job_started_events": started_events,
+                "orca_pids": orca_pids,
+                "orca_max_concurrent": sampler.max_concurrent,
+                "budget_row": _b13_run_budget(spec, task_id=task_id, pid=pid, orca_pids=orca_pids),
+                "evidence": "races/adapter_eof",
+            }
+        )
+        race_dir = out_dir / "races" / "adapter_eof"
+        _b13_copy_artifacts(work_dir, race_dir / "native")
+        _b13_write_json(race_dir / "race.json", row)
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        subprocess.SubprocessError,
+    ) as exc:
+        sampler.stop()
+        assertions.append(
+            {
+                "name": "b13.adapter_eof.probe",
+                "status": "FAIL",
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        )
+        if task_id:
+            try:
+                _b13_cancel_task(base, task_id, timeout)
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+    finally:
+        if probe is not None:
+            probe.close()
+        sampler.stop()
+    _b13_finish_row(row, assertions)
+    return row
+
+
+def _b13_race_controller_restart(
+    base: str, launch: dict[str, Any], out_dir: Path, timeout: float, orca: str
+) -> dict[str, Any]:
+    spec = next(item for item in B13_LOCAL_RACES if item["race_id"] == "controller_restart")
+    row = _b13_row_record(spec)
+    assertions: list[dict[str, Any]] = []
+    sampler = _B10OrcaSampler(orca)
+    sampler.start()
+    task_id = ""
+    try:
+        health_before = _b13_controller_health(base, timeout)
+        before_count = _controller_task_count(base, timeout)
+        task_id, _probe, _submitted, _meta = _b13_submit(
+            launch, "singlepoint", str(spec["xyz"]), dict(spec["level"]), timeout
+        )
+        row.update({"task_ref": task_id, "task_count_before": before_count})
+        final, terminal = _b13_wait_terminal(base, task_id, min(90.0, timeout))
+        work_dir = Path(str(final.get("work_dir") or ""))
+        published = _b13_wait_publication(work_dir, min(60.0, timeout)) if terminal else False
+        before = _b13_snapshot_task(
+            base, task_id, timeout, task_count=_controller_task_count(base, timeout)
+        )
+        row.update(
+            {
+                "attempt": before["attempt"],
+                "pid": int(final.get("pid") or 0),
+                "release_id": before["release_id"],
+                "submission_id": before["submission_id"],
+            }
+        )
+        restart, restart_assertions = _b13_restart_controller(base, out_dir, health_before, timeout)
+        assertions.extend(restart_assertions)
+        after = _b13_snapshot_task(
+            base, task_id, timeout, task_count=_controller_task_count(base, timeout)
+        )
+        sampler.stop()
+        orca_pids = sorted(sampler.pids)
+        identity_fields = (
+            "task_id",
+            "attempt",
+            "release_id",
+            "submission_id",
+            "plan_identity",
+            "result_digest",
+            "task_result_digest",
+            "manifest_sha256",
+        )
+        identity_ok = all(before.get(field) == after.get(field) for field in identity_fields)
+        terminal_ok = (
+            terminal
+            and published
+            and before["status"] == "completed"
+            and after["status"] == "completed"
+            and before["exit_code"] == after["exit_code"] == 0
+        )
+        no_second_dispatch = (
+            before["job_started_events"] == after["job_started_events"] == 1
+            and before["process_starting_events"] == after["process_starting_events"] == 1
+            and before["task_count"] == after["task_count"]
+        )
+        assertions.extend(
+            [
+                {
+                    "name": "b13.restart.same_task_and_release",
+                    "status": "PASS" if identity_ok else "FAIL",
+                    "detail": json.dumps(
+                        {field: [before.get(field), after.get(field)] for field in identity_fields},
+                        sort_keys=True,
+                    )[:1200],
+                },
+                {
+                    "name": "b13.restart.terminal_state_preserved",
+                    "status": "PASS" if terminal_ok else "FAIL",
+                    "detail": (
+                        f"before={before['status']}/{before['exit_code']} "
+                        f"after={after['status']}/{after['exit_code']} "
+                        f"published={published}"
+                    ),
+                },
+                {
+                    "name": "b13.restart.no_second_dispatch",
+                    "status": "PASS" if no_second_dispatch else "FAIL",
+                    "detail": (
+                        f"job.started={before['job_started_events']}->"
+                        f"{after['job_started_events']} "
+                        f"process.starting={before['process_starting_events']}->"
+                        f"{after['process_starting_events']} "
+                        f"tasks={before['task_count']}->{after['task_count']}"
+                    ),
+                },
+                {
+                    "name": "b13.restart.real_orca_unchanged",
+                    "status": "PASS"
+                    if len(orca_pids) == 1 and sampler.max_concurrent == 1
+                    else "FAIL",
+                    "detail": f"orca_pids={orca_pids} max_concurrent={sampler.max_concurrent}",
+                },
+            ]
+        )
+        row.update(
+            {
+                "restart": restart,
+                "before_restart": before,
+                "after_restart": after,
+                "orca_pids": orca_pids,
+                "budget_row": _b13_run_budget(
+                    spec, task_id=task_id, pid=int(final.get("pid") or 0), orca_pids=orca_pids
+                ),
+                "evidence": "races/controller_restart",
+            }
+        )
+        race_dir = out_dir / "races" / "controller_restart"
+        _b13_copy_artifacts(work_dir, race_dir / "native")
+        _b13_write_json(race_dir / "restart-comparison.json", {"before": before, "after": after})
+        _b13_write_json(race_dir / "race.json", row)
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        subprocess.SubprocessError,
+    ) as exc:
+        sampler.stop()
+        assertions.append(
+            {
+                "name": "b13.controller_restart.probe",
+                "status": "FAIL",
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        )
+        if task_id:
+            try:
+                _b13_cancel_task(base, task_id, timeout)
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+    finally:
+        sampler.stop()
+    _b13_finish_row(row, assertions)
+    return row
+
+
+def _b13_race_publication_failure(
+    base: str,
+    launch: dict[str, Any],
+    out_dir: Path,
+    timeout: float,
+    orca: str,
+    fault_file: Path | None,
+) -> dict[str, Any]:
+    spec = next(item for item in B13_LOCAL_RACES if item["race_id"] == "publication_failure")
+    row = _b13_row_record(spec)
+    assertions: list[dict[str, Any]] = []
+    sampler = _B10OrcaSampler(orca)
+    sampler.start()
+    task_id = ""
+    fault_file = fault_file or (out_dir / "fault" / "publication-fault.json")
+    race_dir = out_dir / "races" / "publication_failure"
+    try:
+        if not fault_file.is_file():
+            _b13_write_json(fault_file, {"armed": True, "reason": "b13 publication fault"})
+        before_count = _controller_task_count(base, timeout)
+        task_id, _probe, _submitted, _meta = _b13_submit(
+            launch, "singlepoint", str(spec["xyz"]), dict(spec["level"]), timeout
+        )
+        row.update({"task_ref": task_id, "task_count_before": before_count})
+        terminal, is_terminal = _b13_wait_terminal(base, task_id, min(90.0, timeout))
+        work_dir = Path(str(terminal.get("work_dir") or ""))
+        publication_failed = False
+        pending = False
+        manifest_absent = False
+        failure_event: dict[str, Any] = {}
+        if is_terminal:
+            for _ in range(200):
+                publication_failed = any(
+                    item.get("type") == "job.publication_pending"
+                    and item.get("code") == "publication_failed"
+                    for item in _b13_event_rows(work_dir)
+                )
+                terminal = _b13_job(base, task_id, timeout)
+                result = terminal.get("result") if isinstance(terminal.get("result"), dict) else {}
+                pending = result.get("publication_pending") is True
+                manifest_absent = not (work_dir / "RESULT" / "result_manifest.json").is_file()
+                if publication_failed and pending and manifest_absent:
+                    failure_event = next(
+                        item
+                        for item in _b13_event_rows(work_dir)
+                        if item.get("type") == "job.publication_pending"
+                    )
+                    break
+                time.sleep(0.1)
+        qc_pids_before = sorted(sampler.pids)
+        artifacts = _b13_copy_artifacts(work_dir, race_dir / "scientific")
+        receipt = _b10_read_json(work_dir / "execution_receipt.json")
+        task_result = _b10_read_json(work_dir / "WORK" / "00_RUNTIME" / "task_result.json")
+        _b13_write_json(
+            race_dir / "publication-failure.json",
+            {
+                "task_ref": task_id,
+                "status": terminal.get("status"),
+                "publication_pending": pending,
+                "manifest_absent_at_failure": manifest_absent,
+                "publication_failed_event": failure_event,
+                "receipt": receipt,
+                "task_result_content_digest": task_result.get("content_digest"),
+                "qc_pids_before_retry": qc_pids_before,
+                "artifacts": artifacts,
+                "fault_file": str(fault_file),
+            },
+        )
+        assertions.append(
+            {
+                "name": "b13.publication.failed_after_real_qc",
+                "status": "PASS" if publication_failed and pending and manifest_absent else "FAIL",
+                "detail": (
+                    f"publication_failed={publication_failed} pending={pending} "
+                    f"manifest_absent={manifest_absent} event={failure_event.get('code')}"
+                ),
+            }
+        )
+        assertions.append(
+            {
+                "name": "b13.publication.scientific_artifacts_saved",
+                "status": "PASS"
+                if bool(receipt) and bool(task_result) and bool(artifacts)
+                else "FAIL",
+                "detail": (
+                    f"receipt={bool(receipt)} task_result={bool(task_result)} "
+                    f"copied={len(artifacts)}"
+                ),
+            }
+        )
+        # Clear the fault; the Controller's reconcile loop must retry publish ONLY.
+        fault_file.unlink(missing_ok=True)
+        published = _b13_wait_publication(work_dir, min(90.0, timeout))
+        terminal_after = _b13_job(base, task_id, timeout)
+        qc_pids_after = sorted(sampler.pids)
+        sampler.stop()
+        published_artifacts = _b13_copy_artifacts(work_dir, race_dir / "published")
+        started_events = _b13_event_count(work_dir, "job.started")
+        process_events = _b13_event_count(work_dir, "process.starting")
+        published_events = _b13_event_count(work_dir, "job.publication_completed")
+        publication_state = _b10_read_json(work_dir / "RESULT" / "publication_state.json")
+        manifest = work_dir / "RESULT" / "result_manifest.json"
+        result_id = str(publication_state.get("result_id") or "")
+        qc_unchanged = qc_pids_before == qc_pids_after and len(qc_pids_after) == 1
+        assertions.extend(
+            [
+                {
+                    "name": "b13.publication.retried_only_after_fault_cleared",
+                    "status": "PASS"
+                    if published
+                    and published_events >= 1
+                    and started_events == 1
+                    and process_events == 1
+                    else "FAIL",
+                    "detail": (
+                        f"published={published} publication_completed={published_events} "
+                        f"job.started={started_events} process.starting={process_events}"
+                    ),
+                },
+                {
+                    "name": "b13.publication.qc_spawn_count_unchanged",
+                    "status": "PASS" if qc_unchanged else "FAIL",
+                    "detail": json.dumps(
+                        {
+                            "before": qc_pids_before,
+                            "after": qc_pids_after,
+                            "max_concurrent": sampler.max_concurrent,
+                        },
+                        sort_keys=True,
+                    ),
+                },
+                {
+                    "name": "b13.publication.one_published_result",
+                    "status": "PASS"
+                    if published
+                    and publication_state.get("complete") is True
+                    and result_id
+                    and manifest.is_file()
+                    else "FAIL",
+                    "detail": f"result_id={result_id} manifest={manifest.is_file()}",
+                },
+            ]
+        )
+        _b13_write_json(
+            race_dir / "qc-counter-proof.json",
+            {
+                "task_ref": task_id,
+                "pids_before_retry": qc_pids_before,
+                "pids_after_retry": qc_pids_after,
+                "equal": qc_pids_before == qc_pids_after,
+                "max_concurrent": sampler.max_concurrent,
+                "job_started_events": started_events,
+                "process_starting_events": process_events,
+                "publication_completed_events": published_events,
+                "publication_state": publication_state,
+                "status_after": terminal_after.get("status"),
+                "published_artifacts": published_artifacts,
+            },
+        )
+        row.update(
+            {
+                "attempt": int(terminal.get("attempt") or 0),
+                "pid": int(terminal.get("pid") or 0),
+                "release_id": receipt.get("release_id"),
+                "submission_id": receipt.get("submission_id"),
+                "qc_pids_before_retry": qc_pids_before,
+                "qc_pids_after_retry": qc_pids_after,
+                "published_artifacts": published_artifacts,
+                "publication_completed_events": published_events,
+                "budget_row": _b13_run_budget(
+                    spec,
+                    task_id=task_id,
+                    pid=int(terminal.get("pid") or 0),
+                    orca_pids=qc_pids_after,
+                ),
+                "evidence": "races/publication_failure",
+            }
+        )
+        _b13_write_json(race_dir / "race.json", row)
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        subprocess.SubprocessError,
+    ) as exc:
+        sampler.stop()
+        assertions.append(
+            {
+                "name": "b13.publication.probe",
+                "status": "FAIL",
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        )
+        if task_id:
+            try:
+                _b13_cancel_task(base, task_id, timeout)
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+    finally:
+        sampler.stop()
+        fault_file.unlink(missing_ok=True)
+    _b13_finish_row(row, assertions)
+    return row
+
+
+def _b13_race_cancel(
+    base: str, launch: dict[str, Any], out_dir: Path, timeout: float, orca: str
+) -> dict[str, Any]:
+    spec = next(item for item in B13_LOCAL_RACES if item["race_id"] == "cancel_race")
+    row = _b13_row_record(spec)
+    assertions: list[dict[str, Any]] = []
+    sampler = _B10OrcaSampler(orca)
+    sampler.start()
+    task_id = ""
+    race_dir = out_dir / "races" / "cancel_race"
+    try:
+        before_count = _controller_task_count(base, timeout)
+        task_id, _probe, _submitted, _meta = _b13_submit(
+            launch, "singlepoint", str(spec["xyz"]), dict(spec["level"]), timeout
+        )
+        row.update({"task_ref": task_id, "task_count_before": before_count})
+        running_job, running = _b13_wait_running(base, task_id, min(90.0, timeout))
+        pid = int(running_job.get("pid") or 0)
+        revision_before = int(running_job.get("revision") or 0)
+        attempt = int(running_job.get("attempt") or 0)
+        work_dir = Path(str(running_job.get("work_dir") or ""))
+        row.update({"attempt": attempt, "pid": pid})
+        watcher = _B13StopWatcher([pid, *sampler.pids], work_dir)
+        watcher.start()
+        (race_dir).mkdir(parents=True, exist_ok=True)
+        (race_dir / "process-table-before-cancel.txt").write_text(
+            _b13_ps_table([pid, *sampler.pids]), encoding="utf-8"
+        )
+        pid_alive_at_cancel = _b13_pid_alive(pid)
+        cancel_at_monotonic = time.monotonic()
+        cancel_at = _b13_iso_now()
+        cancel_status, cancel_body = _b13_cancel_task(base, task_id, timeout)
+        cancel_returned = str(cancel_body.get("status") or "")
+        final, cancelled = _b13_wait_terminal(base, task_id, min(90.0, timeout))
+        cancelled_at_monotonic = time.monotonic()
+        watcher.stop()
+        watcher.wait(10)
+        completed_at = str(final.get("completed_at") or "")
+        stop_ok = watcher.stop_monotonic is not None
+        stopped_before_terminal = (
+            stop_ok
+            and watcher.stop_monotonic is not None
+            and watcher.stop_monotonic <= cancelled_at_monotonic
+        )
+        remaining_processes = _b13_task_processes(work_dir)
+        started_events = _b13_event_count(work_dir, "job.started")
+        cancelled_events = _b13_event_count(work_dir, "job.cancelled")
+        settled_job = _b13_job(base, task_id, timeout)
+        settle_deadline = time.monotonic() + 15.0
+        while time.monotonic() < settle_deadline:
+            settled_job = _b13_job(base, task_id, timeout)
+            settle_result = (
+                settled_job.get("result") if isinstance(settled_job.get("result"), dict) else {}
+            )
+            if str(settled_job.get("status")) == "cancelled" and (
+                settle_result.get("terminal_side_effects_done") is True
+            ):
+                break
+            time.sleep(0.1)
+        revision_settled = int(settled_job.get("revision") or 0)
+        (race_dir / "process-table-after-cancel.txt").write_text(
+            _b13_ps_table([pid, *sampler.pids]), encoding="utf-8"
+        )
+        assertions.extend(
+            [
+                {
+                    "name": "b13.cancel.task_running_when_cancel_issued",
+                    "status": "PASS" if running and pid_alive_at_cancel else "FAIL",
+                    "detail": f"task={task_id} pid={pid} alive={pid_alive_at_cancel}",
+                },
+                {
+                    "name": "b13.cancel.no_premature_cancelled_response",
+                    "status": "PASS"
+                    if cancel_status == 200 and cancel_returned == "cancelling"
+                    else "FAIL",
+                    "detail": f"http={cancel_status} status={cancel_returned!r}",
+                },
+                {
+                    "name": "b13.cancel.confirmed_stop_before_cancelled",
+                    "status": "PASS" if stopped_before_terminal and cancelled else "FAIL",
+                    "detail": (
+                        f"stop={watcher.stop_iso} cancelled_at={completed_at} "
+                        f"task_processes_at_stop={watcher.task_processes_at_stop}"
+                    ),
+                },
+                {
+                    "name": "b13.cancel.terminal_cancelled_no_live_processes",
+                    "status": "PASS"
+                    if cancelled
+                    and str(final.get("status")) == "cancelled"
+                    and not remaining_processes
+                    else "FAIL",
+                    "detail": (
+                        f"status={final.get('status')} exit={final.get('exit_code')} "
+                        f"remaining={remaining_processes}"
+                    ),
+                },
+                {
+                    "name": "b13.cancel.one_dispatch_one_cancelled_event",
+                    "status": "PASS" if started_events == 1 and cancelled_events == 1 else "FAIL",
+                    "detail": f"job.started={started_events} job.cancelled={cancelled_events}",
+                },
+            ]
+        )
+        # Late/old-attempt receipt: write after terminal, prove no revival.
+        envelope = _b10_read_json(work_dir / "WORK" / "00_RUNTIME" / "frozen" / "envelope.json")
+        late = _b13_late_receipt(work_dir, envelope, attempt=attempt)
+        gate = _b13_receipt_gate_probe(
+            _b13_source_root(base),
+            Path(str(final.get("work_dir") or "")).parent.parent / "acp_jobs.db",
+            task_id,
+            work_dir / "WORK" / "00_RUNTIME" / "frozen" / "envelope.json",
+            work_dir / "execution_receipt.json",
+            current_attempt=attempt,
+            old_revision=revision_before,
+            timeout=timeout,
+        )
+        # Keep the same Controller and let several reconcile passes run.  The
+        # late receipt is a file-only observation; it must not advance the row.
+        time.sleep(3.0)
+        after_late = _b13_job(base, task_id, timeout)
+        after_late_work_dir = Path(str(after_late.get("work_dir") or ""))
+        after_started = _b13_event_count(after_late_work_dir, "job.started")
+        after_completed = _b13_event_count(after_late_work_dir, "job.completed")
+        late_rejected = (
+            gate.get("same_attempt", {}).get("accepted") is True
+            and gate.get("old_attempt", {}).get("code") == "stale_attempt"
+            and gate.get("cas", {}).get("rejected") is True
+        )
+        row_alive = (
+            str(after_late.get("status")) == "cancelled"
+            and int(after_late.get("revision") or 0) == revision_settled
+            and int(after_late.get("attempt") or 0) == attempt
+            and after_started == 1
+            and after_completed == 0
+        )
+        assertions.extend(
+            [
+                {
+                    "name": "b13.cancel.late_receipt_identity_and_old_attempt_rejected",
+                    "status": "PASS" if late_rejected else "FAIL",
+                    "detail": json.dumps(gate, sort_keys=True)[:1600],
+                },
+                {
+                    "name": "b13.cancel.terminal_revision_unchanged_after_late_receipt",
+                    "status": "PASS" if row_alive else "FAIL",
+                    "detail": (
+                        f"status={after_late.get('status')} "
+                        f"revision={after_late.get('revision')}/{revision_settled} "
+                        f"attempt={after_late.get('attempt')} "
+                        f"job.started={after_started} job.completed={after_completed}"
+                    ),
+                },
+            ]
+        )
+        sampler.stop()
+        orca_pids = sorted(sampler.pids)
+        _b13_write_json(
+            race_dir / "cancel-timeline.json",
+            {
+                "task_ref": task_id,
+                "pid": pid,
+                "attempt": attempt,
+                "revision_before_cancel": revision_before,
+                "revision_settled_after_terminal": revision_settled,
+                "cancel_issued_at": cancel_at,
+                "cancel_response_http": cancel_status,
+                "cancel_response_status": cancel_returned,
+                "stop_observed_at": watcher.stop_iso,
+                "cancelled_persisted_at": completed_at,
+                "monotonic": {
+                    "cancel_issued": cancel_at_monotonic,
+                    "terminal_observed": cancelled_at_monotonic,
+                },
+                "pid_alive_at_cancel": pid_alive_at_cancel,
+                "task_processes_at_stop": watcher.task_processes_at_stop,
+                "remaining_processes_after_terminal": remaining_processes,
+                "events": {
+                    "job.started": started_events,
+                    "job.cancelling": _b13_event_count(work_dir, "job.cancelling"),
+                    "job.cancelled": cancelled_events,
+                },
+                "controller_restart": {
+                    "deferred_to": "b13.fault.controller_restart",
+                    "reason": (
+                        "a restart advances terminal side-effect markers; "
+                        "isolation stays in the dedicated row"
+                    ),
+                },
+                "late_receipt": late,
+                "gate": gate,
+                "status_after_late_receipt": after_late.get("status"),
+                "revision_after_late_receipt": after_late.get("revision"),
+                "cancelled_at_wallclock": completed_at,
+            },
+        )
+        _b13_copy_artifacts(work_dir, race_dir / "native")
+        row.update(
+            {
+                "release_id": str(envelope.get("release_id") or ""),
+                "submission_id": str(envelope.get("submission_id") or ""),
+                "revision_before_cancel": revision_before,
+                "revision_settled_after_terminal": revision_settled,
+                "stop_observed_at": watcher.stop_iso,
+                "cancelled_persisted_at": completed_at,
+                "late_receipt_gate": gate,
+                "controller_restart": "b13.fault.controller_restart",
+                "orca_pids": orca_pids,
+                "budget_row": _b13_run_budget(spec, task_id=task_id, pid=pid, orca_pids=orca_pids),
+                "evidence": "races/cancel_race",
+            }
+        )
+        _b13_write_json(race_dir / "race.json", row)
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        subprocess.SubprocessError,
+    ) as exc:
+        sampler.stop()
+        assertions.append(
+            {
+                "name": "b13.cancel.probe",
+                "status": "FAIL",
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        )
+        if task_id:
+            try:
+                _b13_cancel_task(base, task_id, timeout)
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+    finally:
+        sampler.stop()
+    _b13_finish_row(row, assertions)
+    return row
+
+
+def _b13_race_timeout(
+    base: str, launch: dict[str, Any], out_dir: Path, timeout: float, orca: str
+) -> dict[str, Any]:
+    spec = next(item for item in B13_LOCAL_RACES if item["race_id"] == "timeout_cancel")
+    row = _b13_row_record(spec)
+    assertions: list[dict[str, Any]] = []
+    sampler = _B10OrcaSampler(orca)
+    sampler.start()
+    task_id = ""
+    race_dir = out_dir / "races" / "timeout_cancel"
+    try:
+        before_count = _controller_task_count(base, timeout)
+        task_id, probe, _submitted, _meta = _b13_submit(
+            launch, "singlepoint", str(spec["xyz"]), dict(spec["level"]), timeout, keep_probe=True
+        )
+        row.update({"task_ref": task_id, "task_count_before": before_count})
+        running_job, running = _b13_wait_running(base, task_id, min(90.0, timeout))
+        pid = int(running_job.get("pid") or 0)
+        work_dir = Path(str(running_job.get("work_dir") or ""))
+        row.update({"attempt": int(running_job.get("attempt") or 0), "pid": pid})
+        # The client abandons the request at a declared timeout.  This is NOT a
+        # cancel: the Controller must keep the task RUNNING.
+        client_timeout_at = _b13_iso_now()
+        if probe is not None:
+            probe.proc.terminate()
+            try:
+                probe.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                probe.proc.kill()
+                probe.proc.wait(timeout=5)
+            probe = None
+        time.sleep(1.0)
+        after_client_timeout = _b13_job(base, task_id, timeout)
+        status_after_client = str(after_client_timeout.get("status") or "")
+        pid_alive_after_client = _b13_pid_alive(pid)
+        no_cancel_event_before_platform = _b13_event_count(work_dir, "job.cancelling") == 0
+        watcher = _B13StopWatcher([pid, *sampler.pids], work_dir)
+        watcher.start()
+        platform_cancel_at = _b13_iso_now()
+        cancel_status, cancel_body = _b13_cancel_task(base, task_id, timeout)
+        cancel_returned = str(cancel_body.get("status") or "")
+        final, cancelled = _b13_wait_terminal(base, task_id, min(90.0, timeout))
+        watcher.stop()
+        watcher.wait(10)
+        completed_at = str(final.get("completed_at") or "")
+        stop_ok = watcher.stop_monotonic is not None
+        remaining_processes = _b13_task_processes(work_dir)
+        started_events = _b13_event_count(work_dir, "job.started")
+        assertions.extend(
+            [
+                {
+                    "name": "b13.timeout.client_abandoned_while_running",
+                    "status": "PASS" if running and probe is None else "FAIL",
+                    "detail": f"task={task_id} pid={pid} client_timeout_at={client_timeout_at}",
+                },
+                {
+                    "name": "b13.timeout.killing_client_is_not_cancel",
+                    "status": "PASS"
+                    if status_after_client == "running"
+                    and pid_alive_after_client
+                    and no_cancel_event_before_platform
+                    else "FAIL",
+                    "detail": (
+                        f"status_after_client={status_after_client} "
+                        f"pid_alive={pid_alive_after_client} "
+                        f"cancel_events_before_platform={not no_cancel_event_before_platform}"
+                    ),
+                },
+                {
+                    "name": "b13.timeout.platform_cancel_confirmed_stop",
+                    "status": "PASS"
+                    if cancel_status == 200
+                    and cancel_returned == "cancelling"
+                    and cancelled
+                    and stop_ok
+                    else "FAIL",
+                    "detail": (
+                        f"http={cancel_status} response={cancel_returned!r} "
+                        f"stop={watcher.stop_iso} cancelled_at={completed_at}"
+                    ),
+                },
+                {
+                    "name": "b13.timeout.reconciled_terminal",
+                    "status": "PASS"
+                    if cancelled
+                    and str(final.get("status")) == "cancelled"
+                    and not remaining_processes
+                    and started_events == 1
+                    else "FAIL",
+                    "detail": (
+                        f"status={final.get('status')} remaining={remaining_processes} "
+                        f"job.started={started_events}"
+                    ),
+                },
+            ]
+        )
+        sampler.stop()
+        orca_pids = sorted(sampler.pids)
+        _b13_write_json(
+            race_dir / "timeout-timeline.json",
+            {
+                "task_ref": task_id,
+                "pid": pid,
+                "client_timeout_at": client_timeout_at,
+                "status_after_client_timeout": status_after_client,
+                "pid_alive_after_client_timeout": pid_alive_after_client,
+                "platform_cancel_at": platform_cancel_at,
+                "cancel_response_http": cancel_status,
+                "cancel_response_status": cancel_returned,
+                "stop_observed_at": watcher.stop_iso,
+                "cancelled_persisted_at": completed_at,
+                "remaining_processes": remaining_processes,
+            },
+        )
+        _b13_copy_artifacts(work_dir, race_dir / "native")
+        row.update(
+            {
+                "client_timeout_at": client_timeout_at,
+                "status_after_client_timeout": status_after_client,
+                "platform_cancel_at": platform_cancel_at,
+                "stop_observed_at": watcher.stop_iso,
+                "cancelled_persisted_at": completed_at,
+                "orca_pids": orca_pids,
+                "budget_row": _b13_run_budget(spec, task_id=task_id, pid=pid, orca_pids=orca_pids),
+                "evidence": "races/timeout_cancel",
+            }
+        )
+        _b13_write_json(race_dir / "race.json", row)
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+        subprocess.SubprocessError,
+    ) as exc:
+        sampler.stop()
+        assertions.append(
+            {
+                "name": "b13.timeout.probe",
+                "status": "FAIL",
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        )
+        if task_id:
+            try:
+                _b13_cancel_task(base, task_id, timeout)
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+    finally:
+        sampler.stop()
+    _b13_finish_row(row, assertions)
+    return row
+
+
+def _b13_source_root(base: str) -> Path:
+    """The P1 worktree that owns the Controller (from ``/proc/<pid>/cwd``)."""
+
+    port = urlparse(base).port or int(os.environ.get("ACP2_CONTROLLER_PORT", "18771"))
+    pid = _b13_listener_pid(port)
+    if pid is not None:
+        info = _b13_read_proc(pid)
+        cwd = Path(info.get("cwd") or "")
+        if cwd.name == "src" and (cwd.parent / "src").is_dir():
+            return cwd.parent
+    source = Path(os.environ.get("ACP2_SOURCE", "<acp2-dev>/B"))
+    return source
+
+
+def _b13_lsf_control_row(out_dir: Path, fixture_path: str) -> dict[str, Any]:
+    """Read and validate the separately registered LSF control fixture row."""
+
+    registry, registry_path = _b11_pick_json(out_dir, "fixture-runs.json")
+    rows = registry.get("fixtures") if isinstance(registry.get("fixtures"), list) else []
+    control = next(
+        (
+            item
+            for item in rows
+            if isinstance(item, dict) and item.get("fixture_id") == B13_LSF_CONTROL_FIXTURE_ID
+        ),
+        None,
+    )
+    normal = next(
+        (
+            item
+            for item in rows
+            if isinstance(item, dict) and item.get("fixture_id") == B13_LSF_NORMAL_FIXTURE_ID
+        ),
+        None,
+    )
+    prerequisites = _b11_lsf_prerequisites()
+    fixture_digest = sha256_file(Path(fixture_path)) if Path(fixture_path).is_file() else ""
+    control_digest = str((control or {}).get("input_digest") or "")
+    control_input = Path(str((control or {}).get("input") or ""))
+    row = {
+        "fixture_id": B13_LSF_CONTROL_FIXTURE_ID,
+        "normal_completion_fixture_id": B13_LSF_NORMAL_FIXTURE_ID,
+        "registry": str(registry_path) if registry_path is not None else None,
+        "registered": control is not None,
+        "distinct_from_normal": control is not None
+        and normal is not None
+        and control.get("fixture_id") != normal.get("fixture_id"),
+        "task_ref": (control or {}).get("task_ref"),
+        "submitted_once": bool((control or {}).get("submitted_once")),
+        "status": "NOT_VERIFIED",
+        "budget": (control or {}).get("budget"),
+        "timeout_seconds": (control or {}).get("scenario_timeout_seconds"),
+        "input": str(control_input) if control_input else None,
+        "input_digest": control_digest,
+        "fixture_digest": fixture_digest,
+        "input_digest_matches": bool(control_digest)
+        and bool(fixture_digest)
+        and control_digest == fixture_digest,
+        "missing_prerequisites": list(prerequisites["missing"]),
+        "observed": prerequisites["observed"],
+        "no_bsub_invoked": True,
+        "no_bstop_bresume_invoked": True,
+        "no_fake_scheduler": True,
+        "reason": "lsf_prerequisite_missing:" + ",".join(prerequisites["missing"])
+        if prerequisites["missing"]
+        else "lsf_control_live_not_exercised",
+    }
+    return row
+
+
+def _b13_p1_candidate_record(out_dir: Path) -> tuple[dict[str, Any], list[str]]:
+    candidate, errors, _path = _b11_p1_candidate(out_dir)
+    if candidate.get("server_revision") != B13_CANDIDATE_REVISION:
+        errors.append("server_revision_not_b13_candidate")
+    return candidate, errors
+
+
+def _run_control_recovery(
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+    launch_path: str | None = None,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B13: prove control/recovery with real Local faults and a separate LSF row.
+
+    Every Local fault owns one task, one PID, one timeout and one budget row.
+    The LSF control fixture (``fx-control-recovery-lsf-v1``) is a *different*
+    registered fixture from B11's normal-completion row and is only
+    ``NOT_VERIFIED`` here because this host has no LSF client/queue; no fake
+    ``bsub``/``bstop``/``bresume`` is ever invoked.
+
+    Exit semantics (documented in ``exit-semantics.json``): 0 only when every
+    Local fault row and the LSF control row PASS; 2 when the Local rows PASS but
+    the LSF control row is ``NOT_VERIFIED`` (H3 stays open); 1 on any Local
+    failure.  Local PASS rows remain visible in a 2 exit.
+    """
+
+    base = (controller or "").rstrip("/")
+    if not base:
+        return (
+            EXIT_NOT_VERIFIED,
+            [
+                {
+                    "name": "b13.controller_required",
+                    "status": "NOT_VERIFIED",
+                    "detail": "no controller",
+                }
+            ],
+            {"b13.reason": "missing_controller"},
+        )
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "control",
+        "acceptance.target": "local",
+        "b13.fixture": str(fixture_path),
+        "b13.controller": base,
+        "b13.candidate_revision": B13_CANDIDATE_REVISION,
+        "b13.contract_digest": B13_CONTRACT_DIGEST,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    races_dir = out_dir / "races"
+    races_dir.mkdir(parents=True, exist_ok=True)
+
+    candidate, candidate_errors = _b13_p1_candidate_record(out_dir)
+    health = _b13_controller_health(base, timeout)
+    health_ok = (
+        health.get("candidate_revision") == B13_CANDIDATE_REVISION
+        and health.get("contract_digest") == B13_CONTRACT_DIGEST
+    )
+    assertions.append(
+        {
+            "name": "b13.candidate_identity",
+            "status": "PASS" if health_ok and not candidate_errors else "FAIL",
+            "detail": (
+                f"health={health.get('candidate_revision')}/{health.get('contract_digest')} "
+                f"p1={candidate.get('server_revision')} errors={candidate_errors}"
+            ),
+        }
+    )
+    candidate_record = {
+        "server_revision": candidate.get("server_revision"),
+        "server_revision_kind": candidate.get("server_revision_kind"),
+        "candidate_label": candidate.get("candidate_label"),
+        "contract_digest": candidate.get("contract_digest"),
+        "contract_version": candidate.get("contract_version"),
+        "client_revision": candidate.get("client_revision"),
+        "harness_revision": candidate.get("harness_revision"),
+        "harness_revision_current": harness_revision(),
+        "health": health,
+        "errors": candidate_errors,
+    }
+    _b13_write_json(out_dir / "candidate.json", candidate_record)
+    extensions["b13.p1_candidate"] = candidate_record
+
+    if health_ok and not candidate_errors:
+        controller_pid = _b13_listener_pid(urlparse(base).port or 18771)
+        controller_info = _b13_read_proc(controller_pid) if controller_pid else {}
+        parsed = _b13_parse_controller_argv(controller_info.get("argv") or [])
+        source_root = _b13_source_root(base)
+        source_revision = ""
+        try:
+            source_revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(source_root),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            source_revision = ""
+        extensions["b13.controller"] = {
+            "pid": controller_pid,
+            "argv": controller_info.get("argv"),
+            "cwd": controller_info.get("cwd"),
+            "run_root": parsed.get("run_root"),
+            "fault_seam": parsed.get("fault_seam"),
+            "fault_file": parsed.get("fault_file"),
+            "source_root": str(source_root),
+            "source_revision": source_revision,
+            "source_revision_matches": source_revision == B13_CANDIDATE_REVISION,
+        }
+        _b13_write_json(out_dir / "controller.json", extensions["b13.controller"])
+        assertions.append(
+            {
+                "name": "b13.controller_single_instance_source",
+                "status": "PASS"
+                if controller_pid is not None and parsed.get("port") is not None
+                else "FAIL",
+                "detail": (
+                    f"pid={controller_pid} port={parsed.get('port')} "
+                    f"source={source_revision or 'unknown'} fault_seam={parsed.get('fault_seam')}"
+                ),
+            }
+        )
+        orca = str(
+            (controller_info.get("env") or {}).get(
+                "CONFSEARCH_ORCA_PATH", "/home/<user>/orca611/orca"
+            )
+        )
+        launch = _b13_build_launch(
+            base,
+            Path(
+                parsed.get("run_root")
+                or (controller_info.get("env") or {}).get("ACP_RUN_ROOT")
+                or "."
+            ),
+            out_dir,
+            launch_path,
+        )
+        launch_env = launch.get("env") if isinstance(launch.get("env"), dict) else {}
+        for key in (
+            "ACP_CONFIG",
+            "CONFSEARCH_ORCA_PATH",
+            "CONFSEARCH_ORCA_LD_LIBRARY_PATH",
+            "LD_LIBRARY_PATH",
+            "PATH",
+        ):
+            value = (controller_info.get("env") or {}).get(key)
+            if value:
+                launch_env[key] = value
+        launch["env"] = launch_env
+        _b13_write_json(out_dir / "mcp-launch.json", launch)
+        extensions["b13.mcp_launch"] = "mcp-launch.json"
+        fault_file = (
+            Path(parsed["fault_file"])
+            if parsed.get("fault_seam") and parsed.get("fault_file")
+            else None
+        )
+        if fault_file is not None:
+            fault_file.parent.mkdir(parents=True, exist_ok=True)
+            fault_file.unlink(missing_ok=True)
+        extensions["b13.publication_fault_seam"] = {
+            "available": bool(fault_file),
+            "fault_file": str(fault_file) if fault_file else None,
+        }
+        if fault_file is None:
+            assertions.append(
+                {
+                    "name": "b13.publication_fault_seam",
+                    "status": "FAIL",
+                    "detail": (
+                        "Controller was not launched through "
+                        "scripts/acceptance/acp2_controller_fault.py; publication "
+                        "failure cannot be injected without faking the scheduler"
+                    ),
+                }
+            )
+
+        rows: list[dict[str, Any]] = []
+        rows.append(_b13_race_adapter_eof(base, launch, out_dir, timeout, orca))
+        rows.append(_b13_race_controller_restart(base, launch, out_dir, timeout, orca))
+        rows.append(_b13_race_publication_failure(base, launch, out_dir, timeout, orca, fault_file))
+        rows.append(_b13_race_cancel(base, launch, out_dir, timeout, orca))
+        rows.append(_b13_race_timeout(base, launch, out_dir, timeout, orca))
+
+        # DSH is C-owned and this host has no delivered DSH; never start one.
+        client_revision = str(candidate.get("client_revision") or "")
+        dsh_row = {
+            "fault": "dsh_disconnect",
+            "kind": "client",
+            "status": "NOT_VERIFIED",
+            "reason": "c_dsh_absent",
+            "client_revision": client_revision,
+            "detail": (
+                "C DSH/Workbench is not delivered on this host (B10 P1 records "
+                "client_revision=NOT_VERIFIED); no DSH process is started, so a "
+                "re-handshake cannot be claimed."
+            ),
+        }
+        _b13_write_json(out_dir / "dsh-disconnect.json", dsh_row)
+        assertions.append(
+            {
+                "name": "b13.fault.dsh_disconnect",
+                "status": "NOT_VERIFIED",
+                "detail": dsh_row["detail"],
+            }
+        )
+
+        lsf = _b13_lsf_control_row(out_dir, fixture_path)
+        _b13_write_json(out_dir / "lsf-control-fixture.json", lsf)
+        lsf_registered = (
+            lsf["registered"]
+            and lsf["distinct_from_normal"]
+            and lsf["task_ref"] is None
+            and lsf["submitted_once"] is False
+            and lsf["input_digest_matches"]
+            and bool(lsf["budget"])
+        )
+        assertions.append(
+            {
+                "name": "b13.lsf_control_fixture",
+                "status": "NOT_VERIFIED" if lsf_registered else "FAIL",
+                "detail": json.dumps(
+                    {
+                        "registered": lsf_registered,
+                        "task_ref": lsf["task_ref"],
+                        "distinct": lsf["distinct_from_normal"],
+                        "reason": lsf["reason"],
+                        "missing": lsf["missing_prerequisites"],
+                        "no_fake_scheduler": lsf["no_fake_scheduler"],
+                        "live_exercised": False,
+                    },
+                    sort_keys=True,
+                )[:1600],
+            }
+        )
+        if not lsf_registered:
+            assertions.append(
+                {
+                    "name": "b13.lsf_control_fixture_registration",
+                    "status": "FAIL",
+                    "detail": json.dumps(lsf, sort_keys=True)[:1600],
+                }
+            )
+
+        for row in rows:
+            assertions.append(
+                {
+                    "name": f"b13.fault.{row['race_id']}",
+                    "status": row["status"],
+                    "detail": json.dumps(
+                        {
+                            "task_ref": row.get("task_ref"),
+                            "pid": row.get("pid"),
+                            "timeout_seconds": row.get("timeout_seconds"),
+                            "budget": row.get("budget"),
+                            "evidence": row.get("evidence"),
+                        },
+                        sort_keys=True,
+                    )[:1200],
+                }
+            )
+        local_statuses = [row["status"] for row in rows]
+        # B13 never claims a live LSF control PASS: bstop/bresume/cancel were
+        # not exercised on this host.  The registered row stays NOT_VERIFIED.
+        lsf_status = "NOT_VERIFIED"
+        exit_code, result, reason = _b13_exit_semantics(local_statuses, lsf_status)
+        local_pass = all(status == "PASS" for status in local_statuses)
+        if not local_pass:
+            exit_code, result = EXIT_FAIL, "FAIL"
+            reason = "local_fault_row_failed"
+        if lsf["missing_prerequisites"]:
+            reason = "lsf_prerequisite_missing:" + ",".join(lsf["missing_prerequisites"])
+        elif lsf_registered:
+            reason = "lsf_control_live_not_exercised"
+        if any(item["status"] == "FAIL" for item in assertions):
+            exit_code, result = EXIT_FAIL, "FAIL"
+            reason = reason or "assertion_failed"
+        assertions.append(
+            {
+                "name": "b13.local_fault_rows",
+                "status": "PASS" if local_pass else "FAIL",
+                "detail": ",".join(f"{row['race_id']}={row['status']}" for row in rows),
+            }
+        )
+        _b13_write_json(
+            out_dir / "races.json",
+            {
+                "schema": "acp2.b13.races.v1",
+                "candidate_revision": B13_CANDIDATE_REVISION,
+                "controller": extensions.get("b13.controller"),
+                "races": rows,
+                "dsh": dsh_row,
+                "lsf_control": lsf,
+            },
+        )
+        exit_semantics = {
+            "schema": "acp2.b13.exit-semantics.v1",
+            "local_statuses": {row["race_id"]: row["status"] for row in rows},
+            "lsf_control_status": lsf_status,
+            "exit_code": exit_code,
+            "result": result,
+            "reason": reason,
+            "rule": (
+                "0 only if every Local fault row PASS and the LSF control row is "
+                "PASS/NOT_REQUIRED; 2 when Local PASS but LSF is NOT_VERIFIED; "
+                "1 on any Local failure"
+            ),
+        }
+        _b13_write_json(out_dir / "exit-semantics.json", exit_semantics)
+        extensions.update(
+            {
+                "b13.task_ref": next(
+                    (row.get("task_ref") for row in rows if row["race_id"] == "cancel_race"),
+                    None,
+                ),
+                "b13.attempt": next(
+                    (row.get("attempt") for row in rows if row["race_id"] == "cancel_race"),
+                    None,
+                ),
+                "b13.release_id": next(
+                    (row.get("release_id") for row in rows if row["race_id"] == "cancel_race"),
+                    None,
+                ),
+                "b13.submission_id": next(
+                    (row.get("submission_id") for row in rows if row["race_id"] == "cancel_race"),
+                    None,
+                ),
+                "b13.races": [
+                    {
+                        "race_id": row["race_id"],
+                        "fault": row["fault"],
+                        "task_ref": row.get("task_ref"),
+                        "attempt": row.get("attempt"),
+                        "pid": row.get("pid"),
+                        "timeout_seconds": row.get("timeout_seconds"),
+                        "budget": row.get("budget"),
+                        "status": row["status"],
+                        "evidence": row.get("evidence"),
+                    }
+                    for row in rows
+                ],
+                "b13.lsf_control_fixture": lsf,
+                "b13.dsh_disconnect": dsh_row,
+                "b13.exit_semantics": exit_semantics,
+                "b13.reason": reason,
+            }
+        )
+        evidence_files: list[Path] = [
+            out_dir / "races.json",
+            out_dir / "exit-semantics.json",
+            out_dir / "lsf-control-fixture.json",
+            out_dir / "candidate.json",
+            out_dir / "controller.json",
+            out_dir / "mcp-launch.json",
+            out_dir / "dsh-disconnect.json",
+        ]
+        for race in rows:
+            evidence = str(race.get("evidence") or "")
+            if evidence:
+                evidence_files.extend(
+                    path for path in sorted((out_dir / evidence).rglob("*")) if path.is_file()
+                )
+        extensions["b13.artifacts"] = [
+            {
+                "path": str(path.relative_to(out_dir)),
+                "size_bytes": path.stat().st_size,
+                "sha256": _b13_sha256(path),
+            }
+            for path in evidence_files
+            if path.is_file()
+        ]
+        extensions["b13.cleanup"] = {
+            "controller_running_after_scenario": _b13_listener_pid(urlparse(base).port or 18771),
+            "active_tasks": [
+                row.get("task_ref")
+                for row in rows
+                if row.get("status") != "PASS" and row.get("task_ref")
+            ],
+            "note": "the executor stops the single B13 Controller after the run",
+        }
+    else:
+        assertions.append(
+            {
+                "name": "b13.candidate_identity_blocked",
+                "status": "FAIL",
+                "detail": "Controller health/P1 record does not match the frozen B13 candidate",
+            }
+        )
+        extensions["b13.reason"] = "candidate_identity_mismatch"
+        return EXIT_FAIL, assertions, extensions
+
+    return exit_code, assertions, extensions
+
+
 def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
     if args.out:
         return str(Path(args.out).resolve())
@@ -4974,10 +7503,16 @@ def dry_run_commands(
             f"--out {shlex.quote(out)}"
         )
     elif spec.scenario == "control-recovery":
-        commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task --controller "
-            f"{shlex.quote(controller)} query {shlex.quote(fixture)}"
+        commands.append(f"curl -fsS {shlex.quote(controller + '/api/health')}")
+        control_command = (
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario control-recovery --phase {shlex.quote(phase_name)} "
+            f"--controller {shlex.quote(controller)} --fixture {shlex.quote(fixture)} "
+            f"--out {shlex.quote(out)}"
         )
+        if args.launch:
+            control_command += f" --launch {shlex.quote(str(args.launch))}"
+        commands.append(control_command)
     elif spec.scenario == "approval-budget":
         commands.append(
             f"{shlex.quote(sys.executable)} -m acp task plan --controller "
@@ -5199,6 +7734,23 @@ def execute_scenario(
             return code_value
 
         handler = artifact
+    elif spec.scenario == "control-recovery":
+
+        def control_recovery(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_control_recovery(
+                args.controller,
+                str(args.fixture),
+                out_dir,
+                timeout,
+                args.launch,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b13.artifacts", [])
+            outcome["reason"] = extensions.get("b13.reason")
+            return code_value
+
+        handler = control_recovery
     else:
         handler = _b01_stub_handler(spec)
 
@@ -5225,6 +7777,7 @@ def execute_scenario(
         "lsf-singlepoint",
         "three-entry",
         "artifact",
+        "control-recovery",
     }:
         result = (
             "PASS"
@@ -5255,6 +7808,7 @@ def execute_scenario(
         "lsf-singlepoint",
         "three-entry",
         "artifact",
+        "control-recovery",
     }:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -5312,6 +7866,16 @@ def execute_scenario(
             ("release_id", "b11.release_id"),
             ("submission_id", "b11.submission_id"),
             ("operation_id", "b11.operation_id"),
+        ):
+            value = extensions.get(extension)
+            if value is not None and value != "":
+                refs[key] = value
+    if spec.scenario == "control-recovery":
+        for key, extension in (
+            ("job_id", "b13.task_ref"),
+            ("attempt", "b13.attempt"),
+            ("release_id", "b13.release_id"),
+            ("submission_id", "b13.submission_id"),
         ):
             value = extensions.get(extension)
             if value is not None and value != "":
@@ -5610,6 +8174,9 @@ def main(argv: list[str] | None = None) -> int:
             )
     if "launch" in phase.required_args and not Path(args.launch).is_file():
         return _write_prerequisite_result(spec, phase_name, phase, args, "launch_missing")
+    if spec.scenario == "control-recovery" and args.launch and not Path(args.launch).is_file():
+        print(f"usage error: --launch does not exist: {args.launch}", file=sys.stderr)
+        return EXIT_USAGE
     if "fixture" in phase.required_args and not Path(args.fixture).is_file():
         return _write_prerequisite_result(spec, phase_name, phase, args, "fixture_missing")
     if spec.scenario == "three-entry":

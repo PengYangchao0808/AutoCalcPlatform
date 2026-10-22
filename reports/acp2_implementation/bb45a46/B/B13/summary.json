@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "contract_version": "1.1.0",
+  "generated_at": "2026-10-22T22:51:05Z",
+  "runs": [
+    "control-recovery-main-20261022T225006Z-719835-3b3f6d59.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

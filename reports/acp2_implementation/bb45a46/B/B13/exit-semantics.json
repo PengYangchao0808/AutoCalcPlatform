@@ -1,0 +1,15 @@
+{
+  "exit_code": 2,
+  "local_statuses": {
+    "adapter_eof": "PASS",
+    "cancel_race": "PASS",
+    "controller_restart": "PASS",
+    "publication_failure": "PASS",
+    "timeout_cancel": "PASS"
+  },
+  "lsf_control_status": "NOT_VERIFIED",
+  "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+  "result": "NOT_VERIFIED",
+  "rule": "0 only if every Local fault row PASS and the LSF control row is PASS/NOT_REQUIRED; 2 when Local PASS but LSF is NOT_VERIFIED; 1 on any Local failure",
+  "schema": "acp2.b13.exit-semantics.v1"
+}
