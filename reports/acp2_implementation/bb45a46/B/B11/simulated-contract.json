@@ -1,0 +1,82 @@
+{
+  "SIMULATED": true,
+  "assertions": [
+    {
+      "SIMULATED": true,
+      "detail": "job.json + task.json uploaded before the bsub spy is reached",
+      "name": "scheduler_markers_before_bsub",
+      "status": "PASS",
+      "test": "test_submission_orders_release_markers_and_submission_id_before_bsub"
+    },
+    {
+      "SIMULATED": true,
+      "detail": "release bound before bsub; a release-hash failure leaves bsub_calls == 0",
+      "name": "release_id_verified_before_bsub",
+      "status": "PASS",
+      "test": "test_submission_orders_release_markers_and_submission_id_before_bsub; test_release_verification_failure_aborts_before_bsub"
+    },
+    {
+      "SIMULATED": true,
+      "detail": "submit_state=intent + submission_id + lease persisted before the submit call",
+      "name": "submission_record_persisted_before_bsub",
+      "status": "PASS",
+      "test": "test_submit_intent_with_submission_id_is_persisted_before_submit"
+    },
+    {
+      "SIMULATED": true,
+      "bsub_calls": 1,
+      "name": "bsub_exactly_once",
+      "status": "PASS",
+      "test": "test_submission_orders_release_markers_and_submission_id_before_bsub"
+    },
+    {
+      "SIMULATED": true,
+      "attempt_after_reconcile": 1,
+      "bsub_calls_after_reconcile": 1,
+      "bsub_calls_before_reconcile": 1,
+      "name": "lost_response_reconciles_same_submission_no_resubmit",
+      "status": "PASS",
+      "submission_id_after_reconcile": "same",
+      "test": "test_lost_bsub_reply_reconciles_same_submission_without_resubmit"
+    },
+    {
+      "SIMULATED": true,
+      "detail": "explicit prepare publishes once; pull digest matches; generation/freshness checked",
+      "name": "prepare_pull_digest_generation",
+      "status": "PASS",
+      "test": "test_prepare_digest_generation_cold_cache_and_old_attempt"
+    },
+    {
+      "SIMULATED": true,
+      "detail": "cold serve returns served=false/source=not_prepared and fetcher.calls stays empty",
+      "name": "cold_cache_not_prepared_without_fetch",
+      "status": "PASS",
+      "test": "test_prepare_digest_generation_cold_cache_and_old_attempt"
+    },
+    {
+      "SIMULATED": true,
+      "detail": "attempt=2 read of attempt=1 bytes is refused without fetch",
+      "name": "old_attempt_rejected",
+      "status": "PASS",
+      "test": "test_prepare_digest_generation_cold_cache_and_old_attempt"
+    },
+    {
+      "SIMULATED": true,
+      "detail": "_job_read_root returns RemoteStructureCache.job_root(job_id); record.work_dir is never the read root",
+      "name": "remote_read_root_not_work_dir",
+      "status": "PASS",
+      "test": "test_remote_result_root_uses_controlled_cache_not_work_dir"
+    }
+  ],
+  "boundary": "FakeSSHClient/FakeSFTP phase-2 scheduler spy; no real cluster, no real bsub.",
+  "command": "PYTHONPATH=<repo>/src <acp2-dev>/venvs/b/bin/python -m pytest tests/test_acp2_runtime_lsf_scenario.py tests/test_remote_phase1.py tests/test_remote_phase4.py -q",
+  "is_live": false,
+  "note": "This proves the remote contract at a simulated scheduler boundary. It is not a real LSF execution and must not be read as one.",
+  "pytest_exit_file": "pytest.exit",
+  "pytest_file": "pytest.txt",
+  "result": "70 passed",
+  "schema": "acp2.b11.simulated-contract.v1",
+  "status": "PASS",
+  "test_file": "tests/test_acp2_runtime_lsf_scenario.py",
+  "test_file_sha256": "1341e1ed0de50c70c5861bfc7f1dc26fb343f18ac43de73f0703834954aec785"
+}

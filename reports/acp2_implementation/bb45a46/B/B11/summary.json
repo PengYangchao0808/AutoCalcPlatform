@@ -1,0 +1,95 @@
+{
+  "candidate": {
+    "client_revision": "NOT_VERIFIED",
+    "executed_harness_revision": "f1935c19e3ed1397394b68339872a84f7d40ad130b088c5fbad7dc9f5126e89c",
+    "p1_harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+    "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a"
+  },
+  "candidate_label": "bb45a46",
+  "control_fixture": {
+    "fixture_id": "fx-control-recovery-lsf-v1",
+    "owner": "B13",
+    "task_ref": null
+  },
+  "evidence_files": [
+    "p1-revision.json",
+    "timeout-derivation.json",
+    "live-gap.json",
+    "simulated-contract.json",
+    "h3-matrix-row.json",
+    "pytest.txt",
+    "pytest.exit",
+    "ruff-check.txt",
+    "ruff-check.exit",
+    "ruff-format.txt",
+    "ruff-format.exit",
+    "validator.txt",
+    "validator.exit",
+    "live/",
+    "fixture-registry-check.json",
+    "usage-check.txt"
+  ],
+  "fixture": {
+    "backend": "lsf",
+    "budget": {
+      "cores": 1,
+      "jobs": 1,
+      "memory_mb": 1024,
+      "status": "frozen_unallocated",
+      "walltime_s": 300
+    },
+    "evidence_owner": "B11",
+    "fixture_id": "fx-lsf-singlepoint-v1",
+    "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+    "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+    "request_owner": "B",
+    "reusable_by": [
+      "B11",
+      "B14a",
+      "B14b"
+    ],
+    "status": "NOT_VERIFIED"
+  },
+  "h3_status": "OPEN",
+  "live": {
+    "command_file": "live/live-command.txt",
+    "exit_code": 2,
+    "exit_file": "live/live-exit.txt",
+    "no_job_created": true,
+    "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+    "receipt": "reports/acp2_implementation/bb45a46/B/B11/live/lsf-singlepoint-live-20261022T202229Z-644324-12963006.json",
+    "remote_job_attempted": false,
+    "status": "NOT_VERIFIED"
+  },
+  "normal_completion_task_ref": null,
+  "schema": "acp2.b11.summary.v1",
+  "simulated_contract": {
+    "SIMULATED": true,
+    "file": "simulated-contract.json",
+    "pytest": "70 passed",
+    "status": "PASS"
+  },
+  "timeout_derivation": {
+    "derived_seconds": 2400,
+    "file": "timeout-derivation.json",
+    "harness_timeout_seconds": 2400.0,
+    "maxima": {
+      "cleanup_seconds": 60,
+      "margin_seconds": 120,
+      "max_prepare_seconds": 120,
+      "max_queue_wait_seconds": 1800,
+      "max_run_seconds": 300
+    },
+    "registry_matches": true,
+    "row_matches": true
+  },
+  "timeouts": {
+    "acceptance_timeout_seconds": 2400.0,
+    "client_request_seconds": null,
+    "client_request_timeout_seconds": 2400.0,
+    "queue_wait_seconds": null,
+    "queue_wait_status": "NOT_VERIFIED",
+    "science_runtime_seconds": null,
+    "science_runtime_status": "NOT_VERIFIED"
+  }
+}

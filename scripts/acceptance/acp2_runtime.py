@@ -40,6 +40,7 @@ import urllib.request
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -280,20 +281,23 @@ B_SCENARIOS: dict[str, ScenarioSpec] = {
                 "B11",
                 "submit",
                 "remote",
-                3600,
-                args=("fixture", "out"),
+                # B07 froze the LSF maxima; the arithmetic sum (1800 + 300 +
+                # 120 + 60 + 120 = 2400) is authoritative and main() re-derives
+                # it from fixture-runs.json before execution.
+                2400,
+                args=("fixture", "launch", "out"),
                 controller=True,
-                prerequisites=("fixture", "controller"),
+                prerequisites=("fixture", "launch", "controller"),
                 side_effects=("one LSF submission",),
             ),
             "live": _phase(
                 "B11",
                 "submit",
                 "remote",
-                3600,
-                args=("fixture", "out"),
+                2400,
+                args=("fixture", "launch", "out"),
                 controller=True,
-                prerequisites=("fixture", "controller"),
+                prerequisites=("fixture", "launch", "controller"),
                 side_effects=("one LSF submission",),
             ),
         },
@@ -891,6 +895,16 @@ def _platform_matrix_errors(
                 errors.append(f"fixture_platform_refs_not_null:{key}")
         return errors
     if evidence_kind != "live":
+        return errors
+
+    prereq_blocked = document.get("result") == "NOT_VERIFIED" and bool(
+        _extension_str(document, "b01.prerequisite_failure")
+        or _extension_str(document, "b11.prerequisite_missing")
+    )
+    if prereq_blocked:
+        for key in PLATFORM_REF_KEYS:
+            if refs[key] is not None:
+                errors.append(f"live_prereq_ref_not_null:{key}")
         return errors
 
     if operation_class in (None, "", "discover", "standalone", "prepare"):
@@ -3168,6 +3182,734 @@ def _run_local_singlepoint(
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
 
 
+B11_FIXTURE_ID = "fx-lsf-singlepoint-v1"
+B11_LSF_TOOLS = ("bsub", "bjobs", "bhosts", "bqueues")
+B11_TIMEOUT_FIELDS = (
+    "max_queue_wait_seconds",
+    "max_run_seconds",
+    "max_prepare_seconds",
+    "cleanup_seconds",
+    "margin_seconds",
+)
+B11_CLIENT_REQUEST_TIMEOUT_SECONDS = 2400.0
+B11_TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
+
+
+def _b11_bases(out_dir: Path) -> list[Path]:
+    """Candidate evidence bases for the B11 registry/P1 records."""
+    bases: list[Path] = []
+    here = out_dir.resolve()
+    for _ in range(4):
+        here = here.parent
+        bases.append(here)
+    evidence_root = os.environ.get("ACP2_EVIDENCE")
+    if evidence_root:
+        bases.append(Path(evidence_root) / "B")
+    bases.append(REPO_ROOT / "reports" / "acp2_implementation" / "bb45a46" / "B")
+    unique: list[Path] = []
+    for base in bases:
+        if base not in unique:
+            unique.append(base)
+    return unique
+
+
+def _b11_pick_json(out_dir: Path, relative: str) -> tuple[dict[str, Any], Path | None]:
+    for base in _b11_bases(out_dir):
+        candidate = base / relative
+        if candidate.is_file():
+            return _b10_read_json(candidate), candidate
+    return {}, None
+
+
+def _b11_p1_candidate(out_dir: Path) -> tuple[dict[str, Any], list[str], Path | None]:
+    document, path = _b11_pick_json(out_dir, "environment/p1-candidate.json")
+    errors: list[str] = []
+    server = str(document.get("server_revision") or "")
+    if not re.fullmatch(r"[0-9a-f]{40}", server):
+        errors.append("server_revision")
+    client = str(document.get("client_revision") or "")
+    if client != "NOT_VERIFIED" and not re.fullmatch(r"[0-9a-f]{40}", client):
+        errors.append("client_revision")
+    harness = str(document.get("harness_revision") or "")
+    if not HEX64.match(harness):
+        errors.append("harness_revision")
+    if document.get("candidate_label") != "bb45a46":
+        errors.append("candidate_label")
+    if path is None:
+        errors.append("p1_candidate_missing")
+    return document, errors, path
+
+
+def _b11_timeout_derivation(out_dir: Path) -> tuple[int | None, dict[str, Any]]:
+    """Derive the LSF harness timeout from B07's frozen fixture maxima only."""
+    registry, path = _b11_pick_json(out_dir, "fixture-runs.json")
+    rows = registry.get("fixtures") if isinstance(registry.get("fixtures"), list) else []
+    row = next(
+        (
+            item
+            for item in rows
+            if isinstance(item, dict) and item.get("fixture_id") == B11_FIXTURE_ID
+        ),
+        None,
+    )
+    maxima = {field: (row or {}).get(field) for field in B11_TIMEOUT_FIELDS}
+    integers_ok = all(isinstance(value, int) and value >= 0 for value in maxima.values())
+    derived = sum(int(value) for value in maxima.values()) if integers_ok else None
+    row_timeout = (row or {}).get("scenario_timeout_seconds")
+    registry_timeout = registry.get("lsf_timeout_seconds")
+    row_matches = derived is not None and row_timeout == derived
+    registry_matches = row_matches and registry_timeout == derived
+    detail = {
+        "registry": str(path) if path is not None else None,
+        "fixture_id": B11_FIXTURE_ID,
+        "maxima": maxima,
+        "derived_seconds": derived,
+        "row_scenario_timeout_seconds": row_timeout,
+        "registry_lsf_timeout_seconds": registry_timeout,
+        "row_matches": row_matches,
+        "registry_matches": registry_matches,
+        "formula": " + ".join(B11_TIMEOUT_FIELDS),
+    }
+    return (derived if registry_matches else None), detail
+
+
+def _b11_ssh_credentials_present() -> bool:
+    if os.environ.get("SSH_AUTH_SOCK"):
+        return True
+    ssh_dir = Path.home() / ".ssh"
+    try:
+        entries = list(ssh_dir.iterdir())
+    except OSError:
+        return False
+    return any(
+        entry.is_file()
+        and (
+            (entry.name.startswith("id_") and not entry.name.endswith(".pub"))
+            or entry.name == "config"
+        )
+        for entry in entries
+    )
+
+
+def _b11_lsf_prerequisites() -> dict[str, Any]:
+    tools = {tool: shutil.which(tool) for tool in B11_LSF_TOOLS}
+    credentials = _b11_ssh_credentials_present()
+    observed = {
+        "ACP_LSF_NODE": os.environ.get("ACP_LSF_NODE") or None,
+        "LSF_ENVDIR": os.environ.get("LSF_ENVDIR") or None,
+        **{f"which:{tool}": path for tool, path in tools.items()},
+        "which:ssh": shutil.which("ssh"),
+        "ssh_credentials": credentials,
+    }
+    missing: list[str] = []
+    if not observed["ACP_LSF_NODE"]:
+        missing.append("ACP_LSF_NODE")
+    if not observed["LSF_ENVDIR"]:
+        missing.append("LSF_ENVDIR")
+    for tool, path in tools.items():
+        if path is None:
+            missing.append(tool)
+    if observed["which:ssh"] is None:
+        missing.append("ssh")
+    elif not credentials:
+        missing.append("ssh_credentials")
+    return {"observed": observed, "missing": missing}
+
+
+def _b11_submission_id(job_id: str, attempt: int) -> str:
+    material = f"{job_id}:{int(attempt or 1)}"
+    return "sub_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
+
+def _b11_iso_seconds(value: Any) -> float | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _b11_timings(
+    job: Mapping[str, Any], client_request: float | None, timeout: float
+) -> dict[str, Any]:
+    created = _b11_iso_seconds(job.get("created_at") or job.get("queued_at"))
+    started = _b11_iso_seconds(job.get("started_at"))
+    finished = _b11_iso_seconds(
+        job.get("completed_at") or job.get("finished_at") or job.get("updated_at")
+    )
+    queue_wait = started - created if started is not None and created is not None else None
+    science = finished - started if finished is not None and started is not None else None
+    return {
+        "queue_wait_seconds": queue_wait,
+        "queue_wait_status": "RECORDED" if queue_wait is not None else "NOT_VERIFIED",
+        "science_runtime_seconds": science,
+        "science_runtime_status": "RECORDED" if science is not None else "NOT_VERIFIED",
+        "client_request_seconds": client_request,
+        "client_request_timeout_seconds": B11_CLIENT_REQUEST_TIMEOUT_SECONDS,
+        "acceptance_timeout_seconds": timeout,
+    }
+
+
+def _b11_http_get(url: str, timeout: float) -> tuple[int, bytes]:
+    request = urllib.request.Request(url, headers={"Accept": "*/*"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return int(response.status), response.read()
+    except urllib.error.HTTPError as exc:
+        return int(exc.code), exc.read()
+
+
+def _b11_mcp_status(probe: _McpStdioProbe, request_id: int, task_id: str) -> dict[str, Any]:
+    result = probe.request(
+        request_id,
+        "tools/call",
+        {
+            "name": "acp_status",
+            "arguments": {"reference": {"kind": "job", "id": task_id}},
+        },
+    )
+    if result.get("isError"):
+        raise RuntimeError(f"acp_status error: {result.get('structuredContent')}")
+    data = (result.get("structuredContent") or {}).get("data") or {}
+    if not isinstance(data, dict):
+        raise ValueError("acp_status returned a non-object projection")
+    return data
+
+
+def _b11_prepare_manifest(
+    probe: _McpStdioProbe, base: str, task_id: str, attempt: int, key: str, timeout: float
+) -> tuple[dict[str, Any], int, str]:
+    result = probe.request(
+        200,
+        "tools/call",
+        {
+            "name": "acp_prepare_artifact",
+            "arguments": {
+                "purpose": "artifact",
+                "job_id": task_id,
+                "attempt": attempt,
+                "artifact_id": "manifest",
+                "idempotency_key": key,
+            },
+        },
+    )
+    if result.get("isError"):
+        raise RuntimeError(f"acp_prepare_artifact error: {result.get('structuredContent')}")
+    data = (result.get("structuredContent") or {}).get("data") or {}
+    operation_ref = data.get("operation_ref")
+    operation_id = str(
+        operation_ref.get("id") if isinstance(operation_ref, Mapping) else operation_ref or ""
+    ) or str(data.get("operation_id") or "")
+    if not operation_id:
+        raise RuntimeError("acp_prepare_artifact returned no operation id")
+    deadline = time.monotonic() + timeout
+    projection: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        code, raw = _b11_http_get(
+            base + f"/api/v1/operations/{quote(operation_id, safe='')}",
+            min(60.0, timeout),
+        )
+        if code == 200:
+            payload = json.loads(raw.decode("utf-8"))
+            projection = payload if isinstance(payload, dict) else {}
+            state = str(projection.get("state") or "").lower()
+            availability = str(projection.get("availability") or "").lower()
+            if availability == "ready" or state in {"succeeded", "completed"}:
+                return projection, code, operation_id
+            if state == "failed":
+                raise RuntimeError(
+                    f"prepare operation {operation_id} failed: {projection.get('error')}"
+                )
+        time.sleep(0.5)
+    raise TimeoutError(f"prepare operation {operation_id} did not reach readiness")
+
+
+def _b11_run_live(
+    controller: str,
+    launch_path: str,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    base = controller.rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {}
+    probe: _McpStdioProbe | None = None
+    reconnect: _McpStdioProbe | None = None
+    submitted_at = time.monotonic()
+    try:
+        launch = json.loads(Path(launch_path).read_text(encoding="utf-8"))
+        if not isinstance(launch, dict):
+            raise ValueError("launch descriptor must be a JSON object")
+        xyz_text = Path(fixture_path).read_text(encoding="utf-8")
+        key = "b11-" + uuid.uuid4().hex[:24]
+        before = _controller_task_count(base, timeout)
+        probe = _McpStdioProbe(launch, timeout)
+        probe.request(
+            1,
+            "initialize",
+            {
+                "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                "capabilities": {},
+                "clientInfo": {"name": "acp2-b11-driver", "version": "1"},
+            },
+        )
+        probe.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        probe.request(2, "tools/list", {})
+        try:
+            submitted = probe.request(
+                3,
+                "tools/call",
+                {
+                    "name": "acp_submit",
+                    "arguments": _submit_arguments(xyz_text, key, project_id=None),
+                },
+            )
+        except TimeoutError as exc:
+            extensions["b11.client_timeout"] = str(exc)
+            extensions["b11.timeouts"] = _b11_timings({}, None, timeout)
+            extensions["b11.submission_unknown"] = True
+            extensions["b11.no_resubmit"] = True
+            extensions["b11.reason"] = "client_request_timeout_no_resubmit"
+            assertions.append(
+                {
+                    "name": "client_request_timeout_no_resubmit",
+                    "status": "NOT_VERIFIED",
+                    "detail": f"{exc}; submission may be unknown; no automatic resubmit",
+                }
+            )
+            return EXIT_NOT_VERIFIED, assertions, extensions
+        client_request = time.monotonic() - submitted_at
+        if submitted.get("isError"):
+            raise RuntimeError(f"acp_submit error: {submitted.get('structuredContent')}")
+        task_id = _submit_task_id(submitted)
+        if not task_id:
+            raise RuntimeError("acp_submit returned no task id")
+
+        deadline = time.monotonic() + timeout
+        job: dict[str, Any] = {}
+        while time.monotonic() < deadline:
+            payload = _http_json(
+                base + f"/api/v1/jobs/{quote(task_id, safe='')}",
+                min(60.0, timeout),
+            )
+            job = payload if isinstance(payload, dict) else {}
+            if str(job.get("status") or "").lower() in B11_TERMINAL_STATUSES:
+                break
+            time.sleep(1.0)
+        after = _controller_task_count(base, timeout)
+        status = str(job.get("status") or "").lower()
+        if status not in B11_TERMINAL_STATUSES:
+            extensions.update(
+                {
+                    "b11.task_ref": task_id,
+                    "b11.deadline_exceeded": True,
+                    "b11.submission_retained": True,
+                }
+            )
+            assertions.append(
+                {
+                    "name": "acceptance_deadline",
+                    "status": "NOT_VERIFIED",
+                    "detail": (
+                        f"job still {status or 'unknown'} at deadline; "
+                        "submission retained, no resubmit"
+                    ),
+                }
+            )
+            return EXIT_NOT_VERIFIED, assertions, extensions
+
+        result = job.get("result") if isinstance(job.get("result"), dict) else {}
+        remote = result.get("remote") if isinstance(result.get("remote"), dict) else {}
+        attempt = int(job.get("attempt") or 0)
+        generated_submission_id = _b11_submission_id(task_id, attempt)
+        lsf_job_id = str(result.get("lsf_job_id") or job.get("remote_job_id") or "")
+
+        job_path = quote(task_id, safe="")
+        code, receipt_raw = _b11_http_get(
+            base + f"/api/v1/jobs/{job_path}/files/execution_receipt.json",
+            min(60.0, timeout),
+        )
+        receipt = json.loads(receipt_raw.decode("utf-8")) if code == 200 and receipt_raw else {}
+        code, envelope_raw = _b11_http_get(
+            base + f"/api/v1/jobs/{job_path}/files/WORK/00_RUNTIME/frozen/envelope.json",
+            min(60.0, timeout),
+        )
+        envelope = json.loads(envelope_raw.decode("utf-8")) if code == 200 and envelope_raw else {}
+        code, listing_raw = _b11_http_get(
+            base + f"/api/v1/jobs/{job_path}/remote-files", min(60.0, timeout)
+        )
+        listing = json.loads(listing_raw.decode("utf-8")) if code == 200 and listing_raw else {}
+        remote_names = {
+            str(item.get("name")) for item in listing.get("files") or [] if isinstance(item, dict)
+        }
+        code, script_raw = _b11_http_get(
+            base + f"/api/v1/jobs/{job_path}/remote-files/submit.lsf",
+            min(60.0, timeout),
+        )
+        script_sha = hashlib.sha256(script_raw).hexdigest() if code == 200 else None
+
+        release_id = str(receipt.get("release_id") or "")
+        submission_id = str(receipt.get("submission_id") or "")
+        markers_ok = {"job.json", "task.json"} <= remote_names
+        submit_ok = before + 1 == after
+        completed_ok = status == "completed"
+        bsub_ok = bool(re.fullmatch(r"[0-9]+", lsf_job_id))
+        submission_ok = (
+            submission_id == generated_submission_id
+            and str(remote.get("submission_id") or "") == generated_submission_id
+            and int(receipt.get("attempt") or -1) == attempt
+        )
+        receipt_ok = (
+            str(receipt.get("state") or "").lower() == "completed"
+            and int(job.get("exit_code") if job.get("exit_code") is not None else -1) == 0
+            and bool(receipt.get("result_digest"))
+        )
+        release_ok = (
+            bool(release_id)
+            and release_id == str(envelope.get("release_id") or "")
+            and release_id == str(remote.get("code_release") or "")
+        )
+
+        cold_code, _cold_body = _b11_http_get(
+            base + f"/api/v1/jobs/{job_path}/prepared/manifest?attempt={attempt}",
+            min(60.0, timeout),
+        )
+        projection, _, operation_id = _b11_prepare_manifest(
+            probe, base, task_id, attempt, key + "-prepare", timeout
+        )
+        artifact_ref = projection.get("artifact_ref")
+        artifact_ref = artifact_ref if isinstance(artifact_ref, dict) else {}
+        generation = int(artifact_ref.get("generation") or 0)
+        artifact_digest = str(artifact_ref.get("digest") or "")
+        pull_code, body = _b11_http_get(
+            base
+            + f"/api/v1/jobs/{job_path}/prepared/manifest?attempt={attempt}"
+            + f"&expected_revision={generation}",
+            min(60.0, timeout),
+        )
+        body_digest = "sha256:" + hashlib.sha256(body).hexdigest() if pull_code == 200 else ""
+        operation_sha = str(projection.get("sha256") or "")
+        digest_ok = bool(operation_sha) and body_digest.removeprefix(
+            "sha256:"
+        ) == operation_sha.removeprefix("sha256:")
+        generation_ok = generation == int(
+            projection.get("basis_revision") or 0
+        ) and generation == int(projection.get("expected_revision") or 0)
+        old_attempt_code, _ = _b11_http_get(
+            base
+            + f"/api/v1/jobs/{job_path}/prepared/manifest?attempt={attempt + 1}"
+            + f"&expected_revision={generation}",
+            min(60.0, timeout),
+        )
+
+        probe.close()
+        probe = None
+        reconnect = _McpStdioProbe(launch, timeout)
+        reconnect.request(
+            1,
+            "initialize",
+            {
+                "protocolVersion": launch.get("protocol_version", "2025-06-18"),
+                "capabilities": {},
+                "clientInfo": {"name": "acp2-b11-reconnect", "version": "1"},
+            },
+        )
+        reconnect.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        reconnect.request(2, "tools/list", {})
+        reread = _b11_mcp_status(reconnect, 3, task_id)
+        after_reconnect = _controller_task_count(base, timeout)
+        reconnect_ok = (
+            str(reread.get("job_id") or reread.get("task_id") or "") == task_id
+            and after_reconnect == after
+            and int(reread.get("attempt") or 0) == attempt
+        )
+
+        timings = _b11_timings(job, client_request, timeout)
+        extensions.update(
+            {
+                "b11.task_ref": task_id,
+                "b11.attempt": attempt,
+                "b11.release_id": release_id,
+                "b11.submission_id": submission_id,
+                "b11.lsf_job_id": lsf_job_id,
+                "b11.operation_id": operation_id,
+                "b11.manifest_generation": generation,
+                "b11.remote_dir": result.get("remote_dir"),
+                "b11.remote_node": result.get("node") or remote.get("node"),
+                "b11.remote_host": result.get("host"),
+                "b11.remote_command_line": result.get("command_line"),
+                "b11.remote_files": sorted(remote_names),
+                "b11.submit_script_sha256": script_sha,
+                "b11.submit_script_observed": script_sha is not None,
+                "b11.lsf_command_note": (
+                    "The Controller remote runner executed bsub; this harness records the "
+                    "observed remote submit.lsf and the parsed LSF id, not a generated command "
+                    "as real execution."
+                ),
+                "b11.prepare": {
+                    "state": projection.get("state"),
+                    "availability": projection.get("availability"),
+                    "sha256": operation_sha,
+                    "artifact_digest": artifact_digest,
+                    "generation": generation,
+                    "pull_http_status": pull_code,
+                    "cold_cache_http_status": cold_code,
+                    "old_attempt_http_status": old_attempt_code,
+                },
+                "b11.timings": timings,
+                "b11.receipt": receipt,
+                "b11.envelope_release": envelope.get("release_id"),
+            }
+        )
+        assertions.extend(
+            [
+                {
+                    "name": "one_mcp_submission_one_task",
+                    "status": "PASS" if submit_ok else "FAIL",
+                    "detail": f"task_count_before={before} after={after}",
+                },
+                {
+                    "name": "job_completed",
+                    "status": "PASS" if completed_ok else "FAIL",
+                    "detail": f"status={status} exit_code={job.get('exit_code')}",
+                },
+                {
+                    "name": "real_bsub_id",
+                    "status": "PASS" if bsub_ok else "FAIL",
+                    "detail": f"lsf_job_id={lsf_job_id!r}",
+                },
+                {
+                    "name": "submission_record_matches",
+                    "status": "PASS" if submission_ok else "FAIL",
+                    "detail": (
+                        f"receipt={submission_id!r} "
+                        f"derived={generated_submission_id!r} attempt={attempt}"
+                    ),
+                },
+                {
+                    "name": "terminal_receipt",
+                    "status": "PASS" if receipt_ok else "FAIL",
+                    "detail": f"state={receipt.get('state')} digest={receipt.get('result_digest')}",
+                },
+                {
+                    "name": "release_id_verified",
+                    "status": "PASS" if release_ok else "FAIL",
+                    "detail": f"receipt={release_id!r} envelope={envelope.get('release_id')!r}",
+                },
+                {
+                    "name": "scheduler_markers_present",
+                    "status": "PASS" if markers_ok else "FAIL",
+                    "detail": (
+                        f"remote_files={sorted(remote_names)} "
+                        "(ordering proved by the SIMULATED contract test)"
+                    ),
+                },
+                {
+                    "name": "cold_cache_read_not_prepared",
+                    "status": "PASS" if cold_code == 409 else "NOT_VERIFIED",
+                    "detail": (
+                        f"http_status={cold_code} (409 proves not_prepared; "
+                        "200 means the terminal prefetch was already warm)"
+                    ),
+                },
+                {
+                    "name": "prepare_artifact_completed",
+                    "status": "PASS" if projection.get("availability") == "ready" else "FAIL",
+                    "detail": (
+                        f"operation={operation_id} availability={projection.get('availability')}"
+                    ),
+                },
+                {
+                    "name": "artifact_digest_generation_verified",
+                    "status": "PASS"
+                    if digest_ok and generation_ok and pull_code == 200
+                    else "FAIL",
+                    "detail": (
+                        f"pull={pull_code} digest={body_digest} generation={generation} "
+                        f"operation_sha={operation_sha}"
+                    ),
+                },
+                {
+                    "name": "old_attempt_rejected",
+                    "status": "PASS" if old_attempt_code == 409 else "FAIL",
+                    "detail": f"attempt={attempt + 1} http_status={old_attempt_code}",
+                },
+                {
+                    "name": "reconnect_same_task_no_new_submission",
+                    "status": "PASS" if reconnect_ok else "FAIL",
+                    "detail": f"task_count_after={after_reconnect} attempt={reread.get('attempt')}",
+                },
+                {
+                    "name": "timeouts_recorded_separately",
+                    "status": (
+                        "PASS"
+                        if timings["queue_wait_seconds"] is not None
+                        and timings["science_runtime_seconds"] is not None
+                        else "NOT_VERIFIED"
+                    ),
+                    "detail": json.dumps(timings, sort_keys=True),
+                },
+            ]
+        )
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        TimeoutError,
+    ) as exc:
+        extensions["b11.probe_error"] = f"{type(exc).__name__}: {exc}"
+        assertions.append({"name": "b11_probe", "status": "FAIL", "detail": str(exc)})
+        return EXIT_FAIL, assertions, extensions
+    finally:
+        if probe is not None:
+            probe.close()
+        if reconnect is not None:
+            reconnect.close()
+
+    if any(item["status"] == "FAIL" for item in assertions):
+        return EXIT_FAIL, assertions, extensions
+    if any(item["status"] != "PASS" for item in assertions):
+        return EXIT_NOT_VERIFIED, assertions, extensions
+    return EXIT_PASS, assertions, extensions
+
+
+def _run_lsf_singlepoint(
+    controller: str | None,
+    launch_path: str,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "submit",
+        "acceptance.target": "remote",
+        "b11.fixture": str(fixture_path),
+        "b11.mcp_launch": str(launch_path),
+    }
+    candidate, candidate_errors, candidate_path = _b11_p1_candidate(out_dir)
+    extensions.update(
+        {
+            "b11.p1_candidate": str(candidate_path) if candidate_path is not None else None,
+            "b11.server_revision": candidate.get("server_revision"),
+            "b11.client_revision": candidate.get("client_revision"),
+            "b11.p1_harness_revision": candidate.get("harness_revision"),
+            "b11.harness_revision": harness_revision(),
+        }
+    )
+    assertions.append(
+        {
+            "name": "p1_candidate_record",
+            "status": "PASS" if not candidate_errors else "FAIL",
+            "detail": (
+                f"server={candidate.get('server_revision')} "
+                f"client={candidate.get('client_revision')} "
+                f"harness={candidate.get('harness_revision')}"
+                if not candidate_errors
+                else "invalid:" + ",".join(candidate_errors)
+            ),
+        }
+    )
+
+    registry, registry_path = _b11_pick_json(out_dir, "fixture-runs.json")
+    rows = registry.get("fixtures") if isinstance(registry.get("fixtures"), list) else []
+    row = next(
+        (
+            item
+            for item in rows
+            if isinstance(item, dict) and item.get("fixture_id") == B11_FIXTURE_ID
+        ),
+        {},
+    )
+    fixture_digest = sha256_file(Path(fixture_path)) if Path(fixture_path).is_file() else ""
+    fixture_path_ok = (
+        bool(row.get("input")) and Path(str(row["input"])).resolve() == Path(fixture_path).resolve()
+    )
+    fixture_digest_ok = bool(row.get("input_digest")) and row.get("input_digest") == fixture_digest
+    extensions.update(
+        {
+            "b11.fixture_registry": str(registry_path) if registry_path is not None else None,
+            "b11.fixture_input_digest": fixture_digest,
+            "b11.fixture_row": row,
+        }
+    )
+    assertions.append(
+        {
+            "name": "fixture_matches_registry",
+            "status": "PASS" if fixture_path_ok and fixture_digest_ok else "FAIL",
+            "detail": (
+                f"path_match={fixture_path_ok} digest_match={fixture_digest_ok} "
+                f"digest={fixture_digest}"
+            ),
+        }
+    )
+
+    derived, derivation = _b11_timeout_derivation(out_dir)
+    extensions["b11.timeout_derivation"] = derivation
+    assertions.append(
+        {
+            "name": "harness_timeout_derived",
+            "status": "PASS"
+            if derived is not None and float(derived) == float(timeout)
+            else "FAIL",
+            "detail": (
+                f"derived={derived} effective={timeout} "
+                f"matches={derivation.get('registry_matches')}"
+            ),
+        }
+    )
+
+    prerequisites = _b11_lsf_prerequisites()
+    extensions["b11.lsf_prerequisites"] = prerequisites
+    missing = list(prerequisites["missing"])
+    for name in ("ACP_LSF_NODE", "LSF_ENVDIR", *B11_LSF_TOOLS, "ssh", "ssh_credentials"):
+        if name in missing:
+            assertions.append(
+                {
+                    "name": f"prerequisite_{name}",
+                    "status": "NOT_VERIFIED",
+                    "detail": f"{name} is not available on the acceptance host",
+                }
+            )
+    if missing:
+        extensions["b11.prerequisite_missing"] = ",".join(missing)
+        extensions["b11.reason"] = "lsf_prerequisite_missing:" + ",".join(missing)
+        extensions["b11.no_job_created"] = True
+        extensions["b11.timeouts"] = _b11_timings({}, None, timeout)
+        return EXIT_NOT_VERIFIED, assertions, extensions
+
+    if not controller:
+        extensions["b11.reason"] = "missing_controller"
+        assertions.append(
+            {
+                "name": "controller_reachable",
+                "status": "NOT_VERIFIED",
+                "detail": "no --controller supplied",
+            }
+        )
+        return EXIT_NOT_VERIFIED, assertions, extensions
+    if not controller_reachable(controller):
+        extensions["b11.reason"] = "controller_unreachable"
+        assertions.append(
+            {"name": "controller_reachable", "status": "NOT_VERIFIED", "detail": controller}
+        )
+        return EXIT_NOT_VERIFIED, assertions, extensions
+
+    code, live_assertions, live_extensions = _b11_run_live(
+        controller, launch_path, fixture_path, out_dir, timeout
+    )
+    assertions.extend(live_assertions)
+    extensions.update(live_extensions)
+    return code, assertions, extensions
+
+
 def _b10_cli_query(
     controller: str,
     task_id: str,
@@ -3468,8 +4210,8 @@ def dry_run_commands(
         )
     elif spec.scenario == "lsf-singlepoint":
         commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task plan --controller "
-            f"{shlex.quote(controller)} --task-dir {shlex.quote(fixture)}"
+            "command -v bsub bjobs bhosts bqueues ssh && "
+            "printenv ACP_LSF_NODE LSF_ENVDIR SSH_AUTH_SOCK"
         )
     elif spec.scenario == "artifact":
         commands.append(
@@ -3522,6 +4264,10 @@ def dry_run_commands(
         harness_command += ["--fixture", fixture]
     if "launch" in phase.required_args:
         harness_command += ["--launch", launch]
+    if spec.scenario == "lsf-singlepoint":
+        derived, _ = _b11_timeout_derivation(Path(out))
+        if derived is not None:
+            harness_command += ["--timeout", str(derived)]
     commands.append(" ".join(shlex.quote(part) for part in harness_command))
     return commands
 
@@ -3657,6 +4403,22 @@ def execute_scenario(
             return code_value
 
         handler = local_singlepoint
+    elif spec.scenario == "lsf-singlepoint":
+
+        def lsf_singlepoint(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_lsf_singlepoint(
+                args.controller,
+                str(args.launch),
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["reason"] = extensions.get("b11.reason")
+            return code_value
+
+        handler = lsf_singlepoint
     elif spec.scenario == "three-entry":
 
         def three_entry(_ledger: CleanupLedger) -> int:
@@ -3692,6 +4454,7 @@ def execute_scenario(
         "env-runtime",
         "submit-replay",
         "local-singlepoint",
+        "lsf-singlepoint",
         "three-entry",
     }:
         result = (
@@ -3720,6 +4483,7 @@ def execute_scenario(
         "env-runtime",
         "submit-replay",
         "local-singlepoint",
+        "lsf-singlepoint",
         "three-entry",
     }:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
@@ -3760,6 +4524,17 @@ def execute_scenario(
         release_id = extensions.get("b10.release_id")
         if isinstance(release_id, str) and release_id:
             refs["release_id"] = release_id
+    if spec.scenario == "lsf-singlepoint":
+        for key, extension in (
+            ("job_id", "b11.task_ref"),
+            ("attempt", "b11.attempt"),
+            ("release_id", "b11.release_id"),
+            ("submission_id", "b11.submission_id"),
+            ("operation_id", "b11.operation_id"),
+        ):
+            value = extensions.get(extension)
+            if value is not None and value != "":
+                refs[key] = value
     run_path, _ = write_result(
         out_dir,
         scenario=spec.scenario,
@@ -4016,19 +4791,36 @@ def main(argv: list[str] | None = None) -> int:
         print(f"usage error: missing required argument(s): {rendered}", file=sys.stderr)
         return EXIT_USAGE
 
-    if spec.scenario == "local-singlepoint":
-        if not args.launch:
-            print(
-                "usage error: local-singlepoint requires --launch <MCP stdio launch JSON>; "
-                "the real MCP path is mandatory and the harness never starts a Controller",
-                file=sys.stderr,
-            )
+    if spec.scenario in {"local-singlepoint", "lsf-singlepoint"} and not args.launch:
+        print(
+            f"usage error: {spec.scenario} requires --launch <MCP stdio launch JSON>; "
+            "the real MCP path is mandatory and the harness never starts a Controller",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    if (
+        spec.scenario in {"local-singlepoint", "lsf-singlepoint"}
+        and not Path(args.launch).is_file()
+    ):
+        print(f"usage error: --launch does not exist: {args.launch}", file=sys.stderr)
+        return EXIT_USAGE
+    if spec.scenario == "lsf-singlepoint":
+        if not Path(args.fixture).is_file():
+            print(f"usage error: --fixture does not exist: {args.fixture}", file=sys.stderr)
             return EXIT_USAGE
-        if not Path(args.launch).is_file():
-            print(f"usage error: --launch does not exist: {args.launch}", file=sys.stderr)
-            return EXIT_USAGE
+        if args.timeout is None:
+            derived, derivation = _b11_timeout_derivation(Path(args.out))
+            if derived is None:
+                return _write_prerequisite_result(
+                    spec,
+                    phase_name,
+                    phase,
+                    args,
+                    "lsf_timeout_derivation_failed:" + json.dumps(derivation, sort_keys=True),
+                )
+            args.timeout = float(derived)
 
-    if phase.controller_required:
+    if phase.controller_required and spec.scenario != "lsf-singlepoint":
         if not args.controller:
             return _write_prerequisite_result(spec, phase_name, phase, args, "missing_controller")
         if not controller_reachable(args.controller):
