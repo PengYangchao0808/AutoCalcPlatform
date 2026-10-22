@@ -96,6 +96,7 @@ SINGLEPOINT_ALIAS = "installed-singlepoint"
 ARTIFACT_ALIAS = "validate-artifacts"
 DA_TS_ALIAS = "validate-da-ts"
 DA_IRC_ALIAS = "validate-da-irc"
+DA_REPORT_ALIAS = "validate-da-report"
 H2_HANDOFF_RELPATH = "docs/reference/next-change/acp2-contracts/science/handoff-H2.json"
 PRODUCTION_RUN_ROOTS = ("/var/lib/acp/runs",)
 
@@ -111,6 +112,18 @@ DA_EXECUTION_SEMANTIC_CANDIDATE = "B.B20a.exec"
 DA_READY_ARTIFACT_ID = "B20a-ready:da-execution-interface-preflight"
 DA_CANDIDATE_SCHEMA = "acp2.science.da-candidate-selection"
 DA_IRC_SELECTION_SCHEMA = "acp2.science.da-irc-selection"
+CONSTRUCTED_EVIDENCE_REPORT_SCHEMA = "acp2.science.constructed-evidence-report"
+DA_REPORT_MISSING_GAPS = (
+    "B20a-exec execution artifacts are absent: no authorized --input-manifest carrying "
+    f"{DA_EXECUTION_ARTIFACT_ID!r} (sub-deliverable {DA_EXECUTION_SUB_DELIVERABLE!r}, "
+    f"semantic candidate {DA_EXECUTION_SEMANTIC_CANDIDATE!r}) was supplied; the real "
+    "Diels-Alder evidence report stays NOT_VERIFIED",
+    "the registered platform ids 'da-runtime' and 'da-research-live' are absent: "
+    "--platform-registry was not supplied and the platform registry is unpublished to "
+    "track A; the harness never invents the ids or a row",
+    "B01 acceptance-result.schema.json / acp2.acceptance.v1 is unpublished, so the "
+    "report receipt remains provisional",
+)
 DA_STARTING_STRUCTURE_SOURCES = frozenset(
     {"user_input", "frozen_known_candidate", "generated_candidate"}
 )
@@ -6110,6 +6123,996 @@ def _execute_validate_da_irc(
     )
 
 
+# ── A-19b: Diels-Alder evidence-report scenario ────────────────────────────
+
+
+def _unpack_evidence_report(
+    plan: Mapping[str, Any], fixture_dir: Path
+) -> tuple[dict[str, Any] | None, bool, list[str]]:
+    """Return the evidence-report wrapper and whether it is constructed.
+
+    A constructed wrapper is unwrapped only when it declares
+    ``constructed: true`` and carries the schema-shaped ``report`` plus the
+    schema-shaped ``provenance``; its read root may be absolute or relative to
+    the frozen fixture directory.  A real platform manifest must carry an
+    absolute read root.
+    """
+    document = plan.get("input_manifest")
+    if not isinstance(document, Mapping):
+        return None, False, ["input manifest must be a JSON object"]
+    if document.get("schema") == CONSTRUCTED_EVIDENCE_REPORT_SCHEMA:
+        if document.get("constructed") is not True:
+            return None, True, ["constructed evidence-report wrapper must declare constructed=true"]
+        if not isinstance(document.get("report"), Mapping):
+            return None, True, ["constructed evidence-report wrapper has no report object"]
+        if not isinstance(document.get("provenance"), Mapping):
+            return None, True, ["constructed evidence-report wrapper has no provenance object"]
+        raw_root = document.get("read_root")
+        if raw_root == FIXTURE_READ_ROOT_TOKEN:
+            root = fixture_dir.resolve()
+        elif isinstance(raw_root, str) and raw_root and not Path(raw_root).is_absolute():
+            root = (fixture_dir / raw_root).resolve()
+        elif isinstance(raw_root, str) and raw_root and Path(raw_root).is_absolute():
+            root = Path(raw_root)
+        else:
+            return (
+                None,
+                True,
+                ["constructed evidence-report read_root must be absolute or fixture-relative"],
+            )
+        payload = dict(document)
+        payload["read_root"] = str(root)
+        return payload, True, []
+    if not isinstance(document.get("report"), Mapping):
+        return (
+            None,
+            False,
+            [
+                "input manifest is not a constructed evidence-report wrapper and has no "
+                "report object"
+            ],
+        )
+    if not isinstance(document.get("provenance"), Mapping):
+        return None, False, ["input manifest has no provenance object"]
+    raw_root = document.get("read_root")
+    if not isinstance(raw_root, str) or not raw_root or not Path(raw_root).is_absolute():
+        return None, False, ["real evidence-report read_root must be an absolute path"]
+    return dict(document), False, []
+
+
+def _da_report_completed_steps(
+    wrapper: Mapping[str, Any], read_root: Path
+) -> tuple[list[dict[str, Any]] | None, list[str], list[str]]:
+    """Verify the report's claim sources come from actually completed steps.
+
+    A report claim may cite only an artifact produced by a step that reached
+    ``completed``.  The step record carries its own terminal state and digest;
+    it never substitutes for the execution facts or the claim status.
+    """
+    from cccp.analysis.research.evidence import (
+        Digest,
+        EvidenceContractError,
+        verify_artifact_digest,
+    )
+
+    raw_steps = wrapper.get("completed_steps")
+    if not isinstance(raw_steps, list) or not raw_steps:
+        return (
+            None,
+            ["the report must record the actually completed steps that produced its claims"],
+            [],
+        )
+    rows: list[dict[str, Any]] = []
+    contradictions: list[str] = []
+    for index, item in enumerate(raw_steps):
+        if not isinstance(item, Mapping):
+            contradictions.append(f"completed_steps[{index}] must be a JSON object")
+            continue
+        step_id = item.get("step_id")
+        task_kind = item.get("task_kind")
+        terminal_state = item.get("terminal_state")
+        artifact = item.get("artifact")
+        sha256 = item.get("sha256")
+        if not isinstance(step_id, str) or not step_id:
+            contradictions.append(f"completed_steps[{index}].step_id is missing")
+        if not isinstance(task_kind, str) or not task_kind:
+            contradictions.append(f"completed_steps[{index}].task_kind is missing")
+        if terminal_state != "completed":
+            contradictions.append(
+                f"completed_steps[{index}] task {step_id!r} has terminal_state "
+                f"{terminal_state!r}, not 'completed'; a claim cannot be generated from it"
+            )
+        if not isinstance(artifact, str) or not artifact:
+            contradictions.append(f"completed_steps[{index}].artifact is missing")
+            continue
+        try:
+            digest = Digest(value=str(sha256))
+            _resolved, actual = verify_artifact_digest(artifact, digest, read_root)
+        except (EvidenceContractError, ValueError) as exc:
+            contradictions.append(f"completed_steps[{index}]: {exc}")
+            continue
+        raw_inputs = item.get("inputs", [])
+        if not isinstance(raw_inputs, list):
+            contradictions.append(f"completed_steps[{index}].inputs must be a JSON array")
+            continue
+        inputs: list[dict[str, Any]] = []
+        for input_index, raw_input in enumerate(raw_inputs):
+            if not isinstance(raw_input, Mapping):
+                contradictions.append(
+                    f"completed_steps[{index}].inputs[{input_index}] must be a JSON object"
+                )
+                continue
+            input_artifact = raw_input.get("artifact")
+            input_sha = raw_input.get("sha256")
+            if not isinstance(input_artifact, str) or not input_artifact:
+                contradictions.append(
+                    f"completed_steps[{index}].inputs[{input_index}].artifact is missing"
+                )
+                continue
+            try:
+                input_digest = Digest(value=str(input_sha))
+                _input_resolved, input_actual = verify_artifact_digest(
+                    input_artifact, input_digest, read_root
+                )
+            except (EvidenceContractError, ValueError) as exc:
+                contradictions.append(f"completed_steps[{index}].inputs[{input_index}]: {exc}")
+                continue
+            inputs.append(
+                {
+                    "artifact": input_artifact,
+                    "declared_digest": input_digest.value,
+                    "actual_digest": input_actual,
+                    "status": "PASS",
+                }
+            )
+        rows.append(
+            {
+                "step_id": step_id,
+                "task_kind": task_kind,
+                "terminal_state": terminal_state,
+                "artifact": artifact,
+                "declared_digest": digest.value,
+                "actual_digest": actual,
+                "inputs": inputs,
+                "status": "PASS",
+            }
+        )
+    if contradictions:
+        return None, [], contradictions
+    return rows, [], []
+
+
+def _da_report_limits(
+    fixture_document: Mapping[str, Any], wrapper: Mapping[str, Any]
+) -> tuple[dict[str, Any] | None, list[str], list[str]]:
+    """Validate the report's sampling/tolerance/model/failed-candidate limits."""
+    from cccp.analysis.research.evidence import FailedCandidate, ReportLimits
+
+    gaps: list[str] = []
+    contradictions: list[str] = []
+    limits = wrapper.get("limits")
+    if not isinstance(limits, Mapping):
+        return None, ["report limits object is missing"], []
+    raw_failed = limits.get("failed_candidates")
+    failed: list[dict[str, Any]] = []
+    if not isinstance(raw_failed, list):
+        gaps.append(
+            "report limits must record a failed_candidates array (empty is an explicit "
+            "statement that no candidate failed)"
+        )
+    else:
+        for index, item in enumerate(raw_failed):
+            if not isinstance(item, Mapping):
+                contradictions.append(f"limits.failed_candidates[{index}] must be a JSON object")
+                continue
+            candidate_id = item.get("candidate_id")
+            stage = item.get("stage")
+            status = item.get("status")
+            reason = item.get("reason")
+            if not isinstance(candidate_id, str) or not candidate_id:
+                contradictions.append(f"limits.failed_candidates[{index}].candidate_id is missing")
+            if not isinstance(stage, str) or not stage:
+                contradictions.append(f"limits.failed_candidates[{index}].stage is missing")
+            if status not in ("rejected", "failed", "not_attempted"):
+                contradictions.append(
+                    f"limits.failed_candidates[{index}].status must be rejected, failed "
+                    "or not_attempted"
+                )
+            if not isinstance(reason, str) or not reason.strip():
+                contradictions.append(f"limits.failed_candidates[{index}].reason must be non-empty")
+            failed.append(
+                {
+                    "candidate_id": candidate_id,
+                    "stage": stage,
+                    "status": status,
+                    "reason": reason,
+                }
+            )
+    raw_boundaries = limits.get("model_boundaries")
+    boundaries: list[str] = []
+    if not isinstance(raw_boundaries, list) or not raw_boundaries:
+        gaps.append("report limits must record at least one model boundary")
+    else:
+        for index, item in enumerate(raw_boundaries):
+            if not isinstance(item, str) or not item.strip():
+                contradictions.append(
+                    f"limits.model_boundaries[{index}] must be a non-empty string"
+                )
+            else:
+                boundaries.append(item)
+    sampling = fixture_document.get("sampling_boundaries")
+    tolerances = fixture_document.get("tolerances")
+    if not isinstance(sampling, Mapping):
+        gaps.append("the frozen fixture has no sampling_boundaries object")
+    if not isinstance(tolerances, Mapping):
+        gaps.append("the frozen fixture has no tolerances object")
+    if gaps or contradictions:
+        return None, gaps, contradictions
+    try:
+        limits_document = ReportLimits(
+            conformation_sampling=dict(sampling),
+            tolerances=dict(tolerances),
+            model_boundaries=tuple(boundaries),
+            failed_candidates=tuple(
+                FailedCandidate(
+                    candidate_id=row["candidate_id"],
+                    stage=row["stage"],
+                    status=row["status"],
+                    reason=row["reason"],
+                )
+                for row in failed
+            ),
+        )
+    except ValueError as exc:
+        return None, [], [str(exc)]
+    return limits_document.to_dict(), [], []
+
+
+def _da_report_provenance_check(
+    provenance: Any,
+    fixture_document: Mapping[str, Any],
+    *,
+    constructed: bool,
+) -> dict[str, Any]:
+    """Check the attached provenance against the frozen fixture identity."""
+    science = fixture_document.get("science_parameters") or {}
+    state = science.get("electronic_state") or {}
+    contradictions: list[str] = []
+    derivation = provenance.derivation
+    if provenance.result_kind != "electronic_structure":
+        contradictions.append(
+            "the Diels-Alder report requires an electronic_structure provenance, got "
+            f"{provenance.result_kind!r}"
+        )
+    method = getattr(derivation, "method", None)
+    basis = getattr(derivation, "basis", None)
+    electronic_state = getattr(derivation, "electronic_state", None)
+    conditions = provenance.conditions
+    if method is None or basis is None or electronic_state is None:
+        contradictions.append(
+            "electronic-structure provenance must carry method, basis and electronic state"
+        )
+    else:
+        if method.method_id != science.get("method"):
+            contradictions.append(
+                f"provenance method {method.method_id!r} differs from the frozen fixture "
+                f"method {science.get('method')!r}"
+            )
+        if basis.basis_id != science.get("basis"):
+            contradictions.append(
+                f"provenance basis {basis.basis_id!r} differs from the frozen fixture "
+                f"basis {science.get('basis')!r}"
+            )
+        if electronic_state.charge != state.get("charge"):
+            contradictions.append(
+                "provenance charge differs from the frozen fixture electronic state"
+            )
+        if electronic_state.multiplicity != state.get("target_multiplicity"):
+            contradictions.append(
+                "provenance multiplicity differs from the frozen fixture electronic state"
+            )
+    if conditions.temperature_kelvin != science.get("temperature_k"):
+        contradictions.append("provenance temperature differs from the frozen fixture temperature")
+    if conditions.standard_state != science.get("standard_state"):
+        contradictions.append(
+            "provenance standard_state differs from the frozen fixture standard state"
+        )
+    if conditions.phase != science.get("phase"):
+        contradictions.append("provenance phase differs from the frozen fixture phase")
+    if conditions.pressure_pa is not None and science.get("pressure_pa") is not None:
+        if float(conditions.pressure_pa) != float(science["pressure_pa"]):
+            contradictions.append("provenance pressure differs from the frozen fixture pressure")
+    if not constructed and "constructed" in provenance.software.software_version.lower():
+        contradictions.append("a real report cannot carry a constructed software version label")
+    return {
+        "status": "FAIL" if contradictions else "PASS",
+        "contradictions": contradictions,
+        "reference_state_declared": conditions.reference_state is not None,
+        "summary": {
+            "method": None if method is None else method.method_id,
+            "basis": None if basis is None else basis.basis_id,
+            "charge": None if electronic_state is None else electronic_state.charge,
+            "multiplicity": (None if electronic_state is None else electronic_state.multiplicity),
+            "temperature_kelvin": conditions.temperature_kelvin,
+            "standard_state": conditions.standard_state,
+            "reference_state": conditions.reference_state,
+            "software_id": provenance.software.software_id,
+            "software_version": provenance.software.software_version,
+            "plugin_versions": provenance.plugin_versions,
+        },
+    }
+
+
+def _da_report_h4_readiness(
+    *,
+    constructed: bool,
+    real_run: bool,
+    report: Any,
+    provenance_ok: bool,
+) -> dict[str, Any]:
+    """Record H4 readiness separately from scenario result and claim status."""
+    statuses = report.claim_statuses
+    required = {
+        "H4-01-valid-ts": (
+            "c-ts-first-order-saddle-candidate",
+            "A real valid TS: one imaginary mode and a mapped mode.",
+        ),
+        "H4-02-bidirectional-irc": (
+            "c-ts-connects-intended-endpoints",
+            "Bidirectional IRC with both specified endpoints reached.",
+        ),
+        "H4-03-endpoint-connectivity": (
+            "c-ts-connects-intended-endpoints",
+            "Endpoint geometry and bond-topology mapping prove the declared path.",
+        ),
+        "H4-04-comparable-energy": (
+            "c-electronic-activation-barrier-comparable",
+            "Activation energy is comparable under frozen conditions and units.",
+        ),
+    }
+    rows: list[dict[str, Any]] = []
+    positive = real_run and not constructed and provenance_ok
+    for row_id, (claim_id, requirement) in required.items():
+        claim_status = statuses.get(claim_id, "not_evaluated")
+        if claim_status != "supported":
+            positive = False
+        rows.append(
+            {
+                "row_id": row_id,
+                "requirement": requirement,
+                "scenario_result": "PASS" if claim_id in statuses else "NOT_VERIFIED",
+                "claim_status": claim_status,
+                "state": "open",
+                "reason": (
+                    "the report carries a supported claim, but H4 closure is published by "
+                    "A-20 only with real positive evidence"
+                    if claim_status == "supported"
+                    else f"claim status is {claim_status}; H4 needs a supported real claim"
+                ),
+            }
+        )
+    rows.append(
+        {
+            "row_id": "H4-05-honest-negatives",
+            "requirement": (
+                "Honest negative cases are recorded; inconclusive/failed never becomes positive."
+            ),
+            "scenario_result": "PASS",
+            "claim_status": "not_evaluated",
+            "state": "open",
+            "reason": (
+                "the report records failed candidates and missing evidence without "
+                "promoting them; a constructed report is never real negative evidence"
+            ),
+        }
+    )
+    return {
+        "closed": False,
+        "status": "open",
+        "readiness": "positive-evidence-present" if positive else "open",
+        "positive_evidence": positive,
+        "real_run": real_run,
+        "constructed": constructed,
+        "rows": rows,
+        "reason": (
+            "H4 closure is published by A-20 from real positive evidence. This report "
+            "records scenario result, per-claim status and H4 readiness separately; it "
+            "never closes H4 by itself."
+        ),
+    }
+
+
+def _print_da_report(report_view: Mapping[str, Any]) -> None:
+    print("DA evidence report")
+    print(f"  scenario result: {report_view.get('scenario_result')}")
+    print(f"  claim status: {report_view.get('claim_status')}")
+    h4 = report_view.get("h4") or {}
+    print(
+        f"  H4 readiness: {h4.get('status')} "
+        f"(closed={h4.get('closed')}, positive_evidence={h4.get('positive_evidence')})"
+    )
+    print("  claim-status table:")
+    print(
+        f"    {'claim_id':52} {'status':13} {'validator':38} "
+        f"{'sources':>7} {'limits':>6} {'missing':>7}"
+    )
+    for row in report_view.get("claim_statuses") or []:
+        validator = row.get("validator_id") or "none"
+        version = row.get("validator_version") or "-"
+        print(
+            f"    {str(row.get('claim_id')):52} {str(row.get('status')):13} "
+            f"{(validator + '@' + version):38} {row.get('source_ref_count', 0):>7} "
+            f"{len(row.get('limitation_ids') or []):>6} "
+            f"{len(row.get('missing_checks') or []):>7}"
+        )
+    provenance = report_view.get("provenance") or {}
+    print(
+        "  provenance: "
+        f"{provenance.get('software_id')} {provenance.get('software_version')} | "
+        f"{provenance.get('method')}/{provenance.get('basis')} | "
+        f"T={provenance.get('temperature_kelvin')} K | "
+        f"standard={provenance.get('standard_state')} | "
+        f"reference={provenance.get('reference_state')} | "
+        f"plugins={provenance.get('plugin_versions')}"
+    )
+    limits = report_view.get("limits") or {}
+    sampling = limits.get("conformation_sampling") or {}
+    print(
+        "  sampling limits: "
+        f"conformer_search={sampling.get('conformer_search')} | "
+        f"md_sampling={sampling.get('md_sampling')} | "
+        f"candidate_paths={sampling.get('max_candidate_paths')} | "
+        f"ts_candidates={sampling.get('max_ts_candidates_per_path')} | "
+        f"conformers_per_endpoint={sampling.get('max_conformers_per_endpoint')}"
+    )
+    print(
+        "  model boundaries: "
+        + "; ".join(str(item) for item in (limits.get("model_boundaries") or []))
+    )
+    failed = limits.get("failed_candidates") or []
+    print(f"  failed candidates: {len(failed)}")
+    for row in failed:
+        print(
+            f"    {row.get('candidate_id')} [{row.get('status')}] "
+            f"{row.get('stage')}: {row.get('reason')}"
+        )
+
+
+def _execute_validate_da_report(
+    args: argparse.Namespace,
+    spec: ScenarioSpec,
+    plan: dict[str, Any],
+    *,
+    started_at: str,
+    argv: list[str],
+) -> int:
+    """Validate the assembled Diels-Alder evidence report without running a job."""
+    receipt = _receipt_protocol()
+    fixture_path = Path(args.fixture)
+    extra: dict[str, Any] = {
+        "scenario_implementation": "A-19b",
+        "fixture_path": str(fixture_path),
+        "input_manifest_path": plan.get("input_manifest_path"),
+        "platform_registry": None,
+        "constructed_fixture": False,
+        "real_run": False,
+        "report": None,
+        "provenance": None,
+        "provenance_audit": None,
+        "claim_statuses": [],
+        "claim_status": None,
+        "claims": [],
+        "h4": None,
+        "limits": None,
+        "gaps": [],
+        "source_verifications": [],
+        "provenance_verifications": [],
+        "model_narrative": None,
+        "model_generated_conclusions_are_evidence": False,
+        "b20a_exec_artifact_id": None,
+        "b20a_exec_sub_deliverable": None,
+        "b20a_exec_semantic_candidate": None,
+        "b20a_ready_cited_as_execution_evidence": False,
+        "execution_provenance": None,
+    }
+    assertions: list[dict[str, Any]] = []
+    export_check: PlatformExportCheck | None = None
+
+    def finish(
+        *,
+        result: str,
+        exit_code: int,
+        reason: str,
+        extra_json: Mapping[str, Any] | None = None,
+        extra_artifacts: list[dict[str, Any]] | None = None,
+    ) -> int:
+        extra["scenario_result"] = result
+        assertions.append({"name": "scenario_executed", "status": result, "detail": reason})
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=reason,
+            started_at=started_at,
+            argv=argv,
+            result=result,
+            exit_code=exit_code,
+            assertions=assertions,
+            platform_export=export_check,
+            extra=extra,
+            extra_json=extra_json,
+            extra_artifacts=extra_artifacts,
+        )
+
+    if plan.get("input_manifest") is None:
+        gaps = list(DA_REPORT_MISSING_GAPS)
+        extra["gaps"] = gaps
+        extra["h4"] = {
+            "closed": False,
+            "status": "open",
+            "positive_evidence": False,
+            "real_run": False,
+            "constructed": False,
+            "rows": [],
+            "reason": "no real evidence report exists; H4 stays open",
+        }
+        assertions.append(
+            {
+                "name": "evidence_report_prerequisites",
+                "status": "NOT_VERIFIED",
+                "detail": "; ".join(gaps),
+            }
+        )
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="evidence report prerequisites missing: " + "; ".join(gaps),
+        )
+
+    try:
+        fixture_document = _load_json(fixture_path)
+    except _InvalidInputError as exc:
+        print(f"usage error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if (
+        not isinstance(fixture_document, Mapping)
+        or fixture_document.get("task_kind") != "diels_alder"
+    ):
+        print(
+            "usage error: validate-da-report requires the Diels-Alder v1 fixture-manifest.json",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+
+    fixture_validation = _validate_da_fixture(fixture_path)
+    extra["fixture_validation"] = fixture_validation
+    assertions.append(
+        {
+            "name": "frozen_fixture_geometry_and_budget",
+            "status": fixture_validation["status"],
+            "detail": "; ".join(fixture_validation["contradictions"]) or None,
+        }
+    )
+    if fixture_validation["status"] != "PASS":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=(
+                "the frozen DA fixture is contradictory: "
+                + "; ".join(fixture_validation["contradictions"])
+            ),
+            extra_json={"fixture-validation.json": fixture_validation},
+        )
+
+    wrapper, constructed, unpack_errors = _unpack_evidence_report(plan, fixture_path.parent)
+    if wrapper is None:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="evidence-report manifest is unusable: " + "; ".join(unpack_errors),
+        )
+    extra["constructed_fixture"] = constructed
+    extra["real_run"] = not constructed
+
+    registry = _platform_registry_view(
+        plan.get("platform_registry_path"),
+        plan.get("platform_registry"),
+        required_ids=DA_REQUIRED_REGISTRY_IDS,
+    )
+    extra["platform_registry"] = registry
+    assertions.append(
+        {
+            "name": "platform_registry_registration",
+            "status": "PASS" if registry.get("registered") else "NOT_VERIFIED",
+            "detail": "; ".join(registry.get("reasons") or []) or None,
+        }
+    )
+    if not constructed and not registry.get("registered"):
+        gaps = list(registry.get("reasons") or [])
+        extra["gaps"] = gaps
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason="registered DA run prerequisite missing: " + "; ".join(gaps),
+        )
+
+    if not constructed:
+        export_check = check_platform_export(wrapper)
+        if not export_check.eligible:
+            return finish(
+                result="FAIL",
+                exit_code=EXIT_FAIL,
+                reason="platform export rejected: " + "; ".join(export_check.reasons),
+            )
+        platform = wrapper.get("platform")
+        binding = platform.get("binding") if isinstance(platform, Mapping) else None
+        binding_attempt = binding.get("attempt") if isinstance(binding, Mapping) else None
+        execution = _da_execution_provenance(platform, binding_attempt)
+        extra["execution_provenance"] = execution
+        extra["b20a_exec_artifact_id"] = execution.get("artifact_id")
+        extra["b20a_exec_sub_deliverable"] = execution.get("sub_deliverable")
+        extra["b20a_exec_semantic_candidate"] = execution.get("semantic_candidate")
+        extra["b20a_ready_cited_as_execution_evidence"] = bool(
+            execution.get("b20a_ready_cited_as_execution_evidence")
+        )
+        assertions.append(
+            {
+                "name": "b20a_exec_execution_evidence",
+                "status": execution["status"],
+                "detail": "; ".join(execution["contradictions"] or execution["reasons"]) or None,
+            }
+        )
+        if execution["status"] == "FAIL":
+            return finish(
+                result="FAIL",
+                exit_code=EXIT_FAIL,
+                reason="B20a-exec provenance rejected: " + "; ".join(execution["contradictions"]),
+            )
+        if execution["status"] != "PASS":
+            return finish(
+                result="NOT_VERIFIED",
+                exit_code=EXIT_NOT_VERIFIED,
+                reason="B20a-exec execution evidence missing: " + "; ".join(execution["reasons"]),
+            )
+
+    try:
+        from cccp.analysis.research.evidence import (
+            EvidenceContractError,
+            EvidenceDigestMismatchError,
+            EvidencePathError,
+            EvidenceReport,
+            EvidenceSourceUnavailableError,
+            ModelConclusionError,
+            reject_model_conclusion_as_evidence,
+            verify_claim_sources,
+        )
+        from cccp.analysis.research.provenance import (
+            PluginIdentity,
+            ProvenanceContractError,
+            ProvenanceDigestMismatchError,
+            ProvenanceSourceUnavailableError,
+            ScientificProvenance,
+            verify_provenance_inputs,
+        )
+    except ImportError as exc:
+        return finish(
+            result="NOT_VERIFIED",
+            exit_code=EXIT_NOT_VERIFIED,
+            reason=f"CCCP science consumer unavailable: {type(exc).__name__}: {exc}",
+        )
+
+    try:
+        reject_model_conclusion_as_evidence(wrapper)
+        report = EvidenceReport.from_dict(wrapper["report"])
+        provenance = ScientificProvenance.from_dict(wrapper["provenance"])
+    except ModelConclusionError as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"model-generated conclusion/validator rejected: {exc}",
+        )
+    except (EvidenceContractError, ProvenanceContractError, KeyError, TypeError, ValueError) as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"evidence report rejected ({type(exc).__name__}): {exc}",
+        )
+
+    plugin_rows: list[dict[str, Any]] = []
+    raw_plugins = wrapper.get("plugins", [])
+    if not isinstance(raw_plugins, list):
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="evidence-report plugins field must be a JSON array",
+        )
+    for index, item in enumerate(raw_plugins):
+        if not isinstance(item, Mapping):
+            return finish(
+                result="FAIL",
+                exit_code=EXIT_FAIL,
+                reason=f"plugins[{index}] must be a JSON object",
+            )
+        plugin_id = item.get("plugin_id")
+        version = item.get("version")
+        if not isinstance(plugin_id, str) or not plugin_id:
+            return finish(
+                result="FAIL",
+                exit_code=EXIT_FAIL,
+                reason=f"plugins[{index}].plugin_id must be a non-empty string",
+            )
+        if not isinstance(version, str) or not version:
+            return finish(
+                result="FAIL",
+                exit_code=EXIT_FAIL,
+                reason=f"plugins[{index}].version must be a non-empty string",
+            )
+        role = item.get("role")
+        plugin_rows.append(
+            PluginIdentity(
+                plugin_id=plugin_id,
+                version=version,
+                role=role if isinstance(role, str) else None,
+            ).to_dict()
+        )
+    extra["plugins"] = plugin_rows
+    extra["plugin_versions"] = {row["plugin_id"]: row["version"] for row in plugin_rows}
+
+    read_root = Path(str(wrapper["read_root"]))
+    completed_steps, step_gaps, step_contradictions = _da_report_completed_steps(wrapper, read_root)
+    assertions.append(
+        {
+            "name": "completed_steps_provenance",
+            "status": ("FAIL" if step_contradictions else "NOT_VERIFIED" if step_gaps else "PASS"),
+            "detail": "; ".join(step_contradictions or step_gaps) or None,
+        }
+    )
+    if step_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="completed-step provenance rejected: " + "; ".join(step_contradictions),
+        )
+    if completed_steps is None:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="completed-step provenance missing: " + "; ".join(step_gaps),
+        )
+    try:
+        source_verifications = verify_claim_sources(report, read_root)
+    except (EvidencePathError, EvidenceSourceUnavailableError) as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"claim source is unavailable: {exc}",
+        )
+    except EvidenceDigestMismatchError as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"claim source digest mismatch: {exc}",
+        )
+    except EvidenceContractError as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"claim source rejected: {exc}",
+        )
+    completed_pairs = {(row["artifact"], row["declared_digest"]) for row in completed_steps}
+    for row in completed_steps:
+        for step_input in row.get("inputs", []):
+            completed_pairs.add((step_input["artifact"], step_input["declared_digest"]))
+    unbacked: list[str] = []
+    for claim in report.claims:
+        for source_ref in claim.source_refs:
+            if (source_ref.artifact_path, source_ref.digest.value) not in completed_pairs:
+                unbacked.append(
+                    f"{claim.claim_id} cites {source_ref.artifact_path!r} which no "
+                    "completed step produced or consumed with that digest"
+                )
+    if unbacked:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="claim evidence is not backed by a completed step: " + "; ".join(unbacked),
+        )
+    extra["completed_steps"] = completed_steps
+    try:
+        provenance_verifications = verify_provenance_inputs(provenance, read_root)
+    except (ProvenanceDigestMismatchError, ProvenanceSourceUnavailableError) as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"provenance input rejected: {exc}",
+        )
+    except ProvenanceContractError as exc:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=f"provenance input rejected: {exc}",
+        )
+    extra["source_verifications"] = [row.to_dict() for row in source_verifications]
+    extra["provenance_verifications"] = list(provenance_verifications)
+    assertions.append(
+        {
+            "name": "claim_source_digests",
+            "status": "PASS",
+            "detail": (
+                f"{len(source_verifications)} claim sources and "
+                f"{len(provenance_verifications)} provenance inputs verified"
+            ),
+        }
+    )
+
+    expected_provenance_digest = provenance.content_digest()
+    if report.provenance_digest is None:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=(
+                "evidence report does not attach a provenance_digest; ScientificProvenance "
+                "must be attached"
+            ),
+        )
+    if report.provenance_digest.value != expected_provenance_digest.value:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=(
+                "evidence report provenance_digest does not match the attached provenance document"
+            ),
+        )
+
+    missing_claim_fields: list[str] = []
+    for claim in report.claims:
+        if claim.validator is None:
+            missing_claim_fields.append(f"{claim.claim_id}: no validator id/version")
+        if not claim.limitations:
+            missing_claim_fields.append(f"{claim.claim_id}: no limitations")
+    if missing_claim_fields:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason=(
+                "every claim must carry status, validator id/version, source refs and "
+                "limitations; " + "; ".join(missing_claim_fields)
+            ),
+        )
+
+    limits_document, limit_gaps, limit_contradictions = _da_report_limits(fixture_document, wrapper)
+    assertions.append(
+        {
+            "name": "report_limits",
+            "status": (
+                "FAIL" if limit_contradictions else "NOT_VERIFIED" if limit_gaps else "PASS"
+            ),
+            "detail": "; ".join(limit_contradictions or limit_gaps) or None,
+        }
+    )
+    if limit_contradictions:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="report limits rejected: " + "; ".join(limit_contradictions),
+        )
+    if limits_document is None:
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="report limits are incomplete: " + "; ".join(limit_gaps),
+        )
+    extra["limits"] = limits_document
+
+    provenance_check = _da_report_provenance_check(
+        provenance, fixture_document, constructed=constructed
+    )
+    extra["provenance_check"] = provenance_check
+    assertions.append(
+        {
+            "name": "provenance_fixture_identity",
+            "status": provenance_check["status"],
+            "detail": "; ".join(provenance_check["contradictions"]) or None,
+        }
+    )
+    if provenance_check["status"] != "PASS":
+        return finish(
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            reason="provenance contradicts the frozen fixture: "
+            + "; ".join(provenance_check["contradictions"]),
+        )
+
+    narrative = wrapper.get("model_narrative")
+    if narrative is not None:
+        if not isinstance(narrative, Mapping) or narrative.get("is_evidence") is not False:
+            return finish(
+                result="FAIL",
+                exit_code=EXIT_FAIL,
+                reason=(
+                    "a model-generated natural-language conclusion cannot be recorded as "
+                    "validated evidence"
+                ),
+            )
+        extra["model_narrative"] = dict(narrative)
+    extra["model_generated_conclusions_are_evidence"] = False
+
+    claim_statuses = report.status_rows()
+    h4 = _da_report_h4_readiness(
+        constructed=constructed,
+        real_run=bool(extra["real_run"]),
+        report=report,
+        provenance_ok=provenance_check["status"] == "PASS",
+    )
+    extra["report"] = report.to_dict()
+    extra["evidence_report"] = report.to_dict()
+    extra["provenance"] = provenance.to_dict()
+    extra["provenance_digest"] = (
+        None if report.provenance_digest is None else report.provenance_digest.to_dict()
+    )
+    provenance_audit = provenance.to_audit_dict()
+    provenance_audit["plugins"] = plugin_rows
+    provenance_audit["plugin_versions"] = extra["plugin_versions"]
+    extra["provenance_audit"] = provenance_audit
+    extra["claim_statuses"] = claim_statuses
+    extra["claim_status_by_id"] = report.claim_statuses
+    extra["per_claim_status"] = report.claim_statuses
+    extra["claim_status"] = report.overall_claim_status
+    extra["claims"] = [claim.to_dict() for claim in report.claims]
+    extra["h4"] = h4
+    extra["h4_readiness"] = h4
+    assertions.append(
+        {
+            "name": "claim_status_separation",
+            "status": "PASS",
+            "detail": (
+                "scenario result is PASS; per-claim statuses are "
+                + ", ".join(f"{row['claim_id']}={row['status']}" for row in claim_statuses)
+                + f"; H4 readiness is {h4['readiness']}"
+            ),
+        }
+    )
+    _print_da_report(
+        {
+            "scenario_result": "PASS",
+            "claim_status": report.overall_claim_status,
+            "h4": h4,
+            "claim_statuses": claim_statuses,
+            "provenance": {
+                **provenance_check["summary"],
+                "plugin_versions": extra["plugin_versions"],
+            },
+            "limits": limits_document,
+        }
+    )
+    reason = (
+        "Diels-Alder evidence report validation completed: scenario PASS; per-claim "
+        "statuses are "
+        + ", ".join(f"{row['claim_id']}={row['status']}" for row in claim_statuses)
+        + f"; H4 readiness is {h4['readiness']} (open, published by A-20)"
+    )
+    return finish(
+        result="PASS",
+        exit_code=EXIT_PASS,
+        reason=reason,
+        extra_json={
+            "fixture-validation.json": fixture_validation,
+            "evidence-report.json": report.to_dict(),
+            "provenance.json": provenance.to_dict(),
+            "provenance-audit.json": provenance_audit,
+            "report-limits.json": limits_document,
+            "completed-steps.json": completed_steps,
+            "claim-statuses.json": claim_statuses,
+            "h4-readiness.json": h4,
+            "artifact-digests.json": {
+                "claim_sources": [row.to_dict() for row in source_verifications],
+                "provenance_inputs": list(provenance_verifications),
+            },
+        },
+    )
+
+
 def _execute(
     args: argparse.Namespace,
     spec: ScenarioSpec,
@@ -6125,6 +7128,12 @@ def _execute(
             file=sys.stderr,
         )
         return EXIT_USAGE
+
+    # The report scenario owns its missing-input handling: an empty
+    # --input-manifest must report the exact B20a-exec/registry gaps rather
+    # than the generic "missing prerequisite" message.
+    if spec.alias == DA_REPORT_ALIAS:
+        return _execute_validate_da_report(args, spec, plan, started_at=started_at, argv=argv)
 
     missing = [error for error in plan["errors"] if error["kind"] == "missing"]
     if missing:
@@ -6218,10 +7227,23 @@ def _dry_run(
     platform_export = None
     registry_view: dict[str, Any] | None = None
     if spec.requires_input_manifest:
-        snapshot_payload, _constructed, _errors = _unpack_snapshot(plan, Path(args.fixture).parent)
-        platform_export = check_platform_export(snapshot_payload)
+        if spec.alias == DA_REPORT_ALIAS:
+            _wrapper, _constructed, _errors = _unpack_evidence_report(
+                plan, Path(args.fixture).parent
+            )
+        else:
+            snapshot_payload, _constructed, _errors = _unpack_snapshot(
+                plan, Path(args.fixture).parent
+            )
+            platform_export = check_platform_export(snapshot_payload)
         registry_view = _platform_registry_view(
-            plan.get("platform_registry_path"), plan.get("platform_registry")
+            plan.get("platform_registry_path"),
+            plan.get("platform_registry"),
+            required_ids=(
+                DA_REQUIRED_REGISTRY_IDS
+                if spec.alias in (DA_TS_ALIAS, DA_IRC_ALIAS, DA_REPORT_ALIAS)
+                else (REGISTERED_OPT_FREQ_RUN_ID,)
+            ),
         )
     document = {
         "dry_run": True,
@@ -6366,6 +7388,9 @@ def _help_epilog() -> str:
             "  acp2_science.py --scenario science:validate-da-irc --fixture"
             " diels_alder/v1/fixture-manifest.json --input-manifest b20a-exec-irc.json"
             " --platform-registry registry.json --out evidence/",
+            "  acp2_science.py --scenario science:validate-da-report --fixture"
+            " diels_alder/v1/fixture-manifest.json --input-manifest evidence-report.json"
+            " --out evidence/",
         ]
     )
     return "\n".join(lines)
