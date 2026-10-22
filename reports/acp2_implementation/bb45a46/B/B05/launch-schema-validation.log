@@ -1,0 +1,9 @@
+launch_schema_violations= []
+launch_schema=PASS
+tool_count= 8
+tool_names= ['acp_capabilities', 'acp_preflight', 'acp_submit', 'acp_status', 'acp_cancel', 'acp_prepare_artifact', 'acp_read_artifact', 'acp_analyze']
+protocol_version= 2025-06-18
+transport= stdio
+command= <acp2-dev>/venvs/b/bin/python
+args= ['-m', 'acp', 'mcp', 'serve', '--transport', 'stdio', '--controller', 'http://127.0.0.1:18765', '--log-level', 'INFO']
+cwd= <repo>/src

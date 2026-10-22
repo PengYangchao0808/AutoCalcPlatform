@@ -1,0 +1,32 @@
+{
+  "schema": "acp2.controller-start-record.v1",
+  "pid": 81900,
+  "argv": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "-m",
+    "acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18765",
+    "--run-root",
+    "<acp2-dev>/data/b/run-root",
+    "--no-browser",
+    "--log-level",
+    "INFO"
+  ],
+  "cwd": "<acp2-dev>/data/b/controller-config",
+  "pythonpath": "<repo>/src",
+  "release": "0d7f6c9f01007c6dde83c7a4a944c279101aa3a3",
+  "release_source": "git rev-parse HEAD of <repo> (B05 checkout)",
+  "interpreter": "<acp2-dev>/venvs/b/bin/python",
+  "run_root": "<acp2-dev>/data/b/run-root",
+  "db_path": "<acp2-dev>/data/b/run-root/acp_jobs.db",
+  "config": "<acp2-dev>/data/b/controller-config/cccp.yaml",
+  "port": 18765,
+  "bind_host": "127.0.0.1",
+  "production_port": 8765,
+  "production_touched": false
+}

@@ -38,6 +38,11 @@ from acp.core.keywords import make_case_insensitive_type
 
 logger = logging.getLogger(__name__)
 
+_MCP_EXIT_OK: Final[int] = 0
+_MCP_EXIT_USAGE: Final[int] = 2
+_MCP_EXIT_CONTROLLER_UNAVAILABLE: Final[int] = 3
+_MCP_EXIT_STARTUP_ERROR: Final[int] = 4
+
 # ---------------------------------------------------------------------------
 # Logging helpers
 # ---------------------------------------------------------------------------
@@ -2289,6 +2294,136 @@ Examples:
     export.add_argument("--task-dir", default=None, help="Task directory (alternative to --job)")
 
 
+def _add_mcp_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Register ``acp mcp serve`` (B05 stdio adapter, one existing Controller)."""
+    mcp_parser = subparsers.add_parser(
+        "mcp",
+        help="MCP adapter entrypoints (stdio; never starts a Controller)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp mcp serve --transport stdio --controller http://127.0.0.1:18765
+  acp mcp serve --help
+
+Exit codes:
+  0  clean EOF or SIGTERM/SIGINT shutdown
+  2  usage error (bad transport/frame limit, missing controller)
+  3  Controller unreachable or unhealthy at startup
+  4  unexpected adapter startup failure
+        """,
+    )
+    mcp_sub = mcp_parser.add_subparsers(dest="mcp_command", required=True)
+    serve = mcp_sub.add_parser(
+        "serve",
+        help="Serve the MCP adapter over newline-delimited JSON-RPC stdio",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+stdout carries protocol frames only; all diagnostics go to stderr. This
+process never starts or owns a Controller, scheduler or jobs database.
+        """,
+    )
+    serve.add_argument(
+        "--transport",
+        choices=("stdio",),
+        default="stdio",
+        help="Transport to serve (only 'stdio' is supported)",
+    )
+    serve.add_argument(
+        "--controller",
+        default=None,
+        metavar="URL",
+        help="Loopback Controller URL (default: $ACP_CONTROLLER_URL)",
+    )
+    serve.add_argument(
+        "--log-level",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+        default=None,
+        help="stderr log level (default: $ACP2_MCP_LOG_LEVEL or INFO)",
+    )
+    serve.add_argument(
+        "--max-frame-bytes",
+        type=int,
+        default=None,
+        help="Hard per-frame JSON-RPC byte limit (default: 1048576, minimum 1024)",
+    )
+
+
+def _configure_mcp_logging(level: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, level, logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[logging.StreamHandler(sys.stderr)],
+        force=True,
+    )
+    logger.setLevel(getattr(logging, level, logging.INFO))
+
+
+def _handle_mcp_serve(args: argparse.Namespace) -> int:
+    controller = (
+        args.controller
+        or os.environ.get("ACP_CONTROLLER_URL")
+        or os.environ.get("ACP2_CONTROLLER")
+        or ""
+    ).strip()
+    if not controller:
+        print(
+            "acp mcp serve: --controller (or ACP_CONTROLLER_URL) is required",
+            file=sys.stderr,
+        )
+        return _MCP_EXIT_USAGE
+
+    log_level = (args.log_level or os.environ.get("ACP2_MCP_LOG_LEVEL") or "INFO").upper()
+    if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+        print(f"acp mcp serve: invalid log level {log_level!r}", file=sys.stderr)
+        return _MCP_EXIT_USAGE
+
+    from acp_services.entrypoints.mcp_stdio import (
+        MAX_FRAME_BYTES,
+        configure_stdio_logging,
+        run_stdio,
+    )
+
+    max_frame_bytes = MAX_FRAME_BYTES if args.max_frame_bytes is None else args.max_frame_bytes
+    if max_frame_bytes < 1024:
+        print(
+            "acp mcp serve: --max-frame-bytes must be at least 1024",
+            file=sys.stderr,
+        )
+        return _MCP_EXIT_USAGE
+
+    _configure_mcp_logging(log_level)
+    configure_stdio_logging(log_level)
+
+    from acp.services_mcp_bootstrap import build_mcp_runtime
+    from acp_services.entrypoints.controller_client import ControllerClientError
+
+    try:
+        runtime = build_mcp_runtime(controller)
+    except ControllerClientError as exc:
+        logger.error("Controller unavailable at %s: %s", controller, exc.message)
+        return _MCP_EXIT_CONTROLLER_UNAVAILABLE
+    except Exception:
+        logger.exception("MCP adapter startup failed")
+        return _MCP_EXIT_STARTUP_ERROR
+
+    logger.info(
+        "MCP stdio adapter serving controller=%s (candidate_revision=%s)",
+        controller,
+        runtime.health.candidate_revision,
+    )
+    return run_stdio(
+        runtime.server,
+        max_frame_bytes=max_frame_bytes,
+        log_level=log_level,
+    )
+
+
+def _dispatch_mcp(args: argparse.Namespace) -> int:
+    if getattr(args, "mcp_command", None) == "serve":
+        return _handle_mcp_serve(args)
+    return _MCP_EXIT_USAGE
+
+
 def job_submit_command(spec: Any, *, manager: Any | None = None) -> Any:
     """Submit a job through the shared Runtime use case (single execution owner)."""
     commands = job_runtime_commands(manager)
@@ -3978,6 +4113,7 @@ Examples:
     )
 
     _add_task_parser(subparsers)
+    _add_mcp_parser(subparsers)
 
     _normalize_string_choices(parser)
 
@@ -5290,6 +5426,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "task":
         return _dispatch_task(args)
+
+    if args.command == "mcp":
+        return _dispatch_mcp(args)
 
     if args.command != "run":
         parser.print_help()

@@ -1,0 +1,135 @@
+{
+  "schema": "acp2.b05.evidence.v1",
+  "task": "B05 real stdio MCP process and protocol compatibility",
+  "status": "PASS",
+  "revisions": {
+    "server_revision": "0d7f6c9f01007c6dde83c7a4a944c279101aa3a3",
+    "probe_source_revision": "a0185b15c546fbd07919326d581fab13e05000fa",
+    "server_module_root": "<repo>/src",
+    "probe_source_root": "<acp2-dev>/B",
+    "note": "B07 re-runs the same matrix on the frozen H2 candidate"
+  },
+  "controller": {
+    "url": "http://127.0.0.1:18765",
+    "pid": 81900,
+    "run_root": "<acp2-dev>/data/b/run-root",
+    "db_path": "<acp2-dev>/data/b/run-root/acp_jobs.db",
+    "contract_version": "1.0.0",
+    "contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488",
+    "production_8765_touched": false
+  },
+  "launch": {
+    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
+    "command": "<acp2-dev>/venvs/b/bin/python",
+    "args": [
+      "-m",
+      "acp",
+      "mcp",
+      "serve",
+      "--transport",
+      "stdio",
+      "--controller",
+      "http://127.0.0.1:18765",
+      "--log-level",
+      "INFO"
+    ],
+    "cwd": "<repo>/src",
+    "transport": "stdio",
+    "protocol_version": "2025-06-18",
+    "tool_names": [
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_submit",
+      "acp_status",
+      "acp_cancel",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_analyze"
+    ],
+    "schema_validation": "PASS (0 violations)",
+    "credential_scan": "PASS"
+  },
+  "protocol": {
+    "default": "2025-06-18",
+    "supported": [
+      "2025-06-18"
+    ],
+    "negotiation_matrix": [
+      {
+        "case": "same",
+        "requested": "2025-06-18",
+        "negotiated": "2025-06-18",
+        "error": null
+      },
+      {
+        "case": "different-supported",
+        "requested": "2025-03-26",
+        "negotiated": "2025-06-18",
+        "error": null
+      },
+      {
+        "case": "no-common",
+        "requested": "1999-01-01",
+        "negotiated": null,
+        "error": "unsupported_protocol_version"
+      },
+      {
+        "case": "tools-before-init",
+        "requested": null,
+        "negotiated": null,
+        "error": "not_initialized"
+      },
+      {
+        "case": "notification-eof",
+        "requested": "2025-06-18",
+        "negotiated": "2025-06-18",
+        "error": null,
+        "exit_code": 0
+      }
+    ]
+  },
+  "probe": {
+    "exit_code": 0,
+    "stdout": "PASS: read-only stdio diagnostic; full MCP/DSH acceptance remains separate",
+    "receive_frames": 3,
+    "tools_listed": 8,
+    "protocol_version": "2025-06-18",
+    "stdout_stderr_separated": true
+  },
+  "task_count": {
+    "before": 1,
+    "after": 1,
+    "unchanged": true
+  },
+  "tests": {
+    "pytest": "56 passed",
+    "pytest_exit": 0,
+    "ruff_check_exit": 0,
+    "ruff_format_check_exit": 0,
+    "acp_mcp_serve_help_exit": 0,
+    "bad_transport_exit": 2
+  },
+  "b06_deferred_commands": [
+    "preflight",
+    "submit",
+    "cancel",
+    "prepare",
+    "read",
+    "analyze"
+  ],
+  "h2_gate": "DSH official MCP client handshake NOT_VERIFIED (C-owned); no compatibility claimed",
+  "cleanup": {
+    "schema": "acp2.acceptance.cleanup.v1",
+    "controller_pid": 81900,
+    "signal": "SIGTERM",
+    "process_gone": true,
+    "port_18765_free": true,
+    "production_service_touched": false,
+    "leftover_mcp_pids": [],
+    "task_count_before": 1,
+    "task_count_after": 1,
+    "note": "B05 Controller stopped with SIGTERM and reaped; port 18765 verified free; production 8765 untouched; no MCP adapter process left.",
+    "leftover_controller_pids": [],
+    "verified_with": "ps -eo pid,args | grep -E 'python[0-9.]* .*-m acp (mcp|run) serve'"
+  }
+}

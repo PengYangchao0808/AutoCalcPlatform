@@ -1,0 +1,4 @@
+usage: acp mcp serve [-h] [--transport {stdio}] [--controller URL]
+                     [--log-level {DEBUG,INFO,WARNING,ERROR}]
+                     [--max-frame-bytes MAX_FRAME_BYTES]
+acp mcp serve: error: argument --transport: value: invalid choice: 'http' (choose from 'stdio')

@@ -6,7 +6,8 @@ same Service use cases the CLI (B08-1 :mod:`acp_services.entrypoints.machine_out
 and API expose.  It is a *transport adapter*, never a second execution owner:
 
 * :meth:`McpServer.handle` speaks JSON-RPC 2.0 over a caller-supplied mapping
-  (the caller owns stdin/stdout framing) at **one locked protocol version**.
+  (the caller owns stdin/stdout framing) at the **advertised supported set**
+  (default and only tested version: ``2025-06-18``).
 * ``tools/list`` advertises a **closed allowlist** of eight tools; ``tools/call``
   dispatches through a *literal* table keyed by those names.  There is **no**
   arbitrary shell, no ``getattr``/``eval``/``exec``/``importlib`` function-name
@@ -73,6 +74,7 @@ __all__ = [
     # Protocol / transport
     "MCP_PROTOCOL_VERSION",
     "LOCKED_PROTOCOL_VERSIONS",
+    "SUPPORTED_PROTOCOL_VERSIONS",
     "JSONRPC_VERSION",
     "STDIO_TRANSPORT",
     "STDIO_PERMISSION_SCOPE",
@@ -114,12 +116,20 @@ __all__ = [
 # Locked protocol / transport
 # ---------------------------------------------------------------------------
 
-#: The single MCP protocol version this adapter speaks.  It is *locked*: a
-#: client that requests a different version is refused rather than silently
-#: downgraded (see :func:`McpServer._initialize`).
+#: The default MCP protocol version this adapter speaks.  It is also the
+#: version returned when the client does not request one.  A client that
+#: requests an unsupported version is only accepted when it explicitly declares
+#: (via ``protocolVersions``) a version in :data:`SUPPORTED_PROTOCOL_VERSIONS`;
+#: otherwise ``initialize`` fails rather than silently downgrading.
 MCP_PROTOCOL_VERSION = "2025-06-18"
-#: The set of accepted protocol versions (currently exactly one).
+#: The set of explicitly supported protocol versions.  This tuple is the single
+#: source of truth advertised by ``initialize`` (``supportedProtocolVersions``)
+#: and in the ``unsupported_protocol_version`` error data.  Adding a version is
+#: a contract change: it requires the same handler subset to be proven by the
+#: process-level tests and the client matrix.
 LOCKED_PROTOCOL_VERSIONS: tuple[str, ...] = (MCP_PROTOCOL_VERSION,)
+#: Backwards-compatible alias for the advertised supported set.
+SUPPORTED_PROTOCOL_VERSIONS: tuple[str, ...] = LOCKED_PROTOCOL_VERSIONS
 
 JSONRPC_VERSION = "2.0"
 
@@ -561,6 +571,48 @@ def _coerce_str_sequence(value: Any) -> tuple[str, ...]:
     return tuple(str(item) for item in value)
 
 
+def _declared_protocol_versions(value: Any) -> tuple[str, ...]:
+    """Return the client's explicitly declared version set (empty when absent)."""
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)) or not all(
+        isinstance(item, str) and item for item in value
+    ):
+        raise McpProtocolError(
+            JsonRpcErrorCode.INVALID_PARAMS,
+            "protocolVersions must be an array of non-empty version strings",
+        )
+    return tuple(str(item) for item in value)
+
+
+def _negotiate_protocol_version(requested: str | None, declared: tuple[str, ...]) -> str:
+    """Choose a mutually supported version or fail explicitly.
+
+    The client's single ``protocolVersion`` is authoritative when supported.
+    An unsupported request is only downgraded when the client also declares a
+    version we support; otherwise there is no proven common version and
+    ``initialize`` fails (never echoed back silently).
+    """
+    if requested is None:
+        return MCP_PROTOCOL_VERSION
+    if requested in SUPPORTED_PROTOCOL_VERSIONS:
+        return requested
+    common = [version for version in declared if version in SUPPORTED_PROTOCOL_VERSIONS]
+    if common:
+        return MCP_PROTOCOL_VERSION if MCP_PROTOCOL_VERSION in common else common[0]
+    raise McpProtocolError(
+        JsonRpcErrorCode.INVALID_PARAMS,
+        f"unsupported protocol version {requested!r}",
+        data={
+            "code": "unsupported_protocol_version",
+            "supported": list(SUPPORTED_PROTOCOL_VERSIONS),
+            "locked": MCP_PROTOCOL_VERSION,
+            "requested": requested,
+            "client_versions": list(declared),
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Budget (server-enforced caps)
 # ---------------------------------------------------------------------------
@@ -787,11 +839,18 @@ class McpServer:
 
     # -- JSON-RPC transport ------------------------------------------------
 
-    def handle(self, request: Mapping[str, Any]) -> dict[str, Any] | None:
+    def handle(self, request: Any) -> dict[str, Any] | None:
         """Dispatch one JSON-RPC 2.0 request; ``None`` for a notification."""
+        if isinstance(request, list):
+            return self._error_response(
+                None,
+                JsonRpcErrorCode.INVALID_REQUEST,
+                "JSON-RPC batch requests are not supported",
+                {"code": "batch_not_supported"},
+            )
         if not isinstance(request, Mapping):
-            raise McpProtocolError(
-                JsonRpcErrorCode.INVALID_REQUEST, "request must be a JSON object"
+            return self._error_response(
+                None, JsonRpcErrorCode.INVALID_REQUEST, "request must be a JSON object"
             )
         method = request.get("method")
         request_id = request.get("id")
@@ -843,7 +902,10 @@ class McpServer:
             return json.dumps(
                 self._error_response(None, JsonRpcErrorCode.PARSE_ERROR, "parse error")
             )
-        response = self.handle(request)
+        try:
+            response = self.handle(request)
+        except McpProtocolError as exc:
+            response = self._error_response(None, exc.code, str(exc), exc.data)
         return None if response is None else json.dumps(response, ensure_ascii=False)
 
     def _invoke(self, method: str, params: Mapping[str, Any]) -> Any:
@@ -870,18 +932,13 @@ class McpServer:
 
     def _initialize(self, params: Mapping[str, Any]) -> dict[str, Any]:
         requested = params.get("protocolVersion")
-        if requested is not None and str(requested) not in LOCKED_PROTOCOL_VERSIONS:
-            raise McpProtocolError(
-                JsonRpcErrorCode.INVALID_PARAMS,
-                f"unsupported protocol version {requested!r}",
-                data={
-                    "code": "unsupported_protocol_version",
-                    "supported": list(LOCKED_PROTOCOL_VERSIONS),
-                    "locked": MCP_PROTOCOL_VERSION,
-                },
-            )
+        declared = _declared_protocol_versions(params.get("protocolVersions"))
+        negotiated = _negotiate_protocol_version(
+            None if requested is None else str(requested), declared
+        )
         return {
-            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "protocolVersion": negotiated,
+            "supportedProtocolVersions": list(SUPPORTED_PROTOCOL_VERSIONS),
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {"name": MCP_SERVER_NAME, "version": MCP_SERVER_VERSION},
             "instructions": (
@@ -1232,9 +1289,19 @@ def client_matrix() -> tuple[Mapping[str, Any], ...]:
             "client": "stdio-mcp-client",
             "transport": STDIO_TRANSPORT,
             "protocol_version": MCP_PROTOCOL_VERSION,
+            "supported_protocol_versions": list(SUPPORTED_PROTOCOL_VERSIONS),
             "permission_scope": STDIO_PERMISSION_SCOPE,
             "session_coupled": False,
-            "status": "protocol-level mock verified",
+            "status": "real stdio process verified (B05 launch + probe)",
+        },
+        {
+            "client": "dsh-official-mcp-client",
+            "transport": STDIO_TRANSPORT,
+            "protocol_version": MCP_PROTOCOL_VERSION,
+            "supported_protocol_versions": list(SUPPORTED_PROTOCOL_VERSIONS),
+            "permission_scope": STDIO_PERMISSION_SCOPE,
+            "session_coupled": False,
+            "status": "NOT_VERIFIED (H2 gate: real DSH handshake owned by C)",
         },
         {
             "client": "http-sse-mcp-client",
