@@ -1,0 +1,105 @@
+{
+  "schema": "acp2.dsh-compatibility.v1",
+  "frozen_at": "2026-10-22T11:24:16Z",
+  "frozen_by": "C/T-04 (C04)",
+  "evidence_run_root": "/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04",
+  "host": {
+    "uname": "Linux workstation 5.14.0-687.56.1.el9_8.x86_64",
+    "arch": "x86_64",
+    "system_node_untouched": {
+      "path": "/home/xieningke/.opencode/bin/node",
+      "version": "v20.19.0"
+    }
+  },
+  "node": {
+    "version": "22.19.0",
+    "dist_name": "node-v22.19.0-linux-x64",
+    "source_url": "https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz",
+    "checksums_url": "https://nodejs.org/dist/v22.19.0/SHASUMS256.txt",
+    "archive_path": "/ACPServer/acp2-tools/downloads/node-v22.19.0-linux-x64.tar.xz",
+    "archive_sha256": "c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2",
+    "archive_sha256_source": "SHASUMS256.txt entry, independently recomputed; verified before extraction",
+    "home": "/ACPServer/acp2-tools/node-v22.19.0-linux-x64",
+    "executable": "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+    "npm_executable": "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/npm",
+    "npm_version": "10.9.3"
+  },
+  "pnpm": {
+    "version": "11.28.5",
+    "install_method": "npm install --prefix /ACPServer/acp2-tools/pnpm --save-exact pnpm@11.28.5",
+    "prefix": "/ACPServer/acp2-tools/pnpm",
+    "executable": "/ACPServer/acp2-tools/pnpm/node_modules/.bin/pnpm",
+    "verified_version": "11.28.5"
+  },
+  "dsh": {
+    "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+    "revision": "687f282e8625c6b8d11ff58211a90524be2e4317",
+    "revision_subject": "Merge pull request #6408 from deepseek-harness/worktree/release-dsh-0.2.1-rc.2",
+    "checkout_mode": "git clone --no-single-branch; git checkout --detach <revision>",
+    "source": "/ACPServer/acp2-tools/deepseek-harness",
+    "version": "0.2.1-rc.2",
+    "package_manager": "pnpm@11.28.5",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "engines_verbatim": "{\"node\":\"^22.19.0 || >=24.0.0\"}",
+    "engines_satisfied_by_locked_node": true,
+    "reselection": {
+      "required": false,
+      "reason": null
+    },
+    "lockfile": {
+      "path": "/ACPServer/acp2-tools/deepseek-harness/pnpm-lock.yaml",
+      "sha256": "4637cca3b89c4c8d5a147321710e597aa62ec2444a3772ab542be5690893dfe4"
+    },
+    "install": {
+      "argv": "pnpm install --frozen-lockfile",
+      "cwd": "/ACPServer/acp2-tools/deepseek-harness",
+      "exit_code": 0,
+      "evidence": "/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04/06-pnpm-install.txt"
+    },
+    "build": {
+      "argv": "pnpm run build",
+      "cwd": "/ACPServer/acp2-tools/deepseek-harness",
+      "exit_code": 0,
+      "gates": "9 passed, 0 failed, 0 skipped in 213.27s",
+      "evidence": "/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04/07-build-and-version.txt"
+    },
+    "version_probe": {
+      "argv": "pnpm dsh --version",
+      "cwd": "/ACPServer/acp2-tools/deepseek-harness",
+      "exit_code": 0,
+      "stdout": "0.2.1-rc.2"
+    },
+    "source_loader": {
+      "resolution": "node --input-type=module -e 'console.log(import.meta.resolve(\"tsx/esm\"))'",
+      "value": "file:///ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs",
+      "tsx_version": "4.23.13",
+      "tsconfig_required_when_cwd_outside_checkout": "/ACPServer/acp2-tools/deepseek-harness/tsconfig.json (passed as TSX_TSCONFIG_PATH)"
+    }
+  },
+  "official_mcp_client": {
+    "package": "@deepseek-ai/dsh-mcp-client",
+    "version": "0.2.1-rc.2",
+    "resolution": "workspace:*",
+    "package_manifest": "/ACPServer/acp2-tools/deepseek-harness/packages/mcp/mcp-client/package.json",
+    "note": "Official DSH MCP transport; C must not fork it or write a second MCP transport."
+  },
+  "acceptance_env": {
+    "path": "/ACPServer/acp2-development/data/acceptance-env-c.sh",
+    "mode": "0600",
+    "route_probe": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+    "live_scenarios_count": 21,
+    "all_scenarios_count": 36
+  },
+  "disk": {
+    "tools_root": "/ACPServer/acp2-tools",
+    "tools_root_cap": "10 GB",
+    "tools_root_usage_after_install": "3.0G",
+    "evidence_root_cap": "2 GB"
+  },
+  "not_verified": [
+    "NOT_VERIFIED(b00_handoff): no runtime/baseline-lock.json; evidence root is the provisional root frozen in experience/ownership.md",
+    "NOT_VERIFIED(b02a_handoff): tools root, data root and role interpreters were created by C/T-01, not supplied by B02a; no B acceptance is claimed"
+  ]
+}
