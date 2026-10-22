@@ -23,12 +23,30 @@ Rules exercised here:
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
+import os
 import re
+import subprocess
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+from cccp.analysis.research.question import (
+    Question as PublicQuestion,
+    QuestionForbiddenFieldError as PublicQuestionForbiddenFieldError,
+    UnsupportedQuestionSchemaVersionError as PublicQuestionSchemaVersionError,
+    read_historical_question,
+)
+from cccp.analysis.research.reaction import (
+    AtomMapping as PublicAtomMapping,
+    DuplicateMapError as PublicDuplicateMapError,
+    Reaction as PublicReaction,
+    UnsupportedSchemaVersionError as PublicReactionSchemaVersionError,
+    read_historical_reaction,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 SCIENCE = REPO / "docs" / "reference" / "next-change" / "acp2-contracts" / "science"
@@ -1054,3 +1072,184 @@ class pytest_raises:
             return False
         self.value = exc
         return True
+
+
+# ── A-04a public reaction/question types ───────────────────────────────────
+#
+# The checks below exercise the immutable Python mirror in
+# ``cccp.analysis.research``.  They are intentionally additive: every
+# A-02b semantic assertion above stays exactly as it was.  The frozen JSON
+# Schema still owns structure; R-01…R-10 semantics stay in the checker above;
+# these tests prove the public type preserves the same payload byte-for-byte
+# and refuses to invent values.
+
+
+def test_reaction_public_type_round_trips_example_byte_identically() -> None:
+    """Happy QA: canonical JSON survives ``from_dict``/``to_json`` unchanged."""
+    raw = (EXAMPLES / "reaction-da.json").read_text(encoding="utf-8")
+    reaction = PublicReaction.from_dict(json.loads(raw))
+    assert reaction.to_json() == raw
+    # A second generation is still byte-stable (no identity drift).
+    assert PublicReaction.from_dict(json.loads(reaction.to_json())).to_json() == raw
+    assert reaction.reaction_scope == "net_reaction"
+    assert reaction.schema_version == 1
+
+
+def test_valid_simple_fixture_round_trips_through_public_type() -> None:
+    raw = (REACTION_FIXTURES / "valid_simple_reaction.json").read_text(encoding="utf-8")
+    reaction = PublicReaction.from_dict(json.loads(raw))
+    assert reaction.to_json() == raw
+
+
+def test_duplicate_map_raises_before_reaction_construction() -> None:
+    """QA failure: a duplicate mapping is rejected before a ``Reaction`` exists.
+
+    ``AtomMapping.from_dict`` is the construction gate; ``PublicReaction.from_dict``
+    necessarily hits it before any ``Reaction`` instance is built.
+    """
+    document = load_json(REACTION_FIXTURES / "duplicate_map.json")
+    with pytest_raises(PublicDuplicateMapError):
+        PublicAtomMapping.from_dict(document["atom_mapping"])
+    with pytest_raises(PublicDuplicateMapError):
+        PublicReaction.from_dict(document)
+
+
+def test_unknown_major_reaction_version_raises_typed_error() -> None:
+    document = copy.deepcopy(load_json(EXAMPLES / "reaction-da.json"))
+    document["schema_version"] = 2
+    with pytest_raises(PublicReactionSchemaVersionError) as info:
+        PublicReaction.from_dict(document)
+    assert "2" in str(info.value)
+    assert "never coerced" in str(info.value)
+
+
+def test_unknown_stereo_stays_unknown_through_public_type() -> None:
+    raw = (REACTION_FIXTURES / "ambiguous_stereo.json").read_text(encoding="utf-8")
+    reaction = PublicReaction.from_dict(json.loads(raw))
+    stereo = reaction.right[0].stereochemistry
+    assert stereo.status == "unknown"
+    assert [center.configuration for center in stereo.centers] == ["unknown"]
+    assert [bond.configuration for bond in stereo.double_bonds] == ["unknown"]
+    assert reaction.to_json() == raw
+
+
+def test_historical_reaction_preserves_unknown_field_without_eligibility() -> None:
+    document = copy.deepcopy(load_json(REACTION_FIXTURES / "valid_simple_reaction.json"))
+    document["legacy_migration_note"] = {"kept": True}
+    document["left"][0]["legacy_atom_note"] = "kept-in-place"
+    document["schema_version"] = 0
+
+    record = read_historical_reaction(document)
+    assert record.schema_version == 0
+    assert record.execution_eligible is False
+    assert record.recovery_eligible is False
+    assert record.unknown_fields == ("legacy_migration_note",)
+    preserved = record.to_dict()
+    assert preserved == document
+    assert preserved["left"][0]["legacy_atom_note"] == "kept-in-place"
+    # Historical readability never makes the payload canonical/executable.
+    with pytest_raises(PublicReactionSchemaVersionError):
+        PublicReaction.from_dict(document)
+
+
+def test_question_public_type_round_trips_example_byte_identically() -> None:
+    raw = (EXAMPLES / "question-activation.json").read_text(encoding="utf-8")
+    question = PublicQuestion.from_dict(json.loads(raw))
+    assert question.to_json() == raw
+    assert question.claim_status_vocabulary == (
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated",
+    )
+    assert question.question_type == "activation_energy"
+
+
+def test_question_with_job_status_rejected_by_public_type() -> None:
+    base = load_json(EXAMPLES / "question-activation.json")
+    for field in FORBIDDEN_QUESTION_FIELDS:
+        document = copy.deepcopy(base)
+        document[field] = "forbidden"
+        with pytest_raises(PublicQuestionForbiddenFieldError) as info:
+            PublicQuestion.from_dict(document)
+        assert field in str(info.value)
+
+    nested = copy.deepcopy(base)
+    nested["comparison_conditions"]["queue"] = "forbidden"
+    with pytest_raises(PublicQuestionForbiddenFieldError):
+        PublicQuestion.from_dict(nested)
+
+
+def test_unknown_major_question_version_raises_typed_error() -> None:
+    document = copy.deepcopy(load_json(EXAMPLES / "question-activation.json"))
+    document["schema_version"] = 3
+    with pytest_raises(PublicQuestionSchemaVersionError) as info:
+        PublicQuestion.from_dict(document)
+    assert "3" in str(info.value)
+
+
+def test_historical_question_preserves_unknown_field_without_eligibility() -> None:
+    document = copy.deepcopy(load_json(EXAMPLES / "question-activation.json"))
+    document["legacy_question_note"] = "kept"
+    document["schema_version"] = 0
+    record = read_historical_question(document)
+    assert record.schema_version == 0
+    assert record.execution_eligible is False
+    assert record.recovery_eligible is False
+    assert record.unknown_fields == ("legacy_question_note",)
+    assert record.to_dict() == document
+
+
+def test_public_types_import_without_execution_or_platform_modules() -> None:
+    """Fresh-interpreter import purity: no task, QC or platform modules."""
+    probe = (
+        "import json, sys\n"
+        "import cccp.analysis.research.reaction\n"
+        "import cccp.analysis.research.question\n"
+        "forbidden = ('cccp.calculation.tasks', 'cccp.qc', 'acp')\n"
+        "bad = sorted(\n"
+        "    name for name in sys.modules\n"
+        "    if any(name == root or name.startswith(root + '.') for root in forbidden)\n"
+        ")\n"
+        "print(json.dumps(bad))\n"
+    )
+    env = dict(os.environ)
+    src = str(REPO / "src")
+    env["PYTHONPATH"] = src + (
+        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == [], completed.stdout
+
+
+def test_research_package_init_is_export_only() -> None:
+    path = REPO / "src" / "cccp" / "analysis" / "research" / "__init__.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    body = [
+        node
+        for node in tree.body
+        if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant))
+    ]
+    assert body, "package initializer must re-export the public types"
+    for node in body:
+        assert isinstance(node, (ast.ImportFrom, ast.Assign)), ast.dump(node)
+        if isinstance(node, ast.Assign):
+            assert len(node.targets) == 1
+            target = node.targets[0]
+            assert isinstance(target, ast.Name) and target.id == "__all__"
+            assert isinstance(node.value, (ast.List, ast.Tuple))
+
+
+def test_research_package_exports_resolve() -> None:
+    import cccp.analysis.research as research
+
+    assert research.__all__
+    missing = [name for name in research.__all__ if not hasattr(research, name)]
+    assert missing == []

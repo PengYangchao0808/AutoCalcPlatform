@@ -1,0 +1,134 @@
+"""ACP2 public research science types — package exports only.
+
+This package initializer contains **no implementation and no side effects**.
+The reaction and question contracts live in :mod:`cccp.analysis.research.reaction`
+and :mod:`cccp.analysis.research.question`; this module only re-exports their
+public names.  Generic names that exist in both modules (``SCHEMA_VERSION``,
+``STANDARD_STATES``) are exported once from :mod:`~cccp.analysis.research.reaction`;
+the question-specific constants remain available through the ``question``
+submodule.
+
+Importing the package must never pull in ``cccp.calculation.tasks``,
+``cccp.qc`` or ``acp``: the types are pure scientific contracts, not an
+execution path.
+
+Author: QCcalc Team
+"""
+
+from __future__ import annotations
+
+from . import question as question
+from . import reaction as reaction
+from .question import (
+    CLAIM_STATUSES,
+    COMPATIBILITY_REQUIREMENTS,
+    ENERGY_UNITS,
+    EVIDENCE_TYPES,
+    QUESTION_TYPES,
+    ComparisonConditions,
+    ElectronicStateRef,
+    HistoricalQuestionRecord,
+    Question,
+    QuestionConditionError,
+    QuestionForbiddenFieldError,
+    QuestionSchemaError,
+    QuestionTypeError,
+    UnknownQuestionDeclarationError,
+    UnsupportedQuestionSchemaVersionError,
+    read_historical_question,
+)
+from .reaction import (
+    ATOM_ID_SCHEMES,
+    BOND_CHANGE_TYPES,
+    INPUT_FORMATS,
+    PHASES,
+    REACTION_SCOPES,
+    SCHEMA_VERSION,
+    STANDARD_STATES,
+    STEREO_BOND_CONFIGURATIONS,
+    STEREO_CENTER_CONFIGURATIONS,
+    STEREO_STATUSES,
+    AtomIdentityError,
+    AtomMapping,
+    BondChange,
+    BondChangeError,
+    Conditions,
+    DuplicateMapError,
+    HistoricalReactionRecord,
+    InputUncertainty,
+    InventedStereoError,
+    MapCoverageError,
+    MapInverseError,
+    MissingProductError,
+    MissingReactantError,
+    Reaction,
+    ReactionForbiddenFieldError,
+    ReactionSchemaError,
+    ReactionTypeError,
+    StereoCenter,
+    StereoContradictionError,
+    StereoDoubleBond,
+    Stereochemistry,
+    StructureRef,
+    UnknownDeclarationError,
+    UnsupportedSchemaVersionError,
+    canonical_json,
+    read_historical_reaction,
+)
+
+__all__ = [
+    "ATOM_ID_SCHEMES",
+    "BOND_CHANGE_TYPES",
+    "CLAIM_STATUSES",
+    "COMPATIBILITY_REQUIREMENTS",
+    "ENERGY_UNITS",
+    "EVIDENCE_TYPES",
+    "INPUT_FORMATS",
+    "PHASES",
+    "QUESTION_TYPES",
+    "REACTION_SCOPES",
+    "SCHEMA_VERSION",
+    "STANDARD_STATES",
+    "STEREO_BOND_CONFIGURATIONS",
+    "STEREO_CENTER_CONFIGURATIONS",
+    "STEREO_STATUSES",
+    "AtomIdentityError",
+    "AtomMapping",
+    "BondChange",
+    "BondChangeError",
+    "ComparisonConditions",
+    "Conditions",
+    "DuplicateMapError",
+    "ElectronicStateRef",
+    "HistoricalQuestionRecord",
+    "HistoricalReactionRecord",
+    "InputUncertainty",
+    "InventedStereoError",
+    "MapCoverageError",
+    "MapInverseError",
+    "MissingProductError",
+    "MissingReactantError",
+    "Question",
+    "QuestionConditionError",
+    "QuestionForbiddenFieldError",
+    "QuestionSchemaError",
+    "QuestionTypeError",
+    "Reaction",
+    "ReactionForbiddenFieldError",
+    "ReactionSchemaError",
+    "ReactionTypeError",
+    "StereoCenter",
+    "StereoContradictionError",
+    "StereoDoubleBond",
+    "Stereochemistry",
+    "StructureRef",
+    "UnknownDeclarationError",
+    "UnknownQuestionDeclarationError",
+    "UnsupportedQuestionSchemaVersionError",
+    "UnsupportedSchemaVersionError",
+    "canonical_json",
+    "question",
+    "reaction",
+    "read_historical_question",
+    "read_historical_reaction",
+]
