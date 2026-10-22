@@ -1,9 +1,9 @@
 # Plan / Step / Approval Identity (frozen by T-03 / C01b)
 
-Status: **frozen v1** for ACP 2.0 P2. Consumers: T-25 (research-record
-persistence) and T-27 (approval binding) must use these names and rules
-verbatim. The P2 resource envelope may add fields later, but it may not change
-the meaning, projection or digest algorithm below.
+Status: **frozen v1** for ACP 2.0 P2 (typed by fix 1). Consumers: T-25
+(research-record persistence) and T-27 (approval binding) must use these names
+and rules verbatim. The P2 resource envelope may add fields later, but it may
+not change the meaning, projection or digest algorithm below.
 
 The three identities are deliberately separate. Collapsing them is a defect:
 
@@ -21,35 +21,60 @@ A DSH chat session, a Workbench snapshot and a UI label are none of these.
 
 ### 1.1 Projection (what is hashed)
 
-`plan_definition_digest` is the canonical digest of a projection containing
-**only** these keys from the Proposal:
+`plan_definition_digest` is the canonical digest of **exactly** these JSON
+paths from the Proposal. No other Proposal member is included:
 
 ```text
 recipe_digest
-science
-  capability_steps
-  initial_inputs
-  method
-  mapping
-  charge
-  spin_multiplicity
-  solvent            (optional; omitted when null)
-  temperature        (optional; omitted when null)
-budget
-allowed_change_scope
+
+science.capability_steps        (array; order-significant)
+science.initial_inputs          (array; order-significant)
+science.method
+science.mapping
+science.charge
+science.multiplicity
+science.allowed_substitutions   (array; may be empty)
+
+budget.model_requests
+budget.input_tokens
+budget.output_tokens
+budget.task_refs
+budget.recipe_steps
+budget.qc_invocations
+budget.wall_seconds
+budget.queue_seconds
 ```
 
-The projection is exactly:
+The projection is built leaf-by-leaf; it is **not** "the whole `science` and
+`budget` objects". That is what keeps optional presentation/basis fields out:
 
 ```python
-PROJECTION_FIELDS = ("recipe_digest", "science", "budget", "allowed_change_scope")
-projection = drop_null_optional_fields({key: proposal[key] for key in PROJECTION_FIELDS})
+SCIENCE_FIELDS = (
+    "capability_steps", "initial_inputs", "method", "mapping",
+    "charge", "multiplicity", "allowed_substitutions",
+)
+BUDGET_FIELDS = (
+    "model_requests", "input_tokens", "output_tokens", "task_refs",
+    "recipe_steps", "qc_invocations", "wall_seconds", "queue_seconds",
+)
+
+def plan_definition_projection(proposal: dict) -> dict:
+    return {
+        "recipe_digest": proposal["recipe_digest"],
+        "science": {k: proposal["science"][k] for k in SCIENCE_FIELDS},
+        "budget": {k: proposal["budget"][k] for k in BUDGET_FIELDS},
+    }
 ```
 
-`drop_null_optional_fields` removes any object member whose value is JSON
+`drop_null_optional_fields` then removes any object member whose value is JSON
 `null` (recursively). This is a projection step, not a digest step: after it,
 the canonicalization input contains no `null`. Absent and `null` therefore mean
-the same thing for optional science fields.
+the same thing for an optional member (e.g. `science.capability_steps[].tool`).
+
+`budget.unit_basis` and `budget.notes` are **excluded**: they describe how the
+count was chosen, not the science being approved. `science` has
+`additionalProperties: false`, so no unlisted science field can enter the
+projection.
 
 ### 1.2 Explicit exclusions (must never change the digest)
 
@@ -61,13 +86,15 @@ The following are **outside** the projection. Changing any of them must leave
 - `display_name`, titles, captions, UI labels, ordering hints,
 - `decision`, `human_edits`, `round`, revision counters (`record_revision`, proposal `revision`),
 - every `task_ref` / `TaskRef` and `evidence_ref` appended after dispatch,
-- `proposal_id`, `project_id`, `question_ref`/`question_revision`, `reaction_ref`/`reaction_revision`, `hypothesis`.
+- `proposal_id`, `project_id`, `question_ref`/`question_revision`, `reaction_ref`/`reaction_revision`, `hypothesis`,
+- `allowed_change_scope` (approval-facing summary; the scientific substitution set is `science.allowed_substitutions`, which **is** in the digest),
+- `budget.unit_basis`, `budget.notes`.
 
 Rationale: the digest is the **scientific definition** the approver signs.
 Approval state, presentation and later provenance must not invalidate an
 already-approved plan, and appending execution facts must not either. Project
-and budget scope are bound by `approval_ref` (see §3) rather than smuggled into
-the science projection.
+and budget scope are bound by `approval_ref` (see §3) in addition to the
+digest's own coverage of the budget numbers.
 
 > `proposal_id`/`project_id` are excluded from the digest but are part of the
 > approval binding. Two projects can have identical scientific definitions and
@@ -103,7 +130,14 @@ Reference implementation used by the T-03 assertion script:
 ```python
 import hashlib, json, unicodedata
 
-PROJECTION_FIELDS = ("recipe_digest", "science", "budget", "allowed_change_scope")
+SCIENCE_FIELDS = (
+    "capability_steps", "initial_inputs", "method", "mapping",
+    "charge", "multiplicity", "allowed_substitutions",
+)
+BUDGET_FIELDS = (
+    "model_requests", "input_tokens", "output_tokens", "task_refs",
+    "recipe_steps", "qc_invocations", "wall_seconds", "queue_seconds",
+)
 
 def _drop_nulls(value):
     if isinstance(value, dict):
@@ -128,7 +162,11 @@ def _normalize(value):
     raise TypeError(type(value))
 
 def plan_definition_digest(proposal: dict) -> str:
-    projection = {k: proposal[k] for k in PROJECTION_FIELDS}
+    projection = {
+        "recipe_digest": proposal["recipe_digest"],
+        "science": {k: proposal["science"][k] for k in SCIENCE_FIELDS},
+        "budget": {k: proposal["budget"][k] for k in BUDGET_FIELDS},
+    }
     payload = _normalize(_drop_nulls(projection))
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
                      ensure_ascii=False).encode("utf-8")
@@ -136,7 +174,7 @@ def plan_definition_digest(proposal: dict) -> str:
 ```
 
 The committed reference digest for `fixtures/proposal.valid.json` is
-`sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b`.
+`sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b`.
 The assertion script recomputes it and also prints the full stability matrix.
 
 ### 1.4 Sensitivity matrix (frozen expectation)
@@ -146,11 +184,14 @@ The assertion script recomputes it and also prints the full stability matrix.
 | `approval_ref` | unchanged |
 | `approval_status` | unchanged |
 | `display_name` | unchanged |
-| `updated_at` | unchanged |
+| appended `task_refs`/`evidence_refs` (post-dispatch) | unchanged |
 | `science.method` | **changed** |
 | `science.mapping` | **changed** |
 | `science.initial_inputs[0].sha256` | **changed** |
-| `budget.count` | **changed** |
+| `science.charge` | **changed** |
+| `science.multiplicity` | **changed** |
+| `budget.model_requests` | **changed** |
+| `budget.wall_seconds` | **changed** |
 
 ---
 
@@ -198,6 +239,11 @@ plan_definition_digest
 + allowed_change_scope
 ```
 
+`budget` and the scientific substitution set are already inside
+`plan_definition_digest`; binding them again is a defence-in-depth consistency
+check, not a second source of truth. `allowed_change_scope` is the
+approval-facing summary and is outside the digest.
+
 Rules:
 
 - Requesting approval for a different `plan_definition_digest`, project, budget
@@ -207,8 +253,9 @@ Rules:
 - An approval is **not** bound to, and must not be invalidated by, later
   appended `TaskRef`s or `evidence_ref`s.
 - `allowed_change_scope.mode = "none"` means no post-approval substitution.
-  `"finite_list"` permits only the enumerated finite substitutions; anything
-  else needs a new proposal and approval.
+  `"finite_list"` permits only the enumerated finite substitutions in
+  `science.allowed_substitutions`; anything else needs a new proposal and
+  approval.
 - Approval status (`pending|approved|rejected|revoked`) is the approval's own
   state, never a task/job status, and never input to `plan_definition_digest`.
 
@@ -216,7 +263,7 @@ Rules:
 
 ## 4. Frozen field names
 
-`proposal.schema.json` required set:
+`proposal.schema.json` required top-level set:
 
 ```text
 proposal_id, project_id, question_ref, question_revision, reaction_ref,
@@ -224,6 +271,28 @@ reaction_revision, hypothesis, recipe_digest, plan_definition_digest, science,
 budget, approval_ref, allowed_change_scope, round, decision, created_at,
 human_edits
 ```
+
+`proposal.science` required set (typed, `additionalProperties: false`):
+
+```text
+capability_steps, initial_inputs, method, mapping, charge, multiplicity,
+allowed_substitutions
+```
+
+- each `capability_steps` item: `{step_index, capability, version}` plus
+  optional `tool` and `parameters`;
+- each `initial_inputs` item: `{input_id, sha256, format}` plus optional `role`.
+
+`proposal.budget` required set (all integer, `minimum: 0`,
+`additionalProperties: false`):
+
+```text
+model_requests, input_tokens, output_tokens, task_refs, recipe_steps,
+qc_invocations, wall_seconds, queue_seconds
+```
+
+Optional `budget.unit_basis` (e.g. `per_scenario`) and `budget.notes` are
+display/basis metadata and are excluded from the digest.
 
 `research-record.schema.json` required set:
 
