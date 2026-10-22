@@ -46,7 +46,7 @@ contract by version + digest.
   "tool": "acp_submit",
   "arguments": {
     "proposal_ref": "prop-da-selectivity-001",
-    "plan_digest": "sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b",
+    "plan_digest": "sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b",
     "budget": {"unit": "task_count", "count": 1, "timeout_s": 3600}
   }
 }

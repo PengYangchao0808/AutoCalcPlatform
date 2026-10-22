@@ -10,19 +10,23 @@
     "reaction_revision": 1,
     "hypothesis": "The endo transition-state path is lower in free energy than the exo path for the frozen butadiene + ethene single-step model.",
     "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-    "plan_definition_digest": "sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b",
+    "plan_definition_digest": "sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b",
     "science": {
       "capability_steps": [
         {
           "step_index": 0,
-          "capability_id": "optimize.ts",
+          "capability": "optimize.ts",
+          "tool": "acp_submit",
+          "version": "1.0.0",
           "parameters": {
             "optimizer": "r2SCAN-3c"
           }
         },
         {
           "step_index": 1,
-          "capability_id": "frequency.ts",
+          "capability": "frequency.ts",
+          "tool": "acp_submit",
+          "version": "1.0.0",
           "parameters": {
             "thermo": "grimme"
           }
@@ -32,24 +36,35 @@
         {
           "input_id": "input-ts-guess-endo",
           "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "format": "xyz",
           "role": "transition_state_guess"
         }
       ],
       "method": "r2SCAN-3c",
       "mapping": "mapping-butadiene-ethene-endo-v1",
       "charge": 0,
-      "spin_multiplicity": 1,
-      "solvent": null,
-      "temperature": {
-        "value": 298,
-        "unit": "kelvin"
-      }
+      "multiplicity": 1,
+      "allowed_substitutions": [
+        {
+          "field_path": "science.method",
+          "allowed_values": [
+            "r2SCAN-3c",
+            "wB97X-D4"
+          ]
+        }
+      ]
     },
     "budget": {
-      "unit": "task_count",
-      "count": 1,
-      "timeout_s": 3600,
-      "wall_clock_s": 3600
+      "model_requests": 24,
+      "input_tokens": 120000,
+      "output_tokens": 24000,
+      "task_refs": 1,
+      "recipe_steps": 2,
+      "qc_invocations": 2,
+      "wall_seconds": 3600,
+      "queue_seconds": 600,
+      "unit_basis": "per_scenario",
+      "notes": "DA selectivity reference round; one new local TaskRef."
     },
     "approval_ref": "approval-da-selectivity-001",
     "approval_status": "pending",
@@ -84,7 +99,7 @@
     "project_id": "proj-acp2-da",
     "round": 1,
     "decision": "accept",
-    "plan_definition_digest": "sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b",
+    "plan_definition_digest": "sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b",
     "step_identity_refs": [
       {
         "step_index": 0,
