@@ -8,6 +8,7 @@ import {
   BRIDGE_OPERATIONS,
   Bridge,
   BridgeContractError,
+  OPERATION_FIELDS,
   P1_TOOL_NAMES,
   P2_OPERATION_MAP,
   P2_OPERATIONS,
@@ -21,10 +22,14 @@ import {
   isP2Operation,
   mapOperationToTool,
   mapP2Operation,
+  missingFieldsFor,
   negotiatesResearchExtension,
   projectToolResult,
   resolveDaPhase,
+  stripModelPrefix,
   toModelToolName,
+  type BridgeField,
+  type BridgeOperation,
   type BridgeProjection,
   type BridgeRequest,
   type BridgeToolResult,
@@ -104,6 +109,16 @@ function contractRule(error: unknown): string {
   }
   const rule = error.error.params["rule"];
   return typeof rule === "string" ? rule : "";
+}
+
+function contractParams(error: unknown): Readonly<Record<string, unknown>> {
+  return error instanceof BridgeContractError ? error.error.params : {};
+}
+
+function omitField(request: BridgeRequest, field: BridgeField): BridgeRequest {
+  const copy: Record<string, unknown> = { ...request };
+  delete copy[field];
+  return copy as unknown as BridgeRequest;
 }
 
 const SUBMIT: BridgeRequest = {
@@ -386,8 +401,15 @@ test("repeated idempotent submit yields the same reference", TEST_OPTIONS, async
   const first = await bridge.execute(request);
   const second = await bridge.execute(request);
   assert.deepEqual(first.projection.reference, second.projection.reference);
-  assert.equal(client.calls.length, 2);
-  assert.deepEqual(client.calls[0]?.params, client.calls[1]?.params);
+  assert.equal(second, first);
+  assert.equal(client.calls.length, 1);
+  assert.deepEqual(client.calls[0]?.params, {
+    workflow: "xtb_optimize",
+    input: { smiles: "CCO" },
+    method: { level: "gfn2" },
+    project_id: "proj-1",
+    idempotency_key: "idem-1",
+  });
 });
 
 test("submit with a mutated method under one idempotency key is a conflict", TEST_OPTIONS, async () => {
@@ -554,4 +576,385 @@ test("projection never invents a reference", TEST_OPTIONS, () => {
   });
   assert.equal(empty.reference, "op-9");
   assert.equal(P2_OPERATIONS.includes("research.events" as P2Operation), true);
+});
+
+const POSITIVE_REQUESTS: Record<BridgeOperation, BridgeRequest> = {
+  discover: { operation: "discover" },
+  validate: {
+    operation: "validate",
+    project: "proj-1",
+    workflow: "xtb_optimize",
+    input: { smiles: "CCO" },
+    method: { level: "gfn2" },
+    idempotencyKey: "idem-validate",
+  },
+  submit: SUBMIT,
+  status: { operation: "status", task: "job-1", attempt: 0 },
+  evidence: {
+    operation: "evidence",
+    task: "job-1",
+    attempt: 0,
+    resource: "freq.out",
+    explicit: true,
+  },
+  prepare: {
+    operation: "prepare",
+    task: "job-1",
+    attempt: 0,
+    resource: "freq.out",
+  },
+  read: {
+    operation: "read",
+    task: "job-1",
+    attempt: 0,
+    generation: 1,
+    resource: "freq.out",
+  },
+};
+
+test("per-operation required-field matrix accepts positives and rejects every missing field", TEST_OPTIONS, async () => {
+  for (const operation of BRIDGE_OPERATIONS) {
+    const request = POSITIVE_REQUESTS[operation];
+    assert.deepEqual(missingFieldsFor(request), [], `${operation}:positive`);
+    const required = OPERATION_FIELDS[operation];
+    for (const field of required) {
+      const incomplete = omitField(request, field);
+      assert.deepEqual(
+        missingFieldsFor(incomplete),
+        [field],
+        `${operation}:missing:${field}`,
+      );
+      const client = recordingClient(() => okResult({}));
+      await assert.rejects(
+        () => new Bridge(client).execute(incomplete),
+        (error: unknown) => {
+          assert.equal(contractCode(error), "input_invalid", `${operation}:${field}`);
+          assert.equal(contractRule(error), "missing_required_field");
+          const fields = contractParams(error)["fields"];
+          assert.equal(
+            Array.isArray(fields) && fields.includes(field),
+            true,
+            `${operation}:${field}:fields=${JSON.stringify(fields)}`,
+          );
+          assert.equal(client.calls.length, 0);
+          return true;
+        },
+      );
+    }
+  }
+  assert.equal(OPERATION_FIELDS.discover.length, 0);
+  assert.equal(OPERATION_FIELDS.validate.includes("generation"), false);
+  assert.equal(OPERATION_FIELDS.submit.includes("generation"), false);
+  assert.equal(OPERATION_FIELDS.status.includes("project"), false);
+  assert.equal(OPERATION_FIELDS.status.includes("generation"), false);
+  assert.deepEqual(
+    missingFieldsFor({ operation: "discover", task: "job-1", generation: 2 }),
+    [],
+  );
+  assert.deepEqual(
+    missingFieldsFor({
+      operation: "submit",
+      project: "proj-1",
+      input: { smiles: "CCO" },
+      idempotencyKey: "idem-no-generation",
+    }),
+    [],
+  );
+});
+
+test("model-visible prefix stripping is exactly once and raw prefixes are rejected", TEST_OPTIONS, () => {
+  assert.equal(BRIDGE_MODEL_PREFIX, "mcp__acp__");
+  assert.equal(
+    stripModelPrefix(`${BRIDGE_MODEL_PREFIX}acp_submit`),
+    "acp_submit",
+  );
+  assert.equal(stripModelPrefix(toModelToolName("acp_submit")), "acp_submit");
+  assert.throws(() => stripModelPrefix("acp_submit"), /not model-visible/);
+  assert.throws(
+    () =>
+      stripModelPrefix(
+        `${BRIDGE_MODEL_PREFIX}${BRIDGE_MODEL_PREFIX}acp_submit`,
+      ),
+    /must not contain mcp__acp__/,
+  );
+  assert.throws(
+    () => assertRawToolName(`x${BRIDGE_MODEL_PREFIX}acp_submit`),
+    /must not contain mcp__acp__/,
+  );
+  assert.throws(
+    () => toModelToolName(`${BRIDGE_MODEL_PREFIX}acp_submit`),
+    /must not contain mcp__acp__/,
+  );
+});
+
+test("read before prepare returns the exact not_prepared envelope without preparing", TEST_OPTIONS, async () => {
+  const client = recordingClient(() => okResult({ content: "leaked" }));
+  const request: BridgeRequest = {
+    operation: "read",
+    task: "job-9",
+    attempt: 2,
+    generation: 4,
+    resource: "freq.out",
+  };
+  const result = await new Bridge(client).execute(request);
+  assert.equal(client.calls.length, 0);
+  assert.deepEqual(Object.keys(result.structuredContent).sort(), [
+    "data",
+    "diagnostic_ref",
+    "dry_run",
+    "error",
+    "exit_code",
+    "operation",
+    "operation_identity",
+    "schema_version",
+    "status",
+  ]);
+  assert.equal(result.structuredContent["schema_version"], 1);
+  assert.equal(result.structuredContent["operation"], "acp_read_artifact");
+  assert.equal(result.structuredContent["status"], "error");
+  assert.equal(result.structuredContent["exit_code"], 2);
+  assert.equal(result.structuredContent["dry_run"], false);
+  assert.equal(result.structuredContent["operation_identity"], null);
+  assert.equal(result.structuredContent["diagnostic_ref"], null);
+  assert.equal(result.structuredContent["data"], null);
+  const error = result.structuredContent["error"] as Record<string, unknown>;
+  assert.deepEqual(Object.keys(error).sort(), [
+    "code",
+    "diagnostic_ref",
+    "message",
+    "params",
+    "retryable",
+  ]);
+  assert.equal(error["code"], "not_prepared");
+  assert.equal(error["retryable"], true);
+  assert.equal(error["diagnostic_ref"], null);
+  assert.deepEqual(error["params"], {
+    rule: "prepare_required",
+    job_id: "job-9",
+    attempt: 2,
+    resource_id: "freq.out",
+  });
+  assert.equal(result.projection.outcome, "error");
+  assert.equal(result.projection.isError, true);
+  assert.equal(result.projection.reference, null);
+  assert.equal(result.projection.digest, null);
+  assert.equal(result.projection.errorCode, "not_prepared");
+});
+
+test("oversized artifacts project only a digest and reference", TEST_OPTIONS, async () => {
+  const payload = "Z".repeat(2_000_000);
+  const digest = "c".repeat(64);
+  const client = recordingClient(() =>
+    okResult({
+      reference: { kind: "operation", id: "op-big" },
+      digest,
+      content: payload,
+    }),
+  );
+  const result = await new Bridge(client).execute({
+    operation: "prepare",
+    task: "job-big",
+    attempt: 0,
+    resource: "trajectory.xyz",
+  });
+  assert.equal(result.isError, false);
+  const projectionJson = JSON.stringify(result.projection);
+  assert.equal(projectionJson.includes("ZZZZZZZZ"), false);
+  assert.equal(projectionJson.length < 512, true);
+  assert.equal(result.projection.digest, digest);
+  assert.deepEqual(result.projection.reference, {
+    kind: "operation",
+    id: "op-big",
+  });
+  assert.deepEqual(Object.keys(result.projection).sort(), [
+    "digest",
+    "errorCode",
+    "isError",
+    "outcome",
+    "reference",
+    "tool",
+  ]);
+  const data = result.structuredContent["data"] as Record<string, unknown>;
+  assert.equal(typeof data["content"], "string");
+  assert.equal((data["content"] as string).length, payload.length);
+});
+
+test("credential-bearing and absolute-path results are refused", TEST_OPTIONS, async () => {
+  const credentialClient = recordingClient(() =>
+    okResult({
+      reference: { kind: "job", id: "job-1" },
+      access_token: `sk-${"a".repeat(24)}`,
+    }),
+  );
+  await assert.rejects(
+    () =>
+      new Bridge(credentialClient).execute({
+        ...SUBMIT,
+        idempotencyKey: "idem-credential",
+      }),
+    (error: unknown) => {
+      assert.equal(contractCode(error), "access_denied");
+      assert.equal(contractRule(error), "credential_in_result");
+      const path = String(contractParams(error)["path"]);
+      assert.equal(path.includes("access_token"), true);
+      return true;
+    },
+  );
+  assert.equal(credentialClient.calls.length, 1);
+
+  const pathClient = recordingClient(() =>
+    okResult({
+      reference: { kind: "job", id: "job-1" },
+      artifact_path: "/scratch/user42/job-1/freq.out",
+    }),
+  );
+  await assert.rejects(
+    () =>
+      new Bridge(pathClient).execute({
+        ...SUBMIT,
+        idempotencyKey: "idem-path",
+      }),
+    (error: unknown) => {
+      assert.equal(contractCode(error), "access_denied");
+      assert.equal(contractRule(error), "absolute_path_in_result");
+      return true;
+    },
+  );
+
+  const uriClient = recordingClient(() =>
+    okResult({ location: "sftp://node01/scratch/job-1/out" }),
+  );
+  await assert.rejects(
+    () =>
+      new Bridge(uriClient).execute({
+        ...SUBMIT,
+        idempotencyKey: "idem-uri",
+      }),
+    (error: unknown) => contractRule(error) === "absolute_path_in_result",
+  );
+});
+
+test("isError and structuredContent pass through byte-for-byte", TEST_OPTIONS, async () => {
+  const errorEnvelope: BridgeToolResult = deepFreeze({
+    isError: true,
+    structuredContent: {
+      schema_version: 1,
+      status: "error",
+      exit_code: 1,
+      data: null,
+      error: {
+        code: "conflict",
+        message: "revision conflict",
+        params: { revision: 3 },
+        retryable: false,
+      },
+    },
+  });
+  const errorResult = await new Bridge(
+    recordingClient(() => errorEnvelope),
+  ).execute({ ...SUBMIT, idempotencyKey: "idem-passthrough-e" });
+  assert.equal(errorResult.isError, true);
+  assert.equal(errorResult.structuredContent, errorEnvelope.structuredContent);
+  assert.deepEqual(errorResult.projection, {
+    tool: "acp_submit",
+    outcome: "error",
+    isError: true,
+    reference: null,
+    digest: null,
+    errorCode: "conflict",
+  });
+
+  const okEnvelope: BridgeToolResult = deepFreeze({
+    isError: false,
+    structuredContent: {
+      schema_version: 1,
+      status: "ok",
+      exit_code: 0,
+      data: { reference: { kind: "job", id: "job-2" }, note: "unchanged" },
+      error: null,
+    },
+  });
+  const ok = await new Bridge(recordingClient(() => okEnvelope)).execute({
+    ...SUBMIT,
+    idempotencyKey: "idem-passthrough-o",
+  });
+  assert.equal(ok.isError, false);
+  assert.equal(ok.structuredContent, okEnvelope.structuredContent);
+  assert.deepEqual(ok.projection.reference, { kind: "job", id: "job-2" });
+});
+
+test("a different idempotency key creates a new reference", TEST_OPTIONS, async () => {
+  let sequence = 0;
+  const client = recordingClient(() =>
+    okResult({ reference: { kind: "job", id: `job-${++sequence}` } }),
+  );
+  const bridge = new Bridge(client);
+  const first = await bridge.execute({ ...SUBMIT, idempotencyKey: "idem-a" });
+  const second = await bridge.execute({ ...SUBMIT, idempotencyKey: "idem-b" });
+  assert.equal(client.calls.length, 2);
+  assert.equal((first.projection.reference as { id: string }).id, "job-1");
+  assert.equal((second.projection.reference as { id: string }).id, "job-2");
+});
+
+test("cross-project and cross-attempt reads are refused", TEST_OPTIONS, async () => {
+  const client = recordingClient(() =>
+    okResult({ reference: { kind: "operation", id: "op-1" } }),
+  );
+  const bridge = new Bridge(client);
+  await bridge.execute({
+    operation: "prepare",
+    project: "proj-a",
+    task: "job-1",
+    attempt: 0,
+    resource: "freq.out",
+  });
+  await assert.rejects(
+    () =>
+      bridge.execute({
+        operation: "read",
+        project: "proj-b",
+        task: "job-1",
+        attempt: 0,
+        generation: 3,
+        resource: "freq.out",
+      }),
+    (error: unknown) => {
+      assert.equal(contractCode(error), "access_denied");
+      assert.equal(contractRule(error), "project_ownership_mismatch");
+      assert.equal(contractParams(error)["expected_project"], "proj-a");
+      assert.equal(contractParams(error)["observed_project"], "proj-b");
+      return true;
+    },
+  );
+  await assert.rejects(
+    () =>
+      bridge.execute({
+        operation: "read",
+        project: "proj-a",
+        task: "job-1",
+        attempt: 1,
+        generation: 3,
+        resource: "freq.out",
+      }),
+    (error: unknown) => {
+      assert.equal(contractCode(error), "access_denied");
+      assert.equal(contractRule(error), "attempt_ownership_mismatch");
+      assert.equal(contractParams(error)["expected_attempt"], 0);
+      assert.equal(contractParams(error)["observed_attempt"], 1);
+      return true;
+    },
+  );
+  const read = await bridge.execute({
+    operation: "read",
+    project: "proj-a",
+    task: "job-1",
+    attempt: 0,
+    generation: 3,
+    resource: "freq.out",
+  });
+  assert.equal(read.isError, false);
+  assert.deepEqual(
+    client.calls.map((call) => call.name),
+    ["acp_prepare_artifact", "acp_read_artifact"],
+  );
 });
