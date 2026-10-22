@@ -56,7 +56,7 @@ rejected (or, where stated, preserved) for each rule.
 | **R-03** | **Element and stoichiometry conservation.** The multiset of elements is identical on both sides; the reaction is balanced. Net charge is conserved; each species' `charge` is explicit. | Semantics only (JSON Schema cannot balance elements): sum `elements`/`formula` per side, compare element counts and total charge; a missing whole side is incomplete. This is implemented by the A-02b contract test, not by a schema engine. | `reaction/missing_product.json` (right side removed), `reaction/element_mismatch.json` (unbalanced element counts), `reaction/charge_mismatch.json` (net charge differs) |
 | **R-04** | **Explicit unknown stereo and conditions are preserved, never invented.** `stereochemistry.status` may be `unknown`; individual centers/double bonds may be `unknown`; conditions may be `null` only when the path is declared in `input_uncertainty.unknown_fields`. | Schema: `unknown` enum members, nullable condition types, required `input_uncertainty`. Semantics: a null/invalid value is either declared or rejected; a declared-unknown stereo fact may not be replaced by an `R`/`S`/`E`/`Z` assignment; missing temperature/pressure is never replaced by 298.15 K / 1 bar. | Preserve: `reaction/ambiguous_stereo.json` (stays `unknown` after round-trip). Reject: `reaction/invented_stereo.json` (contract claims an assignment that the input marked unknown) |
 | **R-05** | **"Cannot interpret the input" is not "representable but not applicable".** An uninterpretable structure/format is rejected at the contract boundary with an interpretation error. A valid, interpretable reaction that a given question or recipe cannot use is accepted by the schema but rejected for that use with a `not_applicable` reason. | Separate error classes, never merged. The contract test asserts distinct reasons and that neither is silently coerced into the other. | `reaction/uninterpretable_input.json` (cannot parse/identify atoms), `reaction/representable_not_applicable.json` (valid reaction, question/recipe applicability fails) |
-| **R-06** | **A net reaction never claims a single elementary step.** `reaction_scope` distinguishes `net_reaction` from `elementary_step`. A `net_reaction` payload may list net bond changes but must not assert that one elementary step explains the transformation. | Schema: required enum. Semantics: `elementary_step` requires explicit transition-state/IRC evidence outside this schema; a net reaction cannot be relabelled as one. | `reaction/net_as_elementary.json` (multi-step net reaction asserted as one elementary step) |
+| **R-06** | **A net reaction never claims a single elementary step.** `reaction_scope` distinguishes `net_reaction` from `elementary_step`. A `net_reaction` payload may list net bond changes but must not assert that one elementary step explains the transformation. | Schema: required enum. Semantics: `elementary_step` requires explicit transition-state/IRC evidence outside this schema; a net reaction cannot be relabelled as one. | `reaction/net_reaction_claimed_as_elementary.json` (multi-step net reaction asserted as one elementary step) |
 | **R-07** | **Unsupported input is rejected explicitly, never silently dropped.** Initial supported `input_format` values are `mol`, `sdf`, `smiles` and `structure_upload`. **CDXML is `DEFERRED` outside the initial A/B/C scope.** | Schema: closed `input_format` enum (CDXML absent). Semantics: an unsupported format produces an explicit rejection; no best-effort parser and no empty structure. | `reaction/unsupported_cdxml.json` (CDXML input rejected as out of scope) |
 | **R-08** | **The question carries no LLM/model role, cost/price, budget or platform state.** Forbidden names: `role`, `model_role`, `cost`, `price`, `job_status`, `queue`, `account`. | Schema: `additionalProperties: false` everywhere plus an explicit top-level/nested `propertyNames.not.enum` containing exactly that list. | `question/job_status.json`, `question/role.json`, `question/cost.json`, `question/price.json` |
 | **R-09** | **Claim statuses are the frozen four values.** `supported`, `refuted`, `inconclusive`, `not_evaluated`. Execution terminal state (completed/failed/cancelled) is not a claim status and never maps to `supported`. | Schema: `claim_status_vocabulary` is a `const` array of exactly the four values; the evidence contract references the same vocabulary. | `question/unknown_claim_status.json` (fifth/unknown value) |
@@ -67,6 +67,30 @@ R-02 (one-to-one maps), R-03 (element/stoichiometry conservation), R-04 (explici
 unknown stereo/conditions preserved) and R-05 (cannot-interpret vs
 representable-but-not-applicable). R-06 to R-10 are additional frozen rules from the
 same task statement.
+
+### 2.1 Fixture delivery status (A-02b)
+
+The A-02b contract test (`tests/test_acp2_science_reaction_contract.py`) enforces
+that every fixture named in the R-01…R-10 table either exists under
+`tests/fixtures/acp2/science/contracts/` or is explicitly marked `(planned)` here.
+This keeps the rule-to-fixture link machine-checkable without silently accepting a
+broken reference and without inventing files that do not exist.
+
+Delivered and exercised today: `reaction/valid_simple_reaction.json` (R-02/R-03),
+`reaction/missing_product.json` (R-03), `reaction/charge_mismatch.json` (R-03),
+`reaction/ambiguous_stereo.json` (R-04, preserved as unknown) and
+`reaction/net_reaction_claimed_as_elementary.json` (R-06).
+
+Planned, not yet delivered (marked `(planned)`; no file is claimed to exist):
+
+- R-01: `reaction/atom_id_missing.json` (planned), `reaction/atom_id_duplicate.json` (planned)
+- R-03: `reaction/element_mismatch.json` (planned)
+- R-04: `reaction/invented_stereo.json` (planned)
+- R-05: `reaction/uninterpretable_input.json` (planned), `reaction/representable_not_applicable.json` (planned)
+- R-07: `reaction/unsupported_cdxml.json` (planned)
+- R-08: `question/job_status.json` (planned), `question/role.json` (planned), `question/cost.json` (planned), `question/price.json` (planned)
+- R-09: `question/unknown_claim_status.json` (planned)
+- R-10: `question/missing_standard_state.json` (planned), `question/incompatible_method.json` (planned)
 
 ## 3. Supported input scope and the CDXML decision
 
