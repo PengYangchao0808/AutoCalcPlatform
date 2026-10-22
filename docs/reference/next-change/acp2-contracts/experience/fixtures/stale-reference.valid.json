@@ -1,0 +1,139 @@
+{
+  "fixture": "stale_reference_positive",
+  "description": "Positive counterpart: the record carries the same plan_definition_digest and a round not older than the proposal.",
+  "proposal": {
+    "proposal_id": "prop-da-selectivity-001",
+    "project_id": "proj-acp2-da",
+    "question_ref": "question-da-selectivity-001",
+    "question_revision": 2,
+    "reaction_ref": "reaction-butadiene-ethene-001",
+    "reaction_revision": 1,
+    "hypothesis": "The endo transition-state path is lower in free energy than the exo path for the frozen butadiene + ethene single-step model.",
+    "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "plan_definition_digest": "sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b",
+    "science": {
+      "capability_steps": [
+        {
+          "step_index": 0,
+          "capability_id": "optimize.ts",
+          "parameters": {
+            "optimizer": "r2SCAN-3c"
+          }
+        },
+        {
+          "step_index": 1,
+          "capability_id": "frequency.ts",
+          "parameters": {
+            "thermo": "grimme"
+          }
+        }
+      ],
+      "initial_inputs": [
+        {
+          "input_id": "input-ts-guess-endo",
+          "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "role": "transition_state_guess"
+        }
+      ],
+      "method": "r2SCAN-3c",
+      "mapping": "mapping-butadiene-ethene-endo-v1",
+      "charge": 0,
+      "spin_multiplicity": 1,
+      "solvent": null,
+      "temperature": {
+        "value": 298,
+        "unit": "kelvin"
+      }
+    },
+    "budget": {
+      "unit": "task_count",
+      "count": 1,
+      "timeout_s": 3600,
+      "wall_clock_s": 3600
+    },
+    "approval_ref": "approval-da-selectivity-001",
+    "approval_status": "pending",
+    "allowed_change_scope": {
+      "mode": "finite_list",
+      "finite_substitutions": [
+        {
+          "field_path": "science.temperature",
+          "allowed_values": [
+            "298",
+            "310"
+          ]
+        }
+      ]
+    },
+    "round": 1,
+    "decision": "proposed",
+    "created_at": "2026-10-22T12:00:00Z",
+    "updated_at": "2026-10-22T12:05:00Z",
+    "display_name": "DA endo vs exo (reference proposal)",
+    "human_edits": [
+      {
+        "edited_at": "2026-10-22T12:02:00Z",
+        "field_path": "hypothesis",
+        "editor_ref": "principal:reviewer-01",
+        "note": "Clarified that the claim is limited to the frozen single-step model."
+      }
+    ]
+  },
+  "record": {
+    "research_id": "res-da-selectivity-round-1",
+    "project_id": "proj-acp2-da",
+    "round": 1,
+    "decision": "accept",
+    "plan_definition_digest": "sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b",
+    "step_identity_refs": [
+      {
+        "step_index": 0,
+        "step_identity": "step-0-optimize-ts-r2scan3c",
+        "implementation_version": "release-2026.10.22",
+        "upstream_digests": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "materialized_parameters_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "step_index": 1,
+        "step_identity": "step-1-frequency-ts-r2scan3c",
+        "implementation_version": "release-2026.10.22",
+        "upstream_digests": [
+          "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "materialized_parameters_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    ],
+    "task_refs": [
+      {
+        "project_id": "proj-acp2-da",
+        "job_id": "20261022_001_PESsearch",
+        "attempt": 1,
+        "release_id": "release-2026.10.22"
+      }
+    ],
+    "evidence_refs": [
+      {
+        "evidence_id": "ev-result-manifest",
+        "kind": "result_manifest",
+        "sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "relative_path": "RESULT/result_manifest.json"
+      },
+      {
+        "evidence_id": "ev-acceptance-receipt",
+        "kind": "acceptance_receipt",
+        "sha256": "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        "relative_path": null
+      }
+    ],
+    "missing_validation": [],
+    "human_edits": [],
+    "approval_ref": "approval-da-selectivity-001",
+    "created_at": "2026-10-22T12:30:00Z",
+    "record_revision": 1
+  },
+  "expected_result": {
+    "allowed": true
+  }
+}
