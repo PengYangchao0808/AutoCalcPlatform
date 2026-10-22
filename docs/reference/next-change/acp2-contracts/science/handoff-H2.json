@@ -1,0 +1,401 @@
+{
+  "compatibility_notes": [
+    "acp2.science contract version 1 is frozen; accepted schema versions are [1] and historical evidence schema_version 0 remains read-only with execution_eligible=false and recovery_eligible=false.",
+    "Recipe plan-definition and step-execution identities are inputs to the existing plan_identity/step_identity; they do not create a second recovery key or checkpoint.",
+    "All science contracts forbid job, queue, account, price and central job-status tokens at every depth.",
+    "The capability catalog seeds only four capabilities; the ten families in unsupported_capabilities are declared unsupported rather than silently absent.",
+    "The fifteen-task matrix and package exports describe the same live TASK_KINDS inventory; the stale README/DevDoc '14' prose is a B-owned documentation drift recorded in requests/shared-file-requests.md.",
+    "B04's premature MCP-adapter check is not H2 evidence; H2 MCP/DSH rows stay NOT_VERIFIED until B05 publishes the stdio launch file and minimal read-only capabilities."
+  ],
+  "contract_set": "acp2.science",
+  "contract_set_frozen": true,
+  "contract_set_version": 1,
+  "contract_version_basis": {
+    "handoff_h1": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+    "handoff_h1_sha256": "da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902",
+    "handoff_h1_version": 1,
+    "rule": "This H2 freezes acp2.science version 1. New semantics require the next contract version; no field is silently widened."
+  },
+  "external_evidence": {
+    "b01_receipt_protocol": {
+      "missing_artifact": "acceptance-result.schema.json",
+      "missing_contract": "acp2.acceptance.v1",
+      "reason": "B01 has not published the receipt schema, so no A sample can be validated by the shared validator. A does not define a competing receipt schema and does not claim a receipt.",
+      "result": "NOT_VERIFIED",
+      "samples_delivered": false
+    },
+    "b04_premature_mcp_adapter_check": {
+      "is_h2_evidence": false,
+      "reason": "B04's initial close covers only the single Controller, the HTTP/CLI client and second-Controller rejection. Its premature MCP-adapter start/exit check is not H2 evidence because the stdio launch file is owned by B05."
+    },
+    "b05_stdio_launch": {
+      "missing_artifact": "MCP stdio launch file + minimal read-only capability mapping",
+      "reason": "B05 has not published the stdio launch file or the minimal read-only capabilities. No stdio handshake, tool listing or read-only call was made, so H2 MCP/DSH evidence remains NOT_VERIFIED.",
+      "result": "NOT_VERIFIED"
+    },
+    "client_revision": null,
+    "client_revision_gap": "No MCP client revision is known: B/C have not published a client build or a negotiated protocol transcript.",
+    "h2_test_candidate": {
+      "candidate_revision": null,
+      "gap": "No H2 integration test candidate has been published. A's static worktree revision b20c286 is the science source snapshot, not an H2 server/client/harness candidate.",
+      "result": "NOT_VERIFIED"
+    },
+    "harness_revision": null,
+    "harness_revision_gap": "No DSH/acceptance harness revision is known: no harness artifact, Node version or protocol transcript was published for this run.",
+    "recorded_a_static_revision": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+    "recorded_a_static_revision_note": "This is A's science source commit only. It must never be presented as a server, client or harness revision.",
+    "server_revision": null,
+    "server_revision_gap": "No MCP server revision is known: B05/B06 have not published a server build, and no launch or handshake exists to identify one."
+  },
+  "frozen_at": "2026-10-22T15:04:22Z",
+  "gate_command": [
+    "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_acp2_science_schema.py",
+    "tests/test_acp2_science_registry.py",
+    "tests/test_acp2_science_task_binding.py",
+    "tests/test_architecture_invariants.py",
+    "tests/test_cccp_isolation.py",
+    "tests/test_acp2_science_handoff.py",
+    "-q"
+  ],
+  "generated_by": "A-08",
+  "handoff_id": "H2",
+  "handoff_version": 1,
+  "real_computation": {
+    "command": [],
+    "not_run": [
+      "real singlepoint / optimize / frequency on this host",
+      "Local and LSF artifact reconciliation",
+      "Diels-Alder TS / IRC / energy-comparability chain",
+      "selectivity execution and NMR/thermochemistry cross-domain records"
+    ],
+    "reason": "P0 is a static gate. No QC binary, scheduler, job, Local/LSF submission, MCP stdio session or DSH replay was launched for this handoff. Every science row above is a static contract/implementation/test fact, never an execution result.",
+    "result": "NOT_RUN",
+    "run_spec": null
+  },
+  "receipt_protocol_gap": {
+    "deferred_samples": [
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-valid.json",
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-invalid.json"
+    ],
+    "delivery_trigger": "Deliver one valid and one invalid A sample immediately when B01 publishes the draft schema, before B05 or A-17.",
+    "missing_artifact": "acceptance-result.schema.json",
+    "missing_contract": "acp2.acceptance.v1",
+    "reason": "B01 has not published the draft receipt schema. A adds only an extensions.science area when B01 exists and never invents a second receipt schema or sample set.",
+    "samples_delivered": false,
+    "status": "NOT_VERIFIED"
+  },
+  "rows": [
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+            "sha256": "da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902"
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py -q"
+        ],
+        "summary": "handoff-H1.json lists 14 contract artifacts; every schema, example and prose file is present, parses, and matches its recorded sha256. H1 declares accepted schema versions [1] and keeps the single B01 receipt gap.",
+        "tests": [
+          "tests/test_acp2_science_schema.py::test_handoff_h1_lists_every_contract_file_with_digests",
+          "tests/test_acp2_science_schema.py::test_receipt_samples_deferred_until_b01_publishes"
+        ]
+      },
+      "item": "H1 capability and task-binding contracts (8 schemas + 2 prose docs + 4 examples)",
+      "result": "PASS",
+      "row_id": "H1-capability-task-contracts",
+      "scope": "static-contract"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "src/cccp/calculation/capabilities/registry.py",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_registry.py -q"
+        ],
+        "summary": "tests/test_acp2_science_registry.py: 25 passed. The registry is immutable, returns capability ids in deterministic order, rejects duplicate capability/implementation ids, and never imports cccp.calculation.tasks at discovery.",
+        "tests": [
+          "tests/test_acp2_science_registry.py"
+        ]
+      },
+      "item": "Read-only capability registry (functional, deterministic, no backend selection)",
+      "result": "PASS",
+      "row_id": "capability-registry",
+      "scope": "static-implementation"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "src/cccp/calculation/capabilities/task_binding.py",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_task_binding.py -q"
+        ],
+        "summary": "tests/test_acp2_science_task_binding.py: 35 passed (15 parametrized task kinds + 20 behaviour tests). Each compute capability reaches exactly one run_* core; vibration.analyze never calls a task core; preflight writes no file and starts no subprocess; unsupported bindings raise typed errors.",
+        "tests": [
+          "tests/test_acp2_science_task_binding.py"
+        ]
+      },
+      "item": "Capability/task binding with exactly one delegation and pure preflight",
+      "result": "PASS",
+      "row_id": "capability-task-binding",
+      "scope": "static-implementation"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "src/cccp/calculation/recipes/contracts.py",
+            "sha256": null
+          },
+          {
+            "path": "src/cccp/calculation/recipes/validation.py",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_recipe.py -q"
+        ],
+        "summary": "Recipe contracts mirror recipe.schema.json v1 as frozen dataclasses; validation rejects cycles, dangling refs, missing required upstreams and diagnostic-only steps masquerading as required. tests/test_acp2_science_recipe.py: 34 passed (contract + compile/identity cases).",
+        "tests": [
+          "tests/test_acp2_science_recipe.py::test_three_step_linear_recipe_validates",
+          "tests/test_acp2_science_recipe.py::test_cycle_raises_typed_cycle_error",
+          "tests/test_acp2_science_recipe.py::test_dangling_reference_raises_typed_error",
+          "tests/test_acp2_science_recipe.py::test_missing_required_upstream_raises_typed_error",
+          "tests/test_acp2_science_recipe.py::test_diagnostic_step_cannot_satisfy_required_dependency"
+        ]
+      },
+      "item": "Scientific recipe contracts, validation and required/diagnostic semantics (A-07a)",
+      "result": "PASS",
+      "row_id": "recipe-contracts",
+      "scope": "static-contract"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "src/cccp/calculation/recipes/compile.py",
+            "sha256": null
+          },
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/identity-boundary.md",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_recipe.py -q"
+        ],
+        "summary": "Compiling the same recipe twice is byte-identical; the definition digest covers method/structure/mapping/charge/multiplicity/electronic state/standard state/provider versions/OutputRef selectors and ignores approval, evidence, timestamps and display name. Step identity materializes from actual upstream digests at dispatch; unresolved selectors are typed errors. identity-boundary.md joins these inputs to the existing plan/step identity without a second recovery truth.",
+        "tests": [
+          "tests/test_acp2_science_recipe.py::test_compile_twice_is_byte_identical_and_digest_stable",
+          "tests/test_acp2_science_recipe.py::test_plan_definition_digest_covers_every_science_field",
+          "tests/test_acp2_science_recipe.py::test_management_fields_never_change_the_definition_digest",
+          "tests/test_acp2_science_recipe.py::test_changed_upstream_byte_changes_step_execution_identity",
+          "tests/test_acp2_science_recipe.py::test_unresolved_output_ref_selector_fails_at_dispatch",
+          "tests/test_acp2_science_recipe.py::test_historical_read_preserves_unknown_fields_without_eligibility"
+        ]
+      },
+      "item": "Recipe compilation, canonical JSON, plan-definition digest and step execution identity (A-07b)",
+      "result": "PASS",
+      "row_id": "recipe-compile-identity",
+      "scope": "static-implementation"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "src/cccp/calculation/capabilities/builtin.py",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_registry.py -q"
+        ],
+        "summary": "Catalog seeds electronic.energy, geometry.optimize, vibration.compute and vibration.analyze only. Ordering is deterministic and the analysis entry point resolves lazily without importing task modules. The ten unsupported families are declared explicitly with no invented descriptor.",
+        "tests": [
+          "tests/test_acp2_science_registry.py"
+        ]
+      },
+      "item": "Built-in capability catalog (four seeded capabilities, ten unsupported families)",
+      "result": "PASS",
+      "row_id": "capability-catalog",
+      "scope": "static-implementation"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/task-compatibility-matrix.md",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_handoff.py -q"
+        ],
+        "summary": "task-compatibility-matrix.md has exactly 15 rows derived from the live TASK_KINDS, not the stale README list. Every row names its run_* core, options/payload types, execution status implemented and evidence static-fact. No row claims a real run.",
+        "tests": [
+          "tests/test_acp2_science_handoff.py::test_task_compatibility_matrix_has_fifteen_rows"
+        ]
+      },
+      "item": "Fifteen-task compatibility matrix with export/execution status",
+      "result": "PASS",
+      "row_id": "task-compatibility-matrix",
+      "scope": "static-record"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "src/cccp/calculation/__init__.py",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_task_binding.py -q"
+        ],
+        "summary": "cccp.calculation now exports run_xtb_constrained_opt, XtbConstrainedOptOptions and XtbConstrainedOptPayload. The lazy export table covers all fifteen TaskKinds and the package-root object is identical to the task module object; no existing export changed.",
+        "tests": [
+          "tests/test_acp2_science_task_binding.py::test_package_root_exposes_all_fifteen_task_cores",
+          "tests/test_acp2_science_task_binding.py::test_xtb_constrained_opt_package_exports_are_the_defined_objects",
+          "tests/test_acp2_science_task_binding.py::test_lazy_export_table_covers_every_task_kind"
+        ]
+      },
+      "item": "Package-root export repair for xtb_constrained_opt (GAP-8)",
+      "result": "PASS",
+      "row_id": "fifteen-task-export-repair",
+      "scope": "static-implementation"
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+            "sha256": null
+          },
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/question.schema.json",
+            "sha256": null
+          }
+        ],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_reaction_contract.py -q",
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_evidence_contract.py -q"
+        ],
+        "summary": "Reaction and question schemas, public types, fixtures and semantic rules are delivered. Reaction contract suite: 32 passed; evidence/provenance suite: delivered with its named negatives. These rows are recorded because the artifacts exist, not because the P0 gate depends on them.",
+        "tests": [
+          "tests/test_acp2_science_reaction_contract.py",
+          "tests/test_acp2_science_evidence_contract.py"
+        ]
+      },
+      "item": "Reaction/question research-type contracts (delivered pre-research, not a gate precondition)",
+      "result": "PASS",
+      "row_id": "research-reaction-question-contracts",
+      "scope": "static-contract"
+    },
+    {
+      "evidence": {
+        "artifacts": [],
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py tests/test_acp2_science_registry.py tests/test_acp2_science_task_binding.py tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_acp2_science_handoff.py -q"
+        ],
+        "summary": "Required P0 gate command: schema 14, registry 25, binding 35, architecture invariants 20, isolation 8 and handoff validator 9 tests. Seven-suite science regression: 170 passed. The gate command includes only delivered test files.",
+        "tests": [
+          "tests/test_acp2_science_schema.py",
+          "tests/test_acp2_science_registry.py",
+          "tests/test_acp2_science_task_binding.py",
+          "tests/test_architecture_invariants.py",
+          "tests/test_cccp_isolation.py",
+          "tests/test_acp2_science_handoff.py"
+        ]
+      },
+      "item": "Contract, registry, binding and recipe test suites plus architecture/isolation guards",
+      "result": "PASS",
+      "row_id": "contract-registry-binding-recipe-test-suites",
+      "scope": "static-test"
+    }
+  ],
+  "source": {
+    "base_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "branch": "acp2/a-science",
+    "pre_delivery_commit": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+    "python": "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "worktree": "/ACPServer/acp2-development/A"
+  },
+  "unsupported_capabilities": {
+    "families": [
+      {
+        "family": "casscf",
+        "reason": "TaskKind casscf exists but no capability descriptor is seeded; a direct TaskKind binding is executable-intent only and raises UnsupportedBindingError instead of inventing a capability route.",
+        "registered": false
+      },
+      {
+        "family": "clustering",
+        "reason": "TaskKind clustering exists but no capability descriptor is seeded; direct reference only, with UnsupportedBindingError on execute.",
+        "registered": false
+      },
+      {
+        "family": "censo_refine",
+        "reason": "TaskKind censo_refine exists but no capability descriptor is seeded; direct reference only, with UnsupportedBindingError on execute.",
+        "registered": false
+      },
+      {
+        "family": "conformer_search",
+        "reason": "TaskKind conformer_search exists but no capability descriptor is seeded; direct reference only, with UnsupportedBindingError on execute.",
+        "registered": false
+      },
+      {
+        "family": "constrained_optimization",
+        "reason": "TaskKind xtb_constrained_opt exists and is package-exported, but no capability descriptor is seeded; capability selection would invent a route, so execution stays unsupported.",
+        "registered": false
+      },
+      {
+        "family": "gradient",
+        "reason": "TaskKind orca_gradient exists but no capability descriptor is seeded; direct reference only, with UnsupportedBindingError on execute.",
+        "registered": false
+      },
+      {
+        "family": "md_sampling",
+        "reason": "TaskKind md_sampling exists but no capability descriptor is seeded; direct reference only, with UnsupportedBindingError on execute.",
+        "registered": false
+      },
+      {
+        "family": "nmr",
+        "reason": "TaskKind nmr_shielding exists but no capability descriptor is seeded; the NMR workflow stack is not a P0 capability contract.",
+        "registered": false
+      },
+      {
+        "family": "reaction_path",
+        "reason": "TaskKinds scan, irc and xtb_path_search exist but no capability descriptor is seeded; path/search capabilities are not registered in the built-in catalog.",
+        "registered": false
+      },
+      {
+        "family": "thermochemistry",
+        "reason": "TaskKind thermochemistry exists but no capability descriptor is seeded; thermochemistry analysis is not a P0 capability contract.",
+        "registered": false
+      }
+    ],
+    "policy": "Every family below has no seeded descriptor. describe_family() returns described=False and no capability is fabricated; task kinds that exist remain reachable only as direct TaskKind references and raise UnsupportedBindingError when a capability route is required.",
+    "registered_capability_ids": [
+      "electronic.energy",
+      "geometry.optimize",
+      "vibration.analyze",
+      "vibration.compute"
+    ],
+    "registered_families": [
+      "electronic",
+      "geometry",
+      "vibration"
+    ]
+  }
+}
