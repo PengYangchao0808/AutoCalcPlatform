@@ -82,3 +82,4 @@ export * from "./record.js";
 export * from "./proposal.js";
 export * from "./cas.js";
 export * from "./store.js";
+export * from "./memory.js";
