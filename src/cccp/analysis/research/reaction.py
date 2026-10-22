@@ -614,9 +614,7 @@ class AtomMapping:
 
         right_targets = list(left_to_right.values())
         if len(set(right_targets)) != len(right_targets):
-            duplicate = next(
-                value for value in right_targets if right_targets.count(value) > 1
-            )
+            duplicate = next(value for value in right_targets if right_targets.count(value) > 1)
             raise DuplicateMapError(
                 f"atom_mapping.left_to_right claims {duplicate!r} more than once"
             )
@@ -631,8 +629,7 @@ class AtomMapping:
         if expected_inverse != right_to_left:
             difference = sorted(set(expected_inverse.items()) ^ set(right_to_left.items()))[:3]
             raise MapInverseError(
-                "atom_mapping directions are not exact inverses "
-                f"(first differences: {difference})"
+                f"atom_mapping directions are not exact inverses (first differences: {difference})"
             )
 
         unmapped_left = _string_tuple(
@@ -762,9 +759,7 @@ class BondChange:
             left_atoms=_optional_pair(left, f"{where}.left_atoms"),
             right_atoms=_optional_pair(right, f"{where}.right_atoms"),
             bond_order_left=_optional_order(data["bond_order_left"], f"{where}.bond_order_left"),
-            bond_order_right=_optional_order(
-                data["bond_order_right"], f"{where}.bond_order_right"
-            ),
+            bond_order_right=_optional_order(data["bond_order_right"], f"{where}.bond_order_right"),
         )
 
 
@@ -827,9 +822,7 @@ class Conditions:
         return cls(
             temperature_k=_optional_number(data["temperature_k"], f"{where}.temperature_k"),
             pressure_pa=_optional_number(data["pressure_pa"], f"{where}.pressure_pa"),
-            standard_state=_optional_string(
-                data["standard_state"], f"{where}.standard_state"
-            ),
+            standard_state=_optional_string(data["standard_state"], f"{where}.standard_state"),
             solvent=_optional_string(data["solvent"], f"{where}.solvent"),
             phase=_optional_string(data["phase"], f"{where}.phase"),
         )
@@ -866,7 +859,9 @@ class InputUncertainty:
         object.__setattr__(
             self,
             "unknown_fields",
-            _string_tuple(self.unknown_fields, "input_uncertainty.unknown_fields", allow_empty=True),
+            _string_tuple(
+                self.unknown_fields, "input_uncertainty.unknown_fields", allow_empty=True
+            ),
         )
         if self.notes is not None:
             require_string(self.notes, "input_uncertainty.notes", allow_empty=True)
@@ -927,7 +922,9 @@ class Reaction:
         left = _coerce_structures(self.left, "left")
         right = _coerce_structures(self.right, "right")
         if not left:
-            raise MissingReactantError("reaction left side is empty; at least one species is required")
+            raise MissingReactantError(
+                "reaction left side is empty; at least one species is required"
+            )
         if not right:
             raise MissingProductError(
                 "reaction right side is empty; a transformation needs at least one product"

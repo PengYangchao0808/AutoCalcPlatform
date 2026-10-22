@@ -103,9 +103,7 @@ COMPATIBILITY_REQUIREMENTS: Final = frozenset(
     }
 )
 ENERGY_UNITS: Final = frozenset({"hartree", "kcal_per_mol", "kj_per_mol"})
-STANDARD_STATES: Final = frozenset(
-    {"1_bar_ideal_gas", "1_molar_ideal_solution", "unknown"}
-)
+STANDARD_STATES: Final = frozenset({"1_bar_ideal_gas", "1_molar_ideal_solution", "unknown"})
 
 _QUESTION_KEYS: Final = frozenset(
     {
@@ -172,15 +170,11 @@ class UnknownQuestionDeclarationError(QuestionTypeError):
 # ── helpers ─────────────────────────────────────────────────────────────────
 
 
-def _unique_strings(
-    value: Any, where: str, *, allow_empty: bool = False
-) -> tuple[str, ...]:
+def _unique_strings(value: Any, where: str, *, allow_empty: bool = False) -> tuple[str, ...]:
     items = require_sequence(value, where)
     if not items and not allow_empty:
         raise QuestionSchemaError(f"{where}: must not be empty")
-    result = tuple(
-        require_string(item, f"{where}[{index}]") for index, item in enumerate(items)
-    )
+    result = tuple(require_string(item, f"{where}[{index}]") for index, item in enumerate(items))
     if len(set(result)) != len(result):
         raise QuestionSchemaError(f"{where}: duplicate entries {sorted(result)}")
     return result
@@ -232,9 +226,7 @@ class ElectronicStateRef:
         object.__setattr__(
             self,
             "multiplicity",
-            require_int(
-                self.multiplicity, "electronic_state.multiplicity", minimum=1
-            ),
+            require_int(self.multiplicity, "electronic_state.multiplicity", minimum=1),
         )
         if self.state_id is not None:
             require_string(self.state_id, "electronic_state.state_id")
@@ -257,9 +249,7 @@ class ElectronicStateRef:
         require_keys(data, {"charge", "multiplicity"}, where)
         return cls(
             charge=require_int(data["charge"], f"{where}.charge"),
-            multiplicity=require_int(
-                data["multiplicity"], f"{where}.multiplicity", minimum=1
-            ),
+            multiplicity=require_int(data["multiplicity"], f"{where}.multiplicity", minimum=1),
             state_id=(
                 None
                 if data.get("state_id") is None
@@ -377,8 +367,7 @@ class ComparisonConditions:
             value = _resolve_path(view, dotted)
             if value is _MISSING:
                 raise UnknownQuestionDeclarationError(
-                    f"comparison_conditions.unknown_fields names {dotted!r}, "
-                    "which does not exist"
+                    f"comparison_conditions.unknown_fields names {dotted!r}, which does not exist"
                 )
             if value is not None:
                 raise UnknownQuestionDeclarationError(
@@ -420,9 +409,7 @@ class ComparisonConditions:
                 require_mapping(data["electronic_state"], f"{where}.electronic_state"),
                 f"{where}.electronic_state",
             ),
-            temperature_k=_optional_number(
-                data["temperature_k"], f"{where}.temperature_k"
-            ),
+            temperature_k=_optional_number(data["temperature_k"], f"{where}.temperature_k"),
             pressure_pa=_optional_number(data["pressure_pa"], f"{where}.pressure_pa"),
             standard_state=(
                 None
@@ -473,9 +460,7 @@ class Question:
                 f"got {self.question_type!r}"
             )
         refs = _unique_strings(self.hypothesis_refs, "question.hypothesis_refs")
-        evidence = _unique_strings(
-            self.required_evidence_types, "question.required_evidence_types"
-        )
+        evidence = _unique_strings(self.required_evidence_types, "question.required_evidence_types")
         unsupported = sorted(set(evidence) - EVIDENCE_TYPES)
         if unsupported:
             raise QuestionSchemaError(
@@ -493,9 +478,7 @@ class Question:
             self.comparison_conditions
             if isinstance(self.comparison_conditions, ComparisonConditions)
             else ComparisonConditions.from_dict(
-                require_mapping(
-                    self.comparison_conditions, "question.comparison_conditions"
-                ),
+                require_mapping(self.comparison_conditions, "question.comparison_conditions"),
                 "question.comparison_conditions",
             )
         )
@@ -540,19 +523,13 @@ class Question:
         return cls(
             schema_version=version,
             question_id=require_string(data["question_id"], "question.question_id"),
-            question_type=require_string(
-                data["question_type"], "question.question_type"
-            ),
-            hypothesis_refs=_unique_strings(
-                data["hypothesis_refs"], "question.hypothesis_refs"
-            ),
+            question_type=require_string(data["question_type"], "question.question_type"),
+            hypothesis_refs=_unique_strings(data["hypothesis_refs"], "question.hypothesis_refs"),
             required_evidence_types=_unique_strings(
                 data["required_evidence_types"], "question.required_evidence_types"
             ),
             comparison_conditions=ComparisonConditions.from_dict(
-                require_mapping(
-                    data["comparison_conditions"], "question.comparison_conditions"
-                ),
+                require_mapping(data["comparison_conditions"], "question.comparison_conditions"),
                 "question.comparison_conditions",
             ),
             claim_status_vocabulary=_unique_strings(

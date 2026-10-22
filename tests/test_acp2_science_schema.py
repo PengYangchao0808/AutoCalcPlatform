@@ -193,9 +193,7 @@ class RestrictedSchemaValidator:
                         f"{self.name}: {keyword} must be an array at {path}"
                     )
                 for index, subschema in enumerate(value):
-                    self.assert_supported_keywords(
-                        subschema, f"{child}/{index}"
-                    )
+                    self.assert_supported_keywords(subschema, f"{child}/{index}")
 
     # -- validation -------------------------------------------------------
 
@@ -219,9 +217,7 @@ class RestrictedSchemaValidator:
         for token in pointer.lstrip("/").split("/"):
             key = token.replace("~1", "/").replace("~0", "~")
             if not isinstance(node, dict) or key not in node:
-                raise UnsupportedSchemaKeywordError(
-                    f"{self.name}: unresolved $ref {ref!r}"
-                )
+                raise UnsupportedSchemaKeywordError(f"{self.name}: unresolved $ref {ref!r}")
             node = node[key]
         if not isinstance(node, dict):
             raise UnsupportedSchemaKeywordError(
@@ -244,14 +240,11 @@ class RestrictedSchemaValidator:
             names = [declared] if isinstance(declared, str) else list(declared)
             if not any(self._matches_type(instance, name, path) for name in names):
                 errors.append(
-                    f"{path}: expected type {' | '.join(names)}, "
-                    f"got {type(instance).__name__}"
+                    f"{path}: expected type {' | '.join(names)}, got {type(instance).__name__}"
                 )
 
         if "const" in schema and not _json_equal(instance, schema["const"]):
-            errors.append(
-                f"{path}: expected const {schema['const']!r}, got {instance!r}"
-            )
+            errors.append(f"{path}: expected const {schema['const']!r}, got {instance!r}")
 
         if "enum" in schema:
             allowed = schema["enum"]
@@ -276,9 +269,7 @@ class RestrictedSchemaValidator:
 
         if isinstance(instance, str) and "pattern" in schema:
             if re.search(schema["pattern"], instance) is None:
-                errors.append(
-                    f"{path}: {instance!r} does not match {schema['pattern']!r}"
-                )
+                errors.append(f"{path}: {instance!r} does not match {schema['pattern']!r}")
 
         if isinstance(instance, dict):
             required = schema.get("required", [])
@@ -289,16 +280,12 @@ class RestrictedSchemaValidator:
             properties = schema.get("properties", {})
             for key, subschema in properties.items():
                 if key in instance:
-                    self._validate(
-                        instance[key], subschema, f"{path}.{key}", errors
-                    )
+                    self._validate(instance[key], subschema, f"{path}.{key}", errors)
 
             if schema.get("additionalProperties") is False:
                 for key in instance:
                     if key not in properties:
-                        errors.append(
-                            f"{path}: additional property {key!r} is not allowed"
-                        )
+                        errors.append(f"{path}: additional property {key!r} is not allowed")
             elif isinstance(schema.get("additionalProperties"), dict):
                 for key, value in instance.items():
                     if key not in properties:
@@ -320,9 +307,7 @@ class RestrictedSchemaValidator:
 
         if isinstance(instance, list) and isinstance(schema.get("items"), dict):
             for index, item in enumerate(instance):
-                self._validate(
-                    item, schema["items"], f"{path}[{index}]", errors
-                )
+                self._validate(item, schema["items"], f"{path}[{index}]", errors)
 
         if "oneOf" in schema:
             matches = 0
@@ -456,8 +441,7 @@ def assess_capability(payload: Any) -> Admission:
         return Admission(
             False,
             "unknown_major_version",
-            f"declared schema_version {payload.get('schema_version')!r}; "
-            "supported versions: [1]",
+            f"declared schema_version {payload.get('schema_version')!r}; supported versions: [1]",
         )
     errors = CAPABILITY_VALIDATOR.validate(payload)
     if errors:
@@ -497,8 +481,7 @@ def assess_capability_corpus(descriptors: Any) -> Admission:
             return Admission(
                 False,
                 "duplicate_capability_id",
-                f"{capability_id!r} declared by {seen[capability_id]!r} and "
-                f"{implementation_id!r}",
+                f"{capability_id!r} declared by {seen[capability_id]!r} and {implementation_id!r}",
             )
         seen[capability_id] = implementation_id
     for descriptor in descriptors:
@@ -548,9 +531,7 @@ def test_capability_schema_unsupported_keyword_is_hard_error(tmp_path: Path) -> 
     schema = load_json(CAPABILITY_SCHEMA_PATH)
     schema["dependencies"] = {"capability_id": ["implementation_id"]}
     temporary = tmp_path / "capability.schema.tmp.json"
-    temporary.write_text(
-        json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    temporary.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     assert temporary.exists()
     try:
         with pytest.raises(UnsupportedSchemaKeywordError):
@@ -667,19 +648,13 @@ def test_capability_unsupported_provider_is_unknown_implementation() -> None:
 
 def test_capability_unknown_execution_field_rejected_for_execution() -> None:
     payload = load_json(FIXTURES / "capability_unknown_execution_field.json")
-    assert unsupported_execution_fields(payload) == (
-        "execution_semantics.retry_policy",
-    )
+    assert unsupported_execution_fields(payload) == ("execution_semantics.retry_policy",)
     assert not CAPABILITY_VALIDATOR.is_valid(payload)
     verdict = assess_capability(payload)
     assert verdict.execution_eligible is False
-    assert verdict.unsupported_execution_fields == (
-        "execution_semantics.retry_policy",
-    )
+    assert verdict.unsupported_execution_fields == ("execution_semantics.retry_policy",)
     assert verdict.reason is not None
-    assert verdict.reason.startswith(
-        "unsupported_execution_field:execution_semantics.retry_policy"
-    )
+    assert verdict.reason.startswith("unsupported_execution_field:execution_semantics.retry_policy")
 
 
 def test_capability_historical_unknown_field_readable_but_not_eligible() -> None:
@@ -802,9 +777,7 @@ def test_handoff_h1_lists_every_contract_file_with_digests() -> None:
     assert handoff["handoff_id"] == "H1"
     assert handoff["handoff_version"] == 1
     entries = {entry["path"]: entry for entry in handoff["contract_files"]}
-    expected_paths = {
-        str((SCIENCE / name).relative_to(REPO)) for name in CONTRACT_FILE_NAMES
-    }
+    expected_paths = {str((SCIENCE / name).relative_to(REPO)) for name in CONTRACT_FILE_NAMES}
     assert set(entries) == expected_paths
     for path, entry in entries.items():
         absolute = REPO / path
@@ -847,9 +820,10 @@ def test_handoff_h1_lists_every_contract_file_with_digests() -> None:
     for fixture in handoff["positive_fixtures"] + handoff["negative_fixtures"]:
         assert (REPO / fixture["path"]).is_file(), fixture["path"]
         if fixture.get("sha256") is not None:
-            assert fixture["sha256"] == hashlib.sha256(
-                (REPO / fixture["path"]).read_bytes()
-            ).hexdigest(), fixture["path"]
+            assert (
+                fixture["sha256"]
+                == hashlib.sha256((REPO / fixture["path"]).read_bytes()).hexdigest()
+            ), fixture["path"]
 
 
 def test_receipt_samples_deferred_until_b01_publishes() -> None:

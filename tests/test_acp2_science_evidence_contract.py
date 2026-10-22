@@ -181,9 +181,7 @@ class RestrictedEvidenceValidator:
         for token in pointer.lstrip("/").split("/"):
             key = token.replace("~1", "/").replace("~0", "~")
             if not isinstance(node, dict) or key not in node:
-                raise UnsupportedEvidenceSchemaKeywordError(
-                    f"{self.name}: unresolved $ref {ref!r}"
-                )
+                raise UnsupportedEvidenceSchemaKeywordError(f"{self.name}: unresolved $ref {ref!r}")
             node = node[key]
         if not isinstance(node, dict):
             raise UnsupportedEvidenceSchemaKeywordError(
@@ -206,14 +204,11 @@ class RestrictedEvidenceValidator:
             names = [declared] if isinstance(declared, str) else list(declared)
             if not any(self._matches_type(instance, name, path) for name in names):
                 errors.append(
-                    f"{path}: expected type {' | '.join(names)}, "
-                    f"got {type(instance).__name__}"
+                    f"{path}: expected type {' | '.join(names)}, got {type(instance).__name__}"
                 )
 
         if "const" in schema and not _json_equal(instance, schema["const"]):
-            errors.append(
-                f"{path}: expected const {schema['const']!r}, got {instance!r}"
-            )
+            errors.append(f"{path}: expected const {schema['const']!r}, got {instance!r}")
 
         if "enum" in schema:
             allowed = schema["enum"]
@@ -222,22 +217,17 @@ class RestrictedEvidenceValidator:
 
         if isinstance(instance, str):
             if "pattern" in schema and re.search(schema["pattern"], instance) is None:
-                errors.append(
-                    f"{path}: {instance!r} does not match {schema['pattern']!r}"
-                )
+                errors.append(f"{path}: {instance!r} does not match {schema['pattern']!r}")
             if "minLength" in schema and len(instance) < schema["minLength"]:
                 errors.append(
-                    f"{path}: length {len(instance)} is below minLength "
-                    f"{schema['minLength']}"
+                    f"{path}: length {len(instance)} is below minLength {schema['minLength']}"
                 )
             if schema.get("format") == "date-time" and DATETIME_PATTERN.match(instance) is None:
                 errors.append(f"{path}: {instance!r} is not an RFC 3339 date-time")
 
         if isinstance(instance, (int, float)) and not isinstance(instance, bool):
             if "minimum" in schema and instance < schema["minimum"]:
-                errors.append(
-                    f"{path}: {instance!r} is below minimum {schema['minimum']!r}"
-                )
+                errors.append(f"{path}: {instance!r} is below minimum {schema['minimum']!r}")
             if "exclusiveMinimum" in schema and instance <= schema["exclusiveMinimum"]:
                 errors.append(
                     f"{path}: {instance!r} is not above exclusiveMinimum "
@@ -257,15 +247,12 @@ class RestrictedEvidenceValidator:
             if schema.get("additionalProperties") is False:
                 for key in instance:
                     if key not in properties:
-                        errors.append(
-                            f"{path}: additional property {key!r} is not allowed"
-                        )
+                        errors.append(f"{path}: additional property {key!r} is not allowed")
 
         if isinstance(instance, list):
             if "minItems" in schema and len(instance) < schema["minItems"]:
                 errors.append(
-                    f"{path}: {len(instance)} items is below minItems "
-                    f"{schema['minItems']}"
+                    f"{path}: {len(instance)} items is below minItems {schema['minItems']}"
                 )
             if isinstance(schema.get("items"), dict):
                 for index, item in enumerate(instance):
@@ -410,9 +397,7 @@ def assert_validator_admissible(validator: Any) -> None:
             f"(expected {expected_prefix}*)"
         )
     if not isinstance(version, str) or VALIDATOR_VERSION_PATTERN.match(version) is None:
-        raise ValidatorShapeError(
-            f"validator_version {version!r} is not a non-empty version token"
-        )
+        raise ValidatorShapeError(f"validator_version {version!r} is not a non-empty version token")
 
 
 def verify_source_digest(fixture_root: Path, source_ref: dict[str, Any]) -> None:
@@ -435,14 +420,10 @@ def verify_source_digest(fixture_root: Path, source_ref: dict[str, Any]) -> None
             f"artifact path {artifact_path!r} escapes the evidence root"
         )
     if not candidate.is_file():
-        raise MissingSourceForSupportedClaimError(
-            f"artifact {artifact_path!r} is absent"
-        )
+        raise MissingSourceForSupportedClaimError(f"artifact {artifact_path!r} is absent")
     actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
     if actual != declared:
-        raise DigestMismatchError(
-            f"{artifact_path}: declared {declared}, actual {actual}"
-        )
+        raise DigestMismatchError(f"{artifact_path}: declared {declared}, actual {actual}")
 
 
 def check_claim(
@@ -453,8 +434,7 @@ def check_claim(
     status = claim.get("status")
     if status not in CLAIM_STATUSES:
         raise UnknownClaimStatusError(
-            f"claim {claim.get('claim_id')!r} declares status {status!r}; "
-            f"allowed: {CLAIM_STATUSES}"
+            f"claim {claim.get('claim_id')!r} declares status {status!r}; allowed: {CLAIM_STATUSES}"
         )
 
     if "validator" in claim:
@@ -482,8 +462,7 @@ def check_claim(
         ]
         if any(check.get("check_id") == "partial_output" for check in blocking):
             raise PartialOutputCannotSupportError(
-                f"claim {claim.get('claim_id')!r} is {status} while the output is "
-                "partial"
+                f"claim {claim.get('claim_id')!r} is {status} while the output is partial"
             )
         if blocking:
             raise BlockingMissingCheckCannotSupportError(
@@ -493,15 +472,13 @@ def check_claim(
 
     if status == "not_evaluated" and not missing_checks:
         raise NotEvaluatedRequiresMissingCheckError(
-            f"claim {claim.get('claim_id')!r} is not_evaluated without listing what "
-            "was missing"
+            f"claim {claim.get('claim_id')!r} is not_evaluated without listing what was missing"
         )
 
     for limitation_id in claim.get("limitations", []):
         if limitation_id not in limitation_ids:
             raise MissingLimitationReferenceError(
-                f"claim {claim.get('claim_id')!r} references unknown limitation "
-                f"{limitation_id!r}"
+                f"claim {claim.get('claim_id')!r} references unknown limitation {limitation_id!r}"
             )
 
 
@@ -565,19 +542,13 @@ def collect_unknown_field_paths(
                 found.append(f"{path}.{key}")
             else:
                 found.extend(
-                    collect_unknown_field_paths(
-                        value, properties[key], root, f"{path}.{key}"
-                    )
+                    collect_unknown_field_paths(value, properties[key], root, f"{path}.{key}")
                 )
     elif isinstance(instance, list):
         items = schema.get("items")
         if isinstance(items, dict):
             for index, item in enumerate(instance):
-                found.extend(
-                    collect_unknown_field_paths(
-                        item, items, root, f"{path}[{index}]"
-                    )
-                )
+                found.extend(collect_unknown_field_paths(item, items, root, f"{path}[{index}]"))
     return found
 
 
@@ -590,9 +561,7 @@ def historical_read_evidence(payload: Any) -> dict[str, Any]:
         "readable": True,
         "recovery_eligible": False,
         "schema_version": payload.get("schema_version"),
-        "unknown_fields": collect_unknown_field_paths(
-            payload, EVIDENCE_SCHEMA, EVIDENCE_SCHEMA
-        ),
+        "unknown_fields": collect_unknown_field_paths(payload, EVIDENCE_SCHEMA, EVIDENCE_SCHEMA),
     }
 
 
@@ -618,9 +587,10 @@ def test_supported_claim_with_digested_source_accepted() -> None:
     claim = report["claims"][0]
     assert claim["status"] == "supported"
     assert claim["validator"]["validator_id"] == "check.imaginary_mode_count"
-    assert claim["source_refs"][0]["digest"]["value"] == hashlib.sha256(
-        (EVIDENCE_FIXTURES / "artifacts/freq.out").read_bytes()
-    ).hexdigest()
+    assert (
+        claim["source_refs"][0]["digest"]["value"]
+        == hashlib.sha256((EVIDENCE_FIXTURES / "artifacts/freq.out").read_bytes()).hexdigest()
+    )
 
 
 def test_provenance_schemas_parse_and_declare_a_version() -> None:
@@ -758,9 +728,7 @@ def test_every_claim_carries_status_validator_sources_and_limitations() -> None:
         "partial_output.json",
     ):
         report = load_json(EVIDENCE_FIXTURES / name)
-        limitation_ids = {
-            limitation["limitation_id"] for limitation in report["limitations"]
-        }
+        limitation_ids = {limitation["limitation_id"] for limitation in report["limitations"]}
         for claim in report["claims"]:
             assert isinstance(claim.get("claim_id"), str) and claim["claim_id"]
             assert isinstance(claim.get("statement"), str) and claim["statement"]
