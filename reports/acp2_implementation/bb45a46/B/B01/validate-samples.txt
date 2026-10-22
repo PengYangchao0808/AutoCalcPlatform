@@ -1,0 +1,26 @@
+ACCEPT  positive/b-env-runtime-discover.json  ok
+ACCEPT  positive/c-dsh-local-singlepoint-fixture.json  ok
+ACCEPT  positive/c-dsh-local-singlepoint-live.json  ok
+ACCEPT  positive/b-approval.json  ok
+ACCEPT  positive/b-budget.json  ok
+ACCEPT  positive/b-da-preflight.json  ok
+ACCEPT  positive/b-da-submit.json  ok
+ACCEPT  positive/b-da-evidence.json  ok
+ACCEPT  positive/b-da-aggregate.json  ok
+ACCEPT  positive/b-artifact-read.json  ok
+REJECT  negative/bad-time-field.json  schema:missing_required:$:started_at
+REJECT  negative/corrupt-digest.json  artifact_sha256_mismatch:artifacts/corrupt-target.txt
+REJECT  negative/unknown-required-version.json  unsupported_contract_version_major:2.0.0
+REJECT  negative/missing-owner.json  schema:missing_required:$:owner
+REJECT  negative/unknown-evidence-kind.json  schema:enum:$.evidence_kind
+REJECT  negative/invalid-result.json  schema:enum:$.result
+REJECT  negative/invalid-scope.json  schema:enum:$.scope
+REJECT  negative/fixture-phase-with-live-kind.json  phase_evidence_kind_mismatch:experience:fixture!=live
+REJECT  negative/duplicate-platform-conflict.json  platform_alias_conflict:job_id
+REJECT  negative/fixture-with-platform-refs.json  fixture_platform_refs_not_null:job_id
+REJECT  negative/live-submit-missing-job-id.json  live_submit_missing_job_id
+REJECT  negative/remote-live-missing-submission-id.json  live_submit_missing_submission_id
+REJECT  negative/live-discovery-with-job-ref.json  live_discover_platform_ref:job_id
+REJECT  negative/local-live-with-submission-id.json  live_submit_submission_id_not_null_local
+REJECT  negative/aggregate-missing-child-phase.json  aggregate_missing_required_child_phase:da-evidence
+SUMMARY: 25/25 sample expectations matched

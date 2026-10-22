@@ -1,0 +1,4 @@
+All checks passed!
+ruff_exit=0
+2 files already formatted
+ruff_format_exit=0

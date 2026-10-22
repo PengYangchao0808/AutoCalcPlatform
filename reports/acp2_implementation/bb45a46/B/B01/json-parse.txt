@@ -1,0 +1,2 @@
+schema_json_tool_exit=0
+all_samples_json_tool_checked
