@@ -604,11 +604,25 @@ class ControllerClient:
             if request.get(key) is not None:
                 query[key] = request[key]
         attempt = request.get("attempt", artifact_ref.get("attempt"))
-        if attempt is not None:
-            query["attempt"] = attempt
+        if attempt is None:
+            raise InvalidParameterError(
+                "read requires artifact_ref.attempt", params={"field": "attempt"}
+            )
+        query["attempt"] = attempt
         generation = artifact_ref.get("generation")
-        if generation is not None:
-            query.setdefault("expected_revision", generation)
+        if generation is None:
+            raise InvalidParameterError(
+                "read requires artifact_ref.generation", params={"field": "generation"}
+            )
+        query.setdefault("expected_revision", generation)
+        # The digest is part of the frozen reference: without it the Controller
+        # cannot prove the served bytes are the requested artifact.
+        digest = artifact_ref.get("digest")
+        if not isinstance(digest, str) or not digest:
+            raise InvalidParameterError(
+                "read requires artifact_ref.digest", params={"field": "digest"}
+            )
+        query["digest"] = digest
         quoted_task = urllib.parse.quote(task_id, safe="")
         quoted_resource = urllib.parse.quote(resource, safe="")
         path = f"/api/v1/jobs/{quoted_task}/prepared/{quoted_resource}"

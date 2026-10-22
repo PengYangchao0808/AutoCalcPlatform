@@ -1,0 +1,39 @@
+{
+  "artifact_ref": {
+    "attempt": 1,
+    "authorization": {
+      "action": "read",
+      "allowed": true,
+      "authorization_version": 6,
+      "principal_id": "principal_local",
+      "project_id": "uncategorized",
+      "scope": "local-single"
+    },
+    "availability": "ready",
+    "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+    "generation": 1,
+    "job_id": "20261023_031453_001_singlepoint",
+    "media_type": "application/json",
+    "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+    "relative_path": "RESULT/energy/singlepoint_energy.json",
+    "resource_id": "singlepoint_energy",
+    "schema": "acp2.artifact-ref.v1",
+    "size_bytes": 241,
+    "source_refs": [],
+    "source_schema": "",
+    "version": 1
+  },
+  "availability": "ready",
+  "body": "{\n  \"energy\": -1.116759307204,\n  \"energy_hartree\": -1.116759307204,\n  \"method\": \"\",\n  \"schema_version\": \"acp_energy_product_v1\",\n  \"source\": \"task_result.json\",\n  \"step_id\": \"singlepoint\",\n  \"step_kind\": \"singlepoint\",\n  \"unit\": \"hartree\"\n}\n",
+  "body_ref": null,
+  "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+  "encoding": "identity",
+  "generation": 1,
+  "media_type": "application/json",
+  "schema": "acp2.artifact-ref.v1",
+  "size_bytes": 241,
+  "source_refs": [],
+  "source_schema": "",
+  "truncated": false,
+  "version": 1
+}

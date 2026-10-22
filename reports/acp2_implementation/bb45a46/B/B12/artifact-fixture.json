@@ -1,0 +1,51 @@
+{
+  "fixture_id": "fx-b12-artifact-v1",
+  "owner": "B12",
+  "source": "B10 completed Local task (copied run root run-root-b12)",
+  "run_root": "/ACPServer/acp2-development/data/b/run-root-b12",
+  "job_id": "20261023_031453_001_singlepoint",
+  "attempt": 1,
+  "release_id": "98e0695545d668e6",
+  "artifacts": [
+    {
+      "artifact_id": "singlepoint_energy",
+      "relative_path": "RESULT/energy/singlepoint_energy.json",
+      "generation": 1,
+      "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+      "size_bytes": 241,
+      "media_type": "application/json"
+    },
+    {
+      "artifact_id": "frequency_modes",
+      "relative_path": "RESULT/frequencies/normal_modes.json",
+      "generation": 1,
+      "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+      "size_bytes": 307,
+      "media_type": "application/json",
+      "fixture": "static B12 auxiliary frequency artifact (not a computed spectrum)"
+    },
+    {
+      "artifact_id": "task_result",
+      "relative_path": "RESULT/task_result.json",
+      "generation": 1,
+      "digest": "sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+      "size_bytes": 1963,
+      "media_type": "application/json"
+    }
+  ],
+  "evidence_report": {
+    "artifact_id": "evidence_report",
+    "path": "fixtures/evidence-report.a-fixture.json",
+    "schema_ref": "acp2.science.evidence.v1",
+    "a_schema": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+    "source_refs": [
+      {
+        "artifact_path": "RESULT/energy/singlepoint_energy.json",
+        "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "role": "native_output",
+        "units": "hartree"
+      }
+    ],
+    "expected_claim_status": "not_evaluated"
+  }
+}

@@ -1,0 +1,632 @@
+{
+  "artifacts": [
+    {
+      "path": "artifact/body-singlepoint_energy",
+      "sha256": "3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+      "size_bytes": 241
+    },
+    {
+      "path": "artifact/body-frequency_modes",
+      "sha256": "8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+      "size_bytes": 307
+    },
+    {
+      "path": "artifact/body-task_result",
+      "sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+      "size_bytes": 1963
+    },
+    {
+      "path": "artifact/body-evidence_report.json",
+      "sha256": "4893a4e970b5ea53314af35d7a5087207ddc12c4f9a071ebc6b66d3d05cbba19",
+      "size_bytes": 924
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "read=200 requested=sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d served=sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d size=241/241 generation=1/1",
+      "name": "artifact:singlepoint_energy:digest_generation_agree",
+      "status": "PASS"
+    },
+    {
+      "detail": "first=op_3557c65874904a45a2e748e5685e914e replay=op_3557c65874904a45a2e748e5685e914e",
+      "name": "artifact:singlepoint_energy:prepare_idempotent",
+      "status": "PASS"
+    },
+    {
+      "detail": "state=ready",
+      "name": "artifact:singlepoint_energy:operation_ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "read=200 requested=sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03 served=sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03 size=307/307 generation=1/1",
+      "name": "artifact:frequency_modes:digest_generation_agree",
+      "status": "PASS"
+    },
+    {
+      "detail": "first=op_2b3f3a0823a8422dbd454283adab8405 replay=op_2b3f3a0823a8422dbd454283adab8405",
+      "name": "artifact:frequency_modes:prepare_idempotent",
+      "status": "PASS"
+    },
+    {
+      "detail": "state=ready",
+      "name": "artifact:frequency_modes:operation_ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "read=200 requested=sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4 served=sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4 size=1963/1963 generation=1/1",
+      "name": "artifact:task_result:digest_generation_agree",
+      "status": "PASS"
+    },
+    {
+      "detail": "first=op_a54cb99942464cbba2c9af746f050d79 replay=op_a54cb99942464cbba2c9af746f050d79",
+      "name": "artifact:task_result:prepare_idempotent",
+      "status": "PASS"
+    },
+    {
+      "detail": "state=ready",
+      "name": "artifact:task_result:operation_ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "generation1=op_3557c65874904a45a2e748e5685e914e generation2=op_e8a19618a44a4a2ca5a7ee336358158d",
+      "name": "artifact:different_generation_new_operation",
+      "status": "PASS"
+    },
+    {
+      "detail": "prepare=200 state=ready read=200 claim_status=not_evaluated digest=sha256:4893a4e970b5ea53314af35d7a5087207ddc12c4f9a071ebc6b66d3d05cbba19",
+      "name": "artifact:evidence_report_stored_not_interpreted",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=409 repeat=409 code=resource_not_ready",
+      "name": "artifact:not_prepared",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=409 body_keys=['detail']",
+      "name": "artifact:corrupt_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "prepare=200 state=failed error={'code': 'digest_mismatch', 'message': 'digest_mismatch:artifact body does not match the expected digest/size'}",
+      "name": "artifact:corrupt_prepare",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=409 detail={'code': 'revision_conflict', 'message': 'artifact generation is stale', 'params': {'rule': 'generation_stale', 'requested_generation': 1, 'current_generation': 2}}",
+      "name": "artifact:old_generation",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=400 sentinel_exists=False",
+      "name": "artifact:path_traversal",
+      "status": "PASS"
+    },
+    {
+      "detail": "first=op_4838b2b1fdf7460f8d694d674092e1a8 cold=409 reprepare=op_3f5a28f5a2944b0080862012044f4652 rebuilt=200 bodies_removed=1",
+      "name": "artifact:eviction_rebuild",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit=0 log=artifact/pytest.txt",
+      "name": "artifact:extended_negative_matrix_tests",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=1 after=1",
+      "name": "artifact:zero_task_side_effects",
+      "status": "PASS"
+    }
+  ],
+  "attempt": 1,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "3d2336581fe60cd8ba63fbb40d6e235f52327d751b7c4ee04c91ba3818c376a6",
+    "server_revision": "945ecd9719a81aad5764ba32a82952e30ee6b087"
+  },
+  "candidate_revision": "945ecd9719a81aad5764ba32a82952e30ee6b087",
+  "command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "artifact",
+    "--phase",
+    "main",
+    "--controller",
+    "http://127.0.0.1:18770",
+    "--fixture",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B12/artifact-fixture.json",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B12",
+    "--timeout",
+    "900"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "read",
+    "acceptance.target": "local",
+    "b12.artifacts": [
+      {
+        "path": "artifact/body-singlepoint_energy",
+        "sha256": "3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "size_bytes": 241
+      },
+      {
+        "path": "artifact/body-frequency_modes",
+        "sha256": "8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+        "size_bytes": 307
+      },
+      {
+        "path": "artifact/body-task_result",
+        "sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+        "size_bytes": 1963
+      },
+      {
+        "path": "artifact/body-evidence_report.json",
+        "sha256": "4893a4e970b5ea53314af35d7a5087207ddc12c4f9a071ebc6b66d3d05cbba19",
+        "size_bytes": 924
+      }
+    ],
+    "b12.attempt": 1,
+    "b12.cross_attempt": "PASS via tests/test_acp2_runtime_artifact.py::test_cross_attempt_read_never_serves_newer_bytes",
+    "b12.fixture": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B12/artifact-fixture.json",
+    "b12.job_id": "20261023_031453_001_singlepoint",
+    "b12.manifest_generation": 1,
+    "b12.missing_remote_cache": "PASS via tests/test_acp2_runtime_artifact.py::test_missing_remote_cache_is_named_and_never_fetches",
+    "b12.negative_matrix": [
+      {
+        "detail": "status=409 repeat=409 code=resource_not_ready",
+        "row": "not_prepared",
+        "status": "PASS"
+      },
+      {
+        "detail": "status=409 body_keys=['detail']",
+        "row": "corrupt_digest",
+        "status": "PASS"
+      },
+      {
+        "detail": "prepare=200 state=failed error={'code': 'digest_mismatch', 'message': 'digest_mismatch:artifact body does not match the expected digest/size'}",
+        "row": "corrupt_prepare",
+        "status": "PASS"
+      },
+      {
+        "detail": "status=409 detail={'code': 'revision_conflict', 'message': 'artifact generation is stale', 'params': {'rule': 'generation_stale', 'requested_generation': 1, 'current_generation': 2}}",
+        "row": "old_generation",
+        "status": "PASS"
+      },
+      {
+        "detail": "status=400 sentinel_exists=False",
+        "row": "path_traversal",
+        "status": "PASS"
+      },
+      {
+        "detail": "first=op_4838b2b1fdf7460f8d694d674092e1a8 cold=409 reprepare=op_3f5a28f5a2944b0080862012044f4652 rebuilt=200 bodies_removed=1",
+        "row": "eviction_rebuild",
+        "status": "PASS"
+      }
+    ],
+    "b12.old_response_after_switch": "PASS via tests/test_acp2_runtime_artifact.py::test_old_response_after_switching_tasks_is_refused",
+    "b12.operation_id": "op_3557c65874904a45a2e748e5685e914e",
+    "b12.release_id": "98e0695545d668e6",
+    "b12.results": {
+      "frequency_modes": {
+        "observed_digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+        "operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+        "operation_ref": {
+          "id": "op_2b3f3a0823a8422dbd454283adab8405",
+          "kind": "operation"
+        },
+        "prepare_status": 200,
+        "projection": {
+          "artifact_ref": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+            "relative_path": "RESULT/frequencies/normal_modes.json",
+            "resource_id": "frequency_modes",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 307,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "attempt": 1,
+          "availability": "ready",
+          "basis_revision": 1,
+          "bytes": 307,
+          "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+          "error": null,
+          "expected_revision": 1,
+          "freshness": "current",
+          "generation": 1,
+          "idempotency_key": "op_e9eceada1d8014a7c5e47e3f2b47da54",
+          "idempotent_replay": false,
+          "job_id": "20261023_031453_001_singlepoint",
+          "observed_at": "2026-10-22T21:19:22Z",
+          "operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+          "operation_ref": {
+            "id": "op_2b3f3a0823a8422dbd454283adab8405",
+            "kind": "operation"
+          },
+          "purpose": "artifact",
+          "resource": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+            "relative_path": "RESULT/frequencies/normal_modes.json",
+            "resource_id": "frequency_modes",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 307,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "resource_id": "frequency_modes",
+          "resource_kind": "artifact",
+          "schema": "acp2.artifact-ref.v1",
+          "schema_version": 1,
+          "sha256": "8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+          "size_bytes": 307,
+          "source_refs": [],
+          "source_schema": "",
+          "state": "ready",
+          "updated_at": "2026-10-22T21:19:22Z",
+          "version": 1
+        },
+        "read": {
+          "artifact_ref": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+            "relative_path": "RESULT/frequencies/normal_modes.json",
+            "resource_id": "frequency_modes",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 307,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "availability": "ready",
+          "body": "{\n  \"fixture\": \"B12 auxiliary frequency artifact (static, not a computed spectrum)\",\n  \"schema\": \"acp2.auxiliary.frequency-modes.v1\",\n  \"modes\": [\n    {\"index\": 1, \"frequency_cm1\": 4401.2, \"intensity_km_mol\": 0.0},\n    {\"index\": 2, \"frequency_cm1\": 4401.2, \"intensity_km_mol\": 0.0}\n  ],\n  \"units\": \"cm-1\"\n}\n",
+          "body_ref": null,
+          "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+          "encoding": "identity",
+          "generation": 1,
+          "media_type": "application/json",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 307,
+          "source_refs": [],
+          "source_schema": "",
+          "truncated": false,
+          "version": 1
+        },
+        "read_status": 200,
+        "replay_operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+        "replay_status": 200
+      },
+      "singlepoint_energy": {
+        "observed_digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+        "operation_ref": {
+          "id": "op_3557c65874904a45a2e748e5685e914e",
+          "kind": "operation"
+        },
+        "prepare_status": 200,
+        "projection": {
+          "artifact_ref": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "resource_id": "singlepoint_energy",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 241,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "attempt": 1,
+          "availability": "ready",
+          "basis_revision": 1,
+          "bytes": 241,
+          "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+          "error": null,
+          "expected_revision": 1,
+          "freshness": "current",
+          "generation": 1,
+          "idempotency_key": "op_69dbb33cef500acc0b4021325d4e9b5e",
+          "idempotent_replay": false,
+          "job_id": "20261023_031453_001_singlepoint",
+          "observed_at": "2026-10-22T21:19:22Z",
+          "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+          "operation_ref": {
+            "id": "op_3557c65874904a45a2e748e5685e914e",
+            "kind": "operation"
+          },
+          "purpose": "artifact",
+          "resource": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "resource_id": "singlepoint_energy",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 241,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "resource_id": "singlepoint_energy",
+          "resource_kind": "artifact",
+          "schema": "acp2.artifact-ref.v1",
+          "schema_version": 1,
+          "sha256": "3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+          "size_bytes": 241,
+          "source_refs": [],
+          "source_schema": "",
+          "state": "ready",
+          "updated_at": "2026-10-22T21:19:22Z",
+          "version": 1
+        },
+        "read": {
+          "artifact_ref": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+            "relative_path": "RESULT/energy/singlepoint_energy.json",
+            "resource_id": "singlepoint_energy",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 241,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "availability": "ready",
+          "body": "{\n  \"energy\": -1.116759307204,\n  \"energy_hartree\": -1.116759307204,\n  \"method\": \"\",\n  \"schema_version\": \"acp_energy_product_v1\",\n  \"source\": \"task_result.json\",\n  \"step_id\": \"singlepoint\",\n  \"step_kind\": \"singlepoint\",\n  \"unit\": \"hartree\"\n}\n",
+          "body_ref": null,
+          "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+          "encoding": "identity",
+          "generation": 1,
+          "media_type": "application/json",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 241,
+          "source_refs": [],
+          "source_schema": "",
+          "truncated": false,
+          "version": 1
+        },
+        "read_status": 200,
+        "replay_operation_id": "op_3557c65874904a45a2e748e5685e914e",
+        "replay_status": 200
+      },
+      "task_result": {
+        "observed_digest": "sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+        "operation_id": "op_a54cb99942464cbba2c9af746f050d79",
+        "operation_ref": {
+          "id": "op_a54cb99942464cbba2c9af746f050d79",
+          "kind": "operation"
+        },
+        "prepare_status": 200,
+        "projection": {
+          "artifact_ref": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_a54cb99942464cbba2c9af746f050d79",
+            "relative_path": "RESULT/task_result.json",
+            "resource_id": "task_result",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 1963,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "attempt": 1,
+          "availability": "ready",
+          "basis_revision": 1,
+          "bytes": 1963,
+          "digest": "sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+          "error": null,
+          "expected_revision": 1,
+          "freshness": "current",
+          "generation": 1,
+          "idempotency_key": "op_13c70fe2ed5fd54266603bdb7a9a8611",
+          "idempotent_replay": false,
+          "job_id": "20261023_031453_001_singlepoint",
+          "observed_at": "2026-10-22T21:19:23Z",
+          "operation_id": "op_a54cb99942464cbba2c9af746f050d79",
+          "operation_ref": {
+            "id": "op_a54cb99942464cbba2c9af746f050d79",
+            "kind": "operation"
+          },
+          "purpose": "artifact",
+          "resource": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_a54cb99942464cbba2c9af746f050d79",
+            "relative_path": "RESULT/task_result.json",
+            "resource_id": "task_result",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 1963,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "resource_id": "task_result",
+          "resource_kind": "artifact",
+          "schema": "acp2.artifact-ref.v1",
+          "schema_version": 1,
+          "sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+          "size_bytes": 1963,
+          "source_refs": [],
+          "source_schema": "",
+          "state": "ready",
+          "updated_at": "2026-10-22T21:19:23Z",
+          "version": 1
+        },
+        "read": {
+          "artifact_ref": {
+            "attempt": 1,
+            "authorization": {
+              "action": "read",
+              "allowed": true,
+              "authorization_version": 6,
+              "principal_id": "principal_local",
+              "project_id": "uncategorized",
+              "scope": "local-single"
+            },
+            "availability": "ready",
+            "digest": "sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+            "generation": 1,
+            "job_id": "20261023_031453_001_singlepoint",
+            "media_type": "application/json",
+            "operation_id": "op_a54cb99942464cbba2c9af746f050d79",
+            "relative_path": "RESULT/task_result.json",
+            "resource_id": "task_result",
+            "schema": "acp2.artifact-ref.v1",
+            "size_bytes": 1963,
+            "source_refs": [],
+            "source_schema": "",
+            "version": 1
+          },
+          "availability": "ready",
+          "body": "{\n  \"authority\": \"cccp.calculation.tasks.singlepoint:184-239\",\n  \"complete\": true,\n  \"content_digest\": \"sha256:60d22eff690b080ea38ea3462a615543601ad1c469db699516af5c83e7f376b4\",\n  \"exit_code\": 0,\n  \"job_status\": \"completed\",\n  \"missing_required_facts\": [],\n  \"normal_reuse\": true,\n  \"partial_result\": false,\n  \"publish\": true,\n  \"publish_policy\": \"normal\",\n  \"qualification\": \"complete\",\n  \"receipt_state\": \"completed\",\n  \"required_facts\": [\n    \"energy_hartree\"\n  ],\n  \"result\": {\n    \"artifacts\": [\n      {\n        \"checksum\": \"sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6\",\n        \"path\": \"/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp\",\n        \"source\": \"orca\",\n        \"type\": \"output\"\n      },\n      {\n        \"checksum\": \"sha256:b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df\",\n        \"path\": \"/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out\",\n        \"source\": \"orca\",\n        \"type\": \"log\"\n      }\n    ],\n    \"complete\": true,\n    \"coordinates\": [\n      [\n        0.0,\n        0.0,\n        0.0\n      ],\n      [\n        0.0,\n        0.0,\n        0.74\n      ]\n    ],\n    \"energy_hartree\": -1.116759307204,\n    \"errors\": [],\n    \"frequencies\": [],\n    \"metadata\": {},\n    \"payload\": {},\n    \"provenance\": {\n      \"backend\": \"orca\",\n      \"input_signature\": \"input.xyz\",\n      \"method\": \"HF\",\n      \"version\": \"unknown\"\n    },\n    \"schema_version\": 1,\n    \"status\": \"completed\",\n    \"symbols\": [\n      \"H\",\n      \"H\"\n    ],\n    \"task\": \"singlepoint\"\n  },\n  \"result_digest\": \"sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f\",\n  \"schema\": \"acp_task_result_v1\",\n  \"status\": \"completed\",\n  \"task\": \"singlepoint\",\n  \"truth_table_row\": \"b\",\n  \"written_at\": \"2026-10-22T19:14:56.360636+00:00\"\n}\n",
+          "body_ref": null,
+          "digest": "sha256:128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+          "encoding": "identity",
+          "generation": 1,
+          "media_type": "application/json",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 1963,
+          "source_refs": [],
+          "source_schema": "",
+          "truncated": false,
+          "version": 1
+        },
+        "read_status": 200,
+        "replay_operation_id": "op_a54cb99942464cbba2c9af746f050d79",
+        "replay_status": 200
+      }
+    },
+    "b12.revoked_permission": "PASS via tests/test_acp2_runtime_artifact.py::test_project_scope_denial_refuses_prepare_read_analyze (project-scope denial); API-key revocation is B15/NOT_VERIFIED",
+    "b12.source": "B10 completed Local task (copied run root run-root-b12)",
+    "b12.task_count_after": 1,
+    "b12.task_count_before": 1
+  },
+  "finished_at": "2026-10-22T21:30:10Z",
+  "job_id": "20261023_031453_001_singlepoint",
+  "manifest_generation": 1,
+  "negotiated_protocol": null,
+  "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": "98e0695545d668e6",
+  "result": "PASS",
+  "run_id": "20261022T212957Z-677819-c7cfdc67",
+  "scenario": "artifact",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T21:29:57Z",
+  "submission_id": null,
+  "usage": null
+}

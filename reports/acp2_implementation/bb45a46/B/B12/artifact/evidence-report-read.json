@@ -1,0 +1,53 @@
+{
+  "artifact_ref": {
+    "attempt": 1,
+    "authorization": {
+      "action": "read",
+      "allowed": true,
+      "authorization_version": 6,
+      "principal_id": "principal_local",
+      "project_id": "uncategorized",
+      "scope": "local-single"
+    },
+    "availability": "ready",
+    "digest": "sha256:4893a4e970b5ea53314af35d7a5087207ddc12c4f9a071ebc6b66d3d05cbba19",
+    "generation": 1,
+    "job_id": "20261023_031453_001_singlepoint",
+    "media_type": "application/json",
+    "operation_id": "op_3c1c745e0ee94839aef3d4ffdb9bf495",
+    "relative_path": "evidence_report.json",
+    "resource_id": "evidence_report",
+    "schema": "acp2.artifact-ref.v1",
+    "size_bytes": 924,
+    "source_refs": [
+      {
+        "artifact_path": "RESULT/energy/singlepoint_energy.json",
+        "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "role": "native_output",
+        "units": "hartree"
+      }
+    ],
+    "source_schema": "acp2.science.evidence.v1",
+    "version": 1
+  },
+  "availability": "ready",
+  "body": "{\"claims\":[{\"claim_id\":\"b12_fixture_claim\",\"missing_checks\":[{\"check_id\":\"not_executed\",\"reason\":\"static B12 fixture, not a science run\"}],\"scope\":{\"applicability\":\"system_specific\",\"subject\":\"static fixture\"},\"source_refs\":[],\"statement\":\"Static A-schema fixture: the platform stores bytes and never interprets claim status.\",\"status\":\"not_evaluated\"}],\"execution\":{\"argv\":[],\"exit_code\":0,\"finished_at\":null,\"started_at\":null,\"stderr_path\":null,\"stdout_path\":null,\"terminal_state\":\"completed\"},\"limitations\":[{\"description\":\"Static fixture copied from A's evidence schema shape; not an executed run.\",\"limitation_id\":\"b12-static\"}],\"report_id\":\"er_b12_static_fixture\",\"schema_version\":1,\"subject\":{\"input_digests\":[{\"algorithm\":\"sha256\",\"value\":\"d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9\"}],\"science_identity\":null,\"subject_id\":\"20261023_031453_001_singlepoint\",\"subject_kind\":\"calculation_result\"}}",
+  "body_ref": null,
+  "digest": "sha256:4893a4e970b5ea53314af35d7a5087207ddc12c4f9a071ebc6b66d3d05cbba19",
+  "encoding": "identity",
+  "generation": 1,
+  "media_type": "application/json",
+  "schema": "acp2.artifact-ref.v1",
+  "size_bytes": 924,
+  "source_refs": [
+    {
+      "artifact_path": "RESULT/energy/singlepoint_energy.json",
+      "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+      "role": "native_output",
+      "units": "hartree"
+    }
+  ],
+  "source_schema": "acp2.science.evidence.v1",
+  "truncated": false,
+  "version": 1
+}

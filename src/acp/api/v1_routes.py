@@ -7839,6 +7839,143 @@ def get_job_availability(
     return snapshot.to_dict()
 
 
+def _serve_prepared_artifact(
+    request: Request,
+    record: Any,
+    *,
+    job_id: str,
+    artifact_id: str,
+    attempt: int | None,
+    generation: int,
+    digest: str | None,
+    encoding: str,
+    max_bytes: int,
+) -> JSONResponse:
+    """Serve one prepared artifact from the controlled store (no fetch).
+
+    Every refusal is named: a cold/evicted body is ``resource_not_ready`` with
+    a ``not_prepared`` message, a stale generation / corrupt digest / cross-
+    attempt read is ``revision_conflict`` with an explicit rule, and a
+    traversing id is ``input_invalid``.  No branch enqueues, fetches or parses.
+    """
+    from acp_services.data.artifacts import (
+        ArtifactAttemptMismatchError,
+        ArtifactDigestMismatchError,
+        ArtifactError,
+        ArtifactGenerationMismatchError,
+        ArtifactNotPreparedError,
+        ArtifactPathRefusedError,
+        ArtifactStore,
+        resolve_artifact_read,
+    )
+
+    if encoding not in {"identity", "base64"}:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"unsupported encoding {encoding!r}",
+            params={"field": "encoding", "allowed": ["identity", "base64"]},
+        )
+    if not digest:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "an artifact read requires artifact_ref.digest",
+            params={"field": "digest", "rule": "required"},
+        )
+    _require_entry_access(
+        request,
+        _EntryClass.RANGE,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        action="read",
+        resource_id=artifact_id,
+    )
+    manager = _manager(request)
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "prepare service is not available",
+            retryable=True,
+        )
+    resolved_attempt = attempt if attempt is not None else _record_read_attempt(record)
+    authorization = _artifact_authorization_projection(
+        request,
+        record,
+        action=_AccessAction.READ,
+        resource_id=artifact_id,
+    )
+    if not authorization.allowed:
+        raise _command_error(
+            403,
+            "access_denied",
+            "artifact read authorization denied",
+            params={"rule": "permission_revoked"},
+        )
+    store = ArtifactStore(manager.run_root / "artifact-store")
+    try:
+        read = resolve_artifact_read(
+            service,
+            store,
+            job_id=job_id,
+            attempt=int(resolved_attempt or 0),
+            resource_id=artifact_id,
+            generation=int(generation),
+            digest=str(digest),
+            permission_scope="local-single",
+            authorization=authorization,
+            max_bytes=int(max_bytes),
+            encoding=encoding,
+        )
+    except ArtifactPathRefusedError as exc:
+        raise _command_error(
+            400,
+            "input_invalid",
+            str(exc),
+            params={"rule": "path_traversal", **exc.params},
+        ) from exc
+    except ArtifactGenerationMismatchError as exc:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "generation_stale", **exc.params},
+        ) from exc
+    except ArtifactDigestMismatchError as exc:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "digest_mismatch", **exc.params},
+        ) from exc
+    except ArtifactAttemptMismatchError as exc:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "attempt_mismatch", **exc.params},
+        ) from exc
+    except ArtifactNotPreparedError as exc:
+        reason = str(exc.params.get("reason") or "not_prepared")
+        raise _command_error(
+            409,
+            "resource_not_ready",
+            f"not_prepared: {reason}",
+            params={"reason": reason, **exc.params},
+            retryable=True,
+        ) from exc
+    except ArtifactError as exc:
+        raise _command_error(
+            exc.http_status,
+            "resource_not_ready" if exc.http_status == 409 else "input_invalid",
+            str(exc),
+            params=dict(exc.params),
+        ) from exc
+    return JSONResponse(content=read.to_dict())
+
+
 @router.get("/jobs/{job_id}/prepared/{resource}")
 def get_prepared_resource(
     job_id: str,
@@ -7849,6 +7986,10 @@ def get_prepared_resource(
     attempt: int | None = Query(default=None, ge=1),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=1 << 20, ge=1),
+    artifact_id: str | None = Query(default=None),
+    digest: str | None = Query(default=None),
+    encoding: str = Query(default="identity"),
+    max_bytes: int | None = Query(default=None, ge=1),
 ) -> Response:
     """Serve a prepared resource cache-only (B02-6 / todo 16 new read path).
 
@@ -7870,8 +8011,49 @@ def get_prepared_resource(
     """
     from acp_services.data.resource_read import RESOURCE_ADAPTERS
 
-    if resource not in RESOURCE_ADAPTERS:
+    if (
+        resource not in RESOURCE_ADAPTERS
+        and resource != "artifact"
+        and artifact_id is None
+        and digest is None
+    ):
+        # Preserve the frozen switch contract: an unknown resource kind is a
+        # 400 before any job lookup.  An artifact read always carries a digest
+        # (or an explicit artifact_id), which is how it is distinguished.
         raise HTTPException(status_code=400, detail=f"Unknown resource kind: {resource}")
+
+    resolved_artifact = artifact_id or ("" if resource in RESOURCE_ADAPTERS else resource)
+    if resource == "artifact":
+        resolved_artifact = artifact_id or ""
+    # A supplied artifact digest names an artifact read even when the id
+    # collides with one of the five switch resource names (e.g. frequency_modes).
+    if digest is not None and not resolved_artifact:
+        resolved_artifact = artifact_id or resource
+    if resource not in RESOURCE_ADAPTERS or resolved_artifact:
+        if not resolved_artifact:
+            raise _command_error(
+                400,
+                "input_invalid",
+                "artifact read requires artifact_id",
+                params={"field": "artifact_id", "rule": "required"},
+            )
+        record = _require_job_scope_access(
+            request,
+            job_id,
+            action=_AccessAction.READ,
+            resource_id=resolved_artifact,
+        )
+        return _serve_prepared_artifact(
+            request,
+            record,
+            job_id=job_id,
+            artifact_id=resolved_artifact,
+            attempt=attempt,
+            generation=expected_revision or 1,
+            digest=digest,
+            encoding=encoding,
+            max_bytes=262144 if max_bytes is None else max_bytes,
+        )
 
     record = _require_job_scope_access(
         request,
@@ -8047,7 +8229,36 @@ def preflight_request(req: V1PreflightRequest, request: Request) -> dict[str, An
     }
 
 
-def _operation_response(record: Any, *, purpose: str) -> dict[str, Any]:
+def _artifact_authorization_projection(
+    request: Request, record: Any, *, action: str, resource_id: str
+) -> Any:
+    """Build the inert authorization projection frozen onto an ArtifactRef."""
+    from acp_services.data.artifacts import ArtifactAuthorization
+
+    identity = _server_identity(request)
+    project = record.project_id or record.spec.project_id
+    decision = identity.authorize_job_project(
+        project,
+        action=action,
+        job_id=record.id,
+        resource_id=resource_id,
+    )
+    return ArtifactAuthorization(
+        principal_id=str(getattr(identity.principal, "principal_id", "") or ""),
+        project_id=str(project or ""),
+        scope=str(getattr(record, "permission_scope", "") or "local-single"),
+        action=str(action),
+        allowed=bool(decision.allowed),
+        authorization_version=int(getattr(record, "revision", 0) or 0),
+    )
+
+
+def _operation_response(
+    record: Any,
+    *,
+    purpose: str,
+    authorization: Any = None,
+) -> dict[str, Any]:
     contract = record.to_contract()
     operation_ref = {"kind": "operation", "id": record.operation_id}
     payload = dict(record.payload or {})
@@ -8075,14 +8286,29 @@ def _operation_response(record: Any, *, purpose: str) -> dict[str, Any]:
     }
     artifact_id = str(payload.get("artifact_id") or "")
     if artifact_id:
-        response["artifact_ref"] = {
-            "task_id": record.job_id,
-            "attempt": record.attempt,
-            "artifact_id": artifact_id,
-            "generation": record.resource_generation,
-            "digest": record.resource_digest,
-            "relative_path": payload.get("relative_path") or None,
-        }
+        from acp_services.data.artifacts import operation_to_artifact_ref
+
+        artifact = operation_to_artifact_ref(record, authorization=authorization)
+        if artifact is not None:
+            response["artifact_ref"] = artifact.to_dict()
+            response["resource"] = artifact.to_dict()
+            response["schema"] = artifact.schema
+            response["version"] = artifact.version
+            response["generation"] = artifact.generation
+            response["digest"] = artifact.digest
+            response["size_bytes"] = artifact.size_bytes
+            response["availability"] = artifact.availability.value
+            response["source_schema"] = artifact.source_schema
+            response["source_refs"] = [dict(item) for item in artifact.source_refs]
+        else:
+            response["artifact_ref"] = {
+                "task_id": record.job_id,
+                "attempt": record.attempt,
+                "artifact_id": artifact_id,
+                "generation": record.resource_generation,
+                "digest": record.resource_digest,
+                "relative_path": payload.get("relative_path") or None,
+            }
     return response
 
 
@@ -8153,18 +8379,64 @@ def prepare_artifact(
         )
     task_ref = normalized.get("task_ref") or {}
     attempt = int(normalized.get("attempt") or task_ref.get("attempt") or record.attempt or 1)
+    if attempt > int(record.attempt or 0):
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"attempt {attempt} is newer than the current attempt",
+            params={"field": "attempt", "rule": "attempt_not_current"},
+        )
     purpose = str(normalized["purpose"])
     artifact_id = str(normalized.get("artifact_id") or "")
     relative_path = str(normalized.get("relative_path") or "")
     workflow = str(record.spec.workflow or "")
+    generation = int(normalized.get("generation") or (1 if purpose == "artifact" else 0))
+    expected_digest = ""
+    evidence_report = normalized.get("evidence_report")
     if purpose == "artifact":
+        from acp_services.data.artifacts import (
+            ArtifactError,
+            ArtifactPathRefusedError,
+            is_safe_artifact_token,
+            normalize_artifact_digest,
+            validate_artifact_relative_path,
+        )
+
+        if not is_safe_artifact_token(artifact_id):
+            raise _command_error(
+                400,
+                "input_invalid",
+                f"unsafe artifact id: {artifact_id!r}",
+                params={"field": "artifact_id", "rule": "path_traversal"},
+            )
+        if relative_path and evidence_report is None:
+            try:
+                relative_path = validate_artifact_relative_path(relative_path)
+            except ArtifactPathRefusedError as exc:
+                raise _command_error(
+                    400,
+                    "input_invalid",
+                    str(exc),
+                    params={"field": "relative_path", "rule": "path_traversal"},
+                ) from exc
+        try:
+            expected_digest = normalize_artifact_digest(
+                str(normalized.get("expected_digest") or normalized.get("content_digest") or "")
+            )
+        except ArtifactError as exc:
+            raise _command_error(
+                400,
+                "input_invalid",
+                str(exc),
+                params={"field": "expected_digest", "rule": "sha256"},
+            ) from exc
         resource_id = artifact_id
         resource_kind = ResourceKind.ARTIFACT
     else:
         resource_id = f"structure-input:{relative_path or 'input.xyz'}"
         resource_kind = ResourceKind.INPUT
     identity = f"{job_id}\x1f{attempt}\x1f{resource_id}".encode()
-    resource_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+    resource_digest = expected_digest or ("sha256:" + hashlib.sha256(identity).hexdigest())
     service = getattr(manager, "_prepare_operations", None)
     if service is None:
         raise _command_error(
@@ -8173,6 +8445,53 @@ def prepare_artifact(
             "prepare service is not available",
             retryable=True,
         )
+    if purpose == "artifact":
+        # An evicted body must not keep a SUCCEEDED operation replaying forever:
+        # expire the bodyless success so an explicit re-prepare opens a new
+        # dedup epoch and rebuilds the artifact.  A read never does this.
+        from acp_services.data.artifacts import ArtifactStore
+        from acp_services.data.operations import PrepareState
+
+        existing = service.find(
+            job_id=job_id,
+            resource_id=resource_id,
+            attempt=attempt,
+            permission_scope="local-single",
+        )
+        if existing is not None and existing.state is PrepareState.SUCCEEDED:
+            store = ArtifactStore(manager.run_root / "artifact-store")
+            published = store.lookup(
+                job_id=job_id,
+                attempt=existing.attempt,
+                resource_id=resource_id,
+                generation=existing.resource_generation,
+                digest="sha256:" + str(existing.sha256 or ""),
+            )
+            if published is None:
+                service.expire_succeeded_for_resource(
+                    job_id=job_id,
+                    attempt=existing.attempt,
+                    resource_id=resource_id,
+                    permission_scope="local-single",
+                    reason="artifact_body_missing",
+                )
+    artifact_payload: dict[str, Any] = {
+        "purpose": purpose,
+        "workflow": workflow,
+        "job_id": job_id,
+        "attempt": attempt,
+        "artifact_id": artifact_id,
+        "relative_path": relative_path,
+        "generation": generation,
+        "expected_digest": expected_digest,
+        "media_type": str(normalized.get("media_type") or ""),
+        "source_schema": str(normalized.get("schema_ref") or ""),
+        "source_refs": list(normalized.get("source_refs") or []),
+    }
+    if normalized.get("expected_size_bytes") is not None:
+        artifact_payload["expected_size_bytes"] = int(normalized["expected_size_bytes"])
+    if evidence_report is not None:
+        artifact_payload["evidence_report"] = dict(evidence_report)
     prepare_request = PrepareRequest(
         job_id=job_id,
         attempt=attempt,
@@ -8180,15 +8499,8 @@ def prepare_artifact(
         resource_kind=resource_kind,
         resource_digest=resource_digest,
         permission_scope="local-single",
-        resource_generation=int(normalized.get("generation") or 0),
-        payload={
-            "purpose": purpose,
-            "workflow": workflow,
-            "job_id": job_id,
-            "attempt": attempt,
-            "artifact_id": artifact_id,
-            "relative_path": relative_path,
-        },
+        resource_generation=generation,
+        payload=artifact_payload,
         client_idempotency_key=str(normalized.get("idempotency_key") or ""),
     )
     try:
@@ -8202,7 +8514,23 @@ def prepare_artifact(
         ) from exc
     except PrepareOperationError as exc:
         raise _command_error(503, "backend_unavailable", str(exc), retryable=True) from exc
-    return _operation_response(operation, purpose=purpose)
+    if purpose == "artifact" and attempt > 1:
+        try:
+            service.expire_older_attempts(
+                job_id=job_id,
+                attempt=attempt,
+                resource_id=resource_id,
+                permission_scope="local-single",
+            )
+        except PrepareOperationError:
+            pass
+    ensure_worker = getattr(manager, "ensure_prepare_worker", None)
+    if callable(ensure_worker):
+        ensure_worker()
+    authorization = _artifact_authorization_projection(
+        request, record, action=_AccessAction.WRITE, resource_id=resource_id
+    )
+    return _operation_response(operation, purpose=purpose, authorization=authorization)
 
 
 @router.get("/operations/{operation_id}")
@@ -8233,7 +8561,19 @@ def get_operation(operation_id: str, request: Request) -> dict[str, Any]:
             retryable=True,
         )
     purpose = str((record.payload or {}).get("purpose") or "artifact")
-    return _operation_response(record, purpose=purpose)
+    authorization = None
+    job = manager.get(record.job_id)
+    if job is not None:
+        _require_job_scope_access(
+            request,
+            record.job_id,
+            action=_AccessAction.READ,
+            resource_id=record.resource_id,
+        )
+        authorization = _artifact_authorization_projection(
+            request, job, action=_AccessAction.READ, resource_id=record.resource_id
+        )
+    return _operation_response(record, purpose=purpose, authorization=authorization)
 
 
 @router.post("/jobs/{job_id}/analyze")
