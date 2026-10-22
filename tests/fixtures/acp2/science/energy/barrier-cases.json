@@ -1,0 +1,1982 @@
+{
+  "cases": {
+    "different_electronic_state": {
+      "expected": {
+        "differing_fields": [
+          "electronic_state.state_id",
+          "electronic_state.target_multiplicity"
+        ],
+        "electronic_barrier": "refuted",
+        "electronic_barrier_value": null,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "t1",
+            "target_multiplicity": 3
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "t1",
+            "target_multiplicity": 3
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "different_method": {
+      "expected": {
+        "differing_fields": [
+          "method"
+        ],
+        "electronic_barrier": "refuted",
+        "electronic_barrier_value": null,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "r2SCAN-3c",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "r2SCAN-3c",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "different_reference_state": {
+      "expected": {
+        "differing_fields": [
+          "reference_state"
+        ],
+        "electronic_barrier": "refuted",
+        "electronic_barrier_value": null,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "finite_basis_fci",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "finite_basis_fci",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "different_standard_state": {
+      "expected": {
+        "differing_fields": [
+          "standard_state"
+        ],
+        "electronic_barrier": "supported",
+        "electronic_barrier_value": 0.1,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1M",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "different_temperature": {
+      "expected": {
+        "differing_fields": [
+          "temperature_k"
+        ],
+        "electronic_barrier": "supported",
+        "electronic_barrier_value": 0.1,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 310.0
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "missing_identity": {
+      "expected": {
+        "electronic_barrier": "inconclusive",
+        "electronic_barrier_value": null,
+        "free_energy_barrier": "inconclusive",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "free_missing_check": "frequency_not_computed",
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": null
+    },
+    "missing_identity_field": {
+      "expected": {
+        "electronic_barrier": "inconclusive",
+        "electronic_barrier_value": null,
+        "electronic_missing_check": "method_identity_missing",
+        "free_energy_barrier": "not_evaluated",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": null,
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "missing_reactant": {
+      "expected": {
+        "electronic_barrier": "refuted",
+        "electronic_barrier_value": null,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "missing_components": [
+          "ethene"
+        ],
+        "stoichiometry": "refuted"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "missing_thermochemistry": {
+      "expected": {
+        "electronic_barrier": "supported",
+        "electronic_barrier_value": 0.1,
+        "free_energy_barrier": "not_evaluated",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "free_missing_check": "frequency_not_computed",
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "mixed_kind": {
+      "expected": {
+        "electronic_barrier": "refuted",
+        "electronic_barrier_value": null,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "mixed_energy_kinds": true,
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "partial_thermochemistry": {
+      "expected": {
+        "electronic_barrier": "supported",
+        "electronic_barrier_value": 0.1,
+        "free_energy_barrier": "inconclusive",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "free_missing_check": "frequency_not_computed",
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "unsupported_standard_state": {
+      "expected": {
+        "declared_standard_state": "1_bar_ideal_gas",
+        "electronic_barrier": "supported",
+        "electronic_barrier_value": 0.1,
+        "free_energy_barrier": "not_evaluated",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "free_missing_check": "standard_state_unspecified",
+        "stoichiometry": "supported"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1_bar_ideal_gas",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1_bar_ideal_gas",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1_bar_ideal_gas",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1_bar_ideal_gas",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1_bar_ideal_gas",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1_bar_ideal_gas",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1_bar_ideal_gas",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1_bar_ideal_gas",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "valid_electronic": {
+      "expected": {
+        "electronic_barrier": "supported",
+        "electronic_barrier_value": 0.1,
+        "free_energy_barrier": "not_evaluated",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "free_missing_check": "frequency_not_computed",
+        "stoichiometry": "supported",
+        "subtraction_performed": true
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "valid_free_energy": {
+      "expected": {
+        "electronic_barrier": "supported",
+        "electronic_barrier_value": 0.1,
+        "free_energy_barrier": "supported",
+        "free_energy_barrier_value": 0.1,
+        "free_energy_claimed": true,
+        "stoichiometry": "supported",
+        "subtraction_performed": true
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.25,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.75,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "free_energy": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.4,
+            "energy_kind": "gibbs_free",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 1
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "free_energy": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.05,
+          "energy_kind": "gibbs_free",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    },
+    "wrong_stoichiometry": {
+      "expected": {
+        "coefficient_mismatch": "ethene",
+        "electronic_barrier": "refuted",
+        "electronic_barrier_value": null,
+        "free_energy_barrier": "refuted",
+        "free_energy_barrier_value": null,
+        "free_energy_claimed": false,
+        "stoichiometry": "refuted"
+      },
+      "product": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.6,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "cyclohexene",
+        "stoichiometry": 1
+      },
+      "reactants": [
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -155.9,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "butadiene",
+          "stoichiometry": 1
+        },
+        {
+          "electronic": {
+            "charge": 0,
+            "electronic_state": {
+              "state_id": "state.singlet.s0",
+              "target_multiplicity": 1
+            },
+            "energy_hartree": -78.5,
+            "energy_kind": "electronic",
+            "energy_unit": "hartree",
+            "method": "wB97X-D4",
+            "multiplicity": 1,
+            "pressure_pa": 101325.0,
+            "reference_state": "isolated_molecule",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          "species_id": "ethene",
+          "stoichiometry": 2
+        }
+      ],
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "required_reactants": {
+        "butadiene": 1,
+        "ethene": 1
+      },
+      "transition_state": {
+        "electronic": {
+          "charge": 0,
+          "electronic_state": {
+            "state_id": "state.singlet.s0",
+            "target_multiplicity": 1
+          },
+          "energy_hartree": -234.3,
+          "energy_kind": "electronic",
+          "energy_unit": "hartree",
+          "method": "wB97X-D4",
+          "multiplicity": 1,
+          "pressure_pa": 101325.0,
+          "reference_state": "isolated_molecule",
+          "standard_state": "1atm",
+          "temperature_k": 298.15
+        },
+        "species_id": "transition_state",
+        "stoichiometry": 1
+      }
+    }
+  },
+  "constructed": true,
+  "description": "CONSTRUCTED activation-energy comparability cases for the A-19a validator. No energy was computed, no QC subprocess ran, and the values are placeholders chosen only to make the identity/kind rules testable.",
+  "energies_are_placeholders": true,
+  "real_run": false,
+  "schema": "acp2.science.energy-comparability-cases",
+  "schema_version": 1,
+  "source_identity": {
+    "a17_snapshot": "tests/fixtures/acp2/science/diels_alder/v1/ts-scenario/constructed-snapshot-success.json",
+    "a17_snapshot_constructed": true,
+    "b20a_exec_artifacts_present": false,
+    "b20a_exec_semantic_candidate": "B.B20a.exec",
+    "basis": "def2-TZVP",
+    "electronic_state": {
+      "charge": 0,
+      "multiplicity": 1,
+      "state_id": "state.singlet.s0"
+    },
+    "identity_source_note": "Method, basis and electronic state mirror the A-17 audited constructed snapshot. B20a-exec has not produced real artifacts, so every energy below is a constructed placeholder and no real barrier is claimed.",
+    "method": "wB97X-D4"
+  }
+}

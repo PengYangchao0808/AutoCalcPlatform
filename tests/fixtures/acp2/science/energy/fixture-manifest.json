@@ -1,0 +1,23 @@
+{
+  "constructed": true,
+  "file_digests": {
+    "barrier-cases.json": "d8cbc35e8f1ea3364f99378e8daa1494b9a6e55c4f293dc750ad23f5aa48f476"
+  },
+  "files": {
+    "barrier-cases.json": "constructed electronic/free-energy barrier cases"
+  },
+  "fixture_id": "diels-alder-energy-comparability-constructed-a19a",
+  "note": "Constructed A-19a energy-comparability fixtures. No B20a-exec artifact, QC run, experimental barrier or real activation energy is claimed.",
+  "real_run": false,
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1,
+  "thresholds": {
+    "claim_statuses": [
+      "supported",
+      "refuted",
+      "inconclusive",
+      "not_evaluated"
+    ],
+    "validator_version": "1.0.0"
+  }
+}
