@@ -1,0 +1,256 @@
+{
+  "event_count": 12,
+  "events": [
+    {
+      "emitted_at": "2026-10-23T05:03:20.800915+00:00",
+      "event_id": "ap_610f54c9a14b46218e433c954e8970e5:1:approval.requested",
+      "event_type": "approval.requested",
+      "owner_id": "ap_610f54c9a14b46218e433c954e8970e5",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_610f54c9a14b46218e433c954e8970e5",
+        "approver_ref": null,
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:104d6bfbd977820565ca8f8c7e196083b9c463d35c0a9833bddabf49e6415f09",
+        "proposal_ref": "prop-b16-main",
+        "requester_ref": "principal_b16_alice",
+        "revision": 1,
+        "state": "pending"
+      },
+      "revision": 1,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:21.054637+00:00",
+      "event_id": "ap_610f54c9a14b46218e433c954e8970e5:2:approval.approved",
+      "event_type": "approval.approved",
+      "owner_id": "ap_610f54c9a14b46218e433c954e8970e5",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_610f54c9a14b46218e433c954e8970e5",
+        "approver_ref": "principal_b16_bob",
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:104d6bfbd977820565ca8f8c7e196083b9c463d35c0a9833bddabf49e6415f09",
+        "proposal_ref": "prop-b16-main",
+        "requester_ref": "principal_b16_alice",
+        "revision": 2,
+        "state": "approved"
+      },
+      "revision": 2,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:24.693377+00:00",
+      "event_id": "ap_610f54c9a14b46218e433c954e8970e5:2:approval.task_bound",
+      "event_type": "approval.task_bound",
+      "owner_id": "ap_610f54c9a14b46218e433c954e8970e5",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_610f54c9a14b46218e433c954e8970e5",
+        "approver_ref": "principal_b16_bob",
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:104d6bfbd977820565ca8f8c7e196083b9c463d35c0a9833bddabf49e6415f09",
+        "proposal_ref": "prop-b16-main",
+        "requester_ref": "principal_b16_alice",
+        "revision": 2,
+        "state": "approved"
+      },
+      "revision": 2,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:26.522789+00:00",
+      "event_id": "ap_abd26622c5da41da80bbc638ac7f90b8:1:approval.requested",
+      "event_type": "approval.requested",
+      "owner_id": "ap_abd26622c5da41da80bbc638ac7f90b8",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_abd26622c5da41da80bbc638ac7f90b8",
+        "approver_ref": null,
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:e03ea1e6e1362b853e749bd65b2a796716143d490c7c8a924e593dcdb7994510",
+        "proposal_ref": "prop-b16-pending",
+        "requester_ref": "principal_b16_alice",
+        "revision": 1,
+        "state": "pending"
+      },
+      "revision": 1,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:26.642558+00:00",
+      "event_id": "ap_5db2919e5f2f4d4ab095de0c191c0ed6:1:approval.requested",
+      "event_type": "approval.requested",
+      "owner_id": "ap_5db2919e5f2f4d4ab095de0c191c0ed6",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_5db2919e5f2f4d4ab095de0c191c0ed6",
+        "approver_ref": null,
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:09d8a767c165238b78c71842d101a0d27a8443939053460cb7d71b191d4b20ed",
+        "proposal_ref": "prop-b16-rejected",
+        "requester_ref": "principal_b16_alice",
+        "revision": 1,
+        "state": "pending"
+      },
+      "revision": 1,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:26.762466+00:00",
+      "event_id": "ap_5db2919e5f2f4d4ab095de0c191c0ed6:2:approval.rejected",
+      "event_type": "approval.rejected",
+      "owner_id": "ap_5db2919e5f2f4d4ab095de0c191c0ed6",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_5db2919e5f2f4d4ab095de0c191c0ed6",
+        "approver_ref": "principal_b16_bob",
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:09d8a767c165238b78c71842d101a0d27a8443939053460cb7d71b191d4b20ed",
+        "proposal_ref": "prop-b16-rejected",
+        "requester_ref": "principal_b16_alice",
+        "revision": 2,
+        "state": "rejected"
+      },
+      "revision": 2,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:26.881479+00:00",
+      "event_id": "ap_cf5fe0d8bc624920a47ab674c6c958e4:1:approval.requested",
+      "event_type": "approval.requested",
+      "owner_id": "ap_cf5fe0d8bc624920a47ab674c6c958e4",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_cf5fe0d8bc624920a47ab674c6c958e4",
+        "approver_ref": null,
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:57c004b54eac2e0fe961183508463eb9add797b771e744bdb88ea2793c859942",
+        "proposal_ref": "prop-b16-revoked",
+        "requester_ref": "principal_b16_alice",
+        "revision": 1,
+        "state": "pending"
+      },
+      "revision": 1,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:26.962623+00:00",
+      "event_id": "ap_cf5fe0d8bc624920a47ab674c6c958e4:2:approval.approved",
+      "event_type": "approval.approved",
+      "owner_id": "ap_cf5fe0d8bc624920a47ab674c6c958e4",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_cf5fe0d8bc624920a47ab674c6c958e4",
+        "approver_ref": "principal_b16_bob",
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:57c004b54eac2e0fe961183508463eb9add797b771e744bdb88ea2793c859942",
+        "proposal_ref": "prop-b16-revoked",
+        "requester_ref": "principal_b16_alice",
+        "revision": 2,
+        "state": "approved"
+      },
+      "revision": 2,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:27.047857+00:00",
+      "event_id": "ap_cf5fe0d8bc624920a47ab674c6c958e4:3:approval.revoked",
+      "event_type": "approval.revoked",
+      "owner_id": "ap_cf5fe0d8bc624920a47ab674c6c958e4",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_cf5fe0d8bc624920a47ab674c6c958e4",
+        "approver_ref": "principal_b16_bob",
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:57c004b54eac2e0fe961183508463eb9add797b771e744bdb88ea2793c859942",
+        "proposal_ref": "prop-b16-revoked",
+        "requester_ref": "principal_b16_alice",
+        "revision": 3,
+        "state": "revoked"
+      },
+      "revision": 3,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:27.127764+00:00",
+      "event_id": "ap_7164dd041edc43e386139c4aa6081c3c:1:approval.requested",
+      "event_type": "approval.requested",
+      "owner_id": "ap_7164dd041edc43e386139c4aa6081c3c",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_7164dd041edc43e386139c4aa6081c3c",
+        "approver_ref": null,
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:d93b4336880973285f318ec67dc250827788bf2dd1d732893c0fd726e2542dcf",
+        "proposal_ref": "prop-b16-expired",
+        "requester_ref": "principal_b16_alice",
+        "revision": 1,
+        "state": "pending"
+      },
+      "revision": 1,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:27.212856+00:00",
+      "event_id": "ap_7164dd041edc43e386139c4aa6081c3c:2:approval.approved",
+      "event_type": "approval.approved",
+      "owner_id": "ap_7164dd041edc43e386139c4aa6081c3c",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_7164dd041edc43e386139c4aa6081c3c",
+        "approver_ref": "principal_b16_bob",
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:d93b4336880973285f318ec67dc250827788bf2dd1d732893c0fd726e2542dcf",
+        "proposal_ref": "prop-b16-expired",
+        "requester_ref": "principal_b16_alice",
+        "revision": 2,
+        "state": "approved"
+      },
+      "revision": 2,
+      "scope": "project"
+    },
+    {
+      "emitted_at": "2026-10-23T05:03:31.365726+00:00",
+      "event_id": "ap_7164dd041edc43e386139c4aa6081c3c:3:approval.expired",
+      "event_type": "approval.expired",
+      "owner_id": "ap_7164dd041edc43e386139c4aa6081c3c",
+      "owner_type": "project",
+      "payload": {
+        "approval_ref": "ap_7164dd041edc43e386139c4aa6081c3c",
+        "approver_ref": "principal_b16_bob",
+        "plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+        "project_id": "project_alpha",
+        "proposal_digest": "sha256:d93b4336880973285f318ec67dc250827788bf2dd1d732893c0fd726e2542dcf",
+        "proposal_ref": "prop-b16-expired",
+        "requester_ref": "principal_b16_alice",
+        "revision": 3,
+        "state": "expired"
+      },
+      "revision": 3,
+      "scope": "project"
+    }
+  ],
+  "schema": "acp2.b16.approval-events.v1",
+  "store": "job_outbox",
+  "types": [
+    "approval.approved",
+    "approval.expired",
+    "approval.rejected",
+    "approval.requested",
+    "approval.revoked",
+    "approval.task_bound"
+  ],
+  "unique_event_ids": true
+}

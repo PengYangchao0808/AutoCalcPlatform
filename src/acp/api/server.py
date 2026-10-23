@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from importlib.util import find_spec
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -24,6 +25,7 @@ from acp.api.drafts import router as drafts_router
 from acp.api.mechanism_readonly import router as mechanism_readonly_router
 from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
+from acp.api.v2_approvals import router as v2_approvals_router
 from acp.api.v2_routes import router as v2_router
 from acp.api.v2_structure_sources import router as v2_struct_router
 from acp_services.contracts.access import DeploymentTier, is_loopback_host
@@ -41,6 +43,10 @@ from acp_services.workspace.http_identity import (
 )
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
+if not _FRONTEND_DIR.is_dir():
+    _assets_spec = find_spec("acp_web_assets")
+    if _assets_spec is not None and _assets_spec.origin is not None:
+        _FRONTEND_DIR = Path(_assets_spec.origin).parent
 logger = logging.getLogger(__name__)
 
 
@@ -184,6 +190,25 @@ def _resolve_tier_capabilities() -> tuple[str, ...]:
     return tuple(part.strip().lower() for part in raw.split(",") if part.strip())
 
 
+def _resolve_public_origin() -> str | None:
+    """Read the init config, allowing an explicit environment override/reset."""
+    if "ACP_PUBLIC_ORIGIN" in os.environ:
+        return os.environ["ACP_PUBLIC_ORIGIN"].strip() or None
+
+    from cccp.config import load_config
+
+    deployment = load_config().get("deployment") or {}
+    if not isinstance(deployment, dict):
+        raise ValueError("deployment must be a mapping")
+    params = deployment.get("params") or {}
+    if not isinstance(params, dict):
+        raise ValueError("deployment.params must be a mapping")
+    origin = params.get("public_origin", "")
+    if not isinstance(origin, str):
+        raise ValueError("deployment.params.public_origin must be a string")
+    return origin.strip() or None
+
+
 def _is_event_stream_request(request: Request) -> bool:
     """Whether *request* is an SSE connection (diagnostic reason only)."""
     if "text/event-stream" in request.headers.get("accept", ""):
@@ -285,6 +310,7 @@ def create_app(
     boundary_policy = OriginPolicy(
         tier=configured_tier,
         server_is_loopback=is_loopback_host(eff_host),
+        public_origin=_resolve_public_origin(),
     )
 
     @asynccontextmanager
@@ -395,6 +421,7 @@ def create_app(
     app.include_router(mechanism_readonly_router, prefix="/api/v1")
     app.include_router(batch_preview_router, prefix="/api/v1")
     app.include_router(v2_router, prefix="/api/v2")
+    app.include_router(v2_approvals_router, prefix="/api/v2")
     app.include_router(v2_struct_router, prefix="/api/v2")
     app.include_router(api_router, prefix="/api")
 

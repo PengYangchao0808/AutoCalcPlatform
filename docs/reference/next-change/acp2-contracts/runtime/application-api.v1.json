@@ -2546,7 +2546,15 @@
     "recorded_here_because": "the P2 rows are application-command extensions and must be validated together with the P1 command surface",
     "client_path": "versioned MCP extension (namespaced tool names + versions); the eight-tool allowlist remains the P1 contract",
     "restricted_http_client": "not chosen in Plan B",
-    "rows": 5
+    "rows": 5,
+    "approval_http_paths": {
+      "request": "POST /api/v2/research/approvals",
+      "query": "GET /api/v2/research/approvals",
+      "read": "GET /api/v2/research/approvals/{approval_ref}",
+      "approve": "POST /api/v2/research/approvals/{approval_ref}/approve",
+      "reject": "POST /api/v2/research/approvals/{approval_ref}/reject",
+      "revoke": "POST /api/v2/research/approvals/{approval_ref}/revoke"
+    }
   },
   "cdxml": {
     "decision": "deferred",
@@ -2638,5 +2646,23 @@
       "descriptor_schema": "runtime/mcp-launch.schema.json",
       "note": "The eight P1 tool names and input schemas are unchanged; the P2 extension adds namespaced tools and advertises its id/version in initialize."
     }
+  },
+  "approval_events": {
+    "owner_type": "project",
+    "scope": "project",
+    "store": "job_outbox (the existing transactional event table; no second event store)",
+    "types": [
+      "approval.drafted",
+      "approval.requested",
+      "approval.approved",
+      "approval.rejected",
+      "approval.expired",
+      "approval.revoked",
+      "approval.task_bound"
+    ],
+    "state_authority": "approval_records.state/revision is authoritative; events never write approval state",
+    "stale_event_rule": "an event is appended in the same transaction as the committed CAS revision and its id names that revision; an older revision can never overwrite the record",
+    "delivery_owner": "B19 (approval/budget waiting and cross-session stream); B16 commits the durable fact only",
+    "task_outbox_isolation": "approval rows carry owner_type=project and are retained as delivered facts so the task-outbox sweeper never treats an approval id as a job id"
   }
 }

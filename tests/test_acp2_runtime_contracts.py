@@ -1187,7 +1187,17 @@ def test_negative_samples_cover_the_required_failure_modes() -> None:
 
 
 def test_b03_did_not_add_a_second_canonicalizer_or_science_dtos() -> None:
-    assert not (REPO_ROOT / "src/acp_services/runtime/canonical_digest.py").exists()
+    # B03 froze the rules only; B16 owns the one implementation.  No other
+    # module may define a second canonicalizer.
+    canonicalizer = REPO_ROOT / "src/acp_services/runtime/canonical_digest.py"
+    assert canonicalizer.is_file()
+    api_text = (RUNTIME / "application-api.v1.json").read_text(encoding="utf-8")
+    assert "B16 (src/acp_services/runtime/canonical_digest.py)" in api_text
+    for path in (REPO_ROOT / "src").rglob("*.py"):
+        if path == canonicalizer:
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert "def canonical_digest(" not in text, path
     binding = load_json(RUNTIME / "science-binding.v1.json")
     for entry in binding["reserved_science_contracts"]["entries"]:
         assert set(entry) == {

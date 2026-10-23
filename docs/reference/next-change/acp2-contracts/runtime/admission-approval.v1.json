@@ -59,7 +59,7 @@
     "model_token_note": "P1 does not proxy or enforce model token budgets. A model provider budget proxy is C-owned (C T-13) and is not a Runtime resource ledger."
   },
   "p2_additive": {
-    "implementation_status": "planned",
+    "implementation_status": "delivered (approval: B16; cumulative budget: B17)",
     "owners": {"approval": "B16", "cumulative budget": "B17"},
     "compatibility_rule": "every P2 field is optional and namespaced under its own object; a P1 reader ignores it and a P2 writer never changes the meaning of a P1 field",
     "approval": {
@@ -86,11 +86,13 @@
         "an approval decision is one CAS on expected_revision"
       ],
       "state_transitions": [
+        {"from": "draft", "to": "pending", "intent": "request"},
         {"from": "pending", "to": "approved", "intent": "approve"},
         {"from": "pending", "to": "rejected", "intent": "reject"},
         {"from": "approved", "to": "revoked", "intent": "revoke"},
         {"from": "pending", "to": "expired", "intent": "expire"}
       ],
+      "persistence": {"migration": "023_approvals", "module": "src/acp_services/runtime/approvals.py", "unique_rule": "at most one pending approval per (requester_principal, proposal_ref, plan_digest); a replay returns the same approval_ref", "canonicalization": "src/acp_services/runtime/canonical_digest.py (B03 rules; B18 imports, never re-implements)", "events": "approval.* facts committed to the existing job_outbox table in the same transaction as the state CAS"},
       "authorization": "read: scope read; request: scope write; decide/revoke: approval permission with a verified human principal"
     },
     "cumulative_budget": {

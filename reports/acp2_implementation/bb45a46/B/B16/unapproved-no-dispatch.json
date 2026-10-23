@@ -1,0 +1,19 @@
+{
+  "job_rows_created": 0,
+  "permit": "the request was refused before RuntimeCommands.submit",
+  "qc_or_bsub_started": false,
+  "row": {
+    "code": "access_denied",
+    "expected_rule": "approval_required",
+    "expected_status": 403,
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "new_work_dirs": [],
+    "ok": true,
+    "row": "unapproved",
+    "rule": "approval_required",
+    "status": 403
+  },
+  "schema": "acp2.b16.unapproved-no-dispatch.v1",
+  "work_dirs_created": []
+}

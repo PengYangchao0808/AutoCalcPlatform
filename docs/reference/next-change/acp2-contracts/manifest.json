@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
   "contract_version": "1.1.0",
-  "contract_digest": "61eb7eb5cb679aa7a4168e8f49d90f0a32acf8b9cffb4b0b572eec39272aeb54",
+  "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "d82ca0903f0ee6c57182d07c87e94833fa00c9bc9fccd3c2d3bade1d26d748b9",
+      "sha256": "654c810aac0db30acdfa546b1ab81ec822725064b2231e95624f94632637ef29",
       "delivered_by": "B00"
     },
     {
@@ -236,8 +236,8 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "778a8fe5745e1424c8d9cfeef4bbee3e6255be60e39e69b598ca12aca3acb5c3",
-      "updated_by": "B06"
+      "sha256": "dbe0f1cf303fdbf26d8722be6dbb877536c6cb232432255711f3a4a63300986b",
+      "updated_by": "B16"
     },
     {
       "id": "entry-call-table",
@@ -254,7 +254,8 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c"
+      "sha256": "10f2ad63c4fdb6471bb8c56fd025a9460eb054b7afc17db7b1f2e57e7904fa04",
+      "updated_by": "B16"
     },
     {
       "id": "mcp-launch-schema",
@@ -304,7 +305,8 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "7cbd97ee055a10eec2de475b9eb54d46e8c1e2c0950ca7cd1d347b5958edbb94"
+      "sha256": "0708c6bb4048ad8544c2c480a0e5c4e36312b5a0c0155f22f4f10afaa45cfa62",
+      "updated_by": "B16"
     },
     {
       "id": "controller-topology",
@@ -712,6 +714,11 @@
       "version": "1.1.0",
       "stage": "B06",
       "note": "additive B-req-01 fields in application-api, entry-call-table and mcp-launch refresh, and the cross-track-requests ledger; no field removed or renamed"
+    },
+    {
+      "version": "1.1.0",
+      "stage": "B16",
+      "note": "additive approval HTTP operations/events in application-api, p2-research-operations and admission-approval; no delivered field removed or renamed, so contract_version stays 1.1.0"
     }
   ],
   "b01_deliverables": [

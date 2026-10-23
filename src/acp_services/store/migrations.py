@@ -317,6 +317,49 @@ CREATE INDEX IF NOT EXISTS idx_idempotency_action_key
     ON idempotency_records(action, idempotency_key);
 """,
     },
+    {
+        "id": "023",
+        "description": (
+            "persistent Proposal/ResearchRecord approvals bound to a frozen "
+            "scientific plan digest (B16): state, optimistic revision, expiry, "
+            "requester/approver principals and the approval binding"
+        ),
+        "sql": """
+CREATE TABLE IF NOT EXISTS approval_records (
+    approval_id            TEXT PRIMARY KEY,
+    proposal_ref           TEXT NOT NULL,
+    proposal_digest        TEXT NOT NULL,
+    plan_digest            TEXT NOT NULL,
+    plan_definition_json   TEXT NOT NULL DEFAULT '{}',
+    project_id             TEXT NOT NULL,
+    requester_principal    TEXT NOT NULL,
+    approver_principal     TEXT,
+    budget_json            TEXT,
+    budget_digest          TEXT NOT NULL DEFAULT '',
+    allowed_change_range_json TEXT NOT NULL DEFAULT '{}',
+    state                  TEXT NOT NULL,
+    expires_at             TEXT,
+    revision               INTEGER NOT NULL DEFAULT 1,
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL,
+    decided_at             TEXT,
+    reason                 TEXT,
+    task_ref_json          TEXT,
+    idempotency_key        TEXT,
+    last_event_revision    INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_approval_pending_pair
+    ON approval_records(requester_principal, proposal_ref, plan_digest)
+    WHERE state = 'pending';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_approval_idempotency
+    ON approval_records(requester_principal, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_approval_project_state
+    ON approval_records(project_id, state, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_approval_proposal
+    ON approval_records(proposal_ref, plan_digest);
+""",
+    },
 ]
 
 
