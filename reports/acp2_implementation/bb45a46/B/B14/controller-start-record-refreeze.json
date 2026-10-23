@@ -1,0 +1,44 @@
+{
+  "schema": "acp2.controller-start-record.v1",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
+  "pid": 1002584,
+  "argv": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "-m",
+    "acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18772",
+    "--run-root",
+    "<acp2-dev>/data/integration/controller-run-root",
+    "--no-browser"
+  ],
+  "cwd": "<acp2-dev>/data/integration/controller-config",
+  "pythonpath": "<acp2-dev>/integration/src",
+  "interpreter": "<acp2-dev>/venvs/b/bin/python",
+  "db_path": "<acp2-dev>/data/integration/controller-run-root/acp_jobs.db",
+  "run_root": "<acp2-dev>/data/integration/controller-run-root",
+  "bind_host": "127.0.0.1",
+  "port": 18772,
+  "production_port": 8765,
+  "production_touched": false,
+  "started_at": "2026-10-23T02:56:58.167338Z",
+  "health": {
+    "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "candidate_revision_source": "ACP_CANDIDATE_REVISION from <acp2-dev>/data/b/acceptance-env.sh",
+    "contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
+    "contract_version": "1.1.0",
+    "read_only": true,
+    "status": "ok"
+  },
+  "loaded_module_paths": {
+    "acp": "<acp2-dev>/integration/src/acp/__init__.py",
+    "cccp": "<acp2-dev>/integration/src/cccp/__init__.py",
+    "acp_services": "<acp2-dev>/integration/src/acp_services/__init__.py"
+  },
+  "note": "PID/port are from this B14a re-freeze; the candidate serves integration source through PYTHONPATH while the B02 venv remains the interpreter environment. /api/health's candidate_revision is the B02 acceptance-env override, not the candidate SHA; the authoritative candidate SHA is recorded separately and the frozen baseline-lock still names ab492cc."
+}

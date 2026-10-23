@@ -1,0 +1,7 @@
+source <acp2-dev>/data/b/acceptance-env.sh
+export ACP_RUN_ROOT=<acp2-dev>/data/integration/run-root
+export ACP2_RUN_ROOT=<acp2-dev>/data/integration/run-root
+export ACP2_PROJECT_ROOT=<acp2-dev>/integration
+export PYTHONPATH=<acp2-dev>/integration/src
+cd <acp2-dev>/integration
+<acp2-dev>/venvs/b/bin/python -m pytest -m "not slow" -q
