@@ -16,6 +16,7 @@ __all__ = [
     "PluginDependencyUnavailableError",
     "PluginDisabledError",
     "PluginError",
+    "PluginLicenseError",
     "PluginLoadError",
     "PluginMetadataError",
     "PluginNameConflictError",
@@ -31,6 +32,23 @@ class PluginError(Exception):
 
 class PluginMetadataError(PluginError, ValueError):
     """A plugin metadata record is missing a required field or is malformed."""
+
+
+class PluginLicenseError(PluginMetadataError):
+    """A plugin declares an empty or unknown licence.
+
+    The licence policy is closed: this is a metadata rejection raised before
+    any loader exists, so an unlicensed plugin can never be discovered as
+    usable.  It subclasses :class:`PluginMetadataError` so existing callers
+    that catch the broader metadata error keep working.
+    """
+
+    def __init__(self, licence: str, *, reason: str, plugin: str | None = None) -> None:
+        self.licence = licence
+        self.plugin = plugin
+        self.reason = reason
+        prefix = f"plugin {plugin!r} " if plugin else "plugin "
+        super().__init__(f"{prefix}license {licence!r} rejected: {reason}")
 
 
 class PluginNameConflictError(PluginError, ValueError):
