@@ -104,9 +104,9 @@
     {
       "artifact_id": "A-25a:selectivity-fixture-v1",
       "consumer": "C T-40a",
-      "digest": null,
+      "digest": "sha256:197473c530d9ae926a656b398c1fe4577f3c976a507f3a22183fd801fce36b45",
       "evidence_state": "NOT_VERIFIED",
-      "gap": "A-25a (todo 45, Wave 13) not executed - the fixture and the registered reference owner=C, scenario=experience:cross-domain-live, subcase=selectivity are not frozen yet. Chain A-25a -> C T-40a -> B23b -> A-25b -> C T-40b must keep this order; C T-40a must not submit first.",
+      "gap": "A-25a fixture is frozen and validated (constructed, real_run=false; manifest digest sha256:197473...; two endpoints distinguishable by CIP configuration and signed-volume sign; producer request selectivity-producer.md). C T-40a has not submitted and no public run_id exists, so evidence_state stays NOT_VERIFIED. Chain A-25a -> C T-40a -> B23b -> A-25b -> C T-40b must keep this order; C T-40a must not submit first.",
       "phase": "experience:selectivity",
       "preconditions": {
         "and": [],
@@ -114,7 +114,7 @@
       },
       "producer": "A-25a",
       "product": "frozen selectivity fixture (structures, atom maps, endo/exo definitions, two-path criteria, budget) + science/requests/selectivity-producer.md",
-      "readiness": "contract_ready",
+      "readiness": "implementation_ready",
       "task_id": "A-25a",
       "version": null
     },

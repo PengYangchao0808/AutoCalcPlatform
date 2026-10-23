@@ -1,0 +1,315 @@
+{
+  "atom_mapping": {
+    "left_to_right": {
+      "cyclopentadiene:cp_c1": "product_endo:pd_c1",
+      "cyclopentadiene:cp_c2": "product_endo:pd_c2",
+      "cyclopentadiene:cp_c3": "product_endo:pd_c3",
+      "cyclopentadiene:cp_c4": "product_endo:pd_c6",
+      "cyclopentadiene:cp_c5": "product_endo:pd_c7",
+      "cyclopentadiene:cp_h1": "product_endo:pd_h1",
+      "cyclopentadiene:cp_h2": "product_endo:pd_h2",
+      "cyclopentadiene:cp_h3": "product_endo:pd_h3",
+      "cyclopentadiene:cp_h4": "product_endo:pd_h4",
+      "cyclopentadiene:cp_h5": "product_endo:pd_h5",
+      "cyclopentadiene:cp_h6": "product_endo:pd_h6",
+      "methyl_acrylate:ma_c1": "product_endo:pd_c4",
+      "methyl_acrylate:ma_c2": "product_endo:pd_c5",
+      "methyl_acrylate:ma_c3": "product_endo:pd_c8",
+      "methyl_acrylate:ma_c4": "product_endo:pd_c9",
+      "methyl_acrylate:ma_h1": "product_endo:pd_h7",
+      "methyl_acrylate:ma_h2": "product_endo:pd_h8",
+      "methyl_acrylate:ma_h3": "product_endo:pd_h9",
+      "methyl_acrylate:ma_h4": "product_endo:pd_h10",
+      "methyl_acrylate:ma_h5": "product_endo:pd_h11",
+      "methyl_acrylate:ma_h6": "product_endo:pd_h12",
+      "methyl_acrylate:ma_o1": "product_endo:pd_o1",
+      "methyl_acrylate:ma_o2": "product_endo:pd_o2"
+    },
+    "right_to_left": {
+      "product_endo:pd_c1": "cyclopentadiene:cp_c1",
+      "product_endo:pd_c2": "cyclopentadiene:cp_c2",
+      "product_endo:pd_c3": "cyclopentadiene:cp_c3",
+      "product_endo:pd_c4": "methyl_acrylate:ma_c1",
+      "product_endo:pd_c5": "methyl_acrylate:ma_c2",
+      "product_endo:pd_c6": "cyclopentadiene:cp_c4",
+      "product_endo:pd_c7": "cyclopentadiene:cp_c5",
+      "product_endo:pd_c8": "methyl_acrylate:ma_c3",
+      "product_endo:pd_c9": "methyl_acrylate:ma_c4",
+      "product_endo:pd_h1": "cyclopentadiene:cp_h1",
+      "product_endo:pd_h10": "methyl_acrylate:ma_h4",
+      "product_endo:pd_h11": "methyl_acrylate:ma_h5",
+      "product_endo:pd_h12": "methyl_acrylate:ma_h6",
+      "product_endo:pd_h2": "cyclopentadiene:cp_h2",
+      "product_endo:pd_h3": "cyclopentadiene:cp_h3",
+      "product_endo:pd_h4": "cyclopentadiene:cp_h4",
+      "product_endo:pd_h5": "cyclopentadiene:cp_h5",
+      "product_endo:pd_h6": "cyclopentadiene:cp_h6",
+      "product_endo:pd_h7": "methyl_acrylate:ma_h1",
+      "product_endo:pd_h8": "methyl_acrylate:ma_h2",
+      "product_endo:pd_h9": "methyl_acrylate:ma_h3",
+      "product_endo:pd_o1": "methyl_acrylate:ma_o1",
+      "product_endo:pd_o2": "methyl_acrylate:ma_o2"
+    },
+    "unmapped_left": [],
+    "unmapped_right": []
+  },
+  "bond_changes": [
+    {
+      "bond_order_left": 0,
+      "bond_order_right": 1,
+      "change_type": "formed",
+      "left_atoms": [
+        "cyclopentadiene:cp_c1",
+        "methyl_acrylate:ma_c1"
+      ],
+      "right_atoms": [
+        "product_endo:pd_c1",
+        "product_endo:pd_c4"
+      ]
+    },
+    {
+      "bond_order_left": 0,
+      "bond_order_right": 1,
+      "change_type": "formed",
+      "left_atoms": [
+        "cyclopentadiene:cp_c4",
+        "methyl_acrylate:ma_c2"
+      ],
+      "right_atoms": [
+        "product_endo:pd_c6",
+        "product_endo:pd_c5"
+      ]
+    },
+    {
+      "bond_order_left": 2,
+      "bond_order_right": 1,
+      "change_type": "changed",
+      "left_atoms": [
+        "cyclopentadiene:cp_c1",
+        "cyclopentadiene:cp_c2"
+      ],
+      "right_atoms": [
+        "product_endo:pd_c1",
+        "product_endo:pd_c2"
+      ]
+    },
+    {
+      "bond_order_left": 1,
+      "bond_order_right": 2,
+      "change_type": "changed",
+      "left_atoms": [
+        "cyclopentadiene:cp_c2",
+        "cyclopentadiene:cp_c3"
+      ],
+      "right_atoms": [
+        "product_endo:pd_c2",
+        "product_endo:pd_c3"
+      ]
+    },
+    {
+      "bond_order_left": 2,
+      "bond_order_right": 1,
+      "change_type": "changed",
+      "left_atoms": [
+        "cyclopentadiene:cp_c3",
+        "cyclopentadiene:cp_c4"
+      ],
+      "right_atoms": [
+        "product_endo:pd_c3",
+        "product_endo:pd_c6"
+      ]
+    },
+    {
+      "bond_order_left": 2,
+      "bond_order_right": 1,
+      "change_type": "changed",
+      "left_atoms": [
+        "methyl_acrylate:ma_c1",
+        "methyl_acrylate:ma_c2"
+      ],
+      "right_atoms": [
+        "product_endo:pd_c4",
+        "product_endo:pd_c5"
+      ]
+    }
+  ],
+  "conditions": {
+    "phase": "gas",
+    "pressure_pa": 100000.0,
+    "solvent": null,
+    "standard_state": "1_bar_ideal_gas",
+    "temperature_k": 298.15
+  },
+  "input_uncertainty": {
+    "notes": "Constructed selectivity fixture. The two paths share the left side, atom-mapping topology and bond changes; only the product stereochemistry differs. No energy, TS geometry or experimental value is asserted.",
+    "unknown_fields": [
+      "conditions.solvent"
+    ]
+  },
+  "left": [
+    {
+      "atom_id_scheme": "explicit",
+      "atom_ids": [
+        "cp_c5",
+        "cp_c1",
+        "cp_c2",
+        "cp_c3",
+        "cp_c4",
+        "cp_h5",
+        "cp_h6",
+        "cp_h1",
+        "cp_h2",
+        "cp_h3",
+        "cp_h4"
+      ],
+      "charge": 0,
+      "elements": [
+        "C",
+        "C",
+        "C",
+        "C",
+        "C",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H"
+      ],
+      "formula": "C5H6",
+      "input_format": "mol",
+      "multiplicity": 1,
+      "species": "cyclopenta-1,3-diene",
+      "stereochemistry": {
+        "centers": [],
+        "double_bonds": [],
+        "status": "defined"
+      },
+      "structure_id": "cyclopentadiene"
+    },
+    {
+      "atom_id_scheme": "explicit",
+      "atom_ids": [
+        "ma_c1",
+        "ma_c2",
+        "ma_c3",
+        "ma_o1",
+        "ma_o2",
+        "ma_c4",
+        "ma_h1",
+        "ma_h2",
+        "ma_h3",
+        "ma_h4",
+        "ma_h5",
+        "ma_h6"
+      ],
+      "charge": 0,
+      "elements": [
+        "C",
+        "C",
+        "C",
+        "O",
+        "O",
+        "C",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H"
+      ],
+      "formula": "C4H6O2",
+      "input_format": "mol",
+      "multiplicity": 1,
+      "species": "methyl prop-2-enoate",
+      "stereochemistry": {
+        "centers": [],
+        "double_bonds": [],
+        "status": "defined"
+      },
+      "structure_id": "methyl_acrylate"
+    }
+  ],
+  "reaction_id": "reaction.selectivity.cp_methyl_acrylate.endo.v1",
+  "reaction_scope": "net_reaction",
+  "right": [
+    {
+      "atom_id_scheme": "explicit",
+      "atom_ids": [
+        "pd_c2",
+        "pd_c3",
+        "pd_c1",
+        "pd_c4",
+        "pd_c5",
+        "pd_c8",
+        "pd_o1",
+        "pd_o2",
+        "pd_c9",
+        "pd_c6",
+        "pd_c7",
+        "pd_h2",
+        "pd_h3",
+        "pd_h1",
+        "pd_h7",
+        "pd_h8",
+        "pd_h9",
+        "pd_h10",
+        "pd_h11",
+        "pd_h12",
+        "pd_h4",
+        "pd_h5",
+        "pd_h6"
+      ],
+      "charge": 0,
+      "elements": [
+        "C",
+        "C",
+        "C",
+        "C",
+        "C",
+        "C",
+        "O",
+        "O",
+        "C",
+        "C",
+        "C",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H"
+      ],
+      "formula": "C9H12O2",
+      "input_format": "mol",
+      "multiplicity": 1,
+      "species": "methyl bicyclo[2.2.1]hept-5-ene-2-carboxylate (endo)",
+      "stereochemistry": {
+        "centers": [
+          {
+            "atom_id": "pd_c1",
+            "configuration": "R"
+          },
+          {
+            "atom_id": "pd_c5",
+            "configuration": "S"
+          },
+          {
+            "atom_id": "pd_c6",
+            "configuration": "R"
+          }
+        ],
+        "double_bonds": [],
+        "status": "defined"
+      },
+      "structure_id": "product_endo"
+    }
+  ],
+  "schema_version": 1
+}
