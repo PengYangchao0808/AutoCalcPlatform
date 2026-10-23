@@ -157,6 +157,25 @@
       "version": "1"
     },
     {
+      "artifact_id": "A-27b:installed-package-probe",
+      "consumer": "A-27b",
+      "digest": "sha256:36494be671404ddf3b6e41c3371e53115a090d4658bc9a058223929c21207496",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B25a has not published the release candidate wheel. A-27b verified a from-tree local candidate cccp wheel (wheel_source=local_candidate, manual_zip_from_src) in a separately recorded venv created with --without-pip; the platform B25a row stays NOT_VERIFIED. The B-owned package-data declaration for the 14-file contract corpus is still pending, so a wheel built by B before that patch omits the corpus.",
+      "phase": "main",
+      "preconditions": {
+        "and": [
+          "B25a:release-candidate"
+        ],
+        "or": []
+      },
+      "producer": "A-27b",
+      "product": "clean-environment installed-package probe (tests/test_acp2_science_installed_package.py) over the packaged 14-file science contract corpus",
+      "readiness": "implementation_ready",
+      "task_id": "A-27b",
+      "version": null
+    },
+    {
       "artifact_id": "B00:candidate-overlay-snapshot",
       "consumer": "A-00a",
       "digest": "sha256:3fb835b5069f96642bf6bb889a804532bbb70b69cf796d21208a6e3364117734",
