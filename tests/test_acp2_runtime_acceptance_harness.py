@@ -53,6 +53,12 @@ def test_help_lists_15_scenarios_and_phase_registry() -> None:
     assert "never a scenario PASS" in result.stdout
 
 
+def test_contract_version_tracks_delivered_manifest() -> None:
+    manifest = _read(REPO_ROOT / "docs/reference/next-change/acp2-contracts/manifest.json")
+    assert harness.contract_version() == manifest["contract_version"]
+    assert harness.contract_version() == "1.3.0"
+
+
 def test_scenario_registry_completeness() -> None:
     assert tuple(harness.B_SCENARIOS) == harness.EXPECTED_B_SCENARIOS
     assert len(harness.B_SCENARIOS) == 15

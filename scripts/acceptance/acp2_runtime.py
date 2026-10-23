@@ -60,7 +60,8 @@ SUMMARY_SCHEMA = "acp2.acceptance.summary.v1"
 SAMPLES_SCHEMA = "acp2.acceptance.samples.v1"
 SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 SUPPORTED_CONTRACT_MAJOR = "1"
-CONTRACT_VERSION = "1.2.0"
+CONTRACT_MANIFEST_PATH = CONTRACT_ROOT / "manifest.json"
+CONTRACT_VERSION_FALLBACK = "1.0.0"
 
 BASELINE_CANDIDATE_REVISION = "096cdffe9a3817d8ee443d824830d87ec6e07bc2"
 SERVER_CANDIDATE_REVISION = (
@@ -109,6 +110,25 @@ TIMESTAMP_PATTERN = re.compile(
 )
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+
+def contract_version() -> str:
+    """Return the delivered contract version from the authoritative manifest.
+
+    The harness must never hardcode a version: every contract bump lands in
+    ``docs/reference/next-change/acp2-contracts/manifest.json`` and must flow
+    into receipts and summaries automatically.  The fallback is used only when
+    the manifest is unreadable or malformed.
+    """
+
+    try:
+        manifest = json.loads(CONTRACT_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return CONTRACT_VERSION_FALLBACK
+    value = manifest.get("contract_version") if isinstance(manifest, dict) else None
+    if isinstance(value, str) and SEMVER.match(value):
+        return value
+    return CONTRACT_VERSION_FALLBACK
 
 
 # ---------------------------------------------------------------------------
@@ -1409,7 +1429,7 @@ def write_result(
     document: dict[str, Any] = {
         "schema": ACCEPTANCE_SCHEMA,
         "schema_dialect": SCHEMA_DIALECT,
-        "contract_version": CONTRACT_VERSION,
+        "contract_version": contract_version(),
         "owner": owner,
         "scenario": scenario,
         "phase": phase,
@@ -1464,7 +1484,7 @@ def write_result(
     summary = {
         "schema": SUMMARY_SCHEMA,
         "schema_dialect": SCHEMA_DIALECT,
-        "contract_version": CONTRACT_VERSION,
+        "contract_version": contract_version(),
         "candidate_revision": document["candidate_revision"],
         "generated_at": finished_at,
         "runs": runs,

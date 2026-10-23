@@ -1,7 +1,7 @@
 {
   "assertions": [
     {
-      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': '9ee70af73c59db5fb5e1738064f7f4b4123849fd', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T08:59:35.137286Z'}",
+      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': 'bc59e04758450321747068e679ca3a8d0efc5ad7', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T09:08:39.010735Z'}",
       "name": "b20a.controller_health",
       "status": "PASS"
     },
@@ -145,14 +145,14 @@
   },
   "operation_class": "submit",
   "p2_candidate": {
-    "candidate_revision": "sha256:6e6ccf5cdda3a37403eea2987383903301724e8e20b3370466fc9a2401f8958e",
+    "candidate_revision": "sha256:143129a243551f9a1227428508f546bc77e4911ea06d166469bf52c17cec8892",
     "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
     "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
-    "env_digest": "a9891b4783b867d6ba5e16e4a8f1db2608be3d2fee19fee830b5345696e788a0",
+    "env_digest": "d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6",
     "errors": [],
-    "harness_revision": "9d291a18ec66e203c576057cd6612c3e8e126480abeb13825eb3b2efbbf96cc9",
+    "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
     "path": "reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json",
-    "server_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd"
+    "server_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7"
   },
   "phase": "da-submit",
   "reaction_errors": [],
