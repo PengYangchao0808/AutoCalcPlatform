@@ -1,5 +1,10 @@
 {
-  "candidate_sha": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "candidate_checkout": {
+    "evidence": "reports/acp2_implementation/bb45a46/B/Bfix7/candidate-clean.txt",
+    "status_porcelain": []
+  },
+  "candidate_sha": "493790709830eac4ce347b5fb81414050f7a1e21",
+  "candidate_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
   "compat_reader_pytest": {
     "argv": [
       "/usr/bin/python3.11",
@@ -16,13 +21,16 @@
     "passed": 41,
     "scope": "compat.legacy manifests/layouts read-only readers + cross-version recovery fixtures"
   },
-  "generated_at": "2026-10-23T19:43:00Z",
+  "generated_at": "2026-10-23T20:51:56Z",
+  "harness_revision": "a44e39a73960b735556dfc47608210300c4c6d95",
   "ordinary_legacy_cli": [
     {
       "browser": "PASS",
-      "candidate_patch_sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
-      "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+      "candidate_patch_sha256": null,
+      "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "candidate_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
       "cell": "F0/S1",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B24b/four-combination/F0_S1.json",
       "legacy_readers": {
         "BatchOptimize": "PASS",
         "Confsearch": "PASS",
@@ -36,18 +44,20 @@
       "steps": {
         "api_submission": true,
         "demo_cli_submission": true,
-        "frontend_browser": true,
+        "frontend_browser": "PASS",
         "frontend_load": true,
         "legacy_cli_missing_args": true,
-        "legacy_ordinary_submissions": true,
+        "legacy_ordinary_submissions": "PASS",
         "service_probe": true
       }
     },
     {
       "browser": "PASS",
-      "candidate_patch_sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
-      "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+      "candidate_patch_sha256": null,
+      "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "candidate_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
       "cell": "F1/S1",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B24b/four-combination/F1_S1.json",
       "legacy_readers": {
         "BatchOptimize": "PASS",
         "Confsearch": "PASS",
@@ -61,10 +71,10 @@
       "steps": {
         "api_submission": true,
         "demo_cli_submission": true,
-        "frontend_browser": true,
+        "frontend_browser": "PASS",
         "frontend_load": true,
         "legacy_cli_missing_args": true,
-        "legacy_ordinary_submissions": true,
+        "legacy_ordinary_submissions": "PASS",
         "service_probe": true
       }
     }

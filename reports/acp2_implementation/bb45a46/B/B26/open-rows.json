@@ -1,10 +1,12 @@
 {
   "candidate": {
-    "landed_head": "09fc41da9171e1d466c0036a114feb272652e028",
+    "evidence_revision": "0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d",
+    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
     "release_source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
     "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2"
   },
-  "generated_at": "2026-10-23T18:40:00Z",
+  "generated_at": "2026-10-23T20:51:56Z",
   "h7_status": "OPEN",
   "missing_external_rows": [
     "A-20",

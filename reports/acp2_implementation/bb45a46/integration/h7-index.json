@@ -96,10 +96,11 @@
   },
   "evidence_revision": {
     "artifact_count": 34,
+    "note": "sha256 over sorted \"<repo-relative path> <file sha256>\\n\" for every artifact referenced by the H0-H7 receipts. The aggregate receipt set keeps its historical candidate revision; only live artifact digests were refreshed for the B-fix-7/B-fix-8 evidence edits.",
     "rule": "sha256 over sorted '<repo-relative path> <file sha256>\\n' for every artifact referenced by the H0-H7 receipts",
-    "value": "3c16877f422933b47243e255f8b3a45efea05bfe1dd176f5f643a6764a7b8aa3"
+    "value": "0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d"
   },
-  "generated_at": "2026-10-23T18:40:00Z",
+  "generated_at": "2026-10-23T20:51:56Z",
   "harness_revision": {
     "path": "scripts/acceptance/acp2_runtime.py",
     "rule": "sha256 of the harness file used to validate this index",
@@ -372,7 +373,10 @@
       "handoff": "H6",
       "notes": [
         "h6_status is OPEN. B-owned migration/backup/restore, four-combination and legacy readers PASS; C DSH, A/C readability, selectivity B23b and real DA remain NOT_VERIFIED.",
-        "B-fix-5's real LSF normal singlepoint (job 1765) closes the basic LSF loop recorded under H3/H7; H6's own multi-project isolation and running-task recovery dimensions were not re-run and stay open.",
+        "B-fix-7 commits the reviewed options overlay at 4937907 and re-runs four-combination plus legacy readers from a clean checkout at that commit (harness a44e39a, no working-tree patch). B3/B4 are re-attributed to 4937907.",
+        "B-fix-8 keeps the B24 F0/S0 and F1/S0 executed FAIL visible (FAIL with NOT_APPLICABLE scope); S0 is not claimed as closed and not rewritten as NOT_VERIFIED.",
+        "The B24b migration evidence remains at f32c670 and is explicitly not re-attributed to 4937907.",
+        "B-fix-5 real LSF normal singlepoint (job 1765) closes the basic LSF loop recorded under H3/H7; H6 own multi-project isolation and running-task recovery dimensions were not re-run and stay open.",
         "No production restart or production run-root write was executed."
       ],
       "owner": "B",
@@ -401,7 +405,8 @@
       "notes": [
         "Release-fix5 artifacts and digests are frozen and verified; the installed release reports 510 files with release_id 1c79785a657c6614 and the real LSF normal singlepoint (job 1765) completed with the same release_id, so the installed-sync and LSF gaps are closed.",
         "H7 remains OPEN because A-29 and C35 signatures are absent, C33/C34 install evidence and C DSH/model scope are absent, and the B26a reproduction is same-agent, not independent.",
-        "C35 is absent and its plan does not list B26 as a prerequisite: disposition c35_absent, not C35_INPUT_CYCLE."
+        "C35 is absent and its plan does not list B26 as a prerequisite: disposition c35_absent, not C35_INPUT_CYCLE.",
+        "B-fix-9 reconciled landed_head/landed_head_tree with the actual code-fix commit 4937907 and the 6ec01ec..4937907 src delta; release-fix5 digests are unchanged and H7 stays OPEN."
       ],
       "owner": "B",
       "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/DSH rows absent",
@@ -417,9 +422,34 @@
   "schema": "acp2.h7.index.v1",
   "schema_version": 1,
   "source_candidate": {
-    "landed_head": "09fc41da9171e1d466c0036a114feb272652e028",
-    "landed_head_relation": "landed B-fix-5 evidence commit on main (docs/evidence only); the release was built from a detached clean worktree at 6ec01ec, whose tree e2b2377 is the build source, so the landed tree differs only by report/evidence files",
-    "landed_head_tree": "b0718da04b2acd32e886c82a03b3217cf99cad97",
+    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head_delta": {
+      "base_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+      "command": "git diff --stat 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2..493790709830eac4ce347b5fb81414050f7a1e21 -- src",
+      "deletions": 161,
+      "files": [
+        "src/acp/calculations/attempt_freeze.py",
+        "src/acp/calculations/attempt_publication.py",
+        "src/acp/calculations/batch/options.py",
+        "src/acp/scheduler/remote/runner.py",
+        "src/acp_services/runtime/attempt_freeze.py",
+        "src/acp_services/runtime/attempt_recovery.py",
+        "src/acp_services/runtime/cgroup.py",
+        "src/acp_services/runtime/isolation.py",
+        "src/acp_services/runtime/worker.py",
+        "src/acp_services/worker_bootstrap.py"
+      ],
+      "head_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "insertions": 823,
+      "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 6ec01ec and their digests are unchanged."
+    },
+    "landed_head_historical_previous": {
+      "head": "09fc41da9171e1d466c0036a114feb272652e028",
+      "note": "Previous value was the B-fix-5 evidence commit and its relation was false after the release fix commits.",
+      "tree": "b0718da04b2acd32e886c82a03b3217cf99cad97"
+    },
+    "landed_head_relation": "Landed code-fix commit B-fix-7 (reviewed batch options overlay) on branch feat/frontend-plan1-closure. The release was built from detached 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2; 6ec01ec..493790709830eac4ce347b5fb81414050f7a1e21 -- src differs in 10 files (+823/-161), including attempt_freeze, attempt_publication, batch/options, scheduler/remote/runner, acp_services/runtime/{attempt_freeze,attempt_recovery,cgroup,isolation,worker} and worker_bootstrap. The docs(evidence) index commit follows this code commit; it does not change src. This relation replaces the previous false \"report/evidence only\" claim.",
+    "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
     "raw_receipt_shas_need_not_match": true,
     "release_base_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
     "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",

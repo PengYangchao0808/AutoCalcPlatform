@@ -1,0 +1,20 @@
+# Candidate fix commit (row 39)
+git add -- src/acp/calculations/batch/options.py
+git commit -m "fix(batch): land the reviewed options overlay"
+# -> 493790709830eac4ce347b5fb81414050f7a1e21 (tree f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a)
+
+# Clean harness worktree (committed a44e39a harness; no working-tree harness patch)
+git worktree add --detach /tmp/opencode/bfix7/harness a44e39a73960b735556dfc47608210300c4c6d95
+cd /tmp/opencode/bfix7/harness
+/usr/bin/python3.11 scripts/acceptance/four_combinations.py --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24b/four-combination --f1-revision 493790709830eac4ce347b5fb81414050f7a1e21 --cells F0/S1,F1/S1
+
+# Clean candidate worktree at the fix commit
+git worktree add --detach /tmp/opencode/bfix7/candidate 493790709830eac4ce347b5fb81414050f7a1e21
+cd /tmp/opencode/bfix7/candidate
+git status --porcelain
+/usr/bin/python3.11 -m pytest tests/test_legacy_read_only.py tests/test_legacy_layout_compat.py tests/test_recovery_fixtures_smoke.py tests/test_recovery_cross_version.py -q
+
+# Verification
+/usr/bin/python3.11 -m pytest tests/test_acp2_runtime_h7_index.py tests/test_acp2_runtime_recovery_runbook.py -q
+/usr/bin/python3.11 scripts/acceptance/validate_acp2_contracts.py
+/usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/integration/summary.json
