@@ -55,3 +55,8 @@ acp_services/
 - **Mock as real** — `PASS` at module level is not real-science/browser/LSF/production evidence; keep `NOT_VERIFIED` explicit.
 - **Deleting compat surfaces for line count** — primitives/backends/compat legacy/recovery fixtures/model assets/vendor/bootstraps are retained by design.
 - **Rewriting `NOT_VERIFIED` to `PASS`** or documenting “field delivered” as “frontend integrated” — forbidden.
+
+## INSTALLED ROLE (B25b, 2026-10-23)
+- `acp-worker` installs only `acp_services/**` + `cccp`; `python -m acp_services.worker_bootstrap` and the `acp-worker` script are the standalone worker entries. Do not install Web/DSH/browser into a worker or CCCP node.
+- The installed wheel keeps `acp_services` independent of `acp`; the root `acp` distribution composes it. MCP stdio is served by `acp mcp serve` through `src/acp/services_mcp_bootstrap.py`, not by importing `acp` from this package.
+- Clean-install evidence: `reports/acp2_implementation/bb45a46/B/B25/` (`installed-probes.json`, `assets-audit.json`).

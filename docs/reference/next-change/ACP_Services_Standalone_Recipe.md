@@ -273,3 +273,27 @@ ACP_RUN_ROOT=/tmp/b41b_runs acp task export  --job <id>          # 新进程 →
 # recover 腿（当前 FAIL，缺陷 D2）：acp task recover --task-dir <dir> --workflow optimize --method r2SCAN-3c
 #             → 生成 `! default def2-TZVPP` 占位输入 + orca 回落 GNOME → failed
 ```
+
+## 10. B25b 角色 wheel 安装追加（2026-10-23）
+
+本节只追加 B25b 的真实安装结果，不覆盖 §2 的 B41a/B41b 记录。
+
+| 步骤 | 命令 | Expected | Actual | 结果 |
+|---|---|---|---|---|
+| W1 三角色 wheel 安装 | `python3.11 -m venv /tmp/opencode/b25b/venvs/web && env -u PYTHONPATH /tmp/opencode/b25b/venvs/web/bin/python -m pip install --find-links <release> <release>/acp_web-0.3.0-py3-none-any.whl` | exit 0；模块来自 venv site-packages | 四个 venv（cccp/worker/web/root）安装 0.3.0；`cccp.__file__`、`acp.__file__`、`acp_services.__file__` 均在各自 site-packages | PASS |
+| W2 CCCP 独立样例 | `/tmp/opencode/b25b/venvs/cccp/bin/python cccp-sample.py` | 无 Controller、无 `acp` import，受控单点完成 | `complete=true`，energy `-1.0`，`acp`/`acp_services` 不在 `sys.modules` | PASS |
+| W3 根/角色 CLI | `<venv>/bin/acp --help` | usage 打印，exit 0 | web 与 root 均 exit 0 | PASS |
+| W4 Lab 服务 | `acp run serve --host 127.0.0.1 --port <free> --run-root <isolated> --no-browser` | `/api/health` status=ok | 随机 loopback 端口返回 `status=ok`，测毕停止 | PASS |
+| W5 stdio MCP | `acp mcp serve --controller http://127.0.0.1:<port>` | initialize `2025-06-18` + 八工具 | 八个 P1 工具全部列出 | PASS |
+| W6 资产/许可/配置/SDK | `unzip -l` + 安装面 import | LICENSE/NOTICE/LICENSE-DP5/model assets/py.typed/sample config/schema/SDK/docs | 全部在场；根发行 LICENSE 在 dist-info；样例配置与 schema/docs 随 `release/docs/` | PASS |
+| W7 四处版本 | 读取四个位置 | 全部 `0.3.0` | 全部 `0.3.0` | PASS |
+| W8 C 静态资产挂载 | 读取 C `experience/static-assets.manifest.json` | 只读挂载 `/experience/<release_id>/`，未知路径 404，摘要不符拒绝 | C 未发布该 manifest | NOT_VERIFIED — 原因：`c_static_assets_absent`；预期路径 `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` |
+
+**判定：** 角色 wheel 安装、CCCP 独立运行、CLI/Lab/MCP、资产与版本均 PASS；
+C33/C34 与 C 静态资产未发布，保持 `NOT_VERIFIED`（预期路径见 B25b 证据
+`a-c-evidence.json` / `static-assets-status.json`）。B25b 未重启生产服务，未使用生产 run root。
+
+**发行修正：** B25a 首版 `acp_web` wheel 的 `OriginPolicy` 构造失败已在 B25b 重建的
+0.3.0 发行中修正（`boundary.py` 接受 `public_origin`）；原始制品保留在
+`reports/acp2_implementation/bb45a46/B/B25/release-b25a-original/`，新摘要以
+`release-manifest.json` 为准。

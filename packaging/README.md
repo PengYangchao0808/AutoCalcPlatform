@@ -61,3 +61,55 @@ worker 为缺省输出目录显式使用 `--work-dir`，相对输出目录也基
 未配置时正常领取仍可用，但异常死亡接管必须另有停止证明。历史无边界锁、
 仍有后代进程、路径/inode/设备/boot ID 不符均不能自动接管。
 此功能处理意外进程死亡，不声明同 UID 恶意程序的隔离能力；真实委派环境尚待验收。
+
+## B25b 干净安装验收（2026-10-23）
+
+B25b 在仓库外的四个干净 venv 中实际安装并运行了 `cccp`、`acp-worker`、`acp-web` 与根
+`acp` 四个发行，数据根为 `/tmp/opencode/b25b`，Lab/MCP 使用随机 loopback 端口与独立
+`ACP_RUN_ROOT`。证据与可复跑摘要位于
+`reports/acp2_implementation/bb45a46/B/B25/`（`summary.json`、`install-results.json`、
+`installed-probes.json`、`cccp-sample.json`、`lab-health.json`、`mcp-tools.json`、
+`assets-audit.json`、`a-c-evidence.json`、`static-assets-status.json`）。
+
+```bash
+# 安装角色（仓库外；不继承 PYTHONPATH / 不使用 editable checkout）
+python3.11 -m venv /tmp/opencode/b25b/venvs/web
+/tmp/opencode/b25b/venvs/web/bin/python -m pip install \
+  --find-links reports/acp2_implementation/bb45a46/B/B25/release \
+  reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
+
+# 独立 CCCP 科学样例（无 Controller / 无 acp import）
+/tmp/opencode/b25b/venvs/cccp/bin/python /path/to/cccp-sample.py
+
+# Lab 与 stdio MCP（隔离端口与 run root）
+/tmp/opencode/b25b/venvs/web/bin/acp run serve --host 127.0.0.1 --port 18786 \
+  --run-root /tmp/opencode/b25b/data/lab-run-root --no-browser
+/tmp/opencode/b25b/venvs/web/bin/acp mcp serve --controller http://127.0.0.1:18786
+```
+
+验收场景（fixture 由 `$ACP2_PACKAGE_FIXTURE` 指定）：
+
+```bash
+python scripts/acceptance/acp2_runtime.py --scenario package-install \
+  --fixture "$ACP2_PACKAGE_FIXTURE" \
+  --out reports/acp2_implementation/bb45a46/B/B25 --timeout 1800
+```
+
+结果：`PASS`（exit 0）；四个干净 venv 导入均解析到各自 `site-packages`；CCCP 受控
+单点在无 Controller 下完成；`acp --help` 在 web/root 均可用；Lab `/api/health` 返回
+`status=ok`；MCP `initialize` 协商 `2025-06-18` 并列出 8 个 P1 工具；资产、NOTICE、
+LICENSE-DP5、`py.typed`、样例配置、schema、SDK 与 AGENTS 文档均在安装面或发行目录可见；
+四处版本位置均为 `0.3.0`。
+
+**发行修正记录：** B25a 的首版 `acp_web` wheel 在 `OriginPolicy` 构造处即失败
+（`server.py` 传入 `public_origin`，而当时的 `boundary.py` 尚未接受该参数），因此 B25a
+把 Web HTTP 探针如实记为 `NOT_VERIFIED(candidate_origin_policy_mismatch)`。B25b 从干净
+HEAD + 同一 `public_origin` 修正重建了 0.3.0 四发行，原始制品保存在
+`release-b25a-original/` 与 `root-build-b25a-original/`，新制品摘要见
+`release/release-manifest.json` 与 `version-locations.json`。该修正只涉及启动参数兼容，
+不改变科学代码、工具许可或版本号。
+
+A/C 原始证据：A-27b 与 A-28 已按登记路径汇总（不重签科学结论）；C33/C34 未发布，
+B25b 记录 `NOT_VERIFIED` 与预期路径。C 的 `experience/static-assets.manifest.json`
+未发布，静态资产只读挂载记录为 `NOT_VERIFIED(c_static_assets_absent)`。C35 不是 B25b
+前置。未重启 `acp.service`，未触碰 `/var/lib/acp/runs`。

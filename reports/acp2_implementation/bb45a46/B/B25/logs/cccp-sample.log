@@ -1,0 +1,7 @@
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/cccp-sample.py
+exit=0
+--- stdout ---
+{"complete": true, "energy": -1.0, "cccp": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/lib64/python3.11/site-packages/cccp/__init__.py", "version": "0.3.0"}
+
+--- stderr ---
+

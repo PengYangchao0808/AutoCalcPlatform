@@ -1,0 +1,5 @@
+2026-10-23 21:11:49,992 [INFO] acp.services_mcp_bootstrap: MCP adapter bound to Controller http://127.0.0.1:51245 (candidate_revision=ab492cc8be9e46125fa2d2fae69a3ecaac64a548, contract_version=1.3.0, contract_digest=1fb215f52dae942c8a19b993ac4cfc8e841069efd3ecd3f70d9c99532030738c)
+2026-10-23 21:11:49,992 [INFO] acp.cli: MCP stdio adapter serving controller=http://127.0.0.1:51245 (candidate_revision=ab492cc8be9e46125fa2d2fae69a3ecaac64a548, identity_binding=local-single)
+2026-10-23 21:11:49,992 [INFO] acp_services.entrypoints.mcp_stdio: mcp stdio transport ready (max_frame_bytes=1048576)
+2026-10-23 21:11:49,992 [INFO] acp_services.entrypoints.mcp_stdio: MCP session initialized (protocolVersion=2025-06-18)
+2026-10-23 21:11:49,992 [INFO] acp_services.entrypoints.mcp_stdio: stdin EOF; closing stdio transport

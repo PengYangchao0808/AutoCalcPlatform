@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "protocol": "2025-06-18",
+  "tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ]
+}

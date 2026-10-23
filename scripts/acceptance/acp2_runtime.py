@@ -15104,7 +15104,11 @@ def dry_run_commands(
     elif spec.scenario == "migration":
         commands.append(f"{shlex.quote(sys.executable)} -m acp task export {shlex.quote(fixture)}")
     elif spec.scenario == "package-install":
-        commands.append(f"{shlex.quote(sys.executable)} -m pip install -e .")
+        commands.append(
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario package-install --fixture {shlex.quote(fixture)} "
+            f"--out {shlex.quote(out)} --timeout {int(phase.timeout)}"
+        )
 
     harness_command = [
         sys.executable,
@@ -15118,7 +15122,7 @@ def dry_run_commands(
     ]
     if phase.controller_required:
         harness_command += ["--controller", controller]
-    if "fixture" in phase.required_args:
+    if "fixture" in phase.required_args or spec.scenario == "package-install":
         harness_command += ["--fixture", fixture]
     if "launch" in phase.required_args:
         harness_command += ["--launch", launch]
@@ -16190,6 +16194,28 @@ def execute_scenario(
             return code_value
 
         handler = migration
+    elif spec.scenario == "package-install":
+
+        def package_install(_ledger: CleanupLedger) -> int:
+            import importlib.util
+
+            helper = Path(__file__).resolve().parent / "acp2_package_install.py"
+            module_spec = importlib.util.spec_from_file_location("acp2_package_install", helper)
+            if module_spec is None or module_spec.loader is None:
+                raise RuntimeError(f"cannot load {helper}")
+            module = importlib.util.module_from_spec(module_spec)
+            module_spec.loader.exec_module(module)
+
+            code_value, assertions, extensions = module.run_package_install(
+                None if args.fixture is None else str(args.fixture), out_dir, timeout
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b25.artifacts", [])
+            outcome["reason"] = extensions.get("b25.reason")
+            return code_value
+
+        handler = package_install
     else:
         handler = _b01_stub_handler(spec)
 
@@ -16221,6 +16247,7 @@ def execute_scenario(
         "approval-budget",
         "infra-plugin",
         "migration",
+        "package-install",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         result = (
             "PASS"
@@ -16256,6 +16283,7 @@ def execute_scenario(
         "approval-budget",
         "infra-plugin",
         "migration",
+        "package-install",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -16658,7 +16686,7 @@ def main(argv: list[str] | None = None) -> int:
     if spec.scenario == "control-recovery" and args.launch and not Path(args.launch).is_file():
         print(f"usage error: --launch does not exist: {args.launch}", file=sys.stderr)
         return EXIT_USAGE
-    fixture_is_file = Path(args.fixture).is_file()
+    fixture_is_file = args.fixture is not None and Path(args.fixture).is_file()
     migration_directory = (
         spec.scenario == "migration"
         and Path(args.fixture).is_dir()

@@ -197,6 +197,13 @@ pytest tests/test_acp_services_isolation.py tests/test_architecture_invariants.p
 ruff check src tests && ruff format --check src tests
 ```
 
+## ACP 2.0 RELEASE ROLES（B25b，2026-10-23）
+- **四发行**: `cccp` / `acp-worker` / `acp-web` 0.3.0 互不重叠；根 `acp` 单发行保留，二者二选一安装。构建 `scripts/build_release.py`，安装验收 `scripts/acceptance/acp2_package_install.py` + `scripts/acceptance/acp2_runtime.py --scenario package-install`。
+- **安装证据**: `reports/acp2_implementation/bb45a46/B/B25/`（`summary.json` 经 `--check-only` 通过；四个干净 venv、CCCP 无 Controller 样例、Lab/MCP/CLI、资产/版本）。B25a 首版 `acp_web` 的 `OriginPolicy` 启动缺陷在 B25b 重建中修正；原始制品在 `release-b25a-original/`。
+- **版本**: 四处 `0.3.0`（`src/cccp/__init__.py`、`src/cccp/version.py`、`src/acp/__init__.py`、`pyproject.toml`）；`requirements-node.txt` 未新增 import。
+- **MCP**: 可执行入口 `acp mcp serve --controller <url>`；协议 `2025-06-18`，八工具。`runtime/mcp-launch.template.json` 的 `entrypoint` 只是协议 owner 元数据。
+- **未发布**: C33/C34 与 C `experience/static-assets.manifest.json` 为 `NOT_VERIFIED`（预期路径见 B25b `a-c-evidence.json` / `static-assets-status.json`）；C35 非 B25b 前置。生产 service/run_root 未触碰。
+
 ## SYSTEMD SERVICE
 - **Service**: `acp.service` · config `/etc/systemd/system/acp.service`（**generated — 编辑 `scripts/install_systemd.sh`，勿手改 unit**）· URL http://127.0.0.1:8765 · 日志 `sudo journalctl -u acp -f`
 - **Reload**: 任何代码修改后 `sudo systemctl restart acp`（服务无 `--reload`）

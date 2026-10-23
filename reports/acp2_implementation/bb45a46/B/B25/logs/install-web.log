@@ -1,0 +1,92 @@
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -m pip install --disable-pip-version-check --no-input --find-links /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
+exit=0
+--- stdout ---
+Looking in links: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release
+Processing ./release/acp_web-0.3.0-py3-none-any.whl
+Processing ./release/cccp-0.3.0-py3-none-any.whl
+Processing ./release/acp_worker-0.3.0-py3-none-any.whl
+Collecting fastapi>=0.115
+  Using cached fastapi-0.161.1-py3-none-any.whl (149 kB)
+Collecting uvicorn>=0.30
+  Using cached uvicorn-0.54.0-py3-none-any.whl (87 kB)
+Collecting python-multipart>=0.0.9
+  Using cached python_multipart-0.0.32-py3-none-any.whl (30 kB)
+Collecting zipstream-ng>=1.9.0
+  Using cached zipstream_ng-1.9.3-py3-none-any.whl (23 kB)
+Collecting paramiko>=3.0
+  Using cached paramiko-5.1.0-py3-none-any.whl (211 kB)
+Collecting numpy>=2.1.0
+  Using cached numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+Collecting rdkit>=2022.09.1
+  Using cached rdkit-2026.9.1-cp311-cp311-manylinux_2_28_x86_64.whl (31.8 MB)
+Collecting pyyaml>=6.0
+  Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (806 kB)
+Collecting scipy>=1.10
+  Using cached scipy-1.17.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
+Collecting matplotlib>=3.7
+  Using cached matplotlib-3.11.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (9.9 MB)
+Collecting openpyxl>=3.1
+  Using cached openpyxl-3.1.5-py2.py3-none-any.whl (250 kB)
+Collecting typing-extensions>=4.1
+  Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Collecting starlette>=0.46.0
+  Using cached starlette-1.9.0-py3-none-any.whl (80 kB)
+Collecting pydantic>=2.9.0
+  Using cached pydantic-2.14.1-py3-none-any.whl (488 kB)
+Collecting typing-inspection>=0.4.2
+  Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Collecting annotated-doc>=0.0.2
+  Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+Collecting opentelemetry-api>=1.44.0
+  Using cached opentelemetry_api-1.45.1-py3-none-any.whl (60 kB)
+Collecting bcrypt>=3.2
+  Using cached bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+Collecting cryptography>=3.3
+  Using cached cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl (4.8 MB)
+Collecting invoke>=2.0
+  Using cached invoke-3.0.3-py3-none-any.whl (160 kB)
+Collecting pynacl>=1.5
+  Using cached pynacl-1.6.2-cp38-abi3-manylinux_2_34_x86_64.whl (1.4 MB)
+Collecting click>=7.0
+  Using cached click-8.5.0-py3-none-any.whl (125 kB)
+Collecting h11>=0.8
+  Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Collecting cffi>=2.0.0
+  Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (217 kB)
+Collecting contourpy>=1.0.1
+  Using cached contourpy-1.3.3-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (355 kB)
+Collecting cycler>=0.10
+  Using cached cycler-0.12.1-py3-none-any.whl (8.3 kB)
+Collecting fonttools>=4.28.2
+  Using cached fonttools-4.67.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.5 MB)
+Collecting kiwisolver>=1.3.1
+  Using cached kiwisolver-1.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.4 MB)
+Collecting packaging>=20.0
+  Using cached packaging-26.3-py3-none-any.whl (129 kB)
+Collecting pillow>=9
+  Using cached pillow-13.0.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.1 MB)
+Collecting pyparsing>=3
+  Using cached pyparsing-3.3.3-py3-none-any.whl (126 kB)
+Collecting python-dateutil>=2.7
+  Using cached python_dateutil-3.0.0-py2.py3-none-any.whl (94 kB)
+Collecting et-xmlfile
+  Using cached et_xmlfile-2.0.0-py3-none-any.whl (18 kB)
+Collecting annotated-types>=0.6.0
+  Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.50.1
+  Using cached pydantic_core-2.50.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+Collecting anyio<5,>=4.0.0
+  Using cached anyio-4.15.1-py3-none-any.whl (132 kB)
+Collecting idna>=2.8
+  Using cached idna-3.20-py3-none-any.whl (69 kB)
+Collecting pycparser
+  Using cached pycparser-3.12-py3-none-any.whl (62 kB)
+Collecting six>=1.6
+  Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+Collecting tzdata
+  Using cached tzdata-2026.5-py2.py3-none-any.whl (347 kB)
+Installing collected packages: zipstream-ng, tzdata, typing-extensions, six, pyyaml, python-multipart, pyparsing, pycparser, pillow, packaging, numpy, kiwisolver, invoke, idna, h11, fonttools, et-xmlfile, cycler, click, bcrypt, annotated-types, annotated-doc, uvicorn, typing-inspection, scipy, rdkit, python-dateutil, pydantic-core, opentelemetry-api, openpyxl, contourpy, cffi, anyio, starlette, pynacl, pydantic, matplotlib, cryptography, paramiko, fastapi, cccp, acp-worker, acp-web
+Successfully installed acp-web-0.3.0 acp-worker-0.3.0 annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.15.1 bcrypt-5.0.0 cccp-0.3.0 cffi-2.1.1 click-8.5.0 contourpy-1.3.3 cryptography-50.0.2 cycler-0.12.1 et-xmlfile-2.0.0 fastapi-0.161.1 fonttools-4.67.0 h11-0.16.0 idna-3.20 invoke-3.0.3 kiwisolver-1.5.1 matplotlib-3.11.2 numpy-2.4.6 openpyxl-3.1.5 opentelemetry-api-1.45.1 packaging-26.3 paramiko-5.1.0 pillow-13.0.0 pycparser-3.12 pydantic-2.14.1 pydantic-core-2.50.1 pynacl-1.6.2 pyparsing-3.3.3 python-dateutil-3.0.0 python-multipart-0.0.32 pyyaml-6.0.3 rdkit-2026.9.1 scipy-1.17.1 six-1.17.0 starlette-1.9.0 typing-extensions-4.16.0 typing-inspection-0.4.4 tzdata-2026.5 uvicorn-0.54.0 zipstream-ng-1.9.3
+
+--- stderr ---
+
