@@ -153,6 +153,23 @@ def test_mcp_stdio_launch_without_controller_exits_2(tmp_path: Path) -> None:
     assert list(tmp_path.rglob("job.json")) == []
 
 
+def test_da_submit_without_timeout_is_usage_error(tmp_path: Path) -> None:
+    completed = _run(
+        "--scenario",
+        "da-runtime",
+        "--phase",
+        "da-submit",
+        "--fixture",
+        str(tmp_path / "da-run.json"),
+        "--out",
+        str(tmp_path),
+    )
+    assert completed.returncode == 3
+    assert "ACP2_DA_TIMEOUT" in completed.stderr
+    assert "silent default" in completed.stderr
+    assert not (tmp_path / "summary.json").exists()
+
+
 def test_unknown_scenario_and_undeclared_phase_exit_3(tmp_path: Path) -> None:
     unknown = _run("--scenario", "not-a-scenario", "--out", str(tmp_path / "a"))
     assert unknown.returncode == 3

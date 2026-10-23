@@ -1,0 +1,271 @@
+{
+  "artifacts": [
+    {
+      "path": "p2-candidate.json",
+      "sha256": "867dcd7f05ea2db4ba49ae2688db27e549aae2e7f80520840a06a1dab2cc8114",
+      "size_bytes": 5280
+    },
+    {
+      "path": "run-spec.json",
+      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+      "size_bytes": 3680
+    },
+    {
+      "path": "dependency-edges.json",
+      "sha256": "b37f11987add32faaf33416fa8faf5fe7b1529ddee17dff840f835787834f411",
+      "size_bytes": 1498
+    },
+    {
+      "path": "b20a-ready.json",
+      "sha256": "10efb184bba1866c66e9b82e45940521dcf890c3ff541e7e354f5b0de3319382",
+      "size_bytes": 13175
+    },
+    {
+      "path": "c24a-gap.json",
+      "sha256": "a39996ec788805ab775a21f2c32c2270cfc25a5a796547339706d23cab99c86c",
+      "size_bytes": 1331
+    },
+    {
+      "path": "search-gap.json",
+      "sha256": "cc70787c02fc9b488d5d0e5d0ebf608d3292050f799fbe6da9fa010988280f8e",
+      "size_bytes": 648
+    },
+    {
+      "path": "incomplete-input-negative.json",
+      "sha256": "64f6949cdb5362d293978f8a6d0c19c3f2a52d7fce997cb544e7953ca9f72c13",
+      "size_bytes": 945
+    },
+    {
+      "path": "consumed-preflight.json",
+      "sha256": "9124bfcda5cce18f41c1449f3b115e3284d9515e5855be6d0ed0d921e1a0dc51",
+      "size_bytes": 764
+    },
+    {
+      "path": "counters.json",
+      "sha256": "05529afc19f637c7944f6171e22d87beb146248d93c22342aeabedbf8fe63693",
+      "size_bytes": 555
+    },
+    {
+      "path": "status-separation.json",
+      "sha256": "5abf2b007247d17bedd329aa3bffc4ff3699c26f5ed991c4f2e06584f10f1a20",
+      "size_bytes": 892
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': '9ee70af73c59db5fb5e1738064f7f4b4123849fd', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T08:59:35.137286Z'}",
+      "name": "b20a.controller_health",
+      "status": "PASS"
+    },
+    {
+      "detail": "contracts=['reaction.schema.json', 'recipe.schema.json', 'task-binding.schema.json', 'evidence.schema.json'] errors=[]",
+      "name": "b20a.science_contracts",
+      "status": "PASS"
+    },
+    {
+      "detail": "reaction=/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json errors=[]",
+      "name": "b20a.input_complete",
+      "status": "PASS"
+    },
+    {
+      "detail": "cases=1 failures=[] rows=[{'case_id': 'missing-atom-mapping', 'fixture': '/ACPServer/acp2-development/data/b/fixtures/da/incomplete-input.json', 'fixture_sha256': 'bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba', 'expected_error': 'incomplete_scientific_input:atom_mapping_incomplete', 'rejected_before_dispatch': True, 'errors': [\"incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']\", \"incomplete_scientific_input:unmapped_left:['ethene:et_h4']\", \"incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']\"], 'dispatched': False}]",
+      "name": "b20a.incomplete_input_rejected",
+      "status": "PASS"
+    },
+    {
+      "detail": "receipt=/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json result=PASS",
+      "name": "b20a.b18_da_preflight_consumed",
+      "status": "PASS"
+    },
+    {
+      "detail": "path=reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json errors=[]",
+      "name": "b20a.p2_candidate",
+      "status": "PASS"
+    },
+    {
+      "detail": "path=reports/acp2_implementation/bb45a46/B/B20/run-spec.json errors=[]",
+      "name": "b20a.run_spec",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[] observed={'path': '/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/dependencies.json', 'required_external_edges': [{'consumer': 'B20a-ready', 'external_id': 'A-14'}, {'consumer': 'B20a-ready', 'external_id': 'A-15'}, {'consumer': 'B20a-ready', 'external_id': 'A-16'}, {'consumer': 'B20a-exec', 'external_id': 'C24a'}], 'ready_to_c24a_edges': [{'consumer': 'C/T-34 (C24a)', 'producer': 'B20a-ready', 'artifact': 'DA execution interface/preflight', 'version': '1.0.0', 'digest_or_pending': 'PENDING', 'readiness': 'contract_ready', 'relation': 'AND', 'delivered': True, 'observed': 'B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a', 'supersedes_c_row': 'C24a:gates_on_B20a_ready'}], 'b20b_depends_on': ['B20a-exec'], 'c24a_readiness': 'contract_ready', 'c24a_delivery_status': 'planned', 'c24a_observed_state': 'blocked: C plan T-34 is [~] and no approved single submission exists'}",
+      "name": "b20a.dependency_edges",
+      "status": "PASS"
+    },
+    {
+      "detail": "tasks_created=0 run_root_dirs_created=[]",
+      "name": "b20a.da_submit_no_side_effects",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "harness_revision": "9d291a18ec66e203c576057cd6612c3e8e126480abeb13825eb3b2efbbf96cc9",
+    "server_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd"
+  },
+  "candidate_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd",
+  "claim_status": "not_evaluated",
+  "command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "da-runtime",
+    "--phase",
+    "da-submit",
+    "--controller",
+    "http://127.0.0.1:18781",
+    "--fixture",
+    "/ACPServer/acp2-development/data/b/fixtures/da/da-run.json",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B20",
+    "--timeout",
+    "14400"
+  ],
+  "contract_version": "1.2.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.operation_class": "submit",
+    "acceptance.target": "local",
+    "b01.prerequisite_failure": "c24a_absent",
+    "b20a.artifacts": [
+      {
+        "path": "p2-candidate.json",
+        "sha256": "867dcd7f05ea2db4ba49ae2688db27e549aae2e7f80520840a06a1dab2cc8114",
+        "size_bytes": 5280
+      },
+      {
+        "path": "run-spec.json",
+        "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+        "size_bytes": 3680
+      },
+      {
+        "path": "dependency-edges.json",
+        "sha256": "b37f11987add32faaf33416fa8faf5fe7b1529ddee17dff840f835787834f411",
+        "size_bytes": 1498
+      },
+      {
+        "path": "b20a-ready.json",
+        "sha256": "10efb184bba1866c66e9b82e45940521dcf890c3ff541e7e354f5b0de3319382",
+        "size_bytes": 13175
+      },
+      {
+        "path": "c24a-gap.json",
+        "sha256": "a39996ec788805ab775a21f2c32c2270cfc25a5a796547339706d23cab99c86c",
+        "size_bytes": 1331
+      },
+      {
+        "path": "search-gap.json",
+        "sha256": "cc70787c02fc9b488d5d0e5d0ebf608d3292050f799fbe6da9fa010988280f8e",
+        "size_bytes": 648
+      },
+      {
+        "path": "incomplete-input-negative.json",
+        "sha256": "64f6949cdb5362d293978f8a6d0c19c3f2a52d7fce997cb544e7953ca9f72c13",
+        "size_bytes": 945
+      },
+      {
+        "path": "consumed-preflight.json",
+        "sha256": "9124bfcda5cce18f41c1449f3b115e3284d9515e5855be6d0ed0d921e1a0dc51",
+        "size_bytes": 764
+      },
+      {
+        "path": "counters.json",
+        "sha256": "05529afc19f637c7944f6171e22d87beb146248d93c22342aeabedbf8fe63693",
+        "size_bytes": 555
+      },
+      {
+        "path": "status-separation.json",
+        "sha256": "5abf2b007247d17bedd329aa3bffc4ff3699c26f5ed991c4f2e06584f10f1a20",
+        "size_bytes": 892
+      }
+    ],
+    "b20a.c24a": {
+      "c_evidence_present": false,
+      "c_plan": {
+        "c24a_blocked": true,
+        "c24a_marker": "- [~] 34. T-34 / C24a\uff1a\u9650\u5b9a Diels\u2013Alder \u63d0\u6848\u3001\u5ba1\u6279\u4e0e\u552f\u4e00\u63d0\u4ea4 \u2014 blocked by T-23..T-33 + A-14..A-16 + B20a-ready",
+        "evidence_present": false,
+        "evidence_roots": [
+          "/ACPServer/acp2-development/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+          "/ACPServer/acp2-development/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+        ],
+        "gates_on_b20a_ready": true,
+        "plan": "/ACPServer/AutoCalcPlatform/.omo/plans/acp2-plan-c-rph-workbench.md"
+      },
+      "evidence_roots": [
+        "/ACPServer/acp2-development/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+        "/ACPServer/acp2-development/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+      ],
+      "expected_artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+      "missing_artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+      "owner": "C",
+      "plan": "/ACPServer/AutoCalcPlatform/.omo/plans/acp2-plan-c-rph-workbench.md",
+      "plan_todo": "34. T-34 / C24a",
+      "reason": "c24a_absent",
+      "required_fields": [
+        "proposal_digest",
+        "approval_ref",
+        "job_id",
+        "recipe_digest",
+        "budget_basis",
+        "run_spec",
+        "search_capability"
+      ],
+      "status": "c24a_absent"
+    },
+    "b20a.counters": {
+      "bsub": 0,
+      "compute_owner": "none (da-submit stopped before dispatch: C24a absent)",
+      "http_calls": [
+        "GET /api/health",
+        "GET /api/v1/jobs?limit=1000",
+        "GET /api/v1/jobs?limit=1000"
+      ],
+      "prepare_operations": 0,
+      "qc_invocations": 0,
+      "reservations": 0,
+      "run_root_dirs_after": [
+        "uncategorized"
+      ],
+      "run_root_dirs_before": [
+        "uncategorized"
+      ],
+      "run_root_dirs_created": [],
+      "schema": "acp2.runtime.b20a-counters.v1",
+      "submission_attempted": false,
+      "tasks_after": 0,
+      "tasks_before": 0,
+      "tasks_created": 0
+    },
+    "b20a.exec": "NOT_VERIFIED",
+    "b20a.exec_reason": "c24a_absent",
+    "b20a.incomplete_input": "PASS",
+    "b20a.ready_result": "PASS",
+    "b20a.search": "NOT_VERIFIED",
+    "b20a.search_reason": "search_not_declared",
+    "da.claim_status": "not_evaluated",
+    "da.h4_gate": "open"
+  },
+  "finished_at": "2026-10-23T09:01:46Z",
+  "h4_gate": "open",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "da-submit",
+  "reason": "c24a_absent",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261023T090146Z-1420676-2da363de",
+  "scenario": "da-runtime",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T09:01:46Z",
+  "submission_id": null,
+  "usage": null
+}

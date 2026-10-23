@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
   "contract_version": "1.3.0",
-  "contract_digest": "aeecba1e9c21de16ed5c1c3a659ee88f0828225b1142bcf93a1ffbc897c9e55b",
+  "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "b4386ef6caccedccfa9d0ce3227cde6fffd49cfe76ebe3bbcb857ff8a5a1830e",
+      "sha256": "3412f072fb509f07ac133f821bada8a692fe8a79e6d2b96695e605cdae09219b",
       "delivered_by": "B00"
     },
     {
@@ -193,7 +193,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "c719620661407ec9d5274447bb4037b9e22b356b4506b2330abbaf06c745f1f4",
+      "sha256": "7fcda6d28eb60f51cf11281fd7757786ae5d3f4332a7eb3f3a6fb71f316c3047",
       "delivered_by": "B00",
       "updated_by": "B06"
     },
@@ -228,7 +228,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B01",
-      "sha256": "9c14f1f50bbbba5733a493b8d018e15d6ee137d49c29b3a9121fda1f6a9108ea"
+      "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e"
     },
     {
       "id": "application-api",

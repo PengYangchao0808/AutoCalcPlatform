@@ -1,0 +1,56 @@
+{
+  "c_t34_gate": "B20a-ready",
+  "chain": [
+    "A-14",
+    "A-15",
+    "A-16",
+    "B20a-ready",
+    "C24a",
+    "B20a-exec",
+    "B20b"
+  ],
+  "consumer_of_B20a_exec": "B20b",
+  "errors": [],
+  "observed": {
+    "b20b_depends_on": [
+      "B20a-exec"
+    ],
+    "c24a_delivery_status": "planned",
+    "c24a_observed_state": "blocked: C plan T-34 is [~] and no approved single submission exists",
+    "c24a_readiness": "contract_ready",
+    "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+    "ready_to_c24a_edges": [
+      {
+        "artifact": "DA execution interface/preflight",
+        "consumer": "C/T-34 (C24a)",
+        "delivered": true,
+        "digest_or_pending": "PENDING",
+        "observed": "B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a",
+        "producer": "B20a-ready",
+        "readiness": "contract_ready",
+        "relation": "AND",
+        "supersedes_c_row": "C24a:gates_on_B20a_ready",
+        "version": "1.0.0"
+      }
+    ],
+    "required_external_edges": [
+      {
+        "consumer": "B20a-ready",
+        "external_id": "A-14"
+      },
+      {
+        "consumer": "B20a-ready",
+        "external_id": "A-15"
+      },
+      {
+        "consumer": "B20a-ready",
+        "external_id": "A-16"
+      },
+      {
+        "consumer": "B20a-exec",
+        "external_id": "C24a"
+      }
+    ]
+  },
+  "schema": "acp2.b20a.dependency-edges.v1"
+}

@@ -1394,6 +1394,9 @@ def write_result(
     extensions: dict[str, Any] | None = None,
     candidate_revision: str | None = None,
     server_revision: str | None = None,
+    client_revision: str | None = None,
+    claim_status: str | None = None,
+    h4_gate: str | None = None,
 ) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     reference_values = {key: None for key in PLATFORM_REF_KEYS}
@@ -1414,7 +1417,7 @@ def write_result(
         "candidate_revision": candidate_revision,
         "candidate": {
             "server_revision": server_revision,
-            "client_revision": None,
+            "client_revision": client_revision,
             "harness_revision": harness_revision(),
         },
         "result": result,
@@ -1438,6 +1441,10 @@ def write_result(
         "evidence_kind": evidence_kind,
         "extensions": extensions or {},
     }
+    if claim_status is not None:
+        document["claim_status"] = claim_status
+    if h4_gate is not None:
+        document["h4_gate"] = h4_gate
     run_name = f"{_safe_name(scenario)}-{_safe_name(phase)}-{run_id}.json"
     run_path = out_dir / run_name
     run_path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -7778,6 +7785,867 @@ def _b18_collect_artifacts(out_dir: Path, names: Sequence[str]) -> list[dict[str
     return rows
 
 
+B20_DA_RUN_SCHEMA = "acp2.b20a.da-run.v1"
+B20_INCOMPLETE_SCHEMA = "acp2.b20a.incomplete-input.v1"
+B20_REQUIRED_C24A_FIELDS = (
+    "proposal_digest",
+    "approval_ref",
+    "job_id",
+    "recipe_digest",
+    "budget_basis",
+    "run_spec",
+    "search_capability",
+)
+B20_REQUIRED_CONTRACTS = (
+    "reaction.schema.json",
+    "recipe.schema.json",
+    "task-binding.schema.json",
+    "evidence.schema.json",
+)
+B20_RUN_SPEC_TOTAL = 14400
+
+
+def _b20_read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _b20_fixture_path(base: Path, value: Any) -> Path:
+    path = Path(str(value))
+    return path if path.is_absolute() else base / path
+
+
+def _b20_reaction_refs(species: Any) -> list[str]:
+    refs: list[str] = []
+    if not isinstance(species, dict):
+        return refs
+    structure_id = species.get("structure_id")
+    atom_ids = species.get("atom_ids")
+    if not isinstance(structure_id, str) or not isinstance(atom_ids, list):
+        return refs
+    for atom_id in atom_ids:
+        if isinstance(atom_id, str) and atom_id:
+            refs.append(f"{structure_id}:{atom_id}")
+    return refs
+
+
+def _b20_validate_reaction(reaction: Any) -> list[str]:
+    """Deterministic completeness gate for the limited DA ReactionSpec.
+
+    This is deliberately stricter than "the JSON parses": an incomplete atom
+    mapping is a scientific-input error and must be rejected before dispatch.
+    """
+
+    errors: list[str] = []
+    if not isinstance(reaction, dict):
+        return ["incomplete_scientific_input:reaction_not_object"]
+    for name in (
+        "schema_version",
+        "reaction_id",
+        "reaction_scope",
+        "left",
+        "right",
+        "atom_mapping",
+        "bond_changes",
+        "conditions",
+        "input_uncertainty",
+    ):
+        if name not in reaction:
+            errors.append(f"incomplete_scientific_input:missing_{name}")
+    left = reaction.get("left")
+    right = reaction.get("right")
+    if not isinstance(left, list) or not left:
+        errors.append("incomplete_scientific_input:missing_left")
+        left = []
+    if not isinstance(right, list) or not right:
+        errors.append("incomplete_scientific_input:missing_right")
+        right = []
+    left_refs = [ref for species in left for ref in _b20_reaction_refs(species)]
+    right_refs = [ref for species in right for ref in _b20_reaction_refs(species)]
+    if not left_refs or not right_refs:
+        errors.append("incomplete_scientific_input:missing_atom_ids")
+    for side, species_rows in (("left", left), ("right", right)):
+        for species in species_rows:
+            if not isinstance(species, dict):
+                errors.append(f"incomplete_scientific_input:{side}_species_not_object")
+                continue
+            for name in ("elements", "formula", "charge", "multiplicity", "structure_id"):
+                if name not in species:
+                    errors.append(f"incomplete_scientific_input:{side}_missing_{name}")
+    mapping = reaction.get("atom_mapping")
+    if not isinstance(mapping, dict):
+        errors.append("incomplete_scientific_input:missing_atom_mapping")
+        mapping = {}
+    left_to_right = mapping.get("left_to_right")
+    right_to_left = mapping.get("right_to_left")
+    if not isinstance(left_to_right, dict) or not left_to_right:
+        errors.append("incomplete_scientific_input:missing_left_to_right")
+        left_to_right = {}
+    if not isinstance(right_to_left, dict) or not right_to_left:
+        errors.append("incomplete_scientific_input:missing_right_to_left")
+        right_to_left = {}
+    missing_left = [ref for ref in left_refs if ref not in left_to_right]
+    missing_right = [ref for ref in right_refs if ref not in right_to_left]
+    if missing_left or missing_right:
+        errors.append(
+            "incomplete_scientific_input:atom_mapping_incomplete:"
+            f"left={missing_left} right={missing_right}"
+        )
+    if mapping.get("unmapped_left") not in ([], None):
+        errors.append(
+            "incomplete_scientific_input:unmapped_left:" + str(mapping.get("unmapped_left"))
+        )
+    if mapping.get("unmapped_right") not in ([], None):
+        errors.append(
+            "incomplete_scientific_input:unmapped_right:" + str(mapping.get("unmapped_right"))
+        )
+    values = list(left_to_right.values())
+    if len(values) != len(set(values)):
+        errors.append("incomplete_scientific_input:atom_mapping_not_injective")
+    for left_ref, right_ref in left_to_right.items():
+        if right_to_left.get(right_ref) != left_ref:
+            errors.append("incomplete_scientific_input:atom_mapping_not_round_trip")
+            break
+    bond_changes = reaction.get("bond_changes")
+    if not isinstance(bond_changes, list) or not bond_changes:
+        errors.append("incomplete_scientific_input:missing_bond_changes")
+    conditions = reaction.get("conditions")
+    if not isinstance(conditions, dict):
+        errors.append("incomplete_scientific_input:missing_conditions")
+    else:
+        for name in ("phase", "temperature_k", "pressure_pa", "standard_state"):
+            if name not in conditions:
+                errors.append(f"incomplete_scientific_input:conditions_missing_{name}")
+    if not isinstance(reaction.get("input_uncertainty"), dict):
+        errors.append("incomplete_scientific_input:missing_input_uncertainty")
+    return errors
+
+
+def _b20_validate_expectations(expectations: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(expectations, dict):
+        return ["incomplete_scientific_input:missing_scientific_expectations"]
+    ts = expectations.get("transition_state")
+    if not isinstance(ts, dict):
+        errors.append("incomplete_scientific_input:missing_ts_expectation")
+    else:
+        if ts.get("one_imaginary_mode") is not True:
+            errors.append("incomplete_scientific_input:ts_one_imaginary_mode_not_declared")
+        if ts.get("mapped_mode_required") is not True:
+            errors.append("incomplete_scientific_input:ts_mapped_mode_not_declared")
+    irc = expectations.get("irc")
+    if not isinstance(irc, dict):
+        errors.append("incomplete_scientific_input:missing_irc_expectation")
+    else:
+        if irc.get("bidirectional") is not True:
+            errors.append("incomplete_scientific_input:irc_not_bidirectional")
+        if irc.get("endpoint_mapping") is not True:
+            errors.append("incomplete_scientific_input:irc_endpoint_mapping_not_declared")
+    energy = expectations.get("energy")
+    if not isinstance(energy, dict) or not energy.get("comparability_fields"):
+        errors.append("incomplete_scientific_input:missing_energy_comparability")
+    return errors
+
+
+def _b20_c24a_state(block: Any) -> dict[str, Any]:
+    if not isinstance(block, dict):
+        return {
+            "status": "c24a_absent",
+            "reason": "c24a_contract_missing_from_fixture",
+            "required_fields": list(B20_REQUIRED_C24A_FIELDS),
+        }
+    expected = _b20_fixture_path(Path.cwd(), block.get("expected_artifact"))
+    required = tuple(block.get("required_fields") or B20_REQUIRED_C24A_FIELDS)
+    state: dict[str, Any] = {
+        "status": "c24a_absent",
+        "expected_artifact": str(expected),
+        "required_fields": list(required),
+        "owner": block.get("owner", "C"),
+        "plan": block.get("plan"),
+        "plan_todo": block.get("plan_todo"),
+        "evidence_roots": list(block.get("evidence_roots") or []),
+    }
+    if not expected.is_file():
+        state["missing_artifact"] = str(expected)
+        state["reason"] = "c24a_absent"
+        return state
+    document = _b20_read_json(expected)
+    if not isinstance(document, dict):
+        state["reason"] = "c24a_unreadable"
+        state["missing_artifact"] = str(expected)
+        return state
+    missing = [
+        field
+        for field in required
+        if field not in document or document[field] in (None, "", [], {})
+    ]
+    state["artifact_sha256"] = _b18_sha256_file(expected)
+    if missing:
+        state["status"] = "c24a_incomplete"
+        state["missing_fields"] = missing
+        state["reason"] = "c24a_incomplete"
+        return state
+    state["status"] = "c24a_present"
+    state["reason"] = None
+    state["document"] = {field: document[field] for field in required}
+    return state
+
+
+def _b20_find_b18_receipt(b18_dir: Path) -> Path | None:
+    if not b18_dir.is_dir():
+        return None
+    candidates = sorted(b18_dir.glob("da-runtime-da-preflight-*.json"))
+    for path in reversed(candidates):
+        document = _b20_read_json(path)
+        if (
+            isinstance(document, dict)
+            and document.get("scenario") == "da-runtime"
+            and document.get("phase") == "da-preflight"
+        ):
+            return path
+    return None
+
+
+def _b20_validate_p2_candidate(document: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(document, dict):
+        return ["p2_candidate_not_object"]
+    for name in (
+        "candidate_revision",
+        "server_revision",
+        "client_revision",
+        "harness_revision",
+        "contract_digest",
+        "env_digest",
+    ):
+        if name not in document:
+            errors.append(f"p2_candidate_missing:{name}")
+    revision = str(document.get("candidate_revision") or "")
+    revision_ok = re.fullmatch(r"[0-9a-f]{40}", revision) or re.fullmatch(
+        r"sha256:[0-9a-f]{64}", revision
+    )
+    if not revision_ok:
+        errors.append("p2_candidate_revision_invalid")
+    client = str(document.get("client_revision") or "")
+    if not (re.fullmatch(r"[0-9a-f]{40}", client) or client == "NOT_VERIFIED"):
+        errors.append("p2_candidate_client_revision_invalid")
+    for name in ("harness_revision", "contract_digest", "env_digest"):
+        if not HEX64.match(str(document.get(name) or "")):
+            errors.append(f"p2_candidate_{name}_invalid")
+    composition = document.get("source_composition")
+    if isinstance(composition, dict) and composition.get("clean_tree") is not True:
+        errors.append("p2_candidate_clean_tree_false")
+    return errors
+
+
+def _b20_validate_run_spec(document: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(document, dict):
+        return ["run_spec_not_object"]
+    expected = {
+        "science_deadline_seconds": 13380,
+        "export_budget_seconds": 900,
+        "aggregate_budget_seconds": 120,
+        "total_budget_seconds": B20_RUN_SPEC_TOTAL,
+    }
+    for name, value in expected.items():
+        if document.get(name) != value:
+            errors.append(f"run_spec_{name}:{document.get(name)}!={value}")
+    for name in ("queue_accounting", "inflight_stop_policy", "backend", "payable_task_count"):
+        if name not in document:
+            errors.append(f"run_spec_missing:{name}")
+    if "started_at" not in document:
+        errors.append("run_spec_missing:started_at")
+    parts = (
+        document.get("science_deadline_seconds"),
+        document.get("export_budget_seconds"),
+        document.get("aggregate_budget_seconds"),
+    )
+    if all(isinstance(part, int) for part in parts) and sum(parts) != B20_RUN_SPEC_TOTAL:
+        errors.append("run_spec_total_mismatch")
+    return errors
+
+
+def _b20_dependency_edges() -> tuple[list[str], dict[str, Any]]:
+    """Verify the executable ledger carries the reviewed P2 DA edges."""
+
+    errors: list[str] = []
+    path = CONTRACT_ROOT / "runtime" / "dependencies.json"
+    document = _b20_read_json(path)
+    observed: dict[str, Any] = {"path": str(path)}
+    if not isinstance(document, dict):
+        return ["dependency_ledger_unreadable"], observed
+    nodes = {node["id"]: node for node in document.get("nodes", []) if isinstance(node, dict)}
+    external = {
+        node["id"]: node for node in document.get("external_nodes", []) if isinstance(node, dict)
+    }
+    external_edges = {
+        (edge.get("consumer"), edge.get("external_id"))
+        for edge in document.get("external_edges", [])
+        if isinstance(edge, dict)
+    }
+    required_external = [
+        ("B20a-ready", "A-14"),
+        ("B20a-ready", "A-15"),
+        ("B20a-ready", "A-16"),
+        ("B20a-exec", "C24a"),
+    ]
+    missing_external = [pair for pair in required_external if pair not in external_edges]
+    if missing_external:
+        errors.append(f"dependency_missing_external_edges:{missing_external}")
+    consumer_edges = [edge for edge in document.get("consumer_edges", []) if isinstance(edge, dict)]
+    ready_to_c24a = [
+        edge
+        for edge in consumer_edges
+        if edge.get("producer") == "B20a-ready" and "T-34" in str(edge.get("consumer", ""))
+    ]
+    if not ready_to_c24a:
+        errors.append("dependency_missing_edge:B20a-ready->C24a(T-34)")
+    b20b_deps = list((nodes.get("B20b") or {}).get("depends_on") or [])
+    if "B20a-exec" not in b20b_deps:
+        errors.append("dependency_missing_edge:B20a-exec->B20b")
+    c24a_state = external.get("C24a") or {}
+    observed.update(
+        {
+            "required_external_edges": [
+                {"consumer": consumer, "external_id": external_id}
+                for consumer, external_id in required_external
+            ],
+            "ready_to_c24a_edges": ready_to_c24a,
+            "b20b_depends_on": b20b_deps,
+            "c24a_readiness": c24a_state.get("readiness"),
+            "c24a_delivery_status": c24a_state.get("delivery_status"),
+            "c24a_observed_state": c24a_state.get("observed_state"),
+        }
+    )
+    return errors, observed
+
+
+def _b20_c_plan_state(block: Any) -> dict[str, Any]:
+    plan_value = block.get("plan") if isinstance(block, dict) else None
+    state: dict[str, Any] = {
+        "plan": plan_value,
+        "c24a_marker": None,
+        "c24a_blocked": None,
+        "gates_on_b20a_ready": None,
+        "evidence_roots": (
+            list(block.get("evidence_roots") or []) if isinstance(block, dict) else []
+        ),
+        "evidence_present": None,
+    }
+    if not isinstance(plan_value, str):
+        return state
+    plan = Path(plan_value)
+    if not plan.is_file():
+        state["plan_missing"] = True
+        return state
+    text = plan.read_text(encoding="utf-8", errors="replace")
+    marker = re.search(r"^-\s*\[(.)\]\s*34\.\s*T-34[^\n]*", text, re.MULTILINE)
+    if marker is None:
+        state["plan_missing"] = False
+        state["c24a_marker"] = None
+        return state
+    state["c24a_marker"] = marker.group(0).strip()
+    state["c24a_blocked"] = marker.group(1) == "~"
+    block_text = text[marker.start() : marker.start() + 4000]
+    state["gates_on_b20a_ready"] = "B20a-ready" in block_text
+    roots = [Path(root) for root in state["evidence_roots"] if isinstance(root, str)]
+    state["evidence_present"] = any(root.exists() for root in roots)
+    return state
+
+
+def _b20_run_root_dirs() -> list[str]:
+    root_value = os.environ.get("ACP_RUN_ROOT")
+    if not root_value:
+        return []
+    root = Path(root_value)
+    if not root.is_dir():
+        return []
+    try:
+        return sorted(entry.name for entry in root.iterdir() if entry.is_dir())
+    except OSError:
+        return []
+
+
+def _run_da_submit(
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B20a da-submit gate: ready/interface proof + C24a execution prerequisite.
+
+    The branch never submits a task.  It consumes A-14..A-16 and B18's
+    ``da-preflight`` receipt, validates the frozen DA input (including a
+    named incomplete-input rejection), records the exact C24a artifact that is
+    missing, and returns NOT_VERIFIED without touching QC/prepare/reservation.
+    """
+
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "submit",
+        "acceptance.target": "local",
+        "b20a.ready_result": "NOT_VERIFIED",
+        "b20a.exec": "NOT_VERIFIED",
+        "b20a.exec_reason": "c24a_absent",
+        "b20a.search": "NOT_VERIFIED",
+        "b20a.search_reason": "search_not_declared",
+        "b20a.incomplete_input": "NOT_VERIFIED",
+        "da.claim_status": "not_evaluated",
+        "da.h4_gate": "open",
+    }
+    fixture_file = Path(fixture_path)
+    document = _b20_read_json(fixture_file)
+    if not isinstance(document, dict) or document.get("schema") != B20_DA_RUN_SCHEMA:
+        assertions.append(
+            _b15_assert(
+                "b20a.fixture_schema",
+                False,
+                f"fixture is not {B20_DA_RUN_SCHEMA}",
+            )
+        )
+        return EXIT_FAIL, assertions, extensions
+    fixture_dir = fixture_file.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    http_calls: list[str] = []
+    tasks_before: int | None = None
+    tasks_after: int | None = None
+    run_dirs_before = _b20_run_root_dirs()
+    health: Any = None
+    if controller:
+        base = controller.rstrip("/")
+        try:
+            health = _http_json(base + "/api/health", timeout)
+            http_calls.append("GET /api/health")
+            tasks_before = _controller_task_count(base, timeout)
+            http_calls.append("GET /api/v1/jobs?limit=1000")
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
+            assertions.append(
+                _b15_assert(
+                    "b20a.controller_health",
+                    False,
+                    f"{type(exc).__name__}: {exc}",
+                    not_verified=True,
+                )
+            )
+            return EXIT_NOT_VERIFIED, assertions, extensions
+    assertions.append(
+        _b15_assert(
+            "b20a.controller_health",
+            isinstance(health, dict) and health.get("status") == "ok",
+            f"health={health if isinstance(health, dict) else None}",
+        )
+    )
+
+    # 1. A-14..A-16 contracts are readable and digestible.
+    science_root_value = document.get("science_root")
+    science_root = _b20_fixture_path(fixture_dir, science_root_value)
+    contract_rows: list[dict[str, Any]] = []
+    contract_errors: list[str] = []
+    for name in tuple(document.get("required_contracts") or B20_REQUIRED_CONTRACTS):
+        path = science_root / name
+        if not path.is_file():
+            contract_errors.append(f"missing:{path}")
+            continue
+        contract_rows.append(
+            {
+                "contract": name,
+                "path": str(path),
+                "sha256": _b18_sha256_file(path),
+                "size_bytes": path.stat().st_size,
+            }
+        )
+    assertions.append(
+        _b15_assert(
+            "b20a.science_contracts",
+            not contract_errors,
+            f"contracts={[row['contract'] for row in contract_rows]} errors={contract_errors}",
+        )
+    )
+
+    # 2. The frozen DA input is complete; the explicit negative fixture is rejected.
+    reaction_value = document.get("reaction")
+    reaction_path: str | None = None
+    if isinstance(reaction_value, str):
+        reaction_file = _b20_fixture_path(science_root, reaction_value)
+        reaction = _b20_read_json(reaction_file)
+        reaction_path = str(reaction_file)
+    else:
+        reaction = reaction_value
+    reaction_errors = _b20_validate_reaction(reaction)
+    expectations_errors = _b20_validate_expectations(document.get("scientific_expectations"))
+    input_errors = reaction_errors + expectations_errors
+    assertions.append(
+        _b15_assert(
+            "b20a.input_complete",
+            not input_errors,
+            f"reaction={reaction_path or '<inline>'} errors={input_errors}",
+        )
+    )
+    negative_rows: list[dict[str, Any]] = []
+    negative_failures: list[str] = []
+    for value in document.get("incomplete_inputs") or []:
+        path = _b20_fixture_path(fixture_dir, value)
+        negative = _b20_read_json(path)
+        if not isinstance(negative, dict) or negative.get("schema") != B20_INCOMPLETE_SCHEMA:
+            negative_failures.append(f"negative_schema:{path}")
+            continue
+        negative_reaction = negative.get("reaction")
+        if isinstance(negative_reaction, str):
+            negative_reaction = _b20_read_json(_b20_fixture_path(science_root, negative_reaction))
+        negative_errors = _b20_validate_reaction(negative_reaction)
+        expected_error = str(negative.get("expected_error") or "")
+        rejected = bool(negative_errors) and (
+            not expected_error or any(expected_error in error for error in negative_errors)
+        )
+        negative_rows.append(
+            {
+                "case_id": negative.get("case_id"),
+                "fixture": str(path),
+                "fixture_sha256": _b18_sha256_file(path),
+                "expected_error": expected_error,
+                "rejected_before_dispatch": rejected,
+                "errors": negative_errors,
+                "dispatched": False,
+            }
+        )
+        if not rejected:
+            negative_failures.append(f"negative_not_rejected:{path}")
+    assertions.append(
+        _b15_assert(
+            "b20a.incomplete_input_rejected",
+            bool(negative_rows) and not negative_failures,
+            f"cases={len(negative_rows)} failures={negative_failures} rows={negative_rows}",
+        )
+    )
+    extensions["b20a.incomplete_input"] = (
+        "PASS" if negative_rows and not negative_failures else "FAIL"
+    )
+    _b15_write_json(
+        out_dir / "incomplete-input-negative.json",
+        {
+            "schema": "acp2.b20a.incomplete-input-negative.v1",
+            "result": extensions["b20a.incomplete_input"],
+            "cases": negative_rows,
+            "failures": negative_failures,
+            "dispatch_attempted": False,
+            "rule": (
+                "Incomplete scientific input is rejected by the deterministic input gate "
+                "before any task/prepare/reservation/QC/bsub call."
+            ),
+        },
+    )
+
+    # 3. B18 da-preflight evidence is consumed unchanged.
+    da_preflight_block = document.get("da_preflight")
+    if not isinstance(da_preflight_block, dict):
+        da_preflight_block = {}
+    receipt_value = da_preflight_block.get("receipt")
+    receipt_path = _b20_fixture_path(Path.cwd(), receipt_value) if receipt_value else None
+    if receipt_path is None or not receipt_path.is_file():
+        receipt_root = _b20_fixture_path(Path.cwd(), da_preflight_block.get("receipt_root", "."))
+        receipt_path = _b20_find_b18_receipt(receipt_root)
+    receipt = _b20_read_json(receipt_path) if receipt_path else None
+    preflight_ok = (
+        isinstance(receipt, dict)
+        and receipt.get("result") == "PASS"
+        and receipt.get("scenario") == "da-runtime"
+        and receipt.get("phase") == "da-preflight"
+    )
+    assertions.append(
+        _b15_assert(
+            "b20a.b18_da_preflight_consumed",
+            preflight_ok,
+            f"receipt={receipt_path} result={(receipt or {}).get('result')}",
+        )
+    )
+    _b15_write_json(
+        out_dir / "consumed-preflight.json",
+        {
+            "schema": "acp2.b20a.consumed-preflight.v1",
+            "path": str(receipt_path) if receipt_path else None,
+            "sha256": (
+                _b18_sha256_file(receipt_path) if receipt_path and receipt_path.is_file() else None
+            ),
+            "result": (receipt or {}).get("result"),
+            "scenario": (receipt or {}).get("scenario"),
+            "phase": (receipt or {}).get("phase"),
+            "counters": (receipt or {}).get("extensions", {}).get("b18.counters")
+            if isinstance((receipt or {}).get("extensions"), dict)
+            else None,
+        },
+    )
+
+    # 4. P2 candidate + run-spec + dependency ledger must already be frozen.
+    candidate_path = _b20_fixture_path(out_dir, document.get("p2_candidate", "p2-candidate.json"))
+    candidate = _b20_read_json(candidate_path)
+    candidate_errors = _b20_validate_p2_candidate(candidate)
+    assertions.append(
+        _b15_assert(
+            "b20a.p2_candidate",
+            not candidate_errors,
+            f"path={candidate_path} errors={candidate_errors}",
+        )
+    )
+    run_spec_path = _b20_fixture_path(out_dir, document.get("run_spec", "run-spec.json"))
+    run_spec = _b20_read_json(run_spec_path)
+    run_spec_errors = _b20_validate_run_spec(run_spec)
+    assertions.append(
+        _b15_assert(
+            "b20a.run_spec",
+            not run_spec_errors,
+            f"path={run_spec_path} errors={run_spec_errors}",
+        )
+    )
+    dependency_errors, dependency_observed = _b20_dependency_edges()
+    assertions.append(
+        _b15_assert(
+            "b20a.dependency_edges",
+            not dependency_errors,
+            f"errors={dependency_errors} observed={dependency_observed}",
+        )
+    )
+    _b15_write_json(
+        out_dir / "dependency-edges.json",
+        {
+            "schema": "acp2.b20a.dependency-edges.v1",
+            "chain": ["A-14", "A-15", "A-16", "B20a-ready", "C24a", "B20a-exec", "B20b"],
+            "consumer_of_B20a_exec": "B20b",
+            "c_t34_gate": "B20a-ready",
+            "errors": dependency_errors,
+            "observed": dependency_observed,
+        },
+    )
+
+    # 5. C24a is the only execution prerequisite and is currently absent.
+    c24a = _b20_c24a_state(document.get("c24a"))
+    c_plan = _b20_c_plan_state(document.get("c24a"))
+    c24a["c_plan"] = c_plan
+    c24a["c_evidence_present"] = c_plan.get("evidence_present")
+    extensions["b20a.c24a"] = c24a
+    _b15_write_json(
+        out_dir / "c24a-gap.json",
+        {
+            "schema": "acp2.b20a.c24a-gap.v1",
+            "status": c24a.get("status"),
+            "reason": c24a.get("reason"),
+            "expected_artifact": c24a.get("expected_artifact"),
+            "required_fields": c24a.get("required_fields"),
+            "missing_artifact": c24a.get("missing_artifact"),
+            "missing_fields": c24a.get("missing_fields"),
+            "c_plan": c_plan,
+            "rule": (
+                "No task/QC/prepare/reservation may be created until C24a supplies the "
+                "single approved submission. A known-candidate chain is not a substitute."
+            ),
+        },
+    )
+
+    # 6. Search is a separate capability; no search sub-run was declared.
+    search = document.get("search") if isinstance(document.get("search"), dict) else {}
+    search_row = {
+        "schema": "acp2.b20a.search-gap.v1",
+        "result": "NOT_VERIFIED",
+        "reason": "search_not_declared",
+        "declared_input_class": search.get("declared_input_class"),
+        "ts_seed": search.get("ts_seed"),
+        "candidate_sources": search.get("candidate_sources"),
+        "candidate_count": search.get("candidate_count"),
+        "generation_steps": search.get("generation_steps"),
+        "filtering_rejection_reasons": search.get("filtering_rejection_reasons"),
+        "validator": search.get("validator"),
+        "success_criteria": search.get("success_criteria"),
+        "known_candidate_chain_counted_as_search": False,
+        "h4_search_row": "open",
+        "rule": (
+            "Only a separate B20a-search PASS with declared input/criteria, candidate "
+            "source/count, generation steps, rejection reasons, validator and success "
+            "criteria may set search supported. A known-candidate chain never upgrades search."
+        ),
+    }
+    _b15_write_json(out_dir / "search-gap.json", search_row)
+
+    # 7. Zero-side-effect counters.
+    if controller and tasks_before is not None:
+        try:
+            tasks_after = _controller_task_count(controller.rstrip("/"), timeout)
+            http_calls.append("GET /api/v1/jobs?limit=1000")
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError):
+            tasks_after = None
+    run_dirs_after = _b20_run_root_dirs()
+    counters = {
+        "schema": "acp2.runtime.b20a-counters.v1",
+        "tasks_before": tasks_before,
+        "tasks_after": tasks_after,
+        "tasks_created": (
+            tasks_after - tasks_before
+            if tasks_before is not None and tasks_after is not None
+            else None
+        ),
+        "prepare_operations": 0,
+        "qc_invocations": 0,
+        "reservations": 0,
+        "bsub": 0,
+        "http_calls": http_calls,
+        "run_root_dirs_before": run_dirs_before,
+        "run_root_dirs_after": run_dirs_after,
+        "run_root_dirs_created": sorted(set(run_dirs_after) - set(run_dirs_before)),
+        "submission_attempted": False,
+        "compute_owner": "none (da-submit stopped before dispatch: C24a absent)",
+    }
+    zero_side_effects = (
+        counters["tasks_created"] == 0
+        and not counters["run_root_dirs_created"]
+        and counters["prepare_operations"] == 0
+        and counters["qc_invocations"] == 0
+        and counters["reservations"] == 0
+        and counters["bsub"] == 0
+    )
+    assertions.append(
+        _b15_assert(
+            "b20a.da_submit_no_side_effects",
+            zero_side_effects,
+            f"tasks_created={counters['tasks_created']} "
+            f"run_root_dirs_created={counters['run_root_dirs_created']}",
+        )
+    )
+    _b15_write_json(out_dir / "counters.json", counters)
+    extensions["b20a.counters"] = counters
+
+    readiness_failed = any(item.get("status") == "FAIL" for item in assertions)
+    ready_result = "FAIL" if readiness_failed else "PASS"
+    extensions["b20a.ready_result"] = ready_result
+    ready_document = {
+        "schema": "acp2.b20a.ready.v1",
+        "result": ready_result,
+        "phase": "da-submit",
+        "operation_class": "submit",
+        "target": "local",
+        "interface": {
+            "scenario": "da-runtime",
+            "phase": "da-submit",
+            "required_args": ["controller", "fixture", "out", "timeout"],
+            "explicit_phase_required": "--phase da-submit",
+            "task_created": False,
+            "submission_attempted": False,
+        },
+        "consumed": {
+            "A-14": "ReactionSpec input contract",
+            "A-15": "Recipe/DAG contract",
+            "A-16": "EvidenceReport contract",
+            "B18": "da-preflight receipt",
+        },
+        "science_contracts": contract_rows,
+        "reaction_path": reaction_path,
+        "reaction_errors": reaction_errors,
+        "expectations_errors": expectations_errors,
+        "incomplete_input": negative_rows,
+        "b18_preflight": {
+            "path": str(receipt_path) if receipt_path else None,
+            "result": (receipt or {}).get("result"),
+        },
+        "p2_candidate": {
+            "path": str(candidate_path),
+            "candidate_revision": (candidate or {}).get("candidate_revision"),
+            "server_revision": (candidate or {}).get("server_revision"),
+            "client_revision": (candidate or {}).get("client_revision"),
+            "harness_revision": (candidate or {}).get("harness_revision"),
+            "contract_digest": (candidate or {}).get("contract_digest"),
+            "env_digest": (candidate or {}).get("env_digest"),
+            "errors": candidate_errors,
+        },
+        "run_spec": {
+            "path": str(run_spec_path),
+            "errors": run_spec_errors,
+            "document": run_spec,
+        },
+        "c24a": c24a,
+        "counters": counters,
+        "assertions": assertions,
+        "zero_side_effects": zero_side_effects,
+    }
+    _b15_write_json(out_dir / "b20a-ready.json", ready_document)
+
+    if readiness_failed:
+        extensions["b20a.exec_reason"] = "b20a_ready_failed"
+        extensions["b01.prerequisite_failure"] = "b20a_ready_failed"
+        _b15_write_json(
+            out_dir / "status-separation.json",
+            {
+                "schema": "acp2.runtime.status-separation.v1",
+                "scenario_result": {"value": "FAIL", "phase": "da-submit"},
+                "claim_status": {"value": "not_evaluated", "h4_gate": "open"},
+                "b20a_ready": {"result": "FAIL"},
+                "b20a_exec": {"result": "NOT_VERIFIED", "reason": "b20a_ready_failed"},
+                "b20a_search": {"result": "NOT_VERIFIED", "reason": "search_not_declared"},
+                "incomplete_input_negative": {"result": extensions["b20a.incomplete_input"]},
+                "rule": "A readiness failure never fabricates a task or a scientific claim.",
+            },
+        )
+        return EXIT_FAIL, assertions, extensions
+
+    c24a_status = str(c24a.get("status"))
+    if c24a_status == "c24a_present":
+        reason = "execution_requires_real_dsh_not_started"
+    elif c24a_status == "c24a_incomplete":
+        reason = "c24a_incomplete"
+    else:
+        reason = "c24a_absent"
+    extensions["b20a.exec_reason"] = reason
+    extensions["b01.prerequisite_failure"] = reason
+
+    status_separation = {
+        "schema": "acp2.runtime.status-separation.v1",
+        "scenario_result": {
+            "value": "NOT_VERIFIED",
+            "phase": "da-submit",
+            "reason": reason,
+        },
+        "claim_status": {
+            "value": "not_evaluated",
+            "why": "No authorized execution artifact exists; no scientific claim was evaluated.",
+        },
+        "h4_gate": {
+            "value": "open",
+            "why": (
+                "H4 requires real positive TS/IRC/comparable-energy rows and the separate "
+                "B20a-search row; none exist."
+            ),
+        },
+        "b20a_ready": {"result": ready_result},
+        "b20a_exec": {"result": "NOT_VERIFIED", "reason": reason},
+        "b20a_search": {"result": "NOT_VERIFIED", "reason": "search_not_declared"},
+        "incomplete_input_negative": {"result": extensions["b20a.incomplete_input"]},
+        "rule": (
+            "result, claim_status and h4_gate are independent. A negative-only PASS cannot "
+            "close H4; B20a-ready PASS is not B20a-exec or search capability."
+        ),
+    }
+    _b15_write_json(out_dir / "status-separation.json", status_separation)
+
+    artifact_names = (
+        "p2-candidate.json",
+        "run-spec.json",
+        "dependency-edges.json",
+        "b20a-ready.json",
+        "c24a-gap.json",
+        "search-gap.json",
+        "incomplete-input-negative.json",
+        "consumed-preflight.json",
+        "counters.json",
+        "status-separation.json",
+    )
+    extensions["b20a.artifacts"] = _b18_collect_artifacts(out_dir, artifact_names)
+    return (
+        EXIT_FAIL if readiness_failed else EXIT_NOT_VERIFIED,
+        assertions,
+        extensions,
+    )
+
+
 def _run_da_preflight(
     controller: str | None,
     fixture_path: str,
@@ -11138,6 +12006,22 @@ def execute_scenario(
             return code_value
 
         handler = da_preflight
+    elif spec.scenario == "da-runtime" and phase_name == "da-submit":
+
+        def da_submit(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_da_submit(
+                args.controller,
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b20a.artifacts", [])
+            outcome["reason"] = extensions.get("b20a.exec_reason")
+            return code_value
+
+        handler = da_submit
     elif spec.scenario == "multitenant":
         if phase_name != "multitenant:authz":
 
@@ -11205,7 +12089,7 @@ def execute_scenario(
         "control-recovery",
         "multitenant",
         "approval-budget",
-    } or (spec.scenario == "da-runtime" and phase_name == "da-preflight"):
+    } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         result = (
             "PASS"
             if code == EXIT_PASS
@@ -11238,7 +12122,7 @@ def execute_scenario(
         "control-recovery",
         "multitenant",
         "approval-budget",
-    } or (spec.scenario == "da-runtime" and phase_name == "da-preflight"):
+    } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
     else:
@@ -11317,6 +12201,15 @@ def execute_scenario(
             value = extensions.get(extension)
             if value is not None and value != "":
                 refs[key] = value
+    claim_status = None
+    h4_gate = None
+    client_revision = None
+    if spec.scenario == "da-runtime" and phase_name == "da-submit":
+        claim_status = extensions.get("da.claim_status") or "not_evaluated"
+        h4_gate = extensions.get("da.h4_gate") or "open"
+        candidate_document = _b20_read_json(out_dir / "p2-candidate.json")
+        if isinstance(candidate_document, dict):
+            client_revision = candidate_document.get("client_revision")
     run_path, _ = write_result(
         out_dir,
         scenario=spec.scenario,
@@ -11335,6 +12228,9 @@ def execute_scenario(
         refs=refs or None,
         candidate_revision=candidate_revision,
         server_revision=server_revision,
+        client_revision=client_revision,
+        claim_status=claim_status,
+        h4_gate=h4_gate,
     )
     errors = validate_receipt(
         json.loads(run_path.read_text(encoding="utf-8")), verify_artifacts=False
@@ -11574,6 +12470,17 @@ def main(argv: list[str] | None = None) -> int:
     if missing_args:
         rendered = ", ".join(f"--{name}" for name in missing_args)
         print(f"usage error: missing required argument(s): {rendered}", file=sys.stderr)
+        return EXIT_USAGE
+    if (
+        spec.scenario == "da-runtime"
+        and phase_name in {"da-submit", "da-evidence", "aggregate"}
+        and args.timeout is None
+    ):
+        print(
+            "usage error: da-runtime requires --timeout (ACP2_DA_TIMEOUT); "
+            "an unset timeout is never a silent default",
+            file=sys.stderr,
+        )
         return EXIT_USAGE
 
     if spec.scenario in {"local-singlepoint", "lsf-singlepoint"} and not args.launch:

@@ -1,0 +1,18 @@
+{
+  "controller_pid": 1419858,
+  "controller_port": 18781,
+  "controller_stopped": true,
+  "harness_revision": "9d291a18ec66e203c576057cd6612c3e8e126480abeb13825eb3b2efbbf96cc9",
+  "overlay_removed": false,
+  "overlay_root": "/ACPServer/acp2-development/data/b/b20-candidate",
+  "p2_candidate_revision": "sha256:6e6ccf5cdda3a37403eea2987383903301724e8e20b3370466fc9a2401f8958e",
+  "port_free": true,
+  "production_8765_touched": false,
+  "production_run_root_touched": false,
+  "run_root": "/ACPServer/acp2-development/data/b/run-root-b20a",
+  "run_root_removed": true,
+  "schema": "acp2.b20a.cleanup.v1",
+  "sigterm_sent": true,
+  "stopped_at": "2026-10-23T09:02:00Z",
+  "tasks_created_by_b20a": 0
+}

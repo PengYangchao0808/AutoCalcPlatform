@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd",
+  "contract_version": "1.2.0",
+  "generated_at": "2026-10-23T09:01:46Z",
+  "runs": [
+    "da-runtime-da-submit-20261023T090146Z-1420676-2da363de.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

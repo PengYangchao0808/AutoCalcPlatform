@@ -1,0 +1,24 @@
+{
+  "bsub": 0,
+  "compute_owner": "none (da-submit stopped before dispatch: C24a absent)",
+  "http_calls": [
+    "GET /api/health",
+    "GET /api/v1/jobs?limit=1000",
+    "GET /api/v1/jobs?limit=1000"
+  ],
+  "prepare_operations": 0,
+  "qc_invocations": 0,
+  "reservations": 0,
+  "run_root_dirs_after": [
+    "uncategorized"
+  ],
+  "run_root_dirs_before": [
+    "uncategorized"
+  ],
+  "run_root_dirs_created": [],
+  "schema": "acp2.runtime.b20a-counters.v1",
+  "submission_attempted": false,
+  "tasks_after": 0,
+  "tasks_before": 0,
+  "tasks_created": 0
+}
