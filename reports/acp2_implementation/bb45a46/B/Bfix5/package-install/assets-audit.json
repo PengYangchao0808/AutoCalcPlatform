@@ -1,0 +1,37 @@
+{
+  "agents_docs": [
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/backends/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/core/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/io/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/pipeline/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/qc/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/qc/cluster/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/qc/interfaces/AGENTS.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/utils/AGENTS.md"
+  ],
+  "dist_info_license": {
+    "acp-web": [
+      "acp_web-0.3.0.dist-info/LICENSE",
+      "acp_web_assets/js/vendor/3Dmol-LICENSE"
+    ],
+    "acp-worker": [
+      "acp_worker-0.3.0.dist-info/LICENSE"
+    ]
+  },
+  "exit": 0,
+  "missing": [],
+  "model_assets": {
+    "LICENSE-DP5": true,
+    "NOTICE.md": true,
+    "atomic_reps.gz": true,
+    "frag_reps.gz": true
+  },
+  "py_typed": true,
+  "root_acp_license": [
+    "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/lib/python3.11/site-packages/acp-0.3.0.dist-info/LICENSE"
+  ],
+  "sample_config": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5/docs/sample-config.yaml",
+  "schema_module": true,
+  "sdk": true
+}

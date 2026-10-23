@@ -1,0 +1,45 @@
+{
+  "artifacts": {
+    "acp-web-0.3.0.tar.gz": {
+      "sha256": "3186b347377599c1e71514bdccc52d1ebf2811eb73b6d802d18b2141a8c927a7",
+      "size_bytes": 2046926
+    },
+    "acp-worker-0.3.0.tar.gz": {
+      "sha256": "223fd6aec2760c35d5346f56edf5b17a3dc0376481e5ea4b48348d36493358b5",
+      "size_bytes": 580783
+    },
+    "acp_web-0.3.0-py3-none-any.whl": {
+      "sha256": "d055e869de602cf1a257d4542243849806b3e3ebe805b78c70a412e8e5a2b210",
+      "size_bytes": 2233023
+    },
+    "acp_worker-0.3.0-py3-none-any.whl": {
+      "sha256": "edd849a75b28f58bba54d8613ec14e1ecae46a325d51d3874967fc683c6ec949",
+      "size_bytes": 614654
+    },
+    "cccp-0.3.0-py3-none-any.whl": {
+      "sha256": "b505413147e3c3a07c9b405631e3ee244d0dc9f7a8f699a45ec112ec692c559c",
+      "size_bytes": 44570492
+    },
+    "cccp-0.3.0.tar.gz": {
+      "sha256": "31631e2f5c131ccba6e08ffac23035feb7670d226b0349cb6816c23959aea425",
+      "size_bytes": 44429877
+    },
+    "root-build/acp-0.3.0-py3-none-any.whl": {
+      "sha256": "64548f8f25e6251532b8b551067f6a0c432a2668bfc20edd310ed2fcb7e4c56a",
+      "size_bytes": 46404596
+    },
+    "root-build/acp-0.3.0.tar.gz": {
+      "sha256": "f449f77d4c89476847a610ef3577a13ce6c1efb30dc77cdc8a5a522411b28987",
+      "size_bytes": 46062358
+    }
+  },
+  "manifest_source": {
+    "clean": true,
+    "dirty_paths": [],
+    "git": true,
+    "path": "/tmp/opencode/fix5-build-src",
+    "revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
+  },
+  "release_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5"
+}

@@ -1,0 +1,22 @@
+{
+  "leftover_processes": [],
+  "note": "No production service, run root, database or LSF queue state was modified.",
+  "ports_free": [
+    "53201",
+    "53202",
+    "53203"
+  ],
+  "production": {
+    "health": "ok",
+    "run_root_touched": false,
+    "service": "acp.service",
+    "state": "active",
+    "url": "http://127.0.0.1:8765"
+  },
+  "schema": "acp2.fix5.cleanup.v1",
+  "stopped": [
+    "isolated Lab 127.0.0.1:53201",
+    "isolated Lab 127.0.0.1:53202",
+    "isolated Lab 127.0.0.1:53203"
+  ]
+}

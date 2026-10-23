@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-10-23T17:59:40.966694+00:00",
+  "current_stage": null,
+  "custom_name": null,
+  "display_name": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c",
+  "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
+  "layout_version": 2,
+  "molecule_name": "2\nH2\nH 0 0 0\nH 0 0 0.74",
+  "name_revision": 0,
+  "node_id": "node-157",
+  "node_path": "/tmp/opencode/fix5-qa/lab-run-root3/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c",
+  "project_id": "uncategorized",
+  "remark": "fix5c",
+  "result_manifest_path": null,
+  "status": "starting",
+  "task_dir_name": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c",
+  "task_id": "20261024_015940_001_fix5-lsf-sp4",
+  "task_name": "singlepoint",
+  "updated_at": "2026-10-23T17:59:40.996363+00:00",
+  "workflow": "singlepoint"
+}

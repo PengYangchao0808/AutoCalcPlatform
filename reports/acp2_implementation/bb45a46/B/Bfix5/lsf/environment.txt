@@ -1,0 +1,11 @@
+date=2026-10-24T02:14:59+08:00
+bsub=/opt/openlava-2.0/bin/bsub
+LSF_ENVDIR=/opt/openlava-2.0/etc
+HOST_NAME          STATUS       JL/U    MAX  NJOBS    RUN  SSUSP  USUSP    RSV 
+redacted-host        ok              -     20      0      0      0      0      0
+QUEUE_NAME      PRIO STATUS          MAX JL/U JL/P JL/H NJOBS  PEND   RUN  SUSP 
+normal           30   Open:Active      -    -    -    -     0     0     0     0
+JOBID   USER    STAT  QUEUE      FROM_HOST   EXEC_HOST   JOB_NAME   SUBMIT_TIME
+1763    xiening DONE  normal     redacted-host redacted-host *7dd122443 Oct 24 01:40
+1764    xiening DONE  normal     redacted-host redacted-host *6556e5994 Oct 24 01:55
+1765    xiening DONE  normal     redacted-host redacted-host *820a81666 Oct 24 02:06

@@ -1,0 +1,24 @@
+#!/bin/bash
+#BSUB -J acp_sub_0fea781820a81666
+#BSUB -q normal
+#BSUB -n 1
+#BSUB -M 1101004
+#BSUB -W 24:00
+#BSUB -o /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/stdout.log
+#BSUB -e /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/stderr.log
+
+_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }
+trap 'exit $?' USR2 TERM INT HUP
+trap _acp_record_exit EXIT
+
+# cluster.pre_cmds (module/environment setup)
+export LD_LIBRARY_PATH=/home/<user>/openmpi418/lib:/home/<user>/orca611:$LD_LIBRARY_PATH
+export CONFSEARCH_ORCA_PATH=/home/<user>/orca611/orca
+export CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/<user>/openmpi418/lib:/home/<user>/orca611
+export CONFSEARCH_ORCA_MPI_PATH=/home/<user>/openmpi418/bin/orterun
+
+export PYTHONPATH="/home/<user>/acp_code/releases/1c79785a657c6614/src:$PYTHONPATH"
+export PYTHONPATH="/home/<user>/acp_code/releases/1c79785a657c6614:$PYTHONPATH"
+cd "/home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c"
+/home/<user>/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group
+echo $? > .exit_code

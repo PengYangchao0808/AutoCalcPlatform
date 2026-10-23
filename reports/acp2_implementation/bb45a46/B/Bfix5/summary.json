@@ -1,0 +1,83 @@
+{
+  "candidate_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+  "candidate_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
+  "historical_artifacts_untouched": [
+    "B25/release/",
+    "B25/root-build/",
+    "B25/release-b25a-original/",
+    "B25/root-build-b25a-original/",
+    "B25/release-fix4/"
+  ],
+  "label": "B-fix-5",
+  "lsf_environment_prerequisite": "The real LSF run used cluster.pre_cmds in an isolated HOME to export ORCA/OpenMPI runtime variables on the remote node: LD_LIBRARY_PATH=/home/<user>/openmpi418/lib:/home/<user>/orca611, CONFSEARCH_ORCA_PATH=/home/<user>/orca611/orca, CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/<user>/openmpi418/lib:/home/<user>/orca611, CONFSEARCH_ORCA_MPI_PATH=/home/<user>/openmpi418/bin/orterun. This is operator environment configuration, not a code fake; bsub executed job 1765 and ORCA 6.1.1 finished.",
+  "plan": "acp2-parallel-plan-b-runtime final-wave remediation (F2 + F3)",
+  "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
+  "remote_release": {
+    "complete": true,
+    "file_count": 510,
+    "release_id": "1c79785a657c6614"
+  },
+  "rows": {
+    "F2.clean_guards": {
+      "detail": "100 passed on clean worktree at 6ec01ec",
+      "evidence": "clean-guards-fix5.txt",
+      "result": "PASS"
+    },
+    "F3.bare_root_singlepoint": {
+      "detail": "PASS (exit 0; -1.116773191779 Hartree)",
+      "evidence": [
+        "bare-root/singlepoint.log",
+        "bare-root/install.log"
+      ],
+      "result": "PASS"
+    },
+    "F3.cross_entry_release_projection": {
+      "detail": "HTTP/CLI/MCP all expose release_id/release_digest/plan_digest/submission_id with equal values",
+      "evidence": "three-entry-compare.json",
+      "result": "PASS"
+    },
+    "F3.installed_release_manifest": {
+      "detail": "project_root=/tmp/opencode/fix5-qa/venvs/root/lib/python3.11/site-packages; sync_files=510; manifest_files=510; release_id=1c79785a657c6614; local_identity_match=True",
+      "evidence": "installed-manifest.json",
+      "result": "PASS"
+    },
+    "F3.lsf_normal": {
+      "detail": "bsub job 1765 terminal completed; release_id=1c79785a657c6614; release_digest=c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1; submission_id=sub_0fea781820a81666; energy=-1.116759307204 Hartree",
+      "evidence": [
+        "lsf/job-terminal.json",
+        "lsf/local-artifacts/execution_receipt.json",
+        "lsf/remote/facts.json"
+      ],
+      "result": "PASS"
+    },
+    "F3.package_install_candidate_identity": {
+      "detail": "receipt candidate_revision=6ec01ec96fa81b89bec8ff321c38e3db2dc154d2 (release_manifest.source.revision); installed Lab health matches",
+      "evidence": [
+        "package-install/summary.json",
+        "package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json"
+      ],
+      "result": "PASS"
+    },
+    "ruff": {
+      "detail": "ruff check + format clean",
+      "evidence": [
+        "ruff-check-fix5.txt",
+        "ruff-format-fix5.txt"
+      ],
+      "result": "PASS"
+    },
+    "tests": {
+      "detail": "263 targeted tests passed",
+      "evidence": "pytest-fix5.txt",
+      "result": "PASS"
+    },
+    "validator": {
+      "detail": "validate_acp2_contracts.py VALID",
+      "evidence": "validator-fix5.txt",
+      "result": "PASS"
+    }
+  },
+  "schema": "acp2.release.fix5.evidence.v1",
+  "three_entry_all_equal": true,
+  "version": "0.3.0"
+}
