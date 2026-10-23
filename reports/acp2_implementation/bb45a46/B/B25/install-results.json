@@ -1,66 +1,7 @@
 {
-  "schema": "acp2.b25.install_results.v1",
-  "generated_at": "2026-10-23T12:12:00Z",
-  "release": {
-    "version": "0.3.0",
-    "source_revision": "0ff488273591b3ed4379d2bfdacbf9519e94e970",
-    "source_tree": "2c988d9b4867d8d0c67d957c72bd7afde5682de5",
-    "clean_worktree": true,
-    "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
-    "artifact_acceptance": "PASS",
-    "root_build_supplemental": "PASS"
-  },
-  "roles": {
-    "cccp": {
-      "wheel": "cccp-0.3.0-py3-none-any.whl",
-      "wheel_sha256": "f83936eeb246e5d696ea518711394561d14490415efb64ee80501236dfc548a0",
-      "sdist": "cccp-0.3.0.tar.gz",
-      "sdist_sha256": "882da3f6baed4be48d1fd1d792946b655bdab19e19f9a155af17eec46862be45",
-      "install_exit": 0,
-      "import_without_acp_acp_services_fastapi_playwright": "PASS",
-      "cccp_version": "0.3.0",
-      "controlled_science_without_external_qc_binary": "PASS",
-      "model_asset_files": 8,
-      "model_asset_hashes": {
-        "atomic_reps.gz": "bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65",
-        "frag_reps.gz": "e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64",
-        "folded_scaled_errors.p": "c59bd8d3218b28db0e5dde3cf70911688ce530351c45f7930a4b470bd9d200dd",
-        "i_w_kde_mean_s_0.025.p": "2d523808d3859e8a48c695f5dbf8f9b9fe1fd3f02ee2dc70c8016414cf8f383e",
-        "c_w_kde_mean_s_0.025.p": "246025abffd97e32cc405d8956deaf3fd03e7426ff688e7052340135e79dc309",
-        "tms_references.txt": "5ff2429aa73ade13aa6a98b3cc6433cc8eedd9d2a687c6b9fa907be03be7dcf7",
-        "NOTICE.md": "f99522ae9c481ceacba628e994cdd8a958b6febaa7ae66136020849cc6925ad0",
-        "LICENSE-DP5": "55bc399b93914549e797365ac07b46527775f9aa28275ccb9fe43c4ebaf08146"
-      },
-      "notices": ["NOTICE.md", "LICENSE-DP5", "dist-info/LICENSE"],
-      "result": "PASS"
-    },
-    "worker": {
-      "wheel": "acp_worker-0.3.0-py3-none-any.whl",
-      "wheel_sha256": "a32cf0bfd8f7d413532f6ee0925aeb316bd46d3f25abdc84bbd6252dc86176f5",
-      "sdist": "acp-worker-0.3.0.tar.gz",
-      "sdist_sha256": "616838e072eea5363c3e0a0f250d0e15f38c66c9641c54535e0c5de0560e393b",
-      "install_exit": 0,
-      "receipt_without_jobs_db": "PASS",
-      "receipt_check": "reports/acp2_implementation/bb45a46/B/B25/worker-receipt-check.json",
-      "full_role_probe": "FAIL",
-      "full_role_probe_failure": "The committed candidate auto-recovers a verifiably-dead attempt.lock holder; the probe expects a refusal unless a proven recovery boundary exists. The B24 recovery-boundary fix is an uncommitted working-tree change, so it is not in this clean-commit package.",
-      "full_role_probe_log": "reports/acp2_implementation/bb45a46/B/B25/worker-role-probe.log",
-      "result": "PASS(receipt-only); NOT_VERIFIED(replay-refusal)"
-    },
-    "web": {
-      "wheel": "acp_web-0.3.0-py3-none-any.whl",
-      "wheel_sha256": "c2464eb828b8327865edf4b32741ac6870dfdaef1d8eb8f9cfae497052fd2c04",
-      "sdist": "acp-web-0.3.0.tar.gz",
-      "sdist_sha256": "181b036e9835391e5ee485ff5323a867000219e5096b713859cc02d9bdc08715",
-      "install_exit": 0,
-      "static_assets_packaged": "PASS",
-      "static_assets_check": "reports/acp2_implementation/bb45a46/B/B25/web-static-assets.json",
-      "http_role_probe": "FAIL",
-      "http_role_probe_failure": "acp.api.server/create_app calls OriginPolicy(public_origin=...) while the committed boundary type lacks the field. This is the known B24b working-tree fix, not a packaging defect; B25b must re-run against the fixed candidate.",
-      "http_role_probe_log": "reports/acp2_implementation/bb45a46/B/B25/web-role-probe.log",
-      "result": "PASS(static-assets); NOT_VERIFIED(http-runtime)"
-    }
-  },
+  "c35_input_cycle": "not_observed (C33 explicitly consumes B25a and does not wait for B25b; C35 prerequisites are C32-C34)",
+  "digest_consistency": "reports/acp2_implementation/bb45a46/B/B25/digest-consistency.json",
+  "generated_at": "2026-10-23T12:30:00Z",
   "not_verified": [
     "A-27a 14-file research contract corpus is absent from this B checkout; the package-data glob is inert until A-49/50 lands it.",
     "Worker full role probe replay-refusal needs the uncommitted B24 recovery-boundary fix.",
@@ -69,5 +10,71 @@
     "C32 static-asset manifest/mount is absent; the versioned read-only mount is B25b scope.",
     "Production 8765 was not touched."
   ],
-  "c35_input_cycle": "not_observed (C33 explicitly consumes B25a and does not wait for B25b; C35 prerequisites are C32-C34)"
+  "release": {
+    "artifact_acceptance": "PASS",
+    "authoritative_artifact_set": "release/ (digests match release-manifest.json and the files on disk)",
+    "clean_worktree": true,
+    "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+    "release_manifest_sha256": "6ed59f7dc68ecad02c8d1a4112051a003433bf18f8f7052a46537c40928b228c",
+    "root_build_supplemental": "PASS",
+    "source_revision": "0ff488273591b3ed4379d2bfdacbf9519e94e970",
+    "source_tree": "2c988d9b4867d8d0c67d957c72bd7afde5682de5",
+    "version": "0.3.0"
+  },
+  "roles": {
+    "cccp": {
+      "cccp_version": "0.3.0",
+      "controlled_science_without_external_qc_binary": "PASS",
+      "import_without_acp_acp_services_fastapi_playwright": "PASS",
+      "install_exit": 0,
+      "model_asset_files": 8,
+      "model_asset_hashes": {
+        "LICENSE-DP5": "55bc399b93914549e797365ac07b46527775f9aa28275ccb9fe43c4ebaf08146",
+        "NOTICE.md": "f99522ae9c481ceacba628e994cdd8a958b6febaa7ae66136020849cc6925ad0",
+        "atomic_reps.gz": "bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65",
+        "c_w_kde_mean_s_0.025.p": "246025abffd97e32cc405d8956deaf3fd03e7426ff688e7052340135e79dc309",
+        "folded_scaled_errors.p": "c59bd8d3218b28db0e5dde3cf70911688ce530351c45f7930a4b470bd9d200dd",
+        "frag_reps.gz": "e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64",
+        "i_w_kde_mean_s_0.025.p": "2d523808d3859e8a48c695f5dbf8f9b9fe1fd3f02ee2dc70c8016414cf8f383e",
+        "tms_references.txt": "5ff2429aa73ade13aa6a98b3cc6433cc8eedd9d2a687c6b9fa907be03be7dcf7"
+      },
+      "notices": [
+        "NOTICE.md",
+        "LICENSE-DP5",
+        "dist-info/LICENSE"
+      ],
+      "result": "PASS",
+      "sdist": "cccp-0.3.0.tar.gz",
+      "sdist_sha256": "fbe9dd22233f230e27fbd75c978959d690755b81ae97b98e54291dc356f6d4cc",
+      "wheel": "cccp-0.3.0-py3-none-any.whl",
+      "wheel_sha256": "f437cf68f4038ce4de623ca7ac65292e4c65f0a30950257c018850e635d96dd3"
+    },
+    "web": {
+      "http_role_probe": "FAIL",
+      "http_role_probe_failure": "acp.api.server/create_app calls OriginPolicy(public_origin=...) while the committed boundary type lacks the field. This is the known B24b working-tree fix, not a packaging defect; B25b must re-run against the fixed candidate.",
+      "http_role_probe_log": "reports/acp2_implementation/bb45a46/B/B25/web-role-probe.log",
+      "install_exit": 0,
+      "result": "PASS(static-assets); NOT_VERIFIED(http-runtime)",
+      "sdist": "acp-web-0.3.0.tar.gz",
+      "sdist_sha256": "60069ec0c5ad260bbd67afa95824f10d220f49fa885e5d99838095f9fb11ab72",
+      "static_assets_check": "reports/acp2_implementation/bb45a46/B/B25/web-static-assets.json",
+      "static_assets_packaged": "PASS",
+      "wheel": "acp_web-0.3.0-py3-none-any.whl",
+      "wheel_sha256": "630077d1a1f30f3a885c946b7e058a88ea71aedcc69b07eac47d14b8c2b95d92"
+    },
+    "worker": {
+      "full_role_probe": "FAIL",
+      "full_role_probe_failure": "The committed candidate auto-recovers a verifiably-dead attempt.lock holder; the probe expects a refusal unless a proven recovery boundary exists. The B24 recovery-boundary fix is an uncommitted working-tree change, so it is not in this clean-commit package.",
+      "full_role_probe_log": "reports/acp2_implementation/bb45a46/B/B25/worker-role-probe.log",
+      "install_exit": 0,
+      "receipt_check": "reports/acp2_implementation/bb45a46/B/B25/worker-receipt-check.json",
+      "receipt_without_jobs_db": "PASS",
+      "result": "PASS(receipt-only); NOT_VERIFIED(replay-refusal)",
+      "sdist": "acp-worker-0.3.0.tar.gz",
+      "sdist_sha256": "ceff0a603b9f4add5bd8a94ac7d840b0aaec9195cf690fd7de0bdcbeffabeac1",
+      "wheel": "acp_worker-0.3.0-py3-none-any.whl",
+      "wheel_sha256": "59d045813012cf9a338ca6640d6e0bca09b08d43ad30130a581959e542b7eee9"
+    }
+  },
+  "schema": "acp2.b25.install_results.v1"
 }

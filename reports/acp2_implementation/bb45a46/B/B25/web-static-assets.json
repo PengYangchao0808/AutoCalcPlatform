@@ -1,5 +1,5 @@
 {
-  "asset_package": "/tmp/opencode/b25-web-venv/lib64/python3.11/site-packages/acp_web_assets",
+  "asset_package": "/tmp/opencode/b25-fix-web-venv/lib64/python3.11/site-packages/acp_web_assets",
   "asset_package_import": "PASS",
   "file_count": 99,
   "js_count": 82,
