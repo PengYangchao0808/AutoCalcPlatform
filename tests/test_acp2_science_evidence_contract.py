@@ -28,14 +28,23 @@ fixtures, never calculation products.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from cccp.analysis.research import evidence as research_evidence
+from cccp.analysis.research import provenance as research_provenance
+from cccp.calculation.contracts import ArtifactRef as CalculationArtifactRef
+from cccp.calculation.contracts import Provenance as CalculationProvenance
 
 REPO = Path(__file__).resolve().parents[1]
 SCIENCE = REPO / "docs" / "reference" / "next-change" / "acp2-contracts" / "science"
@@ -804,3 +813,295 @@ def test_evidence_fixture_verdict_table(capsys: pytest.CaptureFixture[str]) -> N
             actual["model_text_validator.json"][1],
         )
     assert actual == expected
+
+
+# ── A-04b: calculation-contract adapters ────────────────────────────────
+
+_CHECKSUM = "0123456789abcdef" * 4
+
+
+def test_calculation_artifact_adapts_to_digested_source_ref() -> None:
+    artifact = CalculationArtifactRef(
+        path=Path("WORK/02_OPT/native.out"),
+        type="native_output",
+        checksum=_CHECKSUM,
+        source="local",
+    )
+    ref = research_evidence.artifact_source_ref_from_calculation_artifact(
+        artifact,
+        role="native_output",
+        units="hartree",
+        quantity="electronic_energy",
+    )
+    assert isinstance(ref, research_evidence.ArtifactSourceRef)
+    assert ref.artifact_path == "WORK/02_OPT/native.out"
+    assert ref.digest == research_evidence.Digest(value=_CHECKSUM)
+    assert (ref.role, ref.units, ref.quantity) == ("native_output", "hartree", "electronic_energy")
+    # The adapter produces the science type; it never redefines the runtime one.
+    assert not isinstance(ref, CalculationArtifactRef)
+
+    prefixed = CalculationArtifactRef(
+        path=Path("WORK/02_OPT/native.out"),
+        type="native_output",
+        checksum="sha256:" + _CHECKSUM.upper(),
+    )
+    prefixed_ref = research_evidence.artifact_source_ref_from_calculation_artifact(
+        prefixed, role="native_output", units=None
+    )
+    assert prefixed_ref.digest.value == _CHECKSUM
+    assert prefixed_ref.units is None
+    assert prefixed_ref.to_dict()["units"] is None
+
+
+def test_calculation_artifact_without_a_sha256_checksum_is_rejected() -> None:
+    for checksum in ("", "   ", "md5:" + _CHECKSUM):
+        artifact = CalculationArtifactRef(
+            path=Path("WORK/out.log"), type="native_output", checksum=checksum
+        )
+        with pytest.raises(research_evidence.EvidenceContractError):
+            research_evidence.artifact_source_ref_from_calculation_artifact(
+                artifact, role="native_output", units=None
+            )
+    with pytest.raises(research_evidence.EvidenceContractError):
+        research_evidence.artifact_source_ref_from_calculation_artifact(
+            object(), role="native_output", units=None
+        )
+
+
+def test_calculation_artifact_absolute_path_requires_a_read_root(tmp_path: Path) -> None:
+    artifact = CalculationArtifactRef(
+        path=tmp_path / "run" / "native.out", type="native_output", checksum=_CHECKSUM
+    )
+    with pytest.raises(research_evidence.EvidencePathError):
+        research_evidence.artifact_source_ref_from_calculation_artifact(
+            artifact, role="native_output", units=None
+        )
+    relative = research_evidence.artifact_source_ref_from_calculation_artifact(
+        artifact, role="native_output", units=None, read_root=tmp_path
+    )
+    assert relative.artifact_path == "run/native.out"
+    with pytest.raises(research_evidence.EvidencePathError):
+        research_evidence.artifact_source_ref_from_calculation_artifact(
+            artifact, role="native_output", units=None, read_root=tmp_path / "elsewhere"
+        )
+
+
+def test_calculation_provenance_adapts_without_inventing_basis_or_state() -> None:
+    provenance = CalculationProvenance(
+        backend="orca",
+        method="wB97X-D4",
+        version="5.0.4",
+        input_signature=_CHECKSUM,
+    )
+    software = research_provenance.software_identity_from_calculation_provenance(provenance)
+    assert (software.software_id, software.software_version) == ("orca", "5.0.4")
+
+    method = research_provenance.method_identity_from_calculation_provenance(provenance)
+    assert method.method_id == "wB97X-D4"
+    # The runtime record knows no family: the frozen "unknown" stays unknown.
+    assert method.method_family == "unknown"
+
+    assert research_provenance.input_digest_from_calculation_provenance(
+        provenance
+    ) == research_evidence.Digest(value=_CHECKSUM)
+
+    artifact = CalculationArtifactRef(path=Path("WORK/input.xyz"), type="input", checksum=_CHECKSUM)
+    input_ref = research_provenance.provenance_artifact_ref_from_calculation_artifact(
+        artifact, role="input_snapshot"
+    )
+    assert isinstance(input_ref, research_provenance.ProvenanceArtifactRef)
+    assert input_ref.relative_path == "WORK/input.xyz"
+    assert input_ref.units is None
+
+
+def test_calculation_provenance_missing_identities_are_rejected() -> None:
+    no_version = CalculationProvenance(
+        backend="orca", method="wB97X-D4", version="", input_signature=_CHECKSUM
+    )
+    with pytest.raises(research_provenance.ProvenanceContractError):
+        research_provenance.software_identity_from_calculation_provenance(no_version)
+
+    no_method = CalculationProvenance(
+        backend="orca", method="", version="5.0.4", input_signature=_CHECKSUM
+    )
+    with pytest.raises(research_provenance.ProvenanceContractError):
+        research_provenance.method_identity_from_calculation_provenance(no_method)
+
+    composite = CalculationProvenance(
+        backend="orca", method="wB97X-D4", version="5.0.4", input_signature="geom+method+v1"
+    )
+    with pytest.raises(research_provenance.ProvenanceContractError):
+        research_provenance.input_digest_from_calculation_provenance(composite)
+
+
+def test_adapters_are_lazy_and_do_not_redefine_runtime_classes() -> None:
+    for name in ("evidence.py", "provenance.py"):
+        path = REPO / "src" / "cccp" / "analysis" / "research" / name
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        classes = {node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+        assert "ArtifactRef" not in classes, name
+        assert "Provenance" not in classes, name
+        # The runtime contracts may only be imported inside an adapter function.
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                assert not (node.module or "").startswith("cccp.calculation"), name
+        in_function = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            and (node.module or "").startswith("cccp.calculation.contracts")
+        ]
+        assert in_function, name
+
+
+# ── A-04b: historical payload adapters ──────────────────────────────────
+
+
+def test_historical_evidence_read_is_lossless_and_never_eligible() -> None:
+    payload = load_json(EVIDENCE_FIXTURES / "historical_schema_payload.json")
+    record = research_evidence.read_historical_evidence(payload)
+    assert record.schema_version == 0
+    assert record.historical is True
+    assert record.to_dict() == payload
+    # Same unknown-field discovery as the independent test-local schema walker.
+    assert list(record.unknown_fields) == historical_read_evidence(payload)["unknown_fields"]
+    assert record.execution_eligible is False
+    assert record.recovery_eligible is False
+    # The strict v1 reader refuses the payload (unknown fields are closed first).
+    with pytest.raises(research_evidence.EvidenceContractError):
+        research_evidence.evidence_report_from_dict(payload)
+    # With the legacy fields removed the version gate is what refuses it.
+    clean = deepcopy(payload)
+    clean["claims"][0].pop("legacy_confidence")
+    clean.pop("legacy_review_note")
+    with pytest.raises(research_evidence.UnsupportedEvidenceSchemaVersionError):
+        research_evidence.evidence_report_from_dict(clean)
+
+
+def test_historical_evidence_missing_field_stays_missing() -> None:
+    payload = load_json(EVIDENCE_FIXTURES / "supported_valid.json")
+    legacy = deepcopy(payload)
+    del legacy["limitations"]
+    record = research_evidence.read_historical_evidence(legacy)
+    assert record.schema_version == 1
+    assert record.historical is False
+    assert "limitations" not in record.to_dict()
+    # No default was inserted, so the strict reader still refuses the document.
+    with pytest.raises(research_evidence.EvidenceContractError):
+        research_evidence.evidence_report_from_dict(legacy)
+
+    legacy["legacy_confidence"] = 0.9
+    assert (
+        "$.legacy_confidence" in research_evidence.read_historical_evidence(legacy).unknown_fields
+    )
+
+
+def test_historical_evidence_unknown_version_is_readable_not_eligible() -> None:
+    payload = load_json(EVIDENCE_FIXTURES / "supported_valid.json")
+    payload["schema_version"] = 2
+    record = research_evidence.read_historical_evidence(payload)
+    assert record.schema_version == 2
+    assert record.historical is True
+    assert record.to_dict() == payload
+    assert record.execution_eligible is False
+    with pytest.raises(research_evidence.UnsupportedEvidenceSchemaVersionError):
+        research_evidence.evidence_report_from_dict(payload)
+
+
+def _legacy_provenance_payload() -> dict[str, Any]:
+    return {
+        "schema_version": 0,
+        "provenance_id": "prov-legacy-0001",
+        "result_kind": "electronic_structure",
+        "software": {"software_id": "orca", "software_version": "5.0.4"},
+        "derivation": {
+            "method": {"method_id": "wb97x-d4"},
+            "basis": {"basis_id": "def2-tzvpp"},
+            "electronic_state": {"charge": 0, "multiplicity": 1},
+            "legacy_convergence_note": "pre-v1",
+        },
+        "input": {
+            "artifacts": [
+                {
+                    "relative_path": "WORK/input.xyz",
+                    "digest": {"algorithm": "sha256", "value": _CHECKSUM},
+                    "role": "input_snapshot",
+                }
+            ]
+        },
+        "conditions": {
+            "temperature_kelvin": None,
+            "standard_state": None,
+            "reference_state": None,
+        },
+        "legacy_review_note": "read-only import",
+    }
+
+
+def test_historical_provenance_read_is_lossless_and_never_eligible() -> None:
+    payload = _legacy_provenance_payload()
+    record = research_provenance.read_historical_provenance(payload)
+    assert record.schema_version == 0
+    assert record.historical is True
+    assert record.to_dict() == payload
+    assert "$.derivation.legacy_convergence_note" in record.unknown_fields
+    assert "$.legacy_review_note" in record.unknown_fields
+    assert record.execution_eligible is False
+    assert record.recovery_eligible is False
+    # The strict v1 reader refuses unknown fields before it checks the version.
+    with pytest.raises(research_provenance.ProvenanceContractError):
+        research_provenance.provenance_from_dict(payload)
+    clean = _legacy_provenance_payload()
+    clean["derivation"].pop("legacy_convergence_note")
+    clean.pop("legacy_review_note")
+    with pytest.raises(research_provenance.UnsupportedProvenanceSchemaVersionError):
+        research_provenance.provenance_from_dict(clean)
+
+
+def test_historical_provenance_missing_field_stays_missing() -> None:
+    payload = _legacy_provenance_payload()
+    payload["schema_version"] = 1
+    del payload["conditions"]
+    record = research_provenance.read_historical_provenance(payload)
+    assert record.schema_version == 1
+    assert "conditions" not in record.to_dict()
+    with pytest.raises(research_provenance.ProvenanceContractError):
+        research_provenance.provenance_from_dict(payload)
+
+    undeclared_version = _legacy_provenance_payload()
+    del undeclared_version["schema_version"]
+    without_version = research_provenance.read_historical_provenance(undeclared_version)
+    assert without_version.schema_version is None
+    assert "schema_version" not in without_version.to_dict()
+
+
+# ── A-04b: package import purity ────────────────────────────────────────
+
+
+def test_research_package_import_pulls_no_execution_or_platform_modules() -> None:
+    """A fresh interpreter must load the whole package without task/QC/platform."""
+    probe = (
+        "import json, sys\n"
+        "import cccp.analysis.research\n"
+        "forbidden = ('cccp.calculation.tasks', 'cccp.qc', 'acp', 'acp_services')\n"
+        "bad = sorted(\n"
+        "    name for name in sys.modules\n"
+        "    if any(name == root or name.startswith(root + '.') for root in forbidden)\n"
+        ")\n"
+        "print(json.dumps({\n"
+        "    'forbidden': bad,\n"
+        "    'research': 'cccp.analysis.research.evidence' in sys.modules,\n"
+        "}))\n"
+    )
+    env = dict(os.environ)
+    src = str(REPO / "src")
+    env["PYTHONPATH"] = src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"forbidden": [], "research": True}, completed.stdout

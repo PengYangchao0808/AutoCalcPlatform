@@ -27,11 +27,28 @@ subprocess.  Digests use the bare lowercase sha256 value defined by
 ``cccp.analysis.identity.content_sha256`` (never a ``sha256:`` prefix inside
 the JSON contract).
 
+Two boundaries keep this module independent of the execution layer:
+
+* :func:`artifact_source_ref_from_calculation_artifact` adapts the *runtime*
+  ``cccp.calculation.contracts.ArtifactRef`` **into** this module's
+  :class:`ArtifactSourceRef`.  The calculation type is imported lazily inside
+  the function so importing this module never loads ``cccp.calculation``; the
+  adapter is strictly one-directional and never re-defines the runtime type.
+  A missing checksum is rejected instead of being filled with a fabricated
+  digest, and a caller must supply ``role``/``units`` explicitly because the
+  runtime record carries no scientific role.
+* :func:`read_historical_evidence` reads an older payload *without* coercion:
+  the payload is preserved verbatim, missing fields stay missing, unknown
+  fields are reported and retained, and the record is explicitly not eligible
+  for execution or recovery.  Only :meth:`EvidenceReport.from_dict` produces a
+  v1 object usable for new work.
+
 Author: QCcalc Team
 """
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import logging
 import re
@@ -55,6 +72,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "APPLICABILITIES",
     "CLAIM_STATUSES",
+    "DIGEST_KEYS",
     "DIGEST_PATTERN",
     "EVIDENCE_SCHEMA_VERSION",
     "MISSING_CHECK_IDS",
@@ -79,6 +97,7 @@ __all__ = [
     "EvidenceValidator",
     "ExecutionFacts",
     "FailedCandidate",
+    "HistoricalEvidenceRecord",
     "Limitation",
     "ModelConclusionError",
     "ModelNarrative",
@@ -87,12 +106,16 @@ __all__ = [
     "Subject",
     "UnknownClaimStatusError",
     "UnsupportedEvidenceSchemaVersionError",
+    "artifact_source_ref_from_calculation_artifact",
     "assemble_claim",
     "assemble_evidence_report",
     "canonical_evidence_json",
     "claim_draft_from_assessment",
+    "digest_from_checksum",
     "evidence_report_from_dict",
+    "read_historical_evidence",
     "reject_model_conclusion_as_evidence",
+    "unknown_evidence_field_paths",
     "verify_artifact_digest",
     "verify_claim_sources",
 ]
@@ -206,7 +229,7 @@ _SUBJECT_KEYS: Final = frozenset(
     {"subject_id", "subject_kind", "description", "input_digests", "science_identity"}
 )
 _LIMITATION_KEYS: Final = frozenset({"limitation_id", "description", "affected_claim_ids"})
-_DIGEST_KEYS: Final = frozenset({"algorithm", "value"})
+DIGEST_KEYS: Final = frozenset({"algorithm", "value"})
 
 
 # ── typed errors ───────────────────────────────────────────────────────────
@@ -340,7 +363,7 @@ class Digest:
     def from_dict(cls, payload: Any, where: str = "digest") -> Digest:
         """Read a frozen digest object."""
         data = _mapping(payload, where)
-        _reject_unknown(data, _DIGEST_KEYS, where)
+        _reject_unknown(data, DIGEST_KEYS, where)
         _require_keys(data, ("algorithm", "value"), where)
         return cls(
             value=_string(data["value"], f"{where}.value"),
@@ -1454,3 +1477,207 @@ def canonical_evidence_json(report: EvidenceReport) -> str:
 def evidence_report_from_dict(payload: Any) -> EvidenceReport:
     """Convenience wrapper around :meth:`EvidenceReport.from_dict`."""
     return EvidenceReport.from_dict(payload)
+
+
+# ── calculation-contract adapters (one direction, lazy import) ─────────────
+
+
+def digest_from_checksum(checksum: Any, *, where: str = "artifact.checksum") -> Digest:
+    """Return a :class:`Digest` from a bare or ``sha256:``-prefixed checksum.
+
+    The runtime ``cccp.calculation.contracts.ArtifactRef`` stores its checksum
+    as free text while the science contract stores a structured bare-lowercase
+    sha256.  Both ``<64 hex>`` and ``sha256:<64 hex>`` are accepted; any other
+    algorithm, an empty string and a missing checksum are rejected.  A digest
+    is never invented: refusing here is the only honest outcome, because a
+    source reference without a verified digest cannot support a claim.
+    """
+    if checksum is None:
+        raise EvidenceContractError(f"{where}: no checksum declared; cannot build a digest")
+    text = _string(checksum, where).strip()
+    if not text:
+        raise EvidenceContractError(f"{where}: empty checksum; cannot build a digest")
+    prefix, separator, value = text.partition(":")
+    if separator:
+        if prefix.lower() != "sha256":
+            raise EvidenceContractError(
+                f"{where}: unsupported digest algorithm {prefix!r}; only sha256 is legal"
+            )
+    else:
+        value = text
+    return Digest(value=value.lower())
+
+
+def _calculation_artifact_relative_path(path: Path, read_root: Path | None) -> str:
+    """Return the contract-relative path of a runtime artifact.
+
+    A relative runtime path is kept as declared.  An absolute path is refused
+    unless *read_root* is supplied, in which case it must resolve below it.
+    """
+    raw = Path(path)
+    if read_root is None:
+        if raw.is_absolute():
+            raise EvidencePathError(
+                f"artifact.path {str(raw)!r} is absolute; pass read_root to relativise it"
+            )
+        return _relative_artifact_path(str(raw), "artifact.path")
+    root = Path(read_root).resolve()
+    try:
+        relative = raw.resolve().relative_to(root)
+    except ValueError as exc:
+        raise EvidencePathError(
+            f"artifact.path {str(raw)!r} is not below read_root {str(root)!r}"
+        ) from exc
+    return _relative_artifact_path(relative.as_posix(), "artifact.path")
+
+
+def artifact_source_ref_from_calculation_artifact(
+    artifact: Any,
+    *,
+    role: str,
+    units: str | None,
+    quantity: str | None = None,
+    read_root: Path | None = None,
+) -> ArtifactSourceRef:
+    """Adapt a runtime calculation ``ArtifactRef`` into an :class:`ArtifactSourceRef`.
+
+    This is the **single** direction (calculation → science).  The runtime type
+    is imported lazily so importing this module stays independent of
+    ``cccp.calculation``; the runtime class is never redefined here.
+
+    ``role`` and ``units`` are required keyword arguments: the runtime record
+    knows the artifact *type* but not the scientific role it plays in a claim,
+    and the frozen schema requires both fields.  ``units=None`` is the explicit
+    statement "not a numeric quantity".  A missing checksum raises rather than
+    fabricating one.
+    """
+    from cccp.calculation.contracts import ArtifactRef as CalculationArtifactRef
+
+    if not isinstance(artifact, CalculationArtifactRef):
+        raise EvidenceContractError(
+            "artifact_source_ref_from_calculation_artifact requires a "
+            f"cccp.calculation.contracts.ArtifactRef, got {type(artifact).__name__}"
+        )
+    return ArtifactSourceRef(
+        artifact_path=_calculation_artifact_relative_path(artifact.path, read_root),
+        digest=digest_from_checksum(artifact.checksum),
+        role=role,
+        units=units,
+        quantity=quantity,
+    )
+
+
+# ── historical payload adapter ─────────────────────────────────────────────
+
+#: Declared field tree of the v1 report, used only to *report* undeclared
+#: fields in a historical payload.  It is derived from the same key sets the
+#: strict reader enforces, so an unknown path here always means "the strict
+#: reader would reject it", never "the schema allows it".
+_EVIDENCE_FIELD_TREE: Final[dict[str, Any]] = {
+    "keys": _REPORT_KEYS,
+    "children": {
+        "subject": {"keys": _SUBJECT_KEYS},
+        "execution": {"keys": _EXECUTION_KEYS},
+        "claims": {
+            "keys": _CLAIM_KEYS,
+            "list": True,
+            "children": {
+                "scope": {"keys": _SCOPE_KEYS},
+                "source_refs": {"keys": _SOURCE_REF_KEYS, "list": True},
+                "missing_checks": {"keys": _MISSING_CHECK_KEYS, "list": True},
+                "validator": {"keys": _VALIDATOR_KEYS},
+            },
+        },
+        "limitations": {"keys": _LIMITATION_KEYS, "list": True},
+        "provenance_digest": {"keys": DIGEST_KEYS},
+    },
+}
+
+
+def _collect_unknown_evidence_paths(value: Any, spec: Mapping[str, Any], path: str) -> list[str]:
+    if not isinstance(value, Mapping):
+        return []
+    declared: frozenset[str] = spec["keys"]
+    children: Mapping[str, Mapping[str, Any]] = spec.get("children", {})
+    found: list[str] = []
+    for key, child_value in value.items():
+        child_path = f"{path}.{key}"
+        if key not in declared:
+            found.append(child_path)
+            continue
+        child_spec = children.get(key)
+        if child_spec is None:
+            continue
+        if child_spec.get("list"):
+            if not isinstance(child_value, (list, tuple)):
+                continue
+            for index, item in enumerate(child_value):
+                found.extend(
+                    _collect_unknown_evidence_paths(item, child_spec, f"{child_path}[{index}]")
+                )
+        else:
+            found.extend(_collect_unknown_evidence_paths(child_value, child_spec, child_path))
+    return found
+
+
+def unknown_evidence_field_paths(payload: Any) -> tuple[str, ...]:
+    """Return the sorted JSON paths a v1 reader would reject, without coercion."""
+    if not isinstance(payload, Mapping):
+        return ()
+    return tuple(sorted(_collect_unknown_evidence_paths(payload, _EVIDENCE_FIELD_TREE, "$")))
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalEvidenceRecord:
+    """A readable historical evidence payload with no execution eligibility.
+
+    ``payload`` is a deep copy of the declared document: nothing is normalized,
+    defaulted or dropped.  ``schema_version`` is ``None`` when the payload does
+    not declare an integer version — a missing version is never filled with the
+    current one.  Tolerating an older payload never grants execution or
+    recovery eligibility; those require the strict v1 reader.
+    """
+
+    payload: dict[str, Any]
+    schema_version: int | None
+    adapter: str = "historical_evidence_v1"
+    execution_eligible: bool = False
+    recovery_eligible: bool = False
+
+    @property
+    def historical(self) -> bool:
+        """Whether the record predates the current evidence schema."""
+        return self.schema_version != EVIDENCE_SCHEMA_VERSION
+
+    @property
+    def unknown_fields(self) -> tuple[str, ...]:
+        """Undeclared field paths retained verbatim in :attr:`payload`."""
+        return unknown_evidence_field_paths(self.payload)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deep copy of the preserved payload (byte-stable re-read)."""
+        return copy.deepcopy(self.payload)
+
+
+def read_historical_evidence(
+    payload: Any, *, schema_version: int | None = None
+) -> HistoricalEvidenceRecord:
+    """Read an older evidence payload without canonical coercion.
+
+    No field is defaulted and no unknown field is removed.  A payload that is
+    missing a required field stays missing; the caller must not read the
+    absence as an implicit value.  Use :meth:`EvidenceReport.from_dict` for a
+    v1 object eligible for new work.
+    """
+    data = _mapping(payload, "historical_evidence")
+    declared = schema_version
+    if declared is None:
+        raw = data.get("schema_version")
+        if isinstance(raw, int) and not isinstance(raw, bool):
+            declared = raw
+    return HistoricalEvidenceRecord(
+        payload=copy.deepcopy(data),
+        schema_version=declared,
+        execution_eligible=False,
+        recovery_eligible=False,
+    )

@@ -22,11 +22,23 @@ omission).
 The module is pure: standard library only, no task/QC/platform import and no
 subprocess.
 
+Runtime calculation records are adapted **into** these science types, never
+redefined here.  The ``cccp.calculation.contracts.Provenance`` /
+``ArtifactRef`` classes are imported lazily inside the adapter functions so
+that importing this module stays independent of the execution layer.  The
+runtime record knows backend/method/version/input-signature and an artifact
+path/type/checksum; it knows nothing about basis or electronic state, so those
+stay absent (a caller must supply them from the calculation spec) instead of
+being invented.  An older payload is readable through
+:func:`read_historical_provenance` with every field preserved and no execution
+or recovery eligibility.
+
 Author: QCcalc Team
 """
 
 from __future__ import annotations
 
+import copy
 import logging
 import re
 from collections.abc import Iterable, Mapping
@@ -45,8 +57,11 @@ from cccp.analysis.research._common import (
     require_string,
 )
 from cccp.analysis.research.evidence import (
+    DIGEST_KEYS,
     Digest,
     EvidenceContractError,
+    artifact_source_ref_from_calculation_artifact,
+    digest_from_checksum,
     verify_artifact_digest,
 )
 
@@ -61,6 +76,7 @@ __all__ = [
     "Conditions",
     "ElectronicStateIdentity",
     "ElectronicStructureDerivation",
+    "HistoricalProvenanceRecord",
     "InputIdentity",
     "MethodIdentity",
     "PluginIdentity",
@@ -74,7 +90,13 @@ __all__ = [
     "SoftwareIdentity",
     "UnsupportedProvenanceSchemaVersionError",
     "canonical_provenance_json",
+    "input_digest_from_calculation_provenance",
+    "method_identity_from_calculation_provenance",
+    "provenance_artifact_ref_from_calculation_artifact",
     "provenance_from_dict",
+    "read_historical_provenance",
+    "software_identity_from_calculation_provenance",
+    "unknown_provenance_field_paths",
     "verify_provenance_inputs",
 ]
 
@@ -946,3 +968,234 @@ def canonical_provenance_json(provenance: ScientificProvenance) -> str:
 def provenance_from_dict(payload: Any) -> ScientificProvenance:
     """Convenience wrapper around :meth:`ScientificProvenance.from_dict`."""
     return ScientificProvenance.from_dict(payload)
+
+
+# ── calculation-contract adapters (one direction, lazy import) ─────────────
+
+
+def _as_calculation_provenance(provenance: Any) -> Any:
+    """Import and type-check the runtime ``Provenance`` lazily."""
+    from cccp.calculation.contracts import Provenance as CalculationProvenance
+
+    if not isinstance(provenance, CalculationProvenance):
+        raise ProvenanceContractError(
+            f"expected a cccp.calculation.contracts.Provenance, got {type(provenance).__name__}"
+        )
+    return provenance
+
+
+def software_identity_from_calculation_provenance(
+    provenance: Any,
+    *,
+    software_id: str | None = None,
+    distribution: str | None = None,
+    executable_path: str | None = None,
+) -> SoftwareIdentity:
+    """Adapt the runtime backend/version pair into a :class:`SoftwareIdentity`.
+
+    The runtime ``Provenance`` carries no distinct software id, so ``backend``
+    supplies it unless the caller names one explicitly.  A missing version is
+    rejected: the frozen schema requires a non-empty ``software_version`` and a
+    placeholder would make the record look more complete than it is.
+    """
+    runtime = _as_calculation_provenance(provenance)
+    backend = _string(runtime.backend, "calculation_provenance.backend")
+    version = _string(runtime.version, "calculation_provenance.version")
+    if not version.strip():
+        raise ProvenanceContractError(
+            "calculation provenance carries no software version; refusing to invent one"
+        )
+    return SoftwareIdentity(
+        software_id=backend
+        if software_id is None
+        else _string(software_id, "software.software_id"),
+        software_version=version,
+        distribution=distribution,
+        executable_path=executable_path,
+    )
+
+
+def method_identity_from_calculation_provenance(
+    provenance: Any,
+    *,
+    method_family: str = "unknown",
+    dispersion: str | None = None,
+    hamiltonian: str | None = None,
+) -> MethodIdentity:
+    """Adapt the runtime method string into a :class:`MethodIdentity`.
+
+    The runtime record names a method but not its family, dispersion or
+    Hamiltonian; the family therefore defaults to the frozen ``unknown``
+    member instead of being guessed.  Basis and electronic state are not part
+    of the runtime record at all and are never produced by this adapter.
+    """
+    runtime = _as_calculation_provenance(provenance)
+    method_id = _string(runtime.method, "calculation_provenance.method")
+    if not method_id.strip():
+        raise ProvenanceContractError(
+            "calculation provenance carries no method; refusing to invent one"
+        )
+    return MethodIdentity(
+        method_id=method_id,
+        method_family=method_family,
+        dispersion=dispersion,
+        hamiltonian=hamiltonian,
+    )
+
+
+def input_digest_from_calculation_provenance(provenance: Any) -> Digest:
+    """Return the runtime ``input_signature`` as a :class:`Digest` when it is sha256.
+
+    The signature is free text, not a digest type.  It is accepted only when it
+    is a bare or ``sha256:``-prefixed sha256 value; anything else (for example
+    a composite signature) raises instead of being truncated or hashed into a
+    digest that does not describe the inputs.
+    """
+    runtime = _as_calculation_provenance(provenance)
+    signature = _string(runtime.input_signature, "calculation_provenance.input_signature")
+    try:
+        return digest_from_checksum(signature)
+    except EvidenceContractError as exc:
+        raise ProvenanceContractError(
+            f"calculation input_signature is not a sha256 digest: {exc}"
+        ) from exc
+
+
+def provenance_artifact_ref_from_calculation_artifact(
+    artifact: Any,
+    *,
+    role: str,
+    units: str | None = None,
+    read_root: Path | None = None,
+) -> ProvenanceArtifactRef:
+    """Adapt a runtime ``ArtifactRef`` into a :class:`ProvenanceArtifactRef`.
+
+    Delegates path/digest handling to the evidence adapter so both science
+    contracts agree, then drops the claim-only ``quantity`` slot.  ``role`` is
+    required and ``units=None`` is explicit.
+    """
+    source_ref = artifact_source_ref_from_calculation_artifact(
+        artifact,
+        role=role,
+        units=units,
+        read_root=read_root,
+    )
+    return ProvenanceArtifactRef(
+        relative_path=source_ref.artifact_path,
+        digest=source_ref.digest,
+        role=source_ref.role,
+        units=source_ref.units,
+    )
+
+
+# ── historical payload adapter ─────────────────────────────────────────────
+
+_PROVENANCE_FIELD_TREE: Final[dict[str, Any]] = {
+    "keys": _PROVENANCE_KEYS,
+    "children": {
+        "software": {"keys": _SOFTWARE_KEYS},
+        "derivation": {
+            "keys": _ELECTRONIC_DERIVATION_KEYS | _PURE_ANALYSIS_KEYS,
+            "children": {
+                "method": {"keys": _METHOD_KEYS},
+                "basis": {"keys": _BASIS_KEYS},
+                "electronic_state": {"keys": _ELECTRONIC_STATE_KEYS},
+                "input_digest": {"keys": DIGEST_KEYS},
+            },
+        },
+        "input": {
+            "keys": _INPUT_KEYS,
+            "children": {
+                "artifacts": {"keys": _ARTIFACT_KEYS, "list": True},
+                "structure_digest": {"keys": DIGEST_KEYS},
+            },
+        },
+        "conditions": {"keys": _CONDITION_KEYS},
+    },
+}
+
+
+def _collect_unknown_provenance_paths(value: Any, spec: Mapping[str, Any], path: str) -> list[str]:
+    if not isinstance(value, Mapping):
+        return []
+    declared: frozenset[str] = spec["keys"]
+    children: Mapping[str, Mapping[str, Any]] = spec.get("children", {})
+    found: list[str] = []
+    for key, child_value in value.items():
+        child_path = f"{path}.{key}"
+        if key not in declared:
+            found.append(child_path)
+            continue
+        child_spec = children.get(key)
+        if child_spec is None:
+            continue
+        if child_spec.get("list"):
+            if not isinstance(child_value, (list, tuple)):
+                continue
+            for index, item in enumerate(child_value):
+                found.extend(
+                    _collect_unknown_provenance_paths(item, child_spec, f"{child_path}[{index}]")
+                )
+        else:
+            found.extend(_collect_unknown_provenance_paths(child_value, child_spec, child_path))
+    return found
+
+
+def unknown_provenance_field_paths(payload: Any) -> tuple[str, ...]:
+    """Return the sorted JSON paths a v1 reader would reject, without coercion."""
+    if not isinstance(payload, Mapping):
+        return ()
+    return tuple(sorted(_collect_unknown_provenance_paths(payload, _PROVENANCE_FIELD_TREE, "$")))
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalProvenanceRecord:
+    """A readable historical provenance payload with no execution eligibility.
+
+    The payload is preserved verbatim; a missing field stays missing and an
+    unknown version is never upgraded to the current one.  Recovered results
+    must not be built from this record: only :meth:`ScientificProvenance.from_dict`
+    yields an object eligible for new work.
+    """
+
+    payload: dict[str, Any]
+    schema_version: int | None
+    adapter: str = "historical_provenance_v1"
+    execution_eligible: bool = False
+    recovery_eligible: bool = False
+
+    @property
+    def historical(self) -> bool:
+        """Whether the record predates the current provenance schema."""
+        return self.schema_version != PROVENANCE_SCHEMA_VERSION
+
+    @property
+    def unknown_fields(self) -> tuple[str, ...]:
+        """Undeclared field paths retained verbatim in :attr:`payload`."""
+        return unknown_provenance_field_paths(self.payload)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deep copy of the preserved payload (byte-stable re-read)."""
+        return copy.deepcopy(self.payload)
+
+
+def read_historical_provenance(
+    payload: Any, *, schema_version: int | None = None
+) -> HistoricalProvenanceRecord:
+    """Read an older provenance payload without canonical coercion.
+
+    No field is defaulted and no unknown field is removed; the record is
+    explicitly not eligible for execution or recovery.
+    """
+    data = _mapping(payload, "historical_provenance")
+    declared = schema_version
+    if declared is None:
+        raw = data.get("schema_version")
+        if isinstance(raw, int) and not isinstance(raw, bool):
+            declared = raw
+    return HistoricalProvenanceRecord(
+        payload=copy.deepcopy(data),
+        schema_version=declared,
+        execution_eligible=False,
+        recovery_eligible=False,
+    )
