@@ -167,6 +167,22 @@ COMMON_PHASES = (
     "aggregate",
 )
 
+# Scenarios whose current evidence content is fixture-only.  Such a scenario
+# may accept the common phase vocabulary on the command line, but it must
+# never publish ``evidence_kind=live``: no Controller/DSH/model/QC/LSF/browser
+# process is started for those rows.  The C workbench owns this classification
+# (B does not know which C content is fixture), so it lives here next to the
+# phase normalizer.
+FIXTURE_ONLY_SCENARIOS = frozenset(("approval-budget-live",))
+
+# Scenario-level phase aliases.  The CLI keeps accepting B01's common phase
+# (``--phase approval`` is T-27's required invocation) while the receipt is
+# written with the honest public phase.  The requested phase stays available to
+# the scenario body through ``ResolvedIdentity.requested_phase``.
+PHASE_ALIASES: dict[str, dict[str, str]] = {
+    "approval-budget-live": {"approval": "experience:fixture"},
+}
+
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$")
 REVISION_RE = re.compile(r"^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$")
 SECRET_KEY_RE = re.compile(r"(?i)(secret|token|password|api[_-]?key|authorization|credential)")
@@ -493,6 +509,7 @@ class ResolvedIdentity:
     evidence_kind: str
     mode: str | None
     subcase: str | None
+    requested_phase: str | None = None
 
 
 def validate_registry_environment() -> str | None:
@@ -574,6 +591,9 @@ def _resolve_identity(
     if phase is not None and phase not in COMMON_PHASES:
         return None, f"unknown namespaced/common phase {phase!r}"
 
+    requested_phase = phase
+    phase_alias = PHASE_ALIASES.get(scenario, {})
+
     # ``c_accept`` uses ``main`` as its default leaf segment for every scenario
     # (route_select never forwards --phase).  For fixture/live-default
     # scenarios that segment is a directory default, not a requested public
@@ -586,6 +606,8 @@ def _resolve_identity(
         return None, f"unknown mode {mode!r}"
     if mode == "live" and scenario not in LIVE_ALLOWED:
         return None, f"--mode live is not registered for scenario {scenario!r}"
+    if mode == "live" and scenario in FIXTURE_ONLY_SCENARIOS:
+        return None, f"--mode live is unavailable for fixture-only scenario {scenario!r}"
 
     if subcase is not None:
         allowed = SUBCASE_WHITELIST.get(scenario, ())
@@ -599,11 +621,13 @@ def _resolve_identity(
             return None, "--phase aggregate cannot be combined with --subcase"
         resolved_phase = "aggregate"
     elif phase is not None:
-        resolved_phase = phase
+        resolved_phase = phase_alias.get(phase, phase)
     elif subcase is not None:
         resolved_phase = f"experience:{subcase}"
     elif mode is not None:
         resolved_phase = f"experience:{mode}"
+    elif scenario in FIXTURE_ONLY_SCENARIOS:
+        resolved_phase = "experience:fixture"
     elif scenario in MAIN_PHASE_SCENARIOS:
         resolved_phase = "main"
     elif scenario in LIVE_DEFAULT:
@@ -615,12 +639,16 @@ def _resolve_identity(
         evidence_kind = "aggregate"
     elif resolved_phase == "fixture" or resolved_phase.endswith(":fixture"):
         evidence_kind = "fixture"
+    elif scenario in FIXTURE_ONLY_SCENARIOS:
+        evidence_kind = "fixture"
     else:
         evidence_kind = "live"
 
     effective_mode = mode
     if effective_mode is None:
-        if scenario in LIVE_DEFAULT or resolved_phase in ("main", "experience:live"):
+        if scenario in FIXTURE_ONLY_SCENARIOS:
+            effective_mode = "fixture"
+        elif scenario in LIVE_DEFAULT or resolved_phase in ("main", "experience:live"):
             effective_mode = "live"
         elif resolved_phase.endswith(":live"):
             effective_mode = "live"
@@ -635,6 +663,7 @@ def _resolve_identity(
             evidence_kind=evidence_kind,
             mode=effective_mode,
             subcase=subcase,
+            requested_phase=requested_phase,
         ),
         None,
     )

@@ -524,6 +524,70 @@ def test_subcase_whitelist_negative(harness, runtime_env, tmp_path, scenario, su
     assert code == 3
 
 
+def test_approval_budget_live_phase_alias_writes_fixture(harness, runtime_env, tmp_path):
+    out = _out(tmp_path, "approval-budget-live", "alias-approval", suffix="approval")
+    assert (
+        harness.main(
+            [
+                "--scenario",
+                "approval-budget-live",
+                "--out",
+                str(out),
+                "--timeout",
+                "60",
+                "--phase",
+                "approval",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    _, document = _one_receipt(out)
+    assert document["phase"] == "experience:fixture"
+    assert document["evidence_kind"] == "fixture"
+    assert document["extensions"]["experience.mode"] == "fixture"
+    assert document["result"] == "NOT_VERIFIED"
+
+    budget_out = _out(tmp_path, "approval-budget-live", "alias-budget", suffix="budget")
+    assert (
+        harness.main(
+            [
+                "--scenario",
+                "approval-budget-live",
+                "--out",
+                str(budget_out),
+                "--timeout",
+                "60",
+                "--phase",
+                "budget",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    _, budget = _one_receipt(budget_out)
+    assert budget["phase"] == "budget"
+    assert budget["evidence_kind"] == "fixture"
+    assert budget["result"] == "NOT_VERIFIED"
+
+    live_out = _out(tmp_path, "approval-budget-live", "alias-live", suffix="live")
+    assert (
+        harness.main(
+            [
+                "--scenario",
+                "approval-budget-live",
+                "--out",
+                str(live_out),
+                "--timeout",
+                "60",
+                "--mode",
+                "live",
+            ]
+        )
+        == 3
+    )
+
+
 # ---------------------------------------------------------------------------
 # Route selection (T-04 probe is the one routing implementation)
 # ---------------------------------------------------------------------------
