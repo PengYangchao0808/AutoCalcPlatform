@@ -176,10 +176,14 @@ def _build_legacy_opts(d: dict[str, Any]) -> BatchMethodOptions:
     from acp.chem.composition import normalize_recalc_hess
 
     kwargs: dict[str, Any] = {}
-    if d.get("functional"):
-        kwargs["optimization_method"] = d["functional"]
-    if d.get("basis"):
-        kwargs["optimization_basis"] = d["basis"]
+    # CLI and typed callers use canonical field names; historical API payloads
+    # retain functional/basis aliases. Keep role-specific overrides below.
+    optimization_method = d.get("optimization_method") or d.get("functional")
+    optimization_basis = d.get("optimization_basis") or d.get("basis")
+    if optimization_method:
+        kwargs["optimization_method"] = optimization_method
+    if optimization_basis:
+        kwargs["optimization_basis"] = optimization_basis
     if d.get("single_point_method"):
         kwargs["single_point_method"] = d["single_point_method"]
     if d.get("single_point_basis"):
