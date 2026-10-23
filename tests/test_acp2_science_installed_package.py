@@ -758,6 +758,41 @@ def _run_documented_example(
     )
 
 
+def _load_harness() -> Any:
+    name = "acp2_science_harness_installed_examples"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(
+        name, REPO / "scripts" / "acceptance" / "acp2_science.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_installed_example_artifacts_pin_wheel_sources_and_inputs(tmp_path: Path) -> None:
+    """A PASS receipt must carry the wheel, example sources and input digests."""
+    harness = _load_harness()
+    wheel_dir = tmp_path / "wheel"
+    wheel_dir.mkdir()
+    wheel, _, _ = _build_local_candidate(wheel_dir)
+    entries = harness._installed_example_artifacts(wheel)
+    expected = [
+        wheel,
+        *(DOCUMENTED_EXAMPLE_DIR / name for name in DOCUMENTED_EXAMPLE_FILES),
+        *(REPO / relative for _, relative in DOCUMENTED_EXAMPLE_INPUTS.values()),
+    ]
+    assert len(entries) == len(expected) == 7
+    assert [Path(entry["path"]) for entry in entries] == [path.resolve() for path in expected]
+    for entry, path in zip(entries, expected):
+        assert entry["size_bytes"] == path.stat().st_size
+        assert entry["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+        assert re.fullmatch(r"[0-9a-f]{64}", entry["sha256"])
+    print(f"installed-example artifacts: {len(entries)} entries pinned with size + sha256")
+
+
 def test_documented_examples_have_a_help_path(
     installed_probe: dict[str, Any], tmp_path: Path
 ) -> None:
