@@ -1,0 +1,29 @@
+{
+  "c_plan": {
+    "c24a_blocked": true,
+    "c24a_marker": "- [~] 34. T-34 / C24a\uff1a\u9650\u5b9a Diels\u2013Alder \u63d0\u6848\u3001\u5ba1\u6279\u4e0e\u552f\u4e00\u63d0\u4ea4 \u2014 blocked by T-23..T-33 + A-14..A-16 + B20a-ready",
+    "evidence_present": false,
+    "evidence_roots": [
+      "<acp2-dev>/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+      "<acp2-dev>/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+    ],
+    "gates_on_b20a_ready": true,
+    "plan": "<repo>/.omo/plans/acp2-plan-c-rph-workbench.md"
+  },
+  "expected_artifact": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+  "missing_artifact": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+  "missing_fields": null,
+  "reason": "c24a_absent",
+  "required_fields": [
+    "proposal_digest",
+    "approval_ref",
+    "job_id",
+    "recipe_digest",
+    "budget_basis",
+    "run_spec",
+    "search_capability"
+  ],
+  "rule": "No task/QC/prepare/reservation may be created until C24a supplies the single approved submission. A known-candidate chain is not a substitute.",
+  "schema": "acp2.b20a.c24a-gap.v1",
+  "status": "c24a_absent"
+}

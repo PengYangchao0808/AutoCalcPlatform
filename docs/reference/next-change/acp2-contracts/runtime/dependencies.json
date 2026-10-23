@@ -291,7 +291,10 @@
       "digest_or_pending": "PENDING",
       "readiness": "contract_ready",
       "delivery_status": "planned",
-      "description": "C24a unique approved submission"
+      "description": "C24a unique approved submission",
+      "observed_state": "blocked: C plan T-34 is [~] and no approved single submission exists",
+      "observed_plan": "<repo>/.omo/plans/acp2-plan-c-rph-workbench.md",
+      "c_t34_gates_on": "B20a-ready"
     },
     {
       "id": "C25",
@@ -1588,7 +1591,8 @@
       "depends_on_relation": "AND",
       "any_of": [],
       "blocks": [
-        "B20a-exec"
+        "B20a-exec",
+        "C24a"
       ],
       "parallelizable_with": [
         "B20a-exec"
@@ -2324,6 +2328,18 @@
         "evidence": "reports/acp2_implementation/bb45a46/B/B02/browser-env.json"
       },
       "supersedes_c_row": "B02a:browser-venv"
+    },
+    {
+      "consumer": "C/T-34 (C24a)",
+      "producer": "B20a-ready",
+      "artifact": "DA execution interface/preflight",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": "B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a",
+      "supersedes_c_row": "C24a:gates_on_B20a_ready"
     }
   ]
 }

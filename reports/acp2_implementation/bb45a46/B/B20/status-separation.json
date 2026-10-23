@@ -1,0 +1,31 @@
+{
+  "b20a_exec": {
+    "reason": "c24a_absent",
+    "result": "NOT_VERIFIED"
+  },
+  "b20a_ready": {
+    "result": "PASS"
+  },
+  "b20a_search": {
+    "reason": "search_not_declared",
+    "result": "NOT_VERIFIED"
+  },
+  "claim_status": {
+    "value": "not_evaluated",
+    "why": "No authorized execution artifact exists; no scientific claim was evaluated."
+  },
+  "h4_gate": {
+    "value": "open",
+    "why": "H4 requires real positive TS/IRC/comparable-energy rows and the separate B20a-search row; none exist."
+  },
+  "incomplete_input_negative": {
+    "result": "PASS"
+  },
+  "rule": "result, claim_status and h4_gate are independent. A negative-only PASS cannot close H4; B20a-ready PASS is not B20a-exec or search capability.",
+  "scenario_result": {
+    "phase": "da-submit",
+    "reason": "c24a_absent",
+    "value": "NOT_VERIFIED"
+  },
+  "schema": "acp2.runtime.status-separation.v1"
+}

@@ -1,0 +1,22 @@
+{
+  "cases": [
+    {
+      "case_id": "missing-atom-mapping",
+      "dispatched": false,
+      "errors": [
+        "incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']",
+        "incomplete_scientific_input:unmapped_left:['ethene:et_h4']",
+        "incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']"
+      ],
+      "expected_error": "incomplete_scientific_input:atom_mapping_incomplete",
+      "fixture": "<acp2-dev>/data/b/fixtures/da/incomplete-input.json",
+      "fixture_sha256": "bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba",
+      "rejected_before_dispatch": true
+    }
+  ],
+  "dispatch_attempted": false,
+  "failures": [],
+  "result": "PASS",
+  "rule": "Incomplete scientific input is rejected by the deterministic input gate before any task/prepare/reservation/QC/bsub call.",
+  "schema": "acp2.b20a.incomplete-input-negative.v1"
+}

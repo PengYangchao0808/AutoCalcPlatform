@@ -774,7 +774,11 @@ def test_dependencies_merge_c_rows_and_record_the_a_gap(dependencies: dict[str, 
     assert rows[0]["reason"] == "blocked_fixture"
     assert rows[0]["expected_path"] == a_source["path"]
     edges = dependencies["consumer_edges"]
-    assert len(edges) == 5
+    assert len(edges) >= 5
+    ready_to_c24a = [
+        edge for edge in edges if edge["producer"] == "B20a-ready" and "T-34" in edge["consumer"]
+    ]
+    assert ready_to_c24a, "C T-34/C24a must gate on B20a-ready, not the whole B20a"
     node_ids = {node["id"] for node in dependencies["nodes"]}
     for edge in edges:
         assert edge["producer"] in node_ids

@@ -182,6 +182,19 @@
       "$ref": "#/$defs/platform",
       "description": "Ingest-only alias. Normalized to top-level platform references; a conflicting duplicate is rejected."
     },
+    "claim_status": {
+      "enum": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "description": "Scientific claim status, kept separate from the scenario result. A scenario PASS never implies a supported claim; a negative-honesty PASS leaves the claim inconclusive/refuted."
+    },
+    "h4_gate": {
+      "enum": ["open", "closed"],
+      "description": "H4 gate status, kept separate from both the scenario result and the scientific claim. Only real positive TS/IRC/comparable-energy rows plus the separate B20a-search row may close it."
+    },
     "extensions": {
       "$ref": "#/$defs/extensions"
     }

@@ -1,0 +1,112 @@
+{
+  "a_contracts": [
+    {
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+      "size_bytes": 15559
+    },
+    {
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+      "size_bytes": 12521
+    },
+    {
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+      "size_bytes": 18004
+    },
+    {
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+      "size_bytes": 14038
+    },
+    {
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+      "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
+      "size_bytes": 6035
+    },
+    {
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+      "size_bytes": 58068
+    }
+  ],
+  "base_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd",
+  "c_contracts": [
+    {
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
+      "sha256": "4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
+      "size_bytes": 16781
+    },
+    {
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+      "size_bytes": 9943
+    },
+    {
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
+      "sha256": "5818be3b6e86b62c4f0fb421186a567223727fb6e5a8266a6354dd3f501921c4",
+      "size_bytes": 10826
+    },
+    {
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+      "sha256": "79bb1c226a6f23af65eb1f2a1a4af27a3ea26dfead0299d40d4bd94ac9a8dd9d",
+      "size_bytes": 12558
+    }
+  ],
+  "candidate_label": "b20a-6e6ccf5c",
+  "candidate_revision": "sha256:6e6ccf5cdda3a37403eea2987383903301724e8e20b3370466fc9a2401f8958e",
+  "candidate_revision_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for the declared P2 overlay files",
+  "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+  "client_revision_status": "C HEAD read for P2 contracts; C24a approved submission is absent",
+  "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
+  "contract_version": "1.3.0",
+  "env_digest": "a9891b4783b867d6ba5e16e4a8f1db2608be3d2fee19fee830b5345696e788a0",
+  "env_path": "<acp2-dev>/data/b/acceptance-env.sh",
+  "frozen_p1_candidate": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "frozen_p1_candidate_modified": false,
+  "harness_revision": "9d291a18ec66e203c576057cd6612c3e8e126480abeb13825eb3b2efbbf96cc9",
+  "integration_worktree_touched": false,
+  "overlay_files": [
+    {
+      "path": "scripts/acceptance/acp2_runtime.py",
+      "sha256": "9d291a18ec66e203c576057cd6612c3e8e126480abeb13825eb3b2efbbf96cc9",
+      "size_bytes": 481920
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+      "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e",
+      "size_bytes": 11264
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+      "sha256": "7fcda6d28eb60f51cf11281fd7757786ae5d3f4332a7eb3f3a6fb71f316c3047",
+      "size_bytes": 65263
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "sha256": "f83a5736b0a191883e24032ce94294cea80c9703b622e7f0fc4300ba2a8181dd",
+      "size_bytes": 35588
+    },
+    {
+      "path": "tests/test_acp2_runtime_contracts.py",
+      "sha256": "ae4c75499930328e3e398f48cf9ef87292ddb682182b26d86bc9e9c5612f648d",
+      "size_bytes": 51575
+    }
+  ],
+  "schema": "acp2.b20a.p2-candidate.v1",
+  "server_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd",
+  "source_composition": {
+    "clean_tree": true,
+    "clean_tree_meaning": "the overlay contains only HEAD plus the declared B20 files; unrelated dirty working-tree changes are excluded",
+    "matches_running_working_tree": true,
+    "method": "git archive HEAD into <acp2-dev>/data/b/b20-candidate, then copy the declared B20 overlay files",
+    "overlay_root": "<acp2-dev>/data/b/b20-candidate"
+  },
+  "tested_matrix": {
+    "A-14-A-16": "read as P2 science contracts and ReactionSpec example",
+    "B00-B19a": "present in base revision",
+    "C-P2": "read-only proposal/research-record/operation-map/plan-identity contracts",
+    "C24a": "NOT_VERIFIED(c24a_absent)"
+  }
+}
