@@ -157,6 +157,37 @@ def _fixture(path: str | None) -> dict[str, Any]:
     return document
 
 
+_CANDIDATE_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def candidate_revision_from_release(release_dir: Path) -> tuple[str | None, str]:
+    """Return the installed release's source revision and where it came from.
+
+    The release manifest is produced by ``scripts/build_release.py`` from the
+    exact tree that became the wheels.  Its ``source.revision`` is therefore
+    the candidate identity, unlike the harness baseline constant.  Falls back
+    to the adjacent ``source.json`` for older release directories.
+    """
+    manifest_path = Path(release_dir) / "release-manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        manifest = {}
+    source = manifest.get("source") if isinstance(manifest, dict) else None
+    revision = source.get("revision") if isinstance(source, dict) else None
+    if isinstance(revision, str) and _CANDIDATE_REVISION_RE.fullmatch(revision):
+        return revision, "release_manifest.source.revision"
+    source_path = Path(release_dir) / "source.json"
+    try:
+        document = json.loads(source_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        document = {}
+    revision = document.get("source_revision") if isinstance(document, dict) else None
+    if isinstance(revision, str) and _CANDIDATE_REVISION_RE.fullmatch(revision):
+        return revision, "source.json.source_revision"
+    return None, "unavailable"
+
+
 def _run(
     argv: list[str],
     *,
@@ -528,6 +559,22 @@ def run_package_install(
         add("b25.release_manifest", "FAIL", f"unreadable manifest: {exc}")
         extensions["b25.reason"] = "release_manifest_unreadable"
         return EXIT_FAIL, assertions, extensions
+    candidate_revision, candidate_revision_source = candidate_revision_from_release(release_dir)
+    extensions["b25.candidate_revision"] = candidate_revision
+    extensions["b25.candidate_revision_source"] = candidate_revision_source
+    if candidate_revision is None:
+        add(
+            "b25.candidate_revision",
+            "FAIL",
+            "release manifest/source carries no 40-hex source revision",
+        )
+        extensions["b25.reason"] = "candidate_revision_unavailable"
+        return EXIT_FAIL, assertions, extensions
+    add(
+        "b25.candidate_revision",
+        "PASS",
+        f"{candidate_revision} from {candidate_revision_source}",
+    )
     digest_rows: list[dict[str, Any]] = []
     failing: list[str] = []
     for name, expected in sorted(manifest.get("artifacts", {}).items()):
@@ -822,7 +869,10 @@ print(json.dumps(facts))
     lab_root.mkdir(parents=True)
     scheduler_task = fixture.get("scheduler_task")
     scheduler_task = scheduler_task if isinstance(scheduler_task, dict) else None
-    lab_env = {"ACP_RUN_ROOT": str(lab_root)}
+    lab_env = {
+        "ACP_RUN_ROOT": str(lab_root),
+        "ACP_CANDIDATE_REVISION": str(candidate_revision),
+    }
     if scheduler_task is not None:
         orca_path = str(scheduler_task.get("orca_path") or "").strip()
         if orca_path:
@@ -876,6 +926,15 @@ print(json.dumps(facts))
             health["error"] = last_error
         _write_json(out_dir / "lab-health.json", health)
         artifact(out_dir / "lab-health.json")
+        health_revision = health.get("candidate_revision")
+        health_identity_ok = lab_ok and health_revision == candidate_revision
+        add(
+            "b25.health_candidate_revision",
+            "PASS" if health_identity_ok else "FAIL",
+            f"installed Lab health candidate_revision={health_revision!r}"
+            if lab_ok
+            else "installed Lab health unavailable",
+        )
         add(
             "b25.lab_server",
             "PASS" if lab_ok else "FAIL",
@@ -883,6 +942,9 @@ print(json.dumps(facts))
             if lab_ok
             else f"Lab server did not become healthy: {health.get('error')}",
         )
+        if lab_ok and not health_identity_ok:
+            extensions["b25.reason"] = "health_candidate_revision_mismatch"
+            return EXIT_FAIL, assertions, extensions
         if lab_ok:
             mcp_code = """
 import json, subprocess, sys

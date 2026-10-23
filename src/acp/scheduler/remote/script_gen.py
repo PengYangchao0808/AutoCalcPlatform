@@ -116,6 +116,9 @@ class LSFScriptSpec:
             before the CLI runs (after the exit-code traps).  Used for
             ``module load`` / environment setup on module-based clusters.
         extra_flags: Additional raw BSUB flags (e.g. ``"-R span[hosts=1]"``).
+        pythonpath_code_root: Add the release root itself to ``PYTHONPATH``.
+            True for an installed-wheel release (packages live at the
+            release root, no ``src`` layer); False for a source checkout.
     """
 
     job_name: str
@@ -129,6 +132,7 @@ class LSFScriptSpec:
     pre_cmds: list[str] = field(default_factory=list)
     extra_flags: str = ""
     mem_total_mb: int | None = None
+    pythonpath_code_root: bool = False
 
 
 # ── Allowed remote workflows ────────────────────────────────────────────
@@ -703,6 +707,7 @@ def build_lsf_script_spec(
     # Contract A: ``-J acp_<submission_id>`` (attempt-digested) replaces the
     # former ``acp_<job_id>`` name so reconcile can query it unambiguously.
     from acp.scheduler.remote.submission import submission_id_for
+    from acp.scheduler.remote.sync import _is_source_tree, _project_root
 
     lsf_spec = LSFScriptSpec(
         job_name=f"acp_{submission_id or submission_id_for(job_id, 1)}",
@@ -716,6 +721,7 @@ def build_lsf_script_spec(
         pre_cmds=list(pre_cmds or []),
         extra_flags=extra_flags,
         mem_total_mb=mem_to_mb(spec.resources["mem"]),
+        pythonpath_code_root=not _is_source_tree(_project_root()),
     )
     return lsf_spec, cli_command
 
@@ -751,9 +757,11 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         lines.append("")
         lines.append("# cluster.pre_cmds (module/environment setup)")
         lines.extend(s.pre_cmds)
+    lines += ["", f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"']
+    if s.pythonpath_code_root:
+        # Installed-wheel release: packages live at the release root.
+        lines.append(f'export PYTHONPATH="{s.remote_code_dir}:$PYTHONPATH"')
     lines += [
-        "",
-        f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"',
         f'cd "{s.remote_job_dir}"',
         cli_str,
         "echo $? > .exit_code",
