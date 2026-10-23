@@ -1,0 +1,16 @@
+{
+  "multitenant:authz": {
+    "exit": 0,
+    "result": "PASS",
+    "run": "multitenant-multitenant_authz-20261023T042439Z-1162404-c940dcf9.json"
+  },
+  "multitenant:two-project": {
+    "evidence": "two-project-not-verified/",
+    "exit": 2,
+    "owner": "B23",
+    "reason": "b23_not_implemented",
+    "result": "NOT_VERIFIED"
+  },
+  "rule": "B15 closes only the authz subset; the two-project phase remains NOT_VERIFIED until B23.",
+  "schema": "acp2.b15.exit-semantics.v1"
+}

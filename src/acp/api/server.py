@@ -34,6 +34,11 @@ from acp_services.workspace.boundary import (
     OriginPolicy,
     require_tier_capabilities,
 )
+from acp_services.workspace.http_identity import (
+    IdentityDenial,
+    MultiUserIdentity,
+    credential_from_headers,
+)
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
@@ -186,6 +191,32 @@ def _is_event_stream_request(request: Request) -> bool:
     return request.url.path.endswith("/events")
 
 
+_LOCAL_DENIAL = IdentityDenial("no_grant")
+_IDENTITY_EXEMPT_PATHS = frozenset(
+    {
+        "/",
+        "/index.html",
+        "/api/health",
+        "/api/status",
+        "/api/capabilities",
+        "/api/backends",
+        "/api/workflows",
+        "/openapi.json",
+        "/docs",
+        "/redoc",
+        "/favicon.ico",
+    }
+)
+_IDENTITY_EXEMPT_PREFIXES = ("/docs/", "/redoc/", "/assets/", "/static/")
+
+
+def _identity_exempt(path: str) -> bool:
+    """Discovery/static routes that must stay reachable without a credential."""
+    if path in _IDENTITY_EXEMPT_PATHS:
+        return True
+    return any(path.startswith(prefix) for prefix in _IDENTITY_EXEMPT_PREFIXES)
+
+
 def _maybe_configure_structured_logging() -> bool:
     """Opt the API process into structured JSON logging when configured.
 
@@ -266,6 +297,7 @@ def create_app(
         )
 
         server_identity = ServerIdentity.build(verified_project=resolve_server_project())
+        identity_boundary = MultiUserIdentity.from_environment(run_root_path)
         admission = build_local_admission(
             run_root_path / "acp_admission.db",
             verified_project=server_identity.verified_project,
@@ -284,6 +316,8 @@ def create_app(
         try:
             app.state.job_manager = manager
             app.state.server_identity = server_identity
+            app.state.identity_boundary = identity_boundary
+            app.state.identity_mode = identity_boundary.mode
             app.state.admission = admission
             app.state.db_path = str(manager.store.db_path)
             app.state.host = eff_host
@@ -300,6 +334,29 @@ def create_app(
         redoc_url="/redoc",
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def _api_key_identity(request: Request, call_next):
+        """Resolve the opt-in API-key principal before any task entry runs.
+
+        The default ``local-single`` mode never enters this branch.  A denied
+        credential returns one uniform 401 so revoked/expired/unknown keys and
+        missing keys are indistinguishable to a client.
+        """
+        boundary = getattr(app.state, "identity_boundary", None)
+        if boundary is None or not boundary.enabled:
+            return await call_next(request)
+        if _identity_exempt(request.url.path):
+            return await call_next(request)
+        credential = credential_from_headers(dict(request.headers))
+        resolved, denial = boundary.resolve(credential)
+        if denial is not None or resolved is None:
+            return JSONResponse(
+                status_code=denial.http_status if denial is not None else 401,
+                content={"detail": (denial or _LOCAL_DENIAL).to_dict()},
+            )
+        request.state.request_identity = resolved
+        return await call_next(request)
 
     @app.middleware("http")
     async def _local_single_boundary(request: Request, call_next):

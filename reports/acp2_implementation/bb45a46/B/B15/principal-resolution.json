@@ -1,0 +1,72 @@
+{
+  "forged_hint": {
+    "account_id": "acct_d4a87b63609fa017",
+    "actions": [
+      "read",
+      "write",
+      "control"
+    ],
+    "issuer": "local",
+    "key_id": "a5de4da9a3a9f061",
+    "key_project": "project_alpha",
+    "key_scope": "workspace",
+    "mode": "api-key",
+    "multi_tenant_security": "api-key-scoped",
+    "principal": {
+      "deployment_tier": "local-single",
+      "kind": "user",
+      "principal_id": "principal_b15_alice",
+      "roles": [
+        "member"
+      ],
+      "tenant_id": "acp-b15-multiuser"
+    },
+    "project_hint_policy": "narrow-only",
+    "schema_version": 1,
+    "subject": "principal_b15_alice",
+    "verified_project": "project_alpha"
+  },
+  "forged_hint_fields": [
+    "X-ACP-Project",
+    "X-ACP-Workspace",
+    "X-ACP-Tenant",
+    "X-ACP-Role",
+    "X-ACP-Roles"
+  ],
+  "forged_submit_status": 403,
+  "note": "A client project/workspace/tenant/role is not an identity input; the principal and project come from the API key and account rows.",
+  "resolved": {
+    "account_id": "acct_d4a87b63609fa017",
+    "actions": [
+      "read",
+      "write",
+      "control"
+    ],
+    "issuer": "local",
+    "key_id": "a5de4da9a3a9f061",
+    "key_project": "project_alpha",
+    "key_scope": "workspace",
+    "mode": "api-key",
+    "multi_tenant_security": "api-key-scoped",
+    "principal": {
+      "deployment_tier": "local-single",
+      "kind": "user",
+      "principal_id": "principal_b15_alice",
+      "roles": [
+        "member"
+      ],
+      "tenant_id": "acp-b15-multiuser"
+    },
+    "project_hint_policy": "narrow-only",
+    "schema_version": 1,
+    "subject": "principal_b15_alice",
+    "verified_project": "project_alpha"
+  },
+  "schema": "acp2.b15.principal-resolution.v1",
+  "unauthenticated": {
+    "missing": 401,
+    "same_body": true,
+    "unknown_key": 401
+  },
+  "unchanged": true
+}

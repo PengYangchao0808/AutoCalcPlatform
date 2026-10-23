@@ -1,0 +1,44 @@
+WARNING: run_root <acp2-dev>/data/b/run-root-b15 lives inside the ACP install tree (<acp2-dev>/data/b); keep data and code directories separate.
+run_root safety: run_root <acp2-dev>/data/b/run-root-b15 lives inside the ACP install tree (<acp2-dev>/data/b); keep data and code directories separate.
+INFO:     Started server process [1162171]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18775 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18775
+  Run root      : <acp2-dev>/data/b/run-root-b15
+  Poll interval : 1s
+  Docs (Swagger): http://127.0.0.1:18775/docs
+  Reload        : off
+
+INFO:     127.0.0.1:45398 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55806 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55812 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55828 - "GET /api/identity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55836 - "GET /api/identity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55850 - "GET /api/identity HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:55852 - "GET /api/identity HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:55854 - "GET /api/v1/jobs/b15-alpha-paused-v1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55856 - "GET /api/v1/jobs/b15-beta-paused-v1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55864 - "GET /api/v1/jobs/b15-alpha-paused-v1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55872 - "GET /api/v1/jobs/b15-does-not-exist HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55876 - "POST /api/v1/jobs/b15-alpha-paused-v1/cancel HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55884 - "POST /api/v1/jobs/b15-alpha-paused-v1/prepare HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55898 - "GET /api/v1/jobs/b15-beta-paused-v1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55914 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55920 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55928 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:55942 - "GET /api/identity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55952 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:55966 - "GET /api/v1/jobs/b15-beta-paused-v1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55968 - "GET /api/events/stream?scope=task&job_ids=b15-alpha-paused-v1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55984 - "GET /api/v1/jobs/b15-alpha-paused-v1 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:55986 - "GET /api/events/stream?scope=task&job_ids=b15-beta-paused-v1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53862 - "GET /api/v1/jobs/b15-beta-paused-v1 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53900 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53908 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53920 - "GET /api/identity HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53926 - "GET /api/capabilities HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1162171]

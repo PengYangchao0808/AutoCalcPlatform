@@ -4,7 +4,7 @@
   "frozen_at": "2026-10-23",
   "owner": "B",
   "status": "delivered",
-  "scope": "P1 control, artifact, idempotency and budget fields. P2 adds approval/budget accumulation in runtime/admission-approval.v1.json; this file stays the P1 subset. B12 freezes the ArtifactRef and the explicit prepare/read/analyze operation lifecycle.",
+  "scope": "P1 control, artifact, idempotency and budget fields. P2 adds approval/budget accumulation in runtime/admission-approval.v1.json; this file stays the P1 subset. B12 freezes the ArtifactRef and the explicit prepare/read/analyze operation lifecycle. B15 adds the stdio proxy identity binding/permission ceiling and the project-scoped API-key revocation semantics; local-single stays the default.",
   "control": {
     "commands": [
       "pause",
@@ -823,5 +823,54 @@
       }
     },
     "rule": "explicit-only and registry-gated; until A registers a capability handler exactly zero science is started and no task/prepare is created"
+  },
+  "stdio_identity": {
+    "owner": "B15",
+    "status": "delivered",
+    "local_single_default": true,
+    "multi_user_requires": "ACP_IDENTITY_MODE=api-key and a Controller-verified API key",
+    "binding": {
+      "identity_source": "GET /api/identity (server-resolved principal)",
+      "bound_fields": [
+        "principal_id",
+        "tenant_id",
+        "roles",
+        "verified_project",
+        "actions"
+      ],
+      "client_fields_ignored": [
+        "tenant_id",
+        "roles",
+        "kind",
+        "deployment_tier"
+      ],
+      "project_hint_policy": "narrow-only",
+      "shared_launch_allowed": false
+    },
+    "permission_ceiling": {
+      "actions": [
+        "read",
+        "write",
+        "control"
+      ],
+      "rule": "resolved_actions intersect key_actions intersect ceiling",
+      "never": [
+        "admin"
+      ],
+      "tool_arguments_are_identity": false
+    },
+    "remote_identity_providers": {
+      "oidc": {
+        "state": "unsupported"
+      },
+      "external_iam": {
+        "state": "unsupported"
+      }
+    },
+    "revocation": {
+      "key": "the next request and the next event-stream poll re-read the key row",
+      "account": "the account status is re-read, key refs are revoked and open streams are rechecked",
+      "cache_bypass": false
+    }
   }
 }

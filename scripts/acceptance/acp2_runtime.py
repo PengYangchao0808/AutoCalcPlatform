@@ -28,10 +28,12 @@ import json
 import os
 import queue
 import re
+import secrets
 import shlex
 import shutil
 import signal
 import socket
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -7510,6 +7512,703 @@ def _run_control_recovery(
     return exit_code, assertions, extensions
 
 
+B15_FIXTURE_SCHEMA = "acp2.multi-fixture.v1"
+B15_CREDENTIALS_SCHEMA = "acp2.multi-credentials.v1"
+B15_PERMISSION_CEILING = ("control", "read", "write")
+
+
+def _b15_password() -> str:
+    return "B15-" + secrets.token_urlsafe(18) + "!"
+
+
+def _b15_read_json(path: Path, default: Any = None) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return default
+
+
+def _b15_write_json(path: Path, document: Any, *, private: bool = False) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if private:
+        os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+    return path
+
+
+def _b15_assert(
+    name: str,
+    ok: bool,
+    detail: str,
+    *,
+    not_verified: bool = False,
+) -> dict[str, Any]:
+    status = "PASS" if ok else ("NOT_VERIFIED" if not_verified else "FAIL")
+    return {"name": name, "status": status, "detail": detail}
+
+
+def _b15_fixture(path: str) -> dict[str, Any]:
+    document = _b15_read_json(Path(path))
+    if not isinstance(document, dict) or document.get("schema") != B15_FIXTURE_SCHEMA:
+        raise ValueError(f"fixture is not {B15_FIXTURE_SCHEMA}")
+    identity = document.get("identity")
+    if not isinstance(identity, dict):
+        raise ValueError("fixture.identity is required")
+    for required_field in ("database", "credentials_file", "tenant_id"):
+        if not identity.get(required_field):
+            raise ValueError(f"fixture.identity.{required_field} is required")
+    if not identity.get("accounts") or not identity.get("keys"):
+        raise ValueError("fixture.identity.accounts/keys are required")
+    if not isinstance(document.get("scenario"), dict):
+        raise ValueError("fixture.scenario mapping is required")
+    return document
+
+
+def _b15_provision(fixture: Mapping[str, Any]) -> dict[str, Any]:
+    """Create/recover the fixture accounts and mint the project-scoped keys."""
+    from acp_services.workspace.identity_lifecycle import (
+        AccountStatus,
+        IdentityLifecycle,
+        IdentityLifecyclePolicy,
+    )
+    from acp_services.workspace.keys import ApiKeyManager
+
+    identity = fixture["identity"]
+    db_path = Path(str(identity["database"]))
+    credentials_path = Path(str(identity["credentials_file"]))
+    credentials = _b15_read_json(credentials_path, {}) or {}
+    if credentials.get("schema") != B15_CREDENTIALS_SCHEMA:
+        credentials = {"schema": B15_CREDENTIALS_SCHEMA, "keys": {}}
+    key_entries = credentials.setdefault("keys", {})
+
+    key_manager = ApiKeyManager(db_path)
+    policy = IdentityLifecyclePolicy(
+        deployment_tier="lab",
+        capabilities=("authentication", "isolation"),
+    )
+    lifecycle = IdentityLifecycle(db_path, policy=policy, key_manager=key_manager)
+
+    accounts: dict[str, Any] = {}
+    for spec in identity["accounts"]:
+        name = str(spec["name"])
+        account = lifecycle.get_account_by_login(str(spec["login_id"]))
+        if account is None:
+            invitation = lifecycle.invite_account(
+                principal_id=str(spec["principal_id"]),
+                login_id=str(spec["login_id"]),
+                roles=spec.get("roles") or ["member"],
+            )
+            account = lifecycle.accept_invitation(invitation.token, password=_b15_password())
+        elif account.status in {AccountStatus.REVOKED, AccountStatus.DISABLED}:
+            account = lifecycle.recover_account(
+                account.account_id, actor="b15-harness", reason="scenario rerun"
+            )
+        elif account.status == AccountStatus.INVITED:
+            raise ValueError(
+                f"account {spec['login_id']!r} is invited without a token; "
+                f"remove {db_path} and re-run"
+            )
+        accounts[name] = account
+
+    for spec in identity["keys"]:
+        name = str(spec["name"])
+        account = accounts[str(spec["account"])]
+        actions = tuple(str(action) for action in spec.get("actions") or ("read",))
+        project = spec.get("project")
+        entry = key_entries.get(name)
+        record = (
+            key_manager.get(str(entry["key_id"]))
+            if isinstance(entry, dict) and entry.get("key_id")
+            else None
+        )
+        matches = (
+            record is not None
+            and not record.revoked
+            and record.project == (None if project is None else str(project))
+            and tuple(record.actions) == actions
+        )
+        if not matches:
+            generated = lifecycle.issue_key(
+                account.account_id,
+                scope=str(spec.get("scope") or "workspace"),
+                actions=actions,
+                project=None if project is None else str(project),
+            )
+            key_entries[name] = {
+                "key_id": generated.key_id,
+                "key": generated.key,
+                "scope": generated.scope,
+                "project": generated.project,
+                "actions": list(generated.actions),
+            }
+    _b15_write_json(credentials_path, credentials, private=True)
+    return {
+        "accounts": accounts,
+        "credentials": credentials,
+        "key_manager": key_manager,
+        "lifecycle": lifecycle,
+        "database": str(db_path),
+        "credentials_file": str(credentials_path),
+    }
+
+
+def _b15_ensure_fixture_jobs(fixture: Mapping[str, Any], out_dir: Path) -> dict[str, Any]:
+    """Create the two paused project tasks and their project rows idempotently."""
+    from acp.scheduler.events import JobEventLog
+    from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+    from acp_services.store.layout import runtime_file
+    from acp_services.store.migrations import migrate
+    from acp_services.store.store import JobStore
+
+    run_root = Path(str(fixture["controller"]["run_root"]))
+    jobs_database = Path(
+        str(fixture["controller"].get("jobs_database") or run_root / "acp_jobs.db")
+    )
+    migrate(jobs_database)
+    store = JobStore(jobs_database)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(jobs_database))
+    try:
+        for project in fixture.get("projects") or []:
+            project_id = str(project["project_id"])
+            project_dir = run_root / "projects" / project_id
+            project_dir.mkdir(parents=True, exist_ok=True)
+            conn.execute(
+                """INSERT OR IGNORE INTO projects
+                       (project_id, name, description, tags, run_root, settings,
+                        created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    project_id,
+                    str(project.get("name") or project_id),
+                    str(project.get("description") or "B15 multitenant fixture"),
+                    "[]",
+                    str(project_dir),
+                    "{}",
+                    now,
+                    now,
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    created: list[str] = []
+    for spec in fixture.get("fixture_jobs") or []:
+        job_id = str(spec["job_id"])
+        if store.get(job_id) is not None:
+            continue
+        project_id = str(spec["project_id"])
+        work_dir = run_root / job_id
+        work_dir.mkdir(parents=True, exist_ok=True)
+        JobEventLog(runtime_file(work_dir, "events.jsonl")).append(
+            "job.paused",
+            idempotency_key=f"b15-fixture:{job_id}",
+            stage="paused",
+            project_id=project_id,
+        )
+        store.create(
+            JobRecord(
+                id=job_id,
+                spec=JobSpec(workflow="fake", name=job_id, project_id=project_id),
+                status=JobStatus.PAUSED,
+                work_dir=str(work_dir),
+                project_id=project_id,
+                group_id=job_id,
+            )
+        )
+        created.append(job_id)
+    return {
+        "created": created,
+        "jobs_database": str(jobs_database),
+        "run_root": str(run_root),
+    }
+
+
+def _b15_http(
+    base: str,
+    method: str,
+    path: str,
+    *,
+    key: str | None = None,
+    body: Any = None,
+    headers: Mapping[str, str] | None = None,
+    timeout: float = 10.0,
+) -> tuple[int, Any, bytes]:
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    request_headers = {"Accept": "application/json"}
+    if body is not None:
+        request_headers["Content-Type"] = "application/json"
+    if key:
+        request_headers["X-API-Key"] = key
+    request_headers.update(dict(headers or {}))
+    request = urllib.request.Request(base + path, data=data, method=method, headers=request_headers)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+            return int(response.status), _b15_decode(raw), raw
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        return int(exc.code), _b15_decode(raw), raw
+
+
+def _b15_decode(raw: bytes) -> Any:
+    if not raw:
+        return None
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
+def _b15_stream_revoke(
+    base: str,
+    key: str,
+    job_id: str,
+    revoke: Any,
+    *,
+    timeout: float,
+) -> dict[str, Any]:
+    """Open an SSE subscription, revoke mid-stream, and observe the stop."""
+    lines: list[str] = []
+    state = {"first_event": False, "reset": False, "error": None}
+    query = urllib.parse.urlencode({"scope": "task", "job_ids": job_id})
+    request = urllib.request.Request(
+        f"{base}/api/events/stream?{query}",
+        headers={"X-API-Key": key, "Accept": "text/event-stream"},
+    )
+
+    def reader() -> None:
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                for raw in response:
+                    line = raw.decode("utf-8", "replace").rstrip("\n")
+                    lines.append(line)
+                    if line.startswith("data:"):
+                        state["first_event"] = True
+                    if "permission_changed" in line:
+                        state["reset"] = True
+                        return
+        except (OSError, urllib.error.URLError, TimeoutError) as exc:
+            state["error"] = f"{type(exc).__name__}: {exc}"
+
+    thread = threading.Thread(target=reader, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline and not state["first_event"]:
+        if not thread.is_alive():
+            break
+        time.sleep(0.05)
+    received_before = bool(state["first_event"])
+    revoke()
+    thread.join(timeout=15.0)
+    return {
+        "received_event_before_revocation": received_before,
+        "permission_changed_after_revocation": bool(state["reset"]),
+        "stream_thread_stopped": not thread.is_alive(),
+        "line_count": len(lines),
+        "error": state["error"],
+    }
+
+
+def _run_multitenant_authz(
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B15 authorization subset: principal resolution, isolation and revocation."""
+    base = (controller or "").rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "control",
+        "acceptance.target": "local",
+        "b15.fixture": str(fixture_path),
+        "b15.controller": base,
+        "b15.revocation_semantics": {
+            "key": "next request and next stream poll re-read the key row",
+            "account": "account status + key revocation + stream re-check",
+        },
+    }
+    if not base:
+        return (
+            EXIT_NOT_VERIFIED,
+            [_b15_assert("b15.controller_required", False, "no controller", not_verified=True)],
+            {**extensions, "b15.reason": "missing_controller"},
+        )
+    try:
+        fixture = _b15_fixture(fixture_path)
+    except ValueError as exc:
+        return (
+            EXIT_NOT_VERIFIED,
+            [_b15_assert("b15.fixture_schema", False, str(exc), not_verified=True)],
+            {**extensions, "b15.reason": str(exc)},
+        )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        provisioned = _b15_provision(fixture)
+        jobs = _b15_ensure_fixture_jobs(fixture, out_dir)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        return (
+            EXIT_FAIL,
+            [_b15_assert("b15.fixture_provisioned", False, f"{type(exc).__name__}: {exc}")],
+            {**extensions, "b15.reason": f"fixture_provision_failed:{exc}"},
+        )
+
+    scenario = fixture["scenario"]
+    creds = provisioned["credentials"]["keys"]
+    accounts = provisioned["accounts"]
+    key_manager = provisioned["key_manager"]
+    lifecycle = provisioned["lifecycle"]
+
+    def key(name: str) -> str:
+        return str(creds[str(name)]["key"])
+
+    alpha_key_name = str(scenario["alpha_key"])
+    beta_key_name = str(scenario["beta_key"])
+    beta_read_key_name = str(scenario["beta_read_key"])
+    alpha_job = str(scenario["alpha_job"])
+    beta_job = str(scenario["beta_job"])
+    alpha_project = str(scenario["alpha_project"])
+    beta_project = str(scenario["beta_project"])
+    beta_account = str(accounts[str(scenario["beta_account"])].account_id)
+
+    status, capabilities, _ = _b15_http(base, "GET", "/api/capabilities", timeout=timeout)
+    mode = (capabilities or {}).get("identity_mode") if isinstance(capabilities, dict) else None
+    if status != 200 or mode != "api-key":
+        assertions.append(
+            _b15_assert(
+                "b15.identity_mode.api_key",
+                False,
+                f"capabilities status={status} identity_mode={mode!r}",
+                not_verified=True,
+            )
+        )
+        return (
+            EXIT_NOT_VERIFIED,
+            assertions,
+            {**extensions, "b15.reason": "identity_mode_not_api_key"},
+        )
+    assertions.append(_b15_assert("b15.identity_mode.api_key", True, str(mode)))
+    providers = (
+        capabilities.get("remote_identity_providers") if isinstance(capabilities, dict) else {}
+    )
+    unsupported = {
+        name: (providers.get(name) or {}).get("state") for name in ("oidc", "external_iam")
+    }
+    assertions.append(
+        _b15_assert(
+            "b15.identity_providers.unsupported",
+            unsupported == {"oidc": "unsupported", "external_iam": "unsupported"},
+            json.dumps(unsupported, sort_keys=True),
+        )
+    )
+    binding = capabilities.get("stdio_identity_binding") if isinstance(capabilities, dict) else {}
+    ceiling = tuple(sorted((binding or {}).get("permission_ceiling") or ()))
+    assertions.append(
+        _b15_assert(
+            "b15.stdio_identity.ceiling",
+            (binding or {}).get("shared_launch_allowed") is False
+            and ceiling == B15_PERMISSION_CEILING
+            and (binding or {}).get("tool_arguments_are_identity") is False,
+            json.dumps(binding, sort_keys=True),
+        )
+    )
+
+    _, alice_identity, _ = _b15_http(
+        base, "GET", "/api/identity", key=key(alpha_key_name), timeout=timeout
+    )
+    alice_principal = ((alice_identity or {}).get("principal") or {}).get("principal_id")
+    assertions.append(
+        _b15_assert(
+            "b15.principal.alice",
+            alice_principal == str(scenario["alpha_principal"])
+            and (alice_identity or {}).get("verified_project") == alpha_project,
+            json.dumps(alice_identity, sort_keys=True),
+        )
+    )
+    forged_headers = {
+        "X-ACP-Project": beta_project,
+        "X-ACP-Workspace": beta_project,
+        "X-ACP-Tenant": "forged-tenant",
+        "X-ACP-Role": "admin",
+        "X-ACP-Roles": "admin,operator",
+    }
+    _, forged_identity, _ = _b15_http(
+        base,
+        "GET",
+        "/api/identity",
+        key=key(alpha_key_name),
+        headers=forged_headers,
+        timeout=timeout,
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.principal.forged_hint_unchanged",
+            (forged_identity or {}).get("principal") == (alice_identity or {}).get("principal")
+            and (forged_identity or {}).get("verified_project") == alpha_project
+            and "admin" not in ((forged_identity or {}).get("principal") or {}).get("roles", []),
+            json.dumps(forged_identity, sort_keys=True),
+        )
+    )
+    status, unauthenticated, _ = _b15_http(base, "GET", "/api/identity", timeout=timeout)
+    status_unknown, unknown_body, _ = _b15_http(
+        base, "GET", "/api/identity", key="acpk_0000000000000000.invalid", timeout=timeout
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.principal.unauthenticated_non_disclosure",
+            status == 401
+            and status_unknown == 401
+            and (unauthenticated or {}).get("detail") == (unknown_body or {}).get("detail"),
+            json.dumps({"missing": status, "unknown_key": status_unknown}, sort_keys=True),
+        )
+    )
+
+    def status_of(
+        path: str, *, key_value: str | None, method: str = "GET", body: Any = None
+    ) -> tuple[int, Any]:
+        return _b15_http(base, method, path, key=key_value, body=body, timeout=timeout)[:2]
+
+    assertions.append(
+        _b15_assert(
+            "b15.read.alpha_own",
+            status_of(f"/api/v1/jobs/{alpha_job}", key_value=key(alpha_key_name))[0] == 200,
+            alpha_job,
+        )
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.read.beta_own",
+            status_of(f"/api/v1/jobs/{beta_job}", key_value=key(beta_key_name))[0] == 200,
+            beta_job,
+        )
+    )
+
+    bob_alpha_status, bob_alpha_body = status_of(
+        f"/api/v1/jobs/{alpha_job}", key_value=key(beta_key_name)
+    )
+    bob_missing_status, bob_missing_body = status_of(
+        "/api/v1/jobs/b15-does-not-exist", key_value=key(beta_key_name)
+    )
+    same_shape = (
+        bob_alpha_status == bob_missing_status == 404
+        and isinstance(bob_alpha_body, dict)
+        and isinstance(bob_missing_body, dict)
+        and set(bob_alpha_body) == set(bob_missing_body)
+        and "detail" in bob_alpha_body
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.cross_project.read_non_disclosure",
+            same_shape,
+            json.dumps(
+                {
+                    "cross": [bob_alpha_status, bob_alpha_body],
+                    "missing": [bob_missing_status, bob_missing_body],
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+    bob_cancel_status, _ = status_of(
+        f"/api/v1/jobs/{alpha_job}/cancel", key_value=key(beta_key_name), method="POST"
+    )
+    bob_prepare_status, _ = status_of(
+        f"/api/v1/jobs/{alpha_job}/prepare",
+        key_value=key(beta_key_name),
+        method="POST",
+        body={"purpose": "artifact", "artifact_id": "manifest"},
+    )
+    alice_beta_status, _ = status_of(f"/api/v1/jobs/{beta_job}", key_value=key(alpha_key_name))
+    assertions.append(
+        _b15_assert(
+            "b15.cross_project.control_prepare_denied",
+            bob_cancel_status == 404 and bob_prepare_status == 404 and alice_beta_status == 404,
+            json.dumps(
+                {
+                    "bob_cancel_alpha": bob_cancel_status,
+                    "bob_prepare_alpha": bob_prepare_status,
+                    "alice_read_beta": alice_beta_status,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    def listed_projects(key_value: str) -> tuple[int, set[str]]:
+        status_value, payload = status_of("/api/v1/jobs?limit=1000", key_value=key_value)
+        jobs_payload = (payload or {}).get("jobs") if isinstance(payload, dict) else None
+        projects = {
+            str(item.get("project_id")) for item in (jobs_payload or []) if isinstance(item, dict)
+        }
+        return status_value, projects
+
+    alice_list_status, alice_projects = listed_projects(key(alpha_key_name))
+    bob_list_status, bob_projects = listed_projects(key(beta_key_name))
+    assertions.append(
+        _b15_assert(
+            "b15.read.list_scoped",
+            alice_list_status == bob_list_status == 200
+            and alice_projects == {alpha_project}
+            and bob_projects == {beta_project},
+            json.dumps(
+                {
+                    "alice": sorted(alice_projects),
+                    "bob": sorted(bob_projects),
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    status_forged, _ = status_of(
+        "/api/v1/jobs",
+        key_value=key(alpha_key_name),
+        method="POST",
+        body={"workflow": "fake", "input": {"source": "C"}, "project_id": beta_project},
+    )
+    _, identity_after, _ = _b15_http(
+        base, "GET", "/api/identity", key=key(alpha_key_name), timeout=timeout
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.submit.forged_project_denied_principal_unchanged",
+            status_forged == 403
+            and (identity_after or {}).get("principal") == (alice_identity or {}).get("principal")
+            and (identity_after or {}).get("verified_project") == alpha_project,
+            json.dumps({"submit_status": status_forged}, sort_keys=True),
+        )
+    )
+    status_readonly_submit, _ = status_of(
+        "/api/v1/jobs",
+        key_value=key(beta_read_key_name),
+        method="POST",
+        body={"workflow": "fake", "input": {"source": "C"}, "project_id": beta_project},
+    )
+    status_readonly_read, _ = status_of(
+        f"/api/v1/jobs/{beta_job}", key_value=key(beta_read_key_name)
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.key.action_ceiling",
+            status_readonly_submit == 403 and status_readonly_read == 200,
+            json.dumps(
+                {"readonly_submit": status_readonly_submit, "readonly_read": status_readonly_read},
+                sort_keys=True,
+            ),
+        )
+    )
+
+    alice_stream = _b15_stream_revoke(
+        base,
+        key(alpha_key_name),
+        alpha_job,
+        lambda: key_manager.revoke(str(creds[alpha_key_name]["key_id"])),
+        timeout=timeout,
+    )
+    status_after_key_revoke, _ = status_of(
+        f"/api/v1/jobs/{alpha_job}", key_value=key(alpha_key_name)
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.revocation.key.read_and_stream",
+            alice_stream["received_event_before_revocation"]
+            and alice_stream["permission_changed_after_revocation"]
+            and alice_stream["stream_thread_stopped"]
+            and status_after_key_revoke == 401,
+            json.dumps(
+                {**alice_stream, "read_after_revoke": status_after_key_revoke}, sort_keys=True
+            ),
+        )
+    )
+
+    bob_stream = _b15_stream_revoke(
+        base,
+        key(beta_key_name),
+        beta_job,
+        lambda: lifecycle.revoke_account(beta_account, actor="b15-harness"),
+        timeout=timeout,
+    )
+    status_after_account_revoke, _ = status_of(
+        f"/api/v1/jobs/{beta_job}", key_value=key(beta_key_name)
+    )
+    assertions.append(
+        _b15_assert(
+            "b15.revocation.account.read_and_stream",
+            bob_stream["received_event_before_revocation"]
+            and bob_stream["permission_changed_after_revocation"]
+            and bob_stream["stream_thread_stopped"]
+            and status_after_account_revoke == 401,
+            json.dumps(
+                {**bob_stream, "read_after_revoke": status_after_account_revoke},
+                sort_keys=True,
+            ),
+        )
+    )
+
+    matrix = {
+        "schema": "acp2.b15.multitenant-authz.v1",
+        "identity_mode": mode,
+        "remote_identity_providers": providers,
+        "stdio_identity_binding": binding,
+        "principal": alice_identity,
+        "forged_hint_identity": forged_identity,
+        "cross_project": {
+            "bob_read_alpha": [bob_alpha_status, bob_alpha_body],
+            "bob_read_missing": [bob_missing_status, bob_missing_body],
+            "bob_cancel_alpha": bob_cancel_status,
+            "bob_prepare_alpha": bob_prepare_status,
+            "alice_read_beta": alice_beta_status,
+        },
+        "lists": {"alice": sorted(alice_projects), "bob": sorted(bob_projects)},
+        "revocation": {
+            "key": alice_stream,
+            "account": bob_stream,
+            "read_after_key_revoke": status_after_key_revoke,
+            "read_after_account_revoke": status_after_account_revoke,
+        },
+        "fixture_jobs": jobs,
+    }
+    matrix_path = _b15_write_json(out_dir / "multitenant-authz.json", matrix)
+    extensions["b15.matrix"] = matrix_path.name
+    extensions["b15.artifacts"] = [
+        {
+            "path": matrix_path.name,
+            "size_bytes": matrix_path.stat().st_size,
+            "sha256": sha256_file(matrix_path),
+        }
+    ]
+    extensions["b15.fixture_jobs"] = jobs
+    extensions["b15.accounts"] = {
+        name: {
+            "account_id": account.account_id,
+            "principal_id": account.principal_id,
+        }
+        for name, account in accounts.items()
+    }
+
+    failed = [item["name"] for item in assertions if item["status"] == "FAIL"]
+    not_verified = [item["name"] for item in assertions if item["status"] == "NOT_VERIFIED"]
+    if failed:
+        code = EXIT_FAIL
+        extensions["b15.reason"] = "assertion_failed:" + ",".join(failed)
+    elif not_verified:
+        code = EXIT_NOT_VERIFIED
+        extensions["b15.reason"] = "assertion_not_verified:" + ",".join(not_verified)
+    else:
+        code = EXIT_PASS
+    return (
+        code,
+        assertions,
+        extensions,
+    )
+
+
 def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
     if args.out:
         return str(Path(args.out).resolve())
@@ -7616,11 +8315,6 @@ def dry_run_commands(
     elif spec.scenario == "infra-plugin":
         commands.append(
             f"{shlex.quote(sys.executable)} scripts/build_release.py --check {shlex.quote(fixture)}"
-        )
-    elif spec.scenario == "multitenant":
-        commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task --controller "
-            f"{shlex.quote(controller)} query {shlex.quote(fixture)}"
         )
     elif spec.scenario == "migration":
         commands.append(f"{shlex.quote(sys.executable)} -m acp task export {shlex.quote(fixture)}")
@@ -7840,6 +8534,44 @@ def execute_scenario(
             return code_value
 
         handler = control_recovery
+    elif spec.scenario == "multitenant":
+        if phase_name != "multitenant:authz":
+
+            def multitenant_two_project(_ledger: CleanupLedger) -> int:
+                outcome["assertions"] = [
+                    {
+                        "name": "b23.multitenant_two_project",
+                        "status": "NOT_VERIFIED",
+                        "detail": (
+                            "the two-project execution matrix is owned by B23; "
+                            "B15 closes only multitenant:authz"
+                        ),
+                    }
+                ]
+                outcome["extensions"] = {
+                    "b23.owner": "B23",
+                    "b23.reason": "b23_not_implemented",
+                }
+                outcome["reason"] = "b23_not_implemented"
+                return EXIT_NOT_VERIFIED
+
+            handler = multitenant_two_project
+        else:
+
+            def multitenant(_ledger: CleanupLedger) -> int:
+                code_value, assertions, extensions = _run_multitenant_authz(
+                    args.controller,
+                    str(args.fixture),
+                    out_dir,
+                    timeout,
+                )
+                outcome["assertions"] = assertions
+                outcome["extensions"] = extensions
+                outcome["artifacts"] = extensions.get("b15.artifacts", [])
+                outcome["reason"] = extensions.get("b15.reason")
+                return code_value
+
+            handler = multitenant
     else:
         handler = _b01_stub_handler(spec)
 
@@ -7867,6 +8599,7 @@ def execute_scenario(
         "three-entry",
         "artifact",
         "control-recovery",
+        "multitenant",
     }:
         result = (
             "PASS"
@@ -7898,6 +8631,7 @@ def execute_scenario(
         "three-entry",
         "artifact",
         "control-recovery",
+        "multitenant",
     }:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -8197,7 +8931,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"usage error: unknown scenario {args.scenario!r}", file=sys.stderr)
         return EXIT_USAGE
 
-    phase_name = args.phase or "main"
+    if args.phase is None:
+        phase_name = "main" if "main" in spec.phases else next(iter(spec.phases))
+    else:
+        phase_name = args.phase
     if phase_name == "preflight":
         phase_name = "da-preflight"
     phase = spec.phases.get(phase_name)

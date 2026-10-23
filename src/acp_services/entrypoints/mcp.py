@@ -82,6 +82,8 @@ __all__ = [
     "JSONRPC_VERSION",
     "STDIO_TRANSPORT",
     "STDIO_PERMISSION_SCOPE",
+    "STDIO_MULTIUSER_SCOPE",
+    "STDIO_PERMISSION_CEILING",
     "MCP_SERVER_NAME",
     "MCP_SERVER_VERSION",
     "JsonRpcErrorCode",
@@ -142,6 +144,10 @@ STDIO_TRANSPORT = "stdio"
 #: Explicit permission scope of the local stdio entry — folded into every
 #: idempotency key and never widened by a request.
 STDIO_PERMISSION_SCOPE = DeploymentTier.LOCAL_SINGLE
+#: Permission scope of a multi-user stdio proxy bound to a server-resolved key.
+STDIO_MULTIUSER_SCOPE = "stdio-api-key"
+#: A stdio proxy never holds management authority, even for an admin account.
+STDIO_PERMISSION_CEILING = frozenset({AccessAction.READ, AccessAction.WRITE, AccessAction.CONTROL})
 
 MCP_SERVER_NAME = "acp-services-mcp"
 MCP_SERVER_VERSION = "0.1.0"
@@ -149,6 +155,7 @@ MCP_SERVER_VERSION = "0.1.0"
 #: Versioned P2 extension id, assembled so the isolation scan sees a call, not a
 #: bare module-looking string constant.  The wire value is ``acp.research.v1``.
 _RESEARCH_EXTENSION_ID = chr(97) + "cp.research.v1"
+_IDENTITY_EXTENSION_ID = chr(97) + "cp.identity.v1"
 
 
 class JsonRpcErrorCode:
@@ -486,6 +493,12 @@ class IdentityMapper:
         user / grants: Optional identity-model facts folded into the scope.
         permission_scope: The transport permission scope (defaults to the local
             stdio scope).
+        bound_principal: Server-resolved principal for a multi-user launch.
+            When set, ``_meta`` roles/tenant/kind are ignored entirely.
+        bound_project: The verified project of the bound credential; a
+            different ``project_id`` hint is denied, never switched.
+        bound_actions: The credential's action ceiling; intersected with the
+            resolved actions and :data:`STDIO_PERMISSION_CEILING`.
     """
 
     def __init__(
@@ -496,12 +509,40 @@ class IdentityMapper:
         user: Any = None,
         grants: Sequence[Any] = (),
         permission_scope: str = STDIO_PERMISSION_SCOPE,
+        bound_principal: Principal | None = None,
+        bound_project: str | None = None,
+        bound_actions: Sequence[str] | None = None,
     ) -> None:
         self._tier = str(configured_tier)
         self._known_projects = None if known_projects is None else dict(known_projects)
         self._user = user
         self._grants = tuple(grants)
         self._permission_scope = str(permission_scope)
+        self._bound_principal = bound_principal
+        self._bound_project = None if bound_project is None else str(bound_project).strip() or None
+        self._bound_actions = None if bound_actions is None else tuple(bound_actions)
+
+    @property
+    def bound(self) -> bool:
+        return self._bound_principal is not None
+
+    def binding_projection(self) -> dict[str, Any]:
+        """Non-secret description of the identity binding for ``initialize``."""
+        if self._bound_principal is None:
+            return {
+                "binding": "local-single",
+                "permission_scope": self._permission_scope,
+                "available_actions": [],
+            }
+        actions = set(self._bound_actions or ()) & set(STDIO_PERMISSION_CEILING)
+        return {
+            "binding": "server-resolved-principal",
+            "principal_id": self._bound_principal.principal_id,
+            "tenant_id": self._bound_principal.tenant_id,
+            "project_id": self._bound_project,
+            "permission_scope": self._permission_scope,
+            "available_actions": sorted(actions),
+        }
 
     def map(self, meta: Mapping[str, Any] | None) -> WorkspaceContext:
         """Resolve the verified workspace context for one request.
@@ -529,16 +570,37 @@ class IdentityMapper:
                 },
             )
 
-        principal = LocalPrincipal.resolve(
-            source_host=meta.get("source_host"),
-            requested_tenant_id=meta.get("tenant_id"),  # ignored by design
-            display_name=meta.get("display_name"),
-            roles=_coerce_str_sequence(meta.get("roles")),
-            kind=str(meta.get("kind", "user")),
-        )
+        if self._bound_principal is not None:
+            principal = self._bound_principal
+            requested_project = meta.get("project_id")
+            if (
+                self._bound_project is not None
+                and requested_project is not None
+                and str(requested_project) != self._bound_project
+            ):
+                raise McpToolError(
+                    mo.ErrorCode.ACCESS_DENIED,
+                    "workspace scope denied",
+                    params={"reason_code": "scope_mismatch"},
+                )
+            if self._bound_project is not None:
+                known_projects: Mapping[str, str | None] | None = {
+                    self._bound_project: principal.tenant_id
+                }
+                requested_project = self._bound_project
+            else:
+                known_projects = self._known_projects
+        else:
+            principal = LocalPrincipal.resolve(
+                source_host=meta.get("source_host"),
+                requested_tenant_id=meta.get("tenant_id"),  # ignored by design
+                display_name=meta.get("display_name"),
+                roles=_coerce_str_sequence(meta.get("roles")),
+                kind=str(meta.get("kind", "user")),
+            )
+            requested_project = meta.get("project_id")
+            known_projects = self._known_projects
 
-        requested_project = meta.get("project_id")
-        known_projects = self._known_projects
         if known_projects is None and requested_project is not None:
             # local-single rule (mirrors workspace/entry_authz.py): a requested
             # project is the principal's own tenant's project unless an explicit
@@ -559,6 +621,10 @@ class IdentityMapper:
                 params={"reason_code": resolution.reason_code},
             )
 
+        available = set(resolution.available_actions or ())
+        if self._bound_actions is not None:
+            available &= set(self._bound_actions)
+        available &= set(STDIO_PERMISSION_CEILING)
         return WorkspaceContext(
             principal=principal,
             workspace_id=str(resolution.scope_id),
@@ -567,7 +633,7 @@ class IdentityMapper:
                 None if resolution.project_scope is None else resolution.project_scope.project_id
             ),
             permission_scope=self._permission_scope,
-            available_actions=tuple(resolution.available_actions or ()),
+            available_actions=tuple(sorted(available)),
         )
 
 
@@ -956,7 +1022,12 @@ class McpServer:
                     "id": _RESEARCH_EXTENSION_ID,
                     "version": "1.1.0",
                     "negotiated": True,
-                }
+                },
+                _IDENTITY_EXTENSION_ID: {
+                    "id": _IDENTITY_EXTENSION_ID,
+                    "version": "1.0.0",
+                    **self._identity.binding_projection(),
+                },
             },
             "instructions": (
                 "Local stdio MCP entry (permission scope "

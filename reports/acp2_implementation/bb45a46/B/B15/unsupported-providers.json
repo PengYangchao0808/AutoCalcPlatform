@@ -1,0 +1,14 @@
+{
+  "claim": "Only local-single and project-scoped API keys are enforced; OIDC/external IAM are reported unsupported.",
+  "remote_identity_providers": {
+    "external_iam": {
+      "reason": "External IAM/federation is not implemented; enforced modes are local-single and project-scoped API keys.",
+      "state": "unsupported"
+    },
+    "oidc": {
+      "reason": "OIDC/SSO is not implemented in this iteration: no identity dependency is approved (component manifest: pwdlib/Authlib/PyCasbin/Keycloak are all candidate, approved=0). Capability reports must report OIDC as NOT available.",
+      "state": "unsupported"
+    }
+  },
+  "schema": "acp2.b15.unsupported-providers.v1"
+}

@@ -25,7 +25,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
-from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import ValidationError
 from rdkit import Chem
@@ -270,7 +280,43 @@ UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+
+def _job_path_authorization(request: Request) -> None:
+    """Scope every ``/jobs/{job_id}/...`` route to the verified project.
+
+    Endpoint-specific checks still decide the exact action; this router-level
+    gate exists so a newly added job sub-route cannot silently bypass B15's
+    project isolation.  It is inert in the default ``local-single`` mode.
+    """
+    job_id = request.path_params.get("job_id")
+    if not job_id:
+        return
+    resolved = getattr(request.state, "request_identity", None)
+    manager = getattr(request.app.state, "job_manager", None)
+    if resolved is None or manager is None:
+        return
+    record = manager.get(str(job_id))
+    if record is None:
+        return
+    path = request.url.path
+    if request.method in {"GET", "HEAD"}:
+        action = _AccessAction.READ
+    elif path.endswith(("/pause", "/unpause", "/continue", "/cancel", "/rerun")):
+        action = _AccessAction.CONTROL
+    elif request.method == "DELETE":
+        action = _AccessAction.CONTROL
+    else:
+        action = _AccessAction.WRITE
+    decision = resolved.server_identity.authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=action,
+        job_id=str(job_id),
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+
+router = APIRouter(dependencies=[Depends(_job_path_authorization)])
 
 _ENRICHMENT_CACHE_LIMIT: Final = 256
 _ENRICHMENT_CACHE: OrderedDict[tuple[str, int | None, int | None, bool], dict[str, Any]] = (
@@ -327,6 +373,9 @@ def _entry_authorizer(request: Request) -> Any:
     """
     from acp_services.workspace.entry_authz import default_entry_authorizer
 
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return resolved.entry_authorizer
     authorizer = getattr(request.app.state, "entry_authorizer", None)
     return authorizer if authorizer is not None else default_entry_authorizer()
 
@@ -369,6 +418,20 @@ def _require_entry_access(
         resource_id=resource_id,
     )
     if not decision.allowed:
+        from acp_services.workspace.entry_authz import EntryReasonCode
+
+        if (
+            job_id
+            and getattr(request.state, "request_identity", None) is not None
+            and str(decision.reason_code)
+            in {
+                EntryReasonCode.NO_GRANT,
+                EntryReasonCode.SCOPE_MISMATCH,
+            }
+        ):
+            # A job outside the verified project must look exactly like an
+            # unknown job; the 403 shape would confirm that the task exists.
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
         raise HTTPException(status_code=decision.http_status, detail=decision.error_detail())
 
 
@@ -379,6 +442,9 @@ def _server_identity(request: Request) -> Any:
     process environment.  A project hint is handled by the returned object and
     can only narrow the verified scope.
     """
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return resolved.server_identity
     identity = getattr(request.app.state, "server_identity", None)
     if identity is not None:
         return identity
@@ -437,6 +503,31 @@ def _require_job_scope_access(
     if not decision.allowed:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return record
+
+
+def _scoped_read_project(request: Request, requested: str | None) -> str | None:
+    """Narrow a read ``project_id`` hint to the verified credential project.
+
+    In the default local-single mode this returns *requested* unchanged.  In
+    API-key mode a key scoped to one project can never read another project's
+    listing: a different hint is a not-found (same shape as an unknown project).
+    """
+    from acp_services.workspace.http_identity import scoped_project
+
+    resolved = getattr(request.state, "request_identity", None)
+    try:
+        return scoped_project(resolved, requested)
+    except PermissionError as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
+
+
+def _require_project_scope(request: Request, project_id: str) -> None:
+    """Deny a project-scoped entry outside the credential's verified project."""
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is None or resolved.verified_project is None:
+        return
+    if str(project_id) != resolved.verified_project:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
 
 def _admission_http_error(decision: Any) -> HTTPException:
@@ -1229,9 +1320,12 @@ def get_protocols() -> ProtocolsResponse:
 @router.get("/projects", response_model=ProjectListResponse)
 def list_projects(request: Request) -> ProjectListResponse:
     manager = _manager(request)
-    return ProjectListResponse(
-        projects=[_project_to_model(project) for project in manager.projects.list_projects()]
-    )
+    resolved = getattr(request.state, "request_identity", None)
+    verified = None if resolved is None else resolved.verified_project
+    projects = manager.projects.list_projects()
+    if verified is not None:
+        projects = [project for project in projects if str(project.get("project_id")) == verified]
+    return ProjectListResponse(projects=[_project_to_model(project) for project in projects])
 
 
 @router.post("/projects", response_model=ProjectModel, status_code=201)
@@ -1251,6 +1345,7 @@ def create_project(req: ProjectCreateRequest, request: Request) -> ProjectModel:
 
 @router.get("/projects/{project_id}", response_model=ProjectModel)
 def get_project(project_id: str, request: Request) -> ProjectModel:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     project = manager.projects.get_project(project_id)
     if project is None:
@@ -1264,6 +1359,7 @@ def update_project(
     req: ProjectUpdateRequest,
     request: Request,
 ) -> ProjectModel:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     try:
         project = manager.projects.update_project(project_id, **_model_payload(req))
@@ -1280,6 +1376,7 @@ def delete_project(
     request: Request,
     delete_data: bool = Query(default=False),
 ) -> JSONResponse:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     try:
         deleted = manager.delete_project(project_id, delete_data=delete_data)
@@ -1297,6 +1394,7 @@ def list_project_jobs(
     status: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     project = manager.projects.get_project(project_id)
     if project is None:
@@ -2593,6 +2691,7 @@ def list_jobs(
 ) -> V1JobListResponse:
     store = _job_store(request)
     manager = _manager(request)
+    project_id = _scoped_read_project(request, project_id)
     if project_id:
         enriched = store.list_enriched(limit=limit, project_id=project_id)
         if status is not None:

@@ -1,0 +1,57 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "the two-project execution matrix is owned by B23; B15 closes only multitenant:authz",
+      "name": "b23.multitenant_two_project",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "2bbe0be70064dcbced3357245f0e82413329b3cf196186493a5d058604fda083",
+    "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c"
+  },
+  "candidate_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "command": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "multitenant",
+    "--phase",
+    "multitenant:two-project",
+    "--controller",
+    "http://127.0.0.1:18775",
+    "--fixture",
+    "<acp2-dev>/data/b/fixtures/multi.json",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B15/two-project-not-verified"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "<repo>",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "b23.owner": "B23",
+    "b23.reason": "b23_not_implemented"
+  },
+  "finished_at": "2026-10-23T04:24:53Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "multitenant:two-project",
+  "reason": "b23_not_implemented",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261023T042453Z-1162665-1dd74a95",
+  "scenario": "multitenant",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T04:24:53Z",
+  "submission_id": null,
+  "usage": null
+}

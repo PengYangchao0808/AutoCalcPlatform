@@ -1956,8 +1956,14 @@ class IdentityLifecycle:
         *,
         account_id: str,
         timestamp: str,
-    ) -> int:
-        """Revoke every live session + key ref for the account (immediate)."""
+    ) -> list[str]:
+        """Mark every live session + key ref revoked; return the key ids.
+
+        The caller revokes the key-manager rows **after** this transaction
+        commits.  Nesting a second write connection on the same SQLite file
+        inside this write transaction deadlocks (``database is locked``), which
+        is exactly the single-database deployment B15 must support.
+        """
         conn.execute(
             """UPDATE identity_sessions SET revoked_at=?
                WHERE account_id=? AND revoked_at IS NULL""",
@@ -1973,12 +1979,7 @@ class IdentityLifecycle:
                WHERE account_id=? AND revoked_at IS NULL""",
             (timestamp, account_id),
         )
-        revoked = 0
-        for ref in refs:
-            key_id = str(ref["key_id"])
-            if self._key_manager is not None and self._key_manager.revoke(key_id, now=None):
-                revoked += 1
-        return revoked
+        return [str(ref["key_id"]) for ref in refs]
 
     # -- disable / revoke / recover ----------------------------------------
 
@@ -2038,7 +2039,7 @@ class IdentityLifecycle:
                         WHERE account_id=?""",
                     (target, timestamp, timestamp, account_id),
                 )
-                revoked = self._revoke_credentials(
+                key_ids = self._revoke_credentials(
                     conn,
                     account_id=account_id,
                     timestamp=timestamp,
@@ -2058,6 +2059,12 @@ class IdentityLifecycle:
                 updated = self._get_account(conn, account_id)
             finally:
                 conn.close()
+
+        revoked = 0
+        if self._key_manager is not None:
+            for key_id in key_ids:
+                if self._key_manager.revoke(key_id, now=None):
+                    revoked += 1
 
         # Terminate live event streams outside the DB transaction (immediate
         # effect on EXISTING streams, not only new connections).
@@ -2225,11 +2232,17 @@ class IdentityLifecycle:
         *,
         tenant_id: str | None = None,
         kind: str = PrincipalKind.USER,
+        deployment_tier: str | None = None,
     ) -> Principal:
         """Build a :class:`Principal` from an account for use with ``resolve_scope``.
 
         Roles come from the account only — the tier never contributes a role
         (mirrors ``contracts.access.tier_roles`` returning ``()``).
+
+        ``deployment_tier`` overrides the *policy* tier for the resolved
+        principal.  B15 uses it so an opt-in ``api-key`` **identity mode** can
+        enforce project-scoped credentials while the deployment tier remains the
+        explicit ``local-single`` default (the two axes are never collapsed).
         """
         account = self.get_account(account_id)
         if account is None:
@@ -2239,8 +2252,33 @@ class IdentityLifecycle:
             kind=str(kind),
             tenant_id=tenant_id or account.principal_id,
             roles=account.roles,
-            deployment_tier=self._policy.deployment_tier,
+            deployment_tier=str(deployment_tier or self._policy.deployment_tier),
         )
+
+    def account_for_key(self, key_id: str) -> AccountRecord | None:
+        """Return the ACTIVE/disabled/revoked account a live key reference belongs to.
+
+        This is the reverse of :meth:`issue_key`/:meth:`register_key_ref`: a key
+        that was never registered to an account has no principal and is denied.
+        Revoked credential references are ignored so a re-issued key id can never
+        inherit an old account binding.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    """SELECT account_id FROM identity_credential_refs
+                       WHERE key_id=? AND revoked_at IS NULL
+                       ORDER BY created_at DESC LIMIT 1""",
+                    (str(key_id),),
+                ).fetchone()
+                if row is None:
+                    return None
+                account_id = str(row["account_id"])
+                account_row = self._find_by_id(conn, account_id)
+                return None if account_row is None else _row_to_account(account_row)
+            finally:
+                conn.close()
 
     # -- reads --------------------------------------------------------------
 
