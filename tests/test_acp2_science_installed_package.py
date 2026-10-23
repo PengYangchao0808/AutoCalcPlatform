@@ -685,3 +685,163 @@ else:
 
 print(json.dumps(payload, sort_keys=True))
 """
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Documented examples (A-28): run only from the installed wheel
+# ═══════════════════════════════════════════════════════════════════════
+
+DOCUMENTED_EXAMPLE_FILES = (
+    "singlepoint_public_api.py",
+    "compile_recipe.py",
+    "read_report.py",
+    "external_plugin.py",
+)
+DOCUMENTED_EXAMPLE_MARKERS = {
+    "singlepoint_public_api.py": '"preflight_outcome": "ready"',
+    "compile_recipe.py": '"canonical_json_equal": true',
+    "read_report.py": '"overall_claim_status":',
+    "external_plugin.py": '"auto_enabled": false',
+}
+DOCUMENTED_EXAMPLE_INPUTS = {
+    "read_report.py": (
+        "supported_valid.json",
+        "tests/fixtures/acp2/science/contracts/evidence/supported_valid.json",
+    ),
+    "external_plugin.py": (
+        "cccp_science_plugin.json",
+        "tests/fixtures/acp2/science/external_plugin/cccp_science_plugin.json",
+    ),
+}
+DOCUMENTED_EXAMPLE_DIR = SCIENCE / "examples"
+
+
+def _example_env(installed_probe: dict[str, Any]) -> dict[str, str]:
+    entries = tuple(Path(entry) for entry in installed_probe["pythonpath_entries"])
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    env.pop("PYTHONHOME", None)
+    env["PYTHONPATH"] = os.pathsep.join(str(entry) for entry in entries)
+    return env
+
+
+def _copy_documented_examples(destination: Path) -> Path:
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in DOCUMENTED_EXAMPLE_FILES:
+        shutil.copyfile(DOCUMENTED_EXAMPLE_DIR / name, destination / name)
+    return destination
+
+
+def _copy_example_input(name: str, relative: str, destination: Path) -> Path:
+    source = REPO / relative
+    assert source.is_file(), f"example input is missing: {source}"
+    target = destination / name
+    shutil.copyfile(source, target)
+    return target
+
+
+def _run_documented_example(
+    installed_probe: dict[str, Any],
+    work: Path,
+    name: str,
+    extra_args: list[str],
+) -> subprocess.CompletedProcess[str]:
+    env = _example_env(installed_probe)
+    assert SOURCE_TREE not in env["PYTHONPATH"]
+    return subprocess.run(
+        [installed_probe["clean_interpreter"], str(work / name), *extra_args],
+        cwd=str(work),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+
+
+def test_documented_examples_have_a_help_path(
+    installed_probe: dict[str, Any], tmp_path: Path
+) -> None:
+    work = _copy_documented_examples(tmp_path / "examples")
+    for name in DOCUMENTED_EXAMPLE_FILES:
+        completed = _run_documented_example(installed_probe, work, name, ["--help"])
+        assert completed.returncode == 0, f"{name} --help failed: {completed.stderr}"
+        assert "usage:" in completed.stdout.lower(), f"{name} printed no usage line"
+
+
+def test_documented_examples_run_from_the_installed_wheel(
+    installed_probe: dict[str, Any], tmp_path: Path
+) -> None:
+    work = _copy_documented_examples(tmp_path / "examples")
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    input_paths = {
+        local: _copy_example_input(local, relative, inputs)
+        for local, relative in DOCUMENTED_EXAMPLE_INPUTS.values()
+    }
+    invocations = {
+        "singlepoint_public_api.py": [],
+        "compile_recipe.py": [],
+        "read_report.py": ["--report", str(input_paths["supported_valid.json"])],
+        "external_plugin.py": ["--manifest", str(input_paths["cccp_science_plugin.json"])],
+    }
+    for name in DOCUMENTED_EXAMPLE_FILES:
+        completed = _run_documented_example(installed_probe, work, name, invocations[name])
+        assert completed.returncode == 0, (
+            f"{name} failed in the clean interpreter\n"
+            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+        )
+        assert DOCUMENTED_EXAMPLE_MARKERS[name] in completed.stdout, (
+            f"{name} did not print {DOCUMENTED_EXAMPLE_MARKERS[name]!r}"
+        )
+        assert "Traceback" not in completed.stderr
+        print(f"documented example {name}: exit 0, marker {DOCUMENTED_EXAMPLE_MARKERS[name]}")
+
+
+def test_documented_examples_source_has_no_repo_or_placeholder_paths() -> None:
+    forbidden = ("/ACPServer", "/home/", "/tmp/")
+    for name in DOCUMENTED_EXAMPLE_FILES:
+        text = (DOCUMENTED_EXAMPLE_DIR / name).read_text(encoding="utf-8")
+        for token in forbidden:
+            assert token not in text, f"{name} contains a placeholder/external path: {token}"
+        assert "python -m cccp" not in text
+        assert "import acp" not in text and "import acp_services" not in text
+        print(f"documented example {name}: no placeholder path, no platform import")
+
+
+def test_documented_examples_fail_when_a_dependency_is_missing(
+    installed_probe: dict[str, Any], tmp_path: Path
+) -> None:
+    work = _copy_documented_examples(tmp_path / "examples")
+    originals = {
+        name: hashlib.sha256((work / name).read_bytes()).hexdigest()
+        for name in DOCUMENTED_EXAMPLE_FILES
+    }
+    mutated = work / "mutated_example.py"
+    mutated.write_text(
+        "import not_installed_module\n"
+        "from cccp.calculation.capabilities.builtin import builtin_registry\n"
+        "print(builtin_registry().capability_ids)\n",
+        encoding="utf-8",
+    )
+    env = _example_env(installed_probe)
+    completed = subprocess.run(
+        [installed_probe["clean_interpreter"], str(mutated)],
+        cwd=str(work),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert completed.returncode != 0, "an unimportable dependency must fail the example"
+    assert "ModuleNotFoundError" in completed.stderr, completed.stderr
+    assert "not_installed_module" in completed.stderr
+    print(f"failure QA: mutated example exits {completed.returncode} with ModuleNotFoundError")
+
+    mutated.unlink()
+    for name in DOCUMENTED_EXAMPLE_FILES:
+        restored = hashlib.sha256((work / name).read_bytes()).hexdigest()
+        assert restored == originals[name], f"{name} changed during the failure probe"
+    rerun = _run_documented_example(installed_probe, work, "singlepoint_public_api.py", [])
+    assert rerun.returncode == 0, f"restored example must pass: {rerun.stderr}"
+    print("failure QA: original examples restored byte-identical and green")
