@@ -1,0 +1,38 @@
+{
+  "active_version": "1.1.0",
+  "discovered": [
+    "acp.storage.inventory@1.0.0",
+    "acp.storage.inventory@1.1.0"
+  ],
+  "discovery_executed_entrypoint": false,
+  "installed": [
+    "acp.storage.inventory@1.0.0:False",
+    "acp.storage.inventory@1.1.0:True",
+    "platform.identity.local@1.0.0:True",
+    "platform.scheduler.local@1.0.0:True",
+    "platform.scheduler.lsf@1.0.0:True",
+    "platform.storage.local@1.0.0:True",
+    "platform.transfer.local@1.0.0:True"
+  ],
+  "local_regression_not_applicable": true,
+  "ok": true,
+  "old_freeze_version": [
+    "1.0.0"
+  ],
+  "old_task_frozen_version": [
+    "1.0.0"
+  ],
+  "plugin_root": "/tmp/opencode/b26a-clean/plugins/b21",
+  "rejected_codes": [
+    [
+      "adapter_isolation_claim_rejected",
+      "storage-isolation-claim-1.0.0"
+    ],
+    [
+      "science_capability_forbidden",
+      "storage-science-1.0.0"
+    ]
+  ],
+  "schema": "acp2.b26a.plugin-install.v1",
+  "state_root": "/tmp/opencode/b26a-clean/data/plugin-state-b26a"
+}

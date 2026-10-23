@@ -1,0 +1,69 @@
+{
+  "cccp": {
+    "cwd": "/tmp/opencode/b26a-clean/evidence/package-install",
+    "exit": 0,
+    "forbidden": {
+      "acp": true,
+      "acp_services": true,
+      "fastapi": true
+    },
+    "forbidden_absent": true,
+    "modules": {
+      "cccp": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/cccp/lib64/python3.11/site-packages/cccp/__init__.py"
+    },
+    "python": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/cccp/bin/python",
+    "role": "cccp",
+    "site_packages": true,
+    "version": "0.3.0",
+    "version_ok": true
+  },
+  "root": {
+    "cwd": "/tmp/opencode/b26a-clean/evidence/package-install",
+    "exit": 0,
+    "forbidden": {},
+    "forbidden_absent": true,
+    "modules": {
+      "acp": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/root/lib64/python3.11/site-packages/acp/__init__.py",
+      "acp_services": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/root/lib64/python3.11/site-packages/acp_services/__init__.py",
+      "cccp": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/root/lib64/python3.11/site-packages/cccp/__init__.py"
+    },
+    "python": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/root/bin/python",
+    "role": "root",
+    "site_packages": true,
+    "version": "0.3.0",
+    "version_ok": true
+  },
+  "web": {
+    "cwd": "/tmp/opencode/b26a-clean/evidence/package-install",
+    "exit": 0,
+    "forbidden": {},
+    "forbidden_absent": true,
+    "modules": {
+      "acp": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+      "acp_services": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
+      "acp_web_assets": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web/lib64/python3.11/site-packages/acp_web_assets/__init__.py"
+    },
+    "python": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web/bin/python",
+    "role": "web",
+    "site_packages": true,
+    "version": "0.3.0",
+    "version_ok": true
+  },
+  "worker": {
+    "cwd": "/tmp/opencode/b26a-clean/evidence/package-install",
+    "exit": 0,
+    "forbidden": {
+      "acp": true,
+      "fastapi": true
+    },
+    "forbidden_absent": true,
+    "modules": {
+      "acp_services": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/worker/lib64/python3.11/site-packages/acp_services/__init__.py"
+    },
+    "python": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/worker/bin/python",
+    "role": "worker",
+    "site_packages": true,
+    "version": "0.3.0",
+    "version_ok": true
+  }
+}

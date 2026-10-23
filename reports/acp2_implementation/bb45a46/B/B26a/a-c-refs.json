@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-10-23T13:51:12.675883+00:00",
+  "note": "Raw facts are referenced, not re-signed. A owns science; C owns experience. B only records presence/absence and raw exit/result fields.",
+  "rows": [
+    {
+      "id": "A-27b",
+      "note": "Raw evidence present at the registered B25 path; B does not re-sign A science.",
+      "owner": "A",
+      "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+      "present": true,
+      "raw_facts": {
+        "acceptance_focus_exit_code": 0,
+        "acceptance_focus_result": "20 passed in 4.21s",
+        "base_commit": "1a1b595",
+        "branch": "acp2/a-science",
+        "science_suite_exit_code": 0,
+        "science_suite_result": "617 passed in 22.75s"
+      },
+      "signed_by_b": false,
+      "status": "PASS"
+    },
+    {
+      "id": "A-28",
+      "note": "Raw evidence present; A-28 PASS was on 0.2.0 per inherited B25b context. B does not re-sign.",
+      "owner": "A",
+      "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+      "present": true,
+      "raw_facts": {
+        "adversarial_probes": 6,
+        "branch": "acp2/a-science",
+        "changed_files": 7
+      },
+      "signed_by_b": false,
+      "status": "PASS"
+    },
+    {
+      "id": "C33",
+      "note": "Other C evidence roots exist, but the registered C33 path is absent; no C install sign-off is claimed.",
+      "owner": "C",
+      "path": "<acp2-dev>/evidence/C/clean-install-live",
+      "present": false,
+      "reason": "registered_path_absent",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "id": "C34",
+      "note": "Registered path absent; no C operator-runbook sign-off is claimed.",
+      "owner": "C",
+      "path": "<acp2-dev>/evidence/C/operator-runbook-live",
+      "present": false,
+      "reason": "registered_path_absent",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "id": "C35",
+      "note": "C35 is authored against B25a and is not a B26a prerequisite; no C35 was fabricated or re-signed.",
+      "owner": "C",
+      "status": "NOT_REQUIRED"
+    },
+    {
+      "id": "C-static-assets",
+      "note": "No static-asset mount was fabricated.",
+      "owner": "C",
+      "path": "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+      "present": false,
+      "status": "NOT_VERIFIED(c_static_assets_absent)"
+    }
+  ],
+  "schema": "acp2.b26a.a-c-refs.v1"
+}

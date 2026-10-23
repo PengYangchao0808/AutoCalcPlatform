@@ -1,0 +1,11 @@
+executables:
+  xtb:
+    path: /home/<user>/xtb-dist/bin/xtb
+cluster:
+  enabled: false
+  execution_mode: local
+  type: local
+  nodes: []
+resources:
+  nproc: 2
+  mem: "2GB"

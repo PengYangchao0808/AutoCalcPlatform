@@ -1,0 +1,63 @@
+{
+  "generated_at": "2026-10-23T13:51:01.479067+00:00",
+  "independent_operator": false,
+  "independent_operator_statement": "false (same agent/session)",
+  "limitations": [
+    "All rows are same-agent/self-reproduction; an independent operator must rerun the same commands.",
+    "C DSH/browser is absent: agent_research_entry stays NOT_VERIFIED(c_driver_absent).",
+    "LSF is absent: lsf stays NOT_VERIFIED(lsf_prerequisite_missing).",
+    "C33/C34 registered evidence paths are absent; A-27b/A-28 raw facts are referenced but not re-signed.",
+    "The installed-wheel scheduler execution defect (B26A-D1) blocks running-task disconnect recovery."
+  ],
+  "not_claimed": [
+    "independent human/agent operator",
+    "official DSH client handshake (C-owned)",
+    "browser-driven Workbench interaction (C-owned)",
+    "real LSF submission/control",
+    "A/C scientific or experience sign-off",
+    "C35",
+    "production service restart or production data root"
+  ],
+  "operator": "sisyphus-junior (same session as the B author)",
+  "reason": "No separate human or agent operator was available in this session. The executor is the same agent/session that authored the B evidence. This is a self-reproduction, not an independent external reproduction.",
+  "rows_self_reproduction": [
+    "clean_install",
+    "third_party_plugin_install",
+    "novice_manual_entry",
+    "agent_research_entry",
+    "historical_read_only",
+    "local_execution",
+    "lsf",
+    "authorization",
+    "budget",
+    "disconnect_recovery",
+    "installed_workbench_submission"
+  ],
+  "sanitized_environment": {
+    "clean_root": "/tmp/opencode/b26a-clean",
+    "env_invocation": "env -i <whitelist> /bin/bash --noprofile --norc -c ...",
+    "env_whitelist": [
+      "HOME=/tmp/opencode/b26a-clean/home",
+      "USER=b26a-operator",
+      "LOGNAME=b26a-operator",
+      "PATH=/usr/bin:/bin",
+      "SHELL=/bin/sh",
+      "LANG=C.UTF-8",
+      "LC_ALL=C.UTF-8",
+      "TMPDIR=/tmp/opencode/b26a-clean/tmp"
+    ],
+    "host_software_exception": "The ORCA/xTB local-execution rows used the host binaries named in the published recipe (/home/<user>/orca611, /home/<user>/xtb-dist, OpenMPI bin). Those are host software prerequisites, not the author's shell state or credentials.",
+    "removed_or_absent": [
+      "PYTHONPATH",
+      "PYTHONHOME",
+      "SSH_AUTH_SOCK",
+      "author shell history",
+      "author credentials",
+      "production ACP_RUN_ROOT",
+      "author cccp.yaml"
+    ],
+    "repo_dependency": "Release artifacts, docs, plugin bundle, fixtures and the acceptance harness were copied into /tmp/opencode/b26a-clean before the run. Installed modules resolved under the clean venv site-packages; no repo path was on sys.path.",
+    "work_cwd": "/tmp/opencode/b26a-clean/work"
+  },
+  "schema": "acp2.b26a.independent-operator.v1"
+}

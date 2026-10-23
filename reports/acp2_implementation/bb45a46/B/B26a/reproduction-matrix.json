@@ -1,0 +1,540 @@
+{
+  "candidate_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+  "candidate_revision_note": "candidate_revision is the clean release source recorded by release-manifest.json; the B15/B17 receipts carry the controller env label f60fda8, and package-install defaults to the harness baseline 096cdff. These labels are not code claims.",
+  "controller_candidate_revision_label": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+  "defects": [
+    {
+      "blocks": [
+        "novice Workbench execution",
+        "scheduler-driven local execution",
+        "disconnect running-task recovery",
+        "B17 dispatched science"
+      ],
+      "detail": "local_release_identity() requires <root>/src/{acp,acp_services,cccp}; installed wheels place packages under site-packages. Direct CLI 'acp run' works, but Lab/Workbench and 'acp task execute' fail before dispatch.",
+      "evidence": [
+        "<repo>/reports/acp2_implementation/bb45a46/B/B26a/workbench-submit-failure.json",
+        "<repo>/reports/acp2_implementation/bb45a46/B/B26a/task2-execute.txt",
+        "<repo>/reports/acp2_implementation/bb45a46/B/B26a/b17/budget-evidence.json"
+      ],
+      "id": "B26A-D1",
+      "owner": "B",
+      "recommendation": "Make local release identity work for installed distributions (e.g. use installed distribution metadata or package roots) and add a package-install assertion that submits and completes one real scheduler task.",
+      "severity": "high",
+      "title": "Installed acp-web/acp-worker wheel cannot execute scheduler tasks (execution-tree missing)"
+    },
+    {
+      "blocks": [
+        "authorization row PASS"
+      ],
+      "detail": "After key/account revocation the next read returns 401, but the open /api/events/stream subscription did not emit a permission_changed reset within the harness window (other 10 authz assertions passed).",
+      "evidence": [
+        "<repo>/reports/acp2_implementation/bb45a46/B/B26a/b15/multitenant-multitenant_authz-20261023T134216Z-1654871-618db5b0.json"
+      ],
+      "id": "B26A-D2",
+      "owner": "B",
+      "recommendation": "Re-run against the frozen candidate; if reproducible, inspect _ReauthorizingStreamAuthorizer / scope stream authorization recheck.",
+      "severity": "medium",
+      "title": "B15 revocation SSE reset not observed"
+    }
+  ],
+  "environment": {
+    "clean_root": "/tmp/opencode/b26a-clean",
+    "env_whitelist": {
+      "HOME": "/tmp/opencode/b26a-clean/home",
+      "LANG": "C.UTF-8",
+      "LC_ALL": "C.UTF-8",
+      "LOGNAME": "b26a-operator",
+      "PATH": "/usr/bin:/bin",
+      "SHELL": "/bin/sh",
+      "TMPDIR": "/tmp/opencode/b26a-clean/tmp",
+      "USER": "b26a-operator"
+    },
+    "network": "PyPI reachable for wheel dependencies",
+    "no_author_shell_history": true,
+    "no_pythonpath": true,
+    "no_ssh_auth_sock": true,
+    "python": "/usr/bin/python3.11 (3.11.13)",
+    "work_cwd": "/tmp/opencode/b26a-clean/work"
+  },
+  "generated_at": "2026-10-23T13:50:34.737154+00:00",
+  "harness_revision": "218a3097a36e6976b6638ab04212895aa0b22f89b7ee634cdac59a078ad14319",
+  "independence": {
+    "independent_operator": false,
+    "reason": "No separate human or agent operator was available in this session; all rows are self-reproduction by the same agent/session that authored the B evidence. See independent-operator.json."
+  },
+  "overall_reason": "Two external rows are real FAILs (B15 revocation stream, installed Lab/task submission) and two rows are NOT_VERIFIED (third-party plugin documentation, DSH/browser, LSF, disconnect running-task). No row was inflated.",
+  "overall_result": "FAIL",
+  "release_manifest_source": {
+    "clean": true,
+    "git": true,
+    "path": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+    "revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324"
+  },
+  "release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+  "release_version": "0.3.0",
+  "repo_head_at_reproduction": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+  "rows": [
+    {
+      "command": [
+        "/usr/bin/python3.11",
+        "/tmp/opencode/b26a-clean/tools/scripts/acceptance/acp2_runtime.py",
+        "--scenario",
+        "package-install",
+        "--fixture",
+        "/tmp/opencode/b26a-clean/fixtures/package-install-b26a.json",
+        "--out",
+        "/tmp/opencode/b26a-clean/evidence/package-install",
+        "--timeout",
+        "1800"
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work",
+      "documented_step": "packaging/README.md \u00a7\u72ec\u7acb\u89d2\u8272\u53d1\u884c / \u00a7B25b \u5e72\u51c0\u5b89\u88c5\u9a8c\u6536",
+      "exit_code": 0,
+      "id": "clean_install",
+      "item": "Clean install / import isolation (prerequisite, not one of the eight external items)",
+      "observations": {
+        "assets_notices_licenses": true,
+        "c33_c34": "NOT_VERIFIED (registered paths absent)",
+        "cccp_sample_without_controller": true,
+        "four_fresh_venvs": true,
+        "harness_default_candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+        "installed_paths_site_packages": true,
+        "lab_health": true,
+        "manual_import_proof": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/install-import-proof.txt",
+        "mcp_eight_tools": true,
+        "static_assets": "NOT_VERIFIED(c_static_assets_absent)"
+      },
+      "owner": "B",
+      "prerequisites": [
+        "B25 release artifacts (copied outside the repo)",
+        "python3.11",
+        "network/PyPI for dependencies"
+      ],
+      "reason": null,
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/package-install/package-install-main-20261023T133402Z-1649646-aad2b925.json",
+      "result": "PASS",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/python",
+        "/tmp/opencode/b26a-clean/tools/probe_plugin.py",
+        "/tmp/opencode/b26a-clean"
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work",
+      "documented_step": null,
+      "exit_code": 0,
+      "id": "third_party_plugin_install",
+      "item": "Third-party infrastructure plugin install (B21/B22 bundle)",
+      "observations": {
+        "discovered": [
+          "acp.storage.inventory@1.0.0",
+          "acp.storage.inventory@1.1.0"
+        ],
+        "entrypoint_executed_during_discovery": false,
+        "installed_enabled_v1_then_v2": true,
+        "isolation_claim_rejected": true,
+        "old_task_frozen_at_v1": true,
+        "raw_run_exit_0": true,
+        "science_capability_rejected": true,
+        "why_not_verified": "No published install/authorization procedure in packaging/README.md, the standalone recipe, the component manifest or the MCP matrix. The raw capability run passed but an external operator cannot follow a documented path."
+      },
+      "owner": "B",
+      "prerequisites": [
+        "external bundle /tmp/opencode/b26a-clean/plugins/b21",
+        "ACP2_B21_PLUGIN_ENV=1"
+      ],
+      "reason": "undocumented_step",
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/plugin-install.json",
+      "result": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/acp",
+        "init",
+        "--config",
+        "/tmp/opencode/b26a-clean/work/init/cccp.yaml",
+        "--answers",
+        "/tmp/opencode/b26a-clean/work/init/answers.yaml"
+      ],
+      "commands": [
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work/init",
+          "exit_code": 0,
+          "label": "S3 init",
+          "report": "novice-init.txt"
+        },
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work/xtb",
+          "exit_code": 0,
+          "label": "S5 xTB closure",
+          "report": "local-xtb.txt"
+        },
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work",
+          "exit_code": 0,
+          "label": "S6 Lab smoke",
+          "report": "novice-manual-entry.txt"
+        }
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work/init",
+      "documented_step": "ACP_Services_Standalone_Recipe.md \u00a72 S3/S5/S6",
+      "exit_code": 0,
+      "id": "novice_manual_entry",
+      "item": "Novice manual entry (standalone recipe init + first local closure + Lab smoke)",
+      "observations": {
+        "first_local_closure": "xTB optimize exit 0; Energy -5.070543980555 Hartree; RESULT/result_manifest.json present",
+        "init": "plan v1 applied; doctor PASS(7)/FAIL(0)/NOT_VERIFIED(5)",
+        "lab_smoke": "GET / 200 (ACP Molecular Workbench), /api/health status=ok, /api/workflows 15",
+        "workbench_job_submission": "FAIL \u2014 see installed_workbench_submission row"
+      },
+      "owner": "B",
+      "prerequisites": [
+        "installed acp-web 0.3.0",
+        "xtb at /home/<user>/xtb-dist/bin/xtb",
+        "orca at /home/<user>/orca611/orca"
+      ],
+      "reason": null,
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/novice-init.txt",
+      "result": "PASS",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/python",
+        "/tmp/opencode/b26a-clean/tools/probe_mcp.py",
+        "/tmp/opencode/b26a-clean/venvs/web/bin/acp",
+        "http://127.0.0.1:18787",
+        "/tmp/opencode/b26a-clean/logs/mcp-probe.stderr.log"
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work",
+      "documented_step": "ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md \u00a75.1 (and ACP_Services_MCP_Client_Matrix.md)",
+      "exit_code": 0,
+      "id": "agent_research_entry",
+      "item": "Agent research entry (MCP stdio / official DSH client)",
+      "observations": {
+        "dsh_official_client": "NOT_VERIFIED(c_driver_absent) \u2014 no DSH process, no browser, no C driver on this host",
+        "mcp_client_matrix_row": "dsh-official-mcp-client stays NOT_VERIFIED",
+        "stdio_mcp": "PASS \u2014 initialize negotiated 2025-06-18; tools/list returned eight P1 tools; acp_capabilities returned a result"
+      },
+      "owner": "B",
+      "prerequisites": [
+        "running isolated Lab Controller on 127.0.0.1:18787",
+        "official DSH client (C-owned)"
+      ],
+      "reason": "c_driver_absent",
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/agent-research-mcp.json",
+      "result": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/python",
+        "/tmp/opencode/b26a-clean/tools/probe_historical.py",
+        "/tmp/opencode/b26a-clean/legacy"
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work",
+      "documented_step": "acp2-contracts/runtime/recovery-rollback-runbook.md \u00a70 (historical v1 artifacts remain readable through acp.compat.legacy)",
+      "exit_code": 0,
+      "id": "historical_read_only",
+      "item": "Historical read-only (compat readers + recovery fixtures)",
+      "observations": {
+        "batch_kind": "batch_calculation_manifest",
+        "doc_gap": "The runbook names the compat module but gives no copy-paste operator command; the probe is an audit helper.",
+        "historical_v2_manifest_loaded": true,
+        "historical_v2_products": 1,
+        "s2_path_schema": "s2_path_v2",
+        "s3_workflow": "Lowconfirm",
+        "s4_workflow": "Highconfirm"
+      },
+      "owner": "B",
+      "prerequisites": [
+        "legacy fixtures copied outside the repo",
+        "installed acp.compat.legacy + acp.results.manifest"
+      ],
+      "reason": null,
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/historical-readonly.json",
+      "result": "PASS",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/acp",
+        "run",
+        "xtb_optimize",
+        "--input",
+        "water.xyz",
+        "--config",
+        "/tmp/opencode/b26a-clean/work/xtb/cccp.yaml",
+        "--output",
+        "/tmp/opencode/b26a-clean/data/xtb-run-root/out"
+      ],
+      "commands": [
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work/xtb",
+          "exit_code": 0,
+          "label": "xTB S5",
+          "report": "local-xtb.txt"
+        },
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work/orca",
+          "exit_code": 0,
+          "label": "ORCA singlepoint",
+          "report": "local-orca.json"
+        },
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work",
+          "exit_code": 0,
+          "label": "CCCP controlled sample",
+          "report": "local-cccp-sample.json"
+        }
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work/xtb",
+      "documented_step": "ACP_Services_Standalone_Recipe.md \u00a72 S5 and \u00a72.1 B7; packaging/README.md CCCP sample",
+      "exit_code": 0,
+      "id": "local_execution",
+      "item": "Local execution (real installed CCCP/ORCA/xTB)",
+      "observations": {
+        "cccp_sample_energy": -1.0,
+        "direct_cli_bypasses_scheduler": true,
+        "orca_energy_hartree": -1.158631359838,
+        "scheduler_execution": "FAIL \u2014 see installed_workbench_submission",
+        "xtb_energy_hartree": -5.070543980555
+      },
+      "owner": "B",
+      "prerequisites": [
+        "installed cccp 0.3.0",
+        "xTB 6.7.x at /home/<user>/xtb-dist/bin/xtb",
+        "ORCA 6.1.1 + OpenMPI bin on PATH"
+      ],
+      "reason": null,
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/local-xtb.txt",
+      "result": "PASS",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/bin/sh",
+        "-c",
+        "command -v bsub; command -v bjobs; command -v bstop; command -v bresume"
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work",
+      "documented_step": "ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md \u00a73.4 / ACP_Services_Standalone_Recipe.md remote row",
+      "exit_code": 1,
+      "id": "lsf",
+      "item": "LSF normal + control",
+      "observations": {
+        "bjobs_found": false,
+        "bresume_found": false,
+        "bstop_found": false,
+        "bsub_found": false,
+        "note": "No fake bsub/bstop/bresume was invoked; the LSF row stays NOT_VERIFIED."
+      },
+      "owner": "B",
+      "prerequisites": [
+        "LSF client (bsub/bjobs/bstop/bresume)",
+        "configured test node/queue"
+      ],
+      "reason": "lsf_prerequisite_missing",
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/lsf-prerequisite.txt",
+      "result": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/python",
+        "/tmp/opencode/b26a-clean/tools/scripts/acceptance/acp2_runtime.py",
+        "--scenario",
+        "multitenant",
+        "--phase",
+        "multitenant:authz",
+        "--controller",
+        "http://127.0.0.1:18788",
+        "--fixture",
+        "/tmp/opencode/b26a-clean/fixtures/multi-b26a.json",
+        "--out",
+        "/tmp/opencode/b26a-clean/evidence/b15",
+        "--timeout",
+        "600"
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work",
+      "documented_step": "acp2-contracts/runtime/acceptance-harness.v1.md + runbook \u00a78 (three-state acceptance)",
+      "exit_code": 1,
+      "id": "authorization",
+      "item": "Authorization (B15 multitenant authz path)",
+      "observations": {
+        "controller_candidate_revision_label": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+        "failing_assertions": 2,
+        "failure_detail": "The SSE stream received an event before revocation but did not emit permission_changed after key/account revocation; read-after-revoke was 401.",
+        "not_a_fake_pass": true,
+        "passing_assertions": 10,
+        "passing_scope": [
+          "identity mode",
+          "principal resolution",
+          "forged project hint",
+          "cross-project non-disclosure",
+          "read/list scoping",
+          "action ceiling",
+          "key/account revocation read"
+        ]
+      },
+      "owner": "B",
+      "prerequisites": [
+        "Controller with ACP_IDENTITY_MODE=api-key and isolated run root",
+        "B15 fixture copied outside the repo"
+      ],
+      "reason": "assertion_failed:b15.revocation.key.read_and_stream,b15.revocation.account.read_and_stream",
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/b15/multitenant-multitenant_authz-20261023T134216Z-1654871-618db5b0.json",
+      "result": "FAIL",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/python",
+        "/tmp/opencode/b26a-clean/tools/scripts/acceptance/acp2_runtime.py",
+        "--scenario",
+        "approval-budget",
+        "--phase",
+        "budget",
+        "--controller",
+        "http://127.0.0.1:18789",
+        "--fixture",
+        "/tmp/opencode/b26a-clean/fixtures/approval-b17-b26a.json",
+        "--out",
+        "/tmp/opencode/b26a-clean/evidence/b17",
+        "--timeout",
+        "600"
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work/orca",
+      "documented_step": "acp2-contracts/runtime/acceptance-harness.v1.md + runbook \u00a78",
+      "exit_code": 0,
+      "id": "budget",
+      "item": "Budget (B17 approval-bound cumulative budget path)",
+      "observations": {
+        "at_cap_submit": "201",
+        "controller_candidate_revision_label": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+        "dispatch_side_effect": "The accepted jobs failed at the installed execution-tree freeze (see installed_workbench_submission); budget enforcement itself passed.",
+        "duplicate_settlement_idempotent": true,
+        "pre_dispatch_refusal": "403 budget_exhausted",
+        "race_last_unit": "one 201, one 403",
+        "restart_preserves_budget": true
+      },
+      "owner": "B",
+      "prerequisites": [
+        "Controller with ACP_IDENTITY_MODE=api-key and isolated run root",
+        "B17 fixture copied outside the repo"
+      ],
+      "reason": null,
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/b17/approval-budget-budget-20261023T134301Z-1655600-7dfeecd0.json",
+      "result": "PASS",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/python",
+        "/tmp/opencode/b26a-clean/tools/probe_disconnect.py",
+        "http://127.0.0.1:18787",
+        "before",
+        "/tmp/opencode/b26a-clean/evidence/disconnect-state.json"
+      ],
+      "commands": [
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work",
+          "exit_code": 0,
+          "label": "before (submit + close SSE)",
+          "report": "disconnect/state.json"
+        },
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work",
+          "exit_code": 0,
+          "label": "after (Controller restart + query/replay)",
+          "report": "disconnect/after.json"
+        }
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work",
+      "documented_step": "acp2-contracts/runtime/recovery-rollback-runbook.md \u00a73/\u00a74; ACP_Services_Standalone_Recipe.md \u00a72.1 B18",
+      "exit_code": 0,
+      "id": "disconnect_recovery",
+      "item": "Disconnect recovery (B19 simulated + Controller restart)",
+      "observations": {
+        "event_stream_replayed_after_reconnect": true,
+        "job_row_persisted_across_restart": true,
+        "task_itself": "failed before restart with 'no execution-tree files found under /tmp/opencode/b26a-clean/venvs/web/lib/python3.11 (expected src/acp, src/acp_services, src/cccp)'",
+        "why_not_verified": "No running/completed task could be produced through the documented installed Lab path, so running-task recovery is not proven. The B19 simulated C-session row also remains NOT_VERIFIED(c_driver_absent)."
+      },
+      "owner": "B",
+      "prerequisites": [
+        "running Lab Controller on 127.0.0.1:18787",
+        "a task that actually runs"
+      ],
+      "reason": "installed_workbench_submission_failed",
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/disconnect/state.json",
+      "result": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    },
+    {
+      "command": [
+        "/tmp/opencode/b26a-clean/venvs/web/bin/acp",
+        "task",
+        "execute",
+        "--workflow",
+        "singlepoint",
+        "--input",
+        "/tmp/opencode/b26a-clean/work/task2/t/input.xyz",
+        "--name",
+        "b26a-sp",
+        "--run-root",
+        "/tmp/opencode/b26a-clean/data/task2-run-root",
+        "--follow"
+      ],
+      "commands": [
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work",
+          "exit_code": 0,
+          "label": "HTTP submit",
+          "report": "workbench-submit-failure.json"
+        },
+        {
+          "cwd": "/tmp/opencode/b26a-clean/work/task2",
+          "exit_code": 1,
+          "label": "CLI task execute",
+          "report": "task2-execute.txt"
+        }
+      ],
+      "cwd": "/tmp/opencode/b26a-clean/work/task2",
+      "documented_step": "packaging/README.md \u00a7\u72ec\u7acb\u89d2\u8272\u53d1\u884c (acp-web install) + ACP_Services_Standalone_Recipe.md \u00a72 S6",
+      "exit_code": 1,
+      "id": "installed_workbench_submission",
+      "item": "Installed Lab/Workbench task submission (defect discovered by this reproduction)",
+      "observations": {
+        "cli_task_execute": "exit 1 with the same ReleaseIdentityError",
+        "http_post": "201 Created, then job status=failed",
+        "job_error": "Submission error: no execution-tree files found under /tmp/opencode/b26a-clean/venvs/web/lib/python3.11 (expected src/acp, src/acp_services, src/cccp)",
+        "requires_fix": true,
+        "root_cause": "local_release_identity() assumes a source checkout layout (src/acp, src/acp_services, src/cccp) under the install root; the wheel installs packages directly under site-packages. Direct 'acp run' bypasses the scheduler freeze and works."
+      },
+      "owner": "B",
+      "prerequisites": [
+        "installed acp-web 0.3.0",
+        "isolated run root"
+      ],
+      "reason": "execution_tree_missing_in_installed_wheel",
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/workbench-submit-failure.json",
+      "result": "FAIL",
+      "scope": "IN_SCOPE",
+      "stale_pass_reused": false
+    }
+  ],
+  "schema": "acp2.b26a.reproduction-matrix.v1"
+}

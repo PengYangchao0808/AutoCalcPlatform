@@ -1,0 +1,12 @@
+executables:
+  orca:
+    path: /home/<user>/orca611/orca
+    ld_library_path: /home/<user>/orca611
+cluster:
+  enabled: false
+  execution_mode: local
+  type: local
+  nodes: []
+resources:
+  nproc: 1
+  mem: "2GB"
