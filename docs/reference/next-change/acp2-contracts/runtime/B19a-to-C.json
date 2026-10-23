@@ -1,0 +1,77 @@
+{
+  "schema": "acp2.runtime.b19a-handoff.v1",
+  "from": "B19a",
+  "to": "C",
+  "status": "delivered",
+  "contract": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
+  "contract_schema": "acp2.runtime.events-recovery.v1",
+  "contract_version": "1.0.0",
+  "contract_digest": "sha256:fe8944ded15556bd7461ab2b10036bcaabf181ae5484297a98e80c61ca83f559",
+  "contract_sha256": "sha256:9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
+  "cursor": {
+    "wire": "opaque",
+    "max_age_s": 3600,
+    "reset_reasons": [
+      "cursor_expired",
+      "cursor_missing",
+      "cursor_invalid",
+      "cursor_ahead",
+      "retention_gap",
+      "permission_changed",
+      "service_restart",
+      "subscription_changed"
+    ],
+    "snapshot_required_on_reset": true
+  },
+  "event_owners": {
+    "B": "task/approval/budget state facts",
+    "C": "ResearchRecord question/proposal/round/task references (reference-only)"
+  },
+  "event_types": {
+    "B": [
+      "task.queued",
+      "task.started",
+      "task.progress",
+      "task.paused",
+      "task.resumed",
+      "task.completed",
+      "task.failed",
+      "task.cancelled",
+      "task.submitted",
+      "approval.requested",
+      "approval.approved",
+      "approval.rejected",
+      "approval.revoked",
+      "approval.expired",
+      "approval.task_bound",
+      "budget.reserved",
+      "budget.settled",
+      "budget.released",
+      "budget.denied"
+    ],
+    "C": [
+      "research.question.referenced",
+      "research.proposal.referenced",
+      "research.round.referenced",
+      "research.task_ref.referenced"
+    ]
+  },
+  "consumer_rules": [
+    "treat cursor as opaque",
+    "on reset=true rebuild from snapshot before deciding an action",
+    "deduplicate by event_id/dedup_key",
+    "never let a stale event overwrite a terminal projection",
+    "claim approval/submit through the persistent idempotency ledger",
+    "a chat/DSH session is not project authority",
+    "an RPH exit does not cancel the task and never blocks on an LLM wait"
+  ],
+  "business_state_ownership": {
+    "B": "task/approval/budget",
+    "C": "ResearchRecord question/proposal/round/task references",
+    "double_write": "forbidden"
+  },
+  "fixture_evidence": "tests/test_acp2_runtime_event_recovery.py",
+  "does_not_require_live_dsh": true,
+  "does_not_require_c20_c24": true,
+  "notes": "B19a is consumable without C's live client. B19b's real DSH row remains NOT_VERIFIED(c_dsh_absent) on this host; the fixture-level recovery row is clearly labelled simulated."
+}

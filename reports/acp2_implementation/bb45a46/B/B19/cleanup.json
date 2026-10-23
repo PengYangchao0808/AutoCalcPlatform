@@ -1,0 +1,15 @@
+{
+  "approval_rows_seen": 4,
+  "controller_pid": "stopped",
+  "controller_port": 18779,
+  "dsh_processes_started": 0,
+  "jobs_created_during_b19b": 4,
+  "note": "Only the B19 test Controller on 18779 and run-root-b19 were touched; the run root (test data) is removed after the evidence copy under task/.",
+  "port_free": true,
+  "production_8765_touched": false,
+  "production_run_root_touched": false,
+  "run_root": "<acp2-dev>/data/b/run-root-b19",
+  "run_root_removed": true,
+  "schema": "acp2.b19.cleanup.v1",
+  "sigterm_sent": true
+}

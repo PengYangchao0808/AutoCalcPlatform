@@ -1,0 +1,236 @@
+{
+  "attempt": 1,
+  "bound_event": {
+    "attempt": 1,
+    "cursor": "r1.NToxNzkyNzQ0NTIyLjExODI1Mg",
+    "dedup_key": "b19:ap_730c1f16a1a64dd8b33d1781cc0702ef:bound",
+    "emitted_at": "2026-10-23T08:35:22.118252+00:00",
+    "event_id": "b19:ap_730c1f16a1a64dd8b33d1781cc0702ef:bound",
+    "event_type": "approval.task_bound",
+    "owner": "B",
+    "payload": {
+      "approval_ref": "ap_730c1f16a1a64dd8b33d1781cc0702ef",
+      "task_ref": {
+        "task_id": "20261023_163522_001_b19-research-recovery"
+      }
+    },
+    "payload_version": 1,
+    "project_id": "uncategorized",
+    "revision": 5,
+    "seq": 5,
+    "task_id": "20261023_163522_001_b19-research-recovery",
+    "terminal": false
+  },
+  "cancel": {
+    "body": {
+      "attempt": 1,
+      "completed_at": null,
+      "created_at": "2026-10-23T08:35:22.082131+00:00",
+      "current_stage": null,
+      "custom_name": null,
+      "default_name": "",
+      "display_method": null,
+      "error": null,
+      "exit_code": null,
+      "group_id": "20261023_163522_001_b19-research-recovery",
+      "host": "redacted-host",
+      "id": "20261023_163522_001_b19-research-recovery",
+      "input_hash": "sha256:aa21390d218f8b689a12e6242523506816ff2f91278ba83e4441c652f9b33aeb",
+      "latest_event": null,
+      "live_status": null,
+      "name_revision": 0,
+      "name_updated_at": null,
+      "node_id": "local",
+      "pid": 1399629,
+      "progress": null,
+      "progress_state": null,
+      "project_id": "uncategorized",
+      "project_name": null,
+      "remote_job_id": null,
+      "resolved_name": "",
+      "result": {
+        "admission": {
+          "budget": {
+            "budget_id": "rb_3777405c83e92625b5f43b30",
+            "reservation_id": "bres_idem_5a9e2132212c405380cd0c0d6fbb3634",
+            "state": "reserved",
+            "units": {
+              "attempt": 1,
+              "task_ref": 1
+            }
+          },
+          "enforced": true,
+          "enforcement": "local-single-enforced",
+          "mode": "quota-only",
+          "multi_tenant_security": false,
+          "policy_version": "local-single-v1",
+          "principal_id": "principal_local",
+          "reservation_id": "res_idem_5a9e2132212c405380cd0c0d6fbb3634",
+          "verified_project": null
+        },
+        "execution_kind": "local",
+        "execution_target": "local",
+        "required_software": [
+          "orca"
+        ]
+      },
+      "revision": 5,
+      "snapshot_version": null,
+      "spec": {
+        "config_path": null,
+        "execution_mode": null,
+        "input": {
+          "charge": 0,
+          "multiplicity": 1,
+          "source": "9\nethanol B19 research-recovery fixture\nC 0.000 0.000 0.000\nC 1.520 0.000 0.000\nO 2.050 1.250 0.000\nH -0.500 0.900 0.000\nH -0.500 -0.500 0.800\nH -0.500 -0.500 -0.800\nH 1.900 -0.600 0.800\nH 1.900 -0.600 -0.800\nH 2.950 1.150 0.000\n",
+          "source_type": "xyz_text"
+        },
+        "method": {
+          "levels": {
+            "singlepoint": {
+              "basis": "def2-SVP",
+              "engine": "orca",
+              "functional": "wB97M-V"
+            }
+          }
+        },
+        "molecule_name": "9\nethanol B19 research-recovery fixture\nC 0.000 0.000 0.000\nC 1.520 0.000 0.000\nO 2.050 1.250 0.000\nH -0.500 0.900 0.000\nH -0.500 -0.500 0.800\nH -0.500 -0.500 -0.800\nH 1.900 -0.600 0.800\nH 1.900 -0.600 -0.800\nH 2.950 1.150 0.000",
+        "name": "9_ethanol_B19_research-recovery_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000__02",
+        "node_tags": [],
+        "output_dir": null,
+        "project_id": "uncategorized",
+        "remark": "",
+        "resources": {
+          "cores": 1,
+          "mem": "60GB",
+          "memory_mb": 1024,
+          "nproc": 20
+        },
+        "tags": [],
+        "target_node": null,
+        "task_name": "singlepoint",
+        "workflow": "singlepoint"
+      },
+      "stage_detail": null,
+      "stage_index": null,
+      "stage_order": [],
+      "stage_progress": null,
+      "stage_total": null,
+      "started_at": "2026-10-23T08:35:22.094276+00:00",
+      "status": "cancelling",
+      "study_id": null,
+      "study_status": null,
+      "updated_at": "2026-10-23T08:35:23.144363+00:00",
+      "work_dir": "<acp2-dev>/data/b/run-root-b19/uncategorized/9_ethanol_B19_research-recovery_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000__02"
+    },
+    "status": 200
+  },
+  "new_session_resume": {
+    "applied_events": 0,
+    "cursor_after": "r1.NToxNzkyNzQ0NTIzLjEyOTcxOQ",
+    "cursor_before": "r1.MToxNzkyNzQ0NTIyLjExNTgxMQ",
+    "projection": {
+      "applied_event_count": 5,
+      "approval_ref": "ap_730c1f16a1a64dd8b33d1781cc0702ef",
+      "approval_revision": 4,
+      "approval_state": "approved",
+      "attempt": 1,
+      "budget_revision": 0,
+      "budget_state": "",
+      "c_references": {},
+      "error": "",
+      "last_event_id": "b19:ap_730c1f16a1a64dd8b33d1781cc0702ef:bound",
+      "progress": null,
+      "project_id": "uncategorized",
+      "revision": 5,
+      "status": "running",
+      "submitted": true,
+      "task_id": "20261023_163522_001_b19-research-recovery",
+      "task_ref": {
+        "task_id": "20261023_163522_001_b19-research-recovery"
+      },
+      "task_terminal": false
+    },
+    "replayed_events": 4,
+    "reset": false,
+    "reset_reason": "",
+    "task_status_after_resume": "running"
+  },
+  "plan_digest": "sha256:76704c31ef45ef8f33dc078d1136cb0be894a5f77dda2e49244e4f624d43b569",
+  "progress_event": {
+    "attempt": 1,
+    "cursor": "r1.MjoxNzkyNzQ0NTIyLjExNjEwNw",
+    "dedup_key": "b19:20261023_163522_001_b19-research-recovery:progress:1",
+    "emitted_at": "2026-10-23T08:35:22.116107+00:00",
+    "event_id": "b19:20261023_163522_001_b19-research-recovery:progress:1",
+    "event_type": "task.progress",
+    "owner": "B",
+    "payload": {
+      "progress": null,
+      "stage": null
+    },
+    "payload_version": 1,
+    "project_id": "uncategorized",
+    "revision": 2,
+    "seq": 2,
+    "task_id": "20261023_163522_001_b19-research-recovery",
+    "terminal": false
+  },
+  "project_id": "uncategorized",
+  "proposal_ref": "b19-research-a27da445d30b",
+  "real_components": [
+    "Controller HTTP",
+    "ApprovalService",
+    "JobStore idempotency",
+    "per-task events.jsonl"
+  ],
+  "schema": "acp2.b19b.research-recovery.v1",
+  "session_a_cursor": "r1.MToxNzkyNzQ0NTIyLjExNTgxMQ",
+  "simulated": true,
+  "simulated_component": "C DSH session termination",
+  "started_event": {
+    "attempt": 1,
+    "cursor": "r1.MToxNzkyNzQ0NTIyLjExNTMwNQ",
+    "dedup_key": "b19:20261023_163522_001_b19-research-recovery:started",
+    "emitted_at": "2026-10-23T08:35:22.115305+00:00",
+    "event_id": "b19:20261023_163522_001_b19-research-recovery:started",
+    "event_type": "task.started",
+    "owner": "B",
+    "payload": {
+      "business_revision": 1,
+      "status": "running"
+    },
+    "payload_version": 1,
+    "project_id": "uncategorized",
+    "revision": 1,
+    "seq": 1,
+    "task_id": "20261023_163522_001_b19-research-recovery",
+    "terminal": false
+  },
+  "task_left_running": true,
+  "task_ref": "20261023_163522_001_b19-research-recovery",
+  "task_status_after_session_termination": "running",
+  "terminal_projection": {
+    "applied_event_count": 6,
+    "approval_ref": "ap_730c1f16a1a64dd8b33d1781cc0702ef",
+    "approval_revision": 4,
+    "approval_state": "approved",
+    "attempt": 1,
+    "budget_revision": 0,
+    "budget_state": "",
+    "c_references": {},
+    "error": "",
+    "last_event_id": "b19:20261023_163522_001_b19-research-recovery:cancelled",
+    "progress": null,
+    "project_id": "uncategorized",
+    "revision": 6,
+    "status": "cancelled",
+    "submitted": true,
+    "task_id": "20261023_163522_001_b19-research-recovery",
+    "task_ref": {
+      "task_id": "20261023_163522_001_b19-research-recovery"
+    },
+    "task_terminal": true
+  },
+  "terminal_status": "cancelled"
+}
