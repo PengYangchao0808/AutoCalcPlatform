@@ -17,6 +17,16 @@ SUMMARY = INTEGRATION / "summary.json"
 RELEASE_DIR = BASE / "B/B25/release-fix5"
 WORKFLOWS = ("H0", "H1", "H2", "H3", "H4", "H5", "H6", "H7")
 RESULT_VALUES = {"PASS", "FAIL", "NOT_VERIFIED"}
+#: C's live evidence is owned outside this repo.  A row that cites it must
+#: declare the external reference and its status instead of pointing at a
+#: repo-relative file that a clean checkout cannot contain.
+EXTERNAL_EVIDENCE_ROOTS = (
+    Path("/ACPServer/acp2-development/A"),
+    Path("/ACPServer/acp2-development/C"),
+    Path("/ACPServer/acp2-development/evidence/C"),
+    REPO_ROOT / "reports/acp2_implementation/bb45a46/C",
+)
+EXTERNAL_EVIDENCE_STATUS = "NOT_VERIFIED(external_evidence_not_in_repo)"
 
 
 def _load_harness() -> Any:
@@ -49,6 +59,22 @@ def test_summary_validates_with_the_shared_harness() -> None:
     assert errors == []
 
 
+def _evidence_candidates(entry: str | dict[str, Any]) -> list[Path]:
+    """Resolve one evidence entry under the repo or a declared external root."""
+    if isinstance(entry, str):
+        return [REPO_ROOT / entry]
+    path = Path(entry["path"])
+    candidates = [REPO_ROOT / path]
+    external_ref = entry.get("external_ref")
+    if external_ref:
+        ref = Path(external_ref)
+        if ref.is_absolute():
+            candidates.append(ref)
+        else:
+            candidates.extend(root / ref for root in EXTERNAL_EVIDENCE_ROOTS)
+    return candidates
+
+
 def test_every_h0_h7_row_has_a_result_and_artifact_provenance() -> None:
     index = _read(H7_INDEX)
     rows = index["rows"]
@@ -58,7 +84,25 @@ def test_every_h0_h7_row_has_a_result_and_artifact_provenance() -> None:
         assert row["scope"] in {"IN_SCOPE", "DEFERRED", "NOT_APPLICABLE"}
         assert row["evidence"], row["handoff"]
         for evidence in row["evidence"]:
-            assert (REPO_ROOT / evidence).is_file(), (row["handoff"], evidence)
+            if isinstance(evidence, dict):
+                assert evidence.get("status") == EXTERNAL_EVIDENCE_STATUS, (
+                    row["handoff"],
+                    evidence,
+                )
+                external_ref = evidence.get("external_ref")
+                assert external_ref, (row["handoff"], evidence)
+                assert not Path(evidence.get("path", "")).is_absolute(), (row["handoff"], evidence)
+                if Path(external_ref).is_absolute():
+                    ref = Path(external_ref)
+                    assert any(
+                        ref == root or ref.is_relative_to(root) for root in EXTERNAL_EVIDENCE_ROOTS
+                    ), (row["handoff"], evidence)
+            candidates = _evidence_candidates(evidence)
+            resolved = [candidate for candidate in candidates if candidate.is_file()]
+            if resolved:
+                continue
+            assert isinstance(evidence, dict), (row["handoff"], evidence)
+            assert evidence["status"] == EXTERNAL_EVIDENCE_STATUS, (row["handoff"], evidence)
 
 
 def test_h4_h6_h7_stay_open_and_are_not_signed() -> None:

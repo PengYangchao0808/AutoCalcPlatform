@@ -32,9 +32,11 @@ the ACP controller/manager side only.  It is never called from a GET.
 
 from __future__ import annotations
 
+import math
 import os
 import shutil
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -72,6 +74,10 @@ __all__ = [
 #: Product copy under ``RESULT/`` (relative).  The original durable worker
 #: document stays at ``WORK/00_RUNTIME/task_result.json``.
 PUBLICATION_TASK_RESULT_FILENAME: str = "task_result.json"
+
+#: Display-energy product schema reused from the executor's energy product
+#: (``acp_energy_product_v1``, plan D6/T11) so every consumer reads one shape.
+_ENERGY_PRODUCT_SCHEMA: str = "acp_energy_product_v1"
 
 
 class AttemptPublicationError(RuntimeError):
@@ -134,6 +140,57 @@ def _atomic_copy(source: Path, target: Path) -> None:
         raise
 
 
+def _atomic_write_text(target: Path, text: str) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
+    )
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _finite(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _body_coordinates(body: Any) -> tuple[tuple[str, tuple[float, float, float]], ...] | None:
+    """Validated ``(symbol, xyz)`` rows from a persisted result body."""
+    if not isinstance(body, Mapping):
+        return None
+    symbols = body.get("symbols")
+    coordinates = body.get("coordinates")
+    if not isinstance(symbols, list) or not isinstance(coordinates, list):
+        return None
+    if not symbols or len(symbols) != len(coordinates):
+        return None
+    rows: list[tuple[str, tuple[float, float, float]]] = []
+    for symbol, xyz in zip(symbols, coordinates):
+        if not isinstance(symbol, str) or not isinstance(xyz, (list, tuple)) or len(xyz) != 3:
+            return None
+        point = tuple(_finite(component) for component in xyz)
+        if any(component is None for component in point):
+            return None
+        rows.append((symbol, (float(point[0]), float(point[1]), float(point[2]))))
+    return tuple(rows)
+
+
+def _xyz_text(rows: tuple[tuple[str, tuple[float, float, float]], ...], comment: str) -> str:
+    lines = [str(len(rows)), comment]
+    lines.extend(f"{symbol} {x:.10f} {y:.10f} {z:.10f}" for symbol, (x, y, z) in rows)
+    return "\n".join(lines) + "\n"
+
+
 @dataclass(frozen=True)
 class AttemptResultPublication:
     """Publish one worker attempt's ``task_result.json`` through the named path.
@@ -165,6 +222,7 @@ class AttemptResultPublication:
         publish_normal = bool(qualification.publish) and not partial
         status = self._manifest_status(qualification)
         copy_product = publish_normal or partial
+        body = document.get("result") if isinstance(document.get("result"), Mapping) else None
 
         artifacts: tuple[ArtifactReference, ...] = ()
         metadata: dict[str, Any] = {
@@ -188,30 +246,13 @@ class AttemptResultPublication:
             )
             metadata["product_role"] = "partial" if partial else "normal"
 
+        summary = self._scientific_summary(qualification, document, snapshot, body)
+
         record = ScientificResultRecord(
             result_id=result_id,
             kind=workflow,
             artifacts=artifacts,
-            summary={
-                "status": qualification.status,
-                "task": qualification.task,
-                "qualification": qualification.qualification,
-                "partial_result": partial,
-                "normal_reuse": bool(qualification.normal_reuse),
-                "publish": bool(qualification.publish),
-                "publish_policy": qualification.publish_policy,
-                "receipt_state": qualification.receipt_state,
-                "exit_code": qualification.exit_code,
-                "result_digest": str(document.get("result_digest") or ""),
-                "task_result_digest": qualification.content_digest,
-                "job_id": snapshot.job_id,
-                "attempt": snapshot.attempt,
-                "submission_id": snapshot.submission_id,
-                "plan_identity": (
-                    snapshot.envelope.plan_identity if snapshot.envelope is not None else ""
-                ),
-                "release_id": snapshot.release_id,
-            },
+            summary=summary,
         )
 
         manifest = ResultManifest(
@@ -227,6 +268,7 @@ class AttemptResultPublication:
                 ProductKind.FILE,
                 metadata=metadata,
             )
+            self._add_science_products(manifest, workflow, body, publish_normal)
 
         def _copy_products() -> None:
             if copy_product:
@@ -234,6 +276,7 @@ class AttemptResultPublication:
                     task_result_path(Path(snapshot.work_dir)),
                     result_dir / PUBLICATION_TASK_RESULT_FILENAME,
                 )
+                self._write_science_products(result_dir, workflow, body, publish_normal)
 
         published = publish_result(
             result_dir,
@@ -273,6 +316,115 @@ class AttemptResultPublication:
     @staticmethod
     def result_dir(snapshot: AttemptSnapshot) -> Path:
         return Path(snapshot.work_dir) / "RESULT"
+
+    # -- scientific products (R01) ---------------------------------------- #
+
+    @staticmethod
+    def _scientific_summary(
+        qualification: Any,
+        document: dict[str, Any],
+        snapshot: AttemptSnapshot,
+        body: Any,
+    ) -> dict[str, Any]:
+        """Qualification summary plus the persisted body's scientific values."""
+        summary: dict[str, Any] = {
+            "status": qualification.status,
+            "task": qualification.task,
+            "qualification": qualification.qualification,
+            "partial_result": bool(qualification.partial_result),
+            "normal_reuse": bool(qualification.normal_reuse),
+            "publish": bool(qualification.publish),
+            "publish_policy": qualification.publish_policy,
+            "receipt_state": qualification.receipt_state,
+            "exit_code": qualification.exit_code,
+            "result_digest": str(document.get("result_digest") or ""),
+            "task_result_digest": qualification.content_digest,
+            "job_id": snapshot.job_id,
+            "attempt": snapshot.attempt,
+            "submission_id": snapshot.submission_id,
+            "plan_identity": (
+                snapshot.envelope.plan_identity if snapshot.envelope is not None else ""
+            ),
+            "release_id": snapshot.release_id,
+        }
+        if isinstance(body, Mapping):
+            energy = _finite(body.get("energy_hartree"))
+            if energy is not None:
+                summary["energy_hartree"] = energy
+            for key in ("converged", "n_imaginary"):
+                value = body.get(key)
+                if isinstance(value, (bool, int)) and not isinstance(value, bool):
+                    summary[key] = value
+                elif isinstance(value, bool):
+                    summary[key] = value
+        return summary
+
+    def _add_science_products(
+        self,
+        manifest: ResultManifest,
+        workflow: str,
+        body: Any,
+        publish_normal: bool,
+    ) -> None:
+        """Register energy/structure products derived from the result body."""
+        if not isinstance(body, Mapping) or not publish_normal:
+            return
+        energy = _finite(body.get("energy_hartree"))
+        if energy is not None:
+            manifest.add_product(
+                id=f"{workflow}_energy",
+                label=f"{workflow} — energy",
+                path=f"energy/{workflow}_energy.json",
+                kind=ProductKind.ENERGY_REPORT,
+                metadata={"energy_hartree": energy, "workflow": workflow},
+            )
+        if _body_coordinates(body) is not None:
+            manifest.add_product(
+                id=f"{workflow}_structure",
+                label=f"{workflow} — final structure",
+                path=f"structures/{workflow}_final.xyz",
+                kind=ProductKind.STRUCTURE,
+                metadata={"workflow": workflow},
+            )
+
+    def _write_science_products(
+        self,
+        result_dir: Path,
+        workflow: str,
+        body: Any,
+        publish_normal: bool,
+    ) -> None:
+        """Materialise the registered science products (idempotent)."""
+        if not isinstance(body, Mapping) or not publish_normal:
+            return
+        energy = _finite(body.get("energy_hartree"))
+        if energy is not None:
+            import json as _json
+
+            _atomic_write_text(
+                result_dir / "energy" / f"{workflow}_energy.json",
+                _json.dumps(
+                    {
+                        "schema_version": _ENERGY_PRODUCT_SCHEMA,
+                        "step_id": workflow,
+                        "step_kind": workflow,
+                        "energy": energy,
+                        "energy_hartree": energy,
+                        "unit": "hartree",
+                        "method": str(body.get("method") or ""),
+                        "source": "task_result.json",
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+            )
+        rows = _body_coordinates(body)
+        if rows is not None:
+            _atomic_write_text(
+                result_dir / "structures" / f"{workflow}_final.xyz",
+                _xyz_text(rows, f"{workflow} final structure"),
+            )
 
     def _assert_current_attempt(self, snapshot: AttemptSnapshot) -> None:
         if self.snapshot_reader is None:
