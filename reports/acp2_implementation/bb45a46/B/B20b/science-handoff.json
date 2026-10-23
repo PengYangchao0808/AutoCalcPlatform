@@ -1,0 +1,373 @@
+{
+  "schema": "acp2.b20b.science-handoff.v1",
+  "todo": "23 / B20b",
+  "owner": "B",
+  "generated_at": "2026-10-23T09:17:41Z",
+  "generated_at_head": "430b4ba09378bf3a63839be3610ad3d7a075a861",
+  "b20a_candidate_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7",
+  "b20a_exec_status": "NOT_VERIFIED(c24a_absent)",
+  "purpose": "Record A's scientific audit reference and C's evidence/ResearchRecord handoff against B20a execution facts without signing A or C scope or relabelling science.",
+  "run_spec_ref": {
+    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+    "schema": "acp2.b20a.run-spec.v1",
+    "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+    "read_by": [
+      "B20a",
+      "B20b"
+    ],
+    "started_at": null,
+    "started_at_status": "NOT_VERIFIED(c24a_absent)",
+    "started_at_binding_rule": "Set once at the first C24a-approved submit. Every phase (da-submit, da-evidence, aggregate) reads this same value; the readiness attempt does not start the science clock.",
+    "shared_started_at_rule": "Every phase (da-submit, da-evidence, aggregate) reads this same value. B20b and C T-35 must not reset it or start a second science clock.",
+    "science_deadline_seconds": 13380,
+    "export_budget_seconds": 900,
+    "aggregate_budget_seconds": 120,
+    "total_budget_seconds": 14400,
+    "deadline_partition_check": "13380+900+120=14400",
+    "timeout_env": "ACP2_DA_TIMEOUT=14400",
+    "queue_accounting": "Local queue wait is 0s and is included in the same cumulative window. If LSF were selected, queue wait would count against science_deadline_seconds; it does not get a separate budget.",
+    "inflight_stop_policy": "At science_deadline_seconds stop starting new science steps. A still-running step is either stopped with confirmed termination or retained by reference and reconciled in the export window; it is never reported complete.",
+    "stop_new_science_at_deadline": true,
+    "clock_reset_allowed": false,
+    "evidence_phase_fails_on_elapsed_time_alone": false,
+    "evidence_phase_rule": "At science_deadline_seconds only new expensive science steps stop. The export (900s) and aggregate (120s) windows are judged by actual completion; the evidence phase is not failed solely because the science clock reached 13380s."
+  },
+  "b_execution_facts": {
+    "producer": "B20a-exec",
+    "owner": "B",
+    "status": "NOT_VERIFIED",
+    "reason": "c24a_absent",
+    "task_ref": null,
+    "task_ref_status": "NOT_VERIFIED(c24a_absent)",
+    "job_id": null,
+    "attempt": null,
+    "attempt_status": "NOT_VERIFIED(c24a_absent)",
+    "release_id": null,
+    "release_status": "NOT_VERIFIED(c24a_absent)",
+    "manifest_generation": null,
+    "manifest_status": "NOT_VERIFIED(c24a_absent)",
+    "submission_id": null,
+    "operation_id": null,
+    "negotiated_protocol": null,
+    "execution_chain_executed": false,
+    "real_scientific_chain_executed": false,
+    "receipt": {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "sha256": "51cc4c89453cae166b79f4ec0e69e166703503fdf56f1c05cb9cec051e25bdcc",
+      "schema": "acp2.acceptance.v1",
+      "run_id": "20261023T091047Z-1425776-5bf82a03",
+      "scenario": "da-runtime",
+      "phase": "da-submit",
+      "result": "NOT_VERIFIED",
+      "reason": "c24a_absent",
+      "exit_code": 2,
+      "evidence_kind": "live"
+    },
+    "counters": {
+      "source": "<repo>/reports/acp2_implementation/bb45a46/B/B20/counters.json",
+      "sha256": "05529afc19f637c7944f6171e22d87beb146248d93c22342aeabedbf8fe63693",
+      "tasks_created": 0,
+      "prepare_operations": 0,
+      "qc_invocations": 0,
+      "reservations": 0,
+      "bsub": 0,
+      "submission_attempted": false,
+      "compute_owner": "none (da-submit stopped before dispatch: C24a absent)"
+    },
+    "budget_counts": {
+      "tasks_used": 0,
+      "candidate_ts_used": 0,
+      "scenario_submissions_used": 0,
+      "science_clock_started": false,
+      "source": "<repo>/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9"
+    },
+    "facts_only_rule": "B records execution/release/attempt/manifest/budget facts only. B does not assign a scientific status and does not relabel an execution terminal state as claim support."
+  },
+  "a_audit_ref": {
+    "owner": "A-20",
+    "status": "NOT_VERIFIED",
+    "reason": "b20a_exec_absent",
+    "expected_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+    "expected_schema": "no standalone JSON Schema declared; identified by handoff_id=H4, handoff_version=1 (contract_set=acp2.science, contract_set_version=1)",
+    "attached_by_reference": true,
+    "present": true,
+    "digest": {
+      "algorithm": "sha256",
+      "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+    },
+    "observed_h4_status": "open",
+    "observed_real_run": false,
+    "observed_open_required_row_ids": [
+      "H4-01-valid-ts",
+      "H4-02-bidirectional-irc",
+      "H4-03-endpoint-connectivity",
+      "H4-04-comparable-energy",
+      "H4-search"
+    ],
+    "audit_of_b20a_exec": "NOT_VERIFIED",
+    "fabricated_receipt": false,
+    "rule": "A signs the scientific conclusion. B attaches the reference and the observed gap; B does not sign or replace A scope."
+  },
+  "c_t35_ref": {
+    "owner": "C T-35 / C24b",
+    "status": "NOT_VERIFIED",
+    "reason": "c24b_absent",
+    "plan_todo": "35. T-35 / C24b",
+    "plan_state": "[~] blocked by T-34 + A-17..A-19 + B20a-exec",
+    "attached_by_reference": true,
+    "present": false,
+    "digest": null,
+    "expected_artifacts": [
+      {
+        "kind": "research_record",
+        "path": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/b/research-record.json",
+        "schema": "acp2.experience.research-record.v1",
+        "contract_reference": {
+          "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+          "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752"
+        }
+      },
+      {
+        "kind": "c24b_receipt",
+        "path": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/b/experience_da-research-live-da-evidence-da-research-live-r1.json",
+        "schema": "acp2.acceptance.v1",
+        "run_id": "da-research-live-r1",
+        "phase": "da-evidence"
+      },
+      {
+        "kind": "summary",
+        "path": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/b/summary.json",
+        "schema": "acp2.acceptance.summary.v1"
+      }
+    ],
+    "fabricated_receipt": false,
+    "does_not_overwrite_b_task_truth": true,
+    "rule": "C T-35 consumes B20a-exec and A-17..A-19 and does not wait for B20b. B20b waits for C T-35. C may add evidence/ResearchRecord fields, but may not override B job_id/attempt/release_id/submission_id/manifest_generation/task facts."
+  },
+  "propositions": [
+    {
+      "claim_id": "c-ts-first-order-saddle-candidate",
+      "statement": "The real B20a-exec transition-state candidate has exactly one significant imaginary frequency with a mapped native mode.",
+      "status": "not_evaluated",
+      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "source_role": "audit_gap_declaration",
+      "owner": "A-20",
+      "producer": "B20a-exec",
+      "h4_row_id": "H4-01-valid-ts",
+      "h4_row_result": "NOT_VERIFIED",
+      "h4_row_gap": "B20a-exec has not published the authorized TS optimize/frequency step receipts and artifacts: no real magnitude/mode record, snapshot digest, attempt or release exists. A constructed validator PASS is not real evidence.",
+      "evidence_kind": "absent",
+      "why": "A real B20a-exec TS optimize/frequency artifact is required; no magnitude/mode record, snapshot digest, attempt or release exists."
+    },
+    {
+      "claim_id": "c-ts-connects-intended-endpoints",
+      "statement": "Real forward and reverse IRC both complete and connect the declared reactant/product endpoints for the same TS identity.",
+      "status": "not_evaluated",
+      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "source_role": "audit_gap_declaration",
+      "owner": "A-20",
+      "producer": "B20a-exec",
+      "h4_row_id": "H4-02-bidirectional-irc",
+      "h4_row_result": "NOT_VERIFIED",
+      "h4_row_gap": "B20a-exec has not published the authorized forward/reverse IRC step receipts and artifacts: no real direction results, native step counts, terminal states or snapshot digest exist.",
+      "evidence_kind": "absent",
+      "why": "A real B20a-exec bidirectional IRC artifact is required; no forward/reverse result, direction label, native step count or terminal state exists."
+    },
+    {
+      "claim_id": "c-endpoint-connectivity",
+      "statement": "The real IRC endpoint geometries and bond-topology mapping prove the declared reactant-to-product path under stable atom order.",
+      "status": "not_evaluated",
+      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "source_role": "audit_gap_declaration",
+      "owner": "A-20",
+      "producer": "B20a-exec",
+      "h4_row_id": "H4-03-endpoint-connectivity",
+      "h4_row_result": "NOT_VERIFIED",
+      "h4_row_gap": "B20a-exec has not published the authorized endpoint geometries or the mapped product structure; no real atom-order-stable endpoint mapping exists.",
+      "evidence_kind": "absent",
+      "why": "A real B20a-exec endpoint artifact and mapped product structure are required; no atom-order-stable endpoint mapping exists."
+    },
+    {
+      "claim_id": "c-electronic-activation-barrier-comparable",
+      "statement": "The real electronic activation energy is comparable under the frozen method, basis, electronic state, temperature, pressure and standard state with an explicit unit.",
+      "status": "not_evaluated",
+      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "source_role": "audit_gap_declaration",
+      "owner": "A-20",
+      "producer": "B20a-exec",
+      "h4_row_id": "H4-04-comparable-energy",
+      "h4_row_result": "NOT_VERIFIED",
+      "h4_row_gap": "B20a-exec has not published authorized energy/thermochemistry artifacts; additionally B18 must reconcile the frozen 1_bar_ideal_gas standard state with the ThermochemistryOptions 1atm/1M lexicon before a real run.",
+      "evidence_kind": "absent",
+      "why": "A real B20a-exec energy artifact is required; additionally B18 must reconcile the frozen 1_bar_ideal_gas standard state with the ThermochemistryOptions 1atm/1M lexicon."
+    },
+    {
+      "claim_id": "c-free-energy-activation-barrier-comparable",
+      "statement": "The real free-energy activation barrier is comparable under the frozen thermochemistry conditions, separate from the electronic barrier claim.",
+      "status": "not_evaluated",
+      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "source_role": "audit_gap_declaration",
+      "owner": "A-20",
+      "producer": "B20a-exec",
+      "h4_row_id": "H4-04-comparable-energy",
+      "h4_row_result": "NOT_VERIFIED",
+      "h4_row_gap": "B20a-exec has not published authorized energy/thermochemistry artifacts; additionally B18 must reconcile the frozen 1_bar_ideal_gas standard state with the ThermochemistryOptions 1atm/1M lexicon before a real run.",
+      "evidence_kind": "absent",
+      "why": "No real B20a-exec thermochemistry artifact exists; the frozen standard-state lexicon reconciliation is still pending."
+    },
+    {
+      "claim_id": "c-search-capability",
+      "statement": "A separate declared search run generates and accepts at least one candidate under declared input criteria, candidate source/count, generation steps, filtering/rejection reasons, validator and success criteria.",
+      "status": "not_evaluated",
+      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "cc70787c02fc9b488d5d0e5d0ebf608d3292050f799fbe6da9fa010988280f8e"
+      },
+      "source_role": "search_gap_declaration",
+      "owner": "A-20",
+      "producer": "B20a-search",
+      "h4_row_id": "H4-search",
+      "h4_row_result": "NOT_VERIFIED",
+      "h4_row_gap": "B20a-search has not published its separate search evidence row: no input category, candidate source/count, generation steps, rejection reasons, validators or success criteria exist. A control-loop or known-candidate PASS is explicitly not search evidence.",
+      "evidence_kind": "absent",
+      "why": "Search was not declared: no input class, TS seed, candidate source/count, generation steps, rejection reasons, validator or success criteria. A known-candidate chain is explicitly not search evidence."
+    },
+    {
+      "claim_id": "c-negative-missing-frequency-honesty",
+      "statement": "A TS artifact with no frequency evidence is reported inconclusive (frequency_not_computed), never supported and never refuted.",
+      "status": "inconclusive",
+      "source_artifact": "<acp2-dev>/A/tests/fixtures/acp2/science/diels_alder/validators/ts-missing-frequency-result.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "c3f506d0dc0e1c2e81b38b492abe06e5ff7a01809b94ddb2f75de256eb811f66"
+      },
+      "source_role": "constructed_fixture_negative_rule",
+      "owner": "A-20",
+      "producer": "A-17 constructed validator",
+      "h4_row_id": "H4-NEG-missing-frequency",
+      "h4_row_result": "PASS",
+      "h4_row_gap": null,
+      "evidence_kind": "constructed-fixture",
+      "scenario_result": "PASS",
+      "replaces_positive_requirement": false,
+      "why": "Correctly reporting an absent frequency is a PASS for honesty only. It does not supply the missing real frequency evidence and cannot satisfy H4-01, H4-02, H4-03 or H4-04."
+    }
+  ],
+  "result_vs_claim": {
+    "scenario_result": {
+      "value": "NOT_VERIFIED",
+      "phase": "da-submit",
+      "reason": "c24a_absent"
+    },
+    "claim_status": {
+      "value": "not_evaluated",
+      "reason": "No authorized execution artifact exists; no scientific claim was evaluated."
+    },
+    "h4_gate": {
+      "value": "open",
+      "reason": "H4 requires real positive TS/IRC/comparable-energy rows and the separate B20a-search row; none exist."
+    },
+    "independent": true,
+    "rule": "The scenario result answers whether the required operation completed. claim_status answers whether the scientific proposition is supported. h4_gate answers whether the H4 positive evidence set is complete. None implies either of the others."
+  },
+  "negative_case_rule": {
+    "rule": "A correctly-inconclusive negative case may PASS its own scenario while the required positive TS/IRC/comparable-energy gate stays unsatisfied.",
+    "negative_can_pass_scenario": true,
+    "negative_satisfies_positive_gate": false,
+    "negative_closes_h4": false,
+    "example_claim_id": "c-negative-missing-frequency-honesty",
+    "example_h4_row_id": "H4-NEG-missing-frequency"
+  },
+  "one_imaginary_frequency_not_connectivity": {
+    "rule": "A single imaginary frequency identifies a first-order-saddle candidate only. It never proves IRC connectivity.",
+    "one_imaginary_frequency_proves_first_order_saddle_candidate": true,
+    "one_imaginary_frequency_proves_irc_connectivity": false,
+    "irc_connectivity_requires": [
+      "real forward IRC completion",
+      "real reverse IRC completion",
+      "endpoint geometries mapped under stable atom order",
+      "same TS identity for both directions"
+    ]
+  },
+  "b_does_not_relabel_science": {
+    "owner": "B",
+    "science_signing_owner": "A-20",
+    "experience_signing_owner": "C T-35",
+    "b_records_only": [
+      "execution",
+      "release",
+      "attempt",
+      "manifest",
+      "budget"
+    ],
+    "b_assigns_claim_status": false,
+    "b_promotes_h4": false
+  },
+  "c_cannot_overwrite_b_task_truth": {
+    "authoritative_owner": "B",
+    "c_may_not_override": [
+      "job_id",
+      "attempt",
+      "release_id",
+      "submission_id",
+      "manifest_generation",
+      "task_ref",
+      "execution_result"
+    ],
+    "rule": "C's ResearchRecord may reference evidence and record a research decision, but it must not overwrite B's persisted task/execution truth."
+  },
+  "h4_ledger_path": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+  "validation": {
+    "supported_rows": 0,
+    "supported_rows_without_source_artifact": 0,
+    "assertion": "While B20a-exec is absent there are zero supported propositions, and every supported proposition would require a real source artifact and digest."
+  },
+  "missing_references": [
+    {
+      "owner": "B20a-exec",
+      "status": "NOT_VERIFIED(c24a_absent)",
+      "expected": "one approved C24a submission and its TaskRef/attempt/release/manifest artifacts",
+      "detail_path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/c24a-gap.json"
+    },
+    {
+      "owner": "A-20",
+      "status": "NOT_VERIFIED",
+      "expected": "A audit of the real B20a-exec EvidenceReport rows H4-01..H4-04",
+      "detail_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json"
+    },
+    {
+      "owner": "B20a-search",
+      "status": "NOT_VERIFIED(search_not_declared)",
+      "expected": "a separately declared search run with criteria and candidate accounting",
+      "detail_path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
+    },
+    {
+      "owner": "C T-35 / C24b",
+      "status": "NOT_VERIFIED(c24b_absent)",
+      "expected": "a real da-evidence receipt plus ResearchRecord for the same task/attempt",
+      "detail_path": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/b"
+    }
+  ]
+}
