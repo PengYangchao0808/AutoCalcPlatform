@@ -1,0 +1,41 @@
+{
+  "schema": "acp2.controller-start-record.v1",
+  "candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
+  "candidate_tree": "0a9436f24a2a62232c2186a8ba75d0b05f3397a8",
+  "pid": 827185,
+  "argv": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "-m",
+    "acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18772",
+    "--run-root",
+    "/ACPServer/acp2-development/data/integration/controller-run-root",
+    "--no-browser"
+  ],
+  "cwd": "/ACPServer/acp2-development/data/integration/controller-config",
+  "pythonpath": "/ACPServer/acp2-development/integration/src",
+  "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "db_path": "/ACPServer/acp2-development/data/integration/controller-run-root/acp_jobs.db",
+  "run_root": "/ACPServer/acp2-development/data/integration/controller-run-root",
+  "bind_host": "127.0.0.1",
+  "port": 18772,
+  "production_port": 8765,
+  "production_touched": false,
+  "health": {
+    "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "contract_digest": "d0a338dc934b720253e4ca872b08b8c5b7a10b090c41387e1f4bdc8ecbe011d1",
+    "contract_version": "1.1.0",
+    "read_only": true
+  },
+  "loaded_module_paths": {
+    "acp": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "cccp": "/ACPServer/acp2-development/integration/src/cccp/__init__.py",
+    "acp_services": "/ACPServer/acp2-development/integration/src/acp_services/__init__.py"
+  },
+  "note": "PID/port are from this B14a run; the candidate serves integration source through PYTHONPATH while the B02 venv remains the interpreter environment."
+}
