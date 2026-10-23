@@ -35,6 +35,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -226,6 +227,242 @@ def _read_version_locations(source_root: Path) -> dict[str, str]:
     project = tomllib.loads((source_root / "pyproject.toml").read_text(encoding="utf-8"))
     versions["pyproject.toml"] = str(project["project"]["version"])
     return versions
+
+
+def _http_request(
+    url: str,
+    *,
+    method: str = "GET",
+    body: Any = None,
+    timeout: float = 30.0,
+) -> tuple[int, Any]:
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    headers = {"Accept": "application/json"}
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+            status = int(response.status)
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        status = int(exc.code)
+    try:
+        payload = json.loads(raw.decode("utf-8")) if raw else None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        payload = None
+    return status, payload
+
+
+def _read_json_file(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _package_install_scheduler_probe(
+    *,
+    base: str,
+    web_python: str,
+    lab_root: Path,
+    out_dir: Path,
+    logs: Path,
+    task: Mapping[str, Any],
+    timeout: float,
+) -> tuple[bool, dict[str, Any]]:
+    """Submit one real H2/STO-3G singlepoint through the installed Lab."""
+    evidence_dir = out_dir / "scheduler-task"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    facts: dict[str, Any] = {"schema": "acp2.package-install.scheduler-task.v1"}
+    commands: list[dict[str, Any]] = []
+
+    identity_code = """
+import json
+from pathlib import Path
+import acp, acp_services, cccp
+import acp.scheduler.runner
+from acp.calculations.attempt_freeze import local_release_identity
+root = Path(acp.scheduler.runner.__file__).resolve().parents[3]
+identity = local_release_identity(root)
+print(json.dumps({
+    "modules": {"acp": acp.__file__, "acp_services": acp_services.__file__, "cccp": cccp.__file__},
+    "runner_root": str(root),
+    "release_id": identity.release_id,
+    "release_digest": identity.release_digest,
+    "file_count": len(identity.files),
+    "prefixes": sorted({key.split("/", 1)[0] for key in identity.files}),
+    "keys_are_absolute": any(key.startswith("/") for key in identity.files),
+    "contains_repo_path": any("/ACPServer/" in key for key in identity.files),
+}))
+"""
+    identity_run = _run(
+        [web_python, "-c", identity_code],
+        cwd=lab_root,
+        timeout=min(timeout, 120),
+        log=logs / "scheduler-identity.log",
+    )
+    commands.append(
+        {
+            "label": "installed release identity",
+            "argv": [web_python, "-c", "local_release_identity(<runner_root>)"],
+            "exit": identity_run.returncode,
+        }
+    )
+    identity_facts: dict[str, Any] = {}
+    try:
+        identity_facts = json.loads(identity_run.stdout.strip().splitlines()[-1])
+    except (json.JSONDecodeError, IndexError):
+        identity_facts["stderr"] = identity_run.stderr[-2000:]
+    facts["installed_identity"] = identity_facts
+    _write_json(evidence_dir / "installed-identity.json", identity_facts)
+    identity_ok = bool(
+        identity_run.returncode == 0
+        and identity_facts.get("prefixes") == ["acp", "acp_services", "cccp"]
+        and identity_facts.get("keys_are_absolute") is False
+        and identity_facts.get("contains_repo_path") is False
+        and all(
+            "/site-packages/" in str(path)
+            for path in (identity_facts.get("modules") or {}).values()
+        )
+        and len(str(identity_facts.get("release_id") or "")) == 16
+        and len(str(identity_facts.get("release_digest") or "")) == 64
+    )
+
+    workflow = str(task.get("workflow") or "singlepoint")
+    xyz = str(task.get("xyz") or "2\nH2\nH 0 0 0\nH 0 0 0.74\n")
+    submit = {
+        "workflow": workflow,
+        "name": "b25-scheduler-smoke",
+        "input": {
+            "source_type": "xyz_text",
+            "source": xyz,
+            "charge": int(task.get("charge") or 0),
+            "multiplicity": int(task.get("multiplicity") or 1),
+        },
+        "method": dict(
+            task.get("method")
+            or {"method": "HF", "basis": "STO-3G", "charge": 0, "multiplicity": 1}
+        ),
+        "resources": dict(task.get("resources") or {"nproc": 1, "mem": "1024MB"}),
+    }
+    status, created = _http_request(base + "/api/v1/jobs", method="POST", body=submit, timeout=60)
+    commands.append(
+        {
+            "label": "POST /api/v1/jobs",
+            "argv": ["POST", base + "/api/v1/jobs", json.dumps(submit)],
+            "exit": status,
+        }
+    )
+    created = created if isinstance(created, dict) else {}
+    job_id = str(created.get("job_id") or created.get("id") or "")
+    facts["submit"] = {
+        "status": status,
+        "job_id": job_id,
+        "release_id": created.get("release_id"),
+        "release_digest": created.get("release_digest"),
+    }
+    terminal = {"completed", "failed", "cancelled"}
+    job: dict[str, Any] = {}
+    deadline = time.monotonic() + min(timeout, 900)
+    while job_id and time.monotonic() < deadline:
+        _, job_payload = _http_request(base + f"/api/v1/jobs/{job_id}", timeout=min(timeout, 60))
+        job = job_payload if isinstance(job_payload, dict) else {}
+        if str(job.get("status") or "").lower() in terminal:
+            break
+        time.sleep(0.5)
+    final_status = str(job.get("status") or "").lower()
+    work_dir = Path(str(job.get("work_dir") or ""))
+    facts["job"] = {
+        "status": final_status,
+        "attempt": job.get("attempt"),
+        "error": job.get("error"),
+        "work_dir": str(work_dir),
+    }
+    commands.append(
+        {
+            "label": "poll terminal status",
+            "argv": ["GET", base + f"/api/v1/jobs/{job_id}"],
+            "exit": 0 if final_status in terminal else 1,
+        }
+    )
+
+    task_result = _read_json_file(work_dir / "RESULT" / "task_result.json")
+    manifest = _read_json_file(work_dir / "RESULT" / "result_manifest.json")
+    receipt = _read_json_file(work_dir / "execution_receipt.json")
+    envelope = _read_json_file(work_dir / "WORK" / "00_RUNTIME" / "frozen" / "envelope.json")
+    task_result = task_result if isinstance(task_result, dict) else {}
+    manifest = manifest if isinstance(manifest, dict) else {}
+    receipt = receipt if isinstance(receipt, dict) else {}
+    envelope = envelope if isinstance(envelope, dict) else {}
+    result = task_result.get("result") if isinstance(task_result.get("result"), dict) else {}
+    products = manifest.get("products") if isinstance(manifest.get("products"), list) else []
+    receipt_release = str(receipt.get("release_id") or "")
+    envelope_release = str(envelope.get("release_id") or "")
+    orca_text = ""
+    orca_output = work_dir / "sp.out"
+    if orca_output.is_file():
+        orca_text = orca_output.read_text(encoding="utf-8", errors="replace")
+    energies = re.findall(r"FINAL SINGLE POINT ENERGY\s+(-?\d+\.\d+)", orca_text)
+    orca_energy = float(energies[-1]) if energies else None
+    energy = result.get("energy_hartree", orca_energy)
+    task_ok = bool(
+        final_status == "completed"
+        and work_dir.is_dir()
+        and task_result.get("status") == "completed"
+        and task_result.get("complete") is True
+        and isinstance(energy, (int, float))
+        and float(energy) < 0
+        and manifest.get("status") == "completed"
+        and bool(products)
+        and receipt.get("state") == "completed"
+        and receipt_release
+        and receipt_release == envelope_release
+        and receipt_release != "unversioned-shared"
+        and receipt_release == identity_facts.get("release_id")
+        and len(str(envelope.get("release_digest") or "")) == 64
+    )
+    facts["artifacts"] = {
+        "task_result": {
+            "status": task_result.get("status"),
+            "complete": task_result.get("complete"),
+            "energy_hartree": energy,
+        },
+        "manifest": {
+            "status": manifest.get("status"),
+            "products": len(products),
+        },
+        "receipt": {
+            "state": receipt.get("state"),
+            "release_id": receipt_release,
+        },
+        "envelope": {
+            "release_id": envelope_release,
+            "release_digest": envelope.get("release_digest"),
+        },
+        "release_id_matches_installed_identity": receipt_release
+        == identity_facts.get("release_id"),
+    }
+    for relative in (
+        "RESULT/task_result.json",
+        "RESULT/result_manifest.json",
+        "execution_receipt.json",
+        "WORK/00_RUNTIME/frozen/envelope.json",
+        "job.json",
+        "sp.inp",
+        "sp.out",
+    ):
+        source = work_dir / relative
+        if source.is_file():
+            target = evidence_dir / relative.replace("/", "__")
+            shutil.copy2(source, target)
+    facts["commands"] = commands
+    facts["installed_identity_ok"] = identity_ok
+    facts["task_ok"] = task_ok
+    facts["ok"] = bool(identity_ok and task_ok)
+    _write_json(evidence_dir / "scheduler-task.json", facts)
+    return bool(facts["ok"]), facts
 
 
 def run_package_install(
@@ -583,7 +820,16 @@ print(json.dumps(facts))
     if lab_root.exists():
         shutil.rmtree(lab_root)
     lab_root.mkdir(parents=True)
+    scheduler_task = fixture.get("scheduler_task")
+    scheduler_task = scheduler_task if isinstance(scheduler_task, dict) else None
     lab_env = {"ACP_RUN_ROOT": str(lab_root)}
+    if scheduler_task is not None:
+        orca_path = str(scheduler_task.get("orca_path") or "").strip()
+        if orca_path:
+            lab_env["CONFSEARCH_ORCA_PATH"] = orca_path
+        orca_ld = str(scheduler_task.get("orca_ld_library_path") or "").strip()
+        if orca_ld:
+            lab_env["CONFSEARCH_ORCA_LD_LIBRARY_PATH"] = orca_ld
     lab_log = logs / "lab-server.log"
     with lab_log.open("w", encoding="utf-8") as stream:
         lab = subprocess.Popen(
@@ -609,6 +855,8 @@ print(json.dumps(facts))
     health: dict[str, Any] = {}
     lab_ok = False
     mcp_ok = False
+    scheduler_ok = False
+    scheduler_facts: dict[str, Any] = {}
     try:
         deadline = time.monotonic() + min(timeout, 120)
         last_error = ""
@@ -701,6 +949,28 @@ finally:
                 if mcp_ok
                 else "stdio MCP discovery failed",
             )
+        if lab_ok and scheduler_task is not None:
+            scheduler_ok, scheduler_facts = _package_install_scheduler_probe(
+                base=f"http://127.0.0.1:{port}",
+                web_python=web_python,
+                lab_root=lab_root,
+                out_dir=out_dir,
+                logs=logs,
+                task=scheduler_task,
+                timeout=timeout,
+            )
+            for path in sorted((out_dir / "scheduler-task").glob("*")):
+                if path.is_file():
+                    artifact(path)
+            extensions["b25.scheduler_task"] = scheduler_facts
+            add(
+                "b25.scheduler_task",
+                "PASS" if scheduler_ok else "FAIL",
+                "installed Lab completed one real H2/STO-3G singlepoint with "
+                "task_result/result_manifest/receipt release identity"
+                if scheduler_ok
+                else "installed Lab scheduler task did not complete with valid artifacts",
+            )
     finally:
         if lab.poll() is None:
             lab.terminate()
@@ -715,6 +985,16 @@ finally:
         return EXIT_FAIL, assertions, extensions
     if not mcp_ok:
         extensions["b25.reason"] = "mcp_stdio_failed"
+        return EXIT_FAIL, assertions, extensions
+    if scheduler_task is None:
+        add(
+            "b25.scheduler_task",
+            "NOT_VERIFIED",
+            "fixture has no scheduler_task block (ORCA path); installed scheduler "
+            "execution was not exercised",
+        )
+    elif not scheduler_ok:
+        extensions["b25.reason"] = "scheduler_task_failed"
         return EXIT_FAIL, assertions, extensions
     # 7. Assets, notices, licenses, sample config, schema, SDK, docs.
     assets_code = """
