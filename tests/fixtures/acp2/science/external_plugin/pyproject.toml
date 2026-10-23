@@ -1,0 +1,26 @@
+[build-system]
+requires = []
+build-backend = "build_backend"
+backend-path = ["."]
+
+[project]
+name = "acp2-external-science-validator"
+version = "1.0.0"
+description = "Read-only ACP2 external science plugin fixture: native single-point record validator"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "ACP2 Plan A fixture"}]
+keywords = ["acp2", "science", "plugin", "fixture"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = []
+
+[tool.acp2-science-plugin]
+entry-point-group = "cccp.science_plugins"
+entry-point-group-version = 1
+manifest = "cccp_science_plugin.json"

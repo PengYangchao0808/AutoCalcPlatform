@@ -1,0 +1,9 @@
+# ACP2 external native singlepoint record v1
+schema acp2.native.singlepoint.v1
+charge 0
+multiplicity 1
+atoms 3
+atom O 0.000000000 0.000000000 0.117300000
+atom H 0.000000000 0.757200000 -0.469200000
+atom H 0.000000000 -0.757200000 -0.469200000
+energy_hartree -76.0266320000
