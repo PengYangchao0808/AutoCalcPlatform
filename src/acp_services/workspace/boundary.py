@@ -336,11 +336,37 @@ class OriginPolicy:
 
     The tier and loopback binding are process/config facts fixed at startup;
     :meth:`evaluate` only classifies an incoming request against them.
+    ``public_origin`` pins a reverse-proxy deployment to its browser-facing
+    origin; leaving it unset compares against the direct request's Host/scheme.
     """
 
     tier: str = DeploymentTier.LOCAL_SINGLE
     server_is_loopback: bool = True
     server_scheme: str = "http"
+    public_origin: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.public_origin is None:
+            return
+        try:
+            parsed = urlsplit(self.public_origin)
+            valid = (
+                parsed.scheme in {"http", "https"}
+                and bool(parsed.hostname)
+                and parsed.username is None
+                and parsed.password is None
+                and parsed.path in {"", "/"}
+                and not parsed.query
+                and not parsed.fragment
+                and not any(char.isspace() for char in self.public_origin)
+            )
+            parsed.port  # Validate the configured port, including its range.
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError(
+                "ACP_PUBLIC_ORIGIN must be an http(s) origin, e.g. https://acp.example"
+            )
 
     def evaluate(
         self,
@@ -354,6 +380,13 @@ class OriginPolicy:
         client_host: str | None = None,
         server_scheme: str | None = None,
     ) -> BoundaryDecision:
+        # TLS-terminating proxies can change the scheme and Host seen here.
+        # Only deployment configuration may supply the external origin; never
+        # infer it from Origin or untrusted X-Forwarded-* request headers.
+        if self.public_origin is not None:
+            public = urlsplit(self.public_origin)
+            host = public.netloc
+            server_scheme = public.scheme
         return evaluate_request(
             method=method,
             origin=origin,
