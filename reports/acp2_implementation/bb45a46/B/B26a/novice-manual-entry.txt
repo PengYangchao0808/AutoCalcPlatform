@@ -1,0 +1,12 @@
+GET /api/health
+{"schema_version":1,"status":"ok","candidate_revision":"unknown","contract_version":"1.0.0","contract_digest":"812b9ba0886874f7a1fad6fd75c63dd57181cc2e5348e10ea15511f2653b8f50","contract_digest_scope":"delivered-contract-set","read_only":true,"started_at":"2026-10-23T13:37:45.412731Z"}
+HTTP=200
+GET /
+HTTP=200 bytes=82478
+GET /api/workflows
+HTTP=200 bytes=2820
+GET /api/status
+{"service":"ACP Workbench","version":"0.3.0","status":"ok","host":"127.0.0.1","port":18787,"wsl":false,"python":"3.11.13","run_root":"/tmp/opencode/b26a-clean/data/lab-run-root","uptime_seconds":18.4,"queue":{"queued":0,"pending":0,"running":0,"paused":0,"completed":0,"failed":0,"cancelled":0}}
+HTTP=200
+title=<title>ACP Molecular Workbench</title>
+workflow_count=15

@@ -1,0 +1,2 @@
+    PID    PPID    PGID STAT                  STARTED CMD
+1655450       1 1655450 Ssl  Fri Oct 23 21:42:50 2026 /tmp/opencode/b26a-clean/venvs/web/bin/python /tmp/opencode/b26a-clean/venvs/web/bin/acp run serve --host 127.0.0.1 --port 18789 --run-root /tmp/opencode/b26a-clean/data/run-root-b17 --poll-interval 1 --no-browser

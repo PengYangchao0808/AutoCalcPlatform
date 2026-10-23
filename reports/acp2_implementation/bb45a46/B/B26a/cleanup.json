@@ -1,0 +1,23 @@
+{
+  "b26a_servers_stopped": true,
+  "generated_at": "2026-10-23T13:52:02.490460+00:00",
+  "kept": [
+    "clean shell proof",
+    "install/import logs",
+    "row reports",
+    "pytest/ruff/validator logs"
+  ],
+  "listener_ports": {
+    "18787": "FREE",
+    "18788": "FREE",
+    "18789": "FREE"
+  },
+  "mcp_processes_stopped": true,
+  "note": "Lab (18787), B15 (18788) and B17 (18789) controllers were terminated by PID; ports verified free. Production acp.service on 8765 was only observed, never restarted.",
+  "production_8765_process": "/opt/acp/venv/bin/acp run serve --host 0.0.0.0 --port 8765 (observed only, PID 336067)",
+  "production_run_root_touched": false,
+  "production_service_8765_touched": false,
+  "schema": "acp2.b26a.cleanup.v1",
+  "temp_data_roots_removed": true,
+  "temp_venvs_removed_after_logs_copied": true
+}

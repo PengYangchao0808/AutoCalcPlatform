@@ -1,0 +1,41 @@
+ACP 初始化（非交互回答文件：/tmp/opencode/b26a-clean/work/init/answers.yaml）
+ACP 初始化计划 v1
+目标配置：/tmp/opencode/b26a-clean/work/init/cccp.yaml（来源：/tmp/opencode/b26a-clean/work/init/cccp.yaml）
+使用方式：本机部署
+部署档位：Standalone（单机） (local-single)
+组件组合：local-identity, local-storage, science-core
+参数：
+  run_root: /tmp/opencode/b26a-clean/data/init-run-root
+秘密引用：无
+回退：
+  - 恢复目标文件的上一次 .bak-<时间戳> 备份
+  - 删除新增的 deployment 段（若不需要）
+  - 跨系统资源（数据库/对象存储/系统服务）需手工撤销，本计划不承诺全原子回滚
+配置差异：
+  cluster.type: {} → local
+  deployment.components: {} → ["local-identity", "local-storage", "science-core"]
+  deployment.params.run_root: {} → /tmp/opencode/b26a-clean/data/init-run-root
+  deployment.tier: {} → local-single
+  deployment.usage: {} → local
+  executables.orca.path: {} → /home/xieningke/orca611/orca
+  executables.xtb.path: {} → /home/xieningke/xtb-dist/bin/xtb
+已应用计划并写入 /tmp/opencode/b26a-clean/work/init/cccp.yaml
+
+== 验证（doctor） ==
+doctor 能力报告（PASS / FAIL / NOT_VERIFIED 分列）
+  PASS（7）：
+    - deployment-tier — local-single
+    - run_root — /tmp/opencode/b26a-clean/data/init-run-root — 就绪
+    - software:orca — /home/xieningke/orca611/orca
+    - software:xtb — /home/xieningke/xtb-dist/bin/xtb
+    - component:local-identity — 本地身份（单用户）
+    - component:local-storage — 本地存储（run_root）
+    - component:science-core — 科学核心（本地摄入/计划/执行/导出）
+  FAIL（0）：
+    - （无）
+  NOT_VERIFIED（5）：
+    - software:crest — 未配置；配置完成但科学能力尚未验证
+    - software:censo — 未配置；配置完成但科学能力尚未验证
+    - software:shermo — 未配置；配置完成但科学能力尚未验证
+    - software:isostat — 未配置；配置完成但科学能力尚未验证
+    - software:molclus — 未配置；配置完成但科学能力尚未验证

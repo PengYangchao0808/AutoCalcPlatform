@@ -1,0 +1,26 @@
+2026-10-23 21:47:53,835 [INFO] acp.scheduler.manager: JobManager booted: pid=1659826 run_root=/tmp/opencode/b26a-clean/data/task2-run-root
+2026-10-23 21:47:54,055 [INFO] acp.scheduler.manager: Poll loop started (interval=15s, remote=False)
+2026-10-23 21:47:54,055 [INFO] acp.scheduler.manager: Reconcile loop started (interval=15s)
+2026-10-23 21:47:54,222 [ERROR] acp.scheduler.manager: Submission failed for job 20261023_214754_001_b26a-sp
+Traceback (most recent call last):
+  File "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/scheduler/manager.py", line 3736, in _execute_submission_impl
+    submitted = self._submit_job(job_id)
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/scheduler/manager.py", line 4929, in _submit_job
+    self.runner.submit(record, event_log, cancel_event)
+  File "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/scheduler/runner.py", line 597, in submit
+    self._prepare_and_launch(record, work_dir, storage, event_log)
+  File "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/scheduler/runner.py", line 642, in _prepare_and_launch
+    self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
+  File "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/scheduler/runner.py", line 1360, in _ensure_default_frozen_attempt
+    release = build_local_release(self._repo_root, work_dir.parent.parent)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/calculations/attempt_freeze.py", line 452, in build_local_release
+    identity = local_release_identity(root)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/calculations/attempt_freeze.py", line 316, in local_release_identity
+    raise ReleaseIdentityError(
+acp.calculations.attempt_freeze.ReleaseIdentityError: no execution-tree files found under /tmp/opencode/b26a-clean/venvs/web/lib/python3.11 (expected src/acp, src/acp_services, src/cccp)
+{"command": "execute", "job_id": "20261023_214754_001_b26a-sp", "status": "failed", "task_ref": {"attempt": 1, "job_id": "20261023_214754_001_b26a-sp", "task_id": "20261023_214754_001_b26a-sp"}, "work_dir": "/tmp/opencode/b26a-clean/data/task2-run-root/uncategorized/b26a-sp_singlepoint"}
+2026-10-23 21:47:54,374 [INFO] acp.scheduler.manager: Reconcile loop stopped
+2026-10-23 21:47:54,374 [INFO] acp.scheduler.manager: Poll loop stopped

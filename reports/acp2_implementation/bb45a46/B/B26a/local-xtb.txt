@@ -1,0 +1,5 @@
+2026-10-23 21:47:21,004 [INFO] cccp.config: Loaded explicit config from: /tmp/opencode/b26a-clean/work/xtb/cccp.yaml
+2026-10-23 21:47:21,253 [INFO] acp.calculations.executor: step 0: running optimize
+2026-10-23 21:47:21,283 [INFO] acp.calculations.executor: step 0 (optimize) completed
+2026-10-23 21:47:21,286 [INFO] acp.cli: xTB geometry optimization completed
+2026-10-23 21:47:21,286 [INFO] acp.cli:   Energy: -5.070543980555 Hartree

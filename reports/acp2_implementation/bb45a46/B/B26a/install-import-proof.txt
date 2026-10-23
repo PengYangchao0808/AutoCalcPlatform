@@ -1,0 +1,11 @@
+PWD=/tmp/opencode/b26a-clean/work
+PYTHONPATH=<unset>
+sys.executable=/tmp/opencode/b26a-clean/venvs/web/bin/python
+acp=/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/__init__.py
+cccp=/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/cccp/__init__.py
+acp_services=/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py
+acp_web_assets=/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp_web_assets/__init__.py
+repo_path_present=False
+version=0.3.0/0.3.0
+acp_help_exit=0
+freeze_lines=43

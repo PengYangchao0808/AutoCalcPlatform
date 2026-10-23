@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "/tmp/opencode/b26a-clean/venvs/web/bin/python",
+    "/tmp/opencode/b26a-clean/venvs/web/bin/acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18789",
+    "--run-root",
+    "/tmp/opencode/b26a-clean/data/run-root-b17",
+    "--poll-interval",
+    "1",
+    "--no-browser"
+  ],
+  "cwd": "/tmp/opencode/b26a-clean/work/orca",
+  "health": {
+    "candidate_revision": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+    "contract_digest": "812b9ba0886874f7a1fad6fd75c63dd57181cc2e5348e10ea15511f2653b8f50",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.0.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-23T13:43:07.207795Z",
+    "status": "ok"
+  },
+  "pid": 1655678,
+  "run_root": "/tmp/opencode/b26a-clean/data/run-root-b17"
+}
