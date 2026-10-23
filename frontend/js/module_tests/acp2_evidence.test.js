@@ -315,52 +315,147 @@ module.exports.register = async function (h) {
     });
   });
 
-  await test("live reads go through ACPClient only (science view + research round)", async () => {
+  await test("live reads go through the real ACPClient namespace (science view + research round)", async () => {
     const calls = { view: 0, round: 0 };
-    const science = {
-      fetchView(ref) {
+    const dom = makeDom();
+    const sandbox = h.makeSandbox({ document: dom, console: { log() {}, warn() {}, error() {} } });
+    h.loadScript("js/client/resource-store.js", sandbox);
+    h.loadScript("js/workbench/contracts/experience_contract.js", sandbox);
+    h.loadScript("js/client/science-query.js", sandbox);
+    h.loadScript("js/client/research-query.js", sandbox);
+    h.loadScript(FEATURE_REL, sandbox);
+    const C = sandbox.window.ACPClient;
+    assert(C && C.science && C.research, "real ACPClient.science/research namespaces are loaded");
+    assertEq(C.research.readOnly, true, "real research client is read-only");
+    const viewBody = {
+      snapshot_revision: 9,
+      project_id: "p1",
+      task_ref: { job_id: "live_job", attempt: 1 },
+      manifest_generation: 3,
+      artifacts: [],
+      claims: [{
+        claim_id: "claim_live", statement: "live claim", status: "supported",
+        evidence_refs: ["work/a.log"], reason: null,
+      }],
+      clarifications: [],
+      provenance: {
+        source: "projection", producer_revision: "a".repeat(40),
+        produced_at: "2026-10-23T00:00:00Z", digest: "sha256:" + "0".repeat(64),
+      },
+      read_only: true,
+      not_authoritative_for_science: true,
+    };
+    const recordBody = {
+      research_id: "res-live-1",
+      project_id: "p1",
+      round: 1,
+      decision: "accept",
+      plan_definition_digest: "sha256:" + "1".repeat(64),
+      step_identity_refs: [],
+      task_refs: [{
+        project_id: "p1", job_id: "live_job", attempt: 1, release_id: "release-1",
+      }],
+      evidence_refs: [],
+      missing_validation: [],
+      human_edits: [],
+      approval_ref: "apr-1",
+      created_at: "2026-10-23T00:00:00Z",
+      record_revision: 2,
+    };
+    C.science.init({
+      v2: (path) => {
         calls.view += 1;
-        assertEq(ref, { jobId: "live_job", attempt: 1 });
-        return Promise.resolve({
-          snapshot_revision: 9,
-          project_id: "p1",
-          task_ref: { job_id: "live_job", attempt: 1 },
-          manifest_generation: 3,
-          artifacts: [],
-          claims: [{
-            claim_id: "claim_live", statement: "live claim", status: "supported",
-            evidence_refs: ["work/a.log"], reason: null,
-          }],
-          clarifications: [],
-          provenance: {
-            source: "projection", producer_revision: "a".repeat(40),
-            produced_at: "2026-10-23T00:00:00Z", digest: "sha256:" + "0".repeat(64),
-          },
-          read_only: true,
-          not_authoritative_for_science: true,
-        });
+        assert(path.indexOf("/research/") === -1, "science adapter never reads research paths");
+        return Promise.resolve(JSON.parse(JSON.stringify(viewBody)));
       },
-    };
-    const research = {
-      readRound() {
+    });
+    C.research.init({
+      v2: (path) => {
         calls.round += 1;
-        return Promise.resolve({
-          research_id: "res-live-1", round: 1, decision: "accept",
-          approval_ref: "apr-1", record_revision: 2,
-          evidence_refs: [],
-        });
+        assert(path.indexOf("/research/records/") !== -1, "research adapter reads record paths");
+        return Promise.resolve(JSON.parse(JSON.stringify(recordBody)));
       },
-    };
-    const { mod, body } = setup(h, { science, research });
+    });
+    const mod = sandbox.window.ACPScientificEvidence;
+    const body = dom.getElementById("scientific-evidence-body");
+    mod.mount(dom, {});
     await mod.loadViaClient(
       { view_ref: { jobId: "live_job", attempt: 1 }, record_ref: { id: "res-live-1", revision: 2 } },
       { projectId: "p1", permission: "read" }
     );
-    assertEq(calls.view, 1, "view read through ACPClient.science");
-    assertEq(calls.round, 1, "RPH decision read through ACPClient.research");
+    assertEq(calls.view, 1, "view read through the real ACPClient.science adapter");
+    assertEq(calls.round, 1, "RPH decision read through the real ACPClient.research adapter");
     const html = String(body.innerHTML);
     assert(html.indexOf('data-claim-status="supported"') !== -1, "live claim rendered");
     assert(html.indexOf("res-live-1") !== -1, "decision source rendered");
+  });
+
+  await test("workbench page loads js/client/research-query.js before bootstrap and inits it", () => {
+    const html = fs.readFileSync(path.join(FRONTEND, "ACP_Workbench_v2.html"), "utf8");
+    const researchAt = html.indexOf('src="js/client/research-query.js"');
+    const bootstrapAt = html.indexOf('src="js/workbench/bootstrap.js"');
+    assert(researchAt !== -1, "research-query.js is loaded by the workbench page");
+    assert(bootstrapAt !== -1, "bootstrap.js is loaded by the workbench page");
+    assert(researchAt < bootstrapAt, "research-query.js loads before bootstrap.js");
+    const apiSource = fs.readFileSync(
+      path.join(FRONTEND, "js", "workbench", "compat", "api.js"), "utf8");
+    assert(/ACPClient\.research\.init\(\{\s*v2:\s*apiV2\s*\}\)/.test(apiSource),
+      "compat/api.js initializes ACPClient.research with the v2 adapter");
+  });
+
+  await test("save-candidate confirms visibly and persists the candidate", () => {
+    const written = [];
+    const persistence = {
+      read: () => null,
+      write: (key, value) => written.push({ key, value: JSON.parse(JSON.stringify(value)) }),
+    };
+    const dom = makeDom();
+    const sandbox = h.makeSandbox({ document: dom, console: { log() {}, warn() {}, error() {} } });
+    h.loadScript(FEATURE_REL, sandbox);
+    const mod = sandbox.window.ACPScientificEvidence;
+    mod.mount(dom, { persistence });
+    mod.setEvidence(fixtureBundle(h));
+    const beforeHtml = String(dom.getElementById("scientific-evidence-body").innerHTML);
+    assert(beforeHtml.indexOf("data-se-save-confirm") === -1, "no confirmation before a save");
+    const record = mod.saveEnergyCandidate({ frame_index: 2, role: "ts" });
+    assert(record !== null, "candidate recorded");
+    const html = String(dom.getElementById("scientific-evidence-body").innerHTML);
+    assert(html.indexOf('data-se-save-confirm="1"') !== -1, "visible confirmation after save");
+    assert(html.indexOf("已保存为候选") !== -1, "confirmation copy is human-readable");
+    assertEq(written.length, 1, "candidate persisted exactly once");
+    assertEq(written[0].key, "acp_evidence_saved_candidates", "persistence key");
+    assertEq(written[0].value.length, 1, "persisted record list");
+    assertEq(written[0].value[0].role, "ts", "persisted payload kept");
+    const actions = html.slice(html.indexOf("data-se-energy-actions"));
+    const actionsBlock = actions.slice(0, actions.indexOf("</div>"));
+    assert(actionsBlock.indexOf('data-se-action="save-candidate"') !== -1, "sole action kept");
+    assert(html.indexOf('data-se-action="submit"') === -1, "no submit action appears");
+    mod.saveEnergyCandidate({ frame_index: 3 });
+    assert(String(dom.getElementById("scientific-evidence-body").innerHTML)
+      .indexOf('data-se-save-confirm="2"') !== -1, "confirmation count tracks saves");
+    assertEq(written[1].value.length, 2, "persistence keeps the full list");
+  });
+
+  await test("vibration autoplay has a pause control and honors prefers-reduced-motion", () => {
+    const dom = makeDom();
+    const sandbox = h.makeSandbox({
+      document: dom,
+      console: { log() {}, warn() {}, error() {} },
+      matchMedia: (query) => ({ matches: String(query).indexOf("reduced-motion") !== -1, media: query }),
+    });
+    h.loadScript(FEATURE_REL, sandbox);
+    const mod = sandbox.window.ACPScientificEvidence;
+    mod.mount(dom, {});
+    mod.setEvidence(fixtureBundle(h));
+    assertEq(mod.getState().vibrationPaused, true, "reduced motion starts paused");
+    const html = String(dom.getElementById("scientific-evidence-body").innerHTML);
+    assert(html.indexOf('data-se-action="toggle-vibration"') !== -1, "pause control rendered");
+    assert(html.indexOf('data-vibration-paused="1"') !== -1, "paused state visible");
+    assertEq(mod.toggleVibrationPlayback(), false, "toggle resumes playback");
+    assertEq(mod.getState().vibrationPaused, false);
+    assert(String(dom.getElementById("scientific-evidence-body").innerHTML)
+      .indexOf('data-vibration-paused="0"') !== -1, "resumed state visible");
+    assertEq(mod.toggleVibrationPlayback(), true, "toggle pauses again");
   });
 };
 

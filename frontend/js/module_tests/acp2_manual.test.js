@@ -426,4 +426,62 @@ module.exports.register = async function (h) {
     assertEq(preview.charge, 0);
     assertEq(preview.multiplicity, 1);
   });
+
+  await test("preflight failure shows the cause and a working retry control", async () => {
+    const h0 = setup(h, routeSet({
+      capabilities: { body: QFIX.capabilities },
+      preflight: {
+        body: {
+          executed: false,
+          metering_consumed: false,
+          transfers_attempted: false,
+          plan: { question_id: "single_point_energy", workflow: "singlepoint" },
+          estimate: { feasible: false, reason: "fixture preflight failure" },
+        },
+      },
+    }));
+    await h0.Q.discover();
+    await h0.Q.loadDemoStructure();
+    const outcome = await h0.Q.runPreflight();
+    assertEq(outcome.ok, false, "infeasible preflight fails");
+    const html = h0.bodyHtml();
+    assert(html.indexOf("预检失败") !== -1, "failure status visible");
+    assert(html.indexOf("sq-status-cause") !== -1, "cause line rendered");
+    assert(html.indexOf("fixture preflight failure") !== -1, "failure cause shown to the user");
+    assert(html.indexOf("sq-preflight-retry") !== -1, "retry control rendered");
+    assertEq(h0.Q.getState().preflight.error, "fixture preflight failure", "cause kept in state");
+    assertEq(h0.Q.getState().submitEnabled, false, "submit stays disabled");
+    const retry = h0.dom.getElementById("sq-preflight-retry");
+    const handlers = (retry.listeners && retry.listeners.click) || [];
+    assert(handlers.length >= 1, "retry button is wired");
+    const count = () => h0.log.filter((e) => e.url.indexOf("/science/preflight") === 0).length;
+    const before = count();
+    await handlers[0]();
+    assertEq(count(), before + 1, "retry re-runs the preflight");
+    assertEq(h0.submitCalls.length, 0, "failure never submits");
+  });
+
+  await test("user edit refreshes the field provenance (source line never stale)", async () => {
+    const h0 = setup(h, routeSet({
+      capabilities: { body: QFIX.capabilities },
+      preflight: { body: QFIX.preflight },
+    }));
+    await h0.Q.discover();
+    const origin = h0.Q.getState().defaults.sources.method;
+    assert(String(origin).indexOf("capability:") === 0, "baseline provenance is the capability default");
+    h0.Q.setValue("method", "wB97X-D4");
+    const live = h0.dom.getElementById("sq-source-method");
+    assert(String(live.textContent).indexOf("用户输入") !== -1, "edited field marked as a user edit");
+    assert(String(live.textContent).indexOf(origin) !== -1, "original provenance preserved in the line");
+    const sources = h0.Q.getState().defaults.sources;
+    assert(String(sources.method).indexOf("用户输入") !== -1, "state provenance updated");
+    assert(String(sources.charge).indexOf("capability:") === 0, "untouched fields keep their provenance");
+    h0.Q.setValue("method", "r2SCAN-3c");
+    assert(String(h0.Q.getState().defaults.sources.method).indexOf("用户输入") !== -1,
+      "further edits do not nest stale sources");
+    assert(String(h0.Q.getState().defaults.sources.method.split("原：")[1] || "").indexOf("用户输入") === -1,
+      "origin stays the capability source");
+    h0.Q.render();
+    assert(h0.bodyHtml().indexOf("用户输入") !== -1, "re-render shows the refreshed provenance");
+  });
 };

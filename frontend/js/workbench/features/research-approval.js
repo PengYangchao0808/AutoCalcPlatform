@@ -66,6 +66,10 @@ window.ACPResearchApproval = (function () {
     REVOKED: "revoked",
   };
 
+  /** Every status this module understands. Anything else is NOT approved:
+   * the gate below fails closed on unknown status strings. */
+  var KNOWN_STATUSES = [STATUS.PENDING, STATUS.APPROVED, STATUS.REJECTED, STATUS.REVOKED];
+
   var DEFAULT_TTL_SECONDS = 3600;
   var seq = 0;
 
@@ -396,12 +400,22 @@ window.ACPResearchApproval = (function () {
   }
 
   /** Validity of one card against the CURRENT proposal fields. The digest is
-   * recomputed from the fields, never trusted from a stored claim. */
+   * recomputed from the fields, never trusted from a stored claim. FAIL
+   * CLOSED: a null/malformed card, an unknown status, a missing or unparseable
+   * expiry, or an unverifiable binding is never valid. */
   function approvalValidity(card, proposal) {
     if (!isObject(card)) {
       return { valid: false, reason: "not_requested", current_digest: null, bound_digest: null };
     }
-    var bound = card.binding ? card.binding.plan_definition_digest : null;
+    var bound = isObject(card.binding) ? card.binding.plan_definition_digest : null;
+    if (!isObject(card.binding) || typeof card.status !== "string" || !card.status) {
+      return {
+        valid: false,
+        reason: "approval_card_invalid",
+        current_digest: null,
+        bound_digest: bound,
+      };
+    }
     var current = null;
     try {
       current = isObject(proposal) ? computePlanDefinitionDigest(proposal) : null;
@@ -413,11 +427,27 @@ window.ACPResearchApproval = (function () {
         bound_digest: bound,
       };
     }
+    if (KNOWN_STATUSES.indexOf(card.status) === -1) {
+      return {
+        valid: false,
+        reason: "approval_status_unknown",
+        current_digest: current,
+        bound_digest: bound,
+      };
+    }
     if (card.status === STATUS.REVOKED) {
       return { valid: false, reason: "approval_revoked", current_digest: current, bound_digest: bound };
     }
     if (card.status === STATUS.REJECTED) {
       return { valid: false, reason: "approval_rejected", current_digest: current, bound_digest: bound };
+    }
+    if (!card.expires_at || isNaN(Date.parse(card.expires_at))) {
+      return {
+        valid: false,
+        reason: "approval_expiry_invalid",
+        current_digest: current,
+        bound_digest: bound,
+      };
     }
     if (isExpired(card)) {
       return { valid: false, reason: "approval_expired", current_digest: current, bound_digest: bound };
@@ -425,7 +455,15 @@ window.ACPResearchApproval = (function () {
     if (card.status === STATUS.PENDING) {
       return { valid: false, reason: "approval_not_granted", current_digest: current, bound_digest: bound };
     }
-    if (isObject(proposal) && !bindingMatches(card, proposal)) {
+    if (!isObject(proposal)) {
+      return {
+        valid: false,
+        reason: "proposal_required",
+        current_digest: null,
+        bound_digest: bound,
+      };
+    }
+    if (!bindingMatches(card, proposal)) {
       return {
         valid: false,
         reason: "approval_binding_mismatch",
@@ -622,20 +660,39 @@ window.ACPResearchApproval = (function () {
     return approvalValidity(card, proposal).valid === true;
   }
 
-  /** Submit only the already-bound plan. The submit never changes approval
-   * state and never accepts a model claim as the approval itself. */
+  /** Submit only the already-bound plan. FAIL CLOSED: a null/malformed card,
+   * a non-approved status, an expired/revoked approval, a missing proposal, a
+   * missing bound digest or any binding mismatch blocks the submit with a
+   * structured reason. The submit never changes approval state and never
+   * accepts a model claim as the approval itself. */
   function submitPlan(card, proposal, action) {
     action = action || {};
     assertNotModelApprovalClaim(action.approvalClaim);
     var principal = assertUserPrincipal(action.principal);
-    if (typeof action.boundDigest === "string" && isObject(card) &&
+    if (!isObject(card)) {
+      fail("not_requested", "submit needs an approval card");
+    }
+    if (!isObject(card.binding) || typeof card.status !== "string" || !card.status) {
+      fail("approval_card_invalid", "submit needs a structurally valid approval card");
+    }
+    if (typeof action.boundDigest === "string" && action.boundDigest &&
         action.boundDigest !== card.binding.plan_definition_digest) {
       fail("approval_binding_mismatch", "submit digest is not the bound digest");
+    }
+    if (!isObject(proposal)) {
+      fail("proposal_required", "submit must verify the bound digest against the proposal");
     }
     var check = approvalValidity(card, proposal);
     if (!check.valid) {
       fail(check.reason === "ok" ? "approval_binding_mismatch" : check.reason,
         "submit requires the bound digest of an approved, unexpired plan");
+    }
+    if (card.status !== STATUS.APPROVED) {
+      fail("approval_not_granted", "submit requires an approved card, got " + card.status);
+    }
+    if (typeof action.boundDigest !== "string" || !action.boundDigest ||
+        action.boundDigest !== card.binding.plan_definition_digest) {
+      fail("bound_digest_required", "a submit is allowed only with the bound plan digest");
     }
     seq += 1;
     return {
@@ -699,9 +756,83 @@ window.ACPResearchApproval = (function () {
   // rendering — digest, scientific limits, resource caps, cost basis, expiry
   // ---------------------------------------------------------------------
 
+  var LABEL_KEYS = {
+    plan_definition_digest: ["research.approval.label.plan_definition_digest", "Plan definition digest"],
+    recipe_digest: ["research.approval.label.recipe_digest", "Recipe digest"],
+    bound_digest: ["research.approval.label.bound_digest", "Bound plan definition digest"],
+    project_id: ["research.approval.label.project_id", "Project"],
+    approval_ref: ["research.approval.label.approval_ref", "Approval reference"],
+    method: ["research.approval.label.method", "Method"],
+    mapping: ["research.approval.label.mapping", "Reaction mapping"],
+    charge: ["research.approval.label.charge", "Charge"],
+    multiplicity: ["research.approval.label.multiplicity", "Spin multiplicity"],
+    allowed_substitutions: ["research.approval.label.allowed_substitutions", "Allowed substitutions"],
+    "budget.model_requests": ["research.approval.label.budget.model_requests", "Budget: model requests"],
+    "budget.input_tokens": ["research.approval.label.budget.input_tokens", "Budget: input tokens"],
+    "budget.output_tokens": ["research.approval.label.budget.output_tokens", "Budget: output tokens"],
+    "budget.task_refs": ["research.approval.label.budget.task_refs", "Budget: task refs"],
+    "budget.recipe_steps": ["research.approval.label.budget.recipe_steps", "Budget: recipe steps"],
+    "budget.qc_invocations": ["research.approval.label.budget.qc_invocations", "Budget: QC invocations"],
+    "budget.wall_seconds": ["research.approval.label.budget.wall_seconds", "Budget: wall seconds"],
+    "budget.queue_seconds": ["research.approval.label.budget.queue_seconds", "Budget: queue seconds"],
+    unit_basis: ["research.approval.label.unit_basis", "Cost basis"],
+    budget_notes: ["research.approval.label.budget_notes", "Budget notes"],
+    expiry: ["research.approval.label.expiry", "Approval expiry"],
+  };
+
+  var STATUS_FALLBACKS = {
+    not_requested: "Not requested",
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    revoked: "Revoked",
+    invalidated: "Invalidated",
+  };
+
+  var VALIDITY_FALLBACKS = {
+    ok: "Approval valid for the current plan",
+    not_requested: "No approval requested yet",
+    approval_not_granted: "Approval not granted yet",
+    approval_expired: "Approval expired",
+    approval_revoked: "Approval was revoked",
+    approval_rejected: "Approval was rejected",
+    approval_binding_mismatch: "Plan changed after approval — approval invalidated",
+    approval_status_unknown: "Unknown approval status — treated as not approved",
+    approval_card_invalid: "Invalid approval record",
+    approval_expiry_invalid: "Invalid approval expiry",
+    proposal_required: "Proposal required to verify the approval",
+    bound_digest_required: "Submit requires the bound plan digest",
+    model_claim_not_authority: "A model claim is never an approval",
+  };
+
+  function labelFor(field) {
+    var entry = LABEL_KEYS[field];
+    if (entry) return tr(entry[0], entry[1]);
+    return String(field).replace(/^budget\./, "").replace(/_/g, " ");
+  }
+
+  function statusLabel(status) {
+    return tr("research.approval.status." + status,
+      STATUS_FALLBACKS[status] || String(status).replace(/_/g, " "));
+  }
+
+  function validityLabel(reason) {
+    return tr("research.approval.validity." + reason,
+      VALIDITY_FALLBACKS[reason] || String(reason).replace(/_/g, " "));
+  }
+
+  /** Effective chip state: an approved card whose binding no longer verifies
+   * shows `invalidated` (red), never a green `approved`. */
+  function effectiveStatus(card, validity) {
+    if (!isObject(card)) return "not_requested";
+    if (validity && validity.valid) return card.status;
+    if (card.status === STATUS.APPROVED) return "invalidated";
+    return card.status;
+  }
+
   function row(field, label, value, attrs) {
     return '<div class="ra-row" data-ra-field="' + esc(field) + '"' +
-      (attrs || "") + "><dt>" + esc(label) + "</dt><dd>" + value + "</dd></div>";
+      (attrs || "") + "><dt title=\"" + esc(field) + "\">" + esc(label) + "</dt><dd>" + value + "</dd></div>";
   }
 
   function digestRow(field, label, digest) {
@@ -730,59 +861,65 @@ window.ACPResearchApproval = (function () {
     }
     var validity = card ? approvalValidity(card, proposal) : { valid: false, reason: "not_requested" };
     var expired = card ? isExpired(card) : false;
+    var chip = effectiveStatus(card, validity);
+    var rawStatus = card ? card.status : "not_requested";
 
-    var html = '<div class="ra-card" data-ra-status="' + esc(card ? card.status : "not_requested") +
+    var html = '<div class="ra-card" data-ra-status="' + esc(rawStatus) +
+      '" data-ra-effective-status="' + esc(chip) +
       '" data-ra-ref="' + esc(card ? card.approval_ref : "") +
       '" data-ra-validity="' + esc(validity.reason) + '">';
 
+    html += '<div class="ra-card-sticky">';
     html += '<div class="ra-card-head"><span class="ra-title">' +
       esc(tr("research.approval.title", "Research approval")) + "</span>" +
-      '<span class="ra-status ra-status-' + esc(card ? card.status : "not_requested") +
-      '">' + esc(card ? card.status : "not_requested") + "</span></div>";
+      '<span class="ra-status ra-status-' + esc(chip) +
+      '" data-ra-status-chip="' + esc(chip) + '">' + esc(statusLabel(chip)) + "</span></div>";
+    html += '<div class="ra-validity" data-ra-validity="' + esc(validity.reason) +
+      '" data-ra-validity-text="1" role="status">' +
+      esc(validityLabel(validity.reason)) + "</div>";
+    html += "</div>";
 
     html += '<dl class="ra-digests">';
-    html += digestRow("plan_definition_digest", "plan_definition_digest",
+    html += digestRow("plan_definition_digest", labelFor("plan_definition_digest"),
       currentDigest || (proposal && proposal.plan_definition_digest));
-    html += digestRow("recipe_digest", "recipe_digest",
+    html += digestRow("recipe_digest", labelFor("recipe_digest"),
       proposal ? proposal.recipe_digest : (binding ? "" : ""));
-    html += digestRow("bound_digest", "bound_plan_definition_digest",
+    html += digestRow("bound_digest", labelFor("bound_digest"),
       binding ? binding.plan_definition_digest : null);
-    html += row("project_id", "project_id", esc(text(
+    html += row("project_id", labelFor("project_id"), esc(text(
       proposal ? proposal.project_id : (binding ? binding.project_id : null))));
-    html += row("approval_ref", "approval_ref",
+    html += row("approval_ref", labelFor("approval_ref"),
       esc(text(card ? card.approval_ref : null)));
     html += "</dl>";
 
     html += '<dl class="ra-science">' +
-      row("method", "science.method", esc(text(science.method))) +
-      row("mapping", "science.mapping", esc(text(science.mapping))) +
-      row("charge", "science.charge", esc(text(science.charge))) +
-      row("multiplicity", "science.multiplicity", esc(text(science.multiplicity))) +
-      row("allowed_substitutions", "science.allowed_substitutions",
+      row("method", labelFor("method"), esc(text(science.method))) +
+      row("mapping", labelFor("mapping"), esc(text(science.mapping))) +
+      row("charge", labelFor("charge"), esc(text(science.charge))) +
+      row("multiplicity", labelFor("multiplicity"), esc(text(science.multiplicity))) +
+      row("allowed_substitutions", labelFor("allowed_substitutions"),
         esc(text(scope ? scope.mode : null, "none"))) +
       "</dl>";
 
     html += '<dl class="ra-budget">';
     BUDGET_FIELDS.forEach(function (field) {
-      html += row("budget." + field, "budget." + field, esc(text(budget[field])));
+      html += row("budget." + field, labelFor("budget." + field), esc(text(budget[field])));
     });
     html += "</dl>";
 
     html += '<dl class="ra-cost-basis">' +
-      row("unit_basis", "budget.unit_basis", esc(text(budget.unit_basis))) +
-      row("budget_notes", "budget.notes", esc(text(budget.notes))) +
+      row("unit_basis", labelFor("unit_basis"), esc(text(budget.unit_basis))) +
+      row("budget_notes", labelFor("budget_notes"), esc(text(budget.notes))) +
       "</dl>";
 
     html += '<div class="ra-expiry">' +
-      row("expiry", "approval.expires_at",
+      row("expiry", labelFor("expiry"),
         esc(text(card ? card.expires_at : null)) +
         ' <span class="ra-expired" data-ra-expired="' + (expired ? "true" : "false") +
         '">' + esc(expired ? tr("research.approval.expired", "expired")
-          : tr("research.approval.expiry_valid", "expiry ok")) + "</span>") +
+          : tr("research.approval.expiry_valid", "valid")) + "</span>") +
       "</div>";
 
-    html += '<div class="ra-validity" data-ra-validity="' + esc(validity.reason) + '">' +
-      esc(tr("research.approval.validity_" + validity.reason, validity.reason)) + "</div>";
     html += "</div>";
     return html;
   }
@@ -815,7 +952,11 @@ window.ACPResearchApproval = (function () {
 
   function init(next) {
     next = next || {};
-    if (isObject(next.research)) deps.research = next.research;
+    if (window.ACPClient && window.ACPClient.research) {
+      deps.research = window.ACPClient.research;
+    } else if (isObject(next.research)) {
+      deps.research = next.research;
+    }
     if (typeof next.now === "function") deps.now = next.now;
     if (isObject(next.persistence)) deps.persistence = next.persistence;
     return getState();
@@ -826,7 +967,7 @@ window.ACPResearchApproval = (function () {
     domDoc = doc || (typeof document !== "undefined" ? document : null);
     if (!domDoc) return getState();
     init(options);
-    if (!deps.research && window.ACPClient && window.ACPClient.research) {
+    if (window.ACPClient && window.ACPClient.research) {
       deps.research = window.ACPClient.research;
     }
     rootEl = typeof options.container === "object" && options.container
@@ -931,6 +1072,10 @@ window.ACPResearchApproval = (function () {
     applyApprovalMapping: applyApprovalMapping,
     isUserApprovalAuthority: isUserApprovalAuthority,
     assertNotModelApprovalClaim: assertNotModelApprovalClaim,
+    effectiveStatus: effectiveStatus,
+    statusLabel: statusLabel,
+    validityLabel: validityLabel,
+    labelFor: labelFor,
     renderApprovalCard: renderApprovalCard,
     setCard: setCard,
     setProposal: setProposal,

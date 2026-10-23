@@ -266,7 +266,12 @@ window.ACPScienceQuestion = (function () {
       values[field] = def.value;
       sources[field] = def.source || "";
     });
-    return { values: values, sources: sources };
+    return { values: values, sources: sources, originSources: Object.assign({}, sources) };
+  }
+
+  function sourceLineFor(field) {
+    var sources = state.defaults.sources || {};
+    return tr("manual.default_source", "来源：{source}", { source: sources[field] || "-" });
   }
 
   function fieldSpecs() {
@@ -363,7 +368,7 @@ window.ACPScienceQuestion = (function () {
     state.question = question;
     state.defaults = question
       ? defaultsFor(question)
-      : { values: {}, sources: {} };
+      : { values: {}, sources: {}, originSources: {} };
     state.preflight = { ran: false, ok: false, error: null, body: null };
     render();
     return getState();
@@ -372,6 +377,16 @@ window.ACPScienceQuestion = (function () {
   function setValue(field, value) {
     if (DEFAULT_FIELDS.indexOf(field) === -1) return getState();
     state.defaults.values[field] = value;
+    if (!state.defaults.originSources) state.defaults.originSources = {};
+    if (!(field in state.defaults.originSources)) {
+      state.defaults.originSources[field] = state.defaults.sources[field] || "";
+    }
+    var origin = state.defaults.originSources[field];
+    state.defaults.sources[field] = origin
+      ? tr("manual.source_user_edit_from", "用户输入（已修改，原：{source}）", { source: origin })
+      : tr("manual.source_user_edit", "用户输入（已修改）");
+    var srcEl = domDoc ? domDoc.getElementById("sq-source-" + field) : null;
+    if (srcEl) srcEl.textContent = sourceLineFor(field);
     if (field === "solvent") state.spec.conditions.solvent = value;
     if (field === "temperature") state.spec.conditions.temperature = value;
     if (field === "standardState") state.spec.conditions.standardState = value;
@@ -587,10 +602,13 @@ window.ACPScienceQuestion = (function () {
       })
       .then(function (body) {
         var feasible = !(body && body.estimate && body.estimate.feasible === false);
+        var cause = feasible
+          ? null
+          : String((body && body.estimate && body.estimate.reason) || "estimate.feasible=false");
         state.preflight = {
           ran: true,
           ok: feasible,
-          error: feasible ? null : "estimate.feasible=false",
+          error: cause,
           body: body || null,
         };
         state.status = feasible
@@ -882,7 +900,7 @@ window.ACPScienceQuestion = (function () {
         (spec.required ? ' <span class="science-question-required">*</span>' : "") + "</label>" +
         (extra || "") +
         '<div class="science-question-source" id="sq-source-' + id + '">' +
-        escapeHtml(tr("manual.default_source", "来源：{source}", { source: spec.source || "-" })) +
+        escapeHtml(sourceLineFor(id)) +
         "</div></div>";
     };
     var detailHtml = "";
@@ -970,7 +988,17 @@ window.ACPScienceQuestion = (function () {
       '<button type="button" class="btn primary" id="sq-submit"' +
       (canSubmit() ? "" : " disabled") + ">" +
       escapeHtml(tr("manual.submit", "提交任务")) + "</button></div>" +
-      '<div class="science-question-status" id="sq-status">' + escapeHtml(state.status) + "</div>" +
+      '<div class="science-question-status" id="sq-status">' + escapeHtml(state.status) +
+      (state.preflight.ran && !state.preflight.ok
+        ? (state.preflight.error
+          ? '<div class="science-question-status-cause" id="sq-status-cause">' +
+            escapeHtml(tr("manual.preflight_cause", "原因：{reason}", { reason: state.preflight.error })) +
+            "</div>"
+          : "") +
+          '<button type="button" class="btn ghost" id="sq-preflight-retry">' +
+          escapeHtml(tr("manual.preflight_retry", "重试预检")) + "</button>"
+        : "") +
+      "</div>" +
       detailHtml
     );
   }
@@ -1008,7 +1036,10 @@ window.ACPScienceQuestion = (function () {
       discover();
     });
     on("sq-preflight", "click", function () {
-      runPreflight();
+      return runPreflight();
+    });
+    on("sq-preflight-retry", "click", function () {
+      return runPreflight();
     });
     on("sq-submit", "click", function () {
       submit().catch(function (error) {

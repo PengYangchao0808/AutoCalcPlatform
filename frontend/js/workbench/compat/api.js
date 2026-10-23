@@ -38,6 +38,7 @@ if (window.ACPClient && window.ACPClient.systemEndpoints) {
   ACPClient.systemEndpoints.init({ v1: api, direct: apiRequest, baseUrl: API_BASE });
 }
 if (window.ACPClient && window.ACPClient.taskView) ACPClient.taskView.init({ v1: api, v2: apiV2 });
+if (window.ACPClient && window.ACPClient.research) ACPClient.research.init({ v2: apiV2 });
 if (window.ACPClient && window.ACPClient.jobDetail) {
   // R1: single write point for the legacy-endpoint pin — the client decides
   // on structured err.status (404/405 only) and syncs the page global here.
