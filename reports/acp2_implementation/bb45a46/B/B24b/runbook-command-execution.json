@@ -1,0 +1,148 @@
+{
+  "entries": [
+    {
+      "block": 1,
+      "exit_code": 0,
+      "step": "environment"
+    },
+    {
+      "block": 2,
+      "exit_code": 0,
+      "log": "migration/summary.json",
+      "step": "preflight"
+    },
+    {
+      "block": 3,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "step": "backup-databases"
+    },
+    {
+      "block": 4,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "step": "backup-artifacts"
+    },
+    {
+      "block": 5,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "scope": "temp copy /tmp/b24b-command-check5",
+      "step": "restore-databases-and-artifacts"
+    },
+    {
+      "block": 6,
+      "exit_code": 0,
+      "step": "post-restore-verify"
+    },
+    {
+      "block": 7,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "step": "detect-interrupted-migration"
+    },
+    {
+      "block": 8,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "scope": "temp copy /tmp/b24b-command-check4",
+      "step": "restore-interrupted-db"
+    },
+    {
+      "block": 9,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "observed": "applied=2, schema_version=23",
+      "scope": "temp copy /tmp/b24b-command-check4",
+      "step": "rerun-migration"
+    },
+    {
+      "block": 10,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "observed": "qc_calls=0, marker_after_complete=true",
+      "step": "publication-only-retry"
+    },
+    {
+      "block": 11,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "step": "ledger-verify"
+    },
+    {
+      "block": 12,
+      "exit_code": 0,
+      "log": "lost-worker-drill.json",
+      "observed": "running->failed, terminal_unchanged=true",
+      "scope": "fresh seeded /tmp/b24b-lost-fresh",
+      "step": "lost-worker"
+    },
+    {
+      "block": 13,
+      "exit_code": 0,
+      "log": "cursor-drill.json",
+      "observed": "expired_state=expired, takeover_kind=created, no_duplicate_row=true",
+      "scope": "fresh seeded /tmp/b24b-cursor-fresh",
+      "step": "cursor-expiry"
+    },
+    {
+      "block": 14,
+      "exit_code": 0,
+      "log": "runbook-execution.log",
+      "step": "old-duplicate-receipts"
+    },
+    {
+      "block": 15,
+      "exit_code": 0,
+      "log": "four-combination.run.log",
+      "observed": "F0/S1 PASS, F1/S1 PASS",
+      "step": "four-combination"
+    },
+    {
+      "block": 16,
+      "exit_code": 0,
+      "log": "legacy-reader-pytest.txt",
+      "observed": "41 passed",
+      "step": "legacy-readers"
+    },
+    {
+      "block": 17,
+      "exit_code": 0,
+      "step": "stop-harness-service"
+    },
+    {
+      "block": 18,
+      "exit_code": 0,
+      "step": "remove-worktrees"
+    },
+    {
+      "block": 19,
+      "exit_code": 0,
+      "step": "remove-scratch"
+    },
+    {
+      "block": 20,
+      "exit_code": 0,
+      "step": "preserve-backup"
+    },
+    {
+      "block": 21,
+      "exit_code": 0,
+      "step": "confirm-cleanup"
+    },
+    {
+      "block": 22,
+      "exit_code": 0,
+      "step": "validate-contracts-check-only-runbook-test"
+    }
+  ],
+  "generated_at": "2026-10-23T20:00:00Z",
+  "note": "Every runnable block was exercised on 2026-10-23 from the frozen candidate; irreversible drills used dedicated temp copies or a fresh seeded workspace so the preserved B24b workspace stayed intact.",
+  "precondition_notes": {
+    "cursor": "The preserved workspace already had a live/in-progress cursor claim; the drill correctly reported in_progress. A fresh seed produced the expired-lease drill and passed.",
+    "lost_worker": "The preserved workspace already had mig_lost=FAILED after the B24b scenario; the drill correctly refused it. A fresh seed produced RUNNING and the drill passed."
+  },
+  "result": "PASS",
+  "runbook_sha256": "bd6861681a6112f6cd81124a0f08d24c7fae4f3acab5b062c02de7b7ce2d86cc",
+  "schema": "acp2.b24b.runbook_command_execution.v1"
+}

@@ -1,0 +1,202 @@
+{
+  "command_block_count": 23,
+  "commands": [
+    {
+      "command": "# label: REVERSIBLE\nexport ACP2_REPO=<repo>\nsource <acp2-dev>/data/b/acceptance-env.sh\nexport PYTHONPATH=\"$ACP2_REPO/src:$ACP2_REPO\"\nexport B24B_WORKSPACE=<acp2-dev>/data/b/b24b-migration\nexport B24B_EVIDENCE=\"$ACP2_EVIDENCE/B/B24b\"\nexport B24B_FIXTURE=<acp2-dev>/data/b/fixtures/migration/b24b-migration.json\nexport B24B_CANDIDATE=f32c6704e0348585a5a58ce8516450ab3afc7077\nexport ACP_CANDIDATE_REVISION=\"$B24B_CANDIDATE\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 1,
+      "label": "REVERSIBLE",
+      "line_count": 9
+    },
+    {
+      "command": "# label: REVERSIBLE\ncd \"$ACP2_REPO\"\ngit rev-parse HEAD\ngit status --short -- src/ | head -20\ntest -f \"$B24B_WORKSPACE/.b24-migration-workspace\"\ntest -f \"$B24B_EVIDENCE/migration/summary.json\"\nss -ltnp | grep ':8765' || true",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 2,
+      "label": "REVERSIBLE",
+      "line_count": 7
+    },
+    {
+      "command": "# label: REVERSIBLE\nmkdir -p \"$B24B_WORKSPACE/backup\"\n/usr/bin/python3.11 - \"$B24B_WORKSPACE/db/acp_jobs.db\" \"$B24B_WORKSPACE/db/acp_admission.db\" \"$B24B_WORKSPACE/backup\" <<'PY'\nimport hashlib\nimport json\nimport sqlite3\nimport sys\nfrom datetime import datetime, timezone\nfrom pathlib import Path\n\nsources = [Path(sys.argv[1]), Path(sys.argv[2])]\nout = Path(sys.argv[3])\nmanifest = {\"schema\": \"acp2.b24b.backup.v1\", \"generated_at\": datetime.now(timezone.utc).isoformat(), \"databases\": {}}\nfor src in sources:\n    target = out / src.name\n    with sqlite3.connect(f\"file:{src}?mode=ro\", uri=True) as source, sqlite3.connect(target) as dest:\n        source.backup(dest)\n    conn = sqlite3.connect(target)\n    try:\n        version = conn.execute(\"SELECT COUNT(*) FROM _schema_migrations\").fetchone()[0]\n    except sqlite3.OperationalError:\n        version = 0\n    finally:\n        conn.close()\n    manifest[\"databases\"][src.name] = {\n        \"path\": str(target),\n        \"sha256\": hashlib.sha256(target.read_bytes()).hexdigest(),\n        \"schema_version\": version,\n    }\n(out / \"manifest.json\").write_text(json.dumps(manifest, indent=2, sort_keys=True) + \"\\n\", encoding=\"utf-8\")\nprint(json.dumps(manifest, indent=2, sort_keys=True))\nPY",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 3,
+      "label": "REVERSIBLE",
+      "line_count": 31
+    },
+    {
+      "command": "# label: REVERSIBLE\n/usr/bin/python3.11 - \"$B24B_WORKSPACE\" \"$B24B_WORKSPACE/backup/artifacts\" <<'PY'\nimport hashlib\nimport json\nimport shutil\nimport sys\nfrom pathlib import Path\n\nworkspace = Path(sys.argv[1])\ntarget = Path(sys.argv[2])\nfiles = {}\ntarget.mkdir(parents=True, exist_ok=True)\nfor name in (\"tasks\", \"source-copy\"):\n    source = workspace / name\n    if not source.is_dir():\n        continue\n    destination = target / name\n    if destination.exists():\n        shutil.rmtree(destination)\n    shutil.copytree(source, destination)\n    for path in sorted(destination.rglob(\"*\")):\n        if path.is_file():\n            files[path.relative_to(target).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()\n(target.parent / \"artifacts-digests.json\").write_text(\n    json.dumps({\"schema\": \"acp2.b24b.backup.artifacts.v1\", \"files\": files}, indent=2, sort_keys=True) + \"\\n\",\n    encoding=\"utf-8\",\n)\nprint(f\"backed up {len(files)} artifact files to {target}\")\nPY",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 4,
+      "label": "REVERSIBLE",
+      "line_count": 28
+    },
+    {
+      "command": "# label: IRREVERSIBLE\ntest -f \"$B24B_WORKSPACE/backup/manifest.json\"\ncp -a \"$B24B_WORKSPACE/db/acp_jobs.db\" \"$B24B_WORKSPACE/db/acp_jobs.db.pre-restore\"\ncp -a \"$B24B_WORKSPACE/db/acp_admission.db\" \"$B24B_WORKSPACE/db/acp_admission.db.pre-restore\"\n/usr/bin/python3.11 - \"$B24B_WORKSPACE/backup\" \"$B24B_WORKSPACE/db\" <<'PY'\nimport sqlite3\nimport sys\nfrom pathlib import Path\n\nbackup = Path(sys.argv[1])\nlive = Path(sys.argv[2])\nfor name in (\"acp_jobs.db\", \"acp_admission.db\"):\n    source = backup / name\n    target = live / name\n    with sqlite3.connect(f\"file:{source}?mode=ro\", uri=True) as src, sqlite3.connect(target) as dst:\n        src.backup(dst)\n    print(f\"restored {target}\")\nPY\nrm -rf \"$B24B_WORKSPACE/tasks\" \"$B24B_WORKSPACE/source-copy\"\ncp -a \"$B24B_WORKSPACE/backup/artifacts/tasks\" \"$B24B_WORKSPACE/tasks\"\ncp -a \"$B24B_WORKSPACE/backup/artifacts/source-copy\" \"$B24B_WORKSPACE/source-copy\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 5,
+      "label": "IRREVERSIBLE",
+      "line_count": 20
+    },
+    {
+      "command": "# label: REVERSIBLE\n/usr/bin/python3.11 - \"$B24B_WORKSPACE/db/acp_jobs.db\" \"$B24B_WORKSPACE/db/acp_admission.db\" <<'PY'\nimport sqlite3\nimport sys\n\nfor database in sys.argv[1:]:\n    conn = sqlite3.connect(database)\n    version = conn.execute(\"SELECT COUNT(*) FROM _schema_migrations\").fetchone()[0]\n    tables = [row[0] for row in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name\")]\n    print(database, \"schema\", version, \"tables\", len(tables))\n    conn.close()\nPY",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 6,
+      "label": "REVERSIBLE",
+      "line_count": 11
+    },
+    {
+      "command": "# label: REVERSIBLE\n/usr/bin/python3.11 - \"$B24B_WORKSPACE/legacy/acp_jobs.db\" <<'PY'\nimport sqlite3\nimport sys\n\nconn = sqlite3.connect(sys.argv[1])\ntry:\n    applied = conn.execute(\"SELECT COUNT(*) FROM _schema_migrations\").fetchone()[0]\n    jobs = conn.execute(\"SELECT COUNT(*) FROM jobs\").fetchone()[0]\n    print({\"schema_version\": applied, \"jobs\": jobs, \"readable\": True})\nfinally:\n    conn.close()\nPY",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 7,
+      "label": "REVERSIBLE",
+      "line_count": 12
+    },
+    {
+      "command": "# label: IRREVERSIBLE\ntest -f \"$B24B_WORKSPACE/backup/legacy-acp_jobs.db\"\ncp -a \"$B24B_WORKSPACE/legacy/acp_jobs.db\" \"$B24B_WORKSPACE/legacy/acp_jobs.db.interrupted\"\n/usr/bin/python3.11 - \"$B24B_WORKSPACE/backup/legacy-acp_jobs.db\" \"$B24B_WORKSPACE/legacy/acp_jobs.db\" <<'PY'\nimport sqlite3\nimport sys\n\nsource, target = sys.argv[1], sys.argv[2]\nwith sqlite3.connect(f\"file:{source}?mode=ro\", uri=True) as src, sqlite3.connect(target) as dst:\n    src.backup(dst)\nprint(\"restored\", target)\nPY",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 8,
+      "label": "IRREVERSIBLE",
+      "line_count": 11
+    },
+    {
+      "command": "# label: IRREVERSIBLE\n/usr/bin/python3.11 scripts/acceptance/acp2_migration_helper.py migrate --db \"$B24B_WORKSPACE/legacy/acp_jobs.db\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 9,
+      "label": "IRREVERSIBLE",
+      "line_count": 2
+    },
+    {
+      "command": "# label: REVERSIBLE\n/usr/bin/python3.11 scripts/acceptance/acp2_migration_helper.py publication \\\n  --fixture \"$B24B_WORKSPACE/source-copy/v2_publish_interrupted\" \\\n  --scratch \"$B24B_WORKSPACE/drills\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 10,
+      "label": "REVERSIBLE",
+      "line_count": 4
+    },
+    {
+      "command": "# label: REVERSIBLE\nAPPROVAL_REF=$(/usr/bin/python3.11 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"seed\"][\"approvals\"][\"approved\"])' \"$B24B_EVIDENCE/migration/migration-log.json\")\n/usr/bin/python3.11 scripts/acceptance/acp2_migration_helper.py verify \\\n  --db \"$B24B_WORKSPACE/db/acp_jobs.db\" \\\n  --admission-db \"$B24B_WORKSPACE/db/acp_admission.db\" \\\n  --approval-ref \"$APPROVAL_REF\" \\\n  --budget-id mig-budget",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 11,
+      "label": "REVERSIBLE",
+      "line_count": 7
+    },
+    {
+      "command": "# label: REVERSIBLE\nexport B24B_WORKSPACE=/tmp/b24b-lost-fresh\n/usr/bin/python3.11 scripts/acceptance/acp2_migration_helper.py seed \\\n  --db \"$B24B_WORKSPACE/db/acp_jobs.db\" \\\n  --admission-db \"$B24B_WORKSPACE/db/acp_admission.db\" \\\n  --root \"$B24B_WORKSPACE\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 12,
+      "label": "REVERSIBLE",
+      "line_count": 6
+    },
+    {
+      "command": "# label: IRREVERSIBLE\n/usr/bin/python3.11 scripts/acceptance/acp2_migration_helper.py lost-worker \\\n  --db \"$B24B_WORKSPACE/db/acp_jobs.db\" \\\n  --running mig_lost \\\n  --terminal mig_done",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 13,
+      "label": "IRREVERSIBLE",
+      "line_count": 5
+    },
+    {
+      "command": "# label: IRREVERSIBLE\n/usr/bin/python3.11 scripts/acceptance/acp2_migration_helper.py cursor \\\n  --db \"$B24B_WORKSPACE/db/acp_jobs.db\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 14,
+      "label": "IRREVERSIBLE",
+      "line_count": 3
+    },
+    {
+      "command": "# label: REVERSIBLE\n/usr/bin/python3.11 scripts/acceptance/acp2_migration_helper.py receipts \\\n  --fixtures \"$B24B_WORKSPACE/source-copy\" \\\n  --scratch \"$B24B_WORKSPACE/drills\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 15,
+      "label": "REVERSIBLE",
+      "line_count": 4
+    },
+    {
+      "command": "# label: REVERSIBLE\ncd \"$ACP2_REPO\"\n/usr/bin/python3.11 scripts/acceptance/four_combinations.py \\\n  --out \"$B24B_EVIDENCE/four-combination\" \\\n  --f1-revision \"$B24B_CANDIDATE\" \\\n  --cells 'F0/S1,F1/S1' \\\n  --candidate-patch \"$B24B_EVIDENCE/candidate-runnable-overlay.patch\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 16,
+      "label": "REVERSIBLE",
+      "line_count": 7
+    },
+    {
+      "command": "# label: REVERSIBLE\ncd \"$ACP2_REPO\"\n/usr/bin/python3.11 -m pytest \\\n  tests/test_legacy_read_only.py \\\n  tests/test_legacy_layout_compat.py \\\n  tests/test_recovery_fixtures_smoke.py \\\n  tests/test_recovery_cross_version.py -q",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 17,
+      "label": "REVERSIBLE",
+      "line_count": 7
+    },
+    {
+      "command": "# label: REVERSIBLE\nfor pid in $(pgrep -f 'uvicorn acp.api.server:app.*--port 4[0-9][0-9][0-9][0-9]' || true); do\n  kill \"$pid\"\ndone",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 18,
+      "label": "REVERSIBLE",
+      "line_count": 4
+    },
+    {
+      "command": "# label: IRREVERSIBLE\ncd \"$ACP2_REPO\"\ngit worktree prune\ngit worktree list",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 19,
+      "label": "IRREVERSIBLE",
+      "line_count": 4
+    },
+    {
+      "command": "# label: IRREVERSIBLE\nrm -rf /tmp/acp-four-* /tmp/opencode/b24b-* /tmp/b24b-*.log",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 20,
+      "label": "IRREVERSIBLE",
+      "line_count": 2
+    },
+    {
+      "command": "# label: REVERSIBLE\ntest -f \"$B24B_WORKSPACE/backup/manifest.json\"\ntest -f \"$B24B_WORKSPACE/backup/acp_jobs.db\"\ntest -f \"$B24B_WORKSPACE/backup/acp_admission.db\"\ntest -f \"$B24B_WORKSPACE/backup/legacy-acp_jobs.db\"",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 21,
+      "label": "REVERSIBLE",
+      "line_count": 5
+    },
+    {
+      "command": "# label: REVERSIBLE\npgrep -af 'four_combinations.py|acp2_migration_helper.py' || true\nss -ltnp | grep -E ':(18781|8765)\\b' || true",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 22,
+      "label": "REVERSIBLE",
+      "line_count": 3
+    },
+    {
+      "command": "# label: REVERSIBLE\ncd \"$ACP2_REPO\"\n/usr/bin/python3.11 scripts/acceptance/validate_acp2_contracts.py --manifest docs/reference/next-change/acp2-contracts/manifest.json\n/usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only \"$B24B_EVIDENCE/migration/summary.json\"\n/usr/bin/python3.11 -m pytest tests/test_acp2_runtime_recovery_runbook.py -q",
+      "has_literal_ellipsis": false,
+      "has_production_restart": false,
+      "index": 23,
+      "label": "REVERSIBLE",
+      "line_count": 5
+    }
+  ],
+  "generated_at": "2026-10-23T19:58:00Z",
+  "labelled_count": 23,
+  "literal_ellipsis_indices": [],
+  "oldest_supported_schema": 21,
+  "production_restart_executed": false,
+  "production_restart_indices": [],
+  "result": "PASS",
+  "runbook": "docs/reference/next-change/acp2-contracts/runtime/recovery-rollback-runbook.md",
+  "runbook_sha256": "bd6861681a6112f6cd81124a0f08d24c7fae4f3acab5b062c02de7b7ce2d86cc",
+  "schema": "acp2.b24b.runbook_command_validation.v1",
+  "target_schema": 23,
+  "unlabelled_indices": [],
+  "upgrade_path": "021->022->023"
+}

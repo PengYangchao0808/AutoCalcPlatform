@@ -1,0 +1,115 @@
+{
+  "candidate": {
+    "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+    "source": "<repo>/src"
+  },
+  "fixture_id": "fx-migration-v1-b24b",
+  "interrupted": {
+    "counts": {
+      "artifacts": 0,
+      "idempotency_records": 0,
+      "job_outbox": 0,
+      "jobs": 1,
+      "organization_events": 0,
+      "stage_tasks": 0,
+      "tasks": 0
+    },
+    "exit": -9,
+    "payload": {
+      "action": "kill-migrate",
+      "killed_before": "023",
+      "pid": 1562249,
+      "schema_version_before_commit": 21
+    },
+    "schema_version": 21
+  },
+  "legacy_migration": {
+    "action": "migrate",
+    "applied": 2,
+    "db": "<acp2-dev>/data/b/b24b-migration/legacy/acp_jobs.db",
+    "schema_version": 23
+  },
+  "legacy_seed": {
+    "action": "seed-legacy",
+    "db": "<acp2-dev>/data/b/b24b-migration/legacy/acp_jobs.db",
+    "jobs": [
+      {
+        "id": "mig_legacy_done",
+        "status": "completed"
+      }
+    ],
+    "schema_version": 21
+  },
+  "migration": {
+    "action": "migrate",
+    "applied": 0,
+    "db": "<acp2-dev>/data/b/b24b-migration/db/acp_jobs.db",
+    "schema_version": 23
+  },
+  "schema": "acp2.migration.log.v1",
+  "schema_versions": {
+    "interrupted": 21,
+    "legacy_post": 23,
+    "legacy_pre": 21,
+    "post_migration": 23,
+    "post_restore": 23,
+    "pre": 23
+  },
+  "seed": {
+    "action": "seed",
+    "admission_db": "<acp2-dev>/data/b/b24b-migration/db/acp_admission.db",
+    "approvals": {
+      "approved": "ap_dbfe4549156e4aaaba4973672d498d7e",
+      "approved_binding": {
+        "allowed_change_range": {},
+        "budget_digest": "sha256:583654019df6d71bbceb02914cb222ae781f260aa6e570c5a7551e9a5123335e",
+        "plan_digest": "sha256:e218ed4ca55ec01579591d225ab424a2c972d2d1db86be3304bd21124a271c66",
+        "project_id": "default",
+        "proposal_digest": "sha256:a5aa3be912482900abb08007b704037afcbc33fdb09e7500b276fecd7b5ffdb6"
+      },
+      "approved_revision": 2,
+      "draft": "ap_0bd5161a00cc432eadca46f3d6fc0cfe",
+      "pending": "ap_3fb8ff92259e416fa1da5a72c1e0759e"
+    },
+    "budget": {
+      "admitted": true,
+      "budget_id": "mig-budget",
+      "remaining": {
+        "attempt": 3,
+        "qc_invocation": 8,
+        "task_ref": 3
+      },
+      "reservation_id": "mig-budget-res-1"
+    },
+    "db": "<acp2-dev>/data/b/b24b-migration/db/acp_jobs.db",
+    "idempotency": {
+      "committed_claim": "idem_9d02323faf2c43e4a2de60b24fff317b",
+      "expired": [
+        "idem_9ef31e371f004734a30d7c29b5d5a20c"
+      ],
+      "replay_outcome": "replay",
+      "rows": 2,
+      "states": [
+        "committed",
+        "expired"
+      ]
+    },
+    "job_record_revisions": {
+      "mig_done": 0,
+      "mig_lost": 0
+    },
+    "jobs": {
+      "mig_done": {
+        "pid": null,
+        "status": "completed",
+        "work_dir": "<acp2-dev>/data/b/b24b-migration/tasks/mig_done"
+      },
+      "mig_lost": {
+        "pid": 999999,
+        "status": "running",
+        "work_dir": "<acp2-dev>/data/b/b24b-migration/tasks/mig_lost"
+      }
+    },
+    "schema_version": 23
+  }
+}

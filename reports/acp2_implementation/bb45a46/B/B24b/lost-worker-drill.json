@@ -1,0 +1,15 @@
+{
+  "action": "lost-worker",
+  "recovered": {
+    "error": "worker_lost:pid=999999:no_live_process",
+    "from": "running",
+    "job_id": "mig_lost",
+    "revision": 1,
+    "to": "failed"
+  },
+  "recovery_scan_after": [],
+  "terminal_guard": "acp_services.runtime.attempt_completion._is_terminal",
+  "terminal_revival_blocked": true,
+  "terminal_selected_by_recovery_scan": false,
+  "terminal_unchanged": true
+}
