@@ -1,0 +1,199 @@
+{
+  "schema": "acp2.integration.ownership_decisions.v1",
+  "candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
+  "policy": {
+    "rule": "A shared file goes to its single owner. An A/C change to a B-owned shared file is a request, not an auto-merge. Last-writer-wins was never used.",
+    "owners": {
+      "A": ["src/cccp/**", "docs/reference/next-change/acp2-contracts/science/**", "scripts/acceptance/acp2_science.py", "tests/test_acp2_science_*.py", "tests/fixtures/acp2/science/**"],
+      "B": ["src/acp/**", "src/acp_services/**", "packaging/**", "runtime contracts", "shared files", "CI", "tests/test_services_*.py", "tests/test_architecture_*.py"],
+      "C": ["frontend/**", "rph/**", "docs/reference/next-change/acp2-contracts/experience/**", "scripts/acceptance/acp2_experience*", "C-specific acceptance probes", "tests/test_acp2_experience_*.py"]
+    }
+  },
+  "decisions": [
+    {
+      "path_class": "B00 final-debug overlay files absent or reverted in 2a57d6b",
+      "count": 168,
+      "owner": "B",
+      "decision": "Restored byte-for-byte from the B00 manifest. Source commit was A's branch only as a byte-identical carrier; each restored file's sha256 was verified against the B-owned manifest, so no A change was accepted.",
+      "result": "PASS"
+    },
+    {
+      "path_class": "src/acp/api/server.py",
+      "owner": "B",
+      "decision": "Kept the B00-B13 file (admission/identity wiring) and hand-merged the overlay's 5-line acp_web_assets fallback block. The hunks are disjoint.",
+      "result": "PASS"
+    },
+    {
+      "path_class": "20 overlay files evolved by B00-B13",
+      "owner": "B",
+      "decision": "Kept the B00-B13 version. Verified every overlay-added textual line survives in the candidate (0 missing).",
+      "result": "PASS"
+    },
+    {
+      "path_class": "A-owned science paths",
+      "owner": "A",
+      "decision": "Took A's committed content from 243d2b7. Excluded A's uncommitted worktree edit and untracked handoff-H4.json.",
+      "result": "PASS"
+    },
+    {
+      "path_class": "C-owned experience paths",
+      "owner": "C",
+      "decision": "Took C's committed content from e03a9dd.",
+      "result": "PASS"
+    },
+    {
+      "path_class": "A/C changes to B-owned runtime, API, packaging, CI and shared acceptance scripts",
+      "owner": "B",
+      "decision": "Not applied. They are the pre-B13 overlay state or later C commits on top of it; keeping B's version preserves B00-B13. Recorded as excluded shared-file changes, not silently merged.",
+      "result": "EXCLUDED"
+    },
+    {
+      "path_class": "A/C absence of B-owned runtime/acceptance files",
+      "owner": "B",
+      "decision": "C's branch predates B00-B13 and lacks tests/test_acp2_runtime_*.py, scripts/acceptance/acp2_runtime.py, acp2_fault_controller.py and validate_acp2_contracts.py. Absence was not treated as a deletion.",
+      "result": "EXCLUDED"
+    },
+    {
+      "path_class": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "owner": "B",
+      "decision": "Kept B06's contract_version 1.1.0 manifest. A and C branches carry the older B00-era manifest; their version was not applied.",
+      "result": "PASS"
+    }
+  ],
+  "excluded_shared_changes": {
+    "A_modified_not_applied": [
+      "docs/reference/next-change/ACP_Services_MCP_Client_Matrix.md",
+      "frontend/ACP_Workbench_v2.html",
+      "frontend/css/workbench/features.css",
+      "frontend/js/workbench/compat/shared-state.js",
+      "frontend/js/workbench/features/reaction-builder.js",
+      "frontend/js/workbench/features/wizard/submit-edit.js",
+      "frontend/js/workbench/i18n.js",
+      "scripts/acceptance/real_environment.py",
+      "src/acp/api/routes.py",
+      "src/acp/api/server.py",
+      "src/acp/api/v1_routes.py",
+      "src/acp/api/v1_schemas.py",
+      "src/acp/cli.py",
+      "src/acp/scheduler/manager.py",
+      "src/acp/services_bootstrap.py",
+      "src/acp/services_data_bootstrap.py",
+      "src/acp_services/contracts/injection.py",
+      "src/acp_services/data/operations.py",
+      "src/acp_services/entrypoints/machine_output.py",
+      "src/acp_services/entrypoints/mcp.py",
+      "src/acp_services/runtime/admission.py",
+      "src/acp_services/runtime/commands.py",
+      "src/acp_services/store/migrations.py",
+      "src/acp_services/store/store.py",
+      "src/acp_services/workspace/entry_authz.py",
+      "tests/test_services_runtime_usecases.py"
+    ],
+    "C_modified_not_applied": [
+      "docs/reference/next-change/ACP_Services_MCP_Client_Matrix.md",
+      "scripts/acceptance/real_environment.py",
+      "src/acp/api/routes.py",
+      "src/acp/api/server.py",
+      "src/acp/api/v1_routes.py",
+      "src/acp/api/v1_schemas.py",
+      "src/acp/cli.py",
+      "src/acp/scheduler/manager.py",
+      "src/acp/services_bootstrap.py",
+      "src/acp/services_data_bootstrap.py",
+      "src/acp_services/contracts/injection.py",
+      "src/acp_services/data/operations.py",
+      "src/acp_services/entrypoints/machine_output.py",
+      "src/acp_services/entrypoints/mcp.py",
+      "src/acp_services/runtime/admission.py",
+      "src/acp_services/runtime/commands.py",
+      "src/acp_services/store/migrations.py",
+      "src/acp_services/store/store.py",
+      "src/acp_services/workspace/entry_authz.py",
+      "src/cccp/calculation/__init__.py",
+      "tests/test_services_runtime_usecases.py"
+    ],
+    "C_deletions_not_applied": [
+      "scripts/acceptance/acp2_fault_controller.py",
+      "scripts/acceptance/acp2_runtime.py",
+      "scripts/acceptance/validate_acp2_contracts.py",
+      "tests/test_acp2_runtime_acceptance_harness.py",
+      "tests/test_acp2_runtime_admission.py",
+      "tests/test_acp2_runtime_artifact.py",
+      "tests/test_acp2_runtime_contracts.py",
+      "tests/test_acp2_runtime_control_recovery.py",
+      "tests/test_acp2_runtime_controller_topology.py",
+      "tests/test_acp2_runtime_lsf_scenario.py",
+      "tests/test_acp2_runtime_mcp_backends.py",
+      "tests/test_acp2_runtime_mcp_process.py",
+      "tests/test_acp2_runtime_persistent_idempotency.py"
+    ]
+  },
+  "shared_file_requests": {
+    "four_versions": {
+      "bump_performed": false,
+      "owner_of_bump": "B25a",
+      "current": {
+        "src/cccp/__init__.py": "0.2.0",
+        "src/cccp/version.py": "0.2.0",
+        "src/acp/__init__.py": "0.2.0",
+        "pyproject.toml": "0.2.0"
+      },
+      "request": "B25a applies the single release-version bump to all four locations; B14a only records the request."
+    },
+    "config_defaults": {
+      "change_requested": false,
+      "note": "A added no ACP2 science default; C's experience defaults live in C-owned contracts. config/defaults.yaml and the Python built-in defaults are unchanged by this candidate."
+    },
+    "dependencies": {
+      "change_requested": false,
+      "note": "A and C added no shared Python dependency. C's rph package.json/pnpm-lock are C-owned and included. C B-req-07 asks B to keep runtime/dependencies.json current; B03/B06 already delivered it, and this candidate keeps that file. A's cross-track-dependencies.json rows are a request into B's aggregate ledger, not applied here."
+    },
+    "services_ledger": {
+      "change_requested": false,
+      "note": "The A/C branch ledger content is the B00 overlay content (already restored). No new A/C ledger row is applied. C B-req-04 asks B to ingest C harness results into the ledgers; that remains open and is not claimed as done."
+    },
+    "identity_forwarders": {
+      "verified": true,
+      "checks": [
+        "acp.scheduler.store -> acp_services.store.store (public objects identity True)",
+        "acp.scheduler.migrations -> acp_services.store.migrations (public objects identity True)",
+        "acp.calculations.contracts -> acp_services.runtime.plan_contracts (public objects identity True)",
+        "acp.calculations.step_result -> acp_services.runtime.step_result (public objects identity True)",
+        "acp.calculations.step_requirements -> acp_services.runtime.step_requirements (public objects identity True)",
+        "acp.catalog.method_levels_to_cli_flags is acp_services.runtime.method_flags.method_levels_to_cli_flags (True)"
+      ]
+    },
+    "formal_request_documents": {
+      "A": [
+        "docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md (README/DevDoc 14->15; no AGENTS change; no pyproject/CI/version change)",
+        "docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
+        "docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+        "docs/reference/next-change/acp2-contracts/science/requests/runtime-fixture-singlepoint.md",
+        "docs/reference/next-change/acp2-contracts/science/requests/search-contract.md",
+        "docs/reference/next-change/acp2-contracts/science/requests/ADR-008-input.md",
+        "docs/reference/next-change/acp2-contracts/science/requests/f4-amendment.md (no amendment requested)"
+      ],
+      "C_to_B": [
+        "B-req-01 launch/application API field gaps",
+        "B-req-02 consume the experience harness CLI and receipt schema",
+        "B-req-04 ingest C harness results and launch/DSH versions into B ledgers",
+        "B-req-06 workspace/CI/static-asset mount for rph/",
+        "B-req-07 runtime/dependencies.json with an executable validator",
+        "B-req-09 authorized CDXML upload + parse entry",
+        "B-req-10 one selectivity scenario key for B23a/B23b",
+        "B-req-11 DA run_spec and explicit da-preflight/da-submit phases",
+        "B-req-12 split B02a environment from B02b package smoke",
+        "B-req-13 synchronize B-owned plan/index/runbook before cross-track gates",
+        "B-req-15 prove actual search execution",
+        "B-req-17 publish baseline-lock.json + manifest.json with absolute evidence_root",
+        "B-req-18 keep one isolated Controller running for the C H2 window"
+      ],
+      "C_to_A": [
+        "A-req-01 science field/unit/charge-spin semantic gaps",
+        "A-req-02 CDXML owner and stage scope",
+        "A-req-03 selectivity sub-scenario key and ordered chain",
+        "A-req-04 candidate-search input classes and acceptance criteria"
+      ]
+    }
+  }
+}
