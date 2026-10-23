@@ -284,6 +284,9 @@ _ANALYSIS_DELEGATION_TARGETS: Mapping[str, str] = MappingProxyType(
     {
         "vibration.analyze": "cccp.analysis.frequency_products.build_frequency_report",
         "nmr.compare": "cccp.analysis.nmr.comparison.compare_nmr_shielding",
+        "thermochemistry.ensemble": (
+            "cccp.analysis.ensemble.science.build_ensemble_thermochemistry"
+        ),
     }
 )
 

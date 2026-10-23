@@ -9,7 +9,8 @@ The descriptors follow the same frozen ``acp2.science.capability`` contract and
 delegate to the same single implementation seam:
 
 * ``nmr.shielding`` (compute) -> ``nmr_shielding`` task core;
-* ``nmr.compare`` (pure analysis) -> ``cccp.analysis.nmr.comparison``.
+* ``nmr.compare`` (pure analysis) -> ``cccp.analysis.nmr.comparison``;
+* ``thermochemistry.ensemble`` (pure analysis) -> ``cccp.analysis.ensemble.science``.
 
 ``domain_registry()`` returns the built-in descriptors plus these extensions,
 so callers opt in explicitly and the binding can resolve the analysis entry
@@ -56,7 +57,7 @@ __all__ = [
 ]
 
 DOMAIN_EXTENSION_VERSION = 1
-DOMAIN_FAMILIES: tuple[str, ...] = ("nmr",)
+DOMAIN_FAMILIES: tuple[str, ...] = ("nmr", "thermochemistry")
 
 _COMPUTE_INPUT_SCHEMA = SchemaReference("cccp.calculation.requests#TaskRequest")
 _COMPUTE_OUTPUT_SCHEMA = SchemaReference("cccp.calculation.results#TaskResult")
@@ -310,8 +311,143 @@ _NMR_COMPARE = CapabilityDescriptor(
     projections=_ANALYSIS_PROJECTIONS,
 )
 
+_THERMOCHEMISTRY_ENSEMBLE = CapabilityDescriptor(
+    capability_id="thermochemistry.ensemble",
+    implementation_id="cccp.analysis.ensemble.science",
+    input_schema=SchemaReference("cccp.analysis.ensemble.science#EnsembleThermochemistryInput"),
+    output_schema=SchemaReference("cccp.analysis.ensemble.science#EnsembleThermochemistryOutcome"),
+    execution_semantics=_ANALYSIS_EXECUTION,
+    preconditions=(
+        Precondition(
+            id="components_declared",
+            kind="input",
+            description=("At least one ensemble component with a unique component_id is declared."),
+            required=True,
+            error_code="invalid_scientific_input",
+            evaluated_by="cccp",
+        ),
+        Precondition(
+            id="component_weights_declared",
+            kind="scientific",
+            description=(
+                "Every component carries a finite positive weight; the supplied form "
+                "is raw or explicitly normalized, never silently converted."
+            ),
+            required=True,
+            error_code="invalid_scientific_input",
+            evaluated_by="cccp",
+        ),
+        Precondition(
+            id="temperature_declared",
+            kind="scientific",
+            description="A positive finite ensemble temperature is declared.",
+            required=True,
+            error_code="invalid_scientific_input",
+            evaluated_by="cccp",
+        ),
+        Precondition(
+            id="standard_state_declared",
+            kind="scientific",
+            description=(
+                "The standard state in force is declared; an unspecified state is "
+                "reported instead of being fabricated."
+            ),
+            required=True,
+            error_code="invalid_scientific_input",
+            evaluated_by="cccp",
+        ),
+    ),
+    completion_checks=(
+        CompletionCheck(
+            id="weights_policy_recorded",
+            description=(
+                "The supplied weight form, declared tolerance, supplied sum and the "
+                "resulting normalized weights are recorded in provenance."
+            ),
+            evaluator="cccp.analysis.ensemble.science",
+            required=True,
+            failure_error_code="invalid_scientific_input",
+            compares=("weight_mode_supplied", "weight_tolerance", "weights_normalized"),
+        ),
+        CompletionCheck(
+            id="weights_normalized",
+            description=(
+                "The resulting normalized weights sum to 1 within the declared tolerance."
+            ),
+            evaluator="cccp.analysis.ensemble.science",
+            required=True,
+            failure_error_code="invalid_scientific_input",
+            compares=("weights_normalized_sum", "weight_tolerance"),
+        ),
+        CompletionCheck(
+            id="ensemble_complete",
+            description=(
+                "Every declared component contributes a weight and a Gibbs value; a "
+                "missing component is reported as incomplete."
+            ),
+            evaluator="cccp.analysis.ensemble.science",
+            required=True,
+            failure_error_code="invalid_scientific_input",
+            compares=("components_used", "components_missing"),
+        ),
+        CompletionCheck(
+            id="total_gibbs_finite",
+            description=(
+                "The ensemble total Gibbs energy is finite and derived from the rank-1 "
+                "component and its normalized weight."
+            ),
+            evaluator="cccp.analysis.ensemble.science",
+            required=True,
+            failure_error_code="invalid_scientific_input",
+            compares=("rank1_component_id", "rank1_weight", "total_gibbs_hartree"),
+        ),
+    ),
+    limitations=(
+        Limitation(
+            id="supplied_weights_not_rederived",
+            text=(
+                "The component weights are supplied by the caller and recorded; they are "
+                "not re-derived from the Gibbs values or replaced by Boltzmann weights."
+            ),
+            severity="info",
+            applies_to="all ensemble weights",
+        ),
+        Limitation(
+            id="missing_component_blocks_total",
+            text=(
+                "A component without a weight or Gibbs value makes the ensemble "
+                "incomplete; no partial total is presented as the ensemble total."
+            ),
+            severity="hard_limit",
+            applies_to="incomplete component sets",
+        ),
+        Limitation(
+            id="single_temperature_only",
+            text=(
+                "The result applies to the declared temperature only; a different "
+                "temperature requires a new evaluation and provenance record."
+            ),
+            severity="warning",
+            applies_to="all results",
+        ),
+    ),
+    provenance_requirements=ProvenanceRequirements(
+        method_identity="not_applicable",
+        notes=(
+            "Provenance records the temperature, the supplied and normalized standard "
+            "state, the supplied weight form and tolerance, the supplied/normalized "
+            "weights, the component ids (including missing ones) and the resulting "
+            "rank-1 total Gibbs value.",
+        ),
+    ),
+    projections=_ANALYSIS_PROJECTIONS,
+)
+
 DOMAIN_DESCRIPTORS: tuple[CapabilityDescriptor, ...] = tuple(
-    sorted((_NMR_COMPARE, _NMR_SHIELDING), key=lambda descriptor: descriptor.capability_id)
+    sorted(
+        (_NMR_COMPARE, _NMR_SHIELDING, _THERMOCHEMISTRY_ENSEMBLE),
+        key=lambda descriptor: descriptor.capability_id,
+    )
 )
 DOMAIN_CAPABILITY_IDS: tuple[str, ...] = tuple(
     descriptor.capability_id for descriptor in DOMAIN_DESCRIPTORS

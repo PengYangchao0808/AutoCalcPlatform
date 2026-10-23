@@ -256,13 +256,17 @@ def test_nmr_shielding_descriptor_delegates_to_the_existing_task_core() -> None:
 
 
 def test_nmr_family_is_declared_by_the_domain_extension() -> None:
-    assert DOMAIN_CAPABILITY_IDS == ("nmr.compare", "nmr.shielding")
+    assert DOMAIN_CAPABILITY_IDS == (
+        "nmr.compare",
+        "nmr.shielding",
+        "thermochemistry.ensemble",
+    )
     family = describe_domain_family("nmr")
     assert family.described is True
     assert family.supported is True
-    assert family.capability_ids == DOMAIN_CAPABILITY_IDS
+    assert family.capability_ids == ("nmr.compare", "nmr.shielding")
     assert "nmr" in UNSUPPORTED_FAMILIES
-    assert describe_domain_family("thermochemistry").described is False
+    assert describe_domain_family("thermochemistry").described is True
 
 
 # ── binding: exactly one existing implementation ───────────────────────────
