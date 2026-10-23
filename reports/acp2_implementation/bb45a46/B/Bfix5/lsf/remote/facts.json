@@ -1,0 +1,35 @@
+{
+  "sp.out": {
+    "sha256": "34f46a8f01f17e20d2734fd146d70b35349d0572000b1cb52a4e510c0795733a",
+    "size": 42168
+  },
+  "sp.inp": {
+    "sha256": "9d2974939f129a7a19ec58f954d2744259e892aeed7b557b946af06628ee4629",
+    "size": 163
+  },
+  "submit.lsf": {
+    "sha256": "07e384705a62a409a6591528ab011da324968e30b455d8589a48f1b15b3b03fb",
+    "size": 1571
+  },
+  "execution_receipt.json": {
+    "sha256": "f1128fcdc92684622f19046ee61954241f8ec54a1e76078d0124bf1e444a9132",
+    "size": 1617
+  },
+  "RESULT/result_manifest.json": {
+    "error": "[Errno 2] No such file"
+  },
+  "RESULT/task_result.json": {
+    "error": "[Errno 2] No such file"
+  },
+  "RESULT/scientific_result.json": {
+    "error": "[Errno 2] No such file"
+  },
+  "remote_release": {
+    "release_id": "1c79785a657c6614",
+    "schema_version": 1,
+    "file_count": 510,
+    "complete": true
+  },
+  "orca_final_energy_hartree": "-1.116759307204",
+  "orca_version": "6.1.1"
+}

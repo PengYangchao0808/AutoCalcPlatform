@@ -1,0 +1,61 @@
+{
+  "schema": "acp2.package-install.fixture.v1",
+  "fixture_id": "fx-package-install-fix5-v1",
+  "release_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5",
+  "root_wheel_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/root-build",
+  "expected_version": "0.3.0",
+  "python": "/usr/bin/python3.11",
+  "source_root": "/ACPServer/AutoCalcPlatform",
+  "root_wheel": "acp-0.3.0-py3-none-any.whl",
+  "root_wheel_sha256": "64548f8f25e6251532b8b551067f6a0c432a2668bfc20edd310ed2fcb7e4c56a",
+  "sample_config": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/docs/sample-config.yaml",
+  "schema_files": [
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/docs/acceptance-result.schema.json",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/docs/mcp-launch.schema.json"
+  ],
+  "doc_files": [
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/docs/standalone-recipe.md",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/docs/mcp-client-matrix.md"
+  ],
+  "a_c_evidence": [
+    {
+      "id": "A-27b",
+      "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z"
+    },
+    {
+      "id": "A-28",
+      "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z"
+    },
+    {
+      "id": "C33",
+      "path": "/ACPServer/acp2-development/evidence/C/clean-install-live"
+    },
+    {
+      "id": "C34",
+      "path": "/ACPServer/acp2-development/evidence/C/operator-runbook-live"
+    }
+  ],
+  "static_assets_manifest": "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+  "scheduler_task": {
+    "workflow": "singlepoint",
+    "name": "f3-installed-scheduler-smoke",
+    "xyz": "2\nH2\nH 0 0 0\nH 0 0 0.74\n",
+    "charge": 0,
+    "multiplicity": 1,
+    "method": {
+      "levels": {
+        "single_point": {
+          "engine": "orca",
+          "functional": "HF",
+          "basis": "STO-3G"
+        }
+      }
+    },
+    "resources": {
+      "nproc": 1,
+      "mem": "1024MB"
+    },
+    "orca_path": "/home/xieningke/orca611/orca",
+    "orca_ld_library_path": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611"
+  }
+}

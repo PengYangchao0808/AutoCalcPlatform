@@ -1,0 +1,28 @@
+{
+  "artifacts": [
+    {
+      "path": "task_result.json",
+      "type": "task_result"
+    }
+  ],
+  "kind": "singlepoint",
+  "result_id": "20261024_015940_001_fix5-lsf-sp4:attempt1:sub_0fea781820a81666",
+  "summary": {
+    "attempt": 1,
+    "exit_code": 0,
+    "job_id": "20261024_015940_001_fix5-lsf-sp4",
+    "normal_reuse": true,
+    "partial_result": false,
+    "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+    "publish": true,
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "receipt_state": "completed",
+    "release_id": "1c79785a657c6614",
+    "result_digest": "sha256:56685f9f36bc72114bf5d9416c46f3a431f07b71eb3dea816f23aa5cb138c165",
+    "status": "completed",
+    "submission_id": "sub_0fea781820a81666",
+    "task": "singlepoint",
+    "task_result_digest": "sha256:e072d85072ec24a1d0b0c9b9b915368fd2be11288074aa1feb8f4691077632db"
+  }
+}

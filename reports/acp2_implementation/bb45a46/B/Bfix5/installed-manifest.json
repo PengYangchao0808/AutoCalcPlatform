@@ -1,0 +1,17 @@
+{
+  "project_root": "/tmp/opencode/fix5-qa/venvs/root/lib/python3.11/site-packages",
+  "sync_files": 510,
+  "manifest_files": 510,
+  "release_id": "1c79785a657c6614",
+  "local_identity_release_id": "1c79785a657c6614",
+  "release_ids_match": true,
+  "sample_keys": [
+    "acp/__init__.py",
+    "acp/__main__.py",
+    "acp/backends/__init__.py",
+    "acp/backends/base.py",
+    "acp/backends/batch.py"
+  ],
+  "requirements_sha256": "",
+  "defaults_sha256": ""
+}
