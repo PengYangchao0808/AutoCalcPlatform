@@ -52,7 +52,8 @@ Scenarios (canonical ``science:*`` id and short CLI alias are interchangeable):
 ``science:validate-da-report`` / ``validate-da-report``
     Validate the Diels-Alder evidence report and its claims.
 ``science:installed-examples`` / ``installed-examples``
-    Run the installed-package examples.
+    Run the four documented examples with a clean ``venv --without-pip``
+    interpreter built from ``$ACP2_CCCP_WHEEL``; missing wheel => exit 2.
 
 Run ``--help`` for the required flag per scenario.
 """
@@ -61,12 +62,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
 import re
 import shutil
 import sys
+import tempfile
+import zipfile
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
@@ -97,8 +101,39 @@ ARTIFACT_ALIAS = "validate-artifacts"
 DA_TS_ALIAS = "validate-da-ts"
 DA_IRC_ALIAS = "validate-da-irc"
 DA_REPORT_ALIAS = "validate-da-report"
+INSTALLED_EXAMPLES_ALIAS = "installed-examples"
 H2_HANDOFF_RELPATH = "docs/reference/next-change/acp2-contracts/science/handoff-H2.json"
+SCIENCE_EXAMPLES_RELPATH = "docs/reference/next-change/acp2-contracts/science/examples"
 PRODUCTION_RUN_ROOTS = ("/var/lib/acp/runs",)
+
+#: Documented examples, in guide order, and the stdout marker each must print.
+INSTALLED_EXAMPLE_FILES: tuple[str, ...] = (
+    "singlepoint_public_api.py",
+    "compile_recipe.py",
+    "read_report.py",
+    "external_plugin.py",
+)
+INSTALLED_EXAMPLE_MARKERS: dict[str, str] = {
+    "singlepoint_public_api.py": '"preflight_outcome": "ready"',
+    "compile_recipe.py": '"canonical_json_equal": true',
+    "read_report.py": '"overall_claim_status":',
+    "external_plugin.py": '"auto_enabled": false',
+}
+INSTALLED_EXAMPLE_INPUTS: dict[str, tuple[tuple[str, str], ...]] = {
+    "read_report.py": (
+        (
+            "supported_valid.json",
+            "tests/fixtures/acp2/science/contracts/evidence/supported_valid.json",
+        ),
+    ),
+    "external_plugin.py": (
+        (
+            "cccp_science_plugin.json",
+            "tests/fixtures/acp2/science/external_plugin/cccp_science_plugin.json",
+        ),
+    ),
+}
+INSTALLED_EXAMPLES_DEPENDENCIES = ("numpy", "scipy", "rdkit")
 
 #: The platform registry is owned by the platform and is not published to A.
 #: A supplies only the lookup; it never invents the id or a registry row.
@@ -195,6 +230,7 @@ class ScenarioSpec:
     description: str
     requires_run_spec: bool = False
     requires_input_manifest: bool = False
+    requires_fixture: bool = True
 
     @property
     def canonical(self) -> str:
@@ -236,6 +272,7 @@ SCENARIOS: tuple[ScenarioSpec, ...] = (
         alias="installed-examples",
         phase="main",
         description="run the installed-package examples",
+        requires_fixture=False,
     ),
 )
 SCENARIO_BY_ALIAS = {spec.alias: spec for spec in SCENARIOS}
@@ -1320,6 +1357,7 @@ def _build_plan(args: argparse.Namespace, spec: ScenarioSpec) -> dict[str, Any]:
     plan: dict[str, Any] = {
         "paths": [],
         "errors": [],
+        "fixture": None,
         "run_spec": None,
         "run_spec_path": None,
         "run_spec_gaps": [],
@@ -1330,9 +1368,12 @@ def _build_plan(args: argparse.Namespace, spec: ScenarioSpec) -> dict[str, Any]:
         "budget": None,
     }
 
-    fixture = _file_status("fixture", Path(args.fixture))
-    plan["paths"].append(fixture)
-    _record_path_error(plan, fixture)
+    if spec.requires_fixture:
+        fixture = _file_status("fixture", Path(args.fixture))
+        plan["paths"].append(fixture)
+        _record_path_error(plan, fixture)
+    else:
+        plan["fixture"] = None
 
     out = _directory_status("out", Path(args.out))
     plan["paths"].append(out)
@@ -1664,7 +1705,7 @@ def _finish_scenario(
         )
         return EXIT_NOT_VERIFIED
 
-    fixture_path = Path(args.fixture)
+    fixture_path = Path(args.fixture) if args.fixture else None
     run_spec = plan["run_spec"] or {}
     software = run_spec.get("software") if isinstance(run_spec, dict) else None
     software_version = software.get("version") if isinstance(software, dict) else None
@@ -1693,7 +1734,7 @@ def _finish_scenario(
         "interpreter": run_spec.get("interpreter") or sys.executable,
         "software": software,
         "software_version": software_version,
-        "fixture_id": _fixture_id(fixture_path),
+        "fixture_id": _fixture_id(fixture_path) if fixture_path is not None else None,
         "run_key": run_spec.get("run_key"),
         "native_work_root": run_spec.get("native_work_root"),
         "budget": plan["budget"],
@@ -7492,6 +7533,377 @@ def _execute_validate_da_report(
     )
 
 
+def _installed_examples_dir() -> Path:
+    return _repo_root() / SCIENCE_EXAMPLES_RELPATH
+
+
+def _dependency_roots() -> tuple[Path, ...]:
+    """Return installed third-party roots only; the source tree is never added."""
+    roots: list[Path] = []
+    for name in INSTALLED_EXAMPLES_DEPENDENCIES:
+        spec = importlib.util.find_spec(name)
+        if spec is None or spec.origin is None:
+            continue
+        root = Path(spec.origin).resolve().parents[1]
+        if root not in roots:
+            roots.append(root)
+    return tuple(roots)
+
+
+def _venv_site_packages(venv_dir: Path) -> Path:
+    minor = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    for relative in (
+        Path("lib") / minor / "site-packages",
+        Path("lib64") / minor / "site-packages",
+    ):
+        candidate = venv_dir / relative
+        if candidate.is_dir():
+            return candidate
+    raise RuntimeError(f"no site-packages directory under {venv_dir}")
+
+
+def _run_example(
+    clean_python: Path,
+    script: Path,
+    extra_args: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: float,
+    subprocess_module: Any,
+) -> dict[str, Any]:
+    argv = [str(clean_python), str(script), *extra_args]
+    completed = subprocess_module.run(
+        argv,
+        cwd=str(cwd),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    marker = INSTALLED_EXAMPLE_MARKERS[script.name]
+    return {
+        "example": script.name,
+        "argv": argv,
+        "exit_code": completed.returncode,
+        "marker": marker,
+        "marker_present": marker in completed.stdout,
+        "stdout_sha256": hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest(),
+        "stderr_sha256": hashlib.sha256(completed.stderr.encode("utf-8")).hexdigest(),
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+
+
+def _run_installed_examples(wheel: Path, *, timeout: float) -> dict[str, Any]:
+    """Run the four examples with a clean interpreter built from *wheel*."""
+    # Lazy import: only this scenario spawns a child, so the harness module keeps
+    # its in-process import surface (the DA scenario guards assert it).
+    import subprocess
+
+    examples_dir = _installed_examples_dir()
+    work = Path(tempfile.mkdtemp(prefix="acp2-a28-installed-examples-")).resolve()
+    if work.is_relative_to(_repo_root()):
+        shutil.rmtree(work, ignore_errors=True)
+        raise RuntimeError(f"temporary work dir must be outside the repository: {work}")
+
+    record: dict[str, Any] = {
+        "wheel_path": str(wheel),
+        "wheel_sha256": _sha256(wheel),
+        "wheel_source": "ACP2_CCCP_WHEEL",
+        "platform_b25a_wheel": False,
+        "work_dir": str(work),
+        "examples_source": str(examples_dir),
+        "clean_interpreter": None,
+        "site_packages": None,
+        "pythonpath_entries": [],
+        "probe": None,
+        "examples": [],
+        "cleanup_receipt": None,
+    }
+    try:
+        venv_dir = work / "venv"
+        try:
+            completed = subprocess.run(
+                [sys.executable, "-m", "venv", "--without-pip", str(venv_dir)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(f"clean venv creation failed: {exc}") from exc
+        if completed.returncode != 0:
+            raise RuntimeError(f"clean venv creation failed: {completed.stderr.strip()}")
+        clean_python = venv_dir / "bin" / "python"
+        if not clean_python.is_file():
+            raise RuntimeError(f"clean interpreter missing: {clean_python}")
+        site_packages = _venv_site_packages(venv_dir)
+        with zipfile.ZipFile(wheel) as archive:
+            archive.extractall(site_packages)
+        if not (site_packages / "cccp" / "__init__.py").is_file():
+            raise RuntimeError(f"wheel extract omitted cccp/__init__.py: {site_packages}")
+
+        examples = work / "examples"
+        examples.mkdir()
+        for name in INSTALLED_EXAMPLE_FILES:
+            shutil.copyfile(examples_dir / name, examples / name)
+
+        inputs = work / "inputs"
+        inputs.mkdir()
+        input_paths: dict[str, Path] = {}
+        for name, relative in (
+            item for mapping in INSTALLED_EXAMPLE_INPUTS.values() for item in mapping
+        ):
+            source = _repo_root() / relative
+            if not source.is_file():
+                raise RuntimeError(f"example input is missing: {source}")
+            shutil.copyfile(source, inputs / name)
+            input_paths[name] = inputs / name
+
+        pythonpath_entries = _dependency_roots()
+        source_tree = str((_repo_root() / "src").resolve())
+        if any(source_tree in str(entry) for entry in pythonpath_entries):
+            raise RuntimeError("source tree leaked into the clean PYTHONPATH")
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+        env.pop("PYTHONHOME", None)
+        env["PYTHONPATH"] = os.pathsep.join(str(entry) for entry in pythonpath_entries)
+
+        try:
+            probe = subprocess.run(
+                [
+                    str(clean_python),
+                    "-c",
+                    (
+                        "import json, sys, cccp;"
+                        "print(json.dumps({'cccp_file': str(cccp.__file__),"
+                        "'sys_path': list(sys.path)}))"
+                    ),
+                ],
+                cwd=str(work),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(f"clean import probe failed: {exc}") from exc
+        record["probe"] = {
+            "exit_code": probe.returncode,
+            "stdout": probe.stdout,
+            "stderr": probe.stderr,
+            "source_tree_leaked": source_tree in probe.stdout,
+        }
+        if probe.returncode != 0:
+            raise RuntimeError(f"clean import probe failed: {probe.stderr.strip()}")
+        probe_payload = json.loads(probe.stdout)
+        cccp_file = Path(probe_payload["cccp_file"]).resolve()
+        if not cccp_file.is_relative_to(site_packages):
+            raise RuntimeError(f"cccp was not imported from the wheel extract: {cccp_file}")
+        if source_tree in probe.stdout:
+            raise RuntimeError("source tree leaked into the clean interpreter")
+
+        record["clean_interpreter"] = str(clean_python)
+        record["site_packages"] = str(site_packages)
+        record["pythonpath_entries"] = [str(entry) for entry in pythonpath_entries]
+
+        runs: list[tuple[str, list[str]]] = [
+            ("singlepoint_public_api.py", []),
+            ("compile_recipe.py", []),
+            ("read_report.py", ["--report", str(input_paths["supported_valid.json"])]),
+            (
+                "external_plugin.py",
+                ["--manifest", str(input_paths["cccp_science_plugin.json"])],
+            ),
+        ]
+        for name, extra_args in runs:
+            record["examples"].append(
+                _run_example(
+                    clean_python,
+                    examples / name,
+                    extra_args,
+                    cwd=work,
+                    env=env,
+                    timeout=timeout,
+                    subprocess_module=subprocess,
+                )
+            )
+        return record
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+        record["cleanup_receipt"] = f"removed {work}"
+
+
+def _installed_example_assertions(record: dict[str, Any]) -> list[dict[str, Any]]:
+    failures = [
+        f"{item['example']} exited {item['exit_code']} without {item['marker']!r}"
+        for item in record["examples"]
+        if item["exit_code"] != 0 or not item["marker_present"]
+    ]
+    probe = record["probe"] or {}
+    return [
+        {
+            "name": "installed_wheel_provided",
+            "status": "PASS",
+            "detail": f"{record['wheel_source']} sha256={record['wheel_sha256']}",
+        },
+        {
+            "name": "clean_interpreter",
+            "status": "PASS" if record["clean_interpreter"] else "FAIL",
+            "detail": record["clean_interpreter"],
+        },
+        {
+            "name": "no_source_tree_leak",
+            "status": "PASS" if not probe.get("source_tree_leaked") else "FAIL",
+            "detail": "clean sys.path contains no source-tree entry"
+            if not probe.get("source_tree_leaked")
+            else "source tree leaked into the clean interpreter",
+        },
+        {
+            "name": "examples_executed",
+            "status": "FAIL" if failures else "PASS",
+            "detail": "; ".join(failures) or ", ".join(INSTALLED_EXAMPLE_FILES),
+        },
+    ]
+
+
+def _execute_installed_examples(
+    args: argparse.Namespace,
+    spec: ScenarioSpec,
+    plan: dict[str, Any],
+    *,
+    started_at: str,
+    argv: list[str],
+) -> int:
+    receipt = _receipt_protocol()
+    configured = os.environ.get("ACP2_CCCP_WHEEL", "").strip()
+    if not configured:
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason="installed cccp wheel not provided: ACP2_CCCP_WHEEL",
+            started_at=started_at,
+            argv=argv,
+            assertions=[
+                {
+                    "name": "installed_wheel_provided",
+                    "status": "NOT_VERIFIED",
+                    "detail": "installed cccp wheel not provided: ACP2_CCCP_WHEEL",
+                }
+            ],
+            extra={"examples": None, "prerequisite": "ACP2_CCCP_WHEEL"},
+        )
+
+    wheel = Path(configured)
+    if not wheel.is_file():
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=f"installed cccp wheel is not readable: {wheel}",
+            started_at=started_at,
+            argv=argv,
+            assertions=[
+                {
+                    "name": "installed_wheel_provided",
+                    "status": "NOT_VERIFIED",
+                    "detail": f"ACP2_CCCP_WHEEL is not a readable file: {wheel}",
+                }
+            ],
+            extra={"examples": None, "prerequisite": "ACP2_CCCP_WHEEL"},
+        )
+
+    try:
+        record = _run_installed_examples(wheel, timeout=args.timeout)
+    except (OSError, RuntimeError, json.JSONDecodeError) as exc:
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=f"installed examples failed to run: {exc}",
+            started_at=started_at,
+            argv=argv,
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            assertions=[
+                {
+                    "name": "installed_examples_executed",
+                    "status": "FAIL",
+                    "detail": str(exc),
+                }
+            ],
+            extra={"examples": None, "prerequisite": "ACP2_CCCP_WHEEL"},
+        )
+
+    failures = [
+        item for item in record["examples"] if item["exit_code"] != 0 or not item["marker_present"]
+    ]
+    assertions = _installed_example_assertions(record)
+    assertions.append(
+        {
+            "name": "shared_validator",
+            "status": "PASS" if receipt["status"] == "AVAILABLE" else "NOT_VERIFIED",
+            "detail": receipt["reason"],
+        }
+    )
+    extra_json = {"examples.json": record}
+    extra_bytes = {
+        **{
+            f"logs/{item['example']}.stdout.txt": item["stdout"].encode("utf-8")
+            for item in record["examples"]
+        },
+        **{
+            f"logs/{item['example']}.stderr.txt": item["stderr"].encode("utf-8")
+            for item in record["examples"]
+        },
+    }
+    if failures:
+        detail = ", ".join(
+            f"{item['example']} (exit {item['exit_code']}, marker {item['marker_present']})"
+            for item in failures
+        )
+        return _finish_scenario(
+            args=args,
+            spec=spec,
+            plan=plan,
+            receipt=receipt,
+            reason=f"installed examples failed: {detail}",
+            started_at=started_at,
+            argv=argv,
+            result="FAIL",
+            exit_code=EXIT_FAIL,
+            assertions=assertions,
+            extra={"examples": record},
+            extra_json=extra_json,
+            extra_bytes=extra_bytes,
+        )
+
+    return _finish_scenario(
+        args=args,
+        spec=spec,
+        plan=plan,
+        receipt=receipt,
+        reason=(
+            "installed examples passed with the clean interpreter "
+            f"{record['clean_interpreter']} and wheel sha256 {record['wheel_sha256']}"
+        ),
+        started_at=started_at,
+        argv=argv,
+        result="PASS",
+        exit_code=EXIT_PASS,
+        assertions=assertions,
+        extra={"examples": record},
+        extra_json=extra_json,
+        extra_bytes=extra_bytes,
+    )
+
+
 def _execute(
     args: argparse.Namespace,
     spec: ScenarioSpec,
@@ -7513,6 +7925,8 @@ def _execute(
     # than the generic "missing prerequisite" message.
     if spec.alias == DA_REPORT_ALIAS:
         return _execute_validate_da_report(args, spec, plan, started_at=started_at, argv=argv)
+    if spec.alias == INSTALLED_EXAMPLES_ALIAS:
+        return _execute_installed_examples(args, spec, plan, started_at=started_at, argv=argv)
 
     missing = [error for error in plan["errors"] if error["kind"] == "missing"]
     if missing:
@@ -7701,7 +8115,9 @@ def _dry_run(
 
 
 def _required_flags(spec: ScenarioSpec) -> list[str]:
-    flags = ["--scenario", "--fixture", "--out"]
+    flags = ["--scenario", "--out"]
+    if spec.requires_fixture:
+        flags.append("--fixture")
     if spec.requires_run_spec:
         flags.append("--run-spec")
     if spec.requires_input_manifest:
@@ -7710,6 +8126,8 @@ def _required_flags(spec: ScenarioSpec) -> list[str]:
 
 
 def _required_flag_gap(spec: ScenarioSpec, args: argparse.Namespace) -> str | None:
+    if spec.requires_fixture and not args.fixture:
+        return f"scenario {spec.canonical} requires --fixture"
     if spec.requires_run_spec and not args.run_spec:
         return f"scenario {spec.canonical} requires --run-spec"
     if spec.requires_input_manifest and args.input_manifest is None:
@@ -7729,17 +8147,20 @@ def _help_epilog() -> str:
             "",
             "Global required flags:",
             "  --scenario  canonical science:<name> or short alias",
-            "  --fixture   scientific fixture-manifest.json",
             "  --out       evidence directory for result.json and argv.json",
+            "  --fixture   scientific fixture-manifest.json; required for every",
+            "              scenario except installed-examples",
             "Scenario-specific required flags:",
-            "  installed-singlepoint  --run-spec",
-            "  validate-artifacts     --input-manifest + --platform-registry",
+            "  installed-singlepoint  --fixture + --run-spec",
+            "  validate-artifacts     --fixture + --input-manifest + --platform-registry",
             "                         (dsh-optfreq-live)",
-            "  validate-da-ts         --input-manifest + --platform-registry",
+            "  validate-da-ts         --fixture + --input-manifest + --platform-registry",
             "                         (da-runtime, da-research-live)",
-            "  validate-da-irc        --input-manifest + --platform-registry",
+            "  validate-da-irc        --fixture + --input-manifest + --platform-registry",
             "                         (da-runtime, da-research-live)",
-            "  validate-da-report     --input-manifest",
+            "  validate-da-report     --fixture + --input-manifest",
+            "  installed-examples     no --fixture; PASS requires ACP2_CCCP_WHEEL to",
+            "                         name a readable cccp wheel (absent => exit 2)",
             "Optional flags:",
             "  --timeout   positive seconds (default 600)",
             "  --platform-registry  platform-provided registry record; a real",
@@ -7770,6 +8191,7 @@ def _help_epilog() -> str:
             "  acp2_science.py --scenario science:validate-da-report --fixture"
             " diels_alder/v1/fixture-manifest.json --input-manifest evidence-report.json"
             " --out evidence/",
+            "  acp2_science.py --scenario installed-examples --out evidence/ --timeout 300",
         ]
     )
     return "\n".join(lines)
@@ -7791,8 +8213,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--fixture",
         metavar="FIXTURE_MANIFEST",
-        required=True,
-        help="scientific fixture-manifest.json",
+        required=False,
+        default=None,
+        help=(
+            "scientific fixture-manifest.json; required for every scenario except "
+            "installed-examples"
+        ),
     )
     parser.add_argument(
         "--out",
