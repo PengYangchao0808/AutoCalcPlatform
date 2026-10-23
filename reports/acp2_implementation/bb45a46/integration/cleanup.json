@@ -1,0 +1,195 @@
+{
+  "active_test_jobs": [],
+  "active_test_pids": [],
+  "commands": [
+    "pgrep -af '[a]cp2_runtime\\.py|[a]cp run serve .*--port 18[78][0-9]'",
+    "/usr/sbin/ss -ltn | (filter 1876x/1878x)",
+    "python3.11 read-only scan of acp_jobs.db: SELECT id,status,pid FROM jobs",
+    "PYTHONPATH=src:. /usr/bin/python3.11 -m acp task cancel --run-root /tmp/opencode/b26a-fix4/data/task-exec-root --job 20261023_223732_001_b26a-fix4-sp",
+    "PYTHONPATH=src:. /usr/bin/python3.11 -m acp task query --run-root /tmp/opencode/b26a-fix4/data/task-exec-root --job 20261023_223732_001_b26a-fix4-sp",
+    "PYTHONPATH=src:. /usr/bin/python3.11 JobStore.transition CANCELLING->CANCELLED after /proc/<pid> absent",
+    "ps -p 336067 -o pid,ppid,stat,lstart,cmd"
+  ],
+  "db_count_scanned": 29,
+  "generated_at": "2026-10-23T15:55:07Z",
+  "listening_test_ports": [],
+  "migration_fixture_active_rows": [
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24-migration/backup/acp_jobs.db",
+      "id": "mig_lost",
+      "pid": 999999,
+      "pid_alive": false,
+      "status": "running"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24-migration/backup/acp_jobs.db",
+      "id": "mig_idem_job",
+      "pid": null,
+      "pid_alive": false,
+      "status": "queued"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24-migration/db/acp_jobs.db",
+      "id": "mig_idem_job",
+      "pid": null,
+      "pid_alive": false,
+      "status": "queued"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24-migration/restore-pre/acp_jobs.db",
+      "id": "mig_lost",
+      "pid": 999999,
+      "pid_alive": false,
+      "status": "running"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24-migration/restore-pre/acp_jobs.db",
+      "id": "mig_idem_job",
+      "pid": null,
+      "pid_alive": false,
+      "status": "queued"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24b-migration/backup/acp_jobs.db",
+      "id": "mig_lost",
+      "pid": 999999,
+      "pid_alive": false,
+      "status": "running"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24b-migration/backup/acp_jobs.db",
+      "id": "mig_idem_job",
+      "pid": null,
+      "pid_alive": false,
+      "status": "queued"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24b-migration/db/acp_jobs.db",
+      "id": "mig_idem_job",
+      "pid": null,
+      "pid_alive": false,
+      "status": "queued"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24b-migration/restore-pre/acp_jobs.db",
+      "id": "mig_lost",
+      "pid": 999999,
+      "pid_alive": false,
+      "status": "running"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/b24b-migration/restore-pre/acp_jobs.db",
+      "id": "mig_idem_job",
+      "pid": null,
+      "pid_alive": false,
+      "status": "queued"
+    }
+  ],
+  "note": "PAUSED rows are deliberate B15 authorization fixtures with pid=null; migration backup/legacy/restore DBs are frozen B24/B24b evidence, not live jobs. No active queued/running/cancelling/waiting_review row and no test process/port remains in a live run root.",
+  "paused_fixture_rows": [
+    {
+      "db": "/ACPServer/acp2-development/data/b/run-root-b15/acp_jobs.db",
+      "id": "b15-alpha-paused-v1",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/run-root-b15/acp_jobs.db",
+      "id": "b15-beta-paused-v1",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/run-root-b23/acp_jobs.db",
+      "id": "b23-alpha-shared",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/run-root-b23/acp_jobs.db",
+      "id": "b23-beta-shared",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/run-root-b23/acp_jobs.db",
+      "id": "b23-alpha-extra",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/ACPServer/acp2-development/data/b/run-root-b23/acp_jobs.db",
+      "id": "b23-beta-extra",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/tmp/opencode/b26a-clean/data/run-root-b15/acp_jobs.db",
+      "id": "b15-alpha-paused-v1",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/tmp/opencode/b26a-clean/data/run-root-b15/acp_jobs.db",
+      "id": "b15-beta-paused-v1",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/tmp/opencode/tmp_ve1gpxq/acp_jobs.db",
+      "id": "alpha-shared",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/tmp/opencode/tmp_ve1gpxq/acp_jobs.db",
+      "id": "beta-shared",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/tmp/opencode/tmpcm31jcxf/acp_jobs.db",
+      "id": "alpha-shared",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    },
+    {
+      "db": "/tmp/opencode/tmpcm31jcxf/acp_jobs.db",
+      "id": "beta-shared",
+      "pid": null,
+      "pid_alive": false,
+      "status": "paused"
+    }
+  ],
+  "production_deployed": false,
+  "production_service": {
+    "command": " 336067       1 Ssl  Thu Oct 22 23:19:37 2026 /opt/acp/venv/bin/python /opt/acp/venv/bin/acp run serve --host 0.0.0.0 --port 8765 --no-browser",
+    "pid": 336067,
+    "restarted": false,
+    "state": "running, untouched"
+  },
+  "production_service_restarted": false,
+  "reconciled_stale_jobs": [
+    {
+      "command": "PYTHONPATH=src:. /usr/bin/python3.11 -m acp task cancel ... ; JobStore.transition CANCELLING->CANCELLED",
+      "db": "/tmp/opencode/b26a-fix4/data/task-exec-root/acp_jobs.db",
+      "job_id": "20261023_223732_001_b26a-fix4-sp",
+      "now": "cancelled",
+      "reason": "local pid confirmed dead before the CAS; no live process/port",
+      "was": "running/cancelling with pid 1694407 (dead)"
+    }
+  ],
+  "schema": "acp2.h7.cleanup.v1",
+  "test_processes": []
+}

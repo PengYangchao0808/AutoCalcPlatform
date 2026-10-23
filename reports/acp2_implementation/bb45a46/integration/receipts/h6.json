@@ -1,0 +1,121 @@
+{
+  "artifacts": [
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24b/h6-receipt.json",
+      "sha256": "6e10fc5049faae26ae95a4857e4d55e4208c3532a2ed68425697efc14e861a5a",
+      "size_bytes": 10125
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
+      "sha256": "232589e98953b9f353a8cf0ba27ae332fdc1a72c72705b04c6497a469dd6752f",
+      "size_bytes": 2572
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24b/four-combination-summary.json",
+      "sha256": "c6f13cc2d85e7c442494da7c368d6d05ac53f4e25259a27662901e75ee3d5b45",
+      "size_bytes": 285
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",
+      "sha256": "e2c2ebf2a38114aac06e884975c86a937172beb67fbec0eafedf4b61f1b8ed7b",
+      "size_bytes": 331
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "immutable receipts aggregated; no science re-executed",
+      "name": "aggregate_only_no_rerun",
+      "status": "PASS"
+    },
+    {
+      "detail": "h6_open: LSF/DSH/A-readability/C-readability/selectivity/real-DA missing",
+      "name": "gate_result",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/usr/bin/python3.11",
+    "/tmp/opencode/gen_h7.py"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "integration.gate_status": "OPEN",
+    "integration.handoff": "H6",
+    "integration.notes": [
+      "h6_status is OPEN. B-owned migration/backup/restore, four-combination and legacy readers PASS; LSF, C DSH, A/C readability, selectivity B23b and real DA remain NOT_VERIFIED.",
+      "No production restart or production run-root write was executed."
+    ],
+    "integration.reuse_mapping": [],
+    "integration.signatures": {
+      "A": [],
+      "B": [
+        "B"
+      ],
+      "C": []
+    }
+  },
+  "finished_at": "2026-10-23T15:51:28Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "integration",
+  "phase": "aggregate",
+  "reason": "h6_open: LSF/DSH/A-readability/C-readability/selectivity/real-DA missing",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "h6-final-20261023T155128Z",
+  "scenario": "integration:h6-final",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T15:51:28Z",
+  "sub_results": [
+    {
+      "phase": "h6-b24a-migration",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",
+      "result": "PASS"
+    },
+    {
+      "phase": "h6-b24b-runbook",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B24b/h6-receipt.json",
+      "result": "PASS"
+    },
+    {
+      "phase": "h6-lsf",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h6-c-readability",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h6-a-readability",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h6-selectivity",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h6-real-da",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
+      "result": "NOT_VERIFIED"
+    }
+  ],
+  "submission_id": null
+}
