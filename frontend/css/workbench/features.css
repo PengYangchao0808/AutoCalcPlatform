@@ -777,7 +777,7 @@ option, optgroup {
   font-family: var(--mono);
   line-height: 1.6;
 }
-.science-question-source { font-size: 10px; line-height: 1.35; color: var(--text-soft); font-family: var(--mono); word-break: normal; overflow-wrap: break-word; }
+.science-question-source { font-size: 10px; line-height: 1.35; color: var(--text-soft); font-family: var(--mono); word-break: normal; overflow-wrap: normal; }
 .science-question-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .science-question-status { font-size: 12px; color: var(--text-secondary); margin: 6px 0; min-height: 16px; word-break: keep-all; overflow-wrap: break-word; }
 .science-question-detail { border-top: 1px solid var(--border-subtle); margin-top: 10px; padding-top: 8px; font-size: 12px; color: var(--text-secondary); word-break: keep-all; overflow-wrap: break-word; }

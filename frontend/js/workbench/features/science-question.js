@@ -274,6 +274,11 @@ window.ACPScienceQuestion = (function () {
     return tr("manual.default_source", "来源：{source}", { source: sources[field] || "-" });
   }
 
+  function sourceLineHtml(field) {
+    return escapeHtml(sourceLineFor(field))
+      .replace(/([:.])(?=[A-Za-z0-9_])/g, "$1<wbr>");
+  }
+
   function fieldSpecs() {
     var values = state.defaults.values;
     var sources = state.defaults.sources;
@@ -386,7 +391,7 @@ window.ACPScienceQuestion = (function () {
       ? tr("manual.source_user_edit_from", "用户输入（已修改，原：{source}）", { source: origin })
       : tr("manual.source_user_edit", "用户输入（已修改）");
     var srcEl = domDoc ? domDoc.getElementById("sq-source-" + field) : null;
-    if (srcEl) srcEl.textContent = sourceLineFor(field);
+    if (srcEl) srcEl.innerHTML = sourceLineHtml(field);
     if (field === "solvent") state.spec.conditions.solvent = value;
     if (field === "temperature") state.spec.conditions.temperature = value;
     if (field === "standardState") state.spec.conditions.standardState = value;
@@ -900,7 +905,7 @@ window.ACPScienceQuestion = (function () {
         (spec.required ? ' <span class="science-question-required">*</span>' : "") + "</label>" +
         (extra || "") +
         '<div class="science-question-source" id="sq-source-' + id + '">' +
-        escapeHtml(sourceLineFor(id)) +
+        sourceLineHtml(id) +
         "</div></div>";
     };
     var detailHtml = "";

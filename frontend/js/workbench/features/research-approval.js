@@ -805,6 +805,35 @@ window.ACPResearchApproval = (function () {
     model_claim_not_authority: "A model claim is never an approval",
   };
 
+  var SCOPE_MODE_LABELS = {
+    none: ["research.approval.scope.none", "No substitutions"],
+    finite_list: ["research.approval.scope.finite_list", "Finite substitution list only"],
+    any: ["research.approval.scope.any", "Any substitution"],
+  };
+
+  var UNIT_BASIS_LABELS = {
+    per_scenario: ["research.approval.unit_basis.per_scenario", "per scenario"],
+    per_task: ["research.approval.unit_basis.per_task", "per task"],
+    per_request: ["research.approval.unit_basis.per_request", "per request"],
+    per_hour: ["research.approval.unit_basis.per_hour", "per hour"],
+  };
+
+  function enumLabel(table, value, fallback) {
+    var key = String(value == null ? "" : value);
+    var entry = table[key];
+    if (entry) return tr(entry[0], entry[1]);
+    if (!key) return fallback == null ? "—" : fallback;
+    return key.replace(/_/g, " ");
+  }
+
+  function scopeModeLabel(mode) {
+    return enumLabel(SCOPE_MODE_LABELS, mode, "—");
+  }
+
+  function unitBasisLabel(value) {
+    return enumLabel(UNIT_BASIS_LABELS, value, "—");
+  }
+
   function labelFor(field) {
     var entry = LABEL_KEYS[field];
     if (entry) return tr(entry[0], entry[1]);
@@ -898,7 +927,7 @@ window.ACPResearchApproval = (function () {
       row("charge", labelFor("charge"), esc(text(science.charge))) +
       row("multiplicity", labelFor("multiplicity"), esc(text(science.multiplicity))) +
       row("allowed_substitutions", labelFor("allowed_substitutions"),
-        esc(text(scope ? scope.mode : null, "none"))) +
+        esc(scopeModeLabel(scope ? scope.mode : null))) +
       "</dl>";
 
     html += '<dl class="ra-budget">';
@@ -908,7 +937,7 @@ window.ACPResearchApproval = (function () {
     html += "</dl>";
 
     html += '<dl class="ra-cost-basis">' +
-      row("unit_basis", labelFor("unit_basis"), esc(text(budget.unit_basis))) +
+      row("unit_basis", labelFor("unit_basis"), esc(unitBasisLabel(budget.unit_basis))) +
       row("budget_notes", labelFor("budget_notes"), esc(text(budget.notes))) +
       "</dl>";
 
@@ -1075,6 +1104,8 @@ window.ACPResearchApproval = (function () {
     effectiveStatus: effectiveStatus,
     statusLabel: statusLabel,
     validityLabel: validityLabel,
+    scopeModeLabel: scopeModeLabel,
+    unitBasisLabel: unitBasisLabel,
     labelFor: labelFor,
     renderApprovalCard: renderApprovalCard,
     setCard: setCard,

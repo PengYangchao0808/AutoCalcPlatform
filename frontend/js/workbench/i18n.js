@@ -1574,7 +1574,14 @@ const I18N = {
     "research.approval.label.budget.queue_seconds": "预算：排队秒",
     "research.approval.label.unit_basis": "计费基准",
     "research.approval.label.budget_notes": "预算备注",
-    "research.approval.label.expiry": "审批有效期"
+    "research.approval.label.expiry": "审批有效期",
+    "research.approval.scope.none": "不允许替换",
+    "research.approval.scope.finite_list": "仅限有限替换列表",
+    "research.approval.scope.any": "允许任意替换",
+    "research.approval.unit_basis.per_scenario": "每个情景",
+    "research.approval.unit_basis.per_task": "每个任务",
+    "research.approval.unit_basis.per_request": "每次请求",
+    "research.approval.unit_basis.per_hour": "每小时"
   },
   "en-US": {
     "app.title": "ACP Molecular Workbench",
@@ -3151,7 +3158,14 @@ const I18N = {
     "research.approval.label.budget.queue_seconds": "Budget: queue seconds",
     "research.approval.label.unit_basis": "Cost basis",
     "research.approval.label.budget_notes": "Budget notes",
-    "research.approval.label.expiry": "Approval expiry"
+    "research.approval.label.expiry": "Approval expiry",
+    "research.approval.scope.none": "No substitutions",
+    "research.approval.scope.finite_list": "Finite substitution list only",
+    "research.approval.scope.any": "Any substitution",
+    "research.approval.unit_basis.per_scenario": "per scenario",
+    "research.approval.unit_basis.per_task": "per task",
+    "research.approval.unit_basis.per_request": "per request",
+    "research.approval.unit_basis.per_hour": "per hour"
   }
 };
 
