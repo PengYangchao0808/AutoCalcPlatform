@@ -71,6 +71,7 @@ from acp_services.runtime.attempt_freeze import (
     AttemptLockExecutionRight,
     attempt_lock_path,
 )
+from acp_services.runtime.attempt_recovery import CgroupAttemptRecovery
 from acp_services.runtime.execution_chain import (
     FROZEN_GROUP_MANIFEST_FILENAME,
     FrozenGroupError,
@@ -431,7 +432,7 @@ class _ProbeExecutor:
         )
 
     def execute(self, scope: Any) -> TaskExecutionOutcome:
-        return outcome_from_task_result(self._result(), work_dir=scope.work_dir)
+        return outcome_from_task_result(self._result())
 
 
 # ── frozen-data loaders ─────────────────────────────────────────────────────
@@ -859,15 +860,30 @@ def _write_assembly_failure(
     return receipt
 
 
-def _write_unbound_failure(receipt_path: Path, code: str, message: str) -> None:
-    """Structured failure document when the envelope itself cannot be decoded."""
+def _unbound_diagnostic_path(receipt_path: Path) -> Path:
+    return receipt_path.with_name(receipt_path.name + ".unbound.json")
+
+
+def _write_unbound_failure(receipt_path: Path, code: str, message: str) -> Path:
+    """Structured failure document when the envelope itself cannot be decoded.
+
+    R04: an assembly error raised before any identity can be bound (and before
+    the execution right could possibly be acquired) must never touch the
+    canonical receipt path — a pre-existing authoritative receipt (including a
+    completed one) stays byte-identical.  The diagnostic lands beside it as
+    ``<receipt>.unbound.json`` and on stderr.
+    """
     document = {
         "schema": "worker_assembly_error",
         "state": "failed",
         "errors": [{"code": code, "message": message, "retryable": False}],
+        "receipt_path": str(receipt_path),
     }
-    receipt_path.parent.mkdir(parents=True, exist_ok=True)
-    receipt_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    diagnostic = _unbound_diagnostic_path(receipt_path)
+    diagnostic.parent.mkdir(parents=True, exist_ok=True)
+    _write_json_document_atomic(diagnostic, document)
+    print(json.dumps({"state": "failed", "code": code, "message": message}))
+    return diagnostic
 
 
 def _result_exit_code(result: WorkerExecutionResult) -> int:
@@ -929,7 +945,14 @@ def main(
         default=None,
         help="worker-independence probe only: run a deterministic executor instead of cccp",
     )
+    parser.add_argument(
+        "--execution-cgroup-root",
+        default=os.environ.get("ACP_EXECUTION_CGROUP_ROOT"),
+        help="delegated cgroup v2 root for checked local recovery; requires --attempt-lock",
+    )
     args = parser.parse_args(argv)
+    if args.execution_cgroup_root and args.attempt_lock is None:
+        parser.error("--execution-cgroup-root requires --attempt-lock")
 
     work_dir = Path(args.work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -944,15 +967,22 @@ def main(
         )
     except AssemblyError as exc:
         _write_unbound_failure(receipt_path, "frozen_group_invalid", str(exc))
-        print(json.dumps({"state": "failed", "code": "frozen_group_invalid", "message": str(exc)}))
         return 2
 
     lock_path = Path(args.attempt_lock) if args.attempt_lock else attempt_lock_path(work_dir)
+    recovery = CgroupAttemptRecovery(
+        Path(args.execution_cgroup_root) if args.execution_cgroup_root else None
+    )
     right_port = (
         execution_right
         if execution_right is not None
         else (
-            AttemptLockExecutionRight(lock_path=lock_path, lease_seconds=args.lease_seconds)
+            AttemptLockExecutionRight(
+                lock_path=lock_path,
+                lease_seconds=args.lease_seconds,
+                recovery_check=recovery,
+                execution_scope=recovery if recovery.root is not None else None,
+            )
             if args.attempt_lock is not None
             else AlwaysHeldExecutionRight()
         )
@@ -962,7 +992,6 @@ def main(
         envelope = load_frozen_envelope(args.envelope)
     except AssemblyError as exc:
         _write_unbound_failure(receipt_path, "envelope_unreadable", str(exc))
-        print(json.dumps({"state": "failed", "code": "envelope_unreadable", "message": str(exc)}))
         return 2
 
     try:

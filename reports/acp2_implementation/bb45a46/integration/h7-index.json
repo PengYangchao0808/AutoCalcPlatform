@@ -252,7 +252,11 @@
         "reports/acp2_implementation/bb45a46/B/B07/summary.json",
         "reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
         "reports/acp2_implementation/bb45a46/B/B13/dsh-disconnect.json",
-        "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json"
+        {
+          "external_ref": "<acp2-dev>/evidence/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
+          "path": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
+          "status": "NOT_VERIFIED(external_evidence_not_in_repo)"
+        }
       ],
       "gate_status": "OPEN",
       "handoff": "H2",
