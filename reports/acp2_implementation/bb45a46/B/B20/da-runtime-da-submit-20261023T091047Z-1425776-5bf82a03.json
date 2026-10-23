@@ -2,7 +2,7 @@
   "artifacts": [
     {
       "path": "p2-candidate.json",
-      "sha256": "867dcd7f05ea2db4ba49ae2688db27e549aae2e7f80520840a06a1dab2cc8114",
+      "sha256": "f089b9bc766de552976689721d1e38055ed797f9765ed15e4dc317a421646b13",
       "size_bytes": 5280
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "path": "b20a-ready.json",
-      "sha256": "10efb184bba1866c66e9b82e45940521dcf890c3ff541e7e354f5b0de3319382",
+      "sha256": "1817799d9247e2614f81347e69839a52d4026e4ae411f7c4fc9d7348a16e4949",
       "size_bytes": 13175
     },
     {
@@ -53,7 +53,7 @@
   ],
   "assertions": [
     {
-      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': '9ee70af73c59db5fb5e1738064f7f4b4123849fd', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T08:59:35.137286Z'}",
+      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': 'bc59e04758450321747068e679ca3a8d0efc5ad7', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T09:08:39.010735Z'}",
       "name": "b20a.controller_health",
       "status": "PASS"
     },
@@ -101,10 +101,10 @@
   "attempt": null,
   "candidate": {
     "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
-    "harness_revision": "9d291a18ec66e203c576057cd6612c3e8e126480abeb13825eb3b2efbbf96cc9",
-    "server_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd"
+    "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
+    "server_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7"
   },
-  "candidate_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd",
+  "candidate_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7",
   "claim_status": "not_evaluated",
   "command": [
     "/ACPServer/acp2-development/venvs/b/bin/python",
@@ -122,7 +122,7 @@
     "--timeout",
     "14400"
   ],
-  "contract_version": "1.2.0",
+  "contract_version": "1.3.0",
   "cwd": "/ACPServer/AutoCalcPlatform",
   "evidence_kind": "live",
   "exit_code": 2,
@@ -133,7 +133,7 @@
     "b20a.artifacts": [
       {
         "path": "p2-candidate.json",
-        "sha256": "867dcd7f05ea2db4ba49ae2688db27e549aae2e7f80520840a06a1dab2cc8114",
+        "sha256": "f089b9bc766de552976689721d1e38055ed797f9765ed15e4dc317a421646b13",
         "size_bytes": 5280
       },
       {
@@ -148,7 +148,7 @@
       },
       {
         "path": "b20a-ready.json",
-        "sha256": "10efb184bba1866c66e9b82e45940521dcf890c3ff541e7e354f5b0de3319382",
+        "sha256": "1817799d9247e2614f81347e69839a52d4026e4ae411f7c4fc9d7348a16e4949",
         "size_bytes": 13175
       },
       {
@@ -249,7 +249,7 @@
     "da.claim_status": "not_evaluated",
     "da.h4_gate": "open"
   },
-  "finished_at": "2026-10-23T09:01:46Z",
+  "finished_at": "2026-10-23T09:10:47Z",
   "h4_gate": "open",
   "job_id": null,
   "manifest_generation": null,
@@ -260,12 +260,12 @@
   "reason": "c24a_absent",
   "release_id": null,
   "result": "NOT_VERIFIED",
-  "run_id": "20261023T090146Z-1420676-2da363de",
+  "run_id": "20261023T091047Z-1425776-5bf82a03",
   "scenario": "da-runtime",
   "schema": "acp2.acceptance.v1",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "scope": "IN_SCOPE",
-  "started_at": "2026-10-23T09:01:46Z",
+  "started_at": "2026-10-23T09:10:47Z",
   "submission_id": null,
   "usage": null
 }

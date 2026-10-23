@@ -16,8 +16,9 @@
 
 ## Receipt
 
-- `da-runtime-da-submit-20261023T090146Z-1420676-2da363de.json` — exit 2, `evidence_kind=live`, `candidate_revision=9ee70af…`, `claim_status=not_evaluated`, `h4_gate=open`.
-- Candidate: server `9ee70af73c59db5fb5e1738064f7f4b4123849fd`; client `39d4aeb20451c984e20d27e12270a15070adce12` (C HEAD, read-only contracts); harness `9d291a18…`; contract `7d35beef…`; env `a9891b47…`.
+- `da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json` — exit 2, `evidence_kind=live`, `candidate_revision=bc59e04…`, `claim_status=not_evaluated`, `h4_gate=open`.
+- Candidate: server `bc59e04758450321747068e679ca3a8d0efc5ad7`; client `39d4aeb20451c984e20d27e12270a15070adce12` (C HEAD, read-only contracts); harness `2fc709f7…`; contract `7d35beef…`; env `d487f3af…`; contract version `1.3.0`.
+- `contract_version` is derived at runtime from `docs/reference/next-change/acp2-contracts/manifest.json` via `contract_version()`; the fallback `1.0.0` is used only if the manifest is unreadable. The receipt and summary both report `1.3.0`, matching `/api/health`.
 
 ## B20a-ready (zero side effects)
 
@@ -30,7 +31,7 @@
 
 ## P2 test candidate
 
-`p2-candidate.json` (overlay `sha256:6e6ccf5cdda3a37403eea2987383903301724e8e20b3370466fc9a2401f8958e`): built as a clean overlay (`data/b/b20-candidate` = `git archive HEAD` + the declared B20 files). Unrelated dirty working-tree changes are excluded; the overlay content matches the files used for the run. Frozen P1 candidate `77ac1de…` was not modified. A/C contract digests are recorded in the same file.
+`p2-candidate.json` (overlay `sha256:143129a243551f9a1227428508f546bc77e4911ea06d166469bf52c17cec8892`): built as a clean overlay (`data/b/b20-candidate` = `git archive HEAD` + the declared B20 files). Unrelated dirty working-tree changes are excluded; the overlay content matches the files used for the run. Frozen P1 candidate `77ac1de…` was not modified. A/C contract digests are recorded in the same file.
 
 ## Run spec and timeout
 
@@ -58,7 +59,7 @@ Expected artifact: `reports/acp2_implementation/bb45a46/C/da-research-live/a/c24
 
 ## Verification
 
-- `pytest tests/test_acp2_runtime_acceptance_harness.py tests/test_acp2_runtime_contracts.py tests/test_acp2_runtime_science_binding.py -q` → 74 passed (`pytest.txt`, exit 0).
+- `pytest tests/test_acp2_runtime_acceptance_harness.py tests/test_acp2_runtime_mcp_backends.py tests/test_acp2_runtime_event_recovery.py -q` → 46 passed (`pytest.txt`, exit 0).
 - `ruff check` and `ruff format --check` on the changed Python files → exit 0.
 - `validate_acp2_contracts.py` → `VALID` (manifest digests refreshed after the additive `claim_status`/`h4_gate` schema fields).
 - `acp2_runtime.py --check-only summary.json` → `VALID` (tool check only, not a scenario PASS).
