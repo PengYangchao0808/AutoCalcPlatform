@@ -456,6 +456,47 @@ class ApiKeyManager:
         constant time; a wrong secret is always reported as ``no_grant`` so a
         caller cannot learn revoked/expired state without presenting the secret.
         """
+        return self._verify(
+            key,
+            required_action=required_action,
+            project=project,
+            required_scope=required_scope,
+            now=now,
+        )
+
+    def verify_identity(
+        self,
+        key: Any,
+        *,
+        project: str | None = None,
+        required_scope: str | None = None,
+        now: datetime | None = None,
+    ) -> KeyDecision:
+        """Verify *key* as an identity credential without requiring an action.
+
+        B15 needs the resolved principal/scope **before** an entry picks the
+        action it needs (a read-only key must still be able to call a read
+        entry).  This reuses exactly the same digest/revocation/expiry/scope
+        checks as :meth:`verify`; it only omits the action test.  The returned
+        ``actions`` are then enforced per entry as a ceiling, never as a grant.
+        """
+        return self._verify(
+            key,
+            required_action=None,
+            project=project,
+            required_scope=required_scope,
+            now=now,
+        )
+
+    def _verify(
+        self,
+        key: Any,
+        *,
+        required_action: str | None,
+        project: str | None = None,
+        required_scope: str | None = None,
+        now: datetime | None = None,
+    ) -> KeyDecision:
         reference = self._now(now)
         decided_at = reference.isoformat()
 
@@ -498,10 +539,12 @@ class ApiKeyManager:
         if required_scope is not None and required_scope != record.scope:
             logger.debug("api key rejected: scope mismatch key_id=%s", record.key_id)
             return deny(KeyReason.SCOPE_MISMATCH, record)
-        if not _project_allowed(record.project, project):
+        if (project is not None or required_action is not None) and not _project_allowed(
+            record.project, project
+        ):
             logger.debug("api key rejected: project mismatch key_id=%s", record.key_id)
             return deny(KeyReason.SCOPE_MISMATCH, record)
-        if required_action not in record.actions:
+        if required_action is not None and required_action not in record.actions:
             logger.debug("api key rejected: action not allowed key_id=%s", record.key_id)
             return deny(KeyReason.NO_GRANT, record)
 

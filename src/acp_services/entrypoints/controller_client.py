@@ -373,7 +373,13 @@ class ControllerClient:
         timeout: Per-request timeout in seconds.
     """
 
-    def __init__(self, base_url: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        api_key: str | None = None,
+    ) -> None:
         raw = str(base_url or "").strip()
         if not raw:
             raise InvalidParameterError(
@@ -389,6 +395,7 @@ class ControllerClient:
             )
         self.base_url = raw.rstrip("/")
         self.timeout = float(timeout)
+        self._api_key = str(api_key).strip() if api_key else None
 
     # -- transport ---------------------------------------------------------
     def _request_json(
@@ -400,11 +407,14 @@ class ControllerClient:
         timeout: float | None = None,
     ) -> Any:
         body = None if payload is None else json.dumps(dict(payload)).encode("utf-8")
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        if self._api_key:
+            headers["X-API-Key"] = self._api_key
         request = urllib.request.Request(
             self.base_url + path,
             data=body,
             method=method,
-            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            headers=headers,
         )
         try:
             with urllib.request.urlopen(request, timeout=timeout or self.timeout) as response:
@@ -446,6 +456,18 @@ class ControllerClient:
         if not isinstance(data, Mapping):
             raise ControllerClientError("health response is not an object")
         return Health.from_mapping(data)
+
+    def identity(self, *, extensions: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+        """Return the Controller-resolved principal for this client credential.
+
+        The stdio proxy binds its permission ceiling to this answer; it is a
+        server fact, never a locally chosen role or workspace.
+        """
+        del extensions
+        data = self._request_json("GET", "/api/identity")
+        if not isinstance(data, Mapping):
+            raise ControllerClientError("identity response is not an object")
+        return data
 
     def status(
         self,

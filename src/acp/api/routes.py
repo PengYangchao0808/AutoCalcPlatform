@@ -273,8 +273,15 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
 @router.get("/capabilities")
 def get_capabilities(request: Request) -> dict[str, Any]:
     """Read-only discovery (``capabilities`` application command)."""
+    from acp_services.workspace.http_identity import (
+        IdentityMode,
+        remote_identity_providers,
+        stdio_identity_binding,
+    )
+
     admission = getattr(request.app.state, "admission", None)
     identity = getattr(request.app.state, "server_identity", None)
+    identity_mode = getattr(request.app.state, "identity_mode", IdentityMode.LOCAL_SINGLE)
     if admission is not None:
         admission_snapshot = admission.snapshot()
     else:
@@ -298,10 +305,41 @@ def get_capabilities(request: Request) -> dict[str, Any]:
         "admission": admission_snapshot,
         "admission_enforcement": admission_snapshot["enforcement"],
         "model_token_enforcement": "NOT_VERIFIED",
-        "multi_tenant_security": False,
+        "multi_tenant_security": (
+            False if identity_mode == IdentityMode.LOCAL_SINGLE else "api-key-scoped"
+        ),
+        "identity_mode": identity_mode,
+        "identity_profiles": [IdentityMode.LOCAL_SINGLE, IdentityMode.API_KEY],
+        "remote_identity_providers": remote_identity_providers(),
+        "stdio_identity_binding": stdio_identity_binding(),
     }
-    if identity is not None:
+    if identity_mode == IdentityMode.LOCAL_SINGLE and identity is not None:
         payload["identity"] = identity.to_dict()
+    elif identity_mode != IdentityMode.LOCAL_SINGLE:
+        payload["identity"] = {
+            "mode": identity_mode,
+            "principal_resolution": "api-key-verified-by-controller",
+            "project_hint_policy": "narrow-only",
+            "multi_tenant_security": "api-key-scoped",
+        }
+    return payload
+
+
+@router.get("/identity")
+def get_identity(request: Request) -> dict[str, Any]:
+    """Return the server-resolved principal for this request's credential."""
+    from acp_services.workspace.http_identity import IdentityMode
+
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return resolved.to_dict()
+    identity = getattr(request.app.state, "server_identity", None)
+    identity_mode = getattr(request.app.state, "identity_mode", IdentityMode.LOCAL_SINGLE)
+    if identity is None:
+        raise HTTPException(status_code=503, detail="identity is not initialized")
+    payload = identity.to_dict()
+    payload["schema_version"] = 1
+    payload["mode"] = identity_mode
     return payload
 
 
@@ -538,6 +576,32 @@ def download_job_file(job_id: str, file_path: str, request: Request) -> FileResp
     return FileResponse(str(resolved), filename=resolved.name)
 
 
+def _legacy_stream_still_authorized(request: Request, job_id: str) -> bool:
+    """Re-resolve the credential on every poll of an already-open SSE stream.
+
+    A subscription started before revocation must stop at the next delivery, so
+    the in-process ``app.state`` authorizer alone is never trusted here.
+    """
+    boundary = getattr(request.app.state, "identity_boundary", None)
+    if boundary is None or not boundary.enabled:
+        return True
+    from acp_services.workspace.http_identity import credential_from_headers
+
+    resolved, denial = boundary.resolve(credential_from_headers(dict(request.headers)))
+    if denial is not None or resolved is None:
+        return False
+    manager = getattr(request.app.state, "job_manager", None)
+    record = manager.get(job_id) if manager is not None else None
+    if record is None:
+        return False
+    decision = resolved.server_identity.authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action="read",
+        job_id=job_id,
+    )
+    return bool(decision.allowed)
+
+
 @router.get("/jobs/{job_id}/events")
 async def stream_job_events(
     job_id: str,
@@ -684,6 +748,10 @@ async def stream_job_events(
             if await request.is_disconnected():
                 break
 
+            if not _legacy_stream_still_authorized(request, job_id):
+                yield 'event: reset\ndata: {"reason": "permission_changed"}\n\n'
+                break
+
             try:
                 seq, byte_offset, frames, needs_resync = _read_tail(seq, byte_offset)
             except OSError:
@@ -779,6 +847,59 @@ class _EntryStreamAuthorizer:
         )
 
 
+class _ReauthorizingStreamAuthorizer:
+    """Re-resolve the API-key credential on every poll of a scope stream.
+
+    The stream registry already re-checks its authorizer each cycle; binding a
+    resolver that reads the key/account rows is what makes revocation effective
+    on a subscription that was opened *before* the revocation.
+    """
+
+    def __init__(self, boundary: Any, credential: str | None, manager: Any) -> None:
+        self._boundary = boundary
+        self._credential = credential
+        self._manager = manager
+
+    def authorize_stream(self, *, principal_id: str, scope: Any, job_id: str = ""):
+        from acp_services.contracts.events import EventScope
+        from acp_services.runtime.events import StreamAuthorization
+
+        resolved_scope = scope if isinstance(scope, EventScope) else EventScope(scope)
+        resolved, denial = self._boundary.resolve(self._credential)
+        if denial is not None or resolved is None:
+            return StreamAuthorization(
+                allowed=False,
+                principal_id=principal_id,
+                scope=resolved_scope,
+                reason_code="revoked",
+                detail="credential is no longer valid",
+            )
+        if principal_id and resolved.principal.principal_id != principal_id:
+            return StreamAuthorization(
+                allowed=False,
+                principal_id=resolved.principal.principal_id,
+                scope=resolved_scope,
+                reason_code="permission_changed",
+                detail="stream principal changed",
+            )
+        record = self._manager.get(job_id) if job_id else None
+        project = None
+        if record is not None:
+            project = record.project_id or record.spec.project_id
+        decision = resolved.server_identity.authorize_job_project(
+            project,
+            action="read",
+            job_id=job_id,
+        )
+        return StreamAuthorization(
+            allowed=bool(decision.allowed),
+            principal_id=resolved.principal.principal_id,
+            scope=resolved_scope,
+            reason_code=decision.reason_code,
+            detail=decision.detail,
+        )
+
+
 def _scope_stream_registry(request: Request):
     from acp_services.runtime.events import AuthorizedStreamRegistry
 
@@ -849,14 +970,34 @@ async def stream_scope_events(
     if not owners:
         raise HTTPException(status_code=422, detail="job_ids must name at least one owner")
 
+    resolved_request = getattr(request.state, "request_identity", None)
     for owner in owners:
-        if manager.get(owner) is None:
+        record = manager.get(owner)
+        if record is None:
             raise HTTPException(status_code=404, detail=f"Job not found: {owner}")
+        if resolved_request is not None:
+            decision = resolved_request.server_identity.authorize_job_project(
+                record.project_id or record.spec.project_id,
+                action="read",
+                job_id=owner,
+            )
+            if not decision.allowed:
+                raise HTTPException(status_code=404, detail=f"Job not found: {owner}")
 
+    boundary = getattr(request.app.state, "identity_boundary", None)
     authorizer = getattr(request.app.state, "entry_authorizer", None)
-    guard = _EntryStreamAuthorizer(
-        authorizer if authorizer is not None else default_entry_authorizer()
-    )
+    if resolved_request is not None and boundary is not None and boundary.enabled:
+        from acp_services.workspace.http_identity import credential_from_headers
+
+        guard = _ReauthorizingStreamAuthorizer(
+            boundary,
+            credential_from_headers(dict(request.headers)),
+            manager,
+        )
+    else:
+        guard = _EntryStreamAuthorizer(
+            authorizer if authorizer is not None else default_entry_authorizer()
+        )
     probe = guard.authorize_stream(principal_id="", scope=resolved_scope, job_id=owners[0])
     if probe.denied:
         raise HTTPException(

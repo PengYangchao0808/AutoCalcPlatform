@@ -50,7 +50,7 @@
       "note": "No production deployment or service restart in B00."
     }
   },
-  "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+  "contract_digest": "61eb7eb5cb679aa7a4168e8f49d90f0a32acf8b9cffb4b0b572eec39272aeb54",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "env_digest": "2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc",
   "env_digest_status": "recorded by B07 (acceptance-env.sh sha256 at the H2 freeze)",

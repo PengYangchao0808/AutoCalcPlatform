@@ -23,6 +23,7 @@ single-principal enforcement, *not* multi-tenant security (see
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -101,6 +102,38 @@ class ServerIdentity:
     def from_environment(cls) -> ServerIdentity:
         """Build from the process environment (composition-root fallback)."""
         return cls.build(verified_project=resolve_server_project())
+
+    @classmethod
+    def from_principal(
+        cls,
+        principal: Principal,
+        *,
+        external: ExternalIdentity | None = None,
+        verified_project: str | None = None,
+        known_projects: Mapping[str, str | None] | None = None,
+        action_ceiling: Sequence[str] | None = None,
+        require_grant: bool = False,
+    ) -> ServerIdentity:
+        """Build a server identity from an already-verified non-local principal.
+
+        B15 uses this for the opt-in API-key identity path: the principal,
+        tenant, roles and credential action ceiling all come from the identity
+        store, never from the request.  ``known_projects`` is the project map the
+        Controller itself resolved; a request project outside it is denied.
+        """
+        project = _clean_project(verified_project)
+        authorizer = EntryAuthorizer(
+            principal=principal,
+            known_projects=known_projects,
+            require_grant=require_grant,
+            action_ceiling=action_ceiling,
+        )
+        return cls(
+            principal=principal,
+            external=external or local_identity(principal.principal_id),
+            verified_project=project,
+            authorizer=authorizer,
+        )
 
     # -- submit ---------------------------------------------------------
 

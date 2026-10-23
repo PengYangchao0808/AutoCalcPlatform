@@ -1,0 +1,5 @@
+VALID: /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/manifest.json
+VALID: reports/acp2_implementation/bb45a46/B/B15/summary.json (tool check only; this is not a scenario PASS)
+check-only main=0
+VALID: reports/acp2_implementation/bb45a46/B/B15/two-project-not-verified/summary.json (tool check only; this is not a scenario PASS)
+check-only two-project=0

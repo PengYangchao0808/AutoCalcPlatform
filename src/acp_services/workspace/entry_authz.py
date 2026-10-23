@@ -209,6 +209,11 @@ class EntryAuthorizer:
         require_grant: When True, a live explicit grant covering the requested
             resource/action is additionally required (this is the forged-scope
             and revocation axis).
+        action_ceiling: Optional credential ceiling (B15).  When set, the
+            resolved action set is intersected with it, so an API key scoped to
+            ``read`` can never perform a ``write``/``control`` entry even if the
+            account role or tier would otherwise allow it.  ``None`` preserves
+            the pre-B15 behaviour exactly.
     """
 
     def __init__(
@@ -223,6 +228,7 @@ class EntryAuthorizer:
         execution_mode: str = ExecutionMode.LOCAL,
         require_grant: bool = False,
         source_host: str | None = None,
+        action_ceiling: Sequence[str] | None = None,
     ) -> None:
         self._policy = policy
         self._principal = principal
@@ -233,6 +239,7 @@ class EntryAuthorizer:
         self._execution_mode = str(execution_mode)
         self._require_grant = bool(require_grant)
         self._source_host = source_host
+        self._action_ceiling = None if action_ceiling is None else tuple(action_ceiling)
 
     # -- principal ------------------------------------------------------
 
@@ -392,6 +399,11 @@ class EntryAuthorizer:
             )
 
         available = resolution.available_actions or ()
+        if self._action_ceiling is not None:
+            # A credential ceiling can only narrow what the account/role/tier
+            # already allows.  It is never unioned in, so a forged role or a
+            # leaked key cannot widen the resolved scope.
+            available = tuple(action for action in available if action in self._action_ceiling)
         if effective_action not in available:
             return self._verdict(
                 entry_class=entry_class,

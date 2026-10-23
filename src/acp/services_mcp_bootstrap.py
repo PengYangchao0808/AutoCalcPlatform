@@ -327,7 +327,10 @@ def probe_controller(controller_url: str, *, timeout: float = DEFAULT_TIMEOUT_SE
 
 
 def build_mcp_runtime(
-    controller_url: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS
+    controller_url: str,
+    *,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    api_key: str | None = None,
 ) -> McpRuntime:
     """Bind every MCP tool to one Controller application command.
 
@@ -335,10 +338,16 @@ def build_mcp_runtime(
     the Controller's server-side admission ledger the only resource authority,
     so a client/tool core hint can never override the server grant.
 
+    With *api_key* the proxy is one user's transport: it asks the Controller for
+    the resolved principal/project and binds its mapper to that answer, with the
+    key's actions intersected with :data:`mcp.STDIO_PERMISSION_CEILING`.  Without
+    a key the adapter keeps the existing trusted ``local-single`` stdio scope.
+
     Raises:
-        ControllerClientError: the Controller is unreachable or unhealthy.
+        ControllerClientError: the Controller is unreachable/unhealthy, or a
+            supplied credential could not be resolved.
     """
-    client = ControllerClient(controller_url, timeout=timeout)
+    client = ControllerClient(controller_url, timeout=timeout, api_key=api_key)
     health = client.health()
     logger.info(
         "MCP adapter bound to Controller %s (candidate_revision=%s, "
@@ -357,12 +366,40 @@ def build_mcp_runtime(
         artifacts=_ControllerArtifacts(client),
         analysis=_ControllerAnalysis(client),
     )
+    identity = _stdio_identity_mapper(client, api_key)
     server = mcp.McpServer(
         backends=backends,
-        identity=mcp.IdentityMapper(configured_tier=mcp.STDIO_PERMISSION_SCOPE),
+        identity=identity,
         configured_tier=mcp.STDIO_PERMISSION_SCOPE,
     )
     return McpRuntime(server=server, client=client, health=health)
+
+
+def _stdio_identity_mapper(client: ControllerClient, api_key: str | None) -> mcp.IdentityMapper:
+    """Bind the stdio mapper to the Controller-resolved principal (B15)."""
+    if not api_key:
+        return mcp.IdentityMapper(configured_tier=mcp.STDIO_PERMISSION_SCOPE)
+    from acp_services.contracts.access import Principal
+
+    identity = client.identity()
+    principal_data = identity.get("principal")
+    if not isinstance(principal_data, Mapping):
+        raise ControllerClientError("identity response carries no principal")
+    principal = Principal.from_dict(principal_data)
+    bound_actions = tuple(str(action) for action in identity.get("actions") or ())
+    logger.info(
+        "MCP stdio identity bound to principal=%s project=%s actions=%s",
+        principal.principal_id,
+        identity.get("verified_project"),
+        list(bound_actions),
+    )
+    return mcp.IdentityMapper(
+        configured_tier=mcp.STDIO_PERMISSION_SCOPE,
+        permission_scope=mcp.STDIO_MULTIUSER_SCOPE,
+        bound_principal=principal,
+        bound_project=identity.get("verified_project"),
+        bound_actions=bound_actions,
+    )
 
 
 def build_mcp_server(

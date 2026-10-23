@@ -2397,8 +2397,9 @@ def _handle_mcp_serve(args: argparse.Namespace) -> int:
     from acp.services_mcp_bootstrap import build_mcp_runtime
     from acp_services.entrypoints.controller_client import ControllerClientError
 
+    api_key = (os.environ.get("ACP_API_KEY") or "").strip() or None
     try:
-        runtime = build_mcp_runtime(controller)
+        runtime = build_mcp_runtime(controller, api_key=api_key)
     except ControllerClientError as exc:
         logger.error("Controller unavailable at %s: %s", controller, exc.message)
         return _MCP_EXIT_CONTROLLER_UNAVAILABLE
@@ -2407,9 +2408,10 @@ def _handle_mcp_serve(args: argparse.Namespace) -> int:
         return _MCP_EXIT_STARTUP_ERROR
 
     logger.info(
-        "MCP stdio adapter serving controller=%s (candidate_revision=%s)",
+        "MCP stdio adapter serving controller=%s (candidate_revision=%s, identity_binding=%s)",
         controller,
         runtime.health.candidate_revision,
+        "api-key" if api_key else "local-single",
     )
     return run_stdio(
         runtime.server,

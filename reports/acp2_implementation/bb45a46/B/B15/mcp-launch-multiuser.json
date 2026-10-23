@@ -1,0 +1,60 @@
+{
+  "args": [
+    "-m",
+    "acp",
+    "mcp",
+    "serve",
+    "--transport",
+    "stdio",
+    "--controller",
+    "http://127.0.0.1:18775",
+    "--log-level",
+    "INFO"
+  ],
+  "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "constraints": {
+    "no_credential_in_descriptor": true,
+    "stdout_protocol_only": true,
+    "tool_call_state_authority": "none",
+    "unknown_field_policy": "reject"
+  },
+  "controller": {
+    "loopback_only": true,
+    "shared_db": false,
+    "start_controller": false,
+    "transport": "loopback-http"
+  },
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "env": {
+    "ACP_API_KEY": "env:ACP_API_KEY",
+    "ACP_CONTROLLER_URL": "http://127.0.0.1:18775",
+    "PYTHONPATH": "/ACPServer/acp2-development/data/b/b15-src"
+  },
+  "identity_binding": {
+    "bound_fields": [
+      "principal_id",
+      "tenant_id",
+      "roles",
+      "verified_project",
+      "actions"
+    ],
+    "client_meta_is_identity": false,
+    "credential_ref": "env:ACP_API_KEY",
+    "local_single_default": true,
+    "mode": "api-key",
+    "never": [
+      "admin"
+    ],
+    "permission_ceiling": [
+      "read",
+      "write",
+      "control"
+    ],
+    "resolution": "GET /api/identity (server-resolved principal)",
+    "shared_launch_allowed": false
+  },
+  "launch_version": 1,
+  "probe": "stdio-identity.json",
+  "schema": "acp2.mcp-launch.v1",
+  "transport": "stdio"
+}
