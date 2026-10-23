@@ -106,7 +106,7 @@
       "consumer": "C T-40a",
       "digest": "sha256:197473c530d9ae926a656b398c1fe4577f3c976a507f3a22183fd801fce36b45",
       "evidence_state": "NOT_VERIFIED",
-      "gap": "A-25a fixture is frozen and validated (constructed, real_run=false; manifest digest sha256:197473...; two endpoints distinguishable by CIP configuration and signed-volume sign; producer request selectivity-producer.md). C T-40a has not submitted and no public run_id exists, so evidence_state stays NOT_VERIFIED. Chain A-25a -> C T-40a -> B23b -> A-25b -> C T-40b must keep this order; C T-40a must not submit first.",
+      "gap": "A-25a fixture is frozen and validated (constructed, real_run=false; manifest digest sha256:197473...; two endpoints distinguishable by CIP configuration and signed-volume sign; producer request selectivity-producer.md). A-25b then published selectivity-evidence-report.json from the absent-producer state (NOT_VERIFIED, H6 open). C T-40a has still not submitted and no public run_id exists, so this row's evidence_state stays NOT_VERIFIED. Chain A-25a -> C T-40a -> B23b -> A-25b -> C T-40b must keep this order; C T-40a must not submit first.",
       "phase": "experience:selectivity",
       "preconditions": {
         "and": [],
@@ -121,9 +121,9 @@
     {
       "artifact_id": "A-25b:selectivity-audit-report",
       "consumer": "C T-40b",
-      "digest": null,
+      "digest": "sha256:c192657fd6e5a1012939e63d30e0a906309785ad2b735934836c68575df78c83",
       "evidence_state": "NOT_VERIFIED",
-      "gap": "A-25b (todo 46) not executed; requires B23b exports plus a unique (owner=C, scenario=experience:cross-domain-live, phase=experience:selectivity, run_id) - run_id unknown and never invented. C T-40b signs only after A-25b.",
+      "gap": "A-25b is delivered as the bounded report docs/reference/next-change/acp2-contracts/science/selectivity-evidence-report.json (schema_version 1), built from the absent-producer state: platform_evidence_state=NOT_VERIFIED, real_run=false, constructed=true, preference=null, both path statuses not_evaluated, H6 open. It records the exact gaps: no registered (owner=C, scenario=experience:cross-domain-live, subcase=selectivity, phase=experience:selectivity) record, no B/C-issued run_id (never invented), no B23b machine artifact id for the declared edge B23b:selectivity-authorized-artifacts at integration_ready, and no B/C cross-domain budget table. C T-40b signs only after a real A-25b audit; the published file's presence does not upgrade evidence_state.",
       "phase": "experience:selectivity",
       "preconditions": {
         "and": [
@@ -133,9 +133,9 @@
       },
       "producer": "A-25b",
       "product": "bounded selectivity EvidenceReport auditing the B23b-authorized two-path artifacts",
-      "readiness": "contract_ready",
+      "readiness": "implementation_ready",
       "task_id": "A-25b",
-      "version": null
+      "version": "1"
     },
     {
       "artifact_id": "B00:candidate-overlay-snapshot",
@@ -304,7 +304,7 @@
       "consumer": "A-25b",
       "digest": null,
       "evidence_state": "NOT_VERIFIED",
-      "gap": "B23b has not executed or exported anything - it runs after C T-40a. Delivered-state readiness for this edge is integration_ready (artifacts exported) per A-25b todo 46, never B23 whole-task verified; current readiness is contract_ready because only the edge contract exists. The exact machine id is the one B publishes (the B dependency table may show 23b) - A records that id and never infers from the numeric prefix. Either qualified path missing => inconclusive/NOT_VERIFIED, never a preference.",
+      "gap": "B23b has not executed or exported anything - it runs after C T-40a. Delivered-state readiness for this edge is integration_ready (artifacts exported) per A-25b todo 46, never B23 whole-task verified; current readiness stays contract_ready because only the edge contract exists. The A-25b consumer (todo 46) is implemented and reads this edge at integration_ready only; with the edge absent it publishes the bounded report as NOT_VERIFIED and keeps H6 open. The exact machine id is the one B publishes (the B dependency table may show 23b) - A records that id and never infers from the numeric prefix. Either qualified path missing => inconclusive/NOT_VERIFIED, never a preference.",
       "phase": "experience:selectivity",
       "preconditions": {
         "and": [

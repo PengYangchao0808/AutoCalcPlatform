@@ -1,0 +1,49 @@
+{
+  "artifact_id": "constructed-b23b-selectivity-artifacts-one-path",
+  "authorized_artifacts": [
+    {
+      "digest": "3ea06bfc680d9b7278db182bb2a634ce4989f1d2f412081a8d997df65fbd6638",
+      "path_id": "path.endo",
+      "report_path": "path-endo-evidence.json",
+      "reused": false,
+      "role": "path_evidence"
+    }
+  ],
+  "constructed": true,
+  "path_records": [
+    {
+      "activation_energy_kcal_per_mol": 12.0,
+      "comparison_conditions": {
+        "basis": "def2-SVP",
+        "charge": 0,
+        "energy_unit": "kcal_per_mol",
+        "method": "wB97X-D4",
+        "multiplicity": 1,
+        "pressure_pa": 100000.0,
+        "reference_state": "separated cyclopentadiene + methyl acrylate at infinite separation, and each declared product at the same conditions",
+        "standard_state": "1_bar_ideal_gas",
+        "temperature_k": 298.15
+      },
+      "endpoint_signature": {
+        "cip_configuration": "S",
+        "face": "endo",
+        "signed_volume_sign": -1,
+        "stereocenter_atom_id": "pd_c5"
+      },
+      "free_energy_kcal_per_mol": null,
+      "mapping_topology_digest": "f131899dba9c7b02f8d841546362eca1a2b3ef9d5e160a71f3acc7744fc3ed16",
+      "path_id": "path.endo",
+      "product_digest": "2633ffbc851b4dc57880f3d08d616530598062e799c6400fa7df0dd45df2924f",
+      "report_digest": "3ea06bfc680d9b7278db182bb2a634ce4989f1d2f412081a8d997df65fbd6638",
+      "report_path": "path-endo-evidence.json"
+    }
+  ],
+  "paths": [
+    "path.endo",
+    "path.exo"
+  ],
+  "readiness": "integration_ready",
+  "real_qc_binary_ran": false,
+  "record_path": "b23b-export-one-path.json",
+  "run_id": "constructed-run-0001"
+}

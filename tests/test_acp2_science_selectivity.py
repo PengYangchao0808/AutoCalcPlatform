@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pytest
 from rdkit import Chem
 
 from cccp.analysis.research.question import Question
@@ -489,3 +490,650 @@ def test_selectivity_producer_request_names_paths_run_key_budget_and_reference()
     assert "does **not** issue a run key" in text
     assert "does **not** claim a result" in text
     assert "no separate `selectivity-live` scenario" in text
+
+
+# ── A-25b: bounded selectivity audit over B23b-authorized artifacts ────────
+#
+# The report-scenario fixtures are constructed: the two path evidence reports,
+# the B23b export records and the cross-domain budget tables are placeholders
+# assembled with the frozen evidence contract.  No QC job, TS search, IRC,
+# energy or experimental measurement ran.  The audit therefore never reports a
+# real run and H6 stays open even when the constructed preference is supported.
+
+from cccp.analysis.research.selectivity import (  # noqa: E402
+    build_selectivity_audit,
+)
+
+SCENARIO_DIR = FIXTURE_DIR / "report-scenario"
+
+
+def _scenario(name: str) -> dict[str, Any]:
+    return _load_json(SCENARIO_DIR / name)
+
+
+def _record_with_digest(name: str) -> dict[str, Any]:
+    payload = _scenario(name)
+    payload["record_digest"] = _sha256_file(SCENARIO_DIR / name)
+    return payload
+
+
+def _audit(
+    *,
+    export: str = "b23b-export-qualified.json",
+    references: str = "reference-records.json",
+    budget: str = "cross-domain-budget.json",
+    paths: list[dict[str, Any]] | None = None,
+    constructed: bool = True,
+    signoff: dict[str, Any] | None = None,
+) -> Any:
+    b23b = _record_with_digest(export)
+    if paths is None:
+        paths = list(b23b.get("path_records", []))
+    return build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario(references),
+        b23b=b23b,
+        budget=_record_with_digest(budget),
+        paths=paths,
+        read_root=SCENARIO_DIR,
+        c_t40b_signoff=signoff,
+        constructed=constructed,
+    )
+
+
+def test_a25b_qualified_two_path_report_states_a_bounded_preference() -> None:
+    result = _audit()
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.constructed is True
+    assert result.real_run is False
+    assert result.h6_open is True
+    assert result.preference == "endo"
+    assert result.preference_delta_kcal_per_mol == pytest.approx(-3.0)
+    assert result.preference_status == "supported"
+    assert result.path_statuses == {
+        "path.endo": "supported",
+        "path.exo": "supported",
+    }
+    assert result.claim_status("selectivity.reference.registered") == "supported"
+    assert result.claim_status("selectivity.path.endo.qualified") == "supported"
+    assert result.claim_status("selectivity.path.exo.qualified") == "supported"
+    assert result.claim_status("selectivity.preference") == "supported"
+    assert result.claim_status("selectivity.budget") == "supported"
+    assert result.claim_status("selectivity.experimental_prediction") == "not_evaluated"
+    assert "lim-constructed" in result.limitations
+    assert "lim-no-experimental" in result.limitations
+    assert "lim-h6-open" in result.limitations
+    assert "lim-relative-only" in result.limitations
+    assert result.gaps == ()
+
+
+def test_a25b_budget_and_coverage_table_records_subrows_and_cumulative() -> None:
+    result = _audit()
+    budget = result.budget_summary
+    assert budget["run_id"] == "constructed-run-0001"
+    rows = {row["domain"]: row for row in budget["subrows"]}
+    assert set(rows) == {"nmr", "thermo", "selectivity"}
+    assert rows["nmr"]["task_ref_count"] == rows["nmr"]["step_count"] == 0
+    assert rows["nmr"]["reused"] is True
+    assert rows["nmr"]["reused_artifacts"] == ["A-24a:nmr-comparison:constructed"]
+    assert rows["thermo"]["reused_artifacts"] == ["A-24b:ensemble-thermo:constructed"]
+    assert rows["selectivity"]["task_ref_count"] == 1
+    assert rows["selectivity"]["step_count"] == 8
+    assert rows["selectivity"]["qc_count"] == 14
+    assert budget["cumulative"] == {
+        "task_refs": 1,
+        "steps": 8,
+        "qc_calls": 14,
+        "wall_seconds": None,
+    }
+    assert budget["subrow_totals"] == {"task_refs": 1, "steps": 8, "qc_calls": 14}
+    assert budget["reused_artifacts"] == [
+        "A-24a:nmr-comparison:constructed",
+        "A-24b:ensemble-thermo:constructed",
+    ]
+    coverage = result.coverage
+    assert coverage["both_paths_qualified"] is True
+    assert coverage["paths"]["path.endo"]["qualified"] is True
+    assert coverage["paths"]["path.exo"]["qualified"] is True
+    assert coverage["budget_domains"] == ["nmr", "thermo", "selectivity"]
+    assert coverage["reused_artifacts"] == budget["reused_artifacts"]
+
+
+def test_a25b_report_uses_the_shared_evidence_contract_and_sources_verify() -> None:
+    from cccp.analysis.research.evidence import (
+        evidence_report_from_dict,
+        verify_claim_sources,
+    )
+
+    result = _audit()
+    report = result.report
+    assert report.schema_version == 1
+    assert evidence_report_from_dict(report.to_dict()) == report
+    assert report.overall_claim_status == "not_evaluated"
+    rows = verify_claim_sources(report, SCENARIO_DIR)
+    assert rows
+    assert all(row.to_dict()["status"] == "PASS" for row in rows)
+
+
+def test_a25b_one_missing_path_refuses_a_preference() -> None:
+    result = _audit(export="b23b-export-one-path.json")
+    assert result.preference is None
+    assert result.preference_status == "inconclusive"
+    assert result.path_statuses == {
+        "path.endo": "supported",
+        "path.exo": "not_evaluated",
+    }
+    assert result.claim_status("selectivity.path.exo.qualified") == "not_evaluated"
+    assert any("path.exo" in gap for gap in result.gaps)
+
+
+def test_a25b_absent_b23b_artifacts_is_not_verified_and_h6_open() -> None:
+    result = _audit(export="b23b-export-absent.json", paths=[])
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.preference is None
+    assert result.preference_status == "not_evaluated"
+    assert result.h6_open is True
+    assert result.claim_status("selectivity.reference.registered") == "not_evaluated"
+    assert any("readiness" in gap for gap in result.gaps)
+    assert any("both declared paths" in gap for gap in result.gaps)
+
+
+def test_a25b_duplicate_public_key_is_not_verified_and_states_no_preference() -> None:
+    result = _audit(references="reference-records-duplicate-key.json")
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.preference is None
+    assert result.preference_status == "not_evaluated"
+    assert any("two subcases share one public" in gap for gap in result.gaps)
+
+
+def test_a25b_cumulative_budget_mismatch_refuses_a_preference() -> None:
+    result = _audit(budget="cross-domain-budget-mismatch.json")
+    assert result.preference is None
+    assert result.preference_status == "inconclusive"
+    assert result.claim_status("selectivity.budget") == "inconclusive"
+    assert any("cumulative budget total" in gap for gap in result.gaps)
+
+
+def test_a25b_changed_run_id_does_not_reset_the_cumulative_budget() -> None:
+    budget = _record_with_digest("cross-domain-budget.json")
+    budget["run_id"] = "constructed-run-different"
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=budget,
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.preference is None
+    assert any("run_id differs" in gap for gap in result.gaps)
+
+
+def test_a25b_missing_budget_subrow_is_not_verified() -> None:
+    budget = _record_with_digest("cross-domain-budget.json")
+    budget["subrows"] = [row for row in budget["subrows"] if row["domain"] != "nmr"]
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=budget,
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.preference is None
+    assert any("nmr, thermo and selectivity" in gap for gap in result.gaps)
+
+
+def test_a25b_no_real_qc_binary_is_never_claimed_as_a_real_run() -> None:
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    b23b.pop("constructed", None)
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=_record_with_digest("cross-domain-budget.json"),
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=False,
+    )
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.real_run is False
+    assert any("no real QC binary ran" in gap for gap in result.platform_evidence_gaps)
+
+
+def test_a25b_c_t40b_signoff_alone_does_not_close_h6_for_a_constructed_report() -> None:
+    result = _audit(
+        signoff={
+            "owner": "C",
+            "phase": "experience:selectivity",
+            "run_id": "constructed-run-0001",
+            "signed": True,
+            "signed_after_audit": True,
+        }
+    )
+    assert result.h6_open is True
+
+
+def test_a25b_atom_order_only_difference_is_rejected_as_unqualified(tmp_path: Path) -> None:
+    path_records = list(_record_with_digest("b23b-export-qualified.json")["path_records"])
+    exo = copy.deepcopy(path_records[1])
+    exo["endpoint_signature"]["cip_configuration"] = "S"
+    exo["endpoint_signature"]["signed_volume_sign"] = -1
+    path_records[1] = exo
+    result = _audit(paths=path_records)
+    assert result.path_statuses["path.exo"] == "inconclusive"
+    assert result.preference is None
+    assert result.preference_status == "inconclusive"
+    assert any("endpoint signature" in gap for gap in result.gaps)
+
+
+def test_a25b_report_does_not_invent_an_experimental_quantitative_claim() -> None:
+    result = _audit()
+    claim = result.report.claim("selectivity.experimental_prediction")
+    assert claim is not None
+    assert claim.status == "not_evaluated"
+    assert {check.check_id for check in claim.missing_checks} == {"not_executed"}
+    preference = result.report.claim("selectivity.preference")
+    assert preference is not None
+    assert "not an experimental" in preference.statement
+    for limitation in result.report.limitations:
+        if limitation.limitation_id == "lim-no-experimental":
+            assert "No experimental quantitative claim" in limitation.description
+
+
+# ── A-25b: reference, readiness, budget-reset and key-uniqueness edges ─────
+
+from cccp.analysis.research.selectivity import (  # noqa: E402
+    B23B_READINESS,
+    PATH_IDS,
+    SELECTIVITY_PHASE,
+    SELECTIVITY_SCENARIO,
+    SelectivityPublicKey,
+)
+
+
+def test_a25b_absent_reference_is_not_verified_and_h6_open() -> None:
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=[],
+        b23b=b23b,
+        budget=_record_with_digest("cross-domain-budget.json"),
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.public_key is None
+    assert result.preference is None
+    assert result.preference_status == "not_evaluated"
+    assert result.h6_open is True
+    assert any("no registered reference" in gap for gap in result.gaps)
+    claim = result.report.claim("selectivity.reference.registered")
+    assert claim is not None
+    assert claim.status == "not_evaluated"
+    check_ids = {check.check_id for check in claim.missing_checks}
+    assert "run_key_unavailable" in check_ids
+    assert "external_artifact_unavailable" in check_ids
+
+
+def test_a25b_b23b_readiness_must_be_integration_ready_not_verified() -> None:
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    b23b["readiness"] = "verified"
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=_record_with_digest("cross-domain-budget.json"),
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert B23B_READINESS == "integration_ready"
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.preference is None
+    assert result.preference_status == "not_evaluated"
+    assert any("not 'integration_ready'" in gap for gap in result.gaps)
+    assert result.claim_status("selectivity.reference.registered") == "not_evaluated"
+
+
+def test_a25b_b23b_artifact_id_is_recorded_verbatim_not_from_a_numeric_prefix() -> None:
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    b23b["artifact_id"] = "B23b:selectivity-authorized-artifacts"
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=_record_with_digest("cross-domain-budget.json"),
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.b23b_artifact_id == "B23b:selectivity-authorized-artifacts"
+    assert result.b23b_readiness == "integration_ready"
+
+
+def test_a25b_previous_cumulative_decrease_is_refused() -> None:
+    budget = _record_with_digest("cross-domain-budget.json")
+    budget["previous_cumulative"] = {"task_refs": 2, "steps": 9, "qc_calls": 15}
+    budget["previous_run_ids"] = ["constructed-run-0000"]
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=budget,
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.preference is None
+    assert result.preference_status == "inconclusive"
+    assert any("decreased" in gap for gap in result.gaps)
+    assert result.claim_status("selectivity.budget") == "inconclusive"
+
+
+def test_a25b_public_key_excludes_display_only_subcase() -> None:
+    key = SelectivityPublicKey(
+        owner="C",
+        scenario=SELECTIVITY_SCENARIO,
+        phase=SELECTIVITY_PHASE,
+        run_id="constructed-run-0001",
+        subcase="selectivity",
+    )
+    assert key.key() == (
+        "C",
+        SELECTIVITY_SCENARIO,
+        SELECTIVITY_PHASE,
+        "constructed-run-0001",
+    )
+    other = SelectivityPublicKey(
+        owner="C",
+        scenario=SELECTIVITY_SCENARIO,
+        phase=SELECTIVITY_PHASE,
+        run_id="constructed-run-0001",
+        subcase="nmr",
+    )
+    assert other.key() == key.key()
+    assert PATH_IDS == ("path.endo", "path.exo")
+    result = _audit()
+    assert result.public_key is not None
+    assert result.public_key.key() == key.key()
+    assert result.public_key.subcase == "selectivity"
+
+
+# ── A-25b: published absent-producer report and adversarial edges ──────────
+
+from cccp.analysis.research.evidence import evidence_report_from_dict  # noqa: E402
+from cccp.analysis.research.selectivity import (  # noqa: E402
+    B23B_EDGE_ARTIFACT_ID,
+    SELECTIVITY_OWNER,
+)
+
+PUBLISHED_REPORT = (
+    REPO
+    / "docs"
+    / "reference"
+    / "next-change"
+    / "acp2-contracts"
+    / "science"
+    / "selectivity-evidence-report.json"
+)
+
+
+def _published_report() -> dict[str, Any]:
+    return _load_json(PUBLISHED_REPORT)
+
+
+def _absent_audit(report_id: str = "selectivity-a25b-absent-producer-report") -> Any:
+    return build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=(),
+        b23b=None,
+        budget=None,
+        paths=(),
+        read_root=FIXTURE_DIR,
+        constructed=True,
+        report_id=report_id,
+    )
+
+
+def test_a25b_published_report_is_absent_producer_not_verified_and_h6_open() -> None:
+    """The checked-in report is a real absent-producer artifact, not a result."""
+    payload = _published_report()
+    report = evidence_report_from_dict(payload["report"])
+    assert evidence_report_from_dict(report.to_dict()) == report
+    assert report.schema_version == 1
+
+    audit = payload["audit"]
+    assert audit["platform_evidence_state"] == "NOT_VERIFIED"
+    assert audit["real_run"] is False
+    assert audit["constructed"] is True
+    assert audit["h6_open"] is True
+    assert audit["preference"] is None
+    assert audit["preference_status"] == "not_evaluated"
+    assert audit["both_paths_qualified"] is False
+    assert audit["path_statuses"] == {
+        "path.endo": "not_evaluated",
+        "path.exo": "not_evaluated",
+    }
+    assert audit["public_key"] is None
+    assert audit["b23b_artifact_id"] is None
+    assert audit["b23b_readiness"] is None
+    assert audit["budget"] == {}
+    assert audit["absent_producer"] == {
+        "reference_present": False,
+        "b23b_artifact_present": False,
+        "budget_table_present": False,
+        "path_records_present": False,
+        "run_key_present": False,
+        "note": (
+            "Missing producer inputs: reference, b23b_artifact, budget_table, "
+            "path_records, run_key. This report records the absent-producer state "
+            "and is never upgraded by this file's presence."
+        ),
+    }
+
+    joined_gaps = " ".join([*audit["gaps"], *audit["platform_evidence_gaps"]])
+    for token in (
+        "experience:cross-domain-live",
+        "subcase=selectivity",
+        "run_id",
+        B23B_EDGE_ARTIFACT_ID,
+        "budget",
+    ):
+        assert token in joined_gaps, token
+
+    coverage = audit["coverage"]
+    assert coverage["budget_table_present"] is False
+    assert coverage["path_records_present"] is False
+    assert coverage["budget_domains"] == ["nmr", "thermo", "selectivity"]
+    assert coverage["b23b_edge_artifact_id"] == B23B_EDGE_ARTIFACT_ID
+    requirement = coverage["budget_requirement"]
+    assert requirement["max_task_refs"] == 1
+    assert requirement["max_candidate_paths"] == 2
+    assert requirement["max_qc_invocations"] == 14
+    assert requirement["science_deadline_seconds"] == 3000
+    assert requirement["export_budget_seconds"] == 600
+    assert requirement["aggregate_budget_seconds"] == 3600
+    assert requirement["required_subrow_domains"] == ["nmr", "thermo", "selectivity"]
+    assert requirement["constructed"] is True
+
+    assert all(claim.status == "not_evaluated" for claim in report.claims)
+    reference_claim = report.claim("selectivity.reference.registered")
+    assert reference_claim is not None
+    assert {check.check_id for check in reference_claim.missing_checks} >= {
+        "run_key_unavailable",
+        "external_artifact_unavailable",
+    }
+    preference_claim = report.claim("selectivity.preference")
+    assert preference_claim is not None
+    assert preference_claim.status == "not_evaluated"
+    experimental_claim = report.claim("selectivity.experimental_prediction")
+    assert experimental_claim is not None
+    assert experimental_claim.status == "not_evaluated"
+    assert {check.check_id for check in experimental_claim.missing_checks} == {"not_executed"}
+
+    limitation_ids = {limitation.limitation_id for limitation in report.limitations}
+    assert limitation_ids == {
+        "lim-budget-unmeasured",
+        "lim-constructed",
+        "lim-h6-open",
+        "lim-no-experimental",
+        "lim-platform-not-verified",
+        "lim-relative-only",
+        "lim-single-conformer",
+        "lim-single-regioisomer",
+    }
+
+
+def test_a25b_published_report_rebuilds_deterministically_from_the_absent_state() -> None:
+    """The checked-in report is exactly the module's absent-producer output."""
+    payload = _published_report()
+    rebuilt = _absent_audit().to_dict()
+    assert rebuilt["report"] == payload["report"]
+    assert rebuilt["audit"] == payload["audit"]
+
+
+def test_a25b_tampered_budget_digest_cannot_state_a_preference() -> None:
+    """A budget record whose bytes do not match its digest is inconclusive."""
+    budget = _record_with_digest("cross-domain-budget.json")
+    budget["record_digest"] = "0" * 64
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=budget,
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=False,
+    )
+    assert result.preference is None
+    assert result.preference_status == "inconclusive"
+    assert result.claim_status("selectivity.budget") == "inconclusive"
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.real_run is False
+    assert any("selectivity.budget.unverifiable" in gap for gap in result.gaps)
+
+
+def test_a25b_path_escape_is_rejected_before_any_digest_is_read(tmp_path: Path) -> None:
+    """A path report that traverses parents never becomes path evidence."""
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    path_records = copy.deepcopy(b23b["path_records"])
+    path_records[0]["report_path"] = "../../../etc/passwd"
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=_record_with_digest("cross-domain-budget.json"),
+        paths=path_records,
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.path_statuses["path.endo"] == "not_evaluated"
+    assert result.preference is None
+    assert any("relative path without '..'" in gap for gap in result.gaps)
+    assert not (tmp_path / "etc").exists()
+
+
+def test_a25b_previous_run_ids_without_cumulative_is_refused() -> None:
+    """A changed run_id cannot hide a reset when the prior total is unstated."""
+    budget = _record_with_digest("cross-domain-budget.json")
+    budget["previous_run_ids"] = ["constructed-run-0000"]
+    budget["previous_cumulative"] = None
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=budget,
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.preference is None
+    assert result.preference_status == "inconclusive"
+    assert result.claim_status("selectivity.budget") == "inconclusive"
+    assert any("selectivity.budget.reset" in gap for gap in result.gaps)
+
+
+def test_a25b_contract_ready_readiness_is_rejected_like_verified() -> None:
+    """Only integration_ready closes the B23b edge, not contract_ready/verified."""
+    for readiness in ("contract_ready", "verified"):
+        b23b = _record_with_digest("b23b-export-qualified.json")
+        b23b["readiness"] = readiness
+        result = build_selectivity_audit(
+            fixture_manifest=_manifest(),
+            reference_records=_scenario("reference-records.json"),
+            b23b=b23b,
+            budget=_record_with_digest("cross-domain-budget.json"),
+            paths=b23b["path_records"],
+            read_root=SCENARIO_DIR,
+            constructed=True,
+        )
+        assert result.platform_evidence_state == "NOT_VERIFIED"
+        assert result.preference is None
+        assert result.claim_status("selectivity.reference.registered") == "not_evaluated"
+        assert any(f"not {B23B_READINESS!r}" in gap for gap in result.gaps), readiness
+
+
+def test_a25b_one_qualified_path_never_selects_the_other_path() -> None:
+    """When only one path qualifies the preference is absent and inconclusive."""
+    result = _audit(export="b23b-export-one-path.json")
+    assert result.preference is None
+    assert result.preference_status == "inconclusive"
+    assert result.path_statuses["path.endo"] == "supported"
+    assert result.path_statuses["path.exo"] == "not_evaluated"
+    preference_claim = result.report.claim("selectivity.preference")
+    assert preference_claim is not None
+    assert preference_claim.status == "inconclusive"
+    assert "endo" not in preference_claim.statement.lower().replace("endo/exo", "")
+
+
+def test_a25b_reference_owner_and_scenario_are_registered_values() -> None:
+    """The audit cannot approve a differently-owned or differently-named reference."""
+    assert SELECTIVITY_OWNER == "C"
+    assert SELECTIVITY_SCENARIO == "experience:cross-domain-live"
+    assert SELECTIVITY_PHASE == "experience:selectivity"
+    records = copy.deepcopy(_scenario("reference-records.json"))
+    records[0]["owner"] = "B"
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=records,
+        b23b=_record_with_digest("b23b-export-qualified.json"),
+        budget=_record_with_digest("cross-domain-budget.json"),
+        paths=_record_with_digest("b23b-export-qualified.json")["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=True,
+    )
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.public_key is None
+    assert result.preference is None
+    assert any("no registered reference" in gap for gap in result.gaps)
+
+
+def test_a25b_self_declared_constructed_producer_cannot_masquerade_as_real() -> None:
+    """A producer that declares constructed data stays NOT_VERIFIED even if it claims QC."""
+    b23b = _record_with_digest("b23b-export-qualified.json")
+    assert b23b["constructed"] is True
+    b23b["real_qc_binary_ran"] = True
+    result = build_selectivity_audit(
+        fixture_manifest=_manifest(),
+        reference_records=_scenario("reference-records.json"),
+        b23b=b23b,
+        budget=_record_with_digest("cross-domain-budget.json"),
+        paths=b23b["path_records"],
+        read_root=SCENARIO_DIR,
+        constructed=False,
+    )
+    assert result.constructed is True
+    assert result.real_run is False
+    assert result.platform_evidence_state == "NOT_VERIFIED"
+    assert result.h6_open is True

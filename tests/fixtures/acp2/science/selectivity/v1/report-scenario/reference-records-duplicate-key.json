@@ -1,0 +1,16 @@
+[
+  {
+    "owner": "C",
+    "phase": "experience:selectivity",
+    "run_id": "constructed-run-0001",
+    "scenario": "experience:cross-domain-live",
+    "subcase": "selectivity"
+  },
+  {
+    "owner": "C",
+    "phase": "experience:selectivity",
+    "run_id": "constructed-run-0001",
+    "scenario": "experience:cross-domain-live",
+    "subcase": "nmr"
+  }
+]
