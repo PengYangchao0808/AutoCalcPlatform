@@ -26,6 +26,7 @@ import copy
 import hashlib
 import json
 import os
+import platform
 import queue
 import re
 import secrets
@@ -489,7 +490,7 @@ B_SCENARIOS: dict[str, ScenarioSpec] = {
                 "B23",
                 "control",
                 "local",
-                900,
+                1800,
                 args=("fixture", "out"),
                 controller=True,
                 prerequisites=("fixture", "controller"),
@@ -13714,6 +13715,1277 @@ def _run_multitenant_authz(
     )
 
 
+B23_IDENTITY = {
+    "scenario": "experience:cross-domain-live",
+    "phase": "experience:selectivity",
+    "subcase": "selectivity",
+    "scenario_key": "experience:cross-domain-live/selectivity",
+}
+B23_REQUIRED_EDGES = (
+    ("A-25a", "C-T40a"),
+    ("B23a", "C-T40a"),
+    ("C-T40a", "B23b"),
+    ("B23b", "A-25b"),
+    ("A-25b", "C-T40b"),
+    ("C-T40b", "H6"),
+)
+B23_EXPECTED_T40A_GLOB = (
+    "reports/acp2_implementation/bb45a46/C/cross-domain-live/**/"
+    "experience_cross-domain-live-experience_selectivity-*.json"
+)
+B23_CROSS_DOMAIN = {
+    "nmr": (
+        "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/"
+        "nmr_shielding_constructed.json"
+    ),
+    "thermo": (
+        "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/"
+        "thermochemistry_weights_constructed.json"
+    ),
+}
+
+
+def _b23_metric(call: Any, *, iterations: int = 10) -> dict[str, Any]:
+    samples: list[float] = []
+    for _ in range(iterations):
+        started = time.perf_counter()
+        call()
+        samples.append((time.perf_counter() - started) * 1000.0)
+    ordered = sorted(samples)
+    return {
+        "samples_ms": [round(value, 4) for value in samples],
+        "median_ms": round(ordered[len(ordered) // 2], 4),
+        "min_ms": round(ordered[0], 4),
+        "max_ms": round(ordered[-1], 4),
+        "n": len(samples),
+    }
+
+
+def _b23_artifact(path: Path) -> dict[str, Any]:
+    return {
+        "path": str(path),
+        "size_bytes": path.stat().st_size,
+        "sha256": sha256_file(path),
+    }
+
+
+def _b23_seed_matrix(fixture: Mapping[str, Any], out_dir: Path) -> dict[str, Any]:
+    """Create two projects, four same-name tasks and the durable claim facts."""
+    from acp.scheduler.events import JobEventLog
+    from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+    from acp.scheduler.tasks import TaskIndex
+    from acp_services.runtime.idempotency import (
+        canonical_request_digest,
+        resolve_scope_id,
+    )
+    from acp_services.store.layout import runtime_file
+    from acp_services.store.migrations import migrate
+    from acp_services.store.store import JobStore
+
+    b23 = fixture["b23"]
+    run_root = Path(str(fixture["controller"]["run_root"]))
+    jobs_database = Path(
+        str(fixture["controller"].get("jobs_database") or run_root / "acp_jobs.db")
+    )
+    migrate(jobs_database)
+    store = JobStore(jobs_database)
+    tasks = TaskIndex(jobs_database)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(jobs_database))
+    try:
+        for project in fixture.get("projects") or []:
+            project_id = str(project["project_id"])
+            project_dir = run_root / "projects" / project_id
+            project_dir.mkdir(parents=True, exist_ok=True)
+            conn.execute(
+                """INSERT OR IGNORE INTO projects
+                       (project_id, name, description, tags, run_root, settings,
+                        created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    project_id,
+                    str(project.get("name") or project_id),
+                    str(project.get("description") or "B23 two-project fixture"),
+                    "[]",
+                    str(project_dir),
+                    "{}",
+                    now,
+                    now,
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    created: list[dict[str, Any]] = []
+    for spec in b23["jobs"]:
+        job_id = str(spec["job_id"])
+        project_id = str(spec["project_id"])
+        principal_id = str(spec["principal"])
+        scope_id = resolve_scope_id(principal_id, project_id)
+        task_name = str(spec["task_name"])
+        molecule_name = str(spec.get("molecule_name") or "shared-molecule")
+        payload = {
+            "workflow": "fake",
+            "name": task_name,
+            "molecule_name": molecule_name,
+            "task_name": task_name,
+            "project_id": project_id,
+        }
+        digest = canonical_request_digest(payload)
+        conflict = None
+        if spec.get("conflict_key"):
+            conflict = store.claim_idempotency(
+                scope_id, "submit", str(spec["conflict_key"]), digest
+            )
+        outcome = store.claim_idempotency(scope_id, "submit", str(spec["idem_key"]), digest)
+        task_ref: dict[str, Any] | None = None
+        if outcome.created:
+            work_dir = run_root / job_id
+            work_dir.mkdir(parents=True, exist_ok=True)
+            record = JobRecord(
+                id=job_id,
+                spec=JobSpec(
+                    workflow="fake",
+                    name=task_name,
+                    project_id=project_id,
+                    molecule_name=molecule_name,
+                    task_name=task_name,
+                    remark=str(spec.get("remark") or ""),
+                ),
+                status=JobStatus.PAUSED,
+                work_dir=str(work_dir),
+                project_id=project_id,
+                group_id=job_id,
+            )
+            finalized = store.finalize_idempotent_job(
+                record,
+                outcome.claim.claim_id,
+                str(outcome.claim.owner_token),
+                int(outcome.claim.lease_epoch),
+            )
+            task_ref = dict(finalized.task_ref or {})
+        elif outcome.replay:
+            task_ref = dict(outcome.task_ref or {})
+        else:
+            raise ValueError(
+                f"idempotency claim for {job_id} was neither created nor replayed: "
+                f"{outcome.kind} {outcome.detail}"
+            )
+
+        work_dir = run_root / job_id
+        work_dir.mkdir(parents=True, exist_ok=True)
+        event_log = JobEventLog(runtime_file(work_dir, "events.jsonl"))
+        for index, (event_type, stage) in enumerate(b23["event_sequence"]):
+            event_log.append(
+                str(event_type),
+                idempotency_key=f"b23:{job_id}:{index}",
+                stage=str(stage),
+                project_id=project_id,
+                job_id=job_id,
+            )
+        record = store.get(job_id)
+        if record is None:
+            raise ValueError(f"seeded job {job_id} is missing after finalize")
+        tasks.upsert(
+            {
+                "task_id": job_id,
+                "job_id": job_id,
+                "project_id": project_id,
+                "molecule_name": molecule_name,
+                "task_name": task_name,
+                "remark": str(spec.get("remark") or ""),
+                "display_name": record.spec.task_dir_name(),
+                "workflow": "fake",
+                "task_dir_name": record.spec.task_dir_name(),
+                "status": record.status.value,
+                "storage_mode": "local",
+                "layout_version": 2,
+                "created_at": record.created_at,
+                "updated_at": record.updated_at,
+                "group_id": job_id,
+            }
+        )
+        created.append(
+            {
+                "job_id": job_id,
+                "project_id": project_id,
+                "principal_id": principal_id,
+                "task_name": task_name,
+                "molecule_name": molecule_name,
+                "task_dir_name": record.spec.task_dir_name(),
+                "scope_id": scope_id,
+                "idem_key": str(spec["idem_key"]),
+                "task_ref": task_ref,
+                "conflict": None if conflict is None else conflict.to_dict(),
+                "conflict_expected": bool(spec.get("conflict_key")),
+            }
+        )
+    return {
+        "store": store,
+        "tasks": tasks,
+        "jobs_database": str(jobs_database),
+        "run_root": str(run_root),
+        "jobs": created,
+    }
+
+
+def _b23_stream_collect(
+    base: str,
+    key: str,
+    job_id: str,
+    expected: int,
+    *,
+    timeout: float,
+) -> dict[str, Any]:
+    """Open one task-scoped SSE stream and collect *expected* data frames."""
+    events: list[dict[str, Any]] = []
+    lines: list[str] = []
+    state: dict[str, Any] = {"error": None}
+    query = urllib.parse.urlencode({"scope": "task", "job_ids": job_id})
+    request = urllib.request.Request(
+        f"{base}/api/events/stream?{query}",
+        headers={"X-API-Key": key, "Accept": "text/event-stream"},
+    )
+
+    def reader() -> None:
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                for raw in response:
+                    line = raw.decode("utf-8", "replace").rstrip("\n")
+                    lines.append(line)
+                    if line.startswith("data:"):
+                        try:
+                            payload = json.loads(line[len("data:") :].strip())
+                        except json.JSONDecodeError:
+                            continue
+                        events.append(payload if isinstance(payload, dict) else {})
+                        if len(events) >= expected:
+                            return
+        except (OSError, urllib.error.URLError, TimeoutError) as exc:
+            state["error"] = f"{type(exc).__name__}: {exc}"
+
+    started = time.perf_counter()
+    thread = threading.Thread(target=reader, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and len(events) < expected and thread.is_alive():
+        time.sleep(0.05)
+    thread.join(timeout=2.0)
+    return {
+        "job_id": job_id,
+        "events": events,
+        "line_count": len(lines),
+        "elapsed_ms": round((time.perf_counter() - started) * 1000.0, 3),
+        "error": state["error"],
+        "thread_stopped": not thread.is_alive(),
+    }
+
+
+def _b23_cross_domain(out_dir: Path, fixture: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate the reused NMR/thermochemistry artifacts without parsing QC output."""
+    b23 = fixture["b23"]
+    configured = b23.get("cross_domain") or {}
+    nmr_path = Path(str(configured.get("nmr") or B23_CROSS_DOMAIN.get("nmr") or ""))
+    thermo_path = Path(str(configured.get("thermo") or B23_CROSS_DOMAIN.get("thermo") or ""))
+    payload: dict[str, Any] = {
+        "schema": "acp2.b23.cross-domain-consistency.v1",
+        "identity": dict(B23_IDENTITY),
+        "rows": [],
+        "missing_metrics": {},
+    }
+    for domain, path in (("nmr", nmr_path), ("thermochemistry", thermo_path)):
+        if not path.is_file():
+            payload["rows"].append(
+                {"domain": domain, "result": "NOT_VERIFIED", "reason": f"artifact_missing:{path}"}
+            )
+            continue
+        document = _b15_read_json(path, {}) or {}
+        artifact = _b23_artifact(path)
+        if domain == "nmr":
+            units = {
+                "isotropic_shielding": "ppm",
+                "chemical_shift": "ppm",
+                "temperature": "K",
+            }
+            provenance = {
+                "schema": "acp2.science.provenance.v1",
+                "method": (document.get("reference") or {}).get("method"),
+                "basis": (document.get("reference") or {}).get("basis"),
+                "solvent": (document.get("reference") or {}).get("solvent"),
+                "solvent_model": (document.get("reference") or {}).get("solvent_model"),
+                "scaling_mode": (document.get("reference") or {}).get("scaling_mode"),
+                "reference_source": (document.get("reference") or {}).get("reference_source"),
+                "error_model": (document.get("reference") or {}).get("error_model"),
+                "required_nuclei": (document.get("reference") or {}).get("required_nuclei"),
+                "temperature_kelvin": (document.get("reference") or {}).get("temperature_kelvin"),
+            }
+        else:
+            units = {
+                "gibbs_energy": "hartree",
+                "temperature": "K",
+                "mixing_entropy": "kcal/(mol*K)",
+                "t_s_mix": "kcal/mol",
+                "derived_energy_unit": "kcal_per_mol",
+            }
+            provenance = {
+                "schema": "acp2.science.provenance.v1",
+                "standard_state": document.get("standard_state"),
+                "temperature_kelvin": document.get("temperature_kelvin"),
+                "weights_mode": document.get("weights_mode"),
+                "weight_tolerance": document.get("weight_tolerance"),
+                "weights_sum_supplied": document.get("weights_sum_supplied"),
+            }
+        payload["rows"].append(
+            {
+                "domain": domain,
+                "result": "PASS",
+                "fixture_id": document.get("fixture_id"),
+                "schema": document.get("schema"),
+                "schema_version": document.get("schema_version"),
+                "real_run": bool(document.get("real_run", False)),
+                "constructed": bool(document.get("constructed", False)),
+                "new_qc_calls": 0,
+                "new_task_refs": 0,
+                "task_ref": None,
+                "task_ref_reason": "reused_a25a_constructed_fixture_no_new_task_ref",
+                "artifact": artifact,
+                "units": units,
+                "provenance": provenance,
+                "budget": {"new_qc_calls": 0, "new_task_refs": 0},
+            }
+        )
+    payload["missing_metrics"] = {
+        "nmr_experimental_spectrum_acquired": None,
+        "thermochemistry_real_qc_energy": None,
+        "reason": (
+            "constructed fixtures reused; no new QC was launched and no spectrum was acquired"
+        ),
+    }
+    payload["cross_domain_non_mixing"] = {
+        "claim_namespaces": ["nmr.*", "thermochemistry.*"],
+        "no_ppm_to_hartree_conversion": True,
+        "shared_shape": ["task_ref", "artifact", "provenance", "budget"],
+    }
+    path = _b15_write_json(out_dir / "cross-domain-consistency.json", payload)
+    payload["path"] = path.name
+    return payload
+
+
+def _b23_budget_rows(
+    out_dir: Path, cross_domain: Mapping[str, Any], fixture: Mapping[str, Any]
+) -> dict[str, Any]:
+    rows = []
+    for row in cross_domain.get("rows", []):
+        domain = str(row.get("domain"))
+        if domain not in {"nmr", "thermochemistry"}:
+            continue
+        rows.append(
+            {
+                "domain": "thermo" if domain == "thermochemistry" else domain,
+                "mode": "reuse",
+                "result": row.get("result"),
+                "new_qc_calls": 0,
+                "new_task_refs": 0,
+                "budget_seconds": 0,
+                "max_qc_calls": 0,
+                "max_task_refs": 0,
+                "artifacts": [row.get("artifact")],
+                "reuse_reason": row.get("task_ref_reason"),
+            }
+        )
+    b23 = fixture["b23"]
+    selectivity = b23.get("selectivity") or {}
+    rows.append(
+        {
+            "domain": "selectivity",
+            "mode": "execute_pending_c",
+            "result": "NOT_VERIFIED",
+            "reason": "c_t40a_absent",
+            "frozen": False,
+            "max_task_refs": 1,
+            "max_task_refs_frozen": True,
+            "budget_seconds": None,
+            "max_qc_calls": None,
+            "per_step_qc_calls": {"path.endo": None, "path.exo": None},
+            "proposed": {
+                "budget_seconds": selectivity.get("proposed_budget_seconds"),
+                "max_qc_calls": selectivity.get("proposed_max_qc_calls"),
+                "budget_timing_basis": "unmeasured",
+                "source": "A-25a constructed envelope; never frozen without representative timing",
+            },
+            "new_qc_calls": 0,
+            "new_task_refs": 0,
+            "submission": None,
+            "paths": {"path.endo": "not_submitted", "path.exo": "not_submitted"},
+        }
+    )
+    document = {
+        "schema": "acp2.b23.budget-rows.v1",
+        "identity": dict(B23_IDENTITY),
+        "rows": rows,
+        "reconcile": {
+            "required_domains": ["nmr", "thermo", "selectivity"],
+            "nmr_new_qc_calls": 0,
+            "thermo_new_qc_calls": 0,
+            "selectivity_new_task_refs": 0,
+            "selectivity_max_task_refs": 1,
+            "all_frozen": False,
+            "reason": "c_t40a_absent",
+        },
+        "multitenant_timeout_seconds": 1800,
+        "multitenant_timeout_scope": "B23a isolation/permissions/budget readiness only",
+    }
+    path = _b15_write_json(out_dir / "budget-rows.json", document)
+    document["path"] = path.name
+    return document
+
+
+def _b23_b23b_row(out_dir: Path, fixture: Mapping[str, Any]) -> dict[str, Any]:
+    repo = REPO_ROOT
+    candidates = sorted(repo.glob(B23_EXPECTED_T40A_GLOB))
+    document = {
+        "schema": "acp2.b23.sub-delivery-row.v1",
+        "id": "B23b",
+        "owner": "B",
+        "kind": "execution_export",
+        "identity": dict(B23_IDENTITY),
+        "result": "NOT_VERIFIED",
+        "scope": "IN_SCOPE",
+        "reason": "c_t40a_absent",
+        "deferred": False,
+        "expected_artifact": {
+            "owner": "C",
+            "scenario": "experience:cross-domain-live",
+            "phase": "experience:selectivity",
+            "subcase": "selectivity",
+            "path_glob": B23_EXPECTED_T40A_GLOB,
+            "required_fields": [
+                "job_id",
+                "attempt",
+                "release_id",
+                "scenario",
+                "phase",
+                "extensions.experience.subcase",
+            ],
+        },
+        "observed_candidates": [str(path.relative_to(repo)) for path in candidates],
+        "submission": None,
+        "task_refs": [],
+        "paths": {"path.endo": None, "path.exo": None},
+        "h6_fed": False,
+        "no_selectivity_qc": True,
+        "parent_only_pass_accepted": False,
+        "run_spec_ref": (fixture["b23"].get("selectivity") or {}).get("run_spec_ref"),
+    }
+    path = _b15_write_json(out_dir / "b23b-row.json", document)
+    document["path"] = path.name
+    return document
+
+
+def _b23_measurements(seeded: Mapping[str, Any], alpha_job: str, beta_job: str) -> dict[str, Any]:
+    from acp.results.remote_structure_cache import RemoteStructureCache
+    from acp.scheduler.events import JobEventLog
+    from acp.scheduler.task_views import GroupBy, TaskViewQuery, query_project_tasks
+    from acp_services.contracts.events import EventScope
+    from acp_services.runtime.events import AuthorizedEventStream, AuthorizedStreamRegistry
+    from acp_services.store.layout import runtime_file
+
+    store = seeded["store"]
+    tasks = seeded["tasks"]
+    run_root = Path(str(seeded["run_root"]))
+    alpha_project = str(seeded["jobs"][0]["project_id"])
+    beta_project = str(seeded["jobs"][1]["project_id"])
+
+    local_read = _b23_metric(lambda: store.get(alpha_job), iterations=15)
+    detail = _b23_metric(lambda: store.get(beta_job), iterations=15)
+    batch_list = _b23_metric(
+        lambda: store.list_enriched(limit=50, project_id=alpha_project), iterations=10
+    )
+
+    def task_view() -> dict[str, Any]:
+        return query_project_tasks(
+            tasks,
+            TaskViewQuery(project_id=alpha_project, group_by=GroupBy.molecule),
+        )
+
+    task_view_metric = _b23_metric(task_view, iterations=10)
+    task_view_result = task_view()
+
+    cache = RemoteStructureCache(run_root)
+    cache_target = cache.cache_path(alpha_job, "RESULT/result.json")
+    cache_target.parent.mkdir(parents=True, exist_ok=True)
+    cache_target.write_bytes(b'{"result":"b23-reused"}\n')
+    remote_cached_read = _b23_metric(
+        lambda: cache.get_cached(alpha_job, "RESULT/result.json"), iterations=15
+    )
+
+    stream_metric_samples: list[float] = []
+    for _ in range(10):
+        stream = AuthorizedEventStream(
+            principal_id="principal_b23_alice",
+            scope=EventScope.TASK,
+            service_epoch="b23-measurement",
+            log_for=lambda job_id: JobEventLog(runtime_file(run_root / job_id, "events.jsonl")),
+        )
+        stream.subscribe([alpha_job])
+        started = time.perf_counter()
+        batch = stream.poll([])
+        stream_metric_samples.append((time.perf_counter() - started) * 1000.0)
+    events_metric = {
+        "samples_ms": [round(value, 4) for value in stream_metric_samples],
+        "median_ms": round(sorted(stream_metric_samples)[len(stream_metric_samples) // 2], 4),
+        "n": len(stream_metric_samples),
+        "events_per_poll": len(batch.events),
+    }
+
+    registry = AuthorizedStreamRegistry()
+    log_for = lambda job_id: JobEventLog(  # noqa: E731 - measurement adapter
+        runtime_file(run_root / job_id, "events.jsonl")
+    )
+    first = registry.open(
+        principal_id="principal_b23_alice",
+        scope=EventScope.TASK,
+        service_epoch="b23-measurement",
+        log_for=log_for,
+        job_ids=[alpha_job],
+    )
+    second = registry.open(
+        principal_id="principal_b23_alice",
+        scope=EventScope.TASK,
+        service_epoch="b23-measurement",
+        log_for=log_for,
+        job_ids=[beta_job],
+    )
+    after_duplicate = query_project_tasks(
+        tasks,
+        TaskViewQuery(project_id=alpha_project, group_by=GroupBy.molecule),
+    )
+    before_statements = int(task_view_result.get("sql_statements") or 0)
+    after_statements = int(after_duplicate.get("sql_statements") or 0)
+    duplicate_subscription = {
+        "opens": 2,
+        "same_stream_object": first is second,
+        "active_streams": registry.active_count,
+        "distinct_keys": len(registry.keys),
+        "subscribed_owners": sorted(second.task_ids),
+        "additional_stream_resources": registry.active_count - 1,
+        "db_statements_delta": after_statements - before_statements,
+        "list_sql_statements_before": before_statements,
+        "list_sql_statements_after": after_statements,
+        "note": (
+            "a repeated (principal, scope) joins the existing stream; it never opens a second one"
+        ),
+    }
+    registry.close_all("b23-measurement")
+
+    from acp_services.runtime.admission import (
+        AdmissionRequest,
+        Capacity,
+        ReservationLedger,
+        ReserveLimits,
+    )
+
+    quota_path = run_root / ".b23-quota" / "admission.db"
+    quota_path.parent.mkdir(parents=True, exist_ok=True)
+    if quota_path.exists():
+        quota_path.unlink()
+    ledger = ReservationLedger(str(quota_path))
+    limits = ReserveLimits(
+        capacity=Capacity(cores=1, memory_mb=512, concurrency=2, storage_bytes=10_000_000)
+    )
+    first_quota = ledger.reserve(
+        AdmissionRequest(
+            principal_id="principal_b23_alice",
+            project_id=alpha_project,
+            job_id=alpha_job,
+            cores=1,
+        ),
+        limits,
+        reservation_id="res_b23_alpha",
+    )
+    second_quota = ledger.reserve(
+        AdmissionRequest(
+            principal_id="principal_b23_bob",
+            project_id=beta_project,
+            job_id=beta_job,
+            cores=1,
+        ),
+        limits,
+        reservation_id="res_b23_beta",
+    )
+    occupancy = ledger.occupancy()
+    quota = {
+        "capacity": limits.capacity.to_dict(),
+        "alpha_admitted": first_quota.allowed,
+        "beta_admitted": second_quota.allowed,
+        "beta_reason": second_quota.reason_code,
+        "beta_exceeded": [dict(item) for item in second_quota.exceeded],
+        "occupancy_after_two_requests": occupancy,
+        "shared_node": True,
+    }
+    disk = shutil.disk_usage(run_root)
+    return {
+        "schema": "acp2.b23.measurements.v1",
+        "generated_at": _utcnow(),
+        "machine": {
+            "hostname": socket.gethostname(),
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+            "cpu_count": os.cpu_count(),
+        },
+        "sample": {
+            "projects": 2,
+            "tasks_per_project": 2,
+            "config_id": "b23-two-project-paused-v1",
+            "controller": "127.0.0.1 local Controller (same machine)",
+        },
+        "reads": {
+            "local": {"job_get": local_read, "detail": detail},
+            "remote_cached": {
+                "cache_get_cached": remote_cached_read,
+                "transport": "RemoteStructureCache cache replica on the same filesystem",
+            },
+            "remote_live": {
+                "value": None,
+                "reason": "lsf_unavailable",
+            },
+        },
+        "batch": {"list": batch_list, "task_view": task_view_metric},
+        "events": events_metric,
+        "duplicate_subscription": duplicate_subscription,
+        "quota": quota,
+        "storage": {
+            "run_root_disk_total_bytes": disk.total,
+            "run_root_disk_free_bytes": disk.free,
+            "hosted_hard_limit_bytes": None,
+            "hosted_hard_limit_reason": (
+                "lab local-single config exposes no hosted storage quota; not hosted-verified"
+            ),
+        },
+    }
+
+
+def _b23_dependency_edges() -> dict[str, Any]:
+    path = CONTRACT_ROOT / "runtime" / "dependencies.json"
+    document = _b20_read_json(path)
+    rows = {
+        (str(edge.get("producer")), str(edge.get("consumer")))
+        for edge in (document or {}).get("cross_track_edges", [])
+        if isinstance(edge, dict)
+    }
+    missing = [pair for pair in B23_REQUIRED_EDGES if pair not in rows]
+    p4_sync = (document or {}).get("p4_sync") or {}
+    return {
+        "schema": "acp2.b23.dependency-edges.v1",
+        "path": str(path),
+        "required_edges": [
+            {"producer": left, "consumer": right} for left, right in B23_REQUIRED_EDGES
+        ],
+        "observed_edges": sorted(
+            [{"producer": left, "consumer": right} for left, right in rows],
+            key=lambda item: (item["producer"], item["consumer"]),
+        ),
+        "missing": [{"producer": left, "consumer": right} for left, right in missing],
+        "all_present": not missing,
+        "p4_sync": {
+            "published_before_dispatch": bool(p4_sync.get("published_before_dispatch")),
+            "published_at": p4_sync.get("published_at"),
+            "identity": p4_sync.get("identity"),
+            "gating": p4_sync.get("gating"),
+        },
+    }
+
+
+def _run_multitenant_two_project(
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B23a: two users, two projects, same names/keys, cross-domain reuse."""
+    base = (controller or "").rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "control",
+        "acceptance.target": "local",
+        "b23.identity": dict(B23_IDENTITY),
+        "b23.fixture": str(fixture_path),
+        "b23.controller": base,
+    }
+    if not base:
+        return (
+            EXIT_NOT_VERIFIED,
+            [_b15_assert("b23.controller_required", False, "no controller", not_verified=True)],
+            {**extensions, "b23.reason": "missing_controller"},
+        )
+    try:
+        fixture = _b15_fixture(fixture_path)
+    except ValueError as exc:
+        return (
+            EXIT_NOT_VERIFIED,
+            [_b15_assert("b23.fixture_schema", False, str(exc), not_verified=True)],
+            {**extensions, "b23.reason": str(exc)},
+        )
+    b23 = fixture.get("b23")
+    if not isinstance(b23, dict):
+        return (
+            EXIT_NOT_VERIFIED,
+            [
+                _b15_assert(
+                    "b23.fixture_schema", False, "fixture.b23 is required", not_verified=True
+                )
+            ],
+            {**extensions, "b23.reason": "fixture_b23_missing"},
+        )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        provisioned = _b15_provision(fixture)
+        seeded = _b23_seed_matrix(fixture, out_dir)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        return (
+            EXIT_FAIL,
+            [_b15_assert("b23.fixture_provisioned", False, f"{type(exc).__name__}: {exc}")],
+            {**extensions, "b23.reason": f"fixture_provision_failed:{exc}"},
+        )
+
+    credentials = provisioned["credentials"]["keys"]
+    accounts = provisioned["accounts"]
+
+    def key(name: str) -> str:
+        return str(credentials[str(name)]["key"])
+
+    alpha_key_name = str(b23["keys"]["alpha"])
+    beta_key_name = str(b23["keys"]["beta"])
+    alpha_job = str(b23["alpha_job"])
+    beta_job = str(b23["beta_job"])
+    alpha_project = str(b23["alpha_project"])
+    beta_project = str(b23["beta_project"])
+    alpha_principal = str(b23["alpha_principal"])
+    beta_principal = str(b23["beta_principal"])
+    beta_account = str(accounts[str(b23["beta_account"])].account_id)
+    shared_key = str(b23["shared_idempotency_key"])
+
+    status, capabilities, _ = _b15_http(base, "GET", "/api/capabilities", timeout=timeout)
+    mode = (capabilities or {}).get("identity_mode") if isinstance(capabilities, dict) else None
+    assertions.append(
+        _b15_assert(
+            "b23.identity.api_key",
+            status == 200 and mode == "api-key",
+            f"status={status} identity_mode={mode!r}",
+        )
+    )
+
+    jobs = {item["job_id"]: item for item in seeded["jobs"]}
+    alpha_row = jobs[alpha_job]
+    beta_row = jobs[beta_job]
+    assertions.append(
+        _b15_assert(
+            "b23.same_name.identical_task_directory",
+            alpha_row["task_name"] == beta_row["task_name"]
+            and alpha_row["molecule_name"] == beta_row["molecule_name"]
+            and alpha_row["task_dir_name"] == beta_row["task_dir_name"]
+            and alpha_row["job_id"] != beta_row["job_id"],
+            json.dumps(
+                {
+                    "alpha": alpha_row["task_dir_name"],
+                    "beta": beta_row["task_dir_name"],
+                    "task_name": alpha_row["task_name"],
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+    conflict = beta_row.get("conflict") or {}
+    assertions.append(
+        _b15_assert(
+            "b23.idempotency.same_key_cross_project_conflict",
+            beta_row.get("conflict_expected") is True and conflict.get("kind") == "conflict",
+            json.dumps(conflict, sort_keys=True),
+        )
+    )
+    alpha_claim = seeded["store"].find_idempotency_claim(
+        alpha_row["scope_id"], "submit", shared_key
+    )
+    beta_claim = seeded["store"].find_idempotency_claim(beta_row["scope_id"], "submit", shared_key)
+    assertions.append(
+        _b15_assert(
+            "b23.idempotency.project_scoped_task_refs",
+            alpha_claim is not None
+            and alpha_claim.task_id == alpha_job
+            and beta_claim is None
+            and alpha_row["task_ref"].get("job_id") == alpha_job
+            and beta_row["task_ref"].get("job_id") == beta_job,
+            json.dumps(
+                {
+                    "alpha_claim_task": None if alpha_claim is None else alpha_claim.task_id,
+                    "beta_claim_same_key": None if beta_claim is None else beta_claim.task_id,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    def call(method: str, path: str, *, key_value: str, body: Any = None) -> tuple[int, Any]:
+        status_value, payload, _ = _b15_http(
+            base, method, path, key=key_value, body=body, timeout=timeout
+        )
+        return status_value, payload
+
+    alice = key(alpha_key_name)
+    bob = key(beta_key_name)
+    bob_alpha_status, bob_alpha_body = call("GET", f"/api/v1/jobs/{alpha_job}", key_value=bob)
+    bob_missing_status, bob_missing_body = call(
+        "GET", "/api/v1/jobs/b23-does-not-exist", key_value=bob
+    )
+    alice_beta_status, _ = call("GET", f"/api/v1/jobs/{beta_job}", key_value=alice)
+    v2_cross_status, _ = call("GET", f"/api/v2/tasks/{alpha_job}", key_value=bob)
+    v2_cross_tree_status, _ = call("GET", f"/api/v2/tasks/{alpha_job}/tree", key_value=bob)
+    assertions.append(
+        _b15_assert(
+            "b23.cross_project.read_non_disclosure",
+            bob_alpha_status == bob_missing_status == v2_cross_status == v2_cross_tree_status == 404
+            and isinstance(bob_alpha_body, dict)
+            and isinstance(bob_missing_body, dict)
+            and set(bob_alpha_body) == set(bob_missing_body)
+            and alice_beta_status == 404,
+            json.dumps(
+                {
+                    "v1_cross": bob_alpha_status,
+                    "v1_missing": bob_missing_status,
+                    "v2_detail": v2_cross_status,
+                    "v2_tree": v2_cross_tree_status,
+                    "v1_reverse": alice_beta_status,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+    bob_cancel_status, _ = call("POST", f"/api/v1/jobs/{alpha_job}/cancel", key_value=bob)
+    alice_cancel_beta, _ = call("POST", f"/api/v1/jobs/{beta_job}/cancel", key_value=alice)
+    bob_prepare_status, _ = call(
+        "POST",
+        f"/api/v1/jobs/{alpha_job}/prepare",
+        key_value=bob,
+        body={"purpose": "artifact", "artifact_id": "manifest"},
+    )
+    bob_file_status, _ = call("GET", f"/api/v1/jobs/{alpha_job}/files/note.txt", key_value=bob)
+    assertions.append(
+        _b15_assert(
+            "b23.cross_project.control_prepare_denied",
+            bob_cancel_status == alice_cancel_beta == bob_prepare_status == bob_file_status == 404,
+            json.dumps(
+                {
+                    "bob_cancel_alpha": bob_cancel_status,
+                    "alice_cancel_beta": alice_cancel_beta,
+                    "bob_prepare_alpha": bob_prepare_status,
+                    "bob_file_alpha": bob_file_status,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    alice_list_status, alice_list = call("GET", "/api/v1/jobs?limit=1000", key_value=alice)
+    bob_list_status, bob_list = call("GET", "/api/v1/jobs?limit=1000", key_value=bob)
+    alice_projects_status, alice_projects = call("GET", "/api/v2/projects", key_value=alice)
+    bob_projects_status, bob_projects = call("GET", "/api/v2/projects", key_value=bob)
+    bob_view_status, bob_view = call("GET", "/api/v2/task-view", key_value=bob)
+    alice_view_status, alice_view = call("GET", "/api/v2/task-view", key_value=alice)
+
+    def projects_from_v1(payload: Any) -> set[str]:
+        rows = (payload or {}).get("jobs") if isinstance(payload, dict) else None
+        return {str(item.get("project_id")) for item in (rows or []) if isinstance(item, dict)}
+
+    def projects_from_v2_view(payload: Any) -> set[str]:
+        groups = (payload or {}).get("groups") if isinstance(payload, dict) else None
+        values: set[str] = set()
+        for group in groups or []:
+            for row in group.get("jobs") or []:
+                if isinstance(row, dict) and row.get("project_id"):
+                    values.add(str(row["project_id"]))
+        return values
+
+    def projects_from_v2_list(payload: Any) -> set[str]:
+        return {
+            str(item.get("project_id"))
+            for item in (payload or [])
+            if isinstance(item, dict) and item.get("project_id")
+        }
+
+    assertions.append(
+        _b15_assert(
+            "b23.cross_project.list_scoped",
+            alice_list_status == bob_list_status == 200
+            and projects_from_v1(alice_list) == {alpha_project}
+            and projects_from_v1(bob_list) == {beta_project}
+            and alice_projects_status == bob_projects_status == 200
+            and projects_from_v2_list(alice_projects) == {alpha_project}
+            and projects_from_v2_list(bob_projects) == {beta_project}
+            and bob_view_status == alice_view_status == 200
+            and projects_from_v2_view(bob_view) == {beta_project}
+            and projects_from_v2_view(alice_view) == {alpha_project},
+            json.dumps(
+                {
+                    "v1_alice": sorted(projects_from_v1(alice_list)),
+                    "v1_bob": sorted(projects_from_v1(bob_list)),
+                    "v2_projects_bob": sorted(projects_from_v2_list(bob_projects)),
+                    "v2_view_bob": sorted(projects_from_v2_view(bob_view)),
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    alice_stream, bob_stream = {}, {}
+    stream_error: list[str] = []
+
+    def collect(label: str, key_value: str, job_id: str) -> None:
+        try:
+            if label == "alpha":
+                alice_stream.update(
+                    _b23_stream_collect(base, key_value, job_id, 3, timeout=timeout)
+                )
+            else:
+                bob_stream.update(_b23_stream_collect(base, key_value, job_id, 3, timeout=timeout))
+        except Exception as exc:  # noqa: BLE001 - reported as an assertion failure
+            stream_error.append(f"{label}:{type(exc).__name__}:{exc}")
+
+    alpha_thread = threading.Thread(target=collect, args=("alpha", alice, alpha_job))
+    beta_thread = threading.Thread(target=collect, args=("beta", bob, beta_job))
+    alpha_thread.start()
+    beta_thread.start()
+    alpha_thread.join(timeout=timeout)
+    beta_thread.join(timeout=timeout)
+    cross_stream_status, _ = _b15_http(
+        base,
+        "GET",
+        f"/api/events/stream?scope=task&job_ids={alpha_job}",
+        key=bob,
+        timeout=10.0,
+    )[:2]
+
+    def ordered(stream: Mapping[str, Any], job_id: str) -> bool:
+        events = stream.get("events") or []
+        owners = {str(event.get("owner_id")) for event in events}
+        seqs = [int(event.get("seq") or 0) for event in events]
+        return (
+            len(events) == 3
+            and owners == {job_id}
+            and seqs == sorted(seqs)
+            and len(set(seqs)) == len(seqs)
+            and not stream.get("error")
+        )
+
+    assertions.append(
+        _b15_assert(
+            "b23.events.parallel_ordered_per_project",
+            not stream_error
+            and ordered(alice_stream, alpha_job)
+            and ordered(bob_stream, beta_job)
+            and cross_stream_status == 404,
+            json.dumps(
+                {
+                    "alpha": {
+                        "count": len(alice_stream.get("events") or []),
+                        "error": alice_stream.get("error"),
+                    },
+                    "beta": {
+                        "count": len(bob_stream.get("events") or []),
+                        "error": bob_stream.get("error"),
+                    },
+                    "cross_project_subscribe": cross_stream_status,
+                    "errors": stream_error,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    measurements = _b23_measurements(seeded, alpha_job, beta_job)
+    quota = measurements["quota"]
+    assertions.append(
+        _b15_assert(
+            "b23.quota.shared_node_capacity",
+            quota["alpha_admitted"] is True
+            and quota["beta_admitted"] is False
+            and any(item.get("scope") == "capacity" for item in quota["beta_exceeded"])
+            and quota["occupancy_after_two_requests"]["cores"] == 1
+            and quota["occupancy_after_two_requests"]["reservations"] == 1,
+            json.dumps(quota, sort_keys=True),
+        )
+    )
+    measurements_path = _b15_write_json(out_dir / "measurements.json", measurements)
+    extensions["b23.measurements"] = measurements_path.name
+
+    cross_domain = _b23_cross_domain(out_dir, fixture)
+    cross_rows = cross_domain.get("rows") or []
+    shared_fields = {"task_ref", "artifact", "provenance", "budget", "units"}
+    assertions.append(
+        _b15_assert(
+            "b23.cross_domain.unified_semantics",
+            len(cross_rows) == 2
+            and all(row.get("result") == "PASS" for row in cross_rows)
+            and all(shared_fields <= set(row) for row in cross_rows)
+            and all(
+                row.get("schema") == "acp2.science.domain-fixture"
+                and row.get("schema_version") == 1
+                and row.get("real_run") is False
+                for row in cross_rows
+            ),
+            json.dumps(
+                {"rows": [row.get("domain") for row in cross_rows]},
+                sort_keys=True,
+            ),
+        )
+    )
+    assertions.append(
+        _b15_assert(
+            "b23.cross_domain.units_and_provenance",
+            all(
+                row.get("units", {}).get("temperature") == "K"
+                and row.get("provenance", {}).get("schema") == "acp2.science.provenance.v1"
+                for row in cross_rows
+            )
+            and next((row for row in cross_rows if row.get("domain") == "nmr"), {})
+            .get("units", {})
+            .get("isotropic_shielding")
+            == "ppm"
+            and next((row for row in cross_rows if row.get("domain") == "thermochemistry"), {})
+            .get("units", {})
+            .get("gibbs_energy")
+            == "hartree"
+            and cross_domain.get("missing_metrics", {}).get(
+                "nmr_experimental_spectrum_acquired", "unset"
+            )
+            is None,
+            json.dumps(
+                {
+                    "units": [row.get("units") for row in cross_rows],
+                    "missing": cross_domain.get("missing_metrics"),
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    budget = _b23_budget_rows(out_dir, cross_domain, fixture)
+    rows = {row["domain"]: row for row in budget["rows"]}
+    assertions.append(
+        _b15_assert(
+            "b23.budget.three_rows_reconcile",
+            set(rows) == {"nmr", "thermo", "selectivity"}
+            and rows["nmr"]["new_qc_calls"] == 0
+            and rows["thermo"]["new_qc_calls"] == 0
+            and rows["selectivity"]["max_task_refs"] == 1
+            and rows["selectivity"]["result"] == "NOT_VERIFIED"
+            and rows["selectivity"]["frozen"] is False
+            and budget["reconcile"]["all_frozen"] is False,
+            json.dumps(budget["reconcile"], sort_keys=True),
+        )
+    )
+
+    b23b = _b23_b23b_row(out_dir, fixture)
+    assertions.append(
+        _b15_assert(
+            "b23.b23b.c_t40a_absent",
+            b23b["result"] == "NOT_VERIFIED"
+            and b23b["reason"] == "c_t40a_absent"
+            and b23b["submission"] is None
+            and b23b["task_refs"] == []
+            and b23b["h6_fed"] is False
+            and b23b["deferred"] is False
+            and not b23b["observed_candidates"],
+            json.dumps(
+                {
+                    "result": b23b["result"],
+                    "reason": b23b["reason"],
+                    "candidates": b23b["observed_candidates"],
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    dependencies = _b23_dependency_edges()
+    assertions.append(
+        _b15_assert(
+            "b23.dependencies.external_edges",
+            dependencies["all_present"] is True
+            and dependencies["p4_sync"]["published_before_dispatch"] is True
+            and dependencies["p4_sync"]["identity"] == B23_IDENTITY,
+            json.dumps(dependencies["p4_sync"], sort_keys=True),
+        )
+    )
+    dependencies_path = _b15_write_json(out_dir / "dependency-edges.json", dependencies)
+    extensions["b23.dependencies"] = dependencies_path.name
+
+    identity_text = json.dumps(
+        {
+            "extensions": budget.get("identity"),
+            "b23b": b23b.get("identity"),
+            "cross_domain": cross_domain.get("identity"),
+        },
+        sort_keys=True,
+    )
+    assertions.append(
+        _b15_assert(
+            "b23.identity.single_registered_identity",
+            "selectivity-live" not in identity_text
+            and budget.get("identity") == B23_IDENTITY
+            and b23b.get("identity") == B23_IDENTITY,
+            identity_text,
+        )
+    )
+
+    alice_stream_revoke = _b15_stream_revoke(
+        base,
+        alice,
+        alpha_job,
+        lambda: provisioned["key_manager"].revoke(str(credentials[alpha_key_name]["key_id"])),
+        timeout=timeout,
+    )
+    read_after_key_revoke, _ = call("GET", f"/api/v1/jobs/{alpha_job}", key_value=alice)
+    prepare_after_key_revoke, _ = call(
+        "POST",
+        f"/api/v1/jobs/{alpha_job}/prepare",
+        key_value=alice,
+        body={"purpose": "artifact", "artifact_id": "manifest"},
+    )
+    file_after_key_revoke, _ = call(
+        "GET", f"/api/v1/jobs/{alpha_job}/files/note.txt", key_value=alice
+    )
+    assertions.append(
+        _b15_assert(
+            "b23.revocation.key.stops_events_and_artifacts",
+            alice_stream_revoke["received_event_before_revocation"]
+            and alice_stream_revoke["permission_changed_after_revocation"]
+            and alice_stream_revoke["stream_thread_stopped"]
+            and read_after_key_revoke == prepare_after_key_revoke == file_after_key_revoke == 401,
+            json.dumps(
+                {
+                    **alice_stream_revoke,
+                    "read": read_after_key_revoke,
+                    "prepare": prepare_after_key_revoke,
+                    "file": file_after_key_revoke,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    bob_stream_revoke = _b15_stream_revoke(
+        base,
+        bob,
+        beta_job,
+        lambda: provisioned["lifecycle"].revoke_account(beta_account, actor="b23-harness"),
+        timeout=timeout,
+    )
+    read_after_project_revoke, _ = call("GET", f"/api/v1/jobs/{beta_job}", key_value=bob)
+    prepare_after_project_revoke, _ = call(
+        "POST",
+        f"/api/v1/jobs/{beta_job}/prepare",
+        key_value=bob,
+        body={"purpose": "artifact", "artifact_id": "manifest"},
+    )
+    file_after_project_revoke, _ = call(
+        "GET", f"/api/v1/jobs/{beta_job}/files/note.txt", key_value=bob
+    )
+    assertions.append(
+        _b15_assert(
+            "b23.revocation.project.stops_events_and_artifacts",
+            bob_stream_revoke["received_event_before_revocation"]
+            and bob_stream_revoke["permission_changed_after_revocation"]
+            and bob_stream_revoke["stream_thread_stopped"]
+            and read_after_project_revoke
+            == prepare_after_project_revoke
+            == file_after_project_revoke
+            == 401,
+            json.dumps(
+                {
+                    **bob_stream_revoke,
+                    "read": read_after_project_revoke,
+                    "prepare": prepare_after_project_revoke,
+                    "file": file_after_project_revoke,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
+
+    matrix = {
+        "schema": "acp2.b23.multiproject.v1",
+        "identity": dict(B23_IDENTITY),
+        "fixture_jobs": {
+            "jobs_database": seeded["jobs_database"],
+            "run_root": seeded["run_root"],
+            "jobs": seeded["jobs"],
+        },
+        "cross_project": {
+            "bob_read_alpha": [bob_alpha_status, bob_alpha_body],
+            "bob_read_missing": [bob_missing_status, bob_missing_body],
+            "bob_cancel_alpha": bob_cancel_status,
+            "bob_prepare_alpha": bob_prepare_status,
+            "bob_file_alpha": bob_file_status,
+            "v2_bob_task_alpha": v2_cross_status,
+            "v2_bob_tree_alpha": v2_cross_tree_status,
+        },
+        "lists": {
+            "v1_alice": sorted(projects_from_v1(alice_list)),
+            "v1_bob": sorted(projects_from_v1(bob_list)),
+            "v2_projects_alice": sorted(projects_from_v2_list(alice_projects)),
+            "v2_projects_bob": sorted(projects_from_v2_list(bob_projects)),
+            "v2_view_alice": sorted(projects_from_v2_view(alice_view)),
+            "v2_view_bob": sorted(projects_from_v2_view(bob_view)),
+        },
+        "events": {"alpha": alice_stream, "beta": bob_stream},
+        "quota": quota,
+        "cross_domain": cross_domain,
+        "budget_rows": budget,
+        "b23b": b23b,
+        "dependency_edges": dependencies,
+        "revocation": {
+            "key": alice_stream_revoke,
+            "project": bob_stream_revoke,
+            "read_after_key_revoke": read_after_key_revoke,
+            "read_after_project_revoke": read_after_project_revoke,
+        },
+    }
+    matrix_path = _b15_write_json(out_dir / "multitenant-two-project.json", matrix)
+    extensions["b23.matrix"] = matrix_path.name
+    extensions["b23.artifacts"] = [
+        {
+            "path": path.name,
+            "size_bytes": path.stat().st_size,
+            "sha256": sha256_file(path),
+        }
+        for path in sorted(out_dir.glob("*.json"))
+        if path.name != "summary.json"
+    ]
+    extensions["b23.accounts"] = {
+        name: {"account_id": account.account_id, "principal_id": account.principal_id}
+        for name, account in accounts.items()
+    }
+    extensions["b23.principal_scope"] = {
+        "alpha": alpha_principal,
+        "beta": beta_principal,
+    }
+
+    failed = [item["name"] for item in assertions if item["status"] == "FAIL"]
+    not_verified = [item["name"] for item in assertions if item["status"] == "NOT_VERIFIED"]
+    if failed:
+        code = EXIT_FAIL
+        extensions["b23.reason"] = "assertion_failed:" + ",".join(failed)
+    elif not_verified:
+        code = EXIT_NOT_VERIFIED
+        extensions["b23.reason"] = "assertion_not_verified:" + ",".join(not_verified)
+    else:
+        code = EXIT_PASS
+    return code, assertions, extensions
+
+
 def _dry_run_out(args: argparse.Namespace, scenario: str, phase: str) -> str:
     if args.out:
         return str(Path(args.out).resolve())
@@ -14113,22 +15385,17 @@ def execute_scenario(
         if phase_name != "multitenant:authz":
 
             def multitenant_two_project(_ledger: CleanupLedger) -> int:
-                outcome["assertions"] = [
-                    {
-                        "name": "b23.multitenant_two_project",
-                        "status": "NOT_VERIFIED",
-                        "detail": (
-                            "the two-project execution matrix is owned by B23; "
-                            "B15 closes only multitenant:authz"
-                        ),
-                    }
-                ]
-                outcome["extensions"] = {
-                    "b23.owner": "B23",
-                    "b23.reason": "b23_not_implemented",
-                }
-                outcome["reason"] = "b23_not_implemented"
-                return EXIT_NOT_VERIFIED
+                code_value, assertions, extensions = _run_multitenant_two_project(
+                    args.controller,
+                    str(args.fixture),
+                    out_dir,
+                    timeout,
+                )
+                outcome["assertions"] = assertions
+                outcome["extensions"] = extensions
+                outcome["artifacts"] = extensions.get("b23.artifacts", [])
+                outcome["reason"] = extensions.get("b23.reason")
+                return code_value
 
             handler = multitenant_two_project
         else:

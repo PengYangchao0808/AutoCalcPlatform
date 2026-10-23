@@ -1,0 +1,623 @@
+{
+  "b23b": {
+    "deferred": false,
+    "expected_artifact": {
+      "owner": "C",
+      "path_glob": "reports/acp2_implementation/bb45a46/C/cross-domain-live/**/experience_cross-domain-live-experience_selectivity-*.json",
+      "phase": "experience:selectivity",
+      "required_fields": [
+        "job_id",
+        "attempt",
+        "release_id",
+        "scenario",
+        "phase",
+        "extensions.experience.subcase"
+      ],
+      "scenario": "experience:cross-domain-live",
+      "subcase": "selectivity"
+    },
+    "h6_fed": false,
+    "id": "B23b",
+    "identity": {
+      "phase": "experience:selectivity",
+      "scenario": "experience:cross-domain-live",
+      "scenario_key": "experience:cross-domain-live/selectivity",
+      "subcase": "selectivity"
+    },
+    "kind": "execution_export",
+    "no_selectivity_qc": true,
+    "observed_candidates": [],
+    "owner": "B",
+    "parent_only_pass_accepted": false,
+    "path": "b23b-row.json",
+    "paths": {
+      "path.endo": null,
+      "path.exo": null
+    },
+    "reason": "c_t40a_absent",
+    "result": "NOT_VERIFIED",
+    "run_spec_ref": "run-spec-da-selectivity-001",
+    "schema": "acp2.b23.sub-delivery-row.v1",
+    "scope": "IN_SCOPE",
+    "submission": null,
+    "task_refs": []
+  },
+  "budget_rows": {
+    "identity": {
+      "phase": "experience:selectivity",
+      "scenario": "experience:cross-domain-live",
+      "scenario_key": "experience:cross-domain-live/selectivity",
+      "subcase": "selectivity"
+    },
+    "multitenant_timeout_scope": "B23a isolation/permissions/budget readiness only",
+    "multitenant_timeout_seconds": 1800,
+    "path": "budget-rows.json",
+    "reconcile": {
+      "all_frozen": false,
+      "nmr_new_qc_calls": 0,
+      "reason": "c_t40a_absent",
+      "required_domains": [
+        "nmr",
+        "thermo",
+        "selectivity"
+      ],
+      "selectivity_max_task_refs": 1,
+      "selectivity_new_task_refs": 0,
+      "thermo_new_qc_calls": 0
+    },
+    "rows": [
+      {
+        "artifacts": [
+          {
+            "path": "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+            "sha256": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78",
+            "size_bytes": 2670
+          }
+        ],
+        "budget_seconds": 0,
+        "domain": "nmr",
+        "max_qc_calls": 0,
+        "max_task_refs": 0,
+        "mode": "reuse",
+        "new_qc_calls": 0,
+        "new_task_refs": 0,
+        "result": "PASS",
+        "reuse_reason": "reused_a25a_constructed_fixture_no_new_task_ref"
+      },
+      {
+        "artifacts": [
+          {
+            "path": "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+            "sha256": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3",
+            "size_bytes": 1015
+          }
+        ],
+        "budget_seconds": 0,
+        "domain": "thermo",
+        "max_qc_calls": 0,
+        "max_task_refs": 0,
+        "mode": "reuse",
+        "new_qc_calls": 0,
+        "new_task_refs": 0,
+        "result": "PASS",
+        "reuse_reason": "reused_a25a_constructed_fixture_no_new_task_ref"
+      },
+      {
+        "budget_seconds": null,
+        "domain": "selectivity",
+        "frozen": false,
+        "max_qc_calls": null,
+        "max_task_refs": 1,
+        "max_task_refs_frozen": true,
+        "mode": "execute_pending_c",
+        "new_qc_calls": 0,
+        "new_task_refs": 0,
+        "paths": {
+          "path.endo": "not_submitted",
+          "path.exo": "not_submitted"
+        },
+        "per_step_qc_calls": {
+          "path.endo": null,
+          "path.exo": null
+        },
+        "proposed": {
+          "budget_seconds": 3600,
+          "budget_timing_basis": "unmeasured",
+          "max_qc_calls": 14,
+          "source": "A-25a constructed envelope; never frozen without representative timing"
+        },
+        "reason": "c_t40a_absent",
+        "result": "NOT_VERIFIED",
+        "submission": null
+      }
+    ],
+    "schema": "acp2.b23.budget-rows.v1"
+  },
+  "cross_domain": {
+    "cross_domain_non_mixing": {
+      "claim_namespaces": [
+        "nmr.*",
+        "thermochemistry.*"
+      ],
+      "no_ppm_to_hartree_conversion": true,
+      "shared_shape": [
+        "task_ref",
+        "artifact",
+        "provenance",
+        "budget"
+      ]
+    },
+    "identity": {
+      "phase": "experience:selectivity",
+      "scenario": "experience:cross-domain-live",
+      "scenario_key": "experience:cross-domain-live/selectivity",
+      "subcase": "selectivity"
+    },
+    "missing_metrics": {
+      "nmr_experimental_spectrum_acquired": null,
+      "reason": "constructed fixtures reused; no new QC was launched and no spectrum was acquired",
+      "thermochemistry_real_qc_energy": null
+    },
+    "path": "cross-domain-consistency.json",
+    "rows": [
+      {
+        "artifact": {
+          "path": "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+          "sha256": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78",
+          "size_bytes": 2670
+        },
+        "budget": {
+          "new_qc_calls": 0,
+          "new_task_refs": 0
+        },
+        "constructed": true,
+        "domain": "nmr",
+        "fixture_id": "nmr-shielding-constructed-ethanol",
+        "new_qc_calls": 0,
+        "new_task_refs": 0,
+        "provenance": {
+          "basis": "6-311G(d)",
+          "error_model": "goodman-legacy",
+          "method": "mPW1PW91",
+          "reference_source": "goodman-tmsdata",
+          "required_nuclei": [
+            "1H",
+            "13C"
+          ],
+          "scaling_mode": "goodman",
+          "schema": "acp2.science.provenance.v1",
+          "solvent": "chloroform",
+          "solvent_model": "cpcm",
+          "temperature_kelvin": 298.15
+        },
+        "real_run": false,
+        "result": "PASS",
+        "schema": "acp2.science.domain-fixture",
+        "schema_version": 1,
+        "task_ref": null,
+        "task_ref_reason": "reused_a25a_constructed_fixture_no_new_task_ref",
+        "units": {
+          "chemical_shift": "ppm",
+          "isotropic_shielding": "ppm",
+          "temperature": "K"
+        }
+      },
+      {
+        "artifact": {
+          "path": "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+          "sha256": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3",
+          "size_bytes": 1015
+        },
+        "budget": {
+          "new_qc_calls": 0,
+          "new_task_refs": 0
+        },
+        "constructed": true,
+        "domain": "thermochemistry",
+        "fixture_id": "ensemble-thermochemistry-weights-constructed",
+        "new_qc_calls": 0,
+        "new_task_refs": 0,
+        "provenance": {
+          "schema": "acp2.science.provenance.v1",
+          "standard_state": "1atm",
+          "temperature_kelvin": 298.15,
+          "weight_tolerance": 1e-09,
+          "weights_mode": "raw",
+          "weights_sum_supplied": 0.8
+        },
+        "real_run": false,
+        "result": "PASS",
+        "schema": "acp2.science.domain-fixture",
+        "schema_version": 1,
+        "task_ref": null,
+        "task_ref_reason": "reused_a25a_constructed_fixture_no_new_task_ref",
+        "units": {
+          "derived_energy_unit": "kcal_per_mol",
+          "gibbs_energy": "hartree",
+          "mixing_entropy": "kcal/(mol*K)",
+          "t_s_mix": "kcal/mol",
+          "temperature": "K"
+        }
+      }
+    ],
+    "schema": "acp2.b23.cross-domain-consistency.v1"
+  },
+  "cross_project": {
+    "bob_cancel_alpha": 404,
+    "bob_file_alpha": 404,
+    "bob_prepare_alpha": 404,
+    "bob_read_alpha": [
+      404,
+      {
+        "detail": "Job not found: b23-alpha-shared"
+      }
+    ],
+    "bob_read_missing": [
+      404,
+      {
+        "detail": "Job not found: b23-does-not-exist"
+      }
+    ],
+    "v2_bob_task_alpha": 404,
+    "v2_bob_tree_alpha": 404
+  },
+  "dependency_edges": {
+    "all_present": true,
+    "missing": [],
+    "observed_edges": [
+      {
+        "consumer": "C-T40a",
+        "producer": "A-25a"
+      },
+      {
+        "consumer": "C-T40b",
+        "producer": "A-25b"
+      },
+      {
+        "consumer": "C-T40a",
+        "producer": "B23a"
+      },
+      {
+        "consumer": "A-25b",
+        "producer": "B23b"
+      },
+      {
+        "consumer": "B23b",
+        "producer": "C-T40a"
+      },
+      {
+        "consumer": "H6",
+        "producer": "C-T40b"
+      }
+    ],
+    "p4_sync": {
+      "gating": {
+        "B23b_gap": "NOT_VERIFIED(c_t40a_absent)",
+        "C-T40a": "B23a",
+        "H6": "not_fed",
+        "not": "B23"
+      },
+      "identity": {
+        "phase": "experience:selectivity",
+        "scenario": "experience:cross-domain-live",
+        "scenario_key": "experience:cross-domain-live/selectivity",
+        "subcase": "selectivity"
+      },
+      "published_at": "2026-10-23T10:33:41Z",
+      "published_before_dispatch": true
+    },
+    "path": "<repo>/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+    "required_edges": [
+      {
+        "consumer": "C-T40a",
+        "producer": "A-25a"
+      },
+      {
+        "consumer": "C-T40a",
+        "producer": "B23a"
+      },
+      {
+        "consumer": "B23b",
+        "producer": "C-T40a"
+      },
+      {
+        "consumer": "A-25b",
+        "producer": "B23b"
+      },
+      {
+        "consumer": "C-T40b",
+        "producer": "A-25b"
+      },
+      {
+        "consumer": "H6",
+        "producer": "C-T40b"
+      }
+    ],
+    "schema": "acp2.b23.dependency-edges.v1"
+  },
+  "events": {
+    "alpha": {
+      "elapsed_ms": 651.85,
+      "error": null,
+      "events": [
+        {
+          "coverage": "task",
+          "cursor": "1",
+          "dedup_key": "b23:b23-alpha-shared:0",
+          "emitted_at": "2026-10-23T10:44:38.584073+00:00",
+          "event_id": "job:b23-alpha-shared:1",
+          "event_type": "job.queued",
+          "owner_id": "b23-alpha-shared",
+          "owner_type": "job",
+          "payload": {
+            "job_id": "b23-alpha-shared",
+            "project_id": "project_alpha",
+            "stage": "queued"
+          },
+          "schema_version": 1,
+          "scope": "task",
+          "seq": 1
+        },
+        {
+          "coverage": "task",
+          "cursor": "2",
+          "dedup_key": "b23:b23-alpha-shared:1",
+          "emitted_at": "2026-10-23T10:44:38.584288+00:00",
+          "event_id": "job:b23-alpha-shared:2",
+          "event_type": "job.paused",
+          "owner_id": "b23-alpha-shared",
+          "owner_type": "job",
+          "payload": {
+            "job_id": "b23-alpha-shared",
+            "project_id": "project_alpha",
+            "stage": "paused"
+          },
+          "schema_version": 1,
+          "scope": "task",
+          "seq": 2
+        },
+        {
+          "coverage": "task",
+          "cursor": "3",
+          "dedup_key": "b23:b23-alpha-shared:2",
+          "emitted_at": "2026-10-23T10:44:38.584419+00:00",
+          "event_id": "job:b23-alpha-shared:3",
+          "event_type": "job.progress",
+          "owner_id": "b23-alpha-shared",
+          "owner_type": "job",
+          "payload": {
+            "job_id": "b23-alpha-shared",
+            "project_id": "project_alpha",
+            "stage": "progress"
+          },
+          "schema_version": 1,
+          "scope": "task",
+          "seq": 3
+        }
+      ],
+      "job_id": "b23-alpha-shared",
+      "line_count": 13,
+      "thread_stopped": true
+    },
+    "beta": {
+      "elapsed_ms": 652.122,
+      "error": null,
+      "events": [
+        {
+          "coverage": "task",
+          "cursor": "1",
+          "dedup_key": "b23:b23-beta-shared:0",
+          "emitted_at": "2026-10-23T10:44:38.591041+00:00",
+          "event_id": "job:b23-beta-shared:1",
+          "event_type": "job.queued",
+          "owner_id": "b23-beta-shared",
+          "owner_type": "job",
+          "payload": {
+            "job_id": "b23-beta-shared",
+            "project_id": "project_beta",
+            "stage": "queued"
+          },
+          "schema_version": 1,
+          "scope": "task",
+          "seq": 1
+        },
+        {
+          "coverage": "task",
+          "cursor": "2",
+          "dedup_key": "b23:b23-beta-shared:1",
+          "emitted_at": "2026-10-23T10:44:38.591208+00:00",
+          "event_id": "job:b23-beta-shared:2",
+          "event_type": "job.paused",
+          "owner_id": "b23-beta-shared",
+          "owner_type": "job",
+          "payload": {
+            "job_id": "b23-beta-shared",
+            "project_id": "project_beta",
+            "stage": "paused"
+          },
+          "schema_version": 1,
+          "scope": "task",
+          "seq": 2
+        },
+        {
+          "coverage": "task",
+          "cursor": "3",
+          "dedup_key": "b23:b23-beta-shared:2",
+          "emitted_at": "2026-10-23T10:44:38.591308+00:00",
+          "event_id": "job:b23-beta-shared:3",
+          "event_type": "job.progress",
+          "owner_id": "b23-beta-shared",
+          "owner_type": "job",
+          "payload": {
+            "job_id": "b23-beta-shared",
+            "project_id": "project_beta",
+            "stage": "progress"
+          },
+          "schema_version": 1,
+          "scope": "task",
+          "seq": 3
+        }
+      ],
+      "job_id": "b23-beta-shared",
+      "line_count": 13,
+      "thread_stopped": true
+    }
+  },
+  "fixture_jobs": {
+    "jobs": [
+      {
+        "conflict": null,
+        "conflict_expected": false,
+        "idem_key": "b23-shared-key",
+        "job_id": "b23-alpha-shared",
+        "molecule_name": "shared-molecule",
+        "principal_id": "principal_b23_alice",
+        "project_id": "project_alpha",
+        "scope_id": "principal_b23_alice\u001fproject_alpha",
+        "task_dir_name": "shared-molecule_shared-task",
+        "task_name": "shared-task",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "b23-alpha-shared",
+          "task_id": "b23-alpha-shared"
+        }
+      },
+      {
+        "conflict": {
+          "claim": null,
+          "detail": "idempotency key was already used under a different verified scope",
+          "kind": "conflict",
+          "retryable": false,
+          "task_ref": null
+        },
+        "conflict_expected": true,
+        "idem_key": "b23-shared-key-beta",
+        "job_id": "b23-beta-shared",
+        "molecule_name": "shared-molecule",
+        "principal_id": "principal_b23_bob",
+        "project_id": "project_beta",
+        "scope_id": "principal_b23_bob\u001fproject_beta",
+        "task_dir_name": "shared-molecule_shared-task",
+        "task_name": "shared-task",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "b23-beta-shared",
+          "task_id": "b23-beta-shared"
+        }
+      },
+      {
+        "conflict": null,
+        "conflict_expected": false,
+        "idem_key": "b23-extra-key-alpha",
+        "job_id": "b23-alpha-extra",
+        "molecule_name": "shared-molecule",
+        "principal_id": "principal_b23_alice",
+        "project_id": "project_alpha",
+        "scope_id": "principal_b23_alice\u001fproject_alpha",
+        "task_dir_name": "shared-molecule_extra-task",
+        "task_name": "extra-task",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "b23-alpha-extra",
+          "task_id": "b23-alpha-extra"
+        }
+      },
+      {
+        "conflict": null,
+        "conflict_expected": false,
+        "idem_key": "b23-extra-key-beta",
+        "job_id": "b23-beta-extra",
+        "molecule_name": "shared-molecule",
+        "principal_id": "principal_b23_bob",
+        "project_id": "project_beta",
+        "scope_id": "principal_b23_bob\u001fproject_beta",
+        "task_dir_name": "shared-molecule_extra-task",
+        "task_name": "extra-task",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "b23-beta-extra",
+          "task_id": "b23-beta-extra"
+        }
+      }
+    ],
+    "jobs_database": "<acp2-dev>/data/b/run-root-b23/acp_jobs.db",
+    "run_root": "<acp2-dev>/data/b/run-root-b23"
+  },
+  "identity": {
+    "phase": "experience:selectivity",
+    "scenario": "experience:cross-domain-live",
+    "scenario_key": "experience:cross-domain-live/selectivity",
+    "subcase": "selectivity"
+  },
+  "lists": {
+    "v1_alice": [
+      "project_alpha"
+    ],
+    "v1_bob": [
+      "project_beta"
+    ],
+    "v2_projects_alice": [
+      "project_alpha"
+    ],
+    "v2_projects_bob": [
+      "project_beta"
+    ],
+    "v2_view_alice": [
+      "project_alpha"
+    ],
+    "v2_view_bob": [
+      "project_beta"
+    ]
+  },
+  "quota": {
+    "alpha_admitted": true,
+    "beta_admitted": false,
+    "beta_exceeded": [
+      {
+        "dimension": "cores",
+        "limit": 1,
+        "requested": 2,
+        "scope": "capacity"
+      }
+    ],
+    "beta_reason": "capacity_cores",
+    "capacity": {
+      "available": true,
+      "concurrency": 2,
+      "cores": 1,
+      "memory_mb": 512,
+      "source": "",
+      "storage_bytes": 10000000
+    },
+    "occupancy_after_two_requests": {
+      "by_state": {
+        "reserved": 1
+      },
+      "concurrency": 1,
+      "cores": 1,
+      "memory_mb": 0,
+      "reservations": 1,
+      "storage_bytes": 0
+    },
+    "shared_node": true
+  },
+  "revocation": {
+    "key": {
+      "error": null,
+      "line_count": 16,
+      "permission_changed_after_revocation": true,
+      "received_event_before_revocation": true,
+      "stream_thread_stopped": true
+    },
+    "project": {
+      "error": null,
+      "line_count": 16,
+      "permission_changed_after_revocation": true,
+      "received_event_before_revocation": true,
+      "stream_thread_stopped": true
+    },
+    "read_after_key_revoke": 401,
+    "read_after_project_revoke": 401
+  },
+  "schema": "acp2.b23.multiproject.v1"
+}
