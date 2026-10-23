@@ -1,0 +1,231 @@
+{
+  "a_readability": {
+    "contract_handoff": {
+      "parsed": true,
+      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+      "present": true,
+      "schema": null,
+      "sha256": "f690e7e993125b509e4f5a55ce9465323292346dddfdabc0beacb4e4533b0bd0",
+      "size_bytes": 26991
+    },
+    "expected_readability_receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/A/A-26/result.json",
+    "owner": "A",
+    "readability_receipt_present": false,
+    "reason": "A published handoff-H6.json (readable, parsed here) but no A-26 result/readability receipt that verifies B data remains readable at f32c670. B does not sign A scope.",
+    "result": "NOT_VERIFIED(a_readability_absent)"
+  },
+  "b_owned_rows": [
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",
+      "owner": "B",
+      "row_id": "H6-B1-migration-backup-restore",
+      "status": "PASS"
+    },
+    {
+      "evidence": "docs/reference/next-change/acp2-contracts/runtime/recovery-rollback-runbook.md",
+      "owner": "B",
+      "row_id": "H6-B2-recovery-runbook",
+      "status": "PASS"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B24b/four-combination-summary.json",
+      "owner": "B",
+      "row_id": "H6-B3-four-combination-candidate",
+      "status": "PASS"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B24b/legacy-reader-log.json",
+      "owner": "B",
+      "row_id": "H6-B4-legacy-readers",
+      "status": "PASS"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B24b/ac-readability.json",
+      "owner": "B",
+      "row_id": "H6-B5-a-c-reference-resolution",
+      "status": "PASS"
+    },
+    {
+      "detail": "no production restart or production run-root write was executed",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B24b/cleanup.json",
+      "owner": "B",
+      "row_id": "H6-B6-no-production-action",
+      "status": "PASS"
+    }
+  ],
+  "c_readability": {
+    "expected_readability_receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
+    "manifest_extension_schema": {
+      "parsed": true,
+      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/manifest-extension.schema.json",
+      "present": true,
+      "schema": "acp2.experience.manifest-extension.v1",
+      "sha256": "6552b04d33f5bc84d2415a4fe6f68912fb73bc65a44b5e50eaebc1e384c5f5ed",
+      "size_bytes": 19632
+    },
+    "owner": "C",
+    "readability_receipt_present": false,
+    "reason": "C contract schemas are readable (parsed, digests recorded) but C has published no H6 readability receipt and no cross-domain-live/selectivity record; B does not sign C scope.",
+    "research_record_schema": {
+      "parsed": true,
+      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "present": true,
+      "schema": "acp2.experience.research-record.v1",
+      "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+      "size_bytes": 9943
+    },
+    "result": "NOT_VERIFIED(c_readability_absent)",
+    "view_model_schema": {
+      "parsed": true,
+      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
+      "present": true,
+      "schema": "acp2.experience.view-model.v1",
+      "sha256": "b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",
+      "size_bytes": 8650
+    }
+  },
+  "candidate": {
+    "a_reference_revision": "1b580a3dcda1351a0869353e6a505acde10dcfe0",
+    "c_reference_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "candidate_runnable_overlay_path": "reports/acp2_implementation/bb45a46/B/B24b/candidate-runnable-overlay.patch",
+    "candidate_runnable_overlay_reason": "f32c670 cannot construct OriginPolicy(public_origin=...) and does not forward ordinary BatchOptimize --method into typed role options; the overlay is the working-tree delta B24a used and adds no B24b claim.",
+    "candidate_runnable_overlay_sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
+    "server_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077"
+  },
+  "contract": {
+    "acceptance_result_schema": "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+    "contract_digest": "sha256:81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e",
+    "manifest": "docs/reference/next-change/acp2-contracts/manifest.json",
+    "manifest_digest": "sha256:5ddf8c4ae0bd88517328d787a16b66976f9a599dfffa135f9ea950a693e7eaeb",
+    "version": "1.3.0"
+  },
+  "four_combination": {
+    "argv": [
+      "/usr/bin/python3.11",
+      "scripts/acceptance/four_combinations.py",
+      "--out",
+      "reports/acp2_implementation/bb45a46/B/B24b/four-combination",
+      "--f1-revision",
+      "f32c6704e0348585a5a58ce8516450ab3afc7077",
+      "--cells",
+      "F0/S1,F1/S1",
+      "--candidate-patch",
+      "/tmp/opencode/b24b-runnable-overlay.patch"
+    ],
+    "cells": [
+      {
+        "cell": "F0/S1",
+        "result": "PASS"
+      },
+      {
+        "cell": "F1/S1",
+        "result": "PASS"
+      },
+      {
+        "cell": "F0/S0",
+        "reason": "b24b_scope_s1_only: S0 is the pre-P4 baseline service, not the H6 candidate",
+        "result": "NOT_VERIFIED"
+      },
+      {
+        "cell": "F1/S0",
+        "reason": "b24b_scope_s1_only: S0 is the pre-P4 baseline service, not the H6 candidate",
+        "result": "NOT_VERIFIED"
+      }
+    ],
+    "exit_code": 0,
+    "result": "PASS",
+    "run_log": "reports/acp2_implementation/bb45a46/B/B24b/four-combination-run-log.json",
+    "summary": "reports/acp2_implementation/bb45a46/B/B24b/four-combination-summary.json"
+  },
+  "frozen_candidate_sha": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "generated_at": "2026-10-23T19:46:00Z",
+  "h6_status": "OPEN",
+  "legacy_readers": {
+    "compat_pytest": {
+      "command": "/usr/bin/python3.11 -m pytest tests/test_legacy_read_only.py tests/test_legacy_layout_compat.py tests/test_recovery_fixtures_smoke.py tests/test_recovery_cross_version.py -q",
+      "failed": 0,
+      "passed": 41,
+      "result": "PASS"
+    },
+    "log": "reports/acp2_implementation/bb45a46/B/B24b/legacy-reader-log.json",
+    "ordinary_cli": {
+      "BatchOptimize": "PASS",
+      "Confsearch": "PASS",
+      "PESsearch": "PASS",
+      "XtbConstrainedOpt": "PASS",
+      "XtbPathSearch": "PASS",
+      "nmr": "PASS",
+      "tsmode": "PASS"
+    },
+    "result": "PASS"
+  },
+  "migration": {
+    "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+    "oldest_supported_schema": 21,
+    "result": "PASS",
+    "summary": "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",
+    "target_schema": 23,
+    "workspace": "/ACPServer/acp2-development/data/b/b24b-migration"
+  },
+  "note": "H6 remains OPEN. B signs only B-owned runtime/recovery facts; A and C rows are unsigned. No production release, production restart, LSF, DSH, real DA or selectivity sign-off is claimed.",
+  "open_rows": [
+    {
+      "owner": "B",
+      "reason": "ACP_LSF_NODE, LSF_ENVDIR, bsub, bjobs, bhosts, bqueues and ssh credentials are absent; no remote submission was attempted.",
+      "row_id": "H6-LSF-live",
+      "source": "reports/acp2_implementation/bb45a46/B/B11/summary.json",
+      "status": "NOT_VERIFIED(lsf_prerequisite_missing)"
+    },
+    {
+      "owner": "C",
+      "reason": "C has no H6 DSH readability/session receipt; its discovery evidence is dry_run/NOT_VERIFIED.",
+      "row_id": "H6-DSH-live",
+      "source": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/",
+      "status": "NOT_VERIFIED(c_dsh_h6_absent)"
+    },
+    {
+      "expected_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
+      "owner": "C",
+      "reason": "C research-record/view-model/manifest-extension schemas are readable, but no C H6 readability receipt or experience:cross-domain-live record exists.",
+      "row_id": "H6-C-readability",
+      "source": "reports/acp2_implementation/bb45a46/B/B24b/ac-readability.json",
+      "status": "NOT_VERIFIED(c_readability_absent)"
+    },
+    {
+      "expected_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/A/A-26/result.json",
+      "owner": "A",
+      "reason": "A handoff-H6.json is readable (parsed; h6_closure.closed=false), but no A-26 readability receipt for B data exists.",
+      "row_id": "H6-A-readability",
+      "source": "reports/acp2_implementation/bb45a46/B/B24b/ac-readability.json",
+      "status": "NOT_VERIFIED(a_readability_absent)"
+    },
+    {
+      "owner": "B",
+      "reason": "No C T-40a selectivity submission, no B23b authorized two-path artifact and no public run_id; B23b is not fed to H6.",
+      "row_id": "H6-selectivity-B23b",
+      "source": "reports/acp2_implementation/bb45a46/B/B23/b23b-row.json",
+      "status": "NOT_VERIFIED(c_t40a_absent)"
+    },
+    {
+      "owner": "B",
+      "reason": "No C24a-approved DA submission; the H4 aggregation remains open.",
+      "row_id": "H6-real-DA",
+      "source": "reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
+      "status": "NOT_VERIFIED(c24a_absent)"
+    }
+  ],
+  "production_release": false,
+  "production_restart_executed": false,
+  "runbook": {
+    "command_execution": "reports/acp2_implementation/bb45a46/B/B24b/runbook-command-execution.json",
+    "command_validation": "reports/acp2_implementation/bb45a46/B/B24b/runbook-command-validation.json",
+    "oldest_supported_schema": 21,
+    "path": "docs/reference/next-change/acp2-contracts/runtime/recovery-rollback-runbook.md",
+    "production_restart_executed": false,
+    "sha256": "bd6861681a6112f6cd81124a0f08d24c7fae4f3acab5b062c02de7b7ce2d86cc",
+    "target_schema": 23
+  },
+  "schema": "acp2.h6.receipt.v1",
+  "signed_by": [],
+  "todo": "29 / B24b"
+}

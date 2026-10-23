@@ -1,0 +1,14 @@
+{
+  "action": "cursor",
+  "claim_id": "idem_90c3d96380c34965894f6ffb65a47937",
+  "expired": [
+    "idem_90c3d96380c34965894f6ffb65a47937"
+  ],
+  "expired_state": "expired",
+  "lease_epoch": 1,
+  "no_duplicate_row": true,
+  "rows_after": 3,
+  "rows_before": 3,
+  "takeover_detail": "takeover",
+  "takeover_kind": "created"
+}

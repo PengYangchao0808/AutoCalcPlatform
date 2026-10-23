@@ -1,0 +1,55 @@
+{
+  "frozen_candidate_sha": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "generated_at": "2026-10-23T19:46:00Z",
+  "h6_status": "OPEN",
+  "owner": "B",
+  "row_count": 6,
+  "rows": [
+    {
+      "owner": "B",
+      "reason": "ACP_LSF_NODE, LSF_ENVDIR, bsub, bjobs, bhosts, bqueues and ssh credentials are absent; no remote submission was attempted.",
+      "row_id": "H6-LSF-live",
+      "source": "reports/acp2_implementation/bb45a46/B/B11/summary.json",
+      "status": "NOT_VERIFIED(lsf_prerequisite_missing)"
+    },
+    {
+      "owner": "C",
+      "reason": "C has no H6 DSH readability/session receipt; its discovery evidence is dry_run/NOT_VERIFIED.",
+      "row_id": "H6-DSH-live",
+      "source": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/",
+      "status": "NOT_VERIFIED(c_dsh_h6_absent)"
+    },
+    {
+      "expected_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
+      "owner": "C",
+      "reason": "C research-record/view-model/manifest-extension schemas are readable, but no C H6 readability receipt or experience:cross-domain-live record exists.",
+      "row_id": "H6-C-readability",
+      "source": "reports/acp2_implementation/bb45a46/B/B24b/ac-readability.json",
+      "status": "NOT_VERIFIED(c_readability_absent)"
+    },
+    {
+      "expected_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/A/A-26/result.json",
+      "owner": "A",
+      "reason": "A handoff-H6.json is readable (parsed; h6_closure.closed=false), but no A-26 readability receipt for B data exists.",
+      "row_id": "H6-A-readability",
+      "source": "reports/acp2_implementation/bb45a46/B/B24b/ac-readability.json",
+      "status": "NOT_VERIFIED(a_readability_absent)"
+    },
+    {
+      "owner": "B",
+      "reason": "No C T-40a selectivity submission, no B23b authorized two-path artifact and no public run_id; B23b is not fed to H6.",
+      "row_id": "H6-selectivity-B23b",
+      "source": "reports/acp2_implementation/bb45a46/B/B23/b23b-row.json",
+      "status": "NOT_VERIFIED(c_t40a_absent)"
+    },
+    {
+      "owner": "B",
+      "reason": "No C24a-approved DA submission; the H4 aggregation remains open.",
+      "row_id": "H6-real-DA",
+      "source": "reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
+      "status": "NOT_VERIFIED(c24a_absent)"
+    }
+  ],
+  "rule": "A row is signed only by its owner. B never signs A/C scope and never promotes a missing row to PASS.",
+  "schema": "acp2.h6.open_rows.v1"
+}
