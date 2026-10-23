@@ -375,6 +375,16 @@
       "readiness": "contract_ready",
       "delivery_status": "planned",
       "description": "Real DSH session termination and new-session recovery evidence"
+    },
+    {
+      "id": "H6",
+      "owner": "integration",
+      "artifact": "H6 recovery/rollback gate",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "H6 reliability gate; B23 may feed it only after A-25b and C-T40b"
     }
   ],
   "nodes": [
@@ -2341,5 +2351,148 @@
       "observed": "B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a",
       "supersedes_c_row": "C24a:gates_on_B20a_ready"
     }
-  ]
+  ],
+  "cross_track_edges": [
+    {
+      "producer": "A-25a",
+      "consumer": "C-T40a",
+      "artifact": "dual-path selectivity fixture and criteria",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-25a fixture/criteria before C's single research submission"
+    },
+    {
+      "producer": "B23a",
+      "consumer": "C-T40a",
+      "artifact": "P4 readiness: identity/budget/execution interface",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-40 gates on B23a readiness, not the whole B23"
+    },
+    {
+      "producer": "C-T40a",
+      "consumer": "B23b",
+      "artifact": "single cross-domain research submission",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "B23b executes only after C T-40a"
+    },
+    {
+      "producer": "B23b",
+      "consumer": "A-25b",
+      "artifact": "authorized selectivity artifacts (one TaskRef, two qualified paths)",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-25b audits the B23b exported artifacts"
+    },
+    {
+      "producer": "A-25b",
+      "consumer": "C-T40b",
+      "artifact": "selectivity scientific audit",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-40b presents only after A-25b"
+    },
+    {
+      "producer": "C-T40b",
+      "consumer": "H6",
+      "artifact": "P4 presentation sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "Only after A-25b and C T-40b may B23 feed H6"
+    }
+  ],
+  "cross_track_edges_note": "Plan-level P4 handoff chain. A's cross-track-dependencies.json is still absent (see not_verified), so these rows are executable ordering facts, not validated A-ledger rows.",
+  "p4_sync": {
+    "schema": "acp2.p4.sub-delivery-sync.v1",
+    "published_before_dispatch": true,
+    "published_at": "2026-10-23T10:33:41Z",
+    "owner": "B",
+    "todo": 27,
+    "identity": {
+      "scenario": "experience:cross-domain-live",
+      "phase": "experience:selectivity",
+      "subcase": "selectivity",
+      "scenario_key": "experience:cross-domain-live/selectivity"
+    },
+    "sub_deliveries": [
+      {
+        "id": "B23a",
+        "kind": "readiness",
+        "state": "implemented",
+        "owner": "B",
+        "requires": [
+          "B15",
+          "B17",
+          "B21",
+          "B22",
+          "A-25a"
+        ],
+        "creates_selectivity_submission": false,
+        "timeout_seconds": 1800
+      },
+      {
+        "id": "B23b",
+        "kind": "execution_export",
+        "state": "NOT_VERIFIED",
+        "owner": "B",
+        "requires": [
+          "B23a",
+          "C-T40a"
+        ],
+        "reason": "c_t40a_absent",
+        "creates_selectivity_submission": false,
+        "timeout_line": "selectivity_budget_row"
+      }
+    ],
+    "required_rows": [
+      "multitenant:two-project",
+      "same-name-and-key-isolation",
+      "cross-project-denials",
+      "revocation-stops-events-artifacts",
+      "cross-domain-consistency",
+      "budget.nmr",
+      "budget.thermo",
+      "budget.selectivity",
+      "measurements",
+      "dependency-edges",
+      "b23b-row"
+    ],
+    "gating": {
+      "C-T40a": "B23a",
+      "not": "B23",
+      "B23b_gap": "NOT_VERIFIED(c_t40a_absent)",
+      "H6": "not_fed"
+    },
+    "budget_lines": {
+      "multitenant": 1800,
+      "selectivity": "separate_unfrozen_row"
+    },
+    "cross_track_edges": [
+      "A-25a->C-T40a",
+      "B23a->C-T40a",
+      "C-T40a->B23b",
+      "B23b->A-25b",
+      "A-25b->C-T40b",
+      "C-T40b->H6"
+    ]
+  }
 }

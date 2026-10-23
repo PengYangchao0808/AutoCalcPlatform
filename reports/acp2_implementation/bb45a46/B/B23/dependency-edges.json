@@ -1,0 +1,74 @@
+{
+  "all_present": true,
+  "missing": [],
+  "observed_edges": [
+    {
+      "consumer": "C-T40a",
+      "producer": "A-25a"
+    },
+    {
+      "consumer": "C-T40b",
+      "producer": "A-25b"
+    },
+    {
+      "consumer": "C-T40a",
+      "producer": "B23a"
+    },
+    {
+      "consumer": "A-25b",
+      "producer": "B23b"
+    },
+    {
+      "consumer": "B23b",
+      "producer": "C-T40a"
+    },
+    {
+      "consumer": "H6",
+      "producer": "C-T40b"
+    }
+  ],
+  "p4_sync": {
+    "gating": {
+      "B23b_gap": "NOT_VERIFIED(c_t40a_absent)",
+      "C-T40a": "B23a",
+      "H6": "not_fed",
+      "not": "B23"
+    },
+    "identity": {
+      "phase": "experience:selectivity",
+      "scenario": "experience:cross-domain-live",
+      "scenario_key": "experience:cross-domain-live/selectivity",
+      "subcase": "selectivity"
+    },
+    "published_at": "2026-10-23T10:33:41Z",
+    "published_before_dispatch": true
+  },
+  "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+  "required_edges": [
+    {
+      "consumer": "C-T40a",
+      "producer": "A-25a"
+    },
+    {
+      "consumer": "C-T40a",
+      "producer": "B23a"
+    },
+    {
+      "consumer": "B23b",
+      "producer": "C-T40a"
+    },
+    {
+      "consumer": "A-25b",
+      "producer": "B23b"
+    },
+    {
+      "consumer": "C-T40b",
+      "producer": "A-25b"
+    },
+    {
+      "consumer": "H6",
+      "producer": "C-T40b"
+    }
+  ],
+  "schema": "acp2.b23.dependency-edges.v1"
+}

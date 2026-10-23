@@ -80,6 +80,7 @@ from acp.storage.backend import (
 )
 from acp.storage.layout import TaskLayout
 from acp.storage.manifest import ResultManifest
+from acp_services.contracts.access import AccessAction
 from acp_services.runtime.freshness import AVAILABILITY_READY
 from acp_services.runtime.lineage import TaskEvidenceBuilder
 from acp_services.runtime.projections import TaskProjectionStore, TaskRowProjection
@@ -135,11 +136,55 @@ def _task_detail(record: JobRecord) -> V2TaskDetail:
     )
 
 
-def _task_or_404(request: Request, task_id: str) -> JobRecord:
+def _verified_project(request: Request) -> str | None:
+    """Verified project of the resolved credential (``None`` in local-single)."""
+    resolved = getattr(request.state, "request_identity", None)
+    return getattr(resolved, "verified_project", None) if resolved is not None else None
+
+
+def _authorize_record(
+    request: Request,
+    record: JobRecord,
+    *,
+    action: str = AccessAction.READ,
+) -> None:
+    """Deny a task entry outside the credential's verified project.
+
+    The denial is the same not-found shape as an unknown task so a foreign
+    task's existence never leaks (B15/B23 contract).  Inert when no credential
+    was resolved (default ``local-single`` tier).
+    """
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is None:
+        return
+    decision = resolved.server_identity.authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=action,
+        job_id=record.id,
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=404, detail=f"Task not found: {record.id}")
+
+
+def _task_or_404(
+    request: Request,
+    task_id: str,
+    *,
+    action: str = AccessAction.READ,
+) -> JobRecord:
     record = _manager(request).store.get(task_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+    _authorize_record(request, record, action=action)
     return record
+
+
+def _scoped_project_or_404(request: Request, project_id: str) -> str:
+    """Return *project_id* only when it is inside the verified project scope."""
+    verified = _verified_project(request)
+    if verified is not None and str(project_id) != verified:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return str(project_id)
 
 
 _ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset(
@@ -496,9 +541,12 @@ def _remote_tree_entries(request: Request, record: JobRecord, area: str) -> list
 def list_projects(request: Request) -> list[V2ProjectSummary]:
     """List projects with their task counts (§12)."""
     manager = _manager(request)
+    verified = _verified_project(request)
     summaries: list[V2ProjectSummary] = []
     for project in manager.projects.list_projects():
         project_id = str(project.get("project_id", ""))
+        if verified is not None and project_id != verified:
+            continue
         n_tasks = len(manager.store.list_by_project(project_id, limit=_COUNT_LIMIT))
         summaries.append(
             V2ProjectSummary(
@@ -522,6 +570,7 @@ def list_project_tasks(
 ) -> list[V2TaskSummary]:
     """List a project's tasks (= jobs), newest first (§12)."""
     manager = _manager(request)
+    project_id = _scoped_project_or_404(request, project_id)
     if manager.projects.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     records = manager.store.list_by_project(project_id, limit=limit)
@@ -574,6 +623,14 @@ def get_task_view(
     )
 
     manager = _manager(request)
+    verified = _verified_project(request)
+    if verified is not None:
+        # A credential-scoped read has exactly one project.  No project hint
+        # narrows to the verified project; a foreign hint is a not-found.
+        if project_id is None:
+            project_id = verified
+        elif project_id != verified:
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     if project_id is not None and manager.projects.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -676,7 +733,15 @@ def list_orphan_tasks(request: Request) -> dict[str, Any]:
     ``POST /api/v2/tasks/orphans/purge`` to repair.
     """
     manager = _manager(request)
-    return {"orphans": manager.find_orphan_tasks()}
+    orphans = manager.find_orphan_tasks()
+    verified = _verified_project(request)
+    if verified is not None:
+        orphans = [
+            task_id
+            for task_id in orphans
+            if str((manager.tasks.get(task_id) or {}).get("project_id") or "") == verified
+        ]
+    return {"orphans": orphans}
 
 
 @router.get("/tasks/{task_id}", response_model=V2TaskDetail)
@@ -705,6 +770,7 @@ def patch_task(task_id: str, body: V2TaskPatchRequest, request: Request) -> dict
     legacy field updates so both can coexist in one request.
     """
     manager = _manager(request)
+    _task_or_404(request, task_id, action=AccessAction.WRITE)
     existing = manager.tasks.get(task_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
@@ -908,11 +974,26 @@ def create_task_batch(req: V2TaskBatchRequest, request: Request) -> V2TaskBatchR
     item resources (when absent) so the task view can group them.
     """
     manager = _manager(request)
+    verified = _verified_project(request)
+    request_project = req.project_id
+    if verified is not None:
+        if request_project is not None and request_project != verified:
+            raise HTTPException(status_code=403, detail="Project outside verified scope")
+        request_project = verified
     req_batch_id = "batch_" + uuid4().hex[:12]
     created: list[V2TaskSummary] = []
     failed: list[dict[str, Any]] = []
     for item in req.tasks:
-        outcome = _submit_batch_item(manager, item, req.project_id, req_batch_id)
+        if verified is not None and item.project_id is not None and item.project_id != verified:
+            failed.append(
+                {
+                    "molecule_name": item.molecule_name,
+                    "task_name": item.task_name,
+                    "error": "Project outside verified scope",
+                }
+            )
+            continue
+        outcome = _submit_batch_item(manager, item, request_project, req_batch_id)
         if isinstance(outcome, V2TaskSummary):
             created.append(outcome)
         else:
@@ -1149,13 +1230,31 @@ def batch_ops(body: V2BatchOpsRequest, request: Request) -> V2BatchOpsResult:
         raise HTTPException(status_code=422, detail=f"Unsupported op: {body.op}")
 
     manager = _manager(request)
+    verified = _verified_project(request)
+    allowed_ids: list[str] = []
+    foreign_ids: set[str] = set()
+    for task_id in body.task_ids:
+        record = manager.store.get(task_id)
+        if (
+            verified is not None
+            and record is not None
+            and str(record.project_id or record.spec.project_id or "") != verified
+        ):
+            foreign_ids.add(task_id)
+        else:
+            allowed_ids.append(task_id)
 
     if body.op == "archive":
-        _validate_archive_targets(manager, body.task_ids)
+        _validate_archive_targets(manager, allowed_ids)
 
     results: list[V2BatchOpItemResult] = []
     updated_count = 0
     for task_id in body.task_ids:
+        if task_id in foreign_ids:
+            results.append(
+                V2BatchOpItemResult(task_id=task_id, ok=False, error=f"Task not found: {task_id}")
+            )
+            continue
         try:
             changed = _execute_batch_op(manager, task_id, body.op, body.payload)
             results.append(V2BatchOpItemResult(task_id=task_id, ok=True))

@@ -1,0 +1,26 @@
+{
+  "identity": {
+    "phase": "experience:selectivity",
+    "scenario": "experience:cross-domain-live",
+    "scenario_key": "experience:cross-domain-live/selectivity",
+    "subcase": "selectivity"
+  },
+  "key": {
+    "error": null,
+    "line_count": 16,
+    "permission_changed_after_revocation": true,
+    "received_event_before_revocation": true,
+    "stream_thread_stopped": true
+  },
+  "project": {
+    "error": null,
+    "line_count": 16,
+    "permission_changed_after_revocation": true,
+    "received_event_before_revocation": true,
+    "stream_thread_stopped": true
+  },
+  "read_after_key_revoke": 401,
+  "read_after_project_revoke": 401,
+  "result": "PASS",
+  "schema": "acp2.b23.revocation.v1"
+}

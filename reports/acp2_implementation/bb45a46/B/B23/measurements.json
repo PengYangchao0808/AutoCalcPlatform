@@ -1,0 +1,204 @@
+{
+  "batch": {
+    "list": {
+      "max_ms": 1.5175,
+      "median_ms": 1.4283,
+      "min_ms": 1.3223,
+      "n": 10,
+      "samples_ms": [
+        1.3817,
+        1.5175,
+        1.4627,
+        1.5018,
+        1.4973,
+        1.4283,
+        1.379,
+        1.3524,
+        1.3223,
+        1.3385
+      ]
+    },
+    "task_view": {
+      "max_ms": 15.2558,
+      "median_ms": 2.188,
+      "min_ms": 2.1508,
+      "n": 10,
+      "samples_ms": [
+        15.2558,
+        2.2129,
+        2.188,
+        2.2354,
+        2.2139,
+        2.1558,
+        2.1717,
+        2.1806,
+        2.1508,
+        2.1737
+      ]
+    }
+  },
+  "duplicate_subscription": {
+    "active_streams": 1,
+    "additional_stream_resources": 0,
+    "db_statements_delta": 0,
+    "distinct_keys": 1,
+    "list_sql_statements_after": 10,
+    "list_sql_statements_before": 10,
+    "note": "a repeated (principal, scope) joins the existing stream; it never opens a second one",
+    "opens": 2,
+    "same_stream_object": true,
+    "subscribed_owners": [
+      "b23-alpha-shared",
+      "b23-beta-shared"
+    ]
+  },
+  "events": {
+    "events_per_poll": 3,
+    "median_ms": 0.3554,
+    "n": 10,
+    "samples_ms": [
+      0.4679,
+      0.3807,
+      0.3921,
+      0.3567,
+      0.346,
+      0.3222,
+      0.3185,
+      0.3554,
+      0.3232,
+      0.2948
+    ]
+  },
+  "generated_at": "2026-10-23T10:44:40Z",
+  "machine": {
+    "cpu_count": 40,
+    "hostname": "workstation",
+    "platform": "Linux-5.14.0-687.56.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "python": "3.11.13"
+  },
+  "quota": {
+    "alpha_admitted": true,
+    "beta_admitted": false,
+    "beta_exceeded": [
+      {
+        "dimension": "cores",
+        "limit": 1,
+        "requested": 2,
+        "scope": "capacity"
+      }
+    ],
+    "beta_reason": "capacity_cores",
+    "capacity": {
+      "available": true,
+      "concurrency": 2,
+      "cores": 1,
+      "memory_mb": 512,
+      "source": "",
+      "storage_bytes": 10000000
+    },
+    "occupancy_after_two_requests": {
+      "by_state": {
+        "reserved": 1
+      },
+      "concurrency": 1,
+      "cores": 1,
+      "memory_mb": 0,
+      "reservations": 1,
+      "storage_bytes": 0
+    },
+    "shared_node": true
+  },
+  "reads": {
+    "local": {
+      "detail": {
+        "max_ms": 1.2458,
+        "median_ms": 1.199,
+        "min_ms": 1.1601,
+        "n": 15,
+        "samples_ms": [
+          1.2458,
+          1.2254,
+          1.2265,
+          1.2188,
+          1.1861,
+          1.2212,
+          1.1787,
+          1.2012,
+          1.191,
+          1.1804,
+          1.199,
+          1.2043,
+          1.1834,
+          1.1909,
+          1.1601
+        ]
+      },
+      "job_get": {
+        "max_ms": 4.6514,
+        "median_ms": 1.5164,
+        "min_ms": 1.2096,
+        "n": 15,
+        "samples_ms": [
+          1.5515,
+          1.5164,
+          1.5178,
+          1.543,
+          1.5685,
+          1.5035,
+          1.5233,
+          1.5225,
+          1.4888,
+          1.4921,
+          1.513,
+          4.6514,
+          1.2478,
+          1.2229,
+          1.2096
+        ]
+      }
+    },
+    "remote_cached": {
+      "cache_get_cached": {
+        "max_ms": 0.4071,
+        "median_ms": 0.3145,
+        "min_ms": 0.2971,
+        "n": 15,
+        "samples_ms": [
+          0.4071,
+          0.3373,
+          0.3361,
+          0.3172,
+          0.3145,
+          0.3251,
+          0.3213,
+          0.3144,
+          0.3224,
+          0.3052,
+          0.3014,
+          0.3094,
+          0.3001,
+          0.3138,
+          0.2971
+        ]
+      },
+      "transport": "RemoteStructureCache cache replica on the same filesystem"
+    },
+    "remote_live": {
+      "reason": "lsf_unavailable",
+      "value": null
+    }
+  },
+  "sample": {
+    "config_id": "b23-two-project-paused-v1",
+    "controller": "127.0.0.1 local Controller (same machine)",
+    "projects": 2,
+    "tasks_per_project": 2
+  },
+  "schema": "acp2.b23.measurements.v1",
+  "storage": {
+    "hosted_hard_limit_bytes": null,
+    "hosted_hard_limit_reason": "lab local-single config exposes no hosted storage quota; not hosted-verified",
+    "run_root_disk_free_bytes": 48389279744,
+    "run_root_disk_total_bytes": 75094818816
+  }
+}
