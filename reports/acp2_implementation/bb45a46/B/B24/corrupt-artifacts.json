@@ -1,0 +1,11 @@
+{
+  "injected": "historical_manifest/RESULT_v2/corrupt_manifest.json",
+  "observed": [
+    {
+      "error": "JSONDecodeError: Expecting value: line 2 column 1 (char 15)",
+      "path": "historical_manifest/RESULT_v2/corrupt_manifest.json"
+    }
+  ],
+  "reported_as_named_error": true,
+  "schema": "acp2.migration.corrupt-artifacts.v1"
+}
