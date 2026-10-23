@@ -1,0 +1,79 @@
+{
+  "name": "acp2_upgrade.native_singlepoint",
+  "distribution": "acp2-upgrade-science-validator",
+  "version": "1.0.0",
+  "api": {
+    "api_version": 1,
+    "compatible_range": ">=1,<2",
+    "schema_version": 1
+  },
+  "capabilities": [
+    {
+      "name": "acp2_upgrade_native_singlepoint",
+      "schema": "acp2.science.external.upgrade_singlepoint",
+      "schema_version": 1,
+      "kind": "pure_analysis",
+      "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+      "delegates_to_task_kind": null,
+      "recipe_refs": [
+        {
+          "recipe_id": "acp2.upgrade.recipe",
+          "schema_version": 1,
+          "digest": null
+        }
+      ],
+      "validator_refs": [
+        {
+          "validator_id": "check.acp2_upgrade_schema",
+          "validator_version": "1.0.0",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "science_software": [],
+  "resources": {
+    "requires_subprocess": false,
+    "requires_network": false,
+    "min_memory_mb": null,
+    "cpu_cores": null
+  },
+  "license": "MIT",
+  "dependencies": [],
+  "error_semantics": {
+    "pre_launch_typed": true,
+    "partial_output_tolerant": false,
+    "never_overrides_builtin": true
+  },
+  "default_enabled": false,
+  "science_version_range": ">=1,<2",
+  "entry_point_group_version": 1,
+  "distribution_digest": null,
+  "fixture_evidence": [
+    {
+      "fixture_id": "acp2-upgrade-native-singlepoint",
+      "digest": "sha256:6e02135cecd4044ab9c9ed9696375a125587dd7e95f8be4414646a324b4cf259",
+      "verified": true,
+      "description": "Constructed v1 fixed native JSON record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim."
+    }
+  ],
+  "trust_level": "untrusted",
+  "license_policy": {
+    "accepted_licenses": [
+      "AGPL-3.0-only",
+      "Apache-2.0",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "CC0-1.0",
+      "GPL-2.0-only",
+      "GPL-3.0-only",
+      "ISC",
+      "LGPL-2.1-only",
+      "LGPL-3.0-only",
+      "MIT",
+      "MPL-2.0",
+      "Unlicense"
+    ],
+    "unknown_policy": "reject"
+  }
+}

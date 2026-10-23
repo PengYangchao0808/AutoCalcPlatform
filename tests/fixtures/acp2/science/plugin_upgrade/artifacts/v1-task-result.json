@@ -1,0 +1,71 @@
+{
+  "capability": "acp2_upgrade_native_singlepoint",
+  "capability_schema": "acp2.science.external.upgrade_singlepoint",
+  "capability_schema_version": 1,
+  "constructed": true,
+  "default_enabled": false,
+  "distribution_digest": "sha256:30ae47306814dea5ce8aa3f3608740fd1b75528c43dac39569482e3341aeb748",
+  "label": "constructed A-23 upgrade-pair artifact; not a real QC result",
+  "plugin_lock_digest": "7820646bf5780e89754e0371f625d0231368d055e26347248227d6a5dc09d95c",
+  "plugin_name": "acp2_upgrade.native_singlepoint",
+  "plugin_version": "1.0.0",
+  "result": {
+    "artifacts": [],
+    "complete": true,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.1173
+      ],
+      [
+        0.0,
+        0.7572,
+        -0.4692
+      ],
+      [
+        0.0,
+        -0.7572,
+        -0.4692
+      ]
+    ],
+    "energy_hartree": -76.026632,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {
+      "atom_order": [
+        "O",
+        "H",
+        "H"
+      ],
+      "capability": "acp2_upgrade_native_singlepoint",
+      "capability_schema": "acp2.science.external.upgrade_singlepoint",
+      "capability_schema_version": 1,
+      "charge": 0,
+      "declared_atom_count": 3,
+      "multiplicity": 1,
+      "native_schema": "acp2.native.singlepoint.v1",
+      "plugin_version": "1.0.0",
+      "units": {
+        "coordinates": "angstrom",
+        "energy": "hartree"
+      }
+    },
+    "provenance": {
+      "backend": "acp2_upgrade_fixture",
+      "input_signature": "bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+      "method": "native_singlepoint_json_v1",
+      "version": "1.0.0"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  },
+  "schema": "acp2.plugin-upgrade.historical-artifact",
+  "trust_level": "untrusted"
+}
