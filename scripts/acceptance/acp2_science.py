@@ -1956,6 +1956,385 @@ def derive_timeout_from_frozen(
     return report
 
 
+# ── B08 crash-window reconciliation (A-20) ─────────────────────────────────
+
+B08_WINDOW_IDS = (
+    "reservation-before-persist",
+    "persisted-before-submission-start",
+    "submitted-lost-response",
+    "restart-replay",
+)
+
+B08_INVARIANTS = (
+    "no_duplicate_directory",
+    "no_duplicate_reservation",
+    "no_duplicate_qc_process",
+    "no_duplicate_bsub",
+    "no_permanently_undispatched_accepted_task",
+    "only_identity_valid_complete_results_reused",
+    "publication_retry_does_not_relaunch_qc",
+)
+
+_B08_EVENT_TYPES = frozenset(
+    {
+        "reservation_created",
+        "reservation_released",
+        "reservation_swept",
+        "directory_allocated",
+        "directory_adopted",
+        "directory_removed",
+        "job_persisted",
+        "dispatch_started",
+        "dispatch_confirmed",
+        "dispatch_response_lost",
+        "submission_reconciled",
+        "replay",
+        "restart",
+        "publication_retry",
+        "result_reused",
+    }
+)
+
+
+def _b08_window_record_list(records: Any) -> list[Any]:
+    if isinstance(records, Mapping):
+        windows = records.get("windows")
+        return windows if isinstance(windows, list) else []
+    if isinstance(records, list):
+        return records
+    return []
+
+
+def _b08_string(event: Mapping[str, Any], key: str) -> str | None:
+    value = event.get(key)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def reconcile_b08_windows(records: Any) -> dict[str, Any]:
+    """Reconcile B08 crash-window records against A-20's no-duplicate rules.
+
+    Pure stdlib and side-effect free.  The record shape is A-20's reconciliation
+    input, not a platform schema: each record carries a ``window_id`` and an
+    ordered ``events`` list.  The checker proves the invariants the platform
+    evidence must satisfy - no duplicate work directory, reservation, local QC
+    process or ``bsub``; no accepted task permanently undispatched; only
+    identity-valid complete results reused; a publication retry never relaunches
+    QC.  B08's real records are absent, so a PASS here proves the checker logic
+    only and never the platform.
+    """
+    report: dict[str, Any] = {
+        "schema": "acp2.science.b08-reconciliation",
+        "kind": "constructed-checker",
+        "window_ids": list(B08_WINDOW_IDS),
+        "invariants": list(B08_INVARIANTS),
+        "windows": [],
+        "missing_windows": [],
+        "duplicate_windows": [],
+        "ok": True,
+        "violations": [],
+    }
+    seen: list[str] = []
+    for record in _b08_window_record_list(records):
+        if not isinstance(record, Mapping):
+            report["violations"].append("B08 record must be an object")
+            report["ok"] = False
+            continue
+        window_id = record.get("window_id")
+        window: dict[str, Any] = {
+            "window_id": window_id,
+            "ok": True,
+            "duplicate_directories": [],
+            "duplicate_reservations": [],
+            "duplicate_qc_processes": [],
+            "duplicate_bsub": [],
+            "permanently_undispatched": [],
+            "invalid_reuse": [],
+            "publication_retry_relaunched_qc": [],
+            "lost_response_unreconciled": [],
+            "replay_created_second_task": [],
+            "dispatch_without_persisted_job": [],
+            "persist_without_reservation": [],
+            "violations": [],
+        }
+        if window_id not in B08_WINDOW_IDS:
+            window["violations"].append(f"unknown B08 window id {window_id!r}")
+        else:
+            seen.append(window_id)
+
+        live_reservations: dict[str, set[str]] = {}
+        reservation_owner: dict[str, str] = {}
+        live_directories: dict[str, set[str]] = {}
+        persisted: dict[str, dict[str, Any]] = {}
+        dispatch_rows: dict[str, list[dict[str, Any]]] = {}
+        committed_task_by_claim: dict[str, str] = {}
+        lost_responses: list[dict[str, Any]] = []
+        reconciled: dict[str, set[str]] = {}
+        publication_retry_at: dict[str, int] = {}
+
+        events = record.get("events")
+        if not isinstance(events, list):
+            window["violations"].append("events must be a list")
+            events = []
+        for index, event in enumerate(events):
+            if not isinstance(event, Mapping):
+                window["violations"].append(f"event {index} must be an object")
+                continue
+            event_type = event.get("type")
+            if event_type not in _B08_EVENT_TYPES:
+                window["violations"].append(f"event {index}: unknown type {event_type!r}")
+                continue
+            claim_id = _b08_string(event, "claim_id")
+            task_ref = _b08_string(event, "task_ref")
+            if event_type == "reservation_created":
+                reservation_id = _b08_string(event, "reservation_id")
+                if reservation_id is None or claim_id is None:
+                    window["violations"].append(
+                        f"event {index}: reservation_created needs claim_id/reservation_id"
+                    )
+                    continue
+                if reservation_id in reservation_owner:
+                    window["duplicate_reservations"].append(
+                        f"{claim_id}: reservation {reservation_id} created twice"
+                    )
+                if live_reservations.get(claim_id):
+                    window["duplicate_reservations"].append(
+                        f"{claim_id}: second live reservation {reservation_id}"
+                    )
+                reservation_owner[reservation_id] = claim_id
+                live_reservations.setdefault(claim_id, set()).add(reservation_id)
+            elif event_type in {"reservation_released", "reservation_swept"}:
+                reservation_id = _b08_string(event, "reservation_id")
+                if reservation_id is None or reservation_id not in reservation_owner:
+                    window["violations"].append(
+                        f"event {index}: {event_type} of unknown reservation {reservation_id!r}"
+                    )
+                    continue
+                owner = reservation_owner.pop(reservation_id)
+                live_reservations.get(owner, set()).discard(reservation_id)
+            elif event_type == "directory_allocated":
+                work_dir = _b08_string(event, "work_dir")
+                if work_dir is None or claim_id is None:
+                    window["violations"].append(
+                        f"event {index}: directory_allocated needs claim_id/work_dir"
+                    )
+                    continue
+                if any(work_dir in directories for directories in live_directories.values()):
+                    window["duplicate_directories"].append(
+                        f"{claim_id}: work directory {work_dir} already live"
+                    )
+                if live_directories.get(claim_id):
+                    window["duplicate_directories"].append(
+                        f"{claim_id}: second live work directory {work_dir}"
+                    )
+                live_directories.setdefault(claim_id, set()).add(work_dir)
+            elif event_type == "directory_adopted":
+                work_dir = _b08_string(event, "work_dir")
+                if claim_id is None or work_dir not in live_directories.get(claim_id, set()):
+                    window["violations"].append(
+                        f"event {index}: adopted directory {work_dir!r} was not allocated"
+                    )
+            elif event_type == "directory_removed":
+                work_dir = _b08_string(event, "work_dir")
+                for directories in live_directories.values():
+                    directories.discard(work_dir)
+            elif event_type == "job_persisted":
+                work_dir = _b08_string(event, "work_dir")
+                if task_ref is None or claim_id is None:
+                    window["violations"].append(
+                        f"event {index}: job_persisted needs claim_id/task_ref"
+                    )
+                    continue
+                if task_ref in persisted:
+                    window["violations"].append(f"duplicate job row for {task_ref}")
+                if claim_id in committed_task_by_claim:
+                    window["replay_created_second_task"].append(
+                        f"{claim_id}: second committed task {task_ref} "
+                        f"after {committed_task_by_claim[claim_id]}"
+                    )
+                committed_task_by_claim[claim_id] = task_ref
+                if not live_reservations.get(claim_id):
+                    window["persist_without_reservation"].append(
+                        f"{task_ref}: persisted without a live reservation"
+                    )
+                if work_dir is not None and work_dir not in live_directories.get(claim_id, set()):
+                    window["violations"].append(
+                        f"{task_ref}: persisted work directory {work_dir!r} was not allocated"
+                    )
+                persisted[task_ref] = {"claim_id": claim_id, "work_dir": work_dir}
+            elif event_type == "dispatch_started":
+                if task_ref is None:
+                    window["violations"].append(f"event {index}: dispatch_started needs task_ref")
+                    continue
+                if task_ref not in persisted:
+                    window["dispatch_without_persisted_job"].append(task_ref)
+                transport = event.get("transport")
+                if transport not in {"local", "bsub"}:
+                    window["violations"].append(
+                        f"event {index}: unknown dispatch transport {transport!r}"
+                    )
+                    continue
+                dispatch_rows.setdefault(task_ref, []).append(
+                    {
+                        "index": index,
+                        "transport": transport,
+                        "qc_process_id": _b08_string(event, "qc_process_id"),
+                        "submission_id": _b08_string(event, "submission_id"),
+                    }
+                )
+            elif event_type == "dispatch_response_lost":
+                if task_ref is None:
+                    window["violations"].append(
+                        f"event {index}: dispatch_response_lost needs task_ref"
+                    )
+                    continue
+                lost_responses.append(
+                    {
+                        "task_ref": task_ref,
+                        "submission_id": _b08_string(event, "submission_id"),
+                    }
+                )
+            elif event_type == "submission_reconciled":
+                if task_ref is None:
+                    window["violations"].append(
+                        f"event {index}: submission_reconciled needs task_ref"
+                    )
+                    continue
+                reconciled.setdefault(task_ref, set()).add(
+                    _b08_string(event, "submission_id") or ""
+                )
+            elif event_type == "replay":
+                if claim_id is None or task_ref is None:
+                    window["violations"].append(f"event {index}: replay needs claim_id/task_ref")
+                    continue
+                committed = committed_task_by_claim.get(claim_id)
+                if committed is not None and committed != task_ref:
+                    window["replay_created_second_task"].append(
+                        f"{claim_id}: replay returned {task_ref} but committed task is {committed}"
+                    )
+            elif event_type == "publication_retry":
+                if task_ref is None:
+                    window["violations"].append(f"event {index}: publication_retry needs task_ref")
+                    continue
+                publication_retry_at[task_ref] = index
+            elif event_type == "result_reused":
+                if task_ref is None:
+                    window["violations"].append(f"event {index}: result_reused needs task_ref")
+                    continue
+                identity_ok = event.get("identity_valid") is True
+                facts_ok = event.get("facts_complete") is True
+                if not (identity_ok and facts_ok):
+                    window["invalid_reuse"].append(
+                        f"{task_ref}: reused without valid identity and complete facts"
+                    )
+
+        for task_ref, rows in dispatch_rows.items():
+            local_rows = [row for row in rows if row["transport"] == "local"]
+            bsub_rows = [row for row in rows if row["transport"] == "bsub"]
+            qc_ids = {row["qc_process_id"] for row in local_rows if row["qc_process_id"]}
+            submission_ids = {row["submission_id"] for row in bsub_rows if row["submission_id"]}
+            if len(local_rows) > 1 or len(qc_ids) > 1:
+                window["duplicate_qc_processes"].append(
+                    f"{task_ref}: {len(local_rows)} local dispatch(es) / "
+                    f"{len(qc_ids)} QC process id(s)"
+                )
+            if len(bsub_rows) > 1 or len(submission_ids) > 1:
+                window["duplicate_bsub"].append(
+                    f"{task_ref}: {len(bsub_rows)} bsub dispatch(es) / "
+                    f"{len(submission_ids)} submission id(s)"
+                )
+            retry_index = publication_retry_at.get(task_ref)
+            if retry_index is not None:
+                dispatched_before = [row for row in rows if row["index"] < retry_index]
+                relaunched = [row for row in rows if row["index"] > retry_index]
+                if dispatched_before and relaunched:
+                    window["publication_retry_relaunched_qc"].append(
+                        f"{task_ref}: dispatch after publication retry relaunched QC"
+                    )
+
+        accepted: list[str] = list(persisted)
+        extra_accepted = record.get("accepted_tasks")
+        if isinstance(extra_accepted, list):
+            for entry in extra_accepted:
+                if isinstance(entry, Mapping) and entry.get("accepted", True):
+                    task_ref = _b08_string(entry, "task_ref")
+                    if task_ref is None:
+                        window["violations"].append("accepted task without a task_ref")
+                    elif task_ref not in accepted:
+                        accepted.append(task_ref)
+        for task_ref in accepted:
+            if task_ref not in dispatch_rows:
+                window["permanently_undispatched"].append(task_ref)
+
+        for lost in lost_responses:
+            submission_id = lost["submission_id"]
+            reconciled_ids = reconciled.get(lost["task_ref"], set())
+            if not reconciled_ids or (submission_id and submission_id not in reconciled_ids):
+                window["lost_response_unreconciled"].append(
+                    f"{lost['task_ref']}: lost {submission_id!r} was not reconciled"
+                )
+
+        reused = record.get("reused_results")
+        if isinstance(reused, list):
+            for entry in reused:
+                if not isinstance(entry, Mapping):
+                    window["violations"].append("reused result must be an object")
+                    continue
+                task_ref = _b08_string(entry, "task_ref") or "unknown"
+                identity_ok = entry.get("identity_valid") is True
+                facts_ok = entry.get("facts_complete") is True
+                if not (identity_ok and facts_ok):
+                    window["invalid_reuse"].append(
+                        f"{task_ref}: reused without valid identity and complete facts"
+                    )
+
+        blocker_keys = (
+            "duplicate_directories",
+            "duplicate_reservations",
+            "duplicate_qc_processes",
+            "duplicate_bsub",
+            "permanently_undispatched",
+            "invalid_reuse",
+            "publication_retry_relaunched_qc",
+            "lost_response_unreconciled",
+            "replay_created_second_task",
+            "dispatch_without_persisted_job",
+            "persist_without_reservation",
+            "violations",
+        )
+        window["ok"] = not any(window[key] for key in blocker_keys)
+        if not window["ok"]:
+            report["ok"] = False
+        report["windows"].append(window)
+
+    for window_id in B08_WINDOW_IDS:
+        if window_id not in seen:
+            report["missing_windows"].append(window_id)
+    if report["missing_windows"]:
+        report["ok"] = False
+    if len(seen) != len(set(seen)):
+        duplicates = sorted({window_id for window_id in seen if seen.count(window_id) > 1})
+        report["duplicate_windows"] = duplicates
+        report["ok"] = False
+    for window in report["windows"]:
+        for key in (
+            "duplicate_directories",
+            "duplicate_reservations",
+            "duplicate_qc_processes",
+            "duplicate_bsub",
+            "permanently_undispatched",
+            "invalid_reuse",
+            "publication_retry_relaunched_qc",
+            "lost_response_unreconciled",
+            "replay_created_second_task",
+            "dispatch_without_persisted_job",
+            "persist_without_reservation",
+            "violations",
+        ):
+            for violation in window[key]:
+                report["violations"].append(f"{window['window_id']}: {violation}")
+    return report
+
+
 def _crosscheck_document(records: Any) -> tuple[list[Any], dict[str, Any]]:
     if isinstance(records, Mapping):
         document = dict(records)
