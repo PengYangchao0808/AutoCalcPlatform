@@ -1,0 +1,16 @@
+diff --git a/tests/test_f4_scope_audit.py b/tests/test_f4_scope_audit.py
+index 1e499a7..0fbc958 100644
+--- a/tests/test_f4_scope_audit.py
++++ b/tests/test_f4_scope_audit.py
+@@ -2638,11 +2638,6 @@ MIGRATION_STATION_PREFIXES = (
+     # ``acp_services.entrypoints.mcp``; registered as an exact file so the
+     # R1 boundary keeps auditing it (no whole-directory exemption).
+     "src/acp/services_mcp_bootstrap.py",
+-    # Pre-existing run-root contract change in the shared worktree
+-    # (``normalize_configured_run_root`` consumed by ``acp init``); registered
+-    # as an exact file so the audit processes it instead of flagging it as an
+-    # unaudited change.
+-    "src/acp/core/paths.py",
+     # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
+     # station (unified answers/plan/persist + pure node validation); the
+     # package-wide module-level-paramiko ban below is the added tooth.
