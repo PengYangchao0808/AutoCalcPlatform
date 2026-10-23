@@ -18,8 +18,11 @@ Two discovery sources exist and both stay metadata-only:
    ``load`` is stored behind a lazy loader and is invoked only after an
    explicit :meth:`cccp.plugin.host.PluginHost.enable` + ``load``.
 
-The built-in task layer remains the **only** execution station.  Plugins can
-add a read-only analysis capability, never a second task chain.
+The catalog reports four independent projections — ``described``,
+``installed``, ``enabled`` and ``verified`` — so installation or enablement
+can never imply scientific verification.  The built-in task layer remains the
+**only** execution station.  Plugins can add a read-only analysis capability,
+never a second task chain.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ import json
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 
+from cccp.calculation.capabilities.contracts import CapabilityState
 from cccp.calculation.requests import TaskKind
 from cccp.plugin.errors import (
     PluginCapabilityConflictError,
@@ -113,6 +117,81 @@ class PluginCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class PluginOrigin:
+    """Where one catalog entry came from (metadata only, no loader)."""
+
+    name: str
+    origin: str = EXPLICIT_DISCOVERY_MODE
+    entry_point: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the JSON-safe origin record."""
+        return {
+            "name": self.name,
+            "origin": self.origin,
+            "entry_point": self.entry_point,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PluginProjection:
+    """One independent catalog projection (never derived from another)."""
+
+    state: CapabilityState
+    reason: str | None = None
+    evidence_ref: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the JSON-safe projection record."""
+        payload: dict[str, object] = {"state": self.state.value}
+        if self.reason is not None:
+            payload["reason"] = self.reason
+        if self.evidence_ref is not None:
+            payload["evidence_ref"] = self.evidence_ref
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class PluginStatus:
+    """The four separate plugin projections plus its declared references.
+
+    ``described`` is always ``present`` for a catalog entry; ``installed``
+    reflects the discovery origin; ``enabled`` is supplied by the host at
+    query time; ``verified`` is only ``verified`` when the manifest carries
+    verified fixture evidence.  Installation and enablement never promote
+    ``verified``.
+    """
+
+    name: str
+    described: PluginProjection
+    installed: PluginProjection
+    enabled: PluginProjection
+    verified: PluginProjection
+    trust_level: str
+    capability_ids: tuple[str, ...] = ()
+    recipe_refs: tuple[str, ...] = ()
+    validator_refs: tuple[str, ...] = ()
+    origin: str = EXPLICIT_DISCOVERY_MODE
+    entry_point: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the JSON-safe status record."""
+        return {
+            "name": self.name,
+            "described": self.described.to_dict(),
+            "installed": self.installed.to_dict(),
+            "enabled": self.enabled.to_dict(),
+            "verified": self.verified.to_dict(),
+            "trust_level": self.trust_level,
+            "capability_ids": list(self.capability_ids),
+            "recipe_refs": list(self.recipe_refs),
+            "validator_refs": list(self.validator_refs),
+            "origin": self.origin,
+            "entry_point": self.entry_point,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PluginCatalog:
     """The discovery result: built-in identity plus the external plugin set."""
 
@@ -121,6 +200,7 @@ class PluginCatalog:
     enablement_policy: str = PLUGIN_ENABLEMENT_POLICY
     discovery_mode: str = EXPLICIT_DISCOVERY_MODE
     entry_points_scanned: int = 0
+    origins: tuple[PluginOrigin, ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -138,7 +218,90 @@ class PluginCatalog:
                 return metadata
         return None
 
-    def to_dict(self) -> dict[str, object]:
+    def origin_for(self, name: str) -> PluginOrigin | None:
+        """Return the discovery origin for *name* or ``None``."""
+        for origin in self.origins:
+            if origin.name == name:
+                return origin
+        return None
+
+    def status(self, name: str, *, enabled: bool = False) -> PluginStatus | None:
+        """Return the four-projection status for *name* or ``None``.
+
+        ``enabled`` is an explicit caller observation; the catalog never
+        infers enablement from metadata or installation.
+        """
+        metadata = self.get(name)
+        if metadata is None:
+            return None
+        origin = self.origin_for(name) or PluginOrigin(name=metadata.name)
+        capabilities = metadata.capabilities
+        recipe_refs = tuple(
+            f"{ref.recipe_id}@{ref.schema_version}"
+            for capability in capabilities
+            for ref in capability.recipe_refs
+        )
+        validator_refs = tuple(
+            f"{ref.validator_id}@{ref.validator_version}"
+            for capability in capabilities
+            for ref in capability.validator_refs
+        )
+        verified = (
+            PluginProjection(
+                state=CapabilityState.VERIFIED,
+                reason="trusted manifest with verified fixture evidence",
+                evidence_ref=next(
+                    (
+                        evidence.digest
+                        for evidence in metadata.fixture_evidence
+                        if evidence.verified
+                    ),
+                    None,
+                ),
+            )
+            if metadata.is_trusted
+            else PluginProjection(
+                state=CapabilityState.NOT_VERIFIED,
+                reason=(
+                    f"trust level is {metadata.trust_level.value!r}, not evidence-backed 'trusted'"
+                ),
+            )
+        )
+        return PluginStatus(
+            name=metadata.name,
+            described=PluginProjection(
+                state=CapabilityState.PRESENT,
+                reason="declared in the metadata-only catalog",
+            ),
+            installed=PluginProjection(
+                state=CapabilityState.PRESENT,
+                reason=f"discovered from {origin.origin}",
+            ),
+            enabled=PluginProjection(
+                state=CapabilityState.PRESENT if enabled else CapabilityState.ABSENT,
+                reason="explicitly enabled by the operator"
+                if enabled
+                else "disabled by default; explicit enablement required",
+            ),
+            verified=verified,
+            trust_level=metadata.trust_level.value,
+            capability_ids=tuple(capability.name for capability in capabilities),
+            recipe_refs=recipe_refs,
+            validator_refs=validator_refs,
+            origin=origin.origin,
+            entry_point=origin.entry_point,
+        )
+
+    def statuses(self, *, enabled_names: Iterable[str] = ()) -> tuple[PluginStatus, ...]:
+        """Return one status record per discovered plugin."""
+        enabled = set(enabled_names)
+        return tuple(
+            status
+            for name in self.names()
+            if (status := self.status(name, enabled=name in enabled)) is not None
+        )
+
+    def to_dict(self, *, enabled_names: Iterable[str] = ()) -> dict[str, object]:
         """Serialise the catalog to a JSON-safe dictionary (empty set explicit)."""
         return {
             "builtin": self.builtin.to_dict(),
@@ -148,6 +311,8 @@ class PluginCatalog:
             "enablement_policy": self.enablement_policy,
             "discovery_mode": self.discovery_mode,
             "entry_points_scanned": self.entry_points_scanned,
+            "origins": [origin.to_dict() for origin in self.origins],
+            "statuses": [status.to_dict() for status in self.statuses(enabled_names=enabled_names)],
         }
 
 
@@ -182,6 +347,7 @@ def discover_plugins(
     seen: set[str] = set()
     seen_capabilities: dict[str, str] = {}
     discovered: list[PluginMetadata] = []
+    origins: list[PluginOrigin] = []
     for candidate in candidates:
         metadata = candidate.metadata
         if metadata.name in BUILTIN_RESERVED_NAMES:
@@ -220,7 +386,18 @@ def discover_plugins(
             seen_capabilities[capability.name] = metadata.name
         seen.add(metadata.name)
         discovered.append(metadata)
-    return PluginCatalog(builtin=identity, plugins=tuple(discovered))
+        origins.append(
+            PluginOrigin(
+                name=metadata.name,
+                origin=candidate.origin,
+                entry_point=candidate.entry_point,
+            )
+        )
+    return PluginCatalog(
+        builtin=identity,
+        plugins=tuple(discovered),
+        origins=tuple(origins),
+    )
 
 
 def _iter_group_entry_points(entry_points: object, group: str) -> Iterator[object]:
@@ -258,37 +435,33 @@ def _read_entry_point_manifest(
         return None
 
 
-def discover_science_plugins(
+@dataclass(frozen=True, slots=True)
+class SciencePluginScan:
+    """Metadata-only entry-point scan result (no plugin module imported)."""
+
+    candidates: tuple[PluginCandidate, ...] = ()
+    entry_points_scanned: int = 0
+
+
+def scan_science_plugin_entry_points(
     *,
     entry_points: object = None,
     manifest_reader: Callable[[object], str | None] | None = None,
-    builtin: BuiltinIdentity | None = None,
     license_policy: PluginLicensePolicy | None = None,
-) -> PluginCatalog:
-    """Scan the ``cccp.science_plugins`` group for metadata-only candidates.
-
-    The scan never imports plugin code: the manifest JSON is read from the
-    installed distribution and the entry point is wrapped in
-    :class:`EntryPointPluginLoader`, whose ``__call__`` is the only path that
-    imports.  ``PluginHost`` calls that loader only after explicit enablement.
+) -> SciencePluginScan:
+    """Scan the ``cccp.science_plugins`` group without importing any plugin.
 
     Args:
         entry_points: Optional injected entry points (tests).  ``None`` reads
             :func:`importlib.metadata.entry_points`.
         manifest_reader: Optional injected manifest reader for tests.  The
             default reads ``cccp_science_plugin.json`` from ``ep.dist``.
-        builtin: Optional built-in identity override.
-        license_policy: Optional explicit accepted-license policy.  The
-            platform owner may narrow the default set.
+        license_policy: Optional explicit accepted-license policy.
 
     Raises:
         PluginMetadataError: An entry point has no manifest or a malformed
             manifest, or its entry-point group version is not 1.
         PluginLicenseError: The manifest license is empty or unknown.
-        PluginNameConflictError: A plugin name/capability is reserved or
-            duplicated.
-        PluginVersionMismatchError: The API or science range excludes the
-            host.
     """
     candidates: list[PluginCandidate] = []
     scanned = 0
@@ -323,13 +496,39 @@ def discover_science_plugins(
                 entry_point=f"{SCIENCE_PLUGIN_ENTRY_POINT_GROUP}:{entry_name}",
             )
         )
-    catalog = discover_plugins(candidates, builtin=builtin)
+    return SciencePluginScan(candidates=tuple(candidates), entry_points_scanned=scanned)
+
+
+def discover_science_plugins(
+    *,
+    entry_points: object = None,
+    manifest_reader: Callable[[object], str | None] | None = None,
+    builtin: BuiltinIdentity | None = None,
+    license_policy: PluginLicensePolicy | None = None,
+) -> PluginCatalog:
+    """Scan the stable entry-point group and return a metadata-only catalog.
+
+    The scan never imports plugin code: the manifest JSON is read from the
+    installed distribution and the entry point is wrapped in
+    :class:`EntryPointPluginLoader`, whose ``__call__`` is the only path that
+    imports.  ``PluginHost`` calls that loader only after explicit enablement.
+
+    Raises the same typed errors as :func:`scan_science_plugin_entry_points`
+    plus the discovery conflicts of :func:`discover_plugins`.
+    """
+    scan = scan_science_plugin_entry_points(
+        entry_points=entry_points,
+        manifest_reader=manifest_reader,
+        license_policy=license_policy,
+    )
+    catalog = discover_plugins(scan.candidates, builtin=builtin)
     return PluginCatalog(
         builtin=catalog.builtin,
         plugins=catalog.plugins,
         enablement_policy=catalog.enablement_policy,
         discovery_mode=ENTRY_POINT_DISCOVERY_MODE,
-        entry_points_scanned=scanned,
+        entry_points_scanned=scan.entry_points_scanned,
+        origins=catalog.origins,
     )
 
 
@@ -342,7 +541,12 @@ __all__ = [
     "PluginCandidate",
     "PluginCatalog",
     "PluginLoader",
+    "PluginOrigin",
+    "PluginProjection",
+    "PluginStatus",
+    "SciencePluginScan",
     "builtin_catalog",
     "discover_plugins",
     "discover_science_plugins",
+    "scan_science_plugin_entry_points",
 ]

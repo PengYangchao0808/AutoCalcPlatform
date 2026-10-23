@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
+from cccp.calculation.capabilities.contracts import CapabilityKind
 from cccp.calculation.context import TaskContext, resolve_context
 from cccp.calculation.contracts import JsonObject, Provenance
 from cccp.calculation.errors import TaskCancelledError, TaskInputError
@@ -515,6 +516,70 @@ class PluginCapabilityHandler(Protocol):
         """Run the read-only capability and return a built-in result envelope."""
 
 
+def validate_declared_validators(
+    metadata: PluginMetadata,
+    capability: str,
+    validator_ids: tuple[str, ...],
+) -> None:
+    """Reject validator references the capability did not declare.
+
+    Validator references are declarations, not execution authority.  A caller
+    (for example a recipe dispatch) may name the validators it intends to
+    honour; this check makes an undeclared reference a typed boundary
+    violation before the plugin is loaded.
+
+    Raises:
+        PluginUnavailableError: The capability is not declared.
+        PluginContractViolationError: A validator id is not declared by the
+            capability.
+    """
+    declared_capability = next(
+        (entry for entry in metadata.capabilities if entry.name == capability), None
+    )
+    if declared_capability is None:
+        raise PluginUnavailableError(
+            metadata.name, reason=f"capability {capability!r} is not declared"
+        )
+    declared = {ref.validator_id for ref in declared_capability.validator_refs}
+    undeclared = tuple(
+        validator_id for validator_id in validator_ids if validator_id not in declared
+    )
+    if undeclared:
+        raise PluginContractViolationError(
+            metadata.name,
+            detail=(
+                f"validator reference(s) {sorted(undeclared)} are not declared by "
+                f"capability {capability!r}"
+            ),
+        )
+
+
+def validate_declared_recipe(
+    metadata: PluginMetadata,
+    capability: str,
+    recipe_id: str,
+) -> None:
+    """Reject a recipe reference the capability did not declare.
+
+    Raises:
+        PluginUnavailableError: The capability is not declared.
+        PluginContractViolationError: The recipe id is not declared by the
+            capability.
+    """
+    declared_capability = next(
+        (entry for entry in metadata.capabilities if entry.name == capability), None
+    )
+    if declared_capability is None:
+        raise PluginUnavailableError(
+            metadata.name, reason=f"capability {capability!r} is not declared"
+        )
+    if recipe_id not in {ref.recipe_id for ref in declared_capability.recipe_refs}:
+        raise PluginContractViolationError(
+            metadata.name,
+            detail=(f"recipe reference {recipe_id!r} is not declared by capability {capability!r}"),
+        )
+
+
 def invoke_capability(
     host: PluginHost,
     plugin_name: str,
@@ -523,6 +588,8 @@ def invoke_capability(
     request: TaskRequest,
     context: TaskContext | None = None,
     clock: Callable[[], float] = time.monotonic,
+    validator_ids: tuple[str, ...] = (),
+    recipe_id: str | None = None,
 ) -> TaskResult:
     """Load, enable-check and invoke one declared capability.
 
@@ -530,6 +597,12 @@ def invoke_capability(
     return the built-in result envelope.  There is no fallback branch: a
     failure propagates as its typed exception, and the caller decides the
     operator action from :func:`failure_report`.
+
+    ``validator_ids`` and ``recipe_id`` are optional caller intentions.  Each
+    must be declared by the capability's manifest references; an undeclared
+    reference is rejected before the loader runs.  A ``compute`` capability is
+    never invoked here: it delegates to exactly one built-in task kind and the
+    task layer remains the only execution station.
 
     Raises:
         PluginUnavailableError: Unknown plugin/capability or no in-process
@@ -549,8 +622,10 @@ def invoke_capability(
     if metadata is None:
         raise PluginUnavailableError(plugin_name, reason="not discovered")
     require_compatible_plugin(metadata)
-    declared = {entry.name for entry in metadata.capabilities}
-    if capability not in declared:
+    declared_capability = next(
+        (entry for entry in metadata.capabilities if entry.name == capability), None
+    )
+    if declared_capability is None:
         raise PluginUnavailableError(
             plugin_name, reason=f"capability {capability!r} is not declared"
         )
@@ -560,6 +635,28 @@ def invoke_capability(
             capability=capability,
             reason="capability name is reserved for a built-in task",
         )
+    if declared_capability.kind is CapabilityKind.COMPUTE:
+        raise PluginCapabilityConflictError(
+            plugin_name,
+            capability=capability,
+            reason=(
+                "compute capabilities execute only through the built-in task layer "
+                f"({declared_capability.delegates_to_task_kind!r}); the plugin host "
+                "never starts a second execution station"
+            ),
+        )
+    if metadata.resources.requires_subprocess:
+        raise PluginContractViolationError(
+            plugin_name,
+            detail=(
+                f"pure-analysis capability {capability!r} belongs to a plugin that "
+                "declares requires_subprocess=True; the in-process host cannot spawn "
+                "a process"
+            ),
+        )
+    validate_declared_validators(metadata, capability, tuple(validator_ids))
+    if recipe_id is not None:
+        validate_declared_recipe(metadata, capability, recipe_id)
     resolve_dependency_versions(metadata)
     plugin = host.load(plugin_name)
     if not isinstance(plugin, PluginCapabilityHandler):
@@ -953,5 +1050,7 @@ __all__ = [
     "require_compatible_plugin",
     "resolve_context",
     "resolve_dependency_versions",
+    "validate_declared_recipe",
+    "validate_declared_validators",
     "validate_result_contract",
 ]
