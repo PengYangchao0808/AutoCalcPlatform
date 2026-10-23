@@ -1,0 +1,160 @@
+{
+  "id": "20261023_224334_001_b25-scheduler-smoke",
+  "spec": {
+    "workflow": "singlepoint",
+    "name": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+    "input": {
+      "source_type": "xyz_text",
+      "source": "2\nH2\nH 0 0 0\nH 0 0 0.74\n",
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "method": {
+      "levels": {
+        "single_point": {
+          "engine": "orca",
+          "functional": "HF",
+          "basis": "STO-3G"
+        }
+      }
+    },
+    "resources": {
+      "nproc": 1,
+      "mem": "1024MB"
+    },
+    "output_dir": null,
+    "config_path": null,
+    "tags": [],
+    "project_id": "uncategorized",
+    "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
+    "execution_mode": null,
+    "target_node": null,
+    "node_tags": [],
+    "molecule_name": "2\nH2\nH 0 0 0\nH 0 0 0.74",
+    "task_name": "singlepoint",
+    "remark": "",
+    "custom_name": null
+  },
+  "status": "completed",
+  "work_dir": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/lab-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+  "created_at": "2026-10-23T14:43:34.404443+00:00",
+  "updated_at": "2026-10-23T14:44:02.789794+00:00",
+  "started_at": "2026-10-23T14:43:34.415457+00:00",
+  "completed_at": "2026-10-23T14:44:02.789720+00:00",
+  "current_stage": null,
+  "progress": null,
+  "error": null,
+  "project_id": "uncategorized",
+  "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
+  "pid": 1698448,
+  "exit_code": 0,
+  "remote_job_id": null,
+  "group_id": "20261023_224334_001_b25-scheduler-smoke",
+  "node_id": "local",
+  "host": "redacted-host",
+  "result": {
+    "admission": {
+      "reservation_id": "res_job_20261023_224334_001_b25-scheduler-smoke",
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "enforced": true,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "verified_project": null,
+      "multi_tenant_security": false,
+      "reason_code": "admitted"
+    },
+    "required_software": [
+      "orca"
+    ],
+    "execution_target": "local",
+    "execution_kind": "local",
+    "publication_pending": true,
+    "terminal_side_effects_done": false,
+    "receipt_state": "completed",
+    "receipt_result_digest": "sha256:988ce4b0b06a8c2d45321bfb5af8b5637a37ad0b2f2d7aa06a4313fcc4ceee8c",
+    "receipt_written_at": "2026-10-23T14:43:39.606507+00:00",
+    "artifacts": [
+      {
+        "artifact_id": "5956388d-ef11-4790-819c-dc9a0f1f8bc1",
+        "task_id": null,
+        "job_id": "20261023_224334_001_b25-scheduler-smoke",
+        "artifact_type": "json",
+        "file_path": "RESULT/publication_state.json",
+        "checksum": "sha256:c0805c8c6d5b3dee216d538f2a188a85243d38a8efc75af7727fcdba684d2cd8",
+        "size_bytes": 110,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:44:02.836262+00:00"
+      },
+      {
+        "artifact_id": "96907d72-0f51-4447-a5f8-89b1375b7572",
+        "task_id": null,
+        "job_id": "20261023_224334_001_b25-scheduler-smoke",
+        "artifact_type": "json",
+        "file_path": "RESULT/result_manifest.json",
+        "checksum": "sha256:3483249b6b983a261efa9be13761dbb97667df9375e39aa4f74abe5ce20f062e",
+        "size_bytes": 746,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:44:02.838156+00:00"
+      },
+      {
+        "artifact_id": "a5db99dc-54ac-4e7d-86ce-c6d04c433034",
+        "task_id": null,
+        "job_id": "20261023_224334_001_b25-scheduler-smoke",
+        "artifact_type": "json",
+        "file_path": "RESULT/scientific_result.json",
+        "checksum": "sha256:7cda7705ffd2ab4ed1992ce67d194a6e0fca68cf3ff7c2a96d23ce2c5015ceab",
+        "size_bytes": 894,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:44:02.840100+00:00"
+      },
+      {
+        "artifact_id": "e848ebf0-bc55-4e39-8b9e-d42a761c4bb1",
+        "task_id": null,
+        "job_id": "20261023_224334_001_b25-scheduler-smoke",
+        "artifact_type": "json",
+        "file_path": "RESULT/task_result.json",
+        "checksum": "sha256:bb5b6ce4189c1b0f45825b6014733f94d2cc96f9f487dcf5d3d4faa63257adbe",
+        "size_bytes": 725,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:44:02.842066+00:00"
+      }
+    ],
+    "provenance": {
+      "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
+      "molecule_hash": null,
+      "acp_version": "0.3.0",
+      "backend_name": "singlepoint",
+      "backend_version": "",
+      "method": "singlepoint",
+      "basis": null,
+      "solvent": null,
+      "command_line": "",
+      "hostname": "redacted-host",
+      "ncores": 1,
+      "memory_gb": 1.0,
+      "wall_time_seconds": 28.374263,
+      "routine": "singlepoint",
+      "creator": null,
+      "schema_version": "1.0"
+    }
+  },
+  "revision": 5,
+  "attempt": 1
+}

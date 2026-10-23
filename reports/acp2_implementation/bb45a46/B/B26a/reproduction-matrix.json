@@ -16,10 +16,13 @@
         "<repo>/reports/acp2_implementation/bb45a46/B/B26a/task2-execute.txt",
         "<repo>/reports/acp2_implementation/bb45a46/B/B26a/b17/budget-evidence.json"
       ],
+      "fix": "src/acp/calculations/attempt_freeze.py::_release_sources falls back to installed package roots (acp/acp_services/cccp) with stable package-relative keys; package-install scheduler assertion added.",
+      "fix_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/summary.json",
       "id": "B26A-D1",
       "owner": "B",
       "recommendation": "Make local release identity work for installed distributions (e.g. use installed distribution metadata or package roots) and add a package-install assertion that submits and completes one real scheduler task.",
       "severity": "high",
+      "status": "FIXED_VERIFIED_IN_BFIX4",
       "title": "Installed acp-web/acp-worker wheel cannot execute scheduler tasks (execution-tree missing)"
     },
     {
@@ -30,10 +33,13 @@
       "evidence": [
         "<repo>/reports/acp2_implementation/bb45a46/B/B26a/b15/multitenant-multitenant_authz-20261023T134216Z-1654871-618db5b0.json"
       ],
+      "fix": "Harness fixture-state defect, not an installed-code delta: reused PAUSED fixture jobs were frozen to FAILED at Controller restart, so the stream closed via done before revocation. scripts/acceptance/acp2_runtime.py now resets reused fixture jobs to PAUSED via JobStore.transition CAS; the strict assertion is unchanged.",
+      "fix_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/summary.json",
       "id": "B26A-D2",
       "owner": "B",
       "recommendation": "Re-run against the frozen candidate; if reproducible, inspect _ReauthorizingStreamAuthorizer / scope stream authorization recheck.",
       "severity": "medium",
+      "status": "FIXED_VERIFIED_IN_BFIX4",
       "title": "B15 revocation SSE reset not observed"
     }
   ],
@@ -56,14 +62,46 @@
     "python": "/usr/bin/python3.11 (3.11.13)",
     "work_cwd": "/tmp/opencode/b26a-clean/work"
   },
+  "fix4_rerun": {
+    "base_release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+    "candidate_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+    "candidate_source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
+    "evidence_dir": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4",
+    "generated_at": "2026-10-23T14:44:12Z",
+    "not_rerun": [
+      "third_party_plugin_install",
+      "agent_research_entry",
+      "lsf",
+      "disconnect_recovery"
+    ],
+    "release_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+    "release_manifest": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+    "release_source": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
+    "rows": {
+      "authorization": {
+        "receipt": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
+        "result": "PASS"
+      },
+      "installed_workbench_submission": {
+        "cli_row": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/b26a-rerun/cli-row.json",
+        "http_row": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/b26a-rerun/http-row.json",
+        "result": "PASS"
+      },
+      "package_install_scheduler_assertion": {
+        "facts": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/package-install/scheduler-task/scheduler-task.json",
+        "receipt": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/package-install/package-install-main-20261023T144151Z-1697579-37cb416e.json",
+        "result": "PASS"
+      }
+    }
+  },
   "generated_at": "2026-10-23T13:50:34.737154+00:00",
   "harness_revision": "218a3097a36e6976b6638ab04212895aa0b22f89b7ee634cdac59a078ad14319",
   "independence": {
     "independent_operator": false,
     "reason": "No separate human or agent operator was available in this session; all rows are self-reproduction by the same agent/session that authored the B evidence. See independent-operator.json."
   },
-  "overall_reason": "Two external rows are real FAILs (B15 revocation stream, installed Lab/task submission) and two rows are NOT_VERIFIED (third-party plugin documentation, DSH/browser, LSF, disconnect running-task). No row was inflated.",
-  "overall_result": "FAIL",
+  "overall_reason": "Both B26a FAIL rows (B26A-D1, B26A-D2) now PASS from the fixed 0.3.0 candidate; the remaining rows stay NOT_VERIFIED (no third-party plugin procedure, no DSH/browser driver, no LSF client, and disconnect running-task recovery was not re-run in this fix pass). No row was inflated.",
+  "overall_result": "NOT_VERIFIED",
   "release_manifest_source": {
     "clean": true,
     "git": true,
@@ -102,6 +140,8 @@
         "lab_health": true,
         "manual_import_proof": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/install-import-proof.txt",
         "mcp_eight_tools": true,
+        "scheduler_task": "PASS: installed Lab completed one real H2/STO-3G singlepoint; RESULT/task_result.json + RESULT/result_manifest.json + execution_receipt.json verified; release identity equals installed identity.",
+        "scheduler_task_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/package-install/scheduler-task/scheduler-task.json",
         "static_assets": "NOT_VERIFIED(c_static_assets_absent)"
       },
       "owner": "B",
@@ -304,7 +344,7 @@
         "cccp_sample_energy": -1.0,
         "direct_cli_bypasses_scheduler": true,
         "orca_energy_hartree": -1.158631359838,
-        "scheduler_execution": "FAIL \u2014 see installed_workbench_submission",
+        "scheduler_execution": "PASS \u2014 see installed_workbench_submission (B-fix-4 rerun)",
         "xtb_energy_hartree": -5.070543980555
       },
       "owner": "B",
@@ -350,8 +390,8 @@
     },
     {
       "command": [
-        "/tmp/opencode/b26a-clean/venvs/web/bin/python",
-        "/tmp/opencode/b26a-clean/tools/scripts/acceptance/acp2_runtime.py",
+        "/tmp/opencode/b26a-fix4/venvs/lab/bin/python",
+        "<repo>/scripts/acceptance/acp2_runtime.py",
         "--scenario",
         "multitenant",
         "--phase",
@@ -361,21 +401,24 @@
         "--fixture",
         "/tmp/opencode/b26a-clean/fixtures/multi-b26a.json",
         "--out",
-        "/tmp/opencode/b26a-clean/evidence/b15",
+        "/tmp/opencode/b26a-fix4/evidence/b15-fix4",
         "--timeout",
         "600"
       ],
       "cwd": "/tmp/opencode/b26a-clean/work",
       "documented_step": "acp2-contracts/runtime/acceptance-harness.v1.md + runbook \u00a78 (three-state acceptance)",
-      "exit_code": 1,
+      "exit_code": 0,
       "id": "authorization",
       "item": "Authorization (B15 multitenant authz path)",
       "observations": {
         "controller_candidate_revision_label": "f60fda89b700bf1f828bf651183f88cf5e1913da",
-        "failing_assertions": 2,
+        "failing_assertions": 0,
         "failure_detail": "The SSE stream received an event before revocation but did not emit permission_changed after key/account revocation; read-after-revoke was 401.",
+        "fix4_rerun": true,
+        "fix4_result": "PASS: revocation.key.read_and_stream and revocation.account.read_and_stream emitted permission_changed; reads after revoke 401.",
+        "harness_fix": "fixture jobs reused across Controller restarts were terminal (RESTART_FAILED) so the stream closed via done before revocation; _b15_ensure_fixture_jobs now resets reused fixture jobs to their declared PAUSED state via JobStore.transition CAS. The assertion was not weakened.",
         "not_a_fake_pass": true,
-        "passing_assertions": 10,
+        "passing_assertions": 12,
         "passing_scope": [
           "identity mode",
           "principal resolution",
@@ -384,16 +427,17 @@
           "read/list scoping",
           "action ceiling",
           "key/account revocation read"
-        ]
+        ],
+        "revocation_line_count": 12
       },
       "owner": "B",
       "prerequisites": [
         "Controller with ACP_IDENTITY_MODE=api-key and isolated run root",
         "B15 fixture copied outside the repo"
       ],
-      "reason": "assertion_failed:b15.revocation.key.read_and_stream,b15.revocation.account.read_and_stream",
-      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/b15/multitenant-multitenant_authz-20261023T134216Z-1654871-618db5b0.json",
-      "result": "FAIL",
+      "reason": null,
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
+      "result": "PASS",
       "scope": "IN_SCOPE",
       "stale_pass_reused": false
     },
@@ -485,18 +529,9 @@
     },
     {
       "command": [
-        "/tmp/opencode/b26a-clean/venvs/web/bin/acp",
-        "task",
-        "execute",
-        "--workflow",
-        "singlepoint",
-        "--input",
-        "/tmp/opencode/b26a-clean/work/task2/t/input.xyz",
-        "--name",
-        "b26a-sp",
-        "--run-root",
-        "/tmp/opencode/b26a-clean/data/task2-run-root",
-        "--follow"
+        "/tmp/opencode/b26a-fix4/venvs/lab/bin/python",
+        "-c",
+        "POST /api/v1/jobs + acp task execute --follow (see commands in Bfix4/b26a-rerun)"
       ],
       "commands": [
         {
@@ -514,24 +549,37 @@
       ],
       "cwd": "/tmp/opencode/b26a-clean/work/task2",
       "documented_step": "packaging/README.md \u00a7\u72ec\u7acb\u89d2\u8272\u53d1\u884c (acp-web install) + ACP_Services_Standalone_Recipe.md \u00a72 S6",
-      "exit_code": 1,
+      "exit_code": 0,
       "id": "installed_workbench_submission",
       "item": "Installed Lab/Workbench task submission (defect discovered by this reproduction)",
       "observations": {
-        "cli_task_execute": "exit 1 with the same ReleaseIdentityError",
-        "http_post": "201 Created, then job status=failed",
+        "cli_energy_hartree": -1.132971755441,
+        "cli_manifest": "RESULT/result_manifest.json status=completed products=1",
+        "cli_method": "HF/def2-TZVPP (CLI default basis; --basis is not a task execute option)",
+        "cli_task_execute": "exit 0; status=completed",
+        "cli_task_result": "RESULT/task_result.json status=completed complete=true",
+        "fix4_rerun": true,
+        "http_energy_hartree": -1.116759307204,
+        "http_manifest": "RESULT/result_manifest.json status=completed products=1",
+        "http_method": "HF/STO-3G",
+        "http_post": "201 Created; job status=completed",
+        "http_receipt": "execution_receipt.json state=completed",
+        "http_task_result": "RESULT/task_result.json status=completed complete=true",
         "job_error": "Submission error: no execution-tree files found under /tmp/opencode/b26a-clean/venvs/web/lib/python3.11 (expected src/acp, src/acp_services, src/cccp)",
-        "requires_fix": true,
-        "root_cause": "local_release_identity() assumes a source checkout layout (src/acp, src/acp_services, src/cccp) under the install root; the wheel installs packages directly under site-packages. Direct 'acp run' bypasses the scheduler freeze and works."
+        "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+        "release_id": "2c7ffd56045b5bd5",
+        "release_id_matches_installed_identity": true,
+        "requires_fix": false,
+        "root_cause": "local_release_identity() assumed a source checkout; B-fix-4 adds an installed-package fallback with acp/..., acp_services/..., cccp/... keys."
       },
       "owner": "B",
       "prerequisites": [
         "installed acp-web 0.3.0",
         "isolated run root"
       ],
-      "reason": "execution_tree_missing_in_installed_wheel",
-      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/workbench-submit-failure.json",
-      "result": "FAIL",
+      "reason": null,
+      "report_path": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/b26a-rerun/http-row.json",
+      "result": "PASS",
       "scope": "IN_SCOPE",
       "stale_pass_reused": false
     }

@@ -1,0 +1,62 @@
+{
+  "artifacts": {
+    "acp-web-0.3.0.tar.gz": {
+      "sha256": "5d7c5a3f735ee5a10b553c1e4d095a0d32cd25a377573d01858e73b91019d67f",
+      "size_bytes": 2045103
+    },
+    "acp-worker-0.3.0.tar.gz": {
+      "sha256": "badb68d3ea69ab5fe95711049ed26db4d9304f8969ede6443a29da0963c8e17b",
+      "size_bytes": 580065
+    },
+    "acp_web-0.3.0-py3-none-any.whl": {
+      "sha256": "68077f7d9734276b46a1a68fc207f5cde0582788f0218ebffed851763fdf41b1",
+      "size_bytes": 2231055
+    },
+    "acp_worker-0.3.0-py3-none-any.whl": {
+      "sha256": "f30e72ca56e620520987f1408eccdd69b181a81c353a8cec461df268bcb38471",
+      "size_bytes": 613821
+    },
+    "cccp-0.3.0-py3-none-any.whl": {
+      "sha256": "088604cdbe52bbc98c879edb6cb3ccca486f9ed68d8ecd4471e296b9c5110445",
+      "size_bytes": 44570219
+    },
+    "cccp-0.3.0.tar.gz": {
+      "sha256": "b8c712f3ebf2afd9eee547f80797b74b70534bed3005506059df0256c7e8e96f",
+      "size_bytes": 44429542
+    },
+    "root-build/acp-0.3.0-py3-none-any.whl": {
+      "sha256": "423a9cd8f533429d3f2a78284ccf0d5f058c5e590c169790be6e663c982fed63",
+      "size_bytes": 46402365
+    },
+    "root-build/acp-0.3.0.tar.gz": {
+      "sha256": "01fbe86f4231703a180a92e11ae735e41b4fc0a8c81b59fef677372fed4d0f2f",
+      "size_bytes": 46059517
+    }
+  },
+  "base_release": "reports/acp2_implementation/bb45a46/B/B25/release",
+  "base_release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+  "build_commands": [
+    "<acp2-dev>/venvs/b/bin/python scripts/build_release.py --source /tmp/opencode/b26a-fix4/build-src --out <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+    "<acp2-dev>/venvs/b/bin/python -m build --no-isolation --outdir <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build /tmp/opencode/b26a-fix4/build-src"
+  ],
+  "build_exit_codes": {
+    "release": "0",
+    "root": "0"
+  },
+  "historical_artifacts_untouched": [
+    "release/",
+    "root-build/",
+    "release-b25a-original/",
+    "root-build-b25a-original/"
+  ],
+  "label": "B-fix-4",
+  "landed_change": {
+    "commit_message": "fix(release): make installed wheels execute scheduler tasks",
+    "same_attempt_freeze_blob_as_build": true
+  },
+  "schema": "acp2.release.fix4.v1",
+  "source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "source_revision_note": "Detached clean build commit = B25b a84c426 + only the B-fix-4 attempt_freeze/tests change. The B-fix-4 branch commit carries the same attempt_freeze change on the current branch tip; the branch tips differ in unrelated files (the B25b workspace public-origin fix exists only in the B25b line), so the wheels are built from the B25b-derived tree, not from the current branch tip. B26b must use these artifacts.",
+  "source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
+  "version": "0.3.0"
+}

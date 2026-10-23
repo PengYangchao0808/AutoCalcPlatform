@@ -1,0 +1,197 @@
+{
+  "submit": {
+    "job_id": "20261023_223703_002_b26a-fix4-http",
+    "status": "queued",
+    "workflow": "singlepoint",
+    "project_id": "uncategorized",
+    "schema_version": 1,
+    "attempt": 1,
+    "release_id": null,
+    "release_digest": null,
+    "task_ref": {
+      "task_id": "20261023_223703_002_b26a-fix4-http",
+      "job_id": "20261023_223703_002_b26a-fix4-http",
+      "attempt": 1
+    },
+    "operation_ref": null,
+    "plan_digest": null,
+    "proposal_digest": null,
+    "approval_ref": null,
+    "result": "accepted",
+    "idempotency_key": null,
+    "idempotent_replay": false,
+    "admission": {
+      "reservation_id": "res_job_20261023_223703_002_b26a-fix4-http",
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "enforced": true,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "verified_project": null,
+      "multi_tenant_security": false,
+      "reason_code": "admitted"
+    },
+    "identity": {
+      "principal_id": "principal_local",
+      "issuer": "local",
+      "subject": "principal_local",
+      "tenant_id": "local-single",
+      "deployment_tier": "local-single",
+      "verified_project": null,
+      "project_hint_policy": "narrow-only",
+      "multi_tenant_security": false
+    }
+  },
+  "job": {
+    "id": "20261023_223703_002_b26a-fix4-http",
+    "status": "completed",
+    "attempt": 1,
+    "error": null,
+    "work_dir": "/tmp/opencode/b26a-fix4/data/lab-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02",
+    "revision": 6
+  },
+  "task_result": {
+    "authority": "cccp.calculation.tasks.singlepoint:184-239",
+    "complete": true,
+    "content_digest": "sha256:c5a590aa100a158469bdc95f44fdf96a4e10e4b0bcee6723f3f9f09bfe529961",
+    "exit_code": 0,
+    "job_status": "completed",
+    "missing_required_facts": [],
+    "normal_reuse": true,
+    "partial_result": false,
+    "publish": true,
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "receipt_state": "completed",
+    "required_facts": [
+      "energy_hartree"
+    ],
+    "result_digest": "sha256:1d62d33db564344bf8d1f8d3a969947950b07a5b9581a18cc1c811d4033fd71f",
+    "schema": "acp_task_result_v1",
+    "status": "completed",
+    "task": "singlepoint",
+    "truth_table_row": "b",
+    "written_at": "2026-10-23T14:37:06.006863+00:00"
+  },
+  "manifest": {
+    "products": [
+      {
+        "id": "task_result.json",
+        "kind": "file",
+        "label": "task_result.json",
+        "metadata": {
+          "attempt": 1,
+          "job_id": "20261023_223703_002_b26a-fix4-http",
+          "normal_reuse": true,
+          "partial_result": false,
+          "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+          "product_role": "normal",
+          "qualification": "complete",
+          "submission_id": "sub_75c18f8ca24103e2",
+          "task_result_digest": "sha256:c5a590aa100a158469bdc95f44fdf96a4e10e4b0bcee6723f3f9f09bfe529961"
+        },
+        "path": "task_result.json"
+      }
+    ],
+    "status": "completed",
+    "task_id": "20261023_223703_002_b26a-fix4-http",
+    "version": 2,
+    "workflow": "singlepoint"
+  },
+  "receipt": {
+    "attempt": 1,
+    "data_bindings": [
+      {
+        "artifact_digests": {
+          "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+        },
+        "binding_id": "local:2c7ffd56045b5bd5:2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02",
+        "endpoint": "local",
+        "kind": "local",
+        "mapping_version": 1,
+        "project_id": "",
+        "relative_path": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02",
+        "root": "/tmp/opencode/b26a-fix4/data/lab-root/uncategorized",
+        "tenant_id": ""
+      }
+    ],
+    "errors": [],
+    "evidence_digests": {
+      "exit_code": "0",
+      "job_status": "completed",
+      "missing_required_facts": "",
+      "normal_reuse": "true",
+      "partial_result": "false",
+      "publish": "true",
+      "publish_policy": "normal",
+      "qualification": "complete",
+      "required_facts": "energy_hartree",
+      "task_result_digest": "sha256:c5a590aa100a158469bdc95f44fdf96a4e10e4b0bcee6723f3f9f09bfe529961",
+      "truth_table_row": "b"
+    },
+    "fencing_token": "d650cf7c3735f9d7cb35dcfe23082e2e",
+    "job_id": "20261023_223703_002_b26a-fix4-http",
+    "owner": "local:redacted-host:1690622:1",
+    "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+    "receipt_version": 1,
+    "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+    "release_id": "2c7ffd56045b5bd5",
+    "result_digest": "sha256:1d62d33db564344bf8d1f8d3a969947950b07a5b9581a18cc1c811d4033fd71f",
+    "state": "completed",
+    "step_identities": [
+      "v2:853c5b2672a754adfa9088420fc0c126"
+    ],
+    "submission_id": "sub_75c18f8ca24103e2",
+    "written_at": "2026-10-23T14:37:06.010193+00:00"
+  },
+  "envelope": {
+    "attempt": 1,
+    "data_bindings": [
+      {
+        "artifact_digests": {
+          "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+        },
+        "binding_id": "local:2c7ffd56045b5bd5:2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02",
+        "endpoint": "local",
+        "kind": "local",
+        "mapping_version": 1,
+        "project_id": "",
+        "relative_path": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02",
+        "root": "/tmp/opencode/b26a-fix4/data/lab-root/uncategorized",
+        "tenant_id": ""
+      }
+    ],
+    "entrypoint": "worker.bootstrap",
+    "envelope_version": 1,
+    "fencing_token": "d650cf7c3735f9d7cb35dcfe23082e2e",
+    "job_id": "20261023_223703_002_b26a-fix4-http",
+    "owner": "local:redacted-host:1690622:1",
+    "plan_digest": "v2:3825a8cc8e1a1b83f54e0661109f8c20",
+    "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+    "protocol": "local",
+    "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+    "release_id": "2c7ffd56045b5bd5",
+    "required_capabilities": [
+      "singlepoint"
+    ],
+    "resource_budget": {
+      "mem": null,
+      "mem_mb": null,
+      "nproc": null,
+      "partial": false,
+      "queue": null,
+      "walltime_s": null
+    },
+    "scientific_closure": {
+      "algorithm_version": "",
+      "dependency_digests": {},
+      "payload_schema": 1,
+      "result_schema": 1,
+      "task_kind": "singlepoint"
+    },
+    "step_identities": [
+      "v2:853c5b2672a754adfa9088420fc0c126"
+    ],
+    "submission_id": "sub_75c18f8ca24103e2"
+  }
+}

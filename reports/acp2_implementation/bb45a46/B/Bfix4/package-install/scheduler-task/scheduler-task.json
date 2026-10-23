@@ -1,0 +1,84 @@
+{
+  "artifacts": {
+    "envelope": {
+      "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+      "release_id": "2c7ffd56045b5bd5"
+    },
+    "manifest": {
+      "products": 1,
+      "status": "completed"
+    },
+    "receipt": {
+      "release_id": "2c7ffd56045b5bd5",
+      "state": "completed"
+    },
+    "release_id_matches_installed_identity": true,
+    "task_result": {
+      "complete": true,
+      "energy_hartree": -1.116759307204,
+      "status": "completed"
+    }
+  },
+  "commands": [
+    {
+      "argv": [
+        "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/bin/python",
+        "-c",
+        "local_release_identity(<runner_root>)"
+      ],
+      "exit": 0,
+      "label": "installed release identity"
+    },
+    {
+      "argv": [
+        "POST",
+        "http://127.0.0.1:41319/api/v1/jobs",
+        "{\"workflow\": \"singlepoint\", \"name\": \"b25-scheduler-smoke\", \"input\": {\"source_type\": \"xyz_text\", \"source\": \"2\\nH2\\nH 0 0 0\\nH 0 0 0.74\\n\", \"charge\": 0, \"multiplicity\": 1}, \"method\": {\"levels\": {\"single_point\": {\"engine\": \"orca\", \"functional\": \"HF\", \"basis\": \"STO-3G\"}}}, \"resources\": {\"nproc\": 1, \"mem\": \"1024MB\"}}"
+      ],
+      "exit": 201,
+      "label": "POST /api/v1/jobs"
+    },
+    {
+      "argv": [
+        "GET",
+        "http://127.0.0.1:41319/api/v1/jobs/20261023_224334_001_b25-scheduler-smoke"
+      ],
+      "exit": 0,
+      "label": "poll terminal status"
+    }
+  ],
+  "installed_identity": {
+    "contains_repo_path": false,
+    "file_count": 529,
+    "keys_are_absolute": false,
+    "modules": {
+      "acp": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+      "acp_services": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
+      "cccp": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/cccp/__init__.py"
+    },
+    "prefixes": [
+      "acp",
+      "acp_services",
+      "cccp"
+    ],
+    "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+    "release_id": "2c7ffd56045b5bd5",
+    "runner_root": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib/python3.11"
+  },
+  "installed_identity_ok": true,
+  "job": {
+    "attempt": 1,
+    "error": null,
+    "status": "completed",
+    "work_dir": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/lab-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint"
+  },
+  "ok": true,
+  "schema": "acp2.package-install.scheduler-task.v1",
+  "submit": {
+    "job_id": "20261023_224334_001_b25-scheduler-smoke",
+    "release_digest": null,
+    "release_id": null,
+    "status": 201
+  },
+  "task_ok": true
+}

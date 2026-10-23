@@ -1,0 +1,131 @@
+{
+  "cross_project": {
+    "alice_read_beta": 404,
+    "bob_cancel_alpha": 404,
+    "bob_prepare_alpha": 404,
+    "bob_read_alpha": [
+      404,
+      {
+        "detail": "Job not found: b15-alpha-paused-v1"
+      }
+    ],
+    "bob_read_missing": [
+      404,
+      {
+        "detail": "Job not found: b15-does-not-exist"
+      }
+    ]
+  },
+  "fixture_jobs": {
+    "created": [],
+    "jobs_database": "/tmp/opencode/b26a-clean/data/run-root-b15/acp_jobs.db",
+    "reset": [],
+    "run_root": "/tmp/opencode/b26a-clean/data/run-root-b15"
+  },
+  "forged_hint_identity": {
+    "account_id": "acct_40296a07d668cf56",
+    "actions": [
+      "read",
+      "write",
+      "control"
+    ],
+    "issuer": "local",
+    "key_id": "d002254cb7e8e0e4",
+    "key_project": "project_alpha",
+    "key_scope": "workspace",
+    "mode": "api-key",
+    "multi_tenant_security": "api-key-scoped",
+    "principal": {
+      "deployment_tier": "local-single",
+      "kind": "user",
+      "principal_id": "principal_b15_alice",
+      "roles": [
+        "member"
+      ],
+      "tenant_id": "acp-b15-multiuser"
+    },
+    "project_hint_policy": "narrow-only",
+    "schema_version": 1,
+    "subject": "principal_b15_alice",
+    "verified_project": "project_alpha"
+  },
+  "identity_mode": "api-key",
+  "lists": {
+    "alice": [
+      "project_alpha"
+    ],
+    "bob": [
+      "project_beta"
+    ]
+  },
+  "principal": {
+    "account_id": "acct_40296a07d668cf56",
+    "actions": [
+      "read",
+      "write",
+      "control"
+    ],
+    "issuer": "local",
+    "key_id": "d002254cb7e8e0e4",
+    "key_project": "project_alpha",
+    "key_scope": "workspace",
+    "mode": "api-key",
+    "multi_tenant_security": "api-key-scoped",
+    "principal": {
+      "deployment_tier": "local-single",
+      "kind": "user",
+      "principal_id": "principal_b15_alice",
+      "roles": [
+        "member"
+      ],
+      "tenant_id": "acp-b15-multiuser"
+    },
+    "project_hint_policy": "narrow-only",
+    "schema_version": 1,
+    "subject": "principal_b15_alice",
+    "verified_project": "project_alpha"
+  },
+  "remote_identity_providers": {
+    "external_iam": {
+      "reason": "External IAM/federation is not implemented; enforced modes are local-single and project-scoped API keys.",
+      "state": "unsupported"
+    },
+    "oidc": {
+      "reason": "OIDC/SSO is not implemented in this iteration: no identity dependency is approved (component manifest: pwdlib/Authlib/PyCasbin/Keycloak are all candidate, approved=0). Capability reports must report OIDC as NOT available.",
+      "state": "unsupported"
+    }
+  },
+  "revocation": {
+    "account": {
+      "error": null,
+      "line_count": 12,
+      "permission_changed_after_revocation": true,
+      "received_event_before_revocation": true,
+      "stream_thread_stopped": true
+    },
+    "key": {
+      "error": null,
+      "line_count": 12,
+      "permission_changed_after_revocation": true,
+      "received_event_before_revocation": true,
+      "stream_thread_stopped": true
+    },
+    "read_after_account_revoke": 401,
+    "read_after_key_revoke": 401
+  },
+  "schema": "acp2.b15.multitenant-authz.v1",
+  "stdio_identity_binding": {
+    "binding": "server-resolved-principal",
+    "identity_source": "api-key-verified-by-controller",
+    "local_single_default": true,
+    "multi_user_requires_explicit_api_key": true,
+    "permission_ceiling": [
+      "control",
+      "read",
+      "write"
+    ],
+    "permission_ceiling_rule": "bound-actions-intersect-ceiling",
+    "shared_launch_allowed": false,
+    "tool_arguments_are_identity": false
+  }
+}

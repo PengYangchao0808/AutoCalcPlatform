@@ -1,0 +1,34 @@
+[
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "cccp",
+    "venv": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/cccp",
+    "venv_exit": 0,
+    "wheel": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/cccp-0.3.0-py3-none-any.whl"
+  },
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "worker",
+    "venv": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/worker",
+    "venv_exit": 0,
+    "wheel": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/acp_worker-0.3.0-py3-none-any.whl"
+  },
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "web",
+    "venv": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web",
+    "venv_exit": 0,
+    "wheel": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/acp_web-0.3.0-py3-none-any.whl"
+  },
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "root",
+    "venv": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/root",
+    "venv_exit": 0,
+    "wheel": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build/acp-0.3.0-py3-none-any.whl"
+  }
+]

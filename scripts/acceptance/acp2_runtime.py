@@ -11122,7 +11122,7 @@ def _b15_ensure_fixture_jobs(fixture: Mapping[str, Any], out_dir: Path) -> dict[
     from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
     from acp_services.store.layout import runtime_file
     from acp_services.store.migrations import migrate
-    from acp_services.store.store import JobStore
+    from acp_services.store.store import JobStateConflictError, JobStore
 
     run_root = Path(str(fixture["controller"]["run_root"]))
     jobs_database = Path(
@@ -11159,9 +11159,39 @@ def _b15_ensure_fixture_jobs(fixture: Mapping[str, Any], out_dir: Path) -> dict[
         conn.close()
 
     created: list[str] = []
+    reset: list[str] = []
     for spec in fixture.get("fixture_jobs") or []:
         job_id = str(spec["job_id"])
-        if store.get(job_id) is not None:
+        existing = store.get(job_id)
+        if existing is not None:
+            if existing.status != JobStatus.PAUSED:
+                for _ in range(3):
+                    try:
+                        store.transition(
+                            job_id,
+                            expected_status=existing.status,
+                            expected_revision=existing.revision,
+                            expected_attempt=existing.attempt,
+                            status=JobStatus.PAUSED,
+                            error=None,
+                            completed_at=None,
+                            started_at=None,
+                            pid=None,
+                            current_stage=None,
+                            progress=None,
+                        )
+                    except JobStateConflictError:
+                        refreshed = store.get(job_id)
+                        if refreshed is None:
+                            raise
+                        existing = refreshed
+                        continue
+                    reset.append(job_id)
+                    break
+                else:
+                    raise RuntimeError(
+                        f"fixture job {job_id} stayed {existing.status.value} after 3 resets"
+                    )
             continue
         project_id = str(spec["project_id"])
         work_dir = run_root / job_id
@@ -11185,6 +11215,7 @@ def _b15_ensure_fixture_jobs(fixture: Mapping[str, Any], out_dir: Path) -> dict[
         created.append(job_id)
     return {
         "created": created,
+        "reset": reset,
         "jobs_database": str(jobs_database),
         "run_root": str(run_root),
     }

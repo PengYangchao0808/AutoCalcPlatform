@@ -1,0 +1,23 @@
+{
+  "authority": "cccp.calculation.tasks.singlepoint:184-239",
+  "complete": true,
+  "content_digest": "sha256:e13cc7b313131aea59a9b5ce99ce4a3ecf6a27582a1f41700656af6339d583b1",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "energy_hartree"
+  ],
+  "result_digest": "sha256:988ce4b0b06a8c2d45321bfb5af8b5637a37ad0b2f2d7aa06a4313fcc4ceee8c",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "singlepoint",
+  "truth_table_row": "b",
+  "written_at": "2026-10-23T14:43:39.599933+00:00"
+}

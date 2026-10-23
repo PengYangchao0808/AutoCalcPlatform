@@ -40,6 +40,7 @@ writer/contracts one-way and never the reverse.  No jobs DB is touched.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import secrets
@@ -139,6 +140,11 @@ _ACP_EXCLUDED_SUBDIRS: Final[frozenset[str]] = frozenset({"api", "scheduler"})
 
 #: Marker written by py_compile/pytest inside a release; never a source member.
 _IGNORED_RELEASE_SUFFIXES: Final[tuple[str, ...]] = (".pyc", ".pyo")
+
+#: Packages that make up the execution tree.  In a source checkout they live
+#: under ``<project_root>/src``; an installed distribution places them under
+#: ``site-packages``, where the installed package roots are authoritative.
+_EXECUTION_PACKAGES: Final[tuple[str, ...]] = ("acp", "acp_services", "cccp")
 
 
 class ReleaseIdentityError(RuntimeError):
@@ -279,15 +285,62 @@ def _release_source_files(project_root: Path) -> list[Path]:
     return sorted(files)
 
 
-def _files_map(project_root: Path) -> dict[str, dict[str, str | int]]:
-    return {
-        path.relative_to(project_root).as_posix(): {
-            "sha256": digest,
-            "size": size,
-        }
-        for path, (digest, size) in (
-            (path, _sha256_file(path)) for path in _release_source_files(project_root)
+def _installed_package_root(name: str) -> Path | None:
+    """Return the installed package directory for *name*, or ``None``."""
+    try:
+        spec = importlib.util.find_spec(name)
+    except (ImportError, AttributeError, ValueError):
+        return None
+    if spec is None:
+        return None
+    for location in spec.submodule_search_locations or ():
+        candidate = Path(location)
+        if candidate.is_dir():
+            return candidate.resolve()
+    origin = spec.origin
+    if origin and origin not in ("built-in", "frozen"):
+        candidate = Path(origin)
+        if candidate.is_file():
+            return candidate.parent.resolve()
+    return None
+
+
+def _installed_release_sources() -> dict[str, Path]:
+    """Map stable package-relative keys (``acp/...``) to installed files."""
+    sources: dict[str, Path] = {}
+    missing: list[str] = []
+    for name in _EXECUTION_PACKAGES:
+        package_root = _installed_package_root(name)
+        if package_root is None:
+            missing.append(name)
+            continue
+        exclude = _EXCLUDED_DIRS | (_ACP_EXCLUDED_SUBDIRS if name == "acp" else frozenset())
+        for path in _walk_files(package_root, exclude_dirs=exclude):
+            key = f"{name}/{path.relative_to(package_root).as_posix()}"
+            sources[key] = path
+    if missing:
+        raise ReleaseIdentityError(
+            "missing installed package(s) "
+            + ", ".join(missing)
+            + "; cannot identify the installed execution tree"
         )
+    return sources
+
+
+def _release_sources(project_root: Path) -> dict[str, Path]:
+    """Return ``relative key -> on-disk file`` for a source or installed tree."""
+    if any((project_root / "src" / name).is_dir() for name in _EXECUTION_PACKAGES):
+        return {
+            path.relative_to(project_root).as_posix(): path
+            for path in _release_source_files(project_root)
+        }
+    return _installed_release_sources()
+
+
+def _files_map(sources: Mapping[str, Path]) -> dict[str, dict[str, str | int]]:
+    return {
+        rel: {"sha256": digest, "size": size}
+        for rel, (digest, size) in ((rel, _sha256_file(path)) for rel, path in sources.items())
     }
 
 
@@ -300,10 +353,30 @@ def _release_digest(files: Mapping[str, Mapping[str, str | int]], release_id: st
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
+def _identity_from_sources(project_root: Path, sources: Mapping[str, Path]) -> ReleaseIdentity:
+    files = _files_map(sources)
+    if not files:
+        raise ReleaseIdentityError(
+            f"no execution-tree files found under {project_root} "
+            "(expected src/acp, src/acp_services, src/cccp or installed "
+            "acp, acp_services, cccp packages)"
+        )
+    release_id = hashlib.sha256(_canonical_json(files).encode("utf-8")).hexdigest()[:16]
+    return ReleaseIdentity(
+        project_root=project_root,
+        release_id=release_id,
+        release_digest=_release_digest(files, release_id),
+        files=files,
+    )
+
+
 def local_release_identity(project_root: Path | str) -> ReleaseIdentity:
     """Compute the content identity of *project_root* without any remote import.
 
     This is the single release-identity authority for the local freeze path.
+    A source checkout hashes ``<root>/src/{acp,acp_services,cccp}``; an
+    installed distribution (no ``<root>/src``) hashes the installed package
+    roots under stable ``acp/...``, ``acp_services/...``, ``cccp/...`` keys.
     It is deliberately pure (stdlib only): importing it never pulls
     ``acp.scheduler.remote`` (and therefore never requires the ``[remote]``
     extra / paramiko).
@@ -311,19 +384,7 @@ def local_release_identity(project_root: Path | str) -> ReleaseIdentity:
     root = Path(project_root).resolve()
     if not root.is_dir():
         raise ReleaseIdentityError(f"project root is not a directory: {root}")
-    files = _files_map(root)
-    if not files:
-        raise ReleaseIdentityError(
-            f"no execution-tree files found under {root} "
-            f"(expected src/acp, src/acp_services, src/cccp)"
-        )
-    release_id = hashlib.sha256(_canonical_json(files).encode("utf-8")).hexdigest()[:16]
-    return ReleaseIdentity(
-        project_root=root,
-        release_id=release_id,
-        release_digest=_release_digest(files, release_id),
-        files=files,
-    )
+    return _identity_from_sources(root, _release_sources(root))
 
 
 def _fsync_dir(path: Path) -> None:
@@ -449,7 +510,8 @@ def build_local_release(project_root: Path | str, run_root: Path | str) -> Local
     root = Path(project_root).resolve()
     destination_root = Path(run_root).resolve() / _RELEASE_DIRNAME
     try:
-        identity = local_release_identity(root)
+        sources = _release_sources(root)
+        identity = _identity_from_sources(root, sources)
     except ReleaseIdentityError:
         if _unversioned_allowed():
             return _unversioned_release(root)
@@ -464,7 +526,7 @@ def build_local_release(project_root: Path | str, run_root: Path | str) -> Local
     try:
         staging.mkdir(parents=True)
         for rel, expected in identity.files.items():
-            _copy_verified(root / rel, staging / rel, expected)
+            _copy_verified(sources[rel], staging / rel, expected)
         manifest = {
             "schema": DEFAULT_RELEASE_SCHEMA,
             "release_id": identity.release_id,

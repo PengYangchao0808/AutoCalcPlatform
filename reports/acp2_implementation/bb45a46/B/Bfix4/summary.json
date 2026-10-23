@@ -1,0 +1,351 @@
+{
+  "candidate": {
+    "artifact_digests": {
+      "acp-web-0.3.0.tar.gz": {
+        "sha256": "5d7c5a3f735ee5a10b553c1e4d095a0d32cd25a377573d01858e73b91019d67f",
+        "size_bytes": 2045103
+      },
+      "acp-worker-0.3.0.tar.gz": {
+        "sha256": "badb68d3ea69ab5fe95711049ed26db4d9304f8969ede6443a29da0963c8e17b",
+        "size_bytes": 580065
+      },
+      "acp_web-0.3.0-py3-none-any.whl": {
+        "sha256": "68077f7d9734276b46a1a68fc207f5cde0582788f0218ebffed851763fdf41b1",
+        "size_bytes": 2231055
+      },
+      "acp_worker-0.3.0-py3-none-any.whl": {
+        "sha256": "f30e72ca56e620520987f1408eccdd69b181a81c353a8cec461df268bcb38471",
+        "size_bytes": 613821
+      },
+      "cccp-0.3.0-py3-none-any.whl": {
+        "sha256": "088604cdbe52bbc98c879edb6cb3ccca486f9ed68d8ecd4471e296b9c5110445",
+        "size_bytes": 44570219
+      },
+      "cccp-0.3.0.tar.gz": {
+        "sha256": "b8c712f3ebf2afd9eee547f80797b74b70534bed3005506059df0256c7e8e96f",
+        "size_bytes": 44429542
+      },
+      "root-build/acp-0.3.0-py3-none-any.whl": {
+        "sha256": "423a9cd8f533429d3f2a78284ccf0d5f058c5e590c169790be6e663c982fed63",
+        "size_bytes": 46402365
+      },
+      "root-build/acp-0.3.0.tar.gz": {
+        "sha256": "01fbe86f4231703a180a92e11ae735e41b4fc0a8c81b59fef677372fed4d0f2f",
+        "size_bytes": 46059517
+      }
+    },
+    "base_release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+    "build_source_note": "Clean detached commit abec2bc = B25b a84c426 + only the B-fix-4 change. The landed B-fix-4 commit carries the same change on the current branch tip; branch tips differ in unrelated files, so the artifacts are the B25b-derived candidate that B26b consumes.",
+    "release_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+    "release_manifest": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+    "release_source": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
+    "source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+    "source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
+    "version": "0.3.0"
+  },
+  "evidence_digests": {
+    "b15/multitenant-authz.json": {
+      "sha256": "c9165fa8ab976cb824ed38cb92d190c8c981e47658d790415cdf6932d7e73a82",
+      "size_bytes": 3558
+    },
+    "b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json": {
+      "sha256": "ead98a93dfd079634f01006b804448c5b281f8b23db3f8a94bd3a8e1f55278ff",
+      "size_bytes": 6770
+    },
+    "b15/summary.json": {
+      "sha256": "3e1059b6caf15581ef9b20f2bee5ba1e0dc7303f6a147fa42eee5d84777f2f17",
+      "size_bytes": 346
+    },
+    "b26a-rerun/RESULT__result_manifest.json": {
+      "sha256": "32ee1e921e170c2c233933c354a1370d7683e2d6ac545968ea7512edd4903a2d",
+      "size_bytes": 736
+    },
+    "b26a-rerun/RESULT__task_result.json": {
+      "sha256": "36a1eb8fda55d4c922ee6b9a24c6ad9f61349217871ff2951f9ad925e01e79d4",
+      "size_bytes": 725
+    },
+    "b26a-rerun/WORK__00_RUNTIME__frozen__envelope.json": {
+      "sha256": "e4a3d99619039bc779b93bac2dae33fe692fa34f9ce0292de6b09f0191841914",
+      "size_bytes": 1486
+    },
+    "b26a-rerun/cli-row.json": {
+      "sha256": "3231942eb5e66fbff00cbe70905f1fd56064e28e4aef5e5837626ed4f16b2d68",
+      "size_bytes": 4864
+    },
+    "b26a-rerun/cli__RESULT_result_manifest.json": {
+      "sha256": "c7514fbfeb943d75cfa0f0a9ee8e3048752288c4ff2228c17cad4ecfd3448e79",
+      "size_bytes": 734
+    },
+    "b26a-rerun/cli__RESULT_task_result.json": {
+      "sha256": "8afd0199323f4fb8a39e2bf8a2d341e8875ec375e33767c60f6b3e413e966ad1",
+      "size_bytes": 725
+    },
+    "b26a-rerun/cli__WORK_00_RUNTIME_frozen_envelope.json": {
+      "sha256": "ac1c41c0fa0a2155175a338ca7f7c45b4ff1de047fc9662c09856b01241c1153",
+      "size_bytes": 1464
+    },
+    "b26a-rerun/cli__execution_receipt.json": {
+      "sha256": "6abdcc70925fe4a470b45a6ece30cdf5a7764eef2f2229f17e2c21000bc907e7",
+      "size_bytes": 1595
+    },
+    "b26a-rerun/cli__job.json": {
+      "sha256": "7bab7c5cbf3f7665af9fdb5072069325baa85afa0bd79b99449ca326bc6dd4cb",
+      "size_bytes": 4663
+    },
+    "b26a-rerun/execution_receipt.json": {
+      "sha256": "9a9beb7c17871c5a5fe73767a6dbc8bbb88a9bf0c50e4d9bbb042352602b7426",
+      "size_bytes": 1617
+    },
+    "b26a-rerun/http-row.json": {
+      "sha256": "98cbb4d167cc126ed69fdf7e7e4056c473cc69f58fa4b58c6fe80ceaed6d1525",
+      "size_bytes": 6465
+    },
+    "b26a-rerun/installed-identity.json": {
+      "sha256": "f51ec8460fbbd89a4edd7a490555e945f496dfb009777f2ad2a1826a1706e311",
+      "size_bytes": 785
+    },
+    "b26a-rerun/job.json": {
+      "sha256": "e8787bf072c8e2ad5f6d6e6008504a400ca9533b664d315bb840e0375782442a",
+      "size_bytes": 5270
+    },
+    "package-install/install-results.json": {
+      "sha256": "29d65360e4215aadafa72918a4e016f405ca5c8123000fd9505d3840b3a108ef",
+      "size_bytes": 1200
+    },
+    "package-install/lab-health.json": {
+      "sha256": "0d1218a02ba4e050155a697a9d9bf85b10fa1f2243b7585a7968fb9758926afa",
+      "size_bytes": 353
+    },
+    "package-install/package-install-main-20261023T144151Z-1697579-37cb416e.json": {
+      "sha256": "153863c00aee6fcb55905d704467add26c04cfcaaff67a762cf6fb597999ef1a",
+      "size_bytes": 15985
+    },
+    "package-install/release-digests.json": {
+      "sha256": "81665c584b73c74f22deb5cdfd77f2c88c6462a7e657aeed399a0ab2235d4568",
+      "size_bytes": 1982
+    },
+    "package-install/scheduler-task/RESULT__result_manifest.json": {
+      "sha256": "3483249b6b983a261efa9be13761dbb97667df9375e39aa4f74abe5ce20f062e",
+      "size_bytes": 746
+    },
+    "package-install/scheduler-task/RESULT__task_result.json": {
+      "sha256": "bb5b6ce4189c1b0f45825b6014733f94d2cc96f9f487dcf5d3d4faa63257adbe",
+      "size_bytes": 725
+    },
+    "package-install/scheduler-task/WORK__00_RUNTIME__frozen__envelope.json": {
+      "sha256": "154548ac5d5b3fb1bee595e22bd4c43b2c10776a0b22954a8638f70a76fcaa84",
+      "size_bytes": 1512
+    },
+    "package-install/scheduler-task/execution_receipt.json": {
+      "sha256": "88e4f49539ea44fb6015c19ae5416a10b2aef7f6eeb869d7509cf76906eb7724",
+      "size_bytes": 1643
+    },
+    "package-install/scheduler-task/installed-identity.json": {
+      "sha256": "f51ec8460fbbd89a4edd7a490555e945f496dfb009777f2ad2a1826a1706e311",
+      "size_bytes": 785
+    },
+    "package-install/scheduler-task/job.json": {
+      "sha256": "1245a25a1325e2e7f72d01ea7d26759820627623e9b94e3d6710366ee8f0c586",
+      "size_bytes": 5328
+    },
+    "package-install/scheduler-task/scheduler-task.json": {
+      "sha256": "f5f1bd591358f4579465ac920cc75c227c032c0ccdb0c55f0fb8966e01be4ac6",
+      "size_bytes": 2832
+    },
+    "package-install/summary.json": {
+      "sha256": "73e9f9ffc33c6773ddf3c8e3e31fcdff3d6b1a578d14963a17128ec3d6d9b2db",
+      "size_bytes": 337
+    }
+  },
+  "generated_at": "2026-10-23T14:47:00Z",
+  "historical_untouched": [
+    "B25/release/",
+    "B25/root-build/",
+    "B25/release-b25a-original/",
+    "B25/root-build-b25a-original/",
+    "B25/b25a-*",
+    "B25/b25b-evidence.md"
+  ],
+  "results": {
+    "B26A-D1_release_identity_installed": {
+      "detail": "local_release_identity hashes installed package roots under acp/..., acp_services/..., cccp/... keys; no absolute or repo paths; source-tree behaviour unchanged.",
+      "evidence": [
+        "b26a-rerun/installed-identity-proof.txt",
+        "b26a-rerun/installed-identity.json",
+        "pytest-fix4.txt"
+      ],
+      "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+      "release_id": "2c7ffd56045b5bd5",
+      "result": "PASS"
+    },
+    "D2_classification": {
+      "code_delta_routes_py": "none",
+      "detail": "The open stream legitimately closed via event: done before revocation because the reused fixture jobs were PAUSED and Controller restart freezes them to FAILED ([RESTART_FAILED]). _ReauthorizingStreamAuthorizer is byte-identical to the source candidate. Fix: _b15_ensure_fixture_jobs resets reused fixture jobs to their declared PAUSED state through JobStore.transition CAS before the probe; the revocation assertion is unchanged.",
+      "harness_change": "scripts/acceptance/acp2_runtime.py::_b15_ensure_fixture_jobs",
+      "result": "HARNESS_FIXTURE_STATE_NOT_INSTALLED_CODE_DELTA"
+    },
+    "b26a_authorization": {
+      "assertion_strength": "unchanged (received_event_before_revocation AND permission_changed_after_revocation AND stream_thread_stopped AND read_after_revoke==401)",
+      "command": [
+        "/tmp/opencode/b26a-fix4/venvs/lab/bin/python",
+        "<repo>/scripts/acceptance/acp2_runtime.py",
+        "--scenario",
+        "multitenant",
+        "--phase",
+        "multitenant:authz",
+        "--controller",
+        "http://127.0.0.1:18788",
+        "--fixture",
+        "/tmp/opencode/b26a-clean/fixtures/multi-b26a.json",
+        "--out",
+        "/tmp/opencode/b26a-fix4/evidence/b15-fix4",
+        "--timeout",
+        "600"
+      ],
+      "exit_code": 0,
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
+      "result": "PASS",
+      "revocation": {
+        "account": {
+          "error": null,
+          "line_count": 12,
+          "permission_changed_after_revocation": true,
+          "received_event_before_revocation": true,
+          "stream_thread_stopped": true
+        },
+        "key": {
+          "error": null,
+          "line_count": 12,
+          "permission_changed_after_revocation": true,
+          "received_event_before_revocation": true,
+          "stream_thread_stopped": true
+        },
+        "read_after_account_revoke": 401,
+        "read_after_key_revoke": 401
+      }
+    },
+    "b26a_installed_workbench_submission": {
+      "cli": {
+        "command": [
+          "/tmp/opencode/b26a-fix4/venvs/lab/bin/acp",
+          "task",
+          "execute",
+          "--workflow",
+          "singlepoint",
+          "--input",
+          "/tmp/opencode/b26a-fix4/work/task-exec/input.xyz",
+          "--name",
+          "b26a-fix4-sp2",
+          "--method",
+          "HF",
+          "--run-root",
+          "/tmp/opencode/b26a-fix4/data/task-exec-root2",
+          "--follow"
+        ],
+        "complete": true,
+        "energy_hartree": -1.132971755441,
+        "exit_code": 0,
+        "job": "completed",
+        "manifest_status": "completed",
+        "method": "HF/def2-TZVPP (task execute has no --basis option)",
+        "products": 1,
+        "receipt_state": "completed",
+        "release_id": "2c7ffd56045b5bd5",
+        "task_result": "completed"
+      },
+      "http": {
+        "command": [
+          "/tmp/opencode/b26a-fix4/venvs/lab/bin/python",
+          "/tmp/opencode/b26a-fix4/http_submit.py"
+        ],
+        "complete": true,
+        "energy_hartree": -1.116759307204,
+        "exit_code": 0,
+        "job": {
+          "attempt": 1,
+          "error": null,
+          "id": "20261023_223703_002_b26a-fix4-http",
+          "revision": 6,
+          "status": "completed",
+          "work_dir": "/tmp/opencode/b26a-fix4/data/lab-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02"
+        },
+        "manifest_status": "completed",
+        "method": "HF/STO-3G",
+        "products": 1,
+        "receipt_state": "completed",
+        "release_id": "2c7ffd56045b5bd5",
+        "task_result": "completed"
+      },
+      "result": "PASS"
+    },
+    "cleanup": {
+      "detail": "tmux Lab/Controller sessions stopped; ports 18787/18788/18789 free; no worker/acp run processes; production 8765 still healthy and untouched.",
+      "production_health_8765": 200,
+      "result": "PASS"
+    },
+    "package_install_scheduler_assertion": {
+      "assertion": {
+        "detail": "installed Lab completed one real H2/STO-3G singlepoint with task_result/result_manifest/receipt release identity",
+        "name": "b25.scheduler_task",
+        "status": "PASS"
+      },
+      "command": [
+        "/usr/bin/python3.11",
+        "<repo>/scripts/acceptance/acp2_runtime.py",
+        "--scenario",
+        "package-install",
+        "--fixture",
+        "/tmp/opencode/b26a-fix4/fixtures/package-install-fix4.json",
+        "--out",
+        "/tmp/opencode/b26a-fix4/evidence/package-install-fix4",
+        "--timeout",
+        "1800"
+      ],
+      "energy_hartree": -1.116759307204,
+      "exit_code": 0,
+      "job_status": "completed",
+      "manifest": {
+        "products": 1,
+        "status": "completed"
+      },
+      "method": "HF/STO-3G",
+      "receipt": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix4/package-install/package-install-main-20261023T144151Z-1697579-37cb416e.json",
+      "receipt_state": {
+        "release_id": "2c7ffd56045b5bd5",
+        "state": "completed"
+      },
+      "release_id_matches_installed_identity": true,
+      "result": "PASS",
+      "task_result": {
+        "complete": true,
+        "energy_hartree": -1.116759307204,
+        "status": "completed"
+      }
+    },
+    "validation": {
+      "pytest": {
+        "command": "pytest tests/test_acp_attempt_freeze.py tests/test_acp_services_isolation.py tests/test_services_doc_sync.py -q",
+        "exit_code": 0,
+        "result": "38 passed"
+      },
+      "ruff_check": {
+        "command": "ruff check <4 changed files>",
+        "exit_code": 0,
+        "result": "All checks passed!"
+      },
+      "ruff_format": {
+        "command": "ruff format --check <4 changed files>",
+        "exit_code": 0,
+        "result": "4 files already formatted"
+      },
+      "validator": {
+        "command": "python scripts/acceptance/validate_acp2_contracts.py",
+        "exit_code": 0,
+        "result": "VALID"
+      }
+    }
+  },
+  "schema": "acp2.bfix4.summary.v1",
+  "title": "B-fix-4 \u2014 installed wheels execute scheduler tasks (B26A-D1) and installed-wheel revocation reset (B26A-D2)",
+  "todo": 37
+}
