@@ -2,8 +2,8 @@
   "schema": "acp2.contracts.manifest.v1",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
-  "contract_version": "1.1.0",
-  "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+  "contract_version": "1.2.0",
+  "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "654c810aac0db30acdfa546b1ab81ec822725064b2231e95624f94632637ef29",
+      "sha256": "072d5a9b9d0b50b9ffe882c6158a0c5c86fef5470b24e166cb3424f829ebc13b",
       "delivered_by": "B00"
     },
     {
@@ -289,7 +289,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "93a8615939182c7f9897723a1f4e7a96364f55222fe68982ef945f1d11c99c2a"
+      "sha256": "b6ceeb339bf09cb2783cf1104db656d45140eb1150d1fb5632bd6f9b4c38a9a3"
     },
     {
       "id": "control-and-data",
@@ -719,6 +719,11 @@
       "version": "1.1.0",
       "stage": "B16",
       "note": "additive approval HTTP operations/events in application-api, p2-research-operations and admission-approval; no delivered field removed or renamed, so contract_version stays 1.1.0"
+    },
+    {
+      "version": "1.2.0",
+      "stage": "B18",
+      "note": "B18a delivers A schema id/version/digest references in science-binding and adds the bounded step-DAG, evidence-manifest and research-resource sections; no already-delivered wire field was removed or renamed."
     }
   ],
   "b01_deliverables": [

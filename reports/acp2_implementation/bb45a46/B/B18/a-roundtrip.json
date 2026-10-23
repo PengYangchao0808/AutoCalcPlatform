@@ -1,0 +1,82 @@
+{
+  "a_descriptor": {
+    "capability_id": "electronic.energy",
+    "delegation_target": "cccp.calculation.run_singlepoint",
+    "implementation_id": "cccp.calculation.tasks.singlepoint",
+    "source": "reports/acp2_implementation/bb45a46/B/B18/fixtures/capability-energy.json",
+    "task_kind": "singlepoint"
+  },
+  "b_discovery": {
+    "capability_id": "electronic.energy",
+    "delegation_target": "cccp.calculation.run_singlepoint",
+    "implementation_id": "cccp.calculation.tasks.singlepoint",
+    "limitations": [
+      "This capability evaluates one supplied structure; it does not optimize the geometry."
+    ],
+    "request_schema_version": 1,
+    "required_form_fields": [
+      "workflow",
+      "structure",
+      "method",
+      "charge",
+      "multiplicity",
+      "mapping",
+      "resources"
+    ],
+    "result_schema_version": 1,
+    "task_kind": "singlepoint",
+    "validation_owner": {
+      "cccp_scientific_semantics": "cccp",
+      "json_structure": "contract",
+      "runtime_platform_constraints": "runtime"
+    }
+  },
+  "c_p2_minimal_form": {
+    "digest": "sha256:020eaa1f9b2c338990630eea56c129146c631552e1af7f00f97860dcace1d40a",
+    "full_dynamic_form": "C T-38/H5 (not a B18 gate)",
+    "production_path": "frontend/js/workbench/features/science-question.js",
+    "source": "C/frontend/js/workbench/features/science-question.js",
+    "source_commit": "39d4aeb"
+  },
+  "cccp_request": {
+    "charge": 0,
+    "level": {
+      "basis": "def2-TZVP",
+      "method": "r2SCAN-3c",
+      "solvent": "none",
+      "solvent_model": "none"
+    },
+    "multiplicity": 1,
+    "options": {
+      "stability_check": false
+    },
+    "resources": {
+      "mem": "2GB",
+      "nproc": 2
+    },
+    "schema_version": 1,
+    "structure": {
+      "path": "structures/water.xyz",
+      "role": "minimum",
+      "source": "c2_minimal_form"
+    },
+    "task": "singlepoint"
+  },
+  "evidence_class": "STATIC/SIMULATED",
+  "negatives": {
+    "atom_mapping_mismatch": "rejected_before_adoption",
+    "missing_method": "method_identity_missing"
+  },
+  "preserved": {
+    "basis": true,
+    "charge": true,
+    "mapping_digest": true,
+    "method": true,
+    "multiplicity": true,
+    "resources": true,
+    "solvent": true,
+    "structure_path": true
+  },
+  "roundtrip_digest": "sha256:6a163941de04f43b8c8327210c2d4c032b4383b70080e8ace9c01029e8838485",
+  "schema": "acp2.runtime.science-roundtrip.v1"
+}

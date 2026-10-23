@@ -1,0 +1,95 @@
+{
+  "c18_consumes": [
+    "science_contracts.entries (schema id/version/digest)",
+    "a-roundtrip.json",
+    "the P2 minimal form field mapping"
+  ],
+  "c18_does_not_need": "B18b execution wiring or B18c recovery evidence",
+  "c_form_digest": "sha256:020eaa1f9b2c338990630eea56c129146c631552e1af7f00f97860dcace1d40a",
+  "c_form_fixture": "reports/acp2_implementation/bb45a46/B/B18/fixtures/p2-minimal-form.json",
+  "contract_version": "1.0.0",
+  "does_not_copy_a_parsers": true,
+  "does_not_execute": true,
+  "from": "B18a",
+  "full_dynamic_form": "C T-38/H5; never a B18 gate",
+  "handoff_digest": "sha256:5f904ec55e41e0df72e297f73c76f30181174ab8fd8a0f83ca225be566c18368",
+  "roundtrip_digest": "sha256:6a163941de04f43b8c8327210c2d4c032b4383b70080e8ace9c01029e8838485",
+  "roundtrip_schema": "acp2.runtime.science-roundtrip.v1",
+  "schema": "acp2.runtime.b18a-handoff.v1",
+  "science_binding": "<repo>/docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+  "science_binding_contract_version": "1.1.0",
+  "science_contract_set": "acp2.science",
+  "science_contracts": {
+    "binding_contract_version": "1.1.0",
+    "binding_schema": "acp2.runtime.science-binding.v1",
+    "entries": [
+      {
+        "digest": "sha256:39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+        "schema_id": "acp2.science.capability.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+        "schema_id": "acp2.science.errors.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+        "schema_id": "acp2.science.evidence-report.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+        "schema_id": "acp2.science.provenance.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
+        "schema_id": "acp2.science.question.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+        "schema_id": "acp2.science.reaction-spec.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+        "schema_id": "acp2.science.recipe.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+        "schema_id": "acp2.science.semantic-rules.v1",
+        "schema_version": null,
+        "version": "1.0.0"
+      },
+      {
+        "digest": "sha256:a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+        "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+        "schema_id": "acp2.science.task-binding.v1",
+        "schema_version": 1,
+        "version": "1.0.0"
+      }
+    ],
+    "schema": "acp2.runtime.science-contract-refs.v1",
+    "science_contract_set": "acp2.science"
+  },
+  "status": "delivered",
+  "to": "C18"
+}

@@ -1,0 +1,110 @@
+{
+  "evidence_class": "STATIC/SIMULATED",
+  "execution_unit": {
+    "compute_owner": "cccp.calculation.tasks",
+    "loop_owner": "acp_services.runtime.step_dag.BoundedStepDagExecutor",
+    "one_platform_task": true
+  },
+  "limits": {
+    "max_consumers_per_step": 1,
+    "max_edges": 8,
+    "max_fan_in": 1,
+    "max_steps": 8
+  },
+  "recipe_id": "recipe.da.static.v1",
+  "schema": "acp2.runtime.step-dag.v1",
+  "steps": [
+    {
+      "capability": "optimize.ts",
+      "consumes": [],
+      "diagnostic_only": false,
+      "entrypoint": "cccp.calculation.run_optimize",
+      "implementation_version": "cccp-opt-static-1",
+      "intent": "STATIC/SIMULATED optimize of the frozen TS guess",
+      "kind": "optimize",
+      "parameters": {
+        "optimizer": "r2SCAN-3c"
+      },
+      "produces": [
+        {
+          "from_step": "ts_opt",
+          "product_kind": "ts_geometry",
+          "required": true
+        }
+      ],
+      "required": true,
+      "step_id": "ts_opt",
+      "structure_role": "transition_state",
+      "task_kind": "optimize"
+    },
+    {
+      "capability": "frequency.ts",
+      "consumes": [
+        {
+          "expected_digest": "sha256:fc407cda0821aa1f523ba0f4101aada9f3d987175acd413a35a9de6a088ac833",
+          "from_step": "ts_opt",
+          "product_kind": "ts_geometry",
+          "required": true
+        }
+      ],
+      "diagnostic_only": false,
+      "entrypoint": "cccp.calculation.run_frequency",
+      "implementation_version": "cccp-freq-static-1",
+      "intent": "STATIC/SIMULATED imaginary-frequency screening",
+      "kind": "frequency",
+      "parameters": {
+        "thermo": "grimme"
+      },
+      "produces": [
+        {
+          "from_step": "ts_freq",
+          "product_kind": "frequency_summary",
+          "required": true
+        }
+      ],
+      "required": true,
+      "step_id": "ts_freq",
+      "structure_role": "transition_state",
+      "task_kind": "frequency"
+    },
+    {
+      "capability": "irc.ts",
+      "consumes": [
+        {
+          "expected_digest": "sha256:78b3c5e9ea782b5a761893ab0e69c30fc93888faa555050e36fea7cd95ab93c1",
+          "from_step": "ts_freq",
+          "product_kind": "frequency_summary",
+          "required": true
+        }
+      ],
+      "diagnostic_only": false,
+      "entrypoint": "cccp.calculation.run_irc",
+      "implementation_version": "cccp-irc-static-1",
+      "intent": "STATIC/SIMULATED bidirectional IRC endpoint check",
+      "kind": "irc",
+      "parameters": {
+        "directions": [
+          "forward",
+          "reverse"
+        ]
+      },
+      "produces": [
+        {
+          "from_step": "ts_irc",
+          "product_kind": "irc_paths",
+          "required": true
+        }
+      ],
+      "required": true,
+      "step_id": "ts_irc",
+      "structure_role": "transition_state",
+      "task_kind": "irc"
+    }
+  ],
+  "task_ref": "task-b18-static",
+  "topological_order": [
+    "ts_opt",
+    "ts_freq",
+    "ts_irc"
+  ]
+}

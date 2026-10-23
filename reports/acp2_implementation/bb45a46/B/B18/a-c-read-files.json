@@ -1,0 +1,218 @@
+{
+  "a_worktree_status_source": "git -C <acp2-dev>/A status --short at evidence time",
+  "a_worktree_uncommitted_excluded": true,
+  "files": [
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/baseline.md",
+      "sha256": "15800905ee66da6007e84134cdbb861e2d6aa59a20f218d36e68e6c117609dc1"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/capability-support-matrix.md",
+      "sha256": "2a2eddd090e4977d38546649f06fdb1ba9688c2f52d65e5e745ed4c58517487c"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+      "sha256": "39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/cross-domain-compatibility.md",
+      "sha256": "e724cb0ffe9a6912523d4c1b5ba162e5c181bd701308e6c1279a4480c1bc8901"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "sha256": "6e14b0bcbbb905836519b367cf3a957afbd4b32d3190f840a34873bb081be8ef"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+      "sha256": "ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/evidence-semantics.md",
+      "sha256": "1cc0aace3580b8ddce196f719d5c88a434b24203a11bf73cb9e7c5afa414806f"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+      "sha256": "da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
+      "sha256": "bb13f112326475887a65c3012b9222ba1f350ff2d7c6499a87c3bd8489eece71"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
+      "sha256": "1fed3a5a4ae32390e9f59a06ecc1b7ca4a64a0ba68a6750211065fe54d050ddd"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
+      "sha256": "fd8573b5c71c35be07e20bcbf54506803705e0ab5c9bf01c5d278ed1a3f7caa9"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+      "sha256": "f690e7e993125b509e4f5a55ce9465323292346dddfdabc0beacb4e4533b0bd0"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "sha256": "aafe1dba70cc0fb10005eeec95468cc872405da4a24f75bd1e6fd33085867bb4"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/identity-boundary.md",
+      "sha256": "927687e79d3a2b9749262298e0a28735d4d778b9e4290af0e660468ee639dd09"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/packaging-preview.md",
+      "sha256": "73893b2e565af18e39b7cc1cfbcdcff033508557b533e1726b18c8152b84740b"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/path-map.md",
+      "sha256": "658295ed707050bad2d4d1e42125c3ffe6389b29e2a73a6d8f08121458c33111"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+      "sha256": "20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
+      "sha256": "513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/release-note.md",
+      "sha256": "00ad390b43bc0ad009554154ee58330635ddd8588564bc28f42cbc7161a4c2e6"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/replay-index.json",
+      "sha256": "746aa06af611fddf62adc8ee096222cfed07b83821680713a6ff0214f42499e9"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/selectivity-evidence-report.json",
+      "sha256": "c192657fd6e5a1012939e63d30e0a906309785ad2b735934836c68575df78c83"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+      "sha256": "53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/task-compatibility-matrix.md",
+      "sha256": "0a0622d755f8e66b250b3fe266434f240e4877a493bbec61ac66b5a11e4d272f"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/user-guide.md",
+      "sha256": "c805f1bae0fdef82d159fc06d7f5c3756d07a0f42d5042dd96817374226c6ab4"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/illegal-request.json",
+      "sha256": "a2e8d831a7df538aa143b04c2d01791103bef6b47570fc570b3285d01dbde987"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/illegal-request.valid.json",
+      "sha256": "7dc9d7401762865c4d3b4fc1fbabec69c78c1d42778863ea40fac8b9133759af"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/proposal.valid.json",
+      "sha256": "cf15149cb4c49b34f8816f9415c531440b9794a7e8552b3782050ccada4d3b76"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/research-record.valid.json",
+      "sha256": "db4fbdafbdfbac2c546e7b2e701f8aa1347e2a9c5e985fe107c7423794c83674"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/stale-reference.json",
+      "sha256": "b851f38cb1a8b13840c2b777126f67c49af377121bdb230cdb5f66550411e40a"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/stale-reference.valid.json",
+      "sha256": "31784711540a9bb9b14816793a5b23193d229ef5a430a0e773887ba72d10bb24"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/unknown-tool.json",
+      "sha256": "de93de05ae952d2a22e0e9f4ef1a5a5df0ead93e946bfba54362c328ec461c24"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/unknown-tool.valid.json",
+      "sha256": "88f46f595f9d40887a2f6d150b569b3941bfeab840bba2b595be8b1622fbebd9"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/wrong-project.json",
+      "sha256": "31c5025cb7c40114ea99a7840ee5dda2cc1219cd69fd0a448fefd0d66bb85876"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/fixtures/wrong-project.valid.json",
+      "sha256": "4d95d8de4e1730b97542655e98d305215c2967625a8ea4e675175f44ec460263"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
+      "sha256": "4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+      "sha256": "79bb1c226a6f23af65eb1f2a1a4af27a3ea26dfead0299d40d4bd94ac9a8dd9d"
+    }
+  ],
+  "read_only": true,
+  "schema": "acp2.b18.read-only-inputs.v1"
+}

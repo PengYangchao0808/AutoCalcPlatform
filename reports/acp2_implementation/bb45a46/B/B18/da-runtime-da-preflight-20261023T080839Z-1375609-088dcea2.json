@@ -1,0 +1,246 @@
+{
+  "artifacts": [
+    {
+      "path": "science-contracts.json",
+      "sha256": "d686b08b36e9efdca37b6699e6957fa2d3cf5d5fee915822e784b7a855ed279d",
+      "size_bytes": 3126
+    },
+    {
+      "path": "a-roundtrip.json",
+      "sha256": "313daa1c73421ce2ba94f5eace03244390ccf6d14d7bc9d7d1bc847a941cac9e",
+      "size_bytes": 2408
+    },
+    {
+      "path": "B18a-to-C18.json",
+      "sha256": "9703cce2ffe235c068d943d449a3219b1f8d443a95799c04e8aa9b65dfc319d3",
+      "size_bytes": 4421
+    },
+    {
+      "path": "step-dag.json",
+      "sha256": "bce02163686d0d22cc9876679d9f317dc05696bfe9856cf8a580e8269ebca66d",
+      "size_bytes": 2953
+    },
+    {
+      "path": "three-step-static.json",
+      "sha256": "cad8b209322f826bf918f1bb9d95d39a9efd0794669c75c494ebfc267e930704",
+      "size_bytes": 1015
+    },
+    {
+      "path": "evidence-artifact.json",
+      "sha256": "68673466d683b0084c610a67fdc4faee10c354636f1f6a1506bd72f5838e4b99",
+      "size_bytes": 3678
+    },
+    {
+      "path": "research-resource-cas.json",
+      "sha256": "0f6d9ba13fe8ee0107ef96614c0b572d131e9bcf014cf75f88684537f103bbf8",
+      "size_bytes": 829
+    },
+    {
+      "path": "dispatch-enablement.json",
+      "sha256": "ff18b2c5b2a38da4f2cb08ca40eba1873dba0532b39447032cb7baaee0d8b2e1",
+      "size_bytes": 703
+    },
+    {
+      "path": "counters.json",
+      "sha256": "3914098f1173854072cef40e2bb340c1f5c408d9ed0b38b5e52674f8d34ea388",
+      "size_bytes": 368
+    },
+    {
+      "path": "da-preflight.json",
+      "sha256": "482eda833390ec7f75bb4d8d13905d9fc95183222e9e47e4e0f479edd4532c5c",
+      "size_bytes": 14933
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "binding_errors=[] mismatched=[]",
+      "name": "b18a.science_binding_digests",
+      "status": "PASS"
+    },
+    {
+      "detail": "capability=electronic.energy task_kind=singlepoint",
+      "name": "b18a.discovery",
+      "status": "PASS"
+    },
+    {
+      "detail": "preserved={'method': True, 'basis': True, 'solvent': True, 'charge': True, 'multiplicity': True, 'structure_path': True, 'resources': True, 'mapping_digest': True} mapping_rejected=True method_rejected=True",
+      "name": "b18a.roundtrip_preserves_science",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[] order=['ts_opt', 'ts_freq', 'ts_irc']",
+      "name": "b18b.bounded_dag",
+      "status": "PASS"
+    },
+    {
+      "detail": "calls=['ts_opt', 'ts_freq', 'ts_irc'] statuses={'ts_opt': 'completed', 'ts_freq': 'completed', 'ts_irc': 'completed'} budget={'task_refs': 1, 'steps': 3, 'qc_invocations': 3, 'attempts': 3, 'bsub': 0}",
+      "name": "b18c.outputref_passing",
+      "status": "PASS"
+    },
+    {
+      "detail": "statuses={'ts_opt': 'completed', 'ts_freq': 'failed', 'ts_irc': 'upstream_failed'}",
+      "name": "b18c.required_upstream_failure_blocks_dependents",
+      "status": "PASS"
+    },
+    {
+      "detail": "dispatches=['ts_opt', 'ts_freq', 'ts_irc'] statuses={'ts_opt': 'completed', 'ts_freq': 'completed', 'ts_irc': 'completed'}",
+      "name": "b18c.publication_failure_no_recompute",
+      "status": "PASS"
+    },
+    {
+      "detail": "redispatch=['ts_irc'] statuses={'ts_freq': 'completed', 'ts_irc': 'completed', 'ts_opt': 'completed'}",
+      "name": "b18c.restart_recovers_only_unfinished",
+      "status": "PASS"
+    },
+    {
+      "detail": "statuses={'ts_opt': 'cancelled', 'ts_freq': 'cancelled', 'ts_irc': 'cancelled'} dispatch=0",
+      "name": "b18c.cancel_creates_no_new_step",
+      "status": "PASS"
+    },
+    {
+      "detail": "statuses=[{'claim_id': 'c-static-supported', 'status': 'supported'}, {'claim_id': 'c-static-refuted', 'status': 'refuted'}, {'claim_id': 'c-static-inconclusive', 'status': 'inconclusive'}, {'claim_id': 'c-static-not-evaluated', 'status': 'not_evaluated'}] completed=True",
+      "name": "b18.evidence_report_statuses_preserved",
+      "status": "PASS"
+    },
+    {
+      "detail": "create=1 cas=2 conflict=True revoked=True",
+      "name": "b18.research_resource_cas",
+      "status": "PASS"
+    },
+    {
+      "detail": "frequency=envelope irc=envelope tsmode=legacy",
+      "name": "b18.dispatch_enablement_ts_frequency_irc",
+      "status": "PASS"
+    },
+    {
+      "detail": "tasks_created=0 http_calls=['GET /api/health', 'GET /api/v1/jobs?limit=1000', 'GET /api/v1/jobs?limit=1000']",
+      "name": "b18.da_preflight_no_side_effects",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "ffe67994c4feb036113d2f2f0b8da8c623669a76527609800ec778655f927bb3",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "command": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "da-runtime",
+    "--phase",
+    "da-preflight",
+    "--controller",
+    "http://127.0.0.1:18778",
+    "--fixture",
+    "reports/acp2_implementation/bb45a46/B/B18/fixtures/da-preflight.json",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B18",
+    "--timeout",
+    "300"
+  ],
+  "contract_version": "1.2.0",
+  "cwd": "<repo>",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "discover",
+    "acceptance.target": "local",
+    "b18.artifacts": [
+      {
+        "path": "science-contracts.json",
+        "sha256": "d686b08b36e9efdca37b6699e6957fa2d3cf5d5fee915822e784b7a855ed279d",
+        "size_bytes": 3126
+      },
+      {
+        "path": "a-roundtrip.json",
+        "sha256": "313daa1c73421ce2ba94f5eace03244390ccf6d14d7bc9d7d1bc847a941cac9e",
+        "size_bytes": 2408
+      },
+      {
+        "path": "B18a-to-C18.json",
+        "sha256": "9703cce2ffe235c068d943d449a3219b1f8d443a95799c04e8aa9b65dfc319d3",
+        "size_bytes": 4421
+      },
+      {
+        "path": "step-dag.json",
+        "sha256": "bce02163686d0d22cc9876679d9f317dc05696bfe9856cf8a580e8269ebca66d",
+        "size_bytes": 2953
+      },
+      {
+        "path": "three-step-static.json",
+        "sha256": "cad8b209322f826bf918f1bb9d95d39a9efd0794669c75c494ebfc267e930704",
+        "size_bytes": 1015
+      },
+      {
+        "path": "evidence-artifact.json",
+        "sha256": "68673466d683b0084c610a67fdc4faee10c354636f1f6a1506bd72f5838e4b99",
+        "size_bytes": 3678
+      },
+      {
+        "path": "research-resource-cas.json",
+        "sha256": "0f6d9ba13fe8ee0107ef96614c0b572d131e9bcf014cf75f88684537f103bbf8",
+        "size_bytes": 829
+      },
+      {
+        "path": "dispatch-enablement.json",
+        "sha256": "ff18b2c5b2a38da4f2cb08ca40eba1873dba0532b39447032cb7baaee0d8b2e1",
+        "size_bytes": 703
+      },
+      {
+        "path": "counters.json",
+        "sha256": "3914098f1173854072cef40e2bb340c1f5c408d9ed0b38b5e52674f8d34ea388",
+        "size_bytes": 368
+      },
+      {
+        "path": "da-preflight.json",
+        "sha256": "482eda833390ec7f75bb4d8d13905d9fc95183222e9e47e4e0f479edd4532c5c",
+        "size_bytes": 14933
+      }
+    ],
+    "b18.counters": {
+      "bsub": 0,
+      "compute_owner": "none (da-preflight is contract-only)",
+      "http_calls": [
+        "GET /api/health",
+        "GET /api/v1/jobs?limit=1000",
+        "GET /api/v1/jobs?limit=1000"
+      ],
+      "prepare_operations": 0,
+      "qc_invocations": 0,
+      "reservations": 0,
+      "schema": "acp2.runtime.b18-counters.v1",
+      "tasks_after": 0,
+      "tasks_before": 0,
+      "tasks_created": 0
+    },
+    "b18.dag_digest": "sha256:daa036d389055cbe87426b93420edd6778b11455f59b4d6687c54ab41e640af3",
+    "b18.evidence_class": "STATIC/SIMULATED",
+    "b18.evidence_manifest_digest": "sha256:693c7cfd570bb1219597da26207626ebc27e7a1fc602f1957a83b70cb1fd7b0c",
+    "b18.fixture": "reports/acp2_implementation/bb45a46/B/B18/fixtures/da-preflight.json",
+    "b18.handoff_digest": "sha256:5f904ec55e41e0df72e297f73c76f30181174ab8fd8a0f83ca225be566c18368",
+    "b18.no_compute": true,
+    "b18.reason": null,
+    "b18.roundtrip_digest": "sha256:6a163941de04f43b8c8327210c2d4c032b4383b70080e8ace9c01029e8838485"
+  },
+  "finished_at": "2026-10-23T08:08:40Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "da-preflight",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T080839Z-1375609-088dcea2",
+  "scenario": "da-runtime",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T08:08:39Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -1,0 +1,37 @@
+{
+  "budget": {
+    "attempts": 3,
+    "bsub": 0,
+    "qc_invocations": 3,
+    "steps": 3,
+    "task_refs": 1
+  },
+  "dispatch_count": 3,
+  "evidence_class": "STATIC/SIMULATED",
+  "outputref_upstream": {
+    "ts_freq": [
+      "sha256:fc407cda0821aa1f523ba0f4101aada9f3d987175acd413a35a9de6a088ac833"
+    ],
+    "ts_irc": [
+      "sha256:78b3c5e9ea782b5a761893ab0e69c30fc93888faa555050e36fea7cd95ab93c1"
+    ],
+    "ts_opt": []
+  },
+  "publish_statuses": {
+    "ts_freq": "published",
+    "ts_irc": "published",
+    "ts_opt": "published"
+  },
+  "real_qc": false,
+  "schema": "acp2.runtime.three-step-static.v1",
+  "step_identities": {
+    "ts_freq": "sha256:421e4db3801679091ac1e656bb089151eac63bb62bce9be9d766a700cec1ca86",
+    "ts_irc": "sha256:6c66a36031a59ee9a05a1edd8eaf4a97c9d30d393ef5c72c0463ffbe501290d7",
+    "ts_opt": "sha256:9e5b1c87fccf591c984d787cd34d05cd7bfb444ae904d8aaeb2777a47bf41d11"
+  },
+  "step_statuses": {
+    "ts_freq": "completed",
+    "ts_irc": "completed",
+    "ts_opt": "completed"
+  }
+}

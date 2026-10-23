@@ -1,0 +1,29 @@
+{
+  "cas": {
+    "digest": "sha256:60921e931fda663a2e21867853b5f339ef6266d4e8774a7e9a4e6e819225f62a",
+    "revision": 2
+  },
+  "conflict": {
+    "observed_current_revision": 2,
+    "rejected": true
+  },
+  "create": {
+    "digest": "sha256:55f0e8af43f2d544a85ec9108cfa0e30c4c363ebd2828da8c9c49281b6ffe741",
+    "document_schema": "acp2.experience.proposal.v1",
+    "resource_id": "rr-b18-proposal",
+    "revision": 1
+  },
+  "no_research_decision_logic": true,
+  "no_task_table": true,
+  "read": {
+    "digest": "sha256:55f0e8af43f2d544a85ec9108cfa0e30c4c363ebd2828da8c9c49281b6ffe741",
+    "document_equal": true,
+    "revision": 1
+  },
+  "resource_schema": "acp2.data.research-resource.v1",
+  "revocation": {
+    "read_refused": true,
+    "resource_id": "rr-b18-record"
+  },
+  "schema": "acp2.runtime.research-resource-cas.v1"
+}

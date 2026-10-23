@@ -60,7 +60,7 @@ SUMMARY_SCHEMA = "acp2.acceptance.summary.v1"
 SAMPLES_SCHEMA = "acp2.acceptance.samples.v1"
 SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 SUPPORTED_CONTRACT_MAJOR = "1"
-CONTRACT_VERSION = "1.1.0"
+CONTRACT_VERSION = "1.2.0"
 
 BASELINE_CANDIDATE_REVISION = "096cdffe9a3817d8ee443d824830d87ec6e07bc2"
 SERVER_CANDIDATE_REVISION = (
@@ -1366,6 +1366,10 @@ def _evidence_kind_for_phase(phase: str) -> str:
         return "fixture"
     if phase == "aggregate":
         return "aggregate"
+    if phase == "da-preflight":
+        # B18 has no compute and creates no task; this is static/simulated
+        # contract evidence, never a live DA execution (B20a owns that).
+        return "fixture"
     return "live"
 
 
@@ -7624,6 +7628,934 @@ def _b16_work_dirs(run_root: Path) -> list[str]:
         return []
 
 
+B18_PREFLIGHT_SCHEMA = "acp2.b18.da-preflight.v1"
+B18_ROUNDTRIP_SCHEMA = "acp2.runtime.science-roundtrip.v1"
+B18_HANDOFF_SCHEMA = "acp2.runtime.b18a-handoff.v1"
+B18_SCIENCE_BINDING = CONTRACT_ROOT / "runtime" / "science-binding.v1.json"
+
+
+def _b18_fixture_path(fixture_dir: Path, value: Any) -> Path:
+    path = Path(str(value))
+    return path if path.is_absolute() else fixture_dir / path
+
+
+def _b18_sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _b18_default_dag(plan_identity: str, release_id: str):
+    from acp_services.runtime.science_binding import document_digest
+    from acp_services.runtime.step_dag import (
+        BoundedStepDag,
+        OutputRef,
+        ScienceStepKind,
+        StepSpec,
+    )
+
+    ts = StepSpec(
+        step_id="ts_opt",
+        kind=ScienceStepKind.OPTIMIZE,
+        intent="STATIC/SIMULATED optimize of the frozen TS guess",
+        parameters={"optimizer": "r2SCAN-3c"},
+        produces=(OutputRef("ts_opt", "ts_geometry"),),
+        structure_role="transition_state",
+        implementation_version="cccp-opt-static-1",
+        capability="optimize.ts",
+    )
+    freq = StepSpec(
+        step_id="ts_freq",
+        kind=ScienceStepKind.FREQUENCY,
+        intent="STATIC/SIMULATED imaginary-frequency screening",
+        parameters={"thermo": "grimme"},
+        consumes=(
+            OutputRef(
+                "ts_opt",
+                "ts_geometry",
+                document_digest({"step": "ts_opt", "product": "ts_geometry"}),
+            ),
+        ),
+        produces=(OutputRef("ts_freq", "frequency_summary"),),
+        structure_role="transition_state",
+        implementation_version="cccp-freq-static-1",
+        capability="frequency.ts",
+    )
+    irc = StepSpec(
+        step_id="ts_irc",
+        kind=ScienceStepKind.IRC,
+        intent="STATIC/SIMULATED bidirectional IRC endpoint check",
+        parameters={"directions": ["forward", "reverse"]},
+        consumes=(
+            OutputRef(
+                "ts_freq",
+                "frequency_summary",
+                document_digest({"step": "ts_freq", "product": "frequency_summary"}),
+            ),
+        ),
+        produces=(OutputRef("ts_irc", "irc_paths"),),
+        structure_role="transition_state",
+        implementation_version="cccp-irc-static-1",
+        capability="irc.ts",
+    )
+    return BoundedStepDag(
+        recipe_id="recipe.da.static.v1",
+        task_ref="task-b18-static",
+        steps=(ts, freq, irc),
+    )
+
+
+def _b18_static_dispatch(fail_on: str | None = None):
+    from acp_services.runtime.science_binding import document_digest
+    from acp_services.runtime.step_dag import StepOutcome
+
+    calls: list[str] = []
+    upstream: dict[str, list[str]] = {}
+
+    def dispatch(context: Any) -> StepOutcome:
+        step_id = context.step.step_id
+        calls.append(step_id)
+        upstream[step_id] = list(context.upstream_digests)
+        if fail_on == step_id:
+            raise RuntimeError("STATIC simulated compute failure")
+        return StepOutcome(
+            output_digests={
+                ref.product_kind: document_digest({"step": step_id, "product": ref.product_kind})
+                for ref in context.step.produces
+            },
+            receipt_digest=document_digest({"receipt": step_id}),
+            result_digest=document_digest({"result": step_id}),
+            publish_payload={"step_id": step_id, "simulated": True},
+        )
+
+    dispatch.calls = calls  # type: ignore[attr-defined]
+    dispatch.upstream = upstream  # type: ignore[attr-defined]
+    return dispatch
+
+
+def _b18_static_publish(fail_first_for: str | None = None):
+    state = {"fail_first_for": fail_first_for}
+    published: list[str] = []
+
+    def publish(step: Any, outcome: Any) -> dict[str, str]:
+        if state["fail_first_for"] == step.step_id:
+            state["fail_first_for"] = None
+            raise OSError("STATIC simulated publication failure")
+        published.append(step.step_id)
+        return dict(outcome.output_digests)
+
+    publish.published = published  # type: ignore[attr-defined]
+    return publish
+
+
+def _b18_executor(dag: Any, dispatch: Any, publish: Any, *, plan_identity: str, release_id: str):
+    from acp_services.runtime.step_dag import BoundedStepDagExecutor
+
+    return BoundedStepDagExecutor(
+        dag,
+        dispatch,
+        publish,
+        plan_identity=plan_identity,
+        release_id=release_id,
+    )
+
+
+def _b18_collect_artifacts(out_dir: Path, names: Sequence[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for name in names:
+        path = out_dir / name
+        if not path.is_file():
+            continue
+        rows.append(
+            {
+                "path": str(path.relative_to(out_dir)),
+                "size_bytes": path.stat().st_size,
+                "sha256": _b18_sha256_file(path),
+            }
+        )
+    return rows
+
+
+def _run_da_preflight(
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B18 da-preflight: binding/round-trip/DAG proof with **no compute**.
+
+    This branch never creates a task, prepare operation, reservation, QC
+    invocation or bsub.  It reads A's published contracts, converts C's P2
+    minimal form to a CCCP ``TaskRequest``, validates the bounded one-TaskRef
+    DAG, runs the STATIC/SIMULATED three-step proof and registers the
+    EvidenceReport / research-resource fixtures through B12/Data.
+    """
+    from acp_services.data.artifacts import ArtifactAuthorization, ArtifactStore
+    from acp_services.data.research_resources import (
+        PROPOSAL_SCHEMA,
+        RESEARCH_RECORD_SCHEMA,
+        ResearchResourceConflictError,
+        ResearchResourceRequest,
+        ResearchResourceRevokedError,
+        ResearchResourceStore,
+        research_resource_digest,
+    )
+    from acp_services.runtime import science_binding as sb
+    from acp_services.runtime import step_dag as dagmod
+    from acp_services.runtime.step_dag import ControlIntent, PublishStatus, StepStatus
+
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "discover",
+        "acceptance.target": "local",
+        "b18.fixture": str(fixture_path),
+        "b18.evidence_class": "STATIC/SIMULATED",
+        "b18.no_compute": True,
+    }
+    fixture_file = Path(fixture_path)
+    try:
+        document = json.loads(fixture_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return (
+            EXIT_NOT_VERIFIED,
+            [
+                _b15_assert(
+                    "b18.fixture_readable", False, f"{type(exc).__name__}: {exc}", not_verified=True
+                )
+            ],
+            {**extensions, "b18.reason": "fixture_unreadable"},
+        )
+    if not isinstance(document, dict) or document.get("schema") != B18_PREFLIGHT_SCHEMA:
+        return (
+            EXIT_NOT_VERIFIED,
+            [
+                _b15_assert(
+                    "b18.fixture_schema",
+                    False,
+                    f"fixture is not {B18_PREFLIGHT_SCHEMA}",
+                    not_verified=True,
+                )
+            ],
+            {**extensions, "b18.reason": "fixture_schema"},
+        )
+    fixture_dir = fixture_file.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    state_dir = out_dir / "b18-state"
+    if state_dir.exists():
+        shutil.rmtree(state_dir)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    http_calls: list[str] = []
+    counters_before: int | None = None
+    health: Any = None
+    if controller:
+        base = controller.rstrip("/")
+        try:
+            health = _http_json(base + "/api/health", timeout)
+            http_calls.append("GET /api/health")
+            counters_before = _controller_task_count(base, timeout)
+            http_calls.append("GET /api/v1/jobs?limit=1000")
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
+            return (
+                EXIT_NOT_VERIFIED,
+                [
+                    _b15_assert(
+                        "b18.controller_health",
+                        False,
+                        f"{type(exc).__name__}: {exc}",
+                        not_verified=True,
+                    )
+                ],
+                {**extensions, "b18.reason": "controller_unreachable"},
+            )
+
+    # 1. A contract refs + the delivered binding.
+    try:
+        refs = sb.load_science_contract_refs(
+            _b18_fixture_path(fixture_dir, document["science_root"])
+        )
+        binding = json.loads(B18_SCIENCE_BINDING.read_text(encoding="utf-8"))
+        binding_errors = sb.validate_science_binding(binding)
+        actual_by_id = {schema_id: ref.digest for schema_id, ref in refs.items()}
+        declared = {
+            entry["schema_id"]: entry["digest"] for entry in binding["science_contracts"]["entries"]
+        }
+        mismatched = [
+            schema_id
+            for schema_id, digest in declared.items()
+            if actual_by_id.get(schema_id) != digest
+        ]
+        contract_ok = not binding_errors and not mismatched
+        assertions.append(
+            _b15_assert(
+                "b18a.science_binding_digests",
+                contract_ok,
+                f"binding_errors={binding_errors} mismatched={mismatched}",
+            )
+        )
+        contract_refs_doc = {
+            "schema": "acp2.runtime.science-contract-refs.v1",
+            "binding_schema": binding["schema"],
+            "binding_contract_version": binding["contract_version"],
+            "science_contract_set": binding["science_contracts"]["contract_set"],
+            "entries": [refs[key].to_dict() for key in sorted(refs)],
+        }
+        _b15_write_json(out_dir / "science-contracts.json", contract_refs_doc)
+    except (OSError, KeyError, ValueError) as exc:
+        assertions.append(
+            _b15_assert("b18a.science_binding_digests", False, f"{type(exc).__name__}: {exc}")
+        )
+        refs = {}
+        binding = {}
+        contract_refs_doc = {}
+
+    # 2. A descriptor -> B discovery.
+    discovery = None
+    try:
+        capability = json.loads(
+            _b18_fixture_path(fixture_dir, document["capability"]).read_text(encoding="utf-8")
+        )
+        task_binding = json.loads(
+            _b18_fixture_path(fixture_dir, document["task_binding"]).read_text(encoding="utf-8")
+        )
+        discovery = sb.discover_capability(capability, task_binding)
+        assertions.append(
+            _b15_assert(
+                "b18a.discovery",
+                discovery.task_kind == document.get("expected_task_kind", discovery.task_kind),
+                f"capability={discovery.capability_id} task_kind={discovery.task_kind}",
+            )
+        )
+    except (OSError, KeyError, ValueError) as exc:
+        assertions.append(_b15_assert("b18a.discovery", False, f"{type(exc).__name__}: {exc}"))
+
+    # 3. C P2 minimal form -> B validation -> CCCP TaskRequest.
+    roundtrip_doc: dict[str, Any] = {}
+    try:
+        form_document = json.loads(_b18_fixture_dir_read(fixture_dir, document["p2_form"]))
+        form = form_document.get("form") if isinstance(form_document, dict) else None
+        if not isinstance(form, dict):
+            raise ValueError("P2 minimal form has no form object")
+        reaction = json.loads(_b18_fixture_dir_read(fixture_dir, document["reaction"]))
+        if discovery is None:
+            raise ValueError("discovery failed before the round trip")
+        request = sb.build_task_request(form, discovery, reaction=reaction)
+        request_dict = request.to_dict()
+        preserved = {
+            "method": request.level.method == form["method"]["method"],
+            "basis": request.level.basis == form["method"]["basis"],
+            "solvent": request.level.solvent == form["method"]["solvent"],
+            "charge": request.charge == form["charge"],
+            "multiplicity": request.multiplicity == form["multiplicity"],
+            "structure_path": request.structure is not None
+            and str(request.structure.path) == form["structure"]["path"],
+            "resources": request.resources.nproc == form["resources"]["nproc"],
+            "mapping_digest": sb.reaction_mapping_digest(reaction) == form["mapping_digest"],
+        }
+        # Negative: a forged mapping digest is rejected before adoption.
+        forged = dict(form)
+        forged["mapping_digest"] = "sha256:" + "0" * 64
+        mapping_rejected = False
+        try:
+            sb.build_task_request(forged, discovery, reaction=reaction)
+        except sb.AtomMappingMismatchError:
+            mapping_rejected = True
+        # Negative: a missing method is a scientific precondition, not a default.
+        missing_method = dict(form)
+        missing_method["method"] = dict(form["method"], method="")
+        method_rejected = False
+        try:
+            sb.build_task_request(missing_method, discovery, reaction=reaction)
+        except sb.ScientificPreconditionError as exc:
+            method_rejected = exc.code == "method_identity_missing"
+        roundtrip_ok = all(preserved.values()) and mapping_rejected and method_rejected
+        assertions.append(
+            _b15_assert(
+                "b18a.roundtrip_preserves_science",
+                roundtrip_ok,
+                f"preserved={preserved} mapping_rejected={mapping_rejected} "
+                f"method_rejected={method_rejected}",
+            )
+        )
+        roundtrip_doc = {
+            "schema": B18_ROUNDTRIP_SCHEMA,
+            "evidence_class": "STATIC/SIMULATED",
+            "a_descriptor": {
+                "capability_id": discovery.capability_id,
+                "task_kind": discovery.task_kind,
+                "implementation_id": discovery.implementation_id,
+                "delegation_target": discovery.delegation_target,
+                "source": str(_b18_fixture_path(fixture_dir, document["capability"])),
+            },
+            "b_discovery": discovery.to_dict(),
+            "c_p2_minimal_form": {
+                "source": form_document.get("source"),
+                "source_commit": form_document.get("source_commit"),
+                "digest": sb.document_digest(form),
+                "production_path": "frontend/js/workbench/features/science-question.js",
+                "full_dynamic_form": "C T-38/H5 (not a B18 gate)",
+            },
+            "cccp_request": request_dict,
+            "preserved": preserved,
+            "negatives": {
+                "atom_mapping_mismatch": "rejected_before_adoption",
+                "missing_method": "method_identity_missing",
+            },
+        }
+        roundtrip_doc["roundtrip_digest"] = sb.document_digest(roundtrip_doc)
+        _b15_write_json(out_dir / "a-roundtrip.json", roundtrip_doc)
+    except (OSError, KeyError, ValueError) as exc:
+        assertions.append(
+            _b15_assert("b18a.roundtrip_preserves_science", False, f"{type(exc).__name__}: {exc}")
+        )
+
+    # 4. Bounded one-TaskRef DAG.
+    dag = None
+    dag_errors: list[str] = []
+    try:
+        dag = _b18_default_dag(
+            str(document.get("plan_identity") or "v2:0123456789abcdef0123456789abcdef"),
+            str(document.get("release_id") or "release-b18-static"),
+        )
+        dag_errors = dag.validate()
+        dag_doc = dag.to_dict()
+        dag_doc["evidence_class"] = "STATIC/SIMULATED"
+        dag_doc["topological_order"] = dag.topological_order()
+        _b15_write_json(out_dir / "step-dag.json", dag_doc)
+        assertions.append(
+            _b15_assert(
+                "b18b.bounded_dag",
+                not dag_errors
+                and dag_doc["task_ref"] == "task-b18-static"
+                and dag_doc["steps"][-1]["kind"] == "irc"
+                and dag_doc["steps"][-1]["entrypoint"] == "cccp.calculation.run_irc",
+                f"errors={dag_errors} order={dag_doc['topological_order']}",
+            )
+        )
+    except (KeyError, ValueError) as exc:
+        assertions.append(_b15_assert("b18b.bounded_dag", False, f"{type(exc).__name__}: {exc}"))
+
+    # 5. STATIC/SIMULATED three-step run + recovery/publication/cancel/mapping negatives.
+    negatives: dict[str, Any] = {}
+    plan_identity = str(document.get("plan_identity") or "v2:0123456789abcdef0123456789abcdef")
+    release_id = str(document.get("release_id") or "release-b18-static")
+    if dag is not None:
+        try:
+            dispatch = _b18_static_dispatch()
+            publish = _b18_static_publish()
+            executor = _b18_executor(
+                dag, dispatch, publish, plan_identity=plan_identity, release_id=release_id
+            )
+            state = executor.run()
+            static_ok = (
+                dispatch.calls == ["ts_opt", "ts_freq", "ts_irc"]
+                and state.statuses()
+                == {"ts_opt": "completed", "ts_freq": "completed", "ts_irc": "completed"}
+                and executor.publish_statuses()
+                == {"ts_opt": "published", "ts_freq": "published", "ts_irc": "published"}
+                and dispatch.upstream["ts_freq"]
+                == [sb.document_digest({"step": "ts_opt", "product": "ts_geometry"})]
+                and state.budget.to_dict()
+                == {
+                    "task_refs": 1,
+                    "steps": 3,
+                    "qc_invocations": 3,
+                    "attempts": 3,
+                    "bsub": 0,
+                }
+            )
+            static_doc = {
+                "schema": "acp2.runtime.three-step-static.v1",
+                "evidence_class": "STATIC/SIMULATED",
+                "real_qc": False,
+                "outputref_upstream": dispatch.upstream,
+                "step_statuses": state.statuses(),
+                "publish_statuses": executor.publish_statuses(),
+                "budget": state.budget.to_dict(),
+                "step_identities": {
+                    step_id: item.step_identity for step_id, item in state.states.items()
+                },
+                "dispatch_count": state.dispatch_count,
+            }
+            _b15_write_json(out_dir / "three-step-static.json", static_doc)
+            assertions.append(
+                _b15_assert(
+                    "b18c.outputref_passing",
+                    static_ok,
+                    f"calls={dispatch.calls} statuses={state.statuses()} "
+                    f"budget={state.budget.to_dict()}",
+                )
+            )
+        except (KeyError, ValueError) as exc:
+            assertions.append(
+                _b15_assert("b18c.outputref_passing", False, f"{type(exc).__name__}: {exc}")
+            )
+
+        # Required-upstream failure blocks dependents.
+        try:
+            bad_dispatch = _b18_static_dispatch(fail_on="ts_freq")
+            bad_state = _b18_executor(
+                dag,
+                bad_dispatch,
+                _b18_static_publish(),
+                plan_identity=plan_identity,
+                release_id=release_id,
+            ).run()
+            blocked_ok = (
+                bad_state.states["ts_freq"].status is StepStatus.FAILED
+                and bad_state.states["ts_irc"].status is StepStatus.UPSTREAM_FAILED
+                and bad_state.states["ts_irc"].status is not StepStatus.COMPLETED
+            )
+            negatives["required_upstream_failure"] = bad_state.statuses()
+            assertions.append(
+                _b15_assert(
+                    "b18c.required_upstream_failure_blocks_dependents",
+                    blocked_ok,
+                    f"statuses={bad_state.statuses()}",
+                )
+            )
+        except (KeyError, ValueError) as exc:
+            assertions.append(
+                _b15_assert(
+                    "b18c.required_upstream_failure_blocks_dependents",
+                    False,
+                    f"{type(exc).__name__}: {exc}",
+                )
+            )
+
+        # Publication failure does not recompute.
+        try:
+            pub_dispatch = _b18_static_dispatch()
+            pub_publish = _b18_static_publish(fail_first_for="ts_freq")
+            pub_executor = _b18_executor(
+                dag, pub_dispatch, pub_publish, plan_identity=plan_identity, release_id=release_id
+            )
+            pub_state = pub_executor.run()
+            dispatches_before = pub_state.dispatch_count
+            failed_publish_ok = (
+                pub_state.states["ts_freq"].status is StepStatus.COMPLETED
+                and pub_state.states["ts_freq"].publish_status is PublishStatus.FAILED
+                and pub_state.states["ts_irc"].status is StepStatus.BLOCKED
+                and pub_executor.retry_publication("ts_freq")
+                and pub_state.dispatch_count == dispatches_before
+                and pub_dispatch.calls == ["ts_opt", "ts_freq"]
+            )
+            pub_executor.run()
+            negatives["publication_failure"] = {
+                "dispatches_before_retry": dispatches_before,
+                "dispatches_after_retry": pub_state.dispatch_count,
+                "statuses": pub_state.statuses(),
+            }
+            assertions.append(
+                _b15_assert(
+                    "b18c.publication_failure_no_recompute",
+                    failed_publish_ok,
+                    f"dispatches={pub_dispatch.calls} statuses={pub_state.statuses()}",
+                )
+            )
+        except (KeyError, ValueError) as exc:
+            assertions.append(
+                _b15_assert(
+                    "b18c.publication_failure_no_recompute",
+                    False,
+                    f"{type(exc).__name__}: {exc}",
+                )
+            )
+
+        # Restart recovers only unfinished steps.
+        try:
+            restart_dispatch = _b18_static_dispatch()
+            first = _b18_executor(
+                dag,
+                restart_dispatch,
+                _b18_static_publish(),
+                plan_identity=plan_identity,
+                release_id=release_id,
+            )
+            first.run()
+            persisted = first.state.to_dict()
+            by_id = {state["step_id"]: state for state in persisted["states"]}
+            by_id["ts_irc"]["status"] = "running"
+            by_id["ts_freq"]["status"] = "completed"
+            by_id["ts_freq"]["publish_status"] = "published"
+            second_dispatch = _b18_static_dispatch()
+            recovered = dagmod.BoundedStepDagExecutor.recover(
+                dag,
+                second_dispatch,
+                _b18_static_publish(),
+                plan_identity=plan_identity,
+                release_id=release_id,
+                persisted=persisted,
+            )
+            recovered.run()
+            restart_ok = (
+                second_dispatch.calls == ["ts_irc"]
+                and recovered.state.states["ts_opt"].status is StepStatus.COMPLETED
+                and recovered.state.states["ts_freq"].status is StepStatus.COMPLETED
+                and recovered.state.states["ts_irc"].status is StepStatus.COMPLETED
+            )
+            negatives["restart"] = {
+                "redispatch": second_dispatch.calls,
+                "statuses": recovered.state.statuses(),
+            }
+            assertions.append(
+                _b15_assert(
+                    "b18c.restart_recovers_only_unfinished",
+                    restart_ok,
+                    f"redispatch={second_dispatch.calls} statuses={recovered.state.statuses()}",
+                )
+            )
+        except (KeyError, ValueError) as exc:
+            assertions.append(
+                _b15_assert(
+                    "b18c.restart_recovers_only_unfinished", False, f"{type(exc).__name__}: {exc}"
+                )
+            )
+
+        # Cancel creates no new step.
+        try:
+            cancel_dispatch = _b18_static_dispatch()
+            cancel_executor = _b18_executor(
+                dag,
+                cancel_dispatch,
+                _b18_static_publish(),
+                plan_identity=plan_identity,
+                release_id=release_id,
+            )
+            cancel_statuses = cancel_executor.apply_control(ControlIntent.CANCEL)
+            cancel_executor.run()
+            cancel_ok = (
+                set(cancel_statuses.values()) == {"cancelled"}
+                and cancel_executor.state.dispatch_count == 0
+                and cancel_dispatch.calls == []
+            )
+            negatives["cancel"] = {
+                "statuses": cancel_statuses,
+                "dispatch_count": cancel_executor.state.dispatch_count,
+            }
+            assertions.append(
+                _b15_assert(
+                    "b18c.cancel_creates_no_new_step",
+                    cancel_ok,
+                    f"statuses={cancel_statuses} dispatch={cancel_executor.state.dispatch_count}",
+                )
+            )
+        except (KeyError, ValueError) as exc:
+            assertions.append(
+                _b15_assert(
+                    "b18c.cancel_creates_no_new_step", False, f"{type(exc).__name__}: {exc}"
+                )
+            )
+
+    # 6. EvidenceReport registration (statuses preserved, completed != supported).
+    evidence_doc: dict[str, Any] = {}
+    try:
+        report = json.loads(_b18_fixture_dir_read(fixture_dir, document["evidence_report"]))
+        store = ArtifactStore(state_dir / "artifacts")
+        native_files = document.get("native_files") or [
+            {
+                "relative_path": "native/stdout.txt",
+                "role": "native_output",
+                "body": "STATIC stdout\n",
+            },
+            {
+                "relative_path": "native/stderr.txt",
+                "role": "native_output",
+                "body": "STATIC stderr\n",
+            },
+        ]
+        manifest = sb.register_evidence_report(
+            report,
+            store=store,
+            job_id="b18-static",
+            attempt=1,
+            native_files=native_files,
+            provenance_digest=sb.document_digest({"provenance": "STATIC/SIMULATED"}),
+            authorization=ArtifactAuthorization(
+                principal_id="b18-preflight", project_id="proj-b18"
+            ),
+        )
+        served = store.read(manifest.report_ref)
+        served_doc = json.loads(served.decode("utf-8"))
+        evidence_doc = manifest.to_dict()
+        evidence_doc["served_digest"] = "sha256:" + hashlib.sha256(served).hexdigest()
+        evidence_doc["evidence_class"] = "STATIC/SIMULATED"
+        _b15_write_json(out_dir / "evidence-artifact.json", evidence_doc)
+        statuses_ok = dict(manifest.claim_statuses) == {
+            str(claim["claim_id"]): str(claim["status"]) for claim in report["claims"]
+        }
+        separation_ok = (
+            manifest.task_execution_completed is True
+            and "claim_supported" not in evidence_doc
+            and served_doc == report
+        )
+        assertions.append(
+            _b15_assert(
+                "b18.evidence_report_statuses_preserved",
+                statuses_ok and separation_ok,
+                f"statuses={evidence_doc.get('claim_statuses')} "
+                f"completed={manifest.task_execution_completed}",
+            )
+        )
+    except (OSError, KeyError, ValueError) as exc:
+        assertions.append(
+            _b15_assert(
+                "b18.evidence_report_statuses_preserved", False, f"{type(exc).__name__}: {exc}"
+            )
+        )
+
+    # 7. Proposal/ResearchRecord create/read/CAS/conflict/revocation.
+    resource_doc: dict[str, Any] = {}
+    try:
+        proposal = json.loads(_b18_fixture_dir_read(fixture_dir, document["proposal"]))
+        record = json.loads(_b18_fixture_dir_read(fixture_dir, document["research_record"]))
+        resource_store = ResearchResourceStore(state_dir / "research.db")
+        try:
+            created = resource_store.create(
+                ResearchResourceRequest(
+                    resource_id="rr-b18-proposal",
+                    schema=PROPOSAL_SCHEMA,
+                    document=proposal,
+                    principal_id="b18-preflight",
+                    project_id="proj-acp2-da",
+                )
+            )
+            read_back = resource_store.read(
+                "rr-b18-proposal",
+                principal_id="b18-preflight",
+                project_id="proj-acp2-da",
+            )
+            changed = dict(proposal)
+            changed["hypothesis"] = changed["hypothesis"] + " (B18 CAS revision)"
+            updated = resource_store.compare_and_swap(
+                "rr-b18-proposal",
+                expected_revision=created.revision,
+                document=changed,
+                principal_id="b18-preflight",
+                project_id="proj-acp2-da",
+            )
+            conflict_seen = False
+            try:
+                resource_store.compare_and_swap(
+                    "rr-b18-proposal",
+                    expected_revision=created.revision,
+                    document=proposal,
+                    principal_id="b18-preflight",
+                    project_id="proj-acp2-da",
+                )
+            except ResearchResourceConflictError as exc:
+                conflict_seen = exc.current_revision == updated.revision
+            record_created = resource_store.create(
+                ResearchResourceRequest(
+                    resource_id="rr-b18-record",
+                    schema=RESEARCH_RECORD_SCHEMA,
+                    document=record,
+                    principal_id="b18-preflight",
+                    project_id="proj-acp2-da",
+                )
+            )
+            resource_store.revoke(
+                "rr-b18-record",
+                principal_id="b18-preflight",
+                project_id="proj-acp2-da",
+                reason="B18 revocation negative",
+            )
+            revoked_seen = False
+            try:
+                resource_store.read(
+                    "rr-b18-record",
+                    principal_id="b18-preflight",
+                    project_id="proj-acp2-da",
+                )
+            except ResearchResourceRevokedError:
+                revoked_seen = True
+            resource_ok = (
+                created.revision == 1
+                and read_back.digest == created.digest
+                and read_back.document == proposal
+                and updated.revision == 2
+                and updated.digest == research_resource_digest(changed)
+                and conflict_seen
+                and record_created.revision == 1
+                and revoked_seen
+            )
+            resource_doc = {
+                "schema": "acp2.runtime.research-resource-cas.v1",
+                "resource_schema": "acp2.data.research-resource.v1",
+                "create": {
+                    "resource_id": created.resource_id,
+                    "revision": created.revision,
+                    "digest": created.digest,
+                    "document_schema": created.schema,
+                },
+                "read": {
+                    "revision": read_back.revision,
+                    "digest": read_back.digest,
+                    "document_equal": read_back.document == proposal,
+                },
+                "cas": {"revision": updated.revision, "digest": updated.digest},
+                "conflict": {"observed_current_revision": 2, "rejected": conflict_seen},
+                "revocation": {"resource_id": "rr-b18-record", "read_refused": revoked_seen},
+                "no_task_table": True,
+                "no_research_decision_logic": True,
+            }
+            _b15_write_json(out_dir / "research-resource-cas.json", resource_doc)
+            assertions.append(
+                _b15_assert(
+                    "b18.research_resource_cas",
+                    resource_ok,
+                    f"create={created.revision} cas={updated.revision} "
+                    f"conflict={conflict_seen} revoked={revoked_seen}",
+                )
+            )
+        finally:
+            resource_store.close()
+    except (OSError, KeyError, ValueError) as exc:
+        assertions.append(
+            _b15_assert("b18.research_resource_cas", False, f"{type(exc).__name__}: {exc}")
+        )
+
+    # 8. Existing workflow/Task dispatch enablement evidence (frequency/IRC/TS).
+    try:
+        from acp_services.runtime.workflow_enablement import enablement_for
+
+        rows = {name: enablement_for(name).to_dict() for name in ("frequency", "irc", "tsmode")}
+        enablement_ok = (
+            rows["frequency"]["entry"] == "envelope"
+            and rows["irc"]["entry"] == "envelope"
+            and rows["tsmode"]["entry"] == "legacy"
+            and all(row["evidence"] for row in rows.values())
+        )
+        _b15_write_json(out_dir / "dispatch-enablement.json", {"rows": rows})
+        assertions.append(
+            _b15_assert(
+                "b18.dispatch_enablement_ts_frequency_irc",
+                enablement_ok,
+                f"frequency={rows['frequency']['entry']} irc={rows['irc']['entry']} "
+                f"tsmode={rows['tsmode']['entry']}",
+            )
+        )
+    except (KeyError, ValueError) as exc:
+        assertions.append(
+            _b15_assert(
+                "b18.dispatch_enablement_ts_frequency_irc", False, f"{type(exc).__name__}: {exc}"
+            )
+        )
+
+    # 9. No-compute counters: only read-only health/task-list calls were made.
+    counters: dict[str, Any] = {
+        "schema": "acp2.runtime.b18-counters.v1",
+        "http_calls": http_calls,
+        "tasks_created": None,
+        "qc_invocations": 0,
+        "prepare_operations": 0,
+        "reservations": 0,
+        "bsub": 0,
+        "compute_owner": "none (da-preflight is contract-only)",
+    }
+    if controller:
+        try:
+            after = _controller_task_count(controller.rstrip("/"), timeout)
+            http_calls.append("GET /api/v1/jobs?limit=1000")
+            counters["tasks_before"] = counters_before
+            counters["tasks_after"] = after
+            counters["tasks_created"] = None if counters_before is None else after - counters_before
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
+            counters["task_count_error"] = f"{type(exc).__name__}: {exc}"
+    counters["http_calls"] = http_calls
+    counters_ok = (
+        counters["tasks_created"] in (None, 0)
+        and counters["qc_invocations"] == 0
+        and counters["prepare_operations"] == 0
+        and counters["reservations"] == 0
+        and counters["bsub"] == 0
+        and all(call.startswith("GET ") for call in http_calls)
+    )
+    _b15_write_json(out_dir / "counters.json", counters)
+    assertions.append(
+        _b15_assert(
+            "b18.da_preflight_no_side_effects",
+            counters_ok,
+            f"tasks_created={counters['tasks_created']} http_calls={http_calls}",
+        )
+    )
+
+    # 10. B18a handoff to C18 (separately consumable; no execution gate).
+    if roundtrip_doc:
+        handoff = {
+            "schema": B18_HANDOFF_SCHEMA,
+            "contract_version": "1.0.0",
+            "from": "B18a",
+            "to": "C18",
+            "status": "delivered",
+            "science_binding": str(B18_SCIENCE_BINDING),
+            "science_binding_contract_version": binding.get("contract_version"),
+            "science_contract_set": binding.get("science_contracts", {}).get("contract_set"),
+            "science_contracts": contract_refs_doc,
+            "roundtrip_schema": B18_ROUNDTRIP_SCHEMA,
+            "roundtrip_digest": roundtrip_doc.get("roundtrip_digest"),
+            "c_form_fixture": str(_b18_fixture_path(fixture_dir, document["p2_form"])),
+            "c_form_digest": roundtrip_doc.get("c_p2_minimal_form", {}).get("digest"),
+            "c18_consumes": [
+                "science_contracts.entries (schema id/version/digest)",
+                "a-roundtrip.json",
+                "the P2 minimal form field mapping",
+            ],
+            "c18_does_not_need": "B18b execution wiring or B18c recovery evidence",
+            "full_dynamic_form": "C T-38/H5; never a B18 gate",
+            "does_not_execute": True,
+            "does_not_copy_a_parsers": True,
+        }
+        handoff["handoff_digest"] = sb.document_digest(handoff)
+        _b15_write_json(out_dir / "B18a-to-C18.json", handoff)
+    else:
+        handoff = {}
+
+    preflight_doc = {
+        "schema": B18_PREFLIGHT_SCHEMA,
+        "evidence_class": "STATIC/SIMULATED",
+        "real_qc": False,
+        "roundtrip": roundtrip_doc,
+        "dag": dag.to_dict() if dag is not None else None,
+        "negatives": negatives,
+        "evidence_manifest": evidence_doc,
+        "research_resource": resource_doc,
+        "counters": counters,
+        "assertions": assertions,
+        "controller_health": health,
+    }
+    _b15_write_json(out_dir / "da-preflight.json", preflight_doc)
+    artifact_names = [
+        "science-contracts.json",
+        "a-roundtrip.json",
+        "B18a-to-C18.json",
+        "step-dag.json",
+        "three-step-static.json",
+        "evidence-artifact.json",
+        "research-resource-cas.json",
+        "dispatch-enablement.json",
+        "counters.json",
+        "da-preflight.json",
+    ]
+    extensions["b18.artifacts"] = _b18_collect_artifacts(out_dir, artifact_names)
+    extensions["b18.roundtrip_digest"] = roundtrip_doc.get("roundtrip_digest")
+    extensions["b18.dag_digest"] = None if dag is None else sb.document_digest(dag.to_dict())
+    extensions["b18.evidence_manifest_digest"] = (
+        None if not evidence_doc else sb.document_digest(evidence_doc)
+    )
+    extensions["b18.handoff_digest"] = handoff.get("handoff_digest") if handoff else None
+    extensions["b18.counters"] = counters
+    failed = [item["name"] for item in assertions if item["status"] != "PASS"]
+    extensions["b18.reason"] = None if not failed else "assertion_failed:" + ",".join(failed)
+    return (EXIT_PASS if not failed else EXIT_FAIL, assertions, extensions)
+
+
+def _b18_fixture_dir_read(fixture_dir: Path, value: Any) -> str:
+    path = _b18_fixture_path(fixture_dir, value)
+    return path.read_text(encoding="utf-8")
+
+
 def _run_approval_budget(
     phase: str,
     controller: str | None,
@@ -10190,6 +11122,22 @@ def execute_scenario(
             return code_value
 
         handler = approval_budget
+    elif spec.scenario == "da-runtime" and phase_name == "da-preflight":
+
+        def da_preflight(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_da_preflight(
+                args.controller,
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b18.artifacts", [])
+            outcome["reason"] = extensions.get("b18.reason")
+            return code_value
+
+        handler = da_preflight
     elif spec.scenario == "multitenant":
         if phase_name != "multitenant:authz":
 
@@ -10257,7 +11205,7 @@ def execute_scenario(
         "control-recovery",
         "multitenant",
         "approval-budget",
-    }:
+    } or (spec.scenario == "da-runtime" and phase_name == "da-preflight"):
         result = (
             "PASS"
             if code == EXIT_PASS
@@ -10290,7 +11238,7 @@ def execute_scenario(
         "control-recovery",
         "multitenant",
         "approval-budget",
-    }:
+    } or (spec.scenario == "da-runtime" and phase_name == "da-preflight"):
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
     else:
