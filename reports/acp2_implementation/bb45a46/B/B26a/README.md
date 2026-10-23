@@ -1,6 +1,6 @@
 # B26a — External reproduction from a clean shell (2026-10-23)
 
-**Schema:** `acp2.b26a.reproduction-matrix.v1` · **Overall:** `FAIL` (two real FAIL rows; four NOT_VERIFIED; no row inflated)
+**Schema:** `acp2.b26a.reproduction-matrix.v1` · **Overall:** `NOT_VERIFIED` (reconciled at HEAD `8349f21`; the original `FAIL` at `dc72de2` is preserved in `result_history`; both original FAIL rows PASS after B-fix-4; four rows remain NOT_VERIFIED)
 **Release under test:** `0.3.0`, built from clean source `a84c4266bfc4738c8efc2988b7c5c37079a8a324` (`release/release-manifest.json`) · **Repo HEAD at reproduction:** `f60fda89b700bf1f828bf651183f88cf5e1913da` · **Controller env label in B15/B17 receipts:** `f60fda8…` (not a code claim)
 **Independence:** `independent_operator: false (same agent/session)` — this is a **self-reproduction**, not an independent operator run.
 
@@ -38,19 +38,29 @@ The full four-role clean-install scenario is `package-install/` (`summary.json`,
 | Historical read-only | PASS | compat readers load S2/S3/S4/batch/refinement/candidate; historical v2 manifest loads with 1 product |
 | Local execution | PASS | installed `acp run` xTB and ORCA singlepoint both exit 0; CCCP controlled sample exit 0 |
 | LSF normal + control | NOT_VERIFIED(lsf_prerequisite_missing) | no `bsub`/`bjobs`/`bstop`/`bresume`/`LSF_ENVDIR`; no fake LSF invoked |
-| Authorization (B15) | **FAIL** | 10 authz assertions PASS; key/account revocation SSE did not emit `permission_changed` (read-after-revoke is 401) |
+| Authorization (B15) | **PASS** after B-fix-4 | 10 authz assertions PASS; original revocation SSE FAIL was a harness fixture-state defect and now emits `permission_changed` (read-after-revoke 401). Original FAIL retained in `result_history`. |
 | Budget (B17) | PASS | at-cap 201, over-cap 403, race one 201/one 403, restart preserves budget, settlement idempotent |
-| Disconnect recovery | NOT_VERIFIED(installed_workbench_submission_failed) | job row and event cursor survived a real Controller restart, but the task itself failed before restart, so running-task recovery is not proven |
-| Installed Lab/Workbench submission (extra defect row) | **FAIL** | 201 then `Submission error: no execution-tree files found under /tmp/opencode/b26a-clean/venvs/web/lib/python3.11 (expected src/acp, src/acp_services, src/cccp)` |
+| Disconnect recovery | NOT_VERIFIED(installed_workbench_submission_failed) | job row and event cursor survived a real Controller restart, but the task itself failed before restart, so running-task recovery is not proven (not re-run in B-fix-4) |
+| Installed Lab/Workbench submission (extra defect row) | **PASS** after B-fix-4 | Original 201 then `Submission error: no execution-tree files found under /tmp/opencode/b26a-clean/venvs/web/lib/python3.11`; the installed-package fallback now completes HTTP and CLI tasks. Original FAIL retained in `result_history`. |
 
 Each row in `reproduction-matrix.json` carries `command`, `cwd`, `exit_code`, `report_path`, `result`, `scope`, `prerequisites`, `documented_step`, `stale_pass_reused: false` and `owner`.
 
+## 3a. Result history and supersession
+
+| Stage | Commit / source | Overall | Detail |
+|---|---|---|---|
+| Original reproduction | `dc72de26f76c054471e59b6434eab1f9160d96b9` | **FAIL** | Two real FAIL rows (`authorization`, `installed_workbench_submission`) and four NOT_VERIFIED rows; defects B26A-D1/D2 |
+| B-fix-4 re-run | source `abec2bc4f1d302827248d36171973df5bc1bc4dd` | rows PASS | `authorization` PASS (12 assertions), `installed_workbench_submission` PASS (HTTP + CLI, real scheduler task) |
+| Reconciled roll-up | HEAD `8349f210dfff34249b6472e29e012bd12ec3ff16` | NOT_VERIFIED | Remaining `third_party_plugin_install` (no published procedure), `agent_research_entry` (C DSH/browser absent), `lsf` (no LSF client), `disconnect_recovery` (not re-run) |
+
+`superseded_by: B/Bfix4/b26a-rerun` (`../Bfix4/b26a-rerun/`, `../Bfix4/summary.json`). No FAIL was silently relabelled: the first history entry keeps `overall_result: FAIL`, and `dc72de2` still contains the original matrix.
+
 ## 4. Defects found by the external reproduction
 
-1. **B26A-D1 (high): installed wheels cannot execute scheduler tasks.** `local_release_identity()` expects `<root>/src/{acp,acp_services,cccp}`; the wheel installs packages directly under `site-packages`. Direct `acp run` bypasses the scheduler freeze and works, but Lab/Workbench and `acp task execute` fail before dispatch. This also blocks scheduler-driven local execution, running-task disconnect recovery, and B17 dispatched science (budget enforcement itself passes).
-2. **B26A-D2 (medium): B15 revocation SSE reset not observed.** Read-after-revoke is 401, but the open `/api/events/stream` subscription did not emit `permission_changed` within the harness window.
+1. **B26A-D1 (high, fixed): installed wheels could not execute scheduler tasks.** `local_release_identity()` expected `<root>/src/{acp,acp_services,cccp}`; the wheel installs packages directly under `site-packages`. Direct `acp run` bypassed the scheduler freeze and worked, but Lab/Workbench and `acp task execute` failed before dispatch. **B-fix-4** adds an installed-package fallback; `../Bfix4/b26a-rerun/` and the package-install scheduler assertion prove HTTP + CLI completion.
+2. **B26A-D2 (medium, fixed): B15 revocation SSE reset not observed.** Read-after-revoke was 401, but the open `/api/events/stream` subscription did not emit `permission_changed` within the harness window. **B-fix-4** reset reused fixture jobs to `PAUSED` before opening the stream; the strict assertion is unchanged and now passes.
 
-Both are recorded in `reproduction-matrix.json` (`defects`) and `documentation-gaps.json`.
+Both are recorded in `reproduction-matrix.json` (`defects` with `status: FIXED_VERIFIED_IN_BFIX4`) and `documentation-gaps.json` (`result_history` plus `superseded_by`).
 
 ## 5. Independence limitation
 

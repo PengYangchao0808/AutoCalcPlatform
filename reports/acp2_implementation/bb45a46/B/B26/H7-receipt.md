@@ -12,7 +12,7 @@ independent.
 | Client revision | `39d4aeb20451c984e20d27e12270a15070adce12` (C HEAD; C24a/C25/C35 absent) |
 | A revision | `1b580a3dcda1351a0869353e6a505acde10dcfe0` (A HEAD; A-20/A-29 absent) |
 | Harness revision | `4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5` |
-| Evidence revision | `72ed42ddf140536729d12984bf83635401a7bf8f7861bfa18c851550ae7dff27` |
+| Evidence revision | `3c16877f422933b47243e255f8b3a45efea05bfe1dd176f5f643a6764a7b8aa3` |
 | Contract | `1.3.0`; manifest `sha256:5ddf8c4a…`, acceptance schema `sha256:81f653be…` |
 | Version | `0.3.0` in all four locations |
 | Production deployed | **false** |
@@ -49,8 +49,9 @@ root is absent on this host, so H7 stays open and B does not sign C experience s
 
 ## Validation and cleanup
 
-- `python3.11 scripts/acceptance/acp2_runtime.py --check-only integration/summary.json`
-  → `VALID`, exit 0.
+- `cd /ACPServer/AutoCalcPlatform && /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/integration/summary.json`
+  → `VALID`, exit 0 (`B26/check-only.txt` plus `check-only.pwd.txt`, `check-only.command.txt`,
+  `check-only.stdout.txt`, `check-only.stderr.txt`, `check-only.exit`).
 - No active queued/running/cancelling/waiting_review test job remains in a live run root.
   One stale `RUNNING` row with a dead PID was reconciled to `CANCELLED` after confirming
   `/proc/<pid>` was absent; frozen B24 migration fixture DBs and B15 PAUSED fixture rows

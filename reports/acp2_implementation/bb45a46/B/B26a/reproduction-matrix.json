@@ -111,6 +111,54 @@
   "release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
   "release_version": "0.3.0",
   "repo_head_at_reproduction": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+  "result_history": [
+    {
+      "commit": "dc72de26f76c054471e59b6434eab1f9160d96b9",
+      "failing_rows": [
+        "authorization",
+        "installed_workbench_submission"
+      ],
+      "not_verified_rows": [
+        "third_party_plugin_install",
+        "agent_research_entry",
+        "lsf",
+        "disconnect_recovery"
+      ],
+      "note": "Original FAIL retained verbatim; it is not relabelled. Both FAIL rows were real defects (B26A-D1, B26A-D2) found by the external reproduction.",
+      "overall_result": "FAIL",
+      "release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+      "repo_head_at_reproduction": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+      "stage": "Original self-reproduction, as published at dc72de2"
+    },
+    {
+      "candidate_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "candidate_source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
+      "evidence_dir": "reports/acp2_implementation/bb45a46/B/Bfix4",
+      "note": "The harness fixture-state defect and the installed execution-tree defect were fixed; the assertions were not weakened. See fix4-evidence.md.",
+      "releases": "reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+      "row_results": {
+        "authorization": "PASS",
+        "installed_workbench_submission": "PASS",
+        "package_install_scheduler_assertion": "PASS"
+      },
+      "stage": "B-fix-4 re-run of the two FAIL rows",
+      "superseded_by": "B/Bfix4/b26a-rerun"
+    },
+    {
+      "commit": "8349f210dfff34249b6472e29e012bd12ec3ff16",
+      "not_verified_rows": [
+        "third_party_plugin_install",
+        "agent_research_entry",
+        "lsf",
+        "disconnect_recovery"
+      ],
+      "note": "Overall remains NOT_VERIFIED, not PASS. The original FAIL is recoverable from the first history entry and from commit dc72de2.",
+      "overall_result": "NOT_VERIFIED",
+      "reason": "Both original FAIL rows PASS after B-fix-4. The remaining rows stay NOT_VERIFIED: third_party_plugin_install (no published operator procedure), agent_research_entry (C DSH/browser driver absent), lsf (no LSF client), disconnect_recovery (running-task recovery not re-run), plus the self-reproduction independence limitation.",
+      "stage": "Reconciled roll-up at HEAD 8349f21",
+      "superseded_by": "B/Bfix4/b26a-rerun"
+    }
+  ],
   "rows": [
     {
       "command": [
@@ -584,5 +632,6 @@
       "stale_pass_reused": false
     }
   ],
-  "schema": "acp2.b26a.reproduction-matrix.v1"
+  "schema": "acp2.b26a.reproduction-matrix.v1",
+  "superseded_by": "B/Bfix4/b26a-rerun"
 }

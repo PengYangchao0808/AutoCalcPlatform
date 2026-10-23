@@ -3,7 +3,7 @@
   "artifacts": {
     "acp-web-0.3.0.tar.gz": {
       "files": 452,
-      "path": "release/acp-web-0.3.0.tar.gz",
+      "path": "release-b25a-original/acp-web-0.3.0.tar.gz",
       "required_sdist_files_present": [
         "LICENSE",
         "MANIFEST.in",
@@ -14,7 +14,7 @@
     },
     "acp-worker-0.3.0.tar.gz": {
       "files": 122,
-      "path": "release/acp-worker-0.3.0.tar.gz",
+      "path": "release-b25a-original/acp-worker-0.3.0.tar.gz",
       "required_sdist_files_present": [
         "LICENSE",
         "MANIFEST.in",
@@ -28,7 +28,7 @@
       "license_notice_present": true,
       "manifest_payload_files": 401,
       "model_asset_files": 0,
-      "path": "release/acp_web-0.3.0-py3-none-any.whl",
+      "path": "release-b25a-original/acp_web-0.3.0-py3-none-any.whl",
       "py_typed": true,
       "sha256": "630077d1a1f30f3a885c946b7e058a88ea71aedcc69b07eac47d14b8c2b95d92",
       "top_level": [
@@ -43,7 +43,7 @@
       "license_notice_present": true,
       "manifest_payload_files": 104,
       "model_asset_files": 0,
-      "path": "release/acp_worker-0.3.0-py3-none-any.whl",
+      "path": "release-b25a-original/acp_worker-0.3.0-py3-none-any.whl",
       "py_typed": false,
       "sha256": "59d045813012cf9a338ca6640d6e0bca09b08d43ad30130a581959e542b7eee9",
       "top_level": [
@@ -57,7 +57,7 @@
       "license_notice_present": true,
       "manifest_payload_files": 203,
       "model_asset_files": 8,
-      "path": "release/cccp-0.3.0-py3-none-any.whl",
+      "path": "release-b25a-original/cccp-0.3.0-py3-none-any.whl",
       "py_typed": true,
       "sha256": "f437cf68f4038ce4de623ca7ac65292e4c65f0a30950257c018850e635d96dd3",
       "top_level": [
@@ -68,7 +68,7 @@
     },
     "cccp-0.3.0.tar.gz": {
       "files": 239,
-      "path": "release/cccp-0.3.0.tar.gz",
+      "path": "release-b25a-original/cccp-0.3.0.tar.gz",
       "required_sdist_files_present": [
         "LICENSE",
         "MANIFEST.in",
@@ -80,16 +80,16 @@
     "root_acp-0.3.0-py3-none-any.whl": {
       "entries": 577,
       "note": "supplemental root distribution build from the same clean worktree",
-      "path": "root-build/acp-0.3.0-py3-none-any.whl",
+      "path": "root-build-b25a-original/acp-0.3.0-py3-none-any.whl",
       "sha256": "e0c76fa19f09c882947553411e06d1a53dbe5d3a9dcb21047fae3fedbad84917"
     },
     "root_acp-0.3.0.tar.gz": {
       "note": "supplemental root distribution build from the same clean worktree",
-      "path": "root-build/acp-0.3.0.tar.gz",
+      "path": "root-build-b25a-original/acp-0.3.0.tar.gz",
       "sha256": "1ebd408e4657f8894021d98984ec82673ca9050ef80741dc8c2fa9a995e9e3fe"
     }
   },
-  "authoritative_artifact_set": "release/ plus release-manifest.json; every digest in this file and install-results.json is verified against those files by scripts/acceptance/check_release_evidence.py",
+  "authoritative_artifact_set": "release-b25a-original/ plus release-b25a-original/release-manifest.json; every digest in this file and b25a-install-results.json is verified against those preserved files by scripts/acceptance/check_release_evidence.py (output: digest-consistency-b25a.json). The live release/ and root-build/ trees were rebuilt by B25b and B-fix-4 and are not part of this B25a result.",
   "build_source_revision": "0ff488273591b3ed4379d2bfdacbf9519e94e970",
   "build_source_tree": "2c988d9b4867d8d0c67d957c72bd7afde5682de5",
   "checks": {
@@ -123,8 +123,14 @@
   "contract_validator": "reports/acp2_implementation/bb45a46/B/B25/contract-validator.txt",
   "dependency_classification": "reports/acp2_implementation/bb45a46/B/B25/dependency-classification.json",
   "digest_consistency": "reports/acp2_implementation/bb45a46/B/B25/digest-consistency.json",
+  "digest_verification": {
+    "b25a_originals": "reports/acp2_implementation/bb45a46/B/B25/digest-consistency-b25a.json",
+    "checker": "scripts/acceptance/check_release_evidence.py",
+    "current_release": "reports/acp2_implementation/bb45a46/B/B25/digest-consistency-current.json",
+    "note": "The current_release output is a runnable smoke check of the superseding release/, not a B25a result."
+  },
   "generated_at": "2026-10-23T12:30:00Z",
-  "install_results": "reports/acp2_implementation/bb45a46/B/B25/install-results.json",
+  "install_results": "reports/acp2_implementation/bb45a46/B/B25/b25a-install-results.json",
   "not_verified": [
     "A-27a 14-file research contract corpus is absent from this B checkout; the package-data glob is inert until A-49/50 lands it.",
     "Worker full role probe replay-refusal needs the uncommitted B24 recovery-boundary fix.",
@@ -134,10 +140,48 @@
     "Production 8765 was not touched."
   ],
   "production_8765_touched": false,
+  "result_history": [
+    {
+      "artifacts": "release-b25a-original/, root-build-b25a-original/",
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B25/digest-consistency-b25a.json",
+        "reports/acp2_implementation/bb45a46/B/B25/b25a-install-results.json"
+      ],
+      "note": "Original result retained in this summary. The acp_web OriginPolicy and worker recovery-boundary defects were working-tree fixes at build time, so the two runtime probes could not pass against the clean candidate.",
+      "result": "PASS(packaging); NOT_VERIFIED(http runtime, replay refusal)",
+      "source_revision": "0ff488273591b3ed4379d2bfdacbf9519e94e970",
+      "source_tree": "2c988d9b4867d8d0c67d957c72bd7afde5682de5",
+      "stage": "B25a original role build"
+    },
+    {
+      "artifacts": "release/",
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B25/release-correction.json",
+        "reports/acp2_implementation/bb45a46/B/B25/b25b-evidence.md",
+        "reports/acp2_implementation/bb45a46/B/B25/package-install-main-20261023T131008Z-1633496-80a5221a.json"
+      ],
+      "result": "PASS",
+      "source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+      "stage": "B25b rebuild after the OriginPolicy public_origin fix",
+      "superseded_by": "release-fix4"
+    },
+    {
+      "artifacts": "release-fix4/",
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix4/summary.json"
+      ],
+      "result": "PASS",
+      "source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
+      "stage": "B-fix-4 rebuild after the installed-scheduler fix"
+    }
+  ],
   "reviewed_requests": "reports/acp2_implementation/bb45a46/B/B25/reviewed-requests.json",
-  "role_release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+  "role_release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-b25a-original/release-manifest.json",
   "role_release_manifest_sha256": "6ed59f7dc68ecad02c8d1a4112051a003433bf18f8f7052a46537c40928b228c",
   "schema": "acp2.b25.summary.v1",
+  "superseded_by": "release-fix4",
   "task": "B25a (todo 30) \u2014 build the actual ACP 2.0 packages with separated roles",
   "validation_worktree": "/tmp/opencode/acp2-b25-fix (removed after acceptance)",
   "version": "0.3.0",
@@ -149,5 +193,5 @@
   },
   "version_rationale": "No reviewed input specified a different version; 0.3.0 is the pre-release ACP 2.0 packaging candidate, not a production release. All four locations match.",
   "version_sync": "reports/acp2_implementation/bb45a46/B/B25/version-sync.json",
-  "worktree": "/tmp/opencode/acp2-b25-clean (removed after build; role artifacts in release/)"
+  "worktree": "Original B25a build made in /tmp/opencode/acp2-b25-clean (removed after build). The six role artifacts are preserved verbatim under release-b25a-original/ and the two root artifacts under root-build-b25a-original/."
 }

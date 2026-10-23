@@ -12,13 +12,32 @@
       "why": "The B21/B22 bundle and its evidence exist, but no published operator procedure in packaging/README.md, the standalone recipe, the component manifest or the MCP matrix explains how an external plugin is installed, trusted, authorized or frozen."
     },
     {
-      "closing_condition": "Fix local_release_identity() for installed distributions and add a package-install acceptance assertion that submits and completes one real scheduler task; then update the install docs.",
+      "closing_condition": "Closed in B-fix-4: local_release_identity() now falls back to the installed package roots, and the package-install acceptance asserts a real scheduler task; install docs still name the required execution roots.",
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix4/b26a-rerun/http-row.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix4/b26a-rerun/cli-row.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix4/package-install/scheduler-task/scheduler-task.json"
+      ],
       "id": "GAP-B26A-02",
       "item": "installed_workbench_submission",
       "observed_raw_run": "reports/acp2_implementation/bb45a46/B/B26a/workbench-submit-failure.json",
+      "original_row_result": "FAIL",
       "owner": "B",
-      "row_result": "FAIL",
+      "result_history": [
+        {
+          "observed_raw_run": "reports/acp2_implementation/bb45a46/B/B26a/workbench-submit-failure.json",
+          "row_result": "FAIL",
+          "stage": "B26a original at dc72de2"
+        },
+        {
+          "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4/b26a-rerun/http-row.json",
+          "row_result": "PASS",
+          "stage": "B-fix-4 re-run"
+        }
+      ],
+      "row_result": "PASS after B-fix-4 (originally FAIL)",
       "severity": "high",
+      "superseded_by": "B/Bfix4/b26a-rerun",
       "undocumented_step": "The installed Lab/Workbench and 'acp task execute' require an execution tree (<root>/src/acp, <root>/src/acp_services, <root>/src/cccp) that the published wheel install does not create.",
       "why": "packaging/README.md documents installing acp-web and running the Lab, and the standalone recipe documents Lab smoke. Neither says that scheduler execution depends on a source checkout layout. The installed wheel therefore accepts a job (201) and fails it before dispatch."
     },
@@ -35,12 +54,29 @@
     },
     {
       "closing_condition": "Publish the exact harness command and required fixture/env for B15/B17 in the runbook.",
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json"
+      ],
       "id": "GAP-B26A-04",
       "item": "authorization,budget",
       "observed_raw_run": "reports/acp2_implementation/bb45a46/B/B26a/b15/ and reports/acp2_implementation/bb45a46/B/B26a/b17/",
+      "original_row_result": "authorization FAIL / budget PASS",
       "owner": "B",
-      "row_result": "authorization FAIL / budget PASS (real runs; documentation gap recorded)",
+      "result_history": [
+        {
+          "observed_raw_run": "reports/acp2_implementation/bb45a46/B/B26a/b15/ and reports/acp2_implementation/bb45a46/B/B26a/b17/",
+          "row_result": "authorization FAIL / budget PASS",
+          "stage": "B26a original at dc72de2"
+        },
+        {
+          "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4/b15/",
+          "row_result": "authorization PASS / budget PASS",
+          "stage": "B-fix-4 re-run"
+        }
+      ],
+      "row_result": "authorization PASS after B-fix-4 / budget PASS (originally authorization FAIL)",
       "severity": "medium",
+      "superseded_by": "B/Bfix4/b26a-rerun",
       "undocumented_step": "The exact B15/B17 acceptance-harness invocation (fixture paths, identity-mode environment, controller port) is not in the published runbook; only the receipt schema and scenario names are.",
       "why": "An external operator can follow the runbook behavior description but cannot rerun the B15/B17 rows without reading the harness source or the B evidence command files."
     },
@@ -67,5 +103,39 @@
     "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md",
     "reports/acp2_implementation/bb45a46/B/B25/release/docs/*"
   ],
-  "schema": "acp2.b26a.documentation-gaps.v1"
+  "reconciled_at": "2026-10-24T00:00:00Z",
+  "result_history": [
+    {
+      "commit": "dc72de26f76c054471e59b6434eab1f9160d96b9",
+      "note": "Original FAIL retained; not relabelled.",
+      "overall_result": "FAIL",
+      "row_results": {
+        "agent_research_entry": "NOT_VERIFIED(c_driver_absent)",
+        "authorization": "FAIL",
+        "disconnect_recovery": "NOT_VERIFIED(installed_workbench_submission_failed)",
+        "installed_workbench_submission": "FAIL",
+        "lsf": "NOT_VERIFIED(lsf_prerequisite_missing)",
+        "third_party_plugin_install": "NOT_VERIFIED(undocumented_step)"
+      },
+      "stage": "Original self-reproduction, as published at dc72de2"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4",
+      "row_results": {
+        "authorization": "PASS",
+        "installed_workbench_submission": "PASS",
+        "package_install_scheduler_assertion": "PASS"
+      },
+      "stage": "B-fix-4 re-run",
+      "superseded_by": "B/Bfix4/b26a-rerun"
+    },
+    {
+      "commit": "8349f210dfff34249b6472e29e012bd12ec3ff16",
+      "note": "Both original FAIL rows PASS after B-fix-4; four rows stay NOT_VERIFIED (plugin procedure, DSH/browser, LSF, disconnect running-task recovery) plus the self-reproduction independence limitation.",
+      "overall_result": "NOT_VERIFIED",
+      "stage": "Reconciled roll-up at HEAD 8349f21"
+    }
+  ],
+  "schema": "acp2.b26a.documentation-gaps.v1",
+  "superseded_by": "B/Bfix4/b26a-rerun"
 }
