@@ -21,6 +21,7 @@ Author: QCcalc Team
 from __future__ import annotations
 
 from . import artifact_manifest as artifact_manifest
+from . import contracts as contracts
 from . import evidence as evidence
 from . import provenance as provenance
 from . import question as question
@@ -44,6 +45,15 @@ from .artifact_manifest import (
     ArtifactStructuralMismatchError,
     UnsupportedSnapshotSchemaVersionError,
     load_verified_snapshot,
+)
+from .contracts import (
+    CONTRACT_FILE_NAMES,
+    CONTRACT_ROOT_NAME,
+    ContractPathError,
+    contract_root,
+    list_contracts,
+    read_contract,
+    read_contract_text,
 )
 from .evidence import (
     APPLICABILITIES,
@@ -411,6 +421,14 @@ __all__ = [
     "UnsupportedSchemaVersionError",
     "UnsupportedSnapshotSchemaVersionError",
     "artifact_manifest",
+    "CONTRACT_FILE_NAMES",
+    "CONTRACT_ROOT_NAME",
+    "ContractPathError",
+    "contract_root",
+    "contracts",
+    "list_contracts",
+    "read_contract",
+    "read_contract_text",
     "canonical_json",
     "energy_identity_from_thermochemistry",
     "load_verified_snapshot",

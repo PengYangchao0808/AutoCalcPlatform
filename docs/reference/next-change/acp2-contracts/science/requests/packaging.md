@@ -148,6 +148,14 @@ assert {"NOTICE.md", "LICENSE-DP5", "atomic_reps.gz", "frag_reps.gz"} <= hashes.
    the new data; `check_release_artifacts.py`'s `files == staged` assertion already fails if the wheel
    omits it.
 
+**Status note (A-27b, todo 49)**: the corpus in delta item 1 has **landed** in the A worktree at
+`src/cccp/analysis/research/contracts/` — 14 files, byte-identical to this docs directory, with the
+read-only accessor in `src/cccp/analysis/research/contracts.py` and a byte-equality drift test in
+`tests/test_acp2_science_installed_package.py`. The B-owned `package-data` patch in item 3 is **still
+pending**: A did not modify `packaging/roles/cccp/pyproject.toml`. A clean-environment probe therefore
+verified a **locally constructed candidate** wheel (`wheel_source=local_candidate`), not a B25a artifact;
+the B25a row stays `NOT_VERIFIED` until B publishes a wheel built after this corpus lands.
+
 **Out of scope / not requested**: `baseline.md`, `packaging-preview.md`, `path-map.md`,
 `cross-track-dependencies.json`, `handoff-H*.json`, `selectivity-evidence-report.json` and the other
 planning docs stay repo-only. They are plan/evidence records, not user-facing contract inputs.
