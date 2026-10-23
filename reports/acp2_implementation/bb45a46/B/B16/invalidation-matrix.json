@@ -1,0 +1,125 @@
+{
+  "rows": [
+    {
+      "code": "access_denied",
+      "expected_rule": "approval_required",
+      "expected_status": 403,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "unapproved",
+      "rule": "approval_required",
+      "status": 403
+    },
+    {
+      "code": "input_invalid",
+      "expected_rule": "plan_digest_mismatch",
+      "expected_status": 400,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "changed_method_stale_digest",
+      "rule": "plan_digest_mismatch",
+      "status": 400
+    },
+    {
+      "code": "revision_conflict",
+      "expected_rule": "approved_plan_digest_mismatch",
+      "expected_status": 409,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "changed_plan_digest",
+      "rule": "approved_plan_digest_mismatch",
+      "status": 409
+    },
+    {
+      "code": "revision_conflict",
+      "expected_rule": "approved_proposal_digest_mismatch",
+      "expected_status": 409,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "changed_recipe_projection",
+      "rule": "approved_proposal_digest_mismatch",
+      "status": 409
+    },
+    {
+      "code": "revision_conflict",
+      "expected_rule": "approved_budget_mismatch",
+      "expected_status": 409,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "changed_budget",
+      "rule": "approved_budget_mismatch",
+      "status": 409
+    },
+    {
+      "code": "access_denied",
+      "expected_rule": "approval_principal_mismatch",
+      "expected_status": 403,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "other_user",
+      "rule": "approval_principal_mismatch",
+      "status": 403
+    },
+    {
+      "code": "access_denied",
+      "expected_rule": "approval_pending",
+      "expected_status": 403,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "pending",
+      "rule": "approval_pending",
+      "status": 403
+    },
+    {
+      "code": "access_denied",
+      "expected_rule": "approval_rejected",
+      "expected_status": 403,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "rejected",
+      "rule": "approval_rejected",
+      "status": 403
+    },
+    {
+      "code": "access_denied",
+      "expected_rule": "approval_revoked",
+      "expected_status": 403,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "revoked",
+      "rule": "approval_revoked",
+      "status": 403
+    },
+    {
+      "code": "access_denied",
+      "expected_rule": "approval_expired",
+      "expected_status": 403,
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "new_work_dirs": [],
+      "ok": true,
+      "row": "expired",
+      "rule": "approval_expired",
+      "status": 403
+    }
+  ],
+  "schema": "acp2.b16.invalidation-matrix.v1"
+}

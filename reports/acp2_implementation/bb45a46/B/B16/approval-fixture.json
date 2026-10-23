@@ -1,0 +1,130 @@
+{
+  "schema": "acp2.approval-fixture.v1",
+  "fixture_id": "fx-approval-b16-v1",
+  "kind": "approval",
+  "scope": "B16 persistent proposal approval bound to a frozen scientific plan",
+  "identity": {
+    "mode": "api-key",
+    "tenant_id": "acp-b16-approval",
+    "database": "<acp2-dev>/data/b/run-root-b16/acp_identity.db",
+    "credentials_file": "<acp2-dev>/data/b/run-root-b16/secrets/b16-credentials.json",
+    "accounts": [
+      {
+        "name": "alice",
+        "principal_id": "principal_b16_alice",
+        "login_id": "b16-alice",
+        "roles": [
+          "member"
+        ]
+      },
+      {
+        "name": "bob",
+        "principal_id": "principal_b16_bob",
+        "login_id": "b16-bob",
+        "roles": [
+          "member"
+        ]
+      }
+    ],
+    "keys": [
+      {
+        "name": "alice_write",
+        "account": "alice",
+        "scope": "workspace",
+        "project": "project_alpha",
+        "actions": [
+          "read",
+          "write",
+          "control"
+        ]
+      },
+      {
+        "name": "bob_alpha_write",
+        "account": "bob",
+        "scope": "workspace",
+        "project": "project_alpha",
+        "actions": [
+          "read",
+          "write",
+          "control"
+        ]
+      },
+      {
+        "name": "bob_write",
+        "account": "bob",
+        "scope": "workspace",
+        "project": "project_beta",
+        "actions": [
+          "read",
+          "write",
+          "control"
+        ]
+      }
+    ]
+  },
+  "controller": {
+    "run_root": "<acp2-dev>/data/b/run-root-b16",
+    "jobs_database": "<acp2-dev>/data/b/run-root-b16/acp_jobs.db"
+  },
+  "projects": [
+    {
+      "project_id": "project_alpha",
+      "name": "B16 Alpha",
+      "description": "approval owner project"
+    },
+    {
+      "project_id": "project_beta",
+      "name": "B16 Beta",
+      "description": "other-user project"
+    }
+  ],
+  "scenario": {
+    "alpha_key": "alice_write",
+    "bob_alpha_key": "bob_alpha_write",
+    "beta_key": "bob_write",
+    "alpha_principal": "principal_b16_alice",
+    "beta_principal": "principal_b16_bob",
+    "alpha_project": "project_alpha",
+    "beta_project": "project_beta",
+    "proposal_ref": "prop-b16-main",
+    "plan": {
+      "workflow": "singlepoint",
+      "input": {
+        "xyz_text": "3\nwater\nO 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.960000\nH 0.000000 0.930000 -0.240000\n"
+      },
+      "method": {
+        "method": "STO-3G",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      "resources": {
+        "cores": 1,
+        "memory_mb": 512
+      },
+      "plan_version": 1
+    },
+    "budget": {
+      "unit": "task_count",
+      "count": 1,
+      "timeout_s": 60
+    },
+    "proposal": {
+      "proposal_id": "prop-b16-main",
+      "project_id": "project_alpha",
+      "title": "B16 approval acceptance",
+      "question": "Can an unapproved plan dispatch?",
+      "capability_ids": [
+        "singlepoint.run"
+      ],
+      "recipe_ref": {
+        "schema_id": "acp2.science.recipe.v1",
+        "version": "1.0.0",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "budget_request": {
+        "value": "60",
+        "unit": "second"
+      }
+    }
+  }
+}

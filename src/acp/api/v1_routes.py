@@ -2516,6 +2516,10 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
     if _is_research_launch(req):
         req.project_id = _research_project(manager, req.project_id)
+    # B16: an approval bound to the frozen plan_digest is checked BEFORE any
+    # resolution/snapshot/dispatch side effect.  A pending/expired/revoked/
+    # changed-plan/other-principal approval never reaches the manager.
+    approval = _enforce_approval(request, req)
     req.method = _expand_method_electronic_state(req.method)
     _validate_simple_method_cli(req.workflow, req.method)
     _validate_scan_submission(req.workflow, req.method, req.input)
@@ -2662,6 +2666,21 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             "release_id": release_id,
             "release_digest": getattr(record, "release_digest", None),
         }
+    approval_ref = None
+    if approval is not None:
+        approval_ref = approval.approval_id
+        # The approval and the execution are different facts: recording the
+        # TaskRef is evidence only (no approval state/revision change).
+        try:
+            _approval_service(request).bind_task_ref(
+                approval.approval_id,
+                task_ref | {"job_id": record.id},
+                actor_principal=str(_server_identity(request).principal.principal_id),
+            )
+        except Exception:  # noqa: BLE001 - a binding write never invalidates a durable submit
+            logger.debug(
+                "approval TaskRef binding failed for %s", approval.approval_id, exc_info=True
+            )
     return V1JobCreatedResponse(
         job_id=record.id,
         status=record.status.value,
@@ -2673,6 +2692,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         task_ref=task_ref,
         plan_digest=req.plan_digest,
         proposal_digest=req.proposal_digest,
+        approval_ref=approval_ref,
         result="accepted",
         idempotency_key=idempotency_key,
         idempotent_replay=bool(getattr(record, "_idempotent_replay", False)),
@@ -8214,11 +8234,113 @@ def _command_error(
 
 
 def _plan_digest(payload: Mapping[str, Any]) -> str:
+    """Server-computed canonical digest of the frozen scientific plan.
+
+    B16 replaces the pre-canonical ``json.dumps(default=str)`` helper with the
+    single B03 implementation.  Only science-determining fields participate;
+    a display name, project hint or extension never changes the digest.
+    """
     from acp_services.entrypoints.application_params import normalize_preflight
+    from acp_services.runtime.canonical_digest import (
+        frozen_plan_definition,
+    )
+    from acp_services.runtime.canonical_digest import (
+        plan_digest as canonical_plan_digest,
+    )
 
     normalized = normalize_preflight(payload)
-    canonical = json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str)
-    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    definition = frozen_plan_definition(
+        workflow=str(normalized["workflow"]),
+        input=normalized.get("input") if isinstance(normalized.get("input"), Mapping) else {},
+        method=normalized.get("method") if isinstance(normalized.get("method"), Mapping) else {},
+        resources=(
+            normalized.get("resources") if isinstance(normalized.get("resources"), Mapping) else {}
+        ),
+    )
+    return canonical_plan_digest(definition).digest
+
+
+def _approval_service(request: Request) -> Any:
+    """One approval authority per Controller database (cached on the app)."""
+    from acp_services.runtime.approvals import ApprovalService
+
+    manager = _manager(request)
+    db_path = str(manager.store.db_path)
+    cached = getattr(request.app.state, "approval_service", None)
+    if cached is None or str(getattr(cached, "db_path", "")) != db_path:
+        cached = ApprovalService(manager.store.db_path)
+        request.app.state.approval_service = cached
+    return cached
+
+
+def _enforce_approval(request: Request, req: Any) -> Any:
+    """Check the frozen plan + approval binding before any submit side effect.
+
+    Returns the authorizing :class:`Approval` (or ``None`` for a non-research
+    launch).  Raises an HTTP error with the frozen approval/plan error shape.
+    """
+    from acp_services.runtime.approvals import ApprovalError
+    from acp_services.runtime.canonical_digest import (
+        CanonicalDigestError,
+        frozen_plan_definition,
+    )
+    from acp_services.runtime.canonical_digest import (
+        plan_digest as canonical_plan_digest,
+    )
+
+    proposal_bound = bool(req.proposal_ref or req.proposal_digest or req.plan_digest)
+    if not proposal_bound:
+        return None
+    if not req.plan_digest:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "a research launch requires plan_digest",
+            params={"field": "plan_digest", "rule": "plan_digest_required"},
+        )
+    if not req.proposal_ref:
+        raise _command_error(
+            403,
+            "access_denied",
+            "a research launch requires a proposal reference with a server approval",
+            params={"rule": "approval_required"},
+        )
+    try:
+        definition = frozen_plan_definition(
+            workflow=str(req.workflow),
+            input=req.input,
+            method=req.method,
+            resources=req.resources,
+        )
+        computed = canonical_plan_digest(definition).digest
+    except CanonicalDigestError as exc:
+        raise _command_error(
+            400,
+            "input_invalid",
+            str(exc),
+            params={"field": "plan", **exc.params()},
+        ) from exc
+    if computed != req.plan_digest:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "plan_digest does not match the submitted scientific plan",
+            params={"field": "plan_digest", "rule": "plan_digest_mismatch"},
+        )
+    manager = _manager(request)
+    approval_project = req.project_id or manager.default_project_id
+    principal = str(_server_identity(request).principal.principal_id)
+    try:
+        return _approval_service(request).authorize_submission(
+            plan_digest=req.plan_digest,
+            proposal_ref=str(req.proposal_ref),
+            project_id=str(approval_project or ""),
+            requester_principal=principal,
+            proposal_digest=req.proposal_digest,
+            budget=req.budget,
+        )
+    except ApprovalError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.detail()) from exc
 
 
 def _research_project(manager: JobManager, project_id: str | None) -> str | None:
@@ -8310,7 +8432,19 @@ def preflight_request(req: V1PreflightRequest, request: Request) -> dict[str, An
         reasons.append(
             {"code": getattr(exc, "code", None) or "execution_mode_conflict", "message": str(exc)}
         )
-    digest = _plan_digest(payload) if feasible else None
+    digest = None
+    if feasible:
+        from acp_services.runtime.canonical_digest import CanonicalDigestError
+
+        try:
+            digest = _plan_digest(payload)
+        except CanonicalDigestError as exc:
+            raise _command_error(
+                400,
+                "input_invalid",
+                str(exc),
+                params={"field": "plan", **exc.params()},
+            ) from exc
     return {
         "schema_version": 1,
         "feasible": feasible,

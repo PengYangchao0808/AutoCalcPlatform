@@ -44,7 +44,7 @@ import urllib.request
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -7512,6 +7512,944 @@ def _run_control_recovery(
     return exit_code, assertions, extensions
 
 
+B16_APPROVAL_SCHEMA = "acp2.approval-fixture.v1"
+
+
+def _b16_plan_digest(plan: Mapping[str, Any]) -> str:
+    from acp_services.runtime.canonical_digest import plan_digest
+
+    return plan_digest(dict(plan)).digest
+
+
+def _b16_proposal_digest(proposal: Mapping[str, Any]) -> str:
+    from acp_services.runtime.canonical_digest import proposal_digest
+
+    return proposal_digest(dict(proposal)).digest
+
+
+def _b16_submit_body(
+    scenario: Mapping[str, Any],
+    *,
+    plan: Mapping[str, Any],
+    plan_digest: str,
+    proposal_ref: str,
+    proposal_digest: str | None,
+    budget: Mapping[str, Any] | None,
+    name: str,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "workflow": str(plan["workflow"]),
+        "name": name,
+        "input": dict(plan["input"]),
+        "method": dict(plan.get("method") or {}),
+        "resources": dict(plan.get("resources") or {}),
+        "project_id": str(scenario["alpha_project"]),
+        "plan_digest": plan_digest,
+        "proposal_ref": proposal_ref,
+    }
+    if proposal_digest is not None:
+        body["proposal_digest"] = proposal_digest
+    if budget is not None:
+        body["budget"] = dict(budget)
+    return body
+
+
+def _b16_denial_detail(status: int, body: Any) -> tuple[str, str]:
+    detail = body if isinstance(body, dict) else {}
+    error = detail.get("detail") if isinstance(detail.get("detail"), dict) else detail
+    code = str(error.get("code") or "")
+    rule = str((error.get("params") or {}).get("rule") or "")
+    return code, rule
+
+
+def _b16_events(db_path: Path) -> list[dict[str, Any]]:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """SELECT event_id, job_id, owner_type, scope, event_type, payload_json,
+                      revision, emitted_at
+               FROM job_outbox WHERE event_type LIKE 'approval.%'
+               ORDER BY rowid"""
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "event_id": row["event_id"],
+            "owner_id": row["job_id"],
+            "owner_type": row["owner_type"],
+            "scope": row["scope"],
+            "event_type": row["event_type"],
+            "revision": row["revision"],
+            "emitted_at": row["emitted_at"],
+            "payload": json.loads(row["payload_json"]),
+        }
+        for row in rows
+    ]
+
+
+def _b15_count_jobs(db_path: Path) -> int:
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            return int(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return -1
+
+
+def _b16_work_dirs(run_root: Path) -> list[str]:
+    ignored = {
+        "projects",
+        "secrets",
+        "acp_jobs.db",
+        "acp_jobs.db-wal",
+        "acp_jobs.db-shm",
+        "acp_identity.db",
+        "acp_identity.db-wal",
+        "acp_identity.db-shm",
+        "acp_admission.db",
+        "acp_admission.db-wal",
+        "acp_admission.db-shm",
+    }
+    try:
+        return sorted(
+            entry.name
+            for entry in run_root.iterdir()
+            if entry.is_dir() and entry.name not in ignored
+        )
+    except OSError:
+        return []
+
+
+def _run_approval_budget(
+    phase: str,
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B16 approval branch (B17 owns the budget branch).
+
+    Exercises the real HTTP surface against a running Controller: request,
+    replay, query, approve/repeat, a real controller restart, an authorized
+    dispatch, and the full invalidation matrix.  Every denial is checked for
+    zero job rows/work directories; the canonical B03 vectors are reproduced
+    before any approval is created.
+    """
+    base = (controller or "").rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "control",
+        "acceptance.target": "local",
+        "b16.controller": base,
+        "b16.fixture": str(fixture_path),
+        "b16.phase": phase,
+    }
+    if phase != "approval":
+        assertions.append(
+            {
+                "name": "b17.budget_branch",
+                "status": "NOT_VERIFIED",
+                "detail": "cumulative budget reservation/settlement is owned by B17",
+            }
+        )
+        extensions["b17.reason"] = "b17_budget_not_implemented"
+        return EXIT_NOT_VERIFIED, assertions, extensions
+    if not base:
+        return (
+            EXIT_NOT_VERIFIED,
+            [_b15_assert("b16.controller_required", False, "no controller", not_verified=True)],
+            {**extensions, "b16.reason": "missing_controller"},
+        )
+    document = _b15_read_json(Path(fixture_path))
+    if not isinstance(document, dict) or document.get("schema") != B16_APPROVAL_SCHEMA:
+        return (
+            EXIT_NOT_VERIFIED,
+            [
+                _b15_assert(
+                    "b16.fixture_schema",
+                    False,
+                    f"fixture is not {B16_APPROVAL_SCHEMA}",
+                    not_verified=True,
+                )
+            ],
+            {**extensions, "b16.reason": "fixture_schema"},
+        )
+    try:
+        fixture = _b15_fixture(fixture_path)
+        scenario = dict(document["scenario"])
+        provisioned = _b15_provision(fixture)
+        created = _b15_ensure_fixture_jobs(fixture, out_dir)
+    except (OSError, ValueError, sqlite3.Error, KeyError) as exc:
+        return (
+            EXIT_FAIL,
+            [_b15_assert("b16.fixture_provisioned", False, f"{type(exc).__name__}: {exc}")],
+            {**extensions, "b16.reason": f"fixture_provision_failed:{exc}"},
+        )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    keys = provisioned["credentials"]["keys"]
+    run_root = Path(str(fixture["controller"]["run_root"]))
+    jobs_db = Path(str(fixture["controller"].get("jobs_database") or run_root / "acp_jobs.db"))
+
+    def key(name: str) -> str:
+        return str(keys[str(name)]["key"])
+
+    alice = key(str(scenario["alpha_key"]))
+    bob_alpha = key(str(scenario["bob_alpha_key"]))
+    plan = dict(scenario["plan"])
+    budget = dict(scenario.get("budget") or {})
+    plan_digest = _b16_plan_digest(plan)
+    base_proposal = dict(scenario["proposal"])
+    base_proposal["plan_digest"] = plan_digest
+    proposal_digest = _b16_proposal_digest(base_proposal)
+    main_proposal_ref = str(scenario["proposal_ref"])
+    bob_principal = str(scenario["beta_principal"])
+
+    # -- canonical vectors before any approval is created ------------------
+    vectors_path = (
+        Path(__file__).resolve().parents[2]
+        / "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json"
+    )
+    from acp_services.runtime.canonical_digest import (
+        CANONICAL_DIGEST_VERSION,
+        CanonicalDigestError,
+        canonical_digest,
+        canonical_json,
+    )
+    from acp_services.runtime.canonical_digest import (
+        proposal_digest as canonical_proposal_digest,
+    )
+
+    vectors = json.loads(vectors_path.read_text(encoding="utf-8"))["vectors"]
+    vector_rows: list[dict[str, Any]] = []
+    for vector in vectors:
+        row: dict[str, Any] = {"id": vector["id"], "kind": vector["kind"]}
+        try:
+            if vector["kind"] == "proposal_digest":
+                projection = canonical_proposal_digest(vector["input"])
+                row.update(
+                    digest=projection.digest,
+                    canonical_json=projection.canonical_json,
+                )
+            else:
+                row.update(
+                    digest=canonical_digest(
+                        vector["input"],
+                        set_fields=tuple(vector.get("set_fields") or ()),
+                        drop_fields=tuple(vector.get("drop_fields") or ()),
+                    ),
+                    canonical_json=canonical_json(
+                        vector["input"],
+                        set_fields=tuple(vector.get("set_fields") or ()),
+                        drop_fields=tuple(vector.get("drop_fields") or ()),
+                    ),
+                )
+            expected_error = vector.get("expected_error")
+            row["status"] = (
+                "FAIL"
+                if expected_error
+                else (
+                    "PASS"
+                    if row["digest"] == vector["digest"]
+                    and row["canonical_json"] == vector["canonical_json"]
+                    else "FAIL"
+                )
+            )
+        except CanonicalDigestError as exc:
+            expected_error = vector.get("expected_error")
+            row["error_rule"] = exc.rule
+            row["status"] = (
+                "PASS"
+                if expected_error and exc.rule == expected_error["params"]["rule"]
+                else "FAIL"
+            )
+        vector_rows.append(row)
+    vectors_ok = sum(1 for row in vector_rows if row["status"] == "PASS")
+    _b15_write_json(
+        out_dir / "canonical-vectors.json",
+        {
+            "schema": "acp2.b16.canonical-vectors.v1",
+            "version": CANONICAL_DIGEST_VERSION,
+            "passed": vectors_ok,
+            "total": len(vector_rows),
+            "vectors": vector_rows,
+        },
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.canonical_vectors",
+            vectors_ok == len(vector_rows) and len(vector_rows) == 12,
+            f"{vectors_ok}/{len(vector_rows)}",
+        )
+    )
+    if vectors_ok != len(vector_rows):
+        extensions["b16.reason"] = "canonical_vectors_failed"
+        extensions["b16.vectors"] = "canonical-vectors.json"
+        return EXIT_FAIL, assertions, extensions
+
+    def approval_request(
+        proposal_ref: str,
+        *,
+        proposal: Mapping[str, Any] | None = None,
+        plan_digest_value: str | None = None,
+        budget_value: Mapping[str, Any] | None = None,
+        expires_at: str | None = None,
+        key_value: str = alice,
+    ) -> tuple[int, Any]:
+        body = {
+            "proposal_ref": proposal_ref,
+            "plan": plan,
+            "plan_digest": plan_digest_value or plan_digest,
+            "proposal": dict(proposal or {**base_proposal, "proposal_id": proposal_ref}),
+            "budget": dict(budget if budget_value is None else budget_value),
+        }
+        if expires_at is not None:
+            body["expires_at"] = expires_at
+        return _b15_http(
+            base, "POST", "/api/v2/research/approvals", key=key_value, body=body, timeout=timeout
+        )
+
+    def approved_ref(
+        proposal_ref: str,
+        *,
+        expires_at: str | None = None,
+        budget_value: Mapping[str, Any] | None = None,
+    ) -> tuple[str, str, str]:
+        status, body = _b15_http(
+            base,
+            "POST",
+            "/api/v2/research/approvals",
+            key=alice,
+            body={
+                "proposal_ref": proposal_ref,
+                "plan": plan,
+                "plan_digest": plan_digest,
+                "proposal": {**base_proposal, "proposal_id": proposal_ref},
+                "budget": dict(budget if budget_value is None else budget_value),
+                **({"expires_at": expires_at} if expires_at else {}),
+            },
+            timeout=timeout,
+        )[0:2]
+        if status != 201:
+            raise RuntimeError(f"approval request {proposal_ref} failed: {status} {body}")
+        ref = str(body["approval_ref"])
+        status, body = _b15_http(
+            base,
+            "POST",
+            f"/api/v2/research/approvals/{ref}/approve",
+            key=bob_alpha,
+            body={"expected_revision": 1},
+            timeout=timeout,
+        )
+        if status != 200:
+            raise RuntimeError(f"approval decision {proposal_ref} failed: {status} {body}")
+        return ref, str(body["plan_digest"]), str(body["proposal_digest"])
+
+    # -- request / replay / display-name / query ---------------------------
+    status, requested, raw = _b15_http(
+        base,
+        "POST",
+        "/api/v2/research/approvals",
+        key=alice,
+        body={
+            "proposal_ref": main_proposal_ref,
+            "plan": plan,
+            "plan_digest": plan_digest,
+            "proposal": base_proposal,
+            "budget": budget,
+        },
+        timeout=timeout,
+    )
+    approval_ref = str((requested or {}).get("approval_ref") or "")
+    assertions.append(
+        _b15_assert(
+            "b16.request",
+            status == 201
+            and requested.get("status") == "pending"
+            and requested.get("revision") == 1
+            and bool(approval_ref),
+            f"{status} {json.dumps(requested, sort_keys=True)[:400]}",
+        )
+    )
+    display_proposal = dict(base_proposal)
+    display_proposal["display_name"] = "a presentation-only rename"
+    display_proposal["task_refs"] = [{"task_id": "task-not-yet-created"}]
+    status, replay, _ = _b15_http(
+        base,
+        "POST",
+        "/api/v2/research/approvals",
+        key=alice,
+        body={
+            "proposal_ref": main_proposal_ref,
+            "plan": plan,
+            "plan_digest": plan_digest,
+            "proposal": display_proposal,
+            "budget": budget,
+        },
+        timeout=timeout,
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.replay_and_display_name",
+            status == 201
+            and replay.get("replayed") is True
+            and replay.get("approval_ref") == approval_ref
+            and replay.get("revision") == 1,
+            f"{status} {json.dumps(replay, sort_keys=True)[:400]}",
+        )
+    )
+    status, queried, _ = _b15_http(
+        base,
+        "GET",
+        f"/api/v2/research/approvals?approval_ref={approval_ref}",
+        key=alice,
+        timeout=timeout,
+    )
+    rows = (queried or {}).get("approvals") or []
+    assertions.append(
+        _b15_assert(
+            "b16.query",
+            status == 200 and len(rows) == 1 and rows[0]["approval_ref"] == approval_ref,
+            f"{status} {json.dumps(queried, sort_keys=True)[:400]}",
+        )
+    )
+
+    # -- approve / repeat / payload-approver denial ------------------------
+    status, decided, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/approvals/{approval_ref}/approve",
+        key=bob_alpha,
+        body={"expected_revision": 1},
+        timeout=timeout,
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.approve_verified_principal",
+            status == 200
+            and decided.get("status") == "approved"
+            and decided.get("revision") == 2
+            and decided.get("approver_ref") == bob_principal,
+            f"{status} {json.dumps(decided, sort_keys=True)[:400]}",
+        )
+    )
+    status, repeated, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/approvals/{approval_ref}/approve",
+        key=bob_alpha,
+        body={"expected_revision": 1},
+        timeout=timeout,
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.repeat_approve_idempotent",
+            status == 200
+            and repeated.get("replayed") is True
+            and repeated.get("revision") == 2
+            and repeated.get("status") == "approved",
+            f"{status} {json.dumps(repeated, sort_keys=True)[:400]}",
+        )
+    )
+    status, denial, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/approvals/{approval_ref}/approve",
+        key=alice,
+        body={"expected_revision": 2, "approver": "model"},
+        timeout=timeout,
+    )
+    code, rule = _b16_denial_detail(status, denial)
+    assertions.append(
+        _b15_assert(
+            "b16.approver_identity_from_payload",
+            status == 403 and code == "access_denied" and rule == "approver_identity_from_payload",
+            f"{status} {code} {rule}",
+        )
+    )
+
+    # -- real restart, same approval, repeat approve, authorized submit ----
+    health = _b13_controller_health(base, timeout)
+    restart_evidence, restart_assertions = _b13_restart_controller(base, out_dir, health, timeout)
+    assertions.extend(restart_assertions)
+    status, after_restart, _ = _b15_http(
+        base, "GET", f"/api/v2/research/approvals/{approval_ref}", key=alice, timeout=timeout
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.restart_same_approval",
+            status == 200
+            and after_restart.get("approval_ref") == approval_ref
+            and after_restart.get("status") == "approved"
+            and after_restart.get("revision") == 2,
+            f"{status} {json.dumps(after_restart, sort_keys=True)[:400]}",
+        )
+    )
+    status, repeat_after_restart, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/approvals/{approval_ref}/approve",
+        key=bob_alpha,
+        body={"expected_revision": 1},
+        timeout=timeout,
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.repeat_approve_after_restart",
+            status == 200
+            and repeat_after_restart.get("replayed") is True
+            and repeat_after_restart.get("revision") == 2,
+            f"{status} {json.dumps(repeat_after_restart, sort_keys=True)[:400]}",
+        )
+    )
+    _b15_write_json(
+        out_dir / "restart.json",
+        {
+            "health_before": health,
+            "restart": restart_evidence,
+            "after_restart": after_restart,
+            "repeat": repeat_after_restart,
+        },
+    )
+
+    jobs_before = _b15_count_jobs(jobs_db)
+    work_before = set(_b16_work_dirs(run_root))
+    submit = _b16_submit_body(
+        scenario,
+        plan=plan,
+        plan_digest=plan_digest,
+        proposal_ref=main_proposal_ref,
+        proposal_digest=proposal_digest,
+        budget=budget,
+        name="b16-approved-display-name",
+    )
+    status, accepted, _ = _b15_http(
+        base, "POST", "/api/v1/jobs", key=alice, body=submit, timeout=timeout
+    )
+    accepted_ref = str((accepted or {}).get("job_id") or "")
+    jobs_after = _b15_count_jobs(jobs_db)
+    work_after = set(_b16_work_dirs(run_root))
+    assertions.append(
+        _b15_assert(
+            "b16.approved_submit_dispatches",
+            status == 201
+            and accepted.get("approval_ref") == approval_ref
+            and bool(accepted_ref)
+            and jobs_after == jobs_before + 1
+            and len(work_after - work_before) == 1,
+            f"{status} jobs {jobs_before}->{jobs_after} work={sorted(work_after - work_before)}",
+        )
+    )
+    if accepted_ref:
+        _b15_http(base, "POST", f"/api/v1/jobs/{accepted_ref}/cancel", key=alice, timeout=timeout)
+
+    # -- invalidation matrix ------------------------------------------------
+    matrix: list[dict[str, Any]] = []
+    denial_specs: list[tuple[str, dict[str, Any], int, str]] = []
+
+    # unapproved (no record at all)
+    unapproved_ref = "prop-b16-unapproved"
+    denial_specs.append(
+        (
+            "unapproved",
+            _b16_submit_body(
+                scenario,
+                plan=plan,
+                plan_digest=plan_digest,
+                proposal_ref=unapproved_ref,
+                proposal_digest=_b16_proposal_digest(
+                    {**base_proposal, "proposal_id": unapproved_ref}
+                ),
+                budget=budget,
+                name="b16-unapproved",
+            ),
+            403,
+            "approval_required",
+        )
+    )
+    # same approval, changed method but stale (old) plan_digest
+    changed_plan = dict(plan)
+    changed_plan["method"] = {**dict(plan.get("method") or {}), "method": "B3LYP"}
+    changed_plan_digest = _b16_plan_digest(changed_plan)
+    denial_specs.append(
+        (
+            "changed_method_stale_digest",
+            _b16_submit_body(
+                scenario,
+                plan=changed_plan,
+                plan_digest=plan_digest,
+                proposal_ref=main_proposal_ref,
+                proposal_digest=proposal_digest,
+                budget=budget,
+                name="b16-plan-mismatch",
+            ),
+            400,
+            "plan_digest_mismatch",
+        )
+    )
+    denial_specs.append(
+        (
+            "changed_plan_digest",
+            _b16_submit_body(
+                scenario,
+                plan=changed_plan,
+                plan_digest=changed_plan_digest,
+                proposal_ref=main_proposal_ref,
+                proposal_digest=proposal_digest,
+                budget=budget,
+                name="b16-changed-plan",
+            ),
+            409,
+            "approved_plan_digest_mismatch",
+        )
+    )
+    changed_proposal = {
+        **base_proposal,
+        "recipe_ref": {
+            "schema_id": "acp2.science.recipe.v1",
+            "version": "1.0.0",
+            "digest": "sha256:" + "3" * 64,
+        },
+    }
+    denial_specs.append(
+        (
+            "changed_recipe_projection",
+            _b16_submit_body(
+                scenario,
+                plan=plan,
+                plan_digest=plan_digest,
+                proposal_ref=main_proposal_ref,
+                proposal_digest=_b16_proposal_digest(changed_proposal),
+                budget=budget,
+                name="b16-recipe-change",
+            ),
+            409,
+            "approved_proposal_digest_mismatch",
+        )
+    )
+    denial_specs.append(
+        (
+            "changed_budget",
+            _b16_submit_body(
+                scenario,
+                plan=plan,
+                plan_digest=plan_digest,
+                proposal_ref=main_proposal_ref,
+                proposal_digest=proposal_digest,
+                budget={**budget, "count": int(budget.get("count") or 1) + 1},
+                name="b16-budget-change",
+            ),
+            409,
+            "approved_budget_mismatch",
+        )
+    )
+    denial_specs.append(
+        (
+            "other_user",
+            _b16_submit_body(
+                scenario,
+                plan=plan,
+                plan_digest=plan_digest,
+                proposal_ref=main_proposal_ref,
+                proposal_digest=proposal_digest,
+                budget=budget,
+                name="b16-other-user",
+            ),
+            403,
+            "approval_principal_mismatch",
+        )
+    )
+
+    # pending / rejected / revoked / expired approvals
+    for label, decision in (("pending", None), ("rejected", "reject")):
+        ref = f"prop-b16-{label}"
+        status, body, _ = _b15_http(
+            base,
+            "POST",
+            "/api/v2/research/approvals",
+            key=alice,
+            body={
+                "proposal_ref": ref,
+                "plan": plan,
+                "plan_digest": plan_digest,
+                "proposal": {**base_proposal, "proposal_id": ref},
+                "budget": budget,
+            },
+            timeout=timeout,
+        )
+        approval_id = str((body or {}).get("approval_ref") or "")
+        if decision == "reject" and approval_id:
+            _b15_http(
+                base,
+                "POST",
+                f"/api/v2/research/approvals/{approval_id}/reject",
+                key=bob_alpha,
+                body={"expected_revision": 1},
+                timeout=timeout,
+            )
+        denial_specs.append(
+            (
+                label,
+                _b16_submit_body(
+                    scenario,
+                    plan=plan,
+                    plan_digest=plan_digest,
+                    proposal_ref=ref,
+                    proposal_digest=_b16_proposal_digest({**base_proposal, "proposal_id": ref}),
+                    budget=budget,
+                    name=f"b16-{label}",
+                ),
+                403,
+                f"approval_{label}",
+            )
+        )
+    revoked_ref = "prop-b16-revoked"
+    status, body, _ = _b15_http(
+        base,
+        "POST",
+        "/api/v2/research/approvals",
+        key=alice,
+        body={
+            "proposal_ref": revoked_ref,
+            "plan": plan,
+            "plan_digest": plan_digest,
+            "proposal": {**base_proposal, "proposal_id": revoked_ref},
+            "budget": budget,
+        },
+        timeout=timeout,
+    )
+    revoked_id = str((body or {}).get("approval_ref") or "")
+    if revoked_id:
+        _b15_http(
+            base,
+            "POST",
+            f"/api/v2/research/approvals/{revoked_id}/approve",
+            key=bob_alpha,
+            body={"expected_revision": 1},
+            timeout=timeout,
+        )
+        _b15_http(
+            base,
+            "POST",
+            f"/api/v2/research/approvals/{revoked_id}/revoke",
+            key=bob_alpha,
+            body={"expected_revision": 2, "reason": "b16 matrix"},
+            timeout=timeout,
+        )
+    denial_specs.append(
+        (
+            "revoked",
+            _b16_submit_body(
+                scenario,
+                plan=plan,
+                plan_digest=plan_digest,
+                proposal_ref=revoked_ref,
+                proposal_digest=_b16_proposal_digest({**base_proposal, "proposal_id": revoked_ref}),
+                budget=budget,
+                name="b16-revoked",
+            ),
+            403,
+            "approval_revoked",
+        )
+    )
+    expired_ref = "prop-b16-expired"
+    expires_at = (
+        (datetime.now(timezone.utc) + timedelta(seconds=3)).isoformat().replace("+00:00", "Z")
+    )
+    status, body, _ = _b15_http(
+        base,
+        "POST",
+        "/api/v2/research/approvals",
+        key=alice,
+        body={
+            "proposal_ref": expired_ref,
+            "plan": plan,
+            "plan_digest": plan_digest,
+            "proposal": {**base_proposal, "proposal_id": expired_ref},
+            "budget": budget,
+            "expires_at": expires_at,
+        },
+        timeout=timeout,
+    )
+    expired_id = str((body or {}).get("approval_ref") or "")
+    if expired_id:
+        _b15_http(
+            base,
+            "POST",
+            f"/api/v2/research/approvals/{expired_id}/approve",
+            key=bob_alpha,
+            body={"expected_revision": 1},
+            timeout=timeout,
+        )
+        time.sleep(4.0)
+    denial_specs.append(
+        (
+            "expired",
+            _b16_submit_body(
+                scenario,
+                plan=plan,
+                plan_digest=plan_digest,
+                proposal_ref=expired_ref,
+                proposal_digest=_b16_proposal_digest({**base_proposal, "proposal_id": expired_ref}),
+                budget=budget,
+                name="b16-expired",
+            ),
+            403,
+            "approval_expired",
+        )
+    )
+
+    for label, body, expected_status, expected_rule in denial_specs:
+        before_jobs = _b15_count_jobs(jobs_db)
+        before_dirs = set(_b16_work_dirs(run_root))
+        use_key = bob_alpha if label == "other_user" else alice
+        status, response, _ = _b15_http(
+            base, "POST", "/api/v1/jobs", key=use_key, body=body, timeout=timeout
+        )
+        after_jobs = _b15_count_jobs(jobs_db)
+        after_dirs = set(_b16_work_dirs(run_root))
+        code, rule = _b16_denial_detail(status, response)
+        row = {
+            "row": label,
+            "status": status,
+            "code": code,
+            "rule": rule,
+            "expected_status": expected_status,
+            "expected_rule": expected_rule,
+            "jobs_before": before_jobs,
+            "jobs_after": after_jobs,
+            "new_work_dirs": sorted(after_dirs - before_dirs),
+            "ok": status == expected_status
+            and rule == expected_rule
+            and after_jobs == before_jobs
+            and not (after_dirs - before_dirs),
+        }
+        matrix.append(row)
+    assertions.append(
+        _b15_assert(
+            "b16.invalidation_matrix",
+            all(row["ok"] for row in matrix),
+            json.dumps([row["row"] for row in matrix if not row["ok"]]) or "all refused",
+        )
+    )
+    _b15_write_json(
+        out_dir / "invalidation-matrix.json",
+        {"schema": "acp2.b16.invalidation-matrix.v1", "rows": matrix},
+    )
+
+    # unapproved-no-dispatch evidence is the matrix rows' zero job/work-dir delta
+    unapproved_row = next(row for row in matrix if row["row"] == "unapproved")
+    _b15_write_json(
+        out_dir / "unapproved-no-dispatch.json",
+        {
+            "schema": "acp2.b16.unapproved-no-dispatch.v1",
+            "row": unapproved_row,
+            "job_rows_created": unapproved_row["jobs_after"] - unapproved_row["jobs_before"],
+            "work_dirs_created": unapproved_row["new_work_dirs"],
+            "qc_or_bsub_started": False,
+            "permit": "the request was refused before RuntimeCommands.submit",
+        },
+    )
+
+    # -- approval event facts (single outbox table, state is authoritative) --
+    events = _b16_events(jobs_db)
+    event_ids = [event["event_id"] for event in events]
+    approval_ids = {approval_ref, revoked_id, expired_id}
+    extensions["b16.event_approvals"] = sorted(approval_ids)
+    transitions_ok = {
+        "approval.requested",
+        "approval.approved",
+        "approval.rejected",
+        "approval.revoked",
+        "approval.expired",
+        "approval.task_bound",
+    } <= {event["event_type"] for event in events}
+    _b15_write_json(
+        out_dir / "approval-events.json",
+        {
+            "schema": "acp2.b16.approval-events.v1",
+            "store": "job_outbox",
+            "event_count": len(events),
+            "unique_event_ids": len(event_ids) == len(set(event_ids)),
+            "types": sorted({event["event_type"] for event in events}),
+            "events": events,
+        },
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.events_single_store",
+            bool(events) and len(event_ids) == len(set(event_ids)) and transitions_ok,
+            f"{len(events)} events, unique={len(event_ids) == len(set(event_ids))}, "
+            f"types={sorted({event['event_type'] for event in events})}",
+        )
+    )
+
+    # -- approval rows dump -------------------------------------------------
+    conn = sqlite3.connect(str(jobs_db))
+    conn.row_factory = sqlite3.Row
+    try:
+        approval_rows = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM approval_records ORDER BY created_at, approval_id"
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+    _b15_write_json(
+        out_dir / "approval-rows.json",
+        {
+            "schema": "acp2.b16.approval-rows.v1",
+            "rows": approval_rows,
+            "states": sorted({row["state"] for row in approval_rows}),
+        },
+    )
+    assertions.append(
+        _b15_assert(
+            "b16.record_states",
+            {"pending", "approved", "rejected", "revoked", "expired"}
+            <= {row["state"] for row in approval_rows},
+            str(sorted({row["state"] for row in approval_rows})),
+        )
+    )
+
+    extensions.update(
+        {
+            "b16.approval_ref": approval_ref,
+            "b16.plan_digest": plan_digest,
+            "b16.proposal_digest": proposal_digest,
+            "b16.approved_task_ref": accepted_ref,
+            "b16.fixture_projects": created,
+            "b16.invalidation_rows": len(matrix),
+            "b16.events": len(events),
+            "b16.artifacts": [
+                {
+                    "path": name,
+                    "size_bytes": (out_dir / name).stat().st_size,
+                    "sha256": sha256_file(out_dir / name),
+                }
+                for name in (
+                    "canonical-vectors.json",
+                    "restart.json",
+                    "invalidation-matrix.json",
+                    "unapproved-no-dispatch.json",
+                    "approval-events.json",
+                    "approval-rows.json",
+                )
+                if (out_dir / name).is_file()
+            ],
+        }
+    )
+    failed = [item["name"] for item in assertions if item["status"] == "FAIL"]
+    if failed:
+        extensions["b16.reason"] = "assertion_failed:" + ",".join(failed)
+        return EXIT_FAIL, assertions, extensions
+    return EXIT_PASS, assertions, extensions
+
+
 B15_FIXTURE_SCHEMA = "acp2.multi-fixture.v1"
 B15_CREDENTIALS_SCHEMA = "acp2.multi-credentials.v1"
 B15_PERMISSION_CEILING = ("control", "read", "write")
@@ -7551,8 +8489,11 @@ def _b15_assert(
 
 def _b15_fixture(path: str) -> dict[str, Any]:
     document = _b15_read_json(Path(path))
-    if not isinstance(document, dict) or document.get("schema") != B15_FIXTURE_SCHEMA:
-        raise ValueError(f"fixture is not {B15_FIXTURE_SCHEMA}")
+    if not isinstance(document, dict) or document.get("schema") not in {
+        B15_FIXTURE_SCHEMA,
+        B16_APPROVAL_SCHEMA,
+    }:
+        raise ValueError(f"fixture is not {B15_FIXTURE_SCHEMA} or {B16_APPROVAL_SCHEMA}")
     identity = document.get("identity")
     if not isinstance(identity, dict):
         raise ValueError("fixture.identity is required")
@@ -8303,8 +9244,10 @@ def dry_run_commands(
         commands.append(control_command)
     elif spec.scenario == "approval-budget":
         commands.append(
-            f"{shlex.quote(sys.executable)} -m acp task plan --controller "
-            f"{shlex.quote(controller)} --task-dir {shlex.quote(fixture)}"
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario approval-budget --phase {shlex.quote(phase_name)} "
+            f"--controller {shlex.quote(controller)} --fixture {shlex.quote(fixture)} "
+            f"--out {shlex.quote(out)}"
         )
     elif spec.scenario == "da-runtime":
         commands.append(
@@ -8534,6 +9477,23 @@ def execute_scenario(
             return code_value
 
         handler = control_recovery
+    elif spec.scenario == "approval-budget":
+
+        def approval_budget(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_approval_budget(
+                phase_name,
+                args.controller,
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b16.artifacts", [])
+            outcome["reason"] = extensions.get("b16.reason") or extensions.get("b17.reason")
+            return code_value
+
+        handler = approval_budget
     elif spec.scenario == "multitenant":
         if phase_name != "multitenant:authz":
 
@@ -8600,6 +9560,7 @@ def execute_scenario(
         "artifact",
         "control-recovery",
         "multitenant",
+        "approval-budget",
     }:
         result = (
             "PASS"
@@ -8632,6 +9593,7 @@ def execute_scenario(
         "artifact",
         "control-recovery",
         "multitenant",
+        "approval-budget",
     }:
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -8689,6 +9651,14 @@ def execute_scenario(
             ("release_id", "b11.release_id"),
             ("submission_id", "b11.submission_id"),
             ("operation_id", "b11.operation_id"),
+        ):
+            value = extensions.get(extension)
+            if value is not None and value != "":
+                refs[key] = value
+    if spec.scenario == "approval-budget":
+        for key, extension in (
+            ("job_id", "b16.approved_task_ref"),
+            ("approval_ref", "b16.approval_ref"),
         ):
             value = extensions.get(extension)
             if value is not None and value != "":

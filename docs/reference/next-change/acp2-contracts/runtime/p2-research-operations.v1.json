@@ -74,7 +74,9 @@
       "error_classes": ["authorization", "invalid-parameter", "conflict", "retryable"],
       "idempotency": "one pending approval per (proposal_ref, plan_digest); a second request with the same pair returns the existing approval_ref (replayed=true), a different plan_digest is conflict",
       "binding_owner": "B16",
-      "implementation_status": "planned",
+      "implementation_status": "delivered",
+      "delivered_by": "B16",
+      "http_paths": {"request": "POST /api/v2/research/approvals", "query": "GET /api/v2/research/approvals", "read": "GET /api/v2/research/approvals/{approval_ref}"},
       "live_tool_requirement": "visible only after extension negotiation; approving requires a different tool and a verified human principal",
       "evidence_gate": "a headless client requests and queries an approval; a second request for the same plan_digest is replayed, not duplicated"
     },
@@ -92,7 +94,9 @@
       "error_classes": ["authorization", "invalid-parameter", "conflict", "retryable"],
       "idempotency": "a repeated decision with the same expected_revision and the same outcome is replayed; a different outcome on a decided approval is conflict",
       "binding_owner": "B16",
-      "implementation_status": "planned",
+      "implementation_status": "delivered",
+      "delivered_by": "B16",
+      "http_paths": {"approve": "POST /api/v2/research/approvals/{approval_ref}/approve", "reject": "POST /api/v2/research/approvals/{approval_ref}/reject", "revoke": "POST /api/v2/research/approvals/{approval_ref}/revoke"},
       "live_tool_requirement": "advertised only to authorized clients; the decision tool is never offered to an unauthenticated client",
       "evidence_gate": "approve/reject/revoke each move revision exactly once; a payload-claimed approver is denied; a revoked approval cannot authorize a submit"
     },
@@ -132,6 +136,13 @@
       "evidence_gate": "terminate the DSH session, resume in a new session, and observe the same resource revision and task reference"
     }
   ],
+  "approval_lifecycle": {
+    "states": ["draft", "pending", "approved", "rejected", "expired", "revoked"],
+    "note": "draft is the pre-request state; the wire status for a requested but undecided approval is pending (frozen C01/B03 status enum).",
+    "authority": "acp_services.runtime.approvals.ApprovalService",
+    "binding": "plan_digest + proposal_digest + project_id + budget_digest + allowed_change_range",
+    "separate_from_execution": "approval state never changes a JobStatus; resume() remains review-only"
+  },
   "binding_ownership": {
     "B16": ["P2-R2", "P2-R3", "P2-R4"],
     "B18": ["P2-R1", "P2-R5"],

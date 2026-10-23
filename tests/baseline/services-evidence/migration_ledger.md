@@ -104,6 +104,8 @@
 | singlepoint 默认 envelope 激活（07-C，T29 登记） | `src/acp_services/runtime/execution_chain.py:217`（DEFAULT_ENVELOPE_WORKFLOWS） | 既有 legacy 路径保留；DEFAULT 与 ENABLED 分离 | `src/acp/scheduler/runner.py:_prepare_and_launch`；`src/acp/scheduler/remote/runner.py` | [CLOSED] 仅 singlepoint 默认；其余 14 保持注册路径；T31 矩阵分格；T32 先于激活 | `tests/test_services_workflow_enablement.py`；`tests/test_services_chain_switch.py` |
 | 远端冻结链与恢复窗口（07-C，T30 登记） | `src/acp/scheduler/remote/runner.py:1453`（_upload_frozen_envelope、receipt 与 task_result fetch） | `src/acp/scheduler/remote/sync.py:build_sync_file_list`（含 src/acp_services） | `src/acp/scheduler/remote/runner.py`（freeze、release、bsub、reconcile） | [CLOSED] 冻结先于远程选择、manifest 最后提交、不完整组拒绝、三窗口恢复；真实 LSF 仍 NOT_VERIFIED | `tests/test_services_chain_switch.py`；`tests/test_remote_phase1.py` |
 
+| 持久 Proposal 审批（B16，2026-10-23） | `src/acp_services/runtime/approvals.py:1`（ApprovalService） | `acp.api.v2_approvals` HTTP 面；`src/acp/api/v1_routes.py:_enforce_approval` 提交前校验；`src/acp_services/runtime/canonical_digest.py` 唯一规范化实现（B18 只导入） | `src/acp/api/v1_routes.py:create_job`（审批先于 dispatch）；`src/acp/api/server.py`（v2 路由挂载） | [CLOSED] 迁移 023 加性；draft/pending/approved/rejected/expired/revoked 持久 CAS；未批准/过期/换计划/换预算/他人批准不 dispatch；重启后同一审批可查询且重复 approve 幂等；不新增 JobStatus、不挪用 WAITING_REVIEW、不改 resume() | `tests/test_acp2_runtime_approvals.py`；`tests/test_services_cas_fidelity.py`；`scripts/acceptance/acp2_runtime.py --scenario approval-budget --phase approval` |
+
 ## 覆盖说明
 
 初版覆盖 30 行（≥20）；todo 70 收口时 53 行。必需覆盖面逐项对应：

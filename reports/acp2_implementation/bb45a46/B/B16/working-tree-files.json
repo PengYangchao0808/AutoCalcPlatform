@@ -1,0 +1,54 @@
+[
+  {
+    "path": "src/acp_services/runtime/canonical_digest.py",
+    "sha256": "1438c9b336107157f886600b858ff2329377a7b439ac8421330ffb221e53b146"
+  },
+  {
+    "path": "src/acp_services/runtime/approvals.py",
+    "sha256": "0de61e24f859ffc6a80fecbdfda9a84c87f0106f75e689286746fc7384f974e2"
+  },
+  {
+    "path": "src/acp_services/store/migrations.py",
+    "sha256": "76ef303516489dfde08651c08d9480b048edfa104911b7b6c90b749c91385306"
+  },
+  {
+    "path": "src/acp/api/v2_approvals.py",
+    "sha256": "b674b3d5c2b63844ad17c0b493d5e86ac51d0fd5dbdcda1400ae1ef5a3144480"
+  },
+  {
+    "path": "src/acp/api/v1_routes.py",
+    "sha256": "d976ca8012d35e66620844dba8a1204bb246a31a1880ccfd0f7fa4ea3cad211f"
+  },
+  {
+    "path": "src/acp/api/server.py",
+    "sha256": "afa3fef977e5647bf92390e777356f706f6401d2330e2d9dad32a973fd606f5b"
+  },
+  {
+    "path": "scripts/acceptance/acp2_runtime.py",
+    "sha256": "81023137624bddcc6582451e3ad5018f2585fc9b485ff87371766eb32a614ea6"
+  },
+  {
+    "path": "tests/test_acp2_runtime_approvals.py",
+    "sha256": "fe3975147bc6b9889dfe46e413d08c75cfd7c8efa142aba948d170fc030229d3"
+  },
+  {
+    "path": "tests/test_acp2_runtime_contracts.py",
+    "sha256": "1d60798b9cbaddac8bd59dc1e381ddbbddc46b8dab6e806c56d281c298be0148"
+  },
+  {
+    "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+    "sha256": "dbe0f1cf303fdbf26d8722be6dbb877536c6cb232432255711f3a4a63300986b"
+  },
+  {
+    "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+    "sha256": "10f2ad63c4fdb6471bb8c56fd025a9460eb054b7afc17db7b1f2e57e7904fa04"
+  },
+  {
+    "path": "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+    "sha256": "0708c6bb4048ad8544c2c480a0e5c4e36312b5a0c0155f22f4f10afaa45cfa62"
+  },
+  {
+    "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+    "sha256": "f5144c58b29f783d33c589e8a7ed96237eafca87fd307d7d59129cbe89e45bea"
+  }
+]

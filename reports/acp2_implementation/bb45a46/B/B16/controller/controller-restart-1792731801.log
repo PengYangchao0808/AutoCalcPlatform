@@ -1,0 +1,65 @@
+INFO:     Started server process [1204604]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18776 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18776
+  Run root      : <acp2-dev>/data/b/run-root-b16
+  Poll interval : 1s
+  Docs (Swagger): http://127.0.0.1:18776/docs
+  Reload        : off
+
+INFO:     127.0.0.1:49828 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49832 - "GET /api/v2/research/approvals/ap_610f54c9a14b46218e433c954e8970e5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49844 - "POST /api/v2/research/approvals/ap_610f54c9a14b46218e433c954e8970e5/approve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49860 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+Submission failed for job 20261023_130324_001_b16-approved-display-name
+Traceback (most recent call last):
+  File "<repo>/src/acp/scheduler/manager.py", line 3723, in _execute_submission_impl
+    submitted = self._submit_job(job_id)
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/acp/scheduler/manager.py", line 4916, in _submit_job
+    self.runner.submit(record, event_log, cancel_event)
+  File "<repo>/src/acp/scheduler/runner.py", line 597, in submit
+    self._prepare_and_launch(record, work_dir, storage, event_log)
+  File "<repo>/src/acp/scheduler/runner.py", line 642, in _prepare_and_launch
+    self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
+  File "<repo>/src/acp/scheduler/runner.py", line 1366, in _ensure_default_frozen_attempt
+    spec = build_freeze_spec(record, work_dir, input_path, release)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/acp/calculations/attempt_freeze.py", line 1141, in build_freeze_spec
+    return builder(record, work_dir, input_path, release)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/acp/calculations/attempt_freeze.py", line 890, in build_singlepoint_freeze_spec
+    return build_simple_freeze_spec(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/acp/calculations/attempt_freeze.py", line 833, in build_simple_freeze_spec
+    input_file = _materialize_input(work, input_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/acp/calculations/attempt_freeze.py", line 623, in _materialize_input
+    raise FreezeSpecError(f"singlepoint input file not found: {source}")
+acp.calculations.attempt_freeze.FreezeSpecError: singlepoint input file not found: .
+INFO:     127.0.0.1:49874 - "POST /api/v1/jobs/20261023_130324_001_b16-approved-display-name/cancel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39140 - "POST /api/v2/research/approvals HTTP/1.1" 201 Created
+INFO:     127.0.0.1:39144 - "POST /api/v2/research/approvals HTTP/1.1" 201 Created
+INFO:     127.0.0.1:39158 - "POST /api/v2/research/approvals/ap_5db2919e5f2f4d4ab095de0c191c0ed6/reject HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39162 - "POST /api/v2/research/approvals HTTP/1.1" 201 Created
+INFO:     127.0.0.1:39174 - "POST /api/v2/research/approvals/ap_cf5fe0d8bc624920a47ab674c6c958e4/approve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39190 - "POST /api/v2/research/approvals/ap_cf5fe0d8bc624920a47ab674c6c958e4/revoke HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39204 - "POST /api/v2/research/approvals HTTP/1.1" 201 Created
+INFO:     127.0.0.1:39206 - "POST /api/v2/research/approvals/ap_7164dd041edc43e386139c4aa6081c3c/approve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39222 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:39226 - "POST /api/v1/jobs HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:39242 - "POST /api/v1/jobs HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:39252 - "POST /api/v1/jobs HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:39260 - "POST /api/v1/jobs HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:39272 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:39280 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:39294 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:39298 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:39312 - "POST /api/v1/jobs HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:39330 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49554 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1204604]
