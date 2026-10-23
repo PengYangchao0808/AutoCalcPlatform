@@ -2,8 +2,8 @@
   "artifacts": [
     {
       "path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
-      "sha256": "7315a338d48cd10af78dca2c3f1444d24e2e2145ba5ce4a90060f90b0f3a05cd",
-      "size_bytes": 26981
+      "sha256": "7dfc366f7bac5bdb69888a6073aefdc4ba866abca1ff17031fc8ab1e3c293a03",
+      "size_bytes": 29378
     },
     {
       "path": "<repo>/reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",

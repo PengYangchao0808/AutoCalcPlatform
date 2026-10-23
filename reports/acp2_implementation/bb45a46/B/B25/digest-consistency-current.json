@@ -1,0 +1,22 @@
+{
+  "artifact_count": 9,
+  "checked": {
+    "install-results:cccp:wheel": "70749f7673abd40ce99702700b779f109d4d6ff57e7af2891be4f695f6654ad3",
+    "install-results:web:wheel": "55ecb5ea83d0fb0a4f911eb7c0d114495ee0cb8cb367eabee232248cf6907846",
+    "install-results:worker:wheel": "7d93873f4db823e4bd1edaa7be34be8558d8623cfb37cf4a311368110b2fa0c3",
+    "release-manifest:acp-web-0.3.0.tar.gz": "c1798bda7df1f62d4647af5afd61d635504efe6175f84cfc08d3d36cf629dec5",
+    "release-manifest:acp-worker-0.3.0.tar.gz": "a3ea29ea025719e404c7f36c83d193f0e59d05d02799ba478c5555347b978acc",
+    "release-manifest:acp_web-0.3.0-py3-none-any.whl": "55ecb5ea83d0fb0a4f911eb7c0d114495ee0cb8cb367eabee232248cf6907846",
+    "release-manifest:acp_worker-0.3.0-py3-none-any.whl": "7d93873f4db823e4bd1edaa7be34be8558d8623cfb37cf4a311368110b2fa0c3",
+    "release-manifest:cccp-0.3.0-py3-none-any.whl": "70749f7673abd40ce99702700b779f109d4d6ff57e7af2891be4f695f6654ad3",
+    "release-manifest:cccp-0.3.0.tar.gz": "5cb1f202dba608182be7e38a919d282faa63f3b781e1d6ea59ea0e46b3b32825"
+  },
+  "errors": [],
+  "evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B25",
+  "install_results": "<repo>/reports/acp2_implementation/bb45a46/B/B25/install-results.json",
+  "release_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release",
+  "release_manifest": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+  "result": "PASS",
+  "schema": "acp2.b25.digest_consistency.v2",
+  "summary": "<repo>/reports/acp2_implementation/bb45a46/B/B25/summary.json"
+}

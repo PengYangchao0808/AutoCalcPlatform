@@ -97,7 +97,7 @@
   "evidence_revision": {
     "artifact_count": 34,
     "rule": "sha256 over sorted '<repo-relative path> <file sha256>\\n' for every artifact referenced by the H0-H7 receipts",
-    "value": "72ed42ddf140536729d12984bf83635401a7bf8f7861bfa18c851550ae7dff27"
+    "value": "3c16877f422933b47243e255f8b3a45efea05bfe1dd176f5f643a6764a7b8aa3"
   },
   "generated_at": "2026-10-23T15:51:28Z",
   "harness_revision": {

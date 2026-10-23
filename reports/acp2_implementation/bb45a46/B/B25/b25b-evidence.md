@@ -48,6 +48,17 @@ All release-manifest digests matched; root wheel digest recorded in `release-dig
 - B25b rebuilt the four 0.3.0 distributions from clean HEAD + the already-present `boundary.py` `public_origin` fix. Original artifacts: `release-b25a-original/`, `root-build-b25a-original/`; corrected digests: `release/release-manifest.json`, `root-build/acp-0.3.0-py3-none-any.whl`.
 - No science code, tool license or version number changed; only startup parameter compatibility.
 
+## Evidence-integrity re-check (F1-01 reconciliation, 2026-10-24)
+
+- `b25a-summary.json` now points at the preserved `release-b25a-original/` and `root-build-b25a-original/` copies, records `install_results: b25a-install-results.json`, and carries `superseded_by: release-fix4` plus a three-stage `result_history` (B25a → B25b → B-fix-4).
+- `scripts/acceptance/check_release_evidence.py` accepts both the B25a `{"roles": ...}` install mapping and the current list-shaped `install-results.json`; it no longer assumes the summary has an `artifacts` map.
+- Re-run results (both `result: PASS`, empty `errors`):
+  - `digest-consistency-b25a.json` — 20 digests across `release-b25a-original/`, `root-build-b25a-original/`, and `b25a-install-results.json`.
+  - `digest-consistency-current.json` — 9 digests, a smoke check of the superseding `release/` tree; it is not a B25a claim.
+- Commands (run from the repository root):
+  - `/usr/bin/python3.11 scripts/acceptance/check_release_evidence.py --evidence reports/acp2_implementation/bb45a46/B/B25 --summary b25a-summary.json --output reports/acp2_implementation/bb45a46/B/B25/digest-consistency-b25a.json`
+  - `/usr/bin/python3.11 scripts/acceptance/check_release_evidence.py --evidence reports/acp2_implementation/bb45a46/B/B25 --output reports/acp2_implementation/bb45a46/B/B25/digest-consistency-current.json`
+
 ## Verification
 
 - `pytest tests/test_services_doc_sync.py tests/test_services_standalone_recipe.py tests/test_packaging_assets.py tests/test_acp2_runtime_acceptance_harness.py -q` → 50 passed.
