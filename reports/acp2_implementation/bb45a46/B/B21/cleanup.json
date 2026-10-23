@@ -1,0 +1,14 @@
+{
+  "cleaned_at": "2026-10-23T09:53:12Z",
+  "controller_pid": 1471300,
+  "controller_stopped": true,
+  "external_plugin_bundle_retained": true,
+  "plugin_state_removed": true,
+  "port_18782_free": true,
+  "production_port_8765_touched": false,
+  "production_run_root_touched": false,
+  "run_root_removed": true,
+  "schema": "acp2.b21.cleanup.v1",
+  "side_effect_marker_removed": true,
+  "tasks_created_by_b21": 0
+}

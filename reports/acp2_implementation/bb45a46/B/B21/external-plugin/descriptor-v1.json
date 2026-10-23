@@ -1,0 +1,20 @@
+{
+  "descriptor_schema": "acp2.adapter.v1",
+  "adapter_id": "acp.storage.inventory",
+  "version": "1.0.0",
+  "kind": "storage",
+  "supported_schema": ["acp2.adapter.v1"],
+  "environment": ["env:ACP2_B21_PLUGIN_ENV"],
+  "resource_limits": {
+    "max_cpu_seconds": 30,
+    "max_memory_bytes": 33554432,
+    "max_concurrency": 1,
+    "max_io_bytes": 1048576
+  },
+  "verification_fixture": "verification.json",
+  "capabilities": ["storage.inventory"],
+  "trust_level": "discover-only",
+  "entrypoint": {"module": "adapter", "attribute": "run"},
+  "description": "External infrastructure adapter fixture; no science parser.",
+  "claims_process_isolation": false
+}

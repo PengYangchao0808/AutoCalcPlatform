@@ -1,0 +1,39 @@
+{
+  "descriptor": {
+    "adapter_id": "acp.storage.inventory",
+    "capabilities": [
+      "storage.inventory"
+    ],
+    "claims_process_isolation": false,
+    "description": "External infrastructure adapter fixture; no science parser.",
+    "descriptor_schema": "acp2.adapter.v1",
+    "entrypoint": {
+      "attribute": "run",
+      "module": "adapter"
+    },
+    "environment": [
+      "env:ACP2_B21_PLUGIN_ENV"
+    ],
+    "kind": "storage",
+    "resource_limits": {
+      "max_concurrency": 1,
+      "max_cpu_seconds": 30,
+      "max_io_bytes": 1048576,
+      "max_memory_bytes": 33554432
+    },
+    "supported_schema": [
+      "acp2.adapter.v1"
+    ],
+    "trust_level": "discover-only",
+    "verification_fixture": "verification.json",
+    "version": "1.1.0"
+  },
+  "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+  "effective_trust_level": "trusted-explicit",
+  "enabled": true,
+  "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+  "entrypoint_path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.1.0/adapter.py",
+  "installed_at": "2026-10-23T09:52:35Z",
+  "installed_by": "controller",
+  "schema": "acp2.adapter.installed.v1"
+}
