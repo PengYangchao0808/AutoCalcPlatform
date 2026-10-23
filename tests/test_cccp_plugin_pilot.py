@@ -14,6 +14,7 @@ capability template.  These tests pin the *boundaries*, not the science:
 
 from __future__ import annotations
 
+import json
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -25,22 +26,33 @@ from cccp.plugin import (
     BUILTIN_EXECUTION_STATION,
     ORCA_READONLY_PARSER_NAME,
     PLUGIN_API_VERSION,
+    SCIENCE_PLUGIN_ENTRY_POINT_GROUP,
+    SCIENCE_PLUGIN_MANIFEST_FILENAME,
     ApiCompatibility,
+    CapabilityKind,
+    EntryPointPluginLoader,
     ErrorSemantics,
     OrcaReadonlyParserPlugin,
     PluginCandidate,
     PluginCapability,
     PluginDisabledError,
+    PluginFixtureEvidence,
     PluginHost,
+    PluginLicenseError,
+    PluginLicensePolicy,
     PluginLoadError,
     PluginMetadata,
     PluginMetadataError,
     PluginNameConflictError,
+    PluginRecipeRef,
+    PluginTrustLevel,
     PluginUnavailableError,
+    PluginValidatorRef,
     PluginVersionMismatchError,
     ResourceRequirements,
     builtin_catalog,
     discover_plugins,
+    discover_science_plugins,
     readonly_parser_metadata,
 )
 
@@ -266,3 +278,303 @@ def test_api_version_range_parser_is_fail_closed() -> None:
     assert api_version_in_range(2, ">=1,<2") is False
     assert api_version_in_range(1, "") is False
     assert api_version_in_range(1, "not-a-range") is False
+
+
+# ── A-21a: extended science manifest ───────────────────────────────────
+
+
+def _extended_metadata(
+    name: str = "vendor.readonly_validator", **overrides: object
+) -> PluginMetadata:
+    values: dict[str, object] = {
+        "name": name,
+        "distribution": "vendor-science-dist",
+        "version": "2.0.0",
+        "capabilities": (
+            PluginCapability(
+                name="readonly_validator",
+                schema="acp2.science.validator",
+                kind=CapabilityKind.PURE_ANALYSIS,
+                implementation_id="vendor.science.validator",
+                recipe_refs=(PluginRecipeRef(recipe_id="vendor.recipe.v1"),),
+                validator_refs=(
+                    PluginValidatorRef(
+                        validator_id="check.vendor_units", validator_version="1.0.0"
+                    ),
+                ),
+            ),
+        ),
+        "license": "MIT",
+    }
+    values.update(overrides)
+    return PluginMetadata(**values)  # type: ignore[arg-type]
+
+
+def test_extended_manifest_serialises_and_reloads_through_adapter() -> None:
+    metadata = _extended_metadata(
+        trust_level=PluginTrustLevel.TRUSTED,
+        distribution_digest="sha256:" + "a" * 64,
+        fixture_evidence=(
+            PluginFixtureEvidence(
+                fixture_id="vendor.validator.fixed-input",
+                digest="sha256:" + "b" * 64,
+                verified=True,
+            ),
+        ),
+    )
+
+    payload = metadata.to_dict()
+    reloaded = PluginMetadata.from_dict(payload)
+
+    assert reloaded == metadata
+    assert reloaded.trust_level is PluginTrustLevel.TRUSTED
+    assert reloaded.is_trusted is True
+    assert reloaded.capabilities[0].kind is CapabilityKind.PURE_ANALYSIS
+    assert reloaded.capabilities[0].implementation_id == "vendor.science.validator"
+    assert reloaded.capabilities[0].recipe_refs[0].recipe_id == "vendor.recipe.v1"
+    assert reloaded.capabilities[0].validator_refs[0].validator_id == "check.vendor_units"
+    assert payload["distribution_digest"] == "sha256:" + "a" * 64
+    assert payload["fixture_evidence"][0]["digest"] == "sha256:" + "b" * 64
+
+
+def _legacy_manifest_dict(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "name": "legacy_parser",
+        "distribution": "legacy-dist",
+        "version": "0.9.0",
+        "api": {
+            "api_version": PLUGIN_API_VERSION,
+            "compatible_range": ">=1,<2",
+            "schema_version": 1,
+        },
+        "capabilities": [{"name": "legacy_read", "schema": "legacy_output", "schema_version": 1}],
+        "science_software": [],
+        "resources": {"requires_subprocess": False, "requires_network": False},
+        "license": "MIT",
+        "dependencies": [],
+        "error_semantics": {"never_overrides_builtin": True},
+        "default_enabled": False,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_legacy_metadata_loads_through_adapter_with_conservative_defaults() -> None:
+    metadata = PluginMetadata.from_dict(_legacy_manifest_dict())
+
+    assert metadata.name == "legacy_parser"
+    assert metadata.capabilities[0].kind is CapabilityKind.PURE_ANALYSIS
+    assert metadata.trust_level is PluginTrustLevel.UNTRUSTED
+    assert metadata.is_trusted is False
+    assert metadata.distribution_digest is None
+    assert metadata.fixture_evidence == ()
+    assert metadata.science_version_range == ">=1,<2"
+    assert metadata.entry_point_group_version == 1
+    # The adapter never grants trust just because a field was absent.
+    assert metadata.has_verified_fixture_evidence is False
+
+
+def test_legacy_metadata_claiming_builtin_override_is_rejected() -> None:
+    payload = _legacy_manifest_dict(
+        error_semantics={
+            "pre_launch_typed": True,
+            "partial_output_tolerant": True,
+            "never_overrides_builtin": False,
+        }
+    )
+    with pytest.raises(PluginMetadataError):
+        PluginMetadata.from_dict(payload)
+
+
+def test_legacy_metadata_unknown_license_raises_typed_license_error() -> None:
+    payload = _legacy_manifest_dict(license="Proprietary-Unknown-1.0")
+    with pytest.raises(PluginLicenseError) as excinfo:
+        PluginMetadata.from_dict(payload)
+    assert excinfo.value.licence == "Proprietary-Unknown-1.0"
+    assert excinfo.value.plugin == "legacy_parser"
+
+
+def test_empty_license_raises_typed_license_error() -> None:
+    with pytest.raises(PluginLicenseError):
+        _extended_metadata(license="")
+
+
+def test_owner_can_narrow_the_license_policy() -> None:
+    narrowed = PluginLicensePolicy.default().narrowed(excluded={"MIT"})
+    with pytest.raises(PluginLicenseError):
+        _extended_metadata(license="MIT", license_policy=narrowed)
+    assert "MIT" not in narrowed.accepted_licenses
+    assert "Apache-2.0" in narrowed.accepted_licenses
+
+
+def test_trust_defaults_to_lowest_and_is_never_inferred() -> None:
+    metadata = _extended_metadata()
+    assert metadata.trust_level is PluginTrustLevel.UNTRUSTED
+    assert PluginTrustLevel.lowest() is PluginTrustLevel.UNTRUSTED
+    assert metadata.is_trusted is False
+    # Installing, declaring a valid API range or naming a validator does not
+    # promote trust.
+    assert metadata.is_api_compatible(PLUGIN_API_VERSION) is True
+    assert metadata.is_trusted is False
+
+
+def test_trusted_without_fixture_evidence_is_rejected() -> None:
+    with pytest.raises(PluginMetadataError, match="verified fixture evidence"):
+        _extended_metadata(trust_level="trusted")
+    with pytest.raises(PluginMetadataError, match="verified fixture evidence"):
+        _extended_metadata(
+            trust_level="trusted",
+            fixture_evidence=(
+                PluginFixtureEvidence(
+                    fixture_id="vendor.validator.fixed-input",
+                    digest="sha256:" + "b" * 64,
+                    verified=False,
+                ),
+            ),
+        )
+
+
+def test_verified_alias_is_accepted_as_trusted_only_with_evidence() -> None:
+    with pytest.raises(PluginMetadataError, match="verified fixture evidence"):
+        _extended_metadata(trust_level="validated")
+    trusted = _extended_metadata(
+        trust_level="validated",
+        fixture_evidence=(
+            PluginFixtureEvidence(
+                fixture_id="vendor.validator.fixed-input",
+                digest="sha256:" + "c" * 64,
+            ),
+        ),
+    )
+    assert trusted.trust_level is PluginTrustLevel.TRUSTED
+    assert trusted.is_trusted is True
+
+
+@pytest.mark.parametrize(
+    "mixed_fields",
+    [
+        {"delegates_to_task_kind": TaskKind.FREQUENCY.value},
+    ],
+)
+def test_pure_analysis_capability_must_not_delegate(mixed_fields: dict[str, object]) -> None:
+    with pytest.raises(PluginMetadataError):
+        PluginCapability(
+            name="readonly_validator",
+            schema="acp2.science.validator",
+            kind=CapabilityKind.PURE_ANALYSIS,
+            **mixed_fields,
+        )
+
+
+def test_compute_capability_must_delegate_to_one_existing_task_kind() -> None:
+    with pytest.raises(PluginMetadataError):
+        PluginCapability(
+            name="science_compute",
+            schema="acp2.science.result",
+            kind=CapabilityKind.COMPUTE,
+        )
+    with pytest.raises(PluginMetadataError):
+        PluginCapability(
+            name="science_compute",
+            schema="acp2.science.result",
+            kind=CapabilityKind.COMPUTE,
+            delegates_to_task_kind="not_a_task_kind",
+        )
+    capability = PluginCapability(
+        name="science_compute",
+        schema="acp2.science.result",
+        kind=CapabilityKind.COMPUTE,
+        delegates_to_task_kind=TaskKind.SINGLEPOINT.value,
+    )
+    assert capability.delegates_to_task_kind == TaskKind.SINGLEPOINT.value
+
+
+def test_pure_analysis_only_plugin_cannot_require_a_subprocess() -> None:
+    with pytest.raises(PluginMetadataError, match="requires_subprocess"):
+        _extended_metadata(
+            resources=ResourceRequirements(requires_subprocess=True),
+        )
+
+
+def test_science_version_range_must_include_the_host() -> None:
+    with pytest.raises(PluginVersionMismatchError):
+        discover_plugins(
+            (PluginCandidate(metadata=_extended_metadata(science_version_range=">=2,<3")),)
+        )
+
+
+class _FakeDistribution:
+    def __init__(self, manifest: str | None) -> None:
+        self._manifest = manifest
+        self.read_paths: list[str] = []
+
+    def read_text(self, filename: str) -> str | None:
+        self.read_paths.append(filename)
+        return self._manifest
+
+
+class _FakeEntryPoint:
+    group = SCIENCE_PLUGIN_ENTRY_POINT_GROUP
+
+    def __init__(self, name: str, manifest: str | None) -> None:
+        self.name = name
+        self.value = "vendor_plugin:PLUGIN"
+        self.dist = _FakeDistribution(manifest)
+        self.load_calls = 0
+
+    def load(self) -> object:
+        self.load_calls += 1
+        return object()
+
+
+def test_entry_point_discovery_reads_manifest_without_loading_plugin() -> None:
+    manifest = json.dumps(_extended_metadata(name="vendor.readonly_validator").to_dict())
+    entry_point = _FakeEntryPoint("vendor_validator", manifest)
+    unrelated = _FakeEntryPoint("unrelated", manifest)
+    unrelated.group = "unrelated.group"
+
+    catalog = discover_science_plugins(entry_points=[entry_point, unrelated])
+
+    assert entry_point.load_calls == 0
+    assert unrelated.load_calls == 0
+    assert catalog.names() == ("vendor.readonly_validator",)
+    assert catalog.discovery_mode == "entry_points"
+    assert catalog.entry_points_scanned == 1
+    assert entry_point.dist.read_paths == [SCIENCE_PLUGIN_MANIFEST_FILENAME]
+
+
+def test_entry_point_loader_is_lazy_until_called() -> None:
+    manifest = json.dumps(_extended_metadata(name="vendor.readonly_validator").to_dict())
+    entry_point = _FakeEntryPoint("vendor_validator", manifest)
+    discover_science_plugins(entry_points=[entry_point])
+    loader = EntryPointPluginLoader(entry_point)
+
+    assert entry_point.load_calls == 0
+    loader()
+    assert entry_point.load_calls == 1
+
+
+def test_entry_point_without_manifest_is_rejected_without_importing() -> None:
+    entry_point = _FakeEntryPoint("vendor_validator", None)
+    with pytest.raises(PluginMetadataError, match="no cccp_science_plugin.json"):
+        discover_science_plugins(entry_points=[entry_point])
+    assert entry_point.load_calls == 0
+
+
+def test_entry_point_group_version_is_enforced() -> None:
+    manifest = json.dumps(
+        _extended_metadata(name="vendor.readonly_validator", entry_point_group_version=2).to_dict()
+    )
+    entry_point = _FakeEntryPoint("vendor_validator", manifest)
+    with pytest.raises(PluginMetadataError, match="entry_point_group_version"):
+        discover_science_plugins(entry_points=[entry_point])
+    assert entry_point.load_calls == 0
+
+
+def test_entry_point_license_failure_is_typed() -> None:
+    payload = _extended_metadata(name="vendor.readonly_validator").to_dict()
+    payload["license"] = "Unknown-License"
+    entry_point = _FakeEntryPoint("vendor_validator", json.dumps(payload))
+    with pytest.raises(PluginLicenseError):
+        discover_science_plugins(entry_points=[entry_point])
+    assert entry_point.load_calls == 0
