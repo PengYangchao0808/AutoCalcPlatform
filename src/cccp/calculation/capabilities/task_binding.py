@@ -9,8 +9,11 @@ authoritative :class:`~cccp.calculation.requests.TaskRequest` (schema version
 * ``electronic.energy`` -> ``cccp.calculation.tasks.singlepoint.run_singlepoint``;
 * ``geometry.optimize`` -> ``cccp.calculation.tasks.optimize.run_optimize``;
 * ``vibration.compute`` -> ``cccp.calculation.tasks.frequency.run_frequency``;
+* ``nmr.shielding`` -> ``cccp.calculation.tasks.nmr_shielding.run_nmr_shielding``;
 * ``vibration.analyze`` -> the existing pure-analysis entry point
-  :func:`cccp.analysis.frequency_products.build_frequency_report`.
+  :func:`cccp.analysis.frequency_products.build_frequency_report`;
+* ``nmr.compare`` -> the existing pure-analysis entry point
+  :func:`cccp.analysis.nmr.comparison.compare_nmr_shielding`.
 
 It never implements a calculation, never adds a second executor or dispatcher
 and never degrades an unsupported capability into a different task.  A caller
@@ -246,9 +249,9 @@ class TaskEntrypoint:
         return f"cccp.calculation.{self.function}"
 
 
-#: Exactly the three seeded compute capabilities; no other task kind is
-#: executable through this binding.  Direct references to the other twelve
-#: task kinds are bindable for planning but not executable here.
+#: The compute capabilities with an implemented single-task delegation; no
+#: other task kind is executable through this binding.  Direct references to
+#: the remaining task kinds are bindable for planning but not executable here.
 TASK_ENTRYPOINTS: Mapping[str, TaskEntrypoint] = MappingProxyType(
     {
         "singlepoint": TaskEntrypoint(
@@ -266,13 +269,23 @@ TASK_ENTRYPOINTS: Mapping[str, TaskEntrypoint] = MappingProxyType(
             module="cccp.calculation.tasks.frequency",
             function="run_frequency",
         ),
+        "nmr_shielding": TaskEntrypoint(
+            task_kind="nmr_shielding",
+            module="cccp.calculation.tasks.nmr_shielding",
+            function="run_nmr_shielding",
+        ),
     }
 )
 
 SUPPORTED_COMPUTE_TASK_KINDS: tuple[str, ...] = tuple(TASK_ENTRYPOINTS)
 
-#: The pure-analysis target; it is never a task and never starts a subprocess.
-_ANALYSIS_DELEGATION_TARGET = "cccp.analysis.frequency_products.build_frequency_report"
+#: The pure-analysis targets; they are never tasks and never start a subprocess.
+_ANALYSIS_DELEGATION_TARGETS: Mapping[str, str] = MappingProxyType(
+    {
+        "vibration.analyze": "cccp.analysis.frequency_products.build_frequency_report",
+        "nmr.compare": "cccp.analysis.nmr.comparison.compare_nmr_shielding",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -528,8 +541,33 @@ def _read_attribute(value: object, name: str) -> object:
     return getattr(value, name, None)
 
 
-def _analysis_checks(analysis_input: object | None) -> tuple[PreflightCheck, ...]:
-    """Validate that existing frequency products were supplied."""
+def _analysis_checks(
+    capability_id: str,
+    analysis_input: object | None,
+) -> tuple[PreflightCheck, ...]:
+    """Validate a pure-analysis payload without reading or writing artifacts."""
+    preflight = getattr(analysis_input, "preflight_checks", None)
+    if callable(preflight):
+        return tuple(
+            PreflightCheck(
+                id=str(row["id"]),
+                satisfied=row["satisfied"],  # type: ignore[arg-type]
+                reason=str(row["reason"]),
+                expected=row.get("expected"),
+                actual=row.get("actual"),
+            )
+            for row in preflight()
+        )
+    if capability_id != "vibration.analyze":
+        return (
+            PreflightCheck(
+                id="analysis_input_supported",
+                satisfied=False,
+                reason=f"capability {capability_id!r} has no declared analysis preflight",
+                expected="an analysis payload with preflight_checks()",
+                actual=type(analysis_input).__name__,
+            ),
+        )
     if analysis_input is None:
         return (
             PreflightCheck(
@@ -779,7 +817,7 @@ class TaskBinding:
     def delegation_target(self) -> str | None:
         """Return the one delegation target, or ``None`` when unsupported."""
         if self.is_analysis:
-            return _ANALYSIS_DELEGATION_TARGET
+            return _ANALYSIS_DELEGATION_TARGETS.get(self.capability_id or "")
         entrypoint = TASK_ENTRYPOINTS.get(self.task_kind or "")
         return None if entrypoint is None else entrypoint.target
 
@@ -800,7 +838,7 @@ class TaskBinding:
         :meth:`execute`.
         """
         if self.is_analysis:
-            analysis_checks = _analysis_checks(self.analysis_input)
+            analysis_checks = _analysis_checks(self.capability_id or "", self.analysis_input)
             return PreflightResult(
                 PreflightOutcome.READY
                 if all(check.satisfied is not False for check in analysis_checks)
@@ -872,9 +910,22 @@ class TaskBinding:
             raise ScientificPreconditionError.from_check(failed[0])
 
         if self.is_analysis:
-            from cccp.calculation.capabilities.builtin import resolve_analysis_entrypoint
-
-            entrypoint = resolve_analysis_entrypoint(self.capability_id or "")
+            target = _ANALYSIS_DELEGATION_TARGETS.get(self.capability_id or "")
+            if target is None:
+                raise UnsupportedBindingError(
+                    f"analysis capability {self.capability_id!r} has no entry point",
+                    capability_id=self.capability_id,
+                    implementation_id=self.implementation_id,
+                )
+            module_name, _, function_name = target.rpartition(".")
+            module = importlib.import_module(module_name)
+            entrypoint = getattr(module, function_name, None)
+            if not callable(entrypoint):
+                raise UnsupportedBindingError(
+                    f"analysis entry point {target} is missing or not callable",
+                    capability_id=self.capability_id,
+                    implementation_id=self.implementation_id,
+                )
             return entrypoint(self.analysis_input)
 
         entrypoint_def = TASK_ENTRYPOINTS[self.task_kind or ""]
@@ -970,7 +1021,7 @@ class TaskBinding:
                 "max_invocations_per_binding": 1,
                 "entrypoint": self.delegation_target or "<unsupported>",
                 "entrypoint_module": (
-                    "cccp.analysis.frequency_products"
+                    (self.delegation_target or "").rsplit(".", 1)[0]
                     if self.is_analysis
                     else "cccp.calculation.tasks"
                 ),

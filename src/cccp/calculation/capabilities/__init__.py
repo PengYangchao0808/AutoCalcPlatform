@@ -166,6 +166,33 @@ from cccp.calculation.capabilities.contracts import (
 from cccp.calculation.capabilities.contracts import (
     ValidationLayers as ValidationLayers,
 )
+from cccp.calculation.capabilities.domains import (
+    DOMAIN_CAPABILITY_IDS as DOMAIN_CAPABILITY_IDS,
+)
+from cccp.calculation.capabilities.domains import (
+    DOMAIN_DESCRIPTORS as DOMAIN_DESCRIPTORS,
+)
+from cccp.calculation.capabilities.domains import (
+    DOMAIN_EXTENSION_VERSION as DOMAIN_EXTENSION_VERSION,
+)
+from cccp.calculation.capabilities.domains import (
+    DOMAIN_FAMILIES as DOMAIN_FAMILIES,
+)
+from cccp.calculation.capabilities.domains import (
+    describe_domain_family as describe_domain_family,
+)
+from cccp.calculation.capabilities.domains import (
+    domain_catalog as domain_catalog,
+)
+from cccp.calculation.capabilities.domains import (
+    domain_catalog_json as domain_catalog_json,
+)
+from cccp.calculation.capabilities.domains import (
+    domain_registry as domain_registry,
+)
+from cccp.calculation.capabilities.domains import (
+    require_domain_descriptor as require_domain_descriptor,
+)
 from cccp.calculation.capabilities.registry import (
     CAPABILITY_CATALOG_SCHEMA as CAPABILITY_CATALOG_SCHEMA,
 )
@@ -277,6 +304,10 @@ __all__ = [
     "CAPABILITY_SCHEMA_VERSION",
     "CAPABILITY_STATE_RULES",
     "COMPLETION_FAILURE_ERROR_CODES",
+    "DOMAIN_CAPABILITY_IDS",
+    "DOMAIN_DESCRIPTORS",
+    "DOMAIN_EXTENSION_VERSION",
+    "DOMAIN_FAMILIES",
     "CONTRACT_VERSION",
     "ERROR_CODES",
     "HISTORICAL_UNKNOWN_FIELDS_POLICY",
@@ -322,6 +353,11 @@ __all__ = [
     "builtin_catalog",
     "builtin_catalog_json",
     "builtin_registry",
+    "describe_domain_family",
+    "domain_catalog",
+    "domain_catalog_json",
+    "domain_registry",
+    "require_domain_descriptor",
     "describe_family",
     "resolve_analysis_entrypoint",
     "BINDABLE_TASK_KINDS",
