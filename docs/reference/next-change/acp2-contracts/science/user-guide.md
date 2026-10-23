@@ -26,7 +26,7 @@ ephemeral verification paths; the literal paths are in the raw `logs/` files.
 
 > **No B25a artifact exists today.** The wheel used for verification is a
 > deterministic **local candidate** built from `src/cccp` (`manual_zip_from_src`,
-> sha256 `50ca753d…`). It is not a B25a release candidate and is not a platform
+> sha256 `78d0e622…`). It is not a B25a release candidate and is not a platform
 > build. B25a, the platform release manifest and `pip install` of the published
 > role wheel remain `NOT_VERIFIED`.
 
@@ -75,8 +75,13 @@ Real output (interpreter and wheel):
 
 ```
 3.11.13 (main, Jun  1 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]
-50ca753d1e8acf70de2f9a98a4c84bfde8028bf0df89c5c7fe38cd6122df8820  .../cccp-0.2.0-py3-none-any.whl
+78d0e622014d9ab478b870c01ebbb26f07358d419514d78a795a8109193796f1  .../cccp-0.2.0-py3-none-any.whl
 ```
+
+The digest is reproducible: the wheel is built by the checked-in
+`tests/test_acp2_science_installed_package.py::_build_local_candidate` (a
+deterministic manual zip, no network). A wheel built by any other builder may
+have a different digest even with an identical code payload.
 
 The local candidate carries no dependency metadata, so the clean interpreter
 gets the declared science dependencies from a **dep-only** path. This path is
@@ -566,7 +571,7 @@ ACP2_CCCP_WHEEL="$WHEEL" "$PY" scripts/acceptance/acp2_science.py \
 Real result:
 
 ```
-PASS: installed examples passed with the clean interpreter .../venv/bin/python and wheel sha256 50ca753d...
+PASS: installed examples passed with the clean interpreter .../venv/bin/python and wheel sha256 78d0e622...
 exit code: 0
 ```
 
