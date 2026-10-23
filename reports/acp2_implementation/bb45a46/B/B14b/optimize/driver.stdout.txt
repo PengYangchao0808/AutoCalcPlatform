@@ -1,0 +1,107 @@
+{
+  "schema": "acp2.b14b.capability-run.v1",
+  "capability": "optimize",
+  "backend": "local",
+  "result": "FAIL",
+  "fixture_id": "fx-local-optimize-h2-sto3g-v1",
+  "fixture_path": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+  "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+  "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "controller": "http://127.0.0.1:18774",
+  "task_ref": "20261023_111652_002_optimize",
+  "attempt": 1,
+  "release_id": "",
+  "release_digest": null,
+  "submission_id": null,
+  "plan_identity": "",
+  "result_digest": "",
+  "result_manifest_digest": "sha256:d0766a4d0f220d6a1ed37faeded7fa872b5208d19ac5289e3a8a37497d355ff1",
+  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
+  "orca_binary": "/home/<user>/orca611/orca",
+  "orca_output": null,
+  "orca_terminated_normally": false,
+  "orca_energy_hartree": null,
+  "orca_pids": [
+    1054310
+  ],
+  "orca_max_concurrent": 1,
+  "job_started_events": 1,
+  "observed": {
+    "status": "completed",
+    "energy_hartree": null,
+    "symbols": null,
+    "coordinates": null,
+    "frequencies": null,
+    "n_imaginary": null,
+    "optimization_status": null,
+    "required_facts": null,
+    "exit_code": null,
+    "manifest_status": "completed"
+  },
+  "assertions": [
+    {
+      "name": "one_mcp_submission_one_task",
+      "status": "PASS",
+      "detail": "task_count_before=1 after=2"
+    },
+    {
+      "name": "job_completed",
+      "status": "PASS",
+      "detail": "status=completed attempt=1"
+    },
+    {
+      "name": "real_orca_process_once",
+      "status": "PASS",
+      "detail": "pids=[1054310] max_concurrent=1 samples=302"
+    },
+    {
+      "name": "orca_terminated_normally",
+      "status": "FAIL",
+      "detail": "no ORCA output"
+    },
+    {
+      "name": "orca_energy_matches_task_result",
+      "status": "FAIL",
+      "detail": "orca=None task_result=None"
+    },
+    {
+      "name": "task_result_complete",
+      "status": "FAIL",
+      "detail": "null"
+    },
+    {
+      "name": "attempt_and_release_agree",
+      "status": "FAIL",
+      "detail": "attempt=1 release_id="
+    },
+    {
+      "name": "exactly_one_dispatch",
+      "status": "PASS",
+      "detail": "job.started=1"
+    },
+    {
+      "name": "capability_science",
+      "status": "FAIL",
+      "detail": "converged=False payload.optimization_status=None geometry=None energy=None"
+    }
+  ],
+  "native_artifacts": [
+    {
+      "path": "native/RESULT__result_manifest.json",
+      "size_bytes": 1661,
+      "sha256": "d0766a4d0f220d6a1ed37faeded7fa872b5208d19ac5289e3a8a37497d355ff1"
+    },
+    {
+      "path": "native/job.json",
+      "size_bytes": 5805,
+      "sha256": "b84b5e66ba9bb735ffe22f935b0e624fe11f05bfc7605f3eada11d2ce9ac884e"
+    },
+    {
+      "path": "native/task.json",
+      "size_bytes": 951,
+      "sha256": "01a9935e53c675db11bdccf21f4258e75521847d16b9e05f4e45aa2c58129e5d"
+    }
+  ],
+  "written_at_utc": "2026-10-23T03:16:59Z"
+}

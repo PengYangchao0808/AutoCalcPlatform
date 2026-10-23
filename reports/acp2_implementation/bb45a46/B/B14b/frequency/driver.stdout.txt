@@ -1,0 +1,168 @@
+{
+  "schema": "acp2.b14b.capability-run.v1",
+  "capability": "frequency",
+  "backend": "local",
+  "result": "PASS",
+  "fixture_id": "fx-local-frequency-h2-sto3g-v1",
+  "fixture_path": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+  "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+  "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
+  "reuse_command": null,
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "controller": "http://127.0.0.1:18774",
+  "task_ref": "20261023_111946_003_frequency",
+  "attempt": 1,
+  "release_id": null,
+  "release_digest": null,
+  "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+  "execution_chain": "legacy-cli",
+  "submission_id": null,
+  "plan_identity": "",
+  "result_digest": "",
+  "step_identity": "v2:63b46f19e8ae27ee28c8185e0adbe748",
+  "result_manifest_digest": "sha256:54f9adffcb128452bcfd5ee69b22f159d5a6cd55d716da02ebfb7d283a511716",
+  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency",
+  "orca_binary": "/home/<user>/orca611/orca",
+  "orca_output": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.out",
+  "orca_terminated_normally": true,
+  "orca_energy_hartree": -1.116773191779,
+  "orca_pids": [
+    1058357
+  ],
+  "orca_max_concurrent": 1,
+  "orca_samples": 163,
+  "orca_observation_source": "live_sampler",
+  "reused_task": false,
+  "job_started_events": 1,
+  "observed": {
+    "status": "completed",
+    "energy_hartree": -1.116773191779,
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "frequencies": [
+      5038.6
+    ],
+    "n_imaginary": 0,
+    "optimization_status": null,
+    "required_facts": null,
+    "exit_code": null,
+    "manifest_status": "completed",
+    "execution_chain": "legacy-cli",
+    "step_result_status": "completed",
+    "step_result_present": true
+  },
+  "assertions": [
+    {
+      "name": "one_mcp_submission_one_task",
+      "status": "PASS",
+      "detail": "task_count_before=2 after=3"
+    },
+    {
+      "name": "job_completed",
+      "status": "PASS",
+      "detail": "status=completed attempt=1"
+    },
+    {
+      "name": "real_orca_process_once",
+      "status": "PASS",
+      "detail": "pids=[1058357] max_concurrent=1 samples=163"
+    },
+    {
+      "name": "orca_terminated_normally",
+      "status": "PASS",
+      "detail": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.out"
+    },
+    {
+      "name": "orca_energy_matches_task_result",
+      "status": "PASS",
+      "detail": "orca=-1.116773191779 task_result=-1.116773191779"
+    },
+    {
+      "name": "step_result_and_manifest_complete",
+      "status": "PASS",
+      "detail": "step_result=completed manifest=completed"
+    },
+    {
+      "name": "attempt_recorded_release_not_emitted",
+      "status": "PASS",
+      "detail": "attempt=1 release_id=NOT_EMITTED chain=legacy-cli"
+    },
+    {
+      "name": "exactly_one_dispatch",
+      "status": "PASS",
+      "detail": "job.started=1"
+    },
+    {
+      "name": "capability_science",
+      "status": "PASS",
+      "detail": "frequencies=[5038.6] n_imaginary=0 geometry=['H', 'H'] energy=-1.116773191779"
+    }
+  ],
+  "native_artifacts": [
+    {
+      "path": "native/RESULT__result_manifest.json",
+      "size_bytes": 1010,
+      "sha256": "54f9adffcb128452bcfd5ee69b22f159d5a6cd55d716da02ebfb7d283a511716"
+    },
+    {
+      "path": "native/job.json",
+      "size_bytes": 5316,
+      "sha256": "65f676a5d73ae46fc17b0318bdd8b1e77e0cf4ae7d55df3aa1183e164f6c0e18"
+    },
+    {
+      "path": "native/task.json",
+      "size_bytes": 957,
+      "sha256": "e6f2e404b9e2a02dcc4de2dfb50aae81e12047478ec81ceadca52ef7e7841bcd"
+    },
+    {
+      "path": "native/WORK__04_FREQ__freq.out",
+      "size_bytes": 60282,
+      "sha256": "9d9481826c79759bbfbe4fd3e161553ea40cffe5bc25ef230630d70df131e916"
+    },
+    {
+      "path": "native/WORK__04_FREQ__freq.inp",
+      "size_bytes": 218,
+      "sha256": "f55b4b9fef8518d4f3a6a513e1e45a1a2ef905569cefba6dc4bfe402a21ea8bb"
+    },
+    {
+      "path": "native/WORK__04_FREQ__step_result.json",
+      "size_bytes": 1525,
+      "sha256": "139c7c31c2146a75056764fc963d3a7850c6e91da5a5a150d40b967c50b987ca"
+    },
+    {
+      "path": "native/WORK__04_FREQ__scientific_result.json",
+      "size_bytes": 639,
+      "sha256": "b6f115e2c28ad0086daee93f1dbd242ddf8cab4a8b8d740b8ecee015aec50659"
+    },
+    {
+      "path": "native/WORK__04_FREQ__result_manifest.json",
+      "size_bytes": 518,
+      "sha256": "5bd1e69cd8997a4587d0fb0e31ec6fb79215b854d4285c54595ea6519eb76579"
+    },
+    {
+      "path": "native/RESULT__frequencies__normal_modes.json",
+      "size_bytes": 1739,
+      "sha256": "6bda7b8a296ed70d785b68ebb880dba876413fb7d7d929217176bedd65fb4b8f"
+    },
+    {
+      "path": "native/WORK__04_FREQ__normal_modes.json",
+      "size_bytes": 1739,
+      "sha256": "6bda7b8a296ed70d785b68ebb880dba876413fb7d7d929217176bedd65fb4b8f"
+    }
+  ],
+  "written_at_utc": "2026-10-23T03:19:49Z"
+}

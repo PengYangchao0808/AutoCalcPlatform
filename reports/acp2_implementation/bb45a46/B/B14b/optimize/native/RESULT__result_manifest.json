@@ -1,0 +1,62 @@
+{
+  "products": [
+    {
+      "id": "step_0_optimize",
+      "kind": "structure",
+      "label": "optimize (step 0)",
+      "metadata": {
+        "atom_count": 2,
+        "auto_reusable": true,
+        "content_checksum": "sha256:f4b0466566080434bef0beaa71914bb511963ac4600ef6214e5a6c906ab28c0f",
+        "downstream_status": [],
+        "frequency_status": "pending",
+        "optimization_status": "converged",
+        "policy_version": 1,
+        "source_kind": "optimization",
+        "stage_id": "step_0_optimize",
+        "symbols": [
+          "H",
+          "H"
+        ]
+      },
+      "path": "structures/step_0_optimize.xyz"
+    },
+    {
+      "id": "step_0_optimize_output",
+      "kind": "file",
+      "label": "optimize (step 0) \u2014 output",
+      "metadata": {
+        "optimization_status": "converged",
+        "policy_version": 1,
+        "stage_id": "step_0_optimize",
+        "stage_status": "completed"
+      },
+      "path": "WORK/03_OPT/optimize.inp"
+    },
+    {
+      "id": "step_0_optimize_log",
+      "kind": "file",
+      "label": "optimize (step 0) \u2014 log",
+      "metadata": {
+        "optimization_status": "converged",
+        "policy_version": 1,
+        "stage_id": "step_0_optimize",
+        "stage_status": "completed"
+      },
+      "path": "WORK/03_OPT/optimize.out"
+    },
+    {
+      "id": "step_0_optimize_energy",
+      "kind": "energy_report",
+      "label": "optimize (step 0) \u2014 energy",
+      "metadata": {
+        "energy_hartree": -1.11751709882
+      },
+      "path": "energy/step_0_optimize.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "executor",
+  "version": 2,
+  "workflow": "optimize"
+}

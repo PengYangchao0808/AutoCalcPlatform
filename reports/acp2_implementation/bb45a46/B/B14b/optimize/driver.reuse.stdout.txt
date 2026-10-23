@@ -1,0 +1,176 @@
+{
+  "schema": "acp2.b14b.capability-run.v1",
+  "capability": "optimize",
+  "backend": "local",
+  "result": "PASS",
+  "fixture_id": "fx-local-optimize-h2-sto3g-v1",
+  "fixture_path": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+  "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+  "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+  "reuse_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300 --reuse-task 20261023_111652_002_optimize --prior-run <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize/run-initial-strict.json",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "controller": "http://127.0.0.1:18774",
+  "task_ref": "20261023_111652_002_optimize",
+  "attempt": 1,
+  "release_id": null,
+  "release_digest": null,
+  "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+  "execution_chain": "legacy-cli",
+  "submission_id": null,
+  "plan_identity": "",
+  "result_digest": "",
+  "step_identity": "v2:b40cc5b853f6c8d086eb6dbb9c9198e9",
+  "result_manifest_digest": "sha256:d0766a4d0f220d6a1ed37faeded7fa872b5208d19ac5289e3a8a37497d355ff1",
+  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
+  "orca_binary": "/home/<user>/orca611/orca",
+  "orca_output": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.out",
+  "orca_terminated_normally": true,
+  "orca_energy_hartree": -1.11751709882,
+  "orca_pids": [
+    1054310
+  ],
+  "orca_max_concurrent": 1,
+  "orca_samples": null,
+  "orca_observation_source": "reused_prior_run",
+  "reused_task": true,
+  "job_started_events": 1,
+  "observed": {
+    "status": "completed",
+    "energy_hartree": -1.11751709882,
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.013863
+      ],
+      [
+        0.0,
+        0.0,
+        0.726137
+      ]
+    ],
+    "frequencies": [],
+    "n_imaginary": null,
+    "optimization_status": "converged",
+    "required_facts": null,
+    "exit_code": null,
+    "manifest_status": "completed",
+    "execution_chain": "legacy-cli",
+    "step_result_status": "completed",
+    "step_result_present": true
+  },
+  "assertions": [
+    {
+      "name": "one_mcp_submission_one_task",
+      "status": "PASS",
+      "detail": "reused existing task 20261023_111652_002_optimize; no new submission; task_count=3"
+    },
+    {
+      "name": "job_completed",
+      "status": "PASS",
+      "detail": "status=completed attempt=1"
+    },
+    {
+      "name": "real_orca_process_once",
+      "status": "PASS",
+      "detail": "pids=[1054310] max_concurrent=1 samples=None (from prior run of the same task)"
+    },
+    {
+      "name": "orca_terminated_normally",
+      "status": "PASS",
+      "detail": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.out"
+    },
+    {
+      "name": "orca_energy_matches_task_result",
+      "status": "PASS",
+      "detail": "orca=-1.11751709882 task_result=-1.11751709882"
+    },
+    {
+      "name": "step_result_and_manifest_complete",
+      "status": "PASS",
+      "detail": "step_result=completed manifest=completed"
+    },
+    {
+      "name": "attempt_recorded_release_not_emitted",
+      "status": "PASS",
+      "detail": "attempt=1 release_id=NOT_EMITTED chain=legacy-cli"
+    },
+    {
+      "name": "exactly_one_dispatch",
+      "status": "PASS",
+      "detail": "job.started=1"
+    },
+    {
+      "name": "capability_science",
+      "status": "PASS",
+      "detail": "converged=True payload.optimization_status=converged geometry=['H', 'H'] energy=-1.11751709882"
+    }
+  ],
+  "native_artifacts": [
+    {
+      "path": "native/RESULT__result_manifest.json",
+      "size_bytes": 1661,
+      "sha256": "d0766a4d0f220d6a1ed37faeded7fa872b5208d19ac5289e3a8a37497d355ff1"
+    },
+    {
+      "path": "native/job.json",
+      "size_bytes": 5805,
+      "sha256": "b84b5e66ba9bb735ffe22f935b0e624fe11f05bfc7605f3eada11d2ce9ac884e"
+    },
+    {
+      "path": "native/task.json",
+      "size_bytes": 951,
+      "sha256": "01a9935e53c675db11bdccf21f4258e75521847d16b9e05f4e45aa2c58129e5d"
+    },
+    {
+      "path": "native/WORK__03_OPT__optimize.out",
+      "size_bytes": 132321,
+      "sha256": "a4f7784444b52aba028b1130fac9994aebe3f6a121c3c70bd6755b7afca68806"
+    },
+    {
+      "path": "native/WORK__03_OPT__optimize.inp",
+      "size_bytes": 244,
+      "sha256": "8e4b3fb5b7e0de93e8a2501e0bd68c536269b64014c0aaee4a715db213282884"
+    },
+    {
+      "path": "native/WORK__03_OPT__step_result.json",
+      "size_bytes": 1341,
+      "sha256": "5361af4b1c09d6fee0e18c212d22f1a745df2d27a06870a02dbf5e914c81f478"
+    },
+    {
+      "path": "native/WORK__03_OPT__scientific_result.json",
+      "size_bytes": 553,
+      "sha256": "cef90b391f3bae46e80f30fd10c796e54b42ce1d7166d39628cb93ef1e9690f2"
+    },
+    {
+      "path": "native/WORK__03_OPT__result_manifest.json",
+      "size_bytes": 402,
+      "sha256": "da9409d12188f131f2568fbd542535ea54d666a2e52ecff4931a3f0a69ed49ca"
+    },
+    {
+      "path": "native/WORK__03_OPT__optimization_trajectory.json",
+      "size_bytes": 1401,
+      "sha256": "991b06c5cbef82ea1384ab48cf723202af1133f9e9709a5cdf46a56208871f85"
+    },
+    {
+      "path": "native/WORK__03_OPT__optimize.xyz",
+      "size_bytes": 355,
+      "sha256": "099b2045cf2b22680331cf63104785bbb48a1ac0a32ec3eb1a5edff4f0860c9d"
+    },
+    {
+      "path": "native/WORK__03_OPT__optimize_trj.xyz",
+      "size_bytes": 1196,
+      "sha256": "d6f9024c66f4db69b85aae28a98053c51f39fb441ba662798b970a3a4f3180bd"
+    },
+    {
+      "path": "native/WORK__03_OPT__optimize.opt",
+      "size_bytes": 564,
+      "sha256": "3498629c93093149c077dcf9a83d01b2fbaab6c91148be25774fe08301dbb9ac"
+    }
+  ],
+  "written_at_utc": "2026-10-23T03:19:57Z"
+}

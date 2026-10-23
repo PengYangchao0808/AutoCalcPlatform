@@ -1,0 +1,281 @@
+{
+  "schema": "acp2.h3.receipt.v1",
+  "generated_at_utc": "2026-10-23T03:30:00Z",
+  "task": "B14b",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "candidate_label": "bb45a46",
+  "h3_status": "OPEN",
+  "matrix_sha256": "sha256:d2e9de40763751d6107bcdbfe26536c7350d716f5e596bfe0cede13f335e5c4b",
+  "rerun_index_sha256": "sha256:ddd6deb10791549a6af8ce2449de7857e16080556b026d92b2ab9f5ee4f4353e",
+  "capability_rows": [
+    {
+      "row_id": "singlepoint/local",
+      "result": "PASS",
+      "task_ref": "20261023_111633_001_singlepoint",
+      "attempt": 1,
+      "release_id": "28b9a5b5e038090a",
+      "release_status": null,
+      "execution_chain": null
+    },
+    {
+      "row_id": "singlepoint/lsf",
+      "result": "NOT_VERIFIED",
+      "task_ref": null,
+      "attempt": null,
+      "release_id": null,
+      "release_status": null,
+      "execution_chain": null
+    },
+    {
+      "row_id": "optimize/local",
+      "result": "PASS",
+      "task_ref": "20261023_111652_002_optimize",
+      "attempt": 1,
+      "release_id": null,
+      "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+      "execution_chain": "legacy-cli"
+    },
+    {
+      "row_id": "optimize/lsf",
+      "result": "NOT_VERIFIED",
+      "task_ref": null,
+      "attempt": null,
+      "release_id": null,
+      "release_status": null,
+      "execution_chain": null
+    },
+    {
+      "row_id": "frequency/local",
+      "result": "PASS",
+      "task_ref": "20261023_111946_003_frequency",
+      "attempt": 1,
+      "release_id": null,
+      "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+      "execution_chain": "legacy-cli"
+    },
+    {
+      "row_id": "frequency/lsf",
+      "result": "NOT_VERIFIED",
+      "task_ref": null,
+      "attempt": null,
+      "release_id": null,
+      "release_status": null,
+      "execution_chain": null
+    }
+  ],
+  "counts": {
+    "capability_rows": 6,
+    "pass": 3,
+    "fail": 0,
+    "not_verified": 3
+  },
+  "open_rows": [
+    {
+      "row_id": "singlepoint/lsf",
+      "result": "NOT_VERIFIED",
+      "owner": "B",
+      "open_reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+      "evidence": "B/B14b/lsf/singlepoint/run.json + B/B11/summary.json"
+    },
+    {
+      "row_id": "optimize/lsf",
+      "result": "NOT_VERIFIED",
+      "owner": "B",
+      "open_reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+      "evidence": "B/B14b/lsf/optimize/run.json"
+    },
+    {
+      "row_id": "frequency/lsf",
+      "result": "NOT_VERIFIED",
+      "owner": "B",
+      "open_reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+      "evidence": "B/B14b/lsf/frequency/run.json"
+    },
+    {
+      "row_id": "B10b/three-entry",
+      "result": "NOT_VERIFIED",
+      "owner": "B10",
+      "open_reason": "three_entry_workbench_not_verified:c_driver_absent",
+      "evidence": "B/B10/three-entry-matrix.json"
+    },
+    {
+      "row_id": "B11/lsf-normal-completion",
+      "result": "NOT_VERIFIED",
+      "owner": "B11",
+      "open_reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+      "evidence": "B/B11/summary.json + B/B11/live/"
+    },
+    {
+      "row_id": "B13/control-recovery",
+      "result": "NOT_VERIFIED",
+      "owner": "B13",
+      "open_reason": "local fault rows PASS; LSF control NOT_VERIFIED; DSH disconnect NOT_VERIFIED",
+      "evidence": "B/B13/races.json + B/B13/dsh-disconnect.json + B/B13/lsf-control-fixture.json"
+    },
+    {
+      "row_id": "A/scientific-audit",
+      "result": "NOT_VERIFIED",
+      "owner": "A",
+      "open_reason": "a_not_available",
+      "evidence": "<acp2-dev>/A/**"
+    },
+    {
+      "row_id": "C/dsh-browser",
+      "result": "NOT_VERIFIED",
+      "owner": "C",
+      "open_reason": "c_dsh_browser_absent",
+      "evidence": "B/B14b/capability-backend-matrix.json#c_dsh_browser"
+    },
+    {
+      "row_id": "T3",
+      "result": "NOT_VERIFIED",
+      "owner": "C",
+      "open_reason": "c_dsh_browser_absent",
+      "evidence": "B/B14b/capability-backend-matrix.json#aggregation_t0_t5"
+    },
+    {
+      "row_id": "T4/lsf",
+      "result": "NOT_VERIFIED",
+      "owner": "B",
+      "open_reason": "lsf_prerequisite_missing",
+      "evidence": "B/B14b/lsf/"
+    },
+    {
+      "row_id": "T5/lsf",
+      "result": "NOT_VERIFIED",
+      "owner": "B",
+      "open_reason": "lsf_prerequisite_missing",
+      "evidence": "B/B13/summary.json"
+    },
+    {
+      "row_id": "T5/dsh",
+      "result": "NOT_VERIFIED",
+      "owner": "C",
+      "open_reason": "c_dsh_browser_absent",
+      "evidence": "B/B13/dsh-disconnect.json"
+    }
+  ],
+  "caveats": [
+    "optimize/local and frequency/local run on the legacy CLI chain; no execution_receipt/release_id is emitted. Their science is real (ORCA output, task_result-equivalent step_result, manifest) but release identity is NOT_EMITTED_ON_LEGACY_CHAIN.",
+    "B10b Workbench, B11 LSF normal completion, B13 LSF control and DSH rows remain NOT_VERIFIED and are listed separately, not collapsed into the capability rows."
+  ],
+  "aggregation_t0_t5": {
+    "source": "docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md:249-255",
+    "rows": [
+      {
+        "layer": "T0",
+        "subject": "environment/version",
+        "result": "PASS",
+        "detail": "Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/<user>/orca611/orca (sha256 d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1), contract 1.1.0; LSF absent by design.",
+        "owner": "B",
+        "evidence": [
+          "B/environment/b07-environment.json",
+          "B/B14/loaded-paths-refreeze.json",
+          "B/B14b/controller/health.json"
+        ]
+      },
+      {
+        "layer": "T1",
+        "subject": "MCP process",
+        "result": "PASS",
+        "detail": "Real stdio MCP adapter (8 tools, protocol 2025-06-18) performed the B14b acp_submit calls on 77ac1de; B05 protocol matrix and B06 entry mapping PASS.",
+        "owner": "B (C official DSH handshake separately NOT_VERIFIED)",
+        "evidence": [
+          "B/B05/summary.json",
+          "B/B06/summary.json",
+          "B/B14b/singlepoint/run.json",
+          "B/B14b/optimize/run.json",
+          "B/B14b/frequency/run.json"
+        ]
+      },
+      {
+        "layer": "T2",
+        "subject": "platform use case",
+        "result": "PASS",
+        "detail": "MCP submit -> Controller -> real Workspace/Runtime/Data Local chains produced three distinct TaskRefs; B06 entry parity and B12 artifact lifecycle PASS.",
+        "owner": "B",
+        "evidence": [
+          "B/B06/summary.json",
+          "B/B12/summary.json",
+          "B/B14b/*/run.json"
+        ]
+      },
+      {
+        "layer": "T3",
+        "subject": "DSH",
+        "result": "NOT_VERIFIED",
+        "detail": "C DSH/Workbench P1 is not present on this host; no real official-client handshake is claimed.",
+        "owner": "C",
+        "reason": "c_dsh_browser_absent",
+        "evidence": [
+          "B/B10/summary.json",
+          "B/B13/dsh-disconnect.json"
+        ]
+      },
+      {
+        "layer": "T4",
+        "subject": "science/cluster",
+        "result": "NOT_VERIFIED",
+        "detail": "Local singlepoint/optimize/frequency PASS with real ORCA; LSF normal completion is NOT_VERIFIED (no bsub/queue/node).",
+        "components": {
+          "local": "PASS",
+          "lsf": "NOT_VERIFIED"
+        },
+        "owner": "B",
+        "evidence": [
+          "B/B14b/singlepoint/run.json",
+          "B/B14b/optimize/run.json",
+          "B/B14b/frequency/run.json",
+          "B/B11/summary.json"
+        ]
+      },
+      {
+        "layer": "T5",
+        "subject": "fault/boundary",
+        "result": "NOT_VERIFIED",
+        "detail": "B13 Local fault/race rows PASS; LSF control and DSH disconnect NOT_VERIFIED.",
+        "components": {
+          "local": "PASS",
+          "lsf": "NOT_VERIFIED",
+          "dsh": "NOT_VERIFIED"
+        },
+        "owner": "B (LSF/DSH rows open)",
+        "evidence": [
+          "B/B13/races.json",
+          "B/B13/dsh-disconnect.json",
+          "B/B13/lsf-control-fixture.json"
+        ]
+      }
+    ]
+  },
+  "compatibility_guard": {
+    "name": "15-active-workflow compatibility guard",
+    "tests": [
+      "tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered",
+      "tests/test_architecture_invariants.py::test_each_active_workflow_has_dispatch_and_method_schema",
+      "tests/test_services_workflow_enablement.py::test_active_workflows_match_the_canonical_active_set",
+      "tests/test_acp_workflow_task_matrix.py::test_active_workflow_set_matches_matrix"
+    ],
+    "result": "PASS",
+    "detail": "4 passed in 0.62s on candidate 77ac1de",
+    "evidence": "B/B14b/guard/pytest-15-active-workflows.txt"
+  },
+  "a_scientific_audit": {
+    "result": "NOT_VERIFIED",
+    "reason": "a_not_available",
+    "detail": "A published no B14b/H3 scientific audit under <acp2-dev>/A/** at the time of this run. B does not sign A science scope.",
+    "searched_root": "<acp2-dev>/A",
+    "owner": "A"
+  },
+  "c_dsh_browser": {
+    "result": "NOT_VERIFIED",
+    "reason": "c_dsh_browser_absent",
+    "detail": "No C DSH/browser session against candidate 77ac1de is present; B did not drive or sign C scope.",
+    "owner": "C",
+    "evidence": [
+      "B/B10/summary.json",
+      "B/B13/dsh-disconnect.json"
+    ]
+  },
+  "statement": "P1 is frozen at 77ac1de for the Local singlepoint/optimize/frequency capabilities only. LSF, C DSH/Workbench and A audit rows are not verified, so H3 remains OPEN. No evidence from 10eb71e is combined with 77ac1de."
+}

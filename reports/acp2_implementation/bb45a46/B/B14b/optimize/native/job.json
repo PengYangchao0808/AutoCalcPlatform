@@ -1,0 +1,185 @@
+{
+  "id": "20261023_111652_002_optimize",
+  "spec": {
+    "workflow": "optimize",
+    "name": "STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
+    "input": {
+      "source_type": "xyz_text",
+      "source": "2\nH2 singlepoint fixture (H2/STO-3G)\nH 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000\n",
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "method": {
+      "levels": {
+        "optimize": {
+          "engine": "orca",
+          "functional": "HF",
+          "basis": "STO-3G"
+        }
+      }
+    },
+    "resources": {
+      "cores": 1,
+      "nproc": 1,
+      "mem": "1024MB"
+    },
+    "output_dir": null,
+    "config_path": null,
+    "tags": [],
+    "project_id": "uncategorized",
+    "input_hash": "sha256:aab9a55c5617ed83e2a5707982878ec6986838904fa270485236ace132d2b59b",
+    "execution_mode": null,
+    "target_node": null,
+    "node_tags": [],
+    "molecule_name": "STO-3G)\nH 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000",
+    "task_name": "optimize",
+    "remark": "",
+    "custom_name": null
+  },
+  "status": "completed",
+  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
+  "created_at": "2026-10-23T03:16:52.686365+00:00",
+  "updated_at": "2026-10-23T03:16:59.469267+00:00",
+  "started_at": "2026-10-23T03:16:52.697662+00:00",
+  "completed_at": "2026-10-23T03:16:59.469221+00:00",
+  "current_stage": null,
+  "progress": 1.0,
+  "error": null,
+  "project_id": "uncategorized",
+  "input_hash": "sha256:aab9a55c5617ed83e2a5707982878ec6986838904fa270485236ace132d2b59b",
+  "pid": 1054229,
+  "exit_code": 0,
+  "remote_job_id": null,
+  "group_id": "20261023_111652_002_optimize",
+  "node_id": "local",
+  "host": "redacted-host",
+  "result": {
+    "admission": {
+      "reservation_id": "res_idem_06b5e0a41536488ab1bca03a7b5c73c6",
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "enforced": true,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "verified_project": null,
+      "multi_tenant_security": false
+    },
+    "required_software": [
+      "orca"
+    ],
+    "execution_target": "local",
+    "execution_kind": "local",
+    "state": {
+      "version": "1.0",
+      "job_name": "optimize",
+      "status": "completed",
+      "current_stage": null,
+      "overall_progress": 1.0,
+      "stage_index": 1,
+      "stage_total": 1,
+      "stage_order": [
+        "optimize"
+      ],
+      "stage_progress": null,
+      "stage_detail": null,
+      "progress_state": "determinate",
+      "created_at": "2026-10-23T03:16:53.589341+00:00",
+      "updated_at": "2026-10-23T03:16:56.830530+00:00",
+      "stages": {
+        "optimize": {
+          "status": "completed",
+          "started_at": "2026-10-23T03:16:53.634598+00:00",
+          "completed_at": "2026-10-23T03:16:56.830007+00:00"
+        }
+      },
+      "live_metrics": [
+        {
+          "key": "opt_step",
+          "label_key": "live.opt_step",
+          "label": null,
+          "value": "Step 3",
+          "kind": "iteration",
+          "priority": 100,
+          "detail": null
+        },
+        {
+          "key": "opt_convergence",
+          "label_key": "live.opt_convergence",
+          "label": null,
+          "value": "converged",
+          "kind": "status",
+          "priority": 90,
+          "detail": null
+        }
+      ]
+    },
+    "terminal_side_effects_done": false,
+    "artifacts": [
+      {
+        "artifact_id": "da7910df-be1f-4c84-8a1e-ebdba8415a29",
+        "task_id": null,
+        "job_id": "20261023_111652_002_optimize",
+        "artifact_type": "json",
+        "file_path": "RESULT/energy/step_0_optimize.json",
+        "checksum": "sha256:6adc9f64a2f8b010f5876091d6548416996683ec0bae0b80f522cc7e879127b5",
+        "size_bytes": 248,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T03:16:59.486348+00:00"
+      },
+      {
+        "artifact_id": "1f80e2c6-41ed-4279-84c8-6943ce9baadd",
+        "task_id": null,
+        "job_id": "20261023_111652_002_optimize",
+        "artifact_type": "json",
+        "file_path": "RESULT/result_manifest.json",
+        "checksum": "sha256:d0766a4d0f220d6a1ed37faeded7fa872b5208d19ac5289e3a8a37497d355ff1",
+        "size_bytes": 1661,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T03:16:59.487998+00:00"
+      },
+      {
+        "artifact_id": "aed41d6b-9ab5-4829-bb50-9d0c8f18adf2",
+        "task_id": null,
+        "job_id": "20261023_111652_002_optimize",
+        "artifact_type": "optimized_xyz",
+        "file_path": "RESULT/structures/step_0_optimize.xyz",
+        "checksum": "sha256:f4b0466566080434bef0beaa71914bb511963ac4600ef6214e5a6c906ab28c0f",
+        "size_bytes": 102,
+        "parser_status": "pending",
+        "mime_type": "chemical/x-xyz",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T03:16:59.489691+00:00"
+      }
+    ],
+    "provenance": {
+      "input_hash": "sha256:aab9a55c5617ed83e2a5707982878ec6986838904fa270485236ace132d2b59b",
+      "molecule_hash": null,
+      "acp_version": "0.2.0",
+      "backend_name": "optimize",
+      "backend_version": "",
+      "method": "optimize",
+      "basis": null,
+      "solvent": null,
+      "command_line": "",
+      "hostname": "redacted-host",
+      "ncores": 1,
+      "memory_gb": 1.0,
+      "wall_time_seconds": 6.771559,
+      "routine": "optimize",
+      "creator": null,
+      "schema_version": "1.0"
+    }
+  },
+  "revision": 6,
+  "attempt": 1
+}

@@ -1,0 +1,18 @@
+{
+  "command": "<acp2-dev>/venvs/b/bin/python",
+  "args": ["-m", "acp", "mcp", "serve", "--transport", "stdio", "--controller", "http://127.0.0.1:18774", "--log-level", "INFO"],
+  "cwd": "<acp2-dev>/integration",
+  "env": {
+    "PYTHONPATH": "<acp2-dev>/integration/src",
+    "ACP_CONFIG": "<acp2-dev>/data/b/controller-config/cccp.yaml",
+    "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root-b14b",
+    "ACP_CONTROLLER_URL": "http://127.0.0.1:18774",
+    "ACP_CANDIDATE_REVISION": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+    "CONFSEARCH_ORCA_PATH": "/home/<user>/orca611/orca",
+    "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+    "LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+    "PATH": "<acp2-dev>/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+  },
+  "protocol_version": "2025-06-18",
+  "transport": "stdio"
+}

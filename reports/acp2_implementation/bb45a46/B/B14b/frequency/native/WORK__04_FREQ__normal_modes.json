@@ -1,0 +1,115 @@
+{
+  "schema_version": "normal_modes_v1",
+  "units": {
+    "frequency": "cm-1",
+    "displacement": "dimensionless_orca_normal_mode"
+  },
+  "atom_count": 2,
+  "geometry_product_id": null,
+  "modes": [
+    {
+      "mode_index": 0,
+      "frequency_cm1": 0.0,
+      "imaginary": false,
+      "vectors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "mode_index": 1,
+      "frequency_cm1": 0.0,
+      "imaginary": false,
+      "vectors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "mode_index": 2,
+      "frequency_cm1": 0.0,
+      "imaginary": false,
+      "vectors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "mode_index": 3,
+      "frequency_cm1": 0.0,
+      "imaginary": false,
+      "vectors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "mode_index": 4,
+      "frequency_cm1": 0.0,
+      "imaginary": false,
+      "vectors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "mode_index": 5,
+      "frequency_cm1": 5038.6,
+      "imaginary": false,
+      "vectors": [
+        [
+          0.0,
+          0.0,
+          -0.707107
+        ],
+        [
+          0.0,
+          0.0,
+          0.707107
+        ]
+      ],
+      "ir_intensity": 0.0
+    }
+  ],
+  "warnings": []
+}
