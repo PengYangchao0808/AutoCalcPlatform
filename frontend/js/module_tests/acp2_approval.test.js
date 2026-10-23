@@ -421,4 +421,174 @@ module.exports.register = async function (h) {
     assert(!bareCall.test(source), "no direct fetch call in the approval module");
     assert(source.indexOf("XMLHttpRequest") === -1, "no XMLHttpRequest in the approval module");
   });
+
+  await test("fail-closed submit: null card and missing proposal block with structured reasons", () => {
+    const ra = loadApproval();
+    const proposal = baseProposal();
+    const card = approvedCard(ra, proposal);
+    assert(throwsWith("not_requested", () => {
+      ra.submitPlan(null, proposal, { principal: user("alice") });
+    }), "null card never submits");
+    assert(throwsWith("proposal_required", () => {
+      ra.submitPlan(card, null, { principal: user("alice"),
+        boundDigest: card.binding.plan_definition_digest });
+    }), "a null proposal can never verify the binding");
+    assert(throwsWith("proposal_required", () => {
+      ra.submitPlan(card, undefined, { principal: user("alice"),
+        boundDigest: card.binding.plan_definition_digest });
+    }), "a missing proposal can never verify the binding");
+    assertEq(ra.canSubmitPlan(card, null), false, "canSubmitPlan is fail-closed without a proposal");
+  });
+
+  await test("fail-closed submit: unknown status, malformed card and invalid expiry never submit", () => {
+    const ra = loadApproval();
+    const proposal = baseProposal();
+    const card = approvedCard(ra, proposal);
+    const bound = card.binding.plan_definition_digest;
+
+    const unknown = Object.assign(JSON.parse(JSON.stringify(card)), { status: "banana" });
+    assert(throwsWith("approval_status_unknown", () => {
+      ra.submitPlan(unknown, proposal, { principal: user("alice"), boundDigest: bound });
+    }), "unknown status is never approved");
+    assertEq(ra.approvalValidity(unknown, proposal).reason, "approval_status_unknown",
+      "unknown status validity reason");
+    assertEq(ra.approvalValidity(unknown, proposal).valid, false,
+      "unknown status is not valid");
+
+    const malformed = { approval_ref: "apr-x", status: "approved" };
+    assert(throwsWith("approval_card_invalid", () => {
+      ra.submitPlan(malformed, proposal, { principal: user("alice"), boundDigest: bound });
+    }), "card without a binding never submits");
+
+    const badExpiry = Object.assign(JSON.parse(JSON.stringify(card)), {
+      expires_at: "not-a-date",
+    });
+    assert(throwsWith("approval_expiry_invalid", () => {
+      ra.submitPlan(badExpiry, proposal, { principal: user("alice"), boundDigest: bound });
+    }), "unparseable expiry never submits");
+    const noExpiry = Object.assign(JSON.parse(JSON.stringify(card)), { expires_at: null });
+    assert(throwsWith("approval_expiry_invalid", () => {
+      ra.submitPlan(noExpiry, proposal, { principal: user("alice"), boundDigest: bound });
+    }), "missing expiry never submits");
+
+    const late = loadApproval({}, () => Date.parse("2026-10-23T02:00:00.000Z"));
+    const lateProposal = baseProposal();
+    const lateCard = approvedCard(late, lateProposal);
+    assert(throwsWith("approval_expired", () => {
+      late.submitPlan(lateCard, lateProposal, {
+        principal: user("alice"), boundDigest: lateCard.binding.plan_definition_digest,
+      });
+    }), "expired approval never submits");
+
+    const scopeMismatch = baseProposal();
+    scopeMismatch.allowed_change_scope = { mode: "finite", finite_substitutions: ["s1"] };
+    assert(throwsWith("approval_binding_mismatch", () => {
+      ra.submitPlan(card, scopeMismatch, { principal: user("alice"), boundDigest: bound });
+    }), "scope mismatch never submits");
+    const projectMismatch = baseProposal();
+    projectMismatch.project_id = "proj-other";
+    assert(throwsWith("approval_binding_mismatch", () => {
+      ra.submitPlan(card, projectMismatch, { principal: user("alice"), boundDigest: bound });
+    }), "project mismatch never submits");
+  });
+
+  await test("fail-closed submit without the bound digest is refused", () => {
+    const ra = loadApproval();
+    const proposal = baseProposal();
+    const card = approvedCard(ra, proposal);
+    assert(throwsWith("bound_digest_required", () => {
+      ra.submitPlan(card, proposal, { principal: user("alice") });
+    }), "submit without the bound digest is blocked");
+    assert(throwsWith("bound_digest_required", () => {
+      ra.submitPlan(card, proposal, { principal: user("alice"), boundDigest: "" });
+    }), "submit with an empty bound digest is blocked");
+    const allowed = ra.submitPlan(card, proposal, {
+      principal: user("alice"),
+      boundDigest: card.binding.plan_definition_digest,
+    });
+    assertEq(allowed.submitted, true, "the bound digest still submits");
+  });
+
+  await test("method change invalidates the status chip and keeps the reason at the top of the card", () => {
+    const ra = loadApproval();
+    const proposal = baseProposal();
+    const card = approvedCard(ra, proposal);
+    const baseline = ra.renderApprovalCard(card, proposal);
+    assert(baseline.indexOf('data-ra-effective-status="approved"') !== -1,
+      "baseline chip is approved");
+    assert(baseline.indexOf("ra-status-approved") !== -1, "baseline chip class");
+
+    const mutated = baseProposal();
+    mutated.science.method = "wB97X-D4";
+    const html = ra.renderApprovalCard(card, mutated);
+    assert(html.indexOf('data-ra-status="approved"') !== -1,
+      "raw card status is preserved as a machine attribute");
+    assert(html.indexOf('data-ra-effective-status="invalidated"') !== -1,
+      "chip flips to invalidated immediately");
+    assert(html.indexOf("ra-status-invalidated") !== -1, "invalidated chip is red-styled");
+    assert(html.indexOf('data-ra-status-chip="invalidated"') !== -1, "chip carries the state");
+    assert(html.indexOf('data-ra-validity="approval_binding_mismatch"') !== -1,
+      "validity reason is machine-visible");
+    const validityAt = html.indexOf('data-ra-validity-text="1"');
+    const firstRowAt = html.indexOf('data-ra-field="plan_definition_digest"');
+    assert(validityAt !== -1 && firstRowAt !== -1 && validityAt < firstRowAt,
+      "validity reason sits above the field rows (top of card)");
+  });
+
+  await test("visible approval copy is humanized: no raw keys or snake_case state tokens", () => {
+    const ra = loadApproval();
+    const proposal = baseProposal();
+    const card = approvedCard(ra, proposal);
+    const mutated = baseProposal();
+    mutated.science.method = "wB97X-D4";
+    const visible = ra.renderApprovalCard(card, mutated)
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ");
+    ["research.approval.", "approval_binding_mismatch", "not_requested",
+      "expiry ok", "validity_", "plan_definition_digest", "science.method",
+      "budget.model_requests", "RESEARCH.APPROVAL"].forEach((token) => {
+      assert(visible.indexOf(token) === -1, "raw token absent from visible copy: " + token);
+    });
+    assert(visible.indexOf("Plan changed after approval") !== -1,
+      "humanized invalidation reason shown");
+    assert(visible.indexOf("Invalidated") !== -1, "humanized chip label shown");
+    assert(visible.indexOf("Plan definition digest") !== -1, "humanized field label shown");
+  });
+
+  await test("approval card uses the real ACPClient.research namespace, not an injected fake", async () => {
+    const sandbox = makeSandbox({
+      document: makeDom(),
+      console: { log() {}, warn() {}, error() {} },
+      t: (key) => key,
+    });
+    loadScript("js/client/resource-store.js", sandbox);
+    loadScript("js/workbench/contracts/experience_contract.js", sandbox);
+    loadScript("js/client/research-query.js", sandbox);
+    loadScript(FEATURE, sandbox);
+    const ra = sandbox.ACPResearchApproval;
+    const fetched = [];
+    sandbox.ACPClient.research.init({
+      v2: (path) => {
+        fetched.push(path);
+        return Promise.resolve(JSON.parse(fs.readFileSync(FIXTURE_PROPOSAL, "utf8")));
+      },
+    });
+    ra.init({ now: () => Date.parse("2026-10-23T00:30:00.000Z") });
+    ra.mount(sandbox.document, {
+      autoDiscover: false,
+      proposal: baseProposal(),
+    });
+    const after = ra.mount(sandbox.document, {
+      proposalRef: "prop-da-selectivity-001",
+      projectId: "proj-acp2-da",
+      autoDiscover: true,
+    });
+    assertEq(after.mounted, true, "mounted");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert(fetched.length >= 1, "proposal read flowed through ACPClient.research");
+    assert(fetched[0].indexOf("/research/proposals/") !== -1, "research proposal path");
+    const html = sandbox.document.getElementById("research-approval-body").innerHTML;
+    assert(html.indexOf("proj-acp2-da") !== -1,
+      "fetched proposal adopted and rendered via the real client");
+  });
 };

@@ -56,6 +56,7 @@ window.ACPScientificEvidence = (function () {
     research: null,    // ACPClient.research (read-only, RPH decision source)
     sceneFactory: null, // TEST-ONLY injection seam (never used by the page)
     onSaveCandidate: null,
+    persistence: null,
   };
 
   var state = {
@@ -74,6 +75,8 @@ window.ACPScientificEvidence = (function () {
     scenes: [],
     framingStates: [],
     savedCandidates: [],
+    savedConfirmCount: 0,
+    vibrationPaused: prefersReducedMotion(),
     energyActions: ENERGY_ACTIONS.slice(),
     status: "",
   };
@@ -89,6 +92,33 @@ window.ACPScientificEvidence = (function () {
 
   function isObject(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function prefersReducedMotion() {
+    try {
+      return !!(typeof window !== "undefined" && window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  var SAVED_CANDIDATES_KEY = "acp_evidence_saved_candidates";
+
+  function defaultPersistence() {
+    try {
+      if (typeof localStorage !== "undefined" && localStorage) {
+        return {
+          read: function (key) {
+            try { return JSON.parse(localStorage.getItem(key)); } catch (error) { return null; }
+          },
+          write: function (key, value) {
+            try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { /* quota */ }
+          },
+        };
+      }
+    } catch (error) { /* access denied */ }
+    return null;
   }
 
   function esc(value) {
@@ -448,7 +478,12 @@ window.ACPScientificEvidence = (function () {
       /* ANTI #22: the energy chart's ONLY action is save-as-candidate. */
       out += '<div class="se-energy-actions" data-se-energy-actions="1">';
       out += '<button type="button" class="se-save-candidate-btn" data-se-action="save-candidate">保存为候选 / save as candidate</button>';
-      out += "</div></div>";
+      out += "</div>";
+      if (state.savedConfirmCount > 0) {
+        out += '<div class="se-save-confirm" data-se-save-confirm="' + esc(state.savedConfirmCount) +
+          '" role="status">已保存为候选 / saved as candidate（共 ' + esc(state.savedConfirmCount) + "）</div>";
+      }
+      out += "</div>";
     }
     if (projections.irc) {
       out += '<div class="se-projection" data-se-projection="irc">';
@@ -461,6 +496,10 @@ window.ACPScientificEvidence = (function () {
     if (projections.vibration) {
       out += '<div class="se-projection" data-se-projection="vibration">';
       out += '<h4>振动模式 / vibration</h4>';
+      out += '<div class="se-vibration-toolbar" data-se-vibration-toolbar="1">' +
+        '<button type="button" class="se-vibration-toggle" data-se-action="toggle-vibration" ' +
+        'data-vibration-paused="' + (state.vibrationPaused ? "1" : "0") + '">' +
+        (state.vibrationPaused ? "播放 / play" : "暂停 / pause") + "</button></div>";
       out += '<div class="se-scene-host" data-se-scene-host="vibration"></div>';
       out += '<p class="se-note" data-se-vibration-note="1">' + esc(projections.vibration.connectivity_note || "") + "</p>";
       out += "</div>";
@@ -561,6 +600,7 @@ window.ACPScientificEvidence = (function () {
       var phase = 0;
       var frameToken = null;
       registerTick(function () {
+        if (state.vibrationPaused) return;
         phase += 0.35;
         var scale = Math.sin(phase) * 1.6;
         var moved = base.map(function (atom, index) {
@@ -638,6 +678,10 @@ window.ACPScientificEvidence = (function () {
         saveEnergyCandidate();
         return;
       }
+      if (attr === "toggle-vibration") {
+        toggleVibrationPlayback();
+        return;
+      }
       toggleClaim(attr);
     });
     if (rootEl.setAttribute) rootEl.setAttribute("data-se-wired", "1");
@@ -647,15 +691,20 @@ window.ACPScientificEvidence = (function () {
     options = options || {};
     domDoc = doc || (typeof document !== "undefined" ? document : null);
     if (!domDoc) return getState();
-    if (typeof options.science === "object" && options.science) deps.science = options.science;
-    if (typeof options.research === "object" && options.research) deps.research = options.research;
     if (typeof options.sceneFactory === "function") deps.sceneFactory = options.sceneFactory;
     if (typeof options.onSaveCandidate === "function") deps.onSaveCandidate = options.onSaveCandidate;
-    if (!deps.science && window.ACPClient && window.ACPClient.science) {
+    if (isObject(options.persistence)) deps.persistence = options.persistence;
+    if (!deps.persistence) deps.persistence = defaultPersistence();
+    restoreSavedCandidates();
+    if (window.ACPClient && window.ACPClient.science) {
       deps.science = window.ACPClient.science;
+    } else if (typeof options.science === "object" && options.science) {
+      deps.science = options.science;
     }
-    if (!deps.research && window.ACPClient && window.ACPClient.research) {
+    if (window.ACPClient && window.ACPClient.research) {
       deps.research = window.ACPClient.research;
+    } else if (typeof options.research === "object" && options.research) {
+      deps.research = options.research;
     }
     rootEl = typeof options.container === "object" && options.container
       ? options.container
@@ -762,7 +811,9 @@ window.ACPScientificEvidence = (function () {
     return !!state.expanded[claimId];
   }
 
-  /** The energy chart's single allowed action (ANTI #22: never submit). */
+  /** The energy chart's single allowed action (ANTI #22: never submit).
+   * Saves the candidate, persists it and re-renders so the confirmation is
+   * visible — never a silent in-memory append. */
   function saveEnergyCandidate(payload) {
     if (state.disposed) return null;
     var record = Object.assign({
@@ -770,8 +821,32 @@ window.ACPScientificEvidence = (function () {
       task_ref: state.taskRef ? Object.assign({}, state.taskRef) : null,
     }, isObject(payload) ? payload : {});
     state.savedCandidates.push(record);
+    state.savedConfirmCount = state.savedCandidates.length;
+    var adapter = deps.persistence;
+    if (isObject(adapter) && typeof adapter.write === "function") {
+      adapter.write(SAVED_CANDIDATES_KEY, state.savedCandidates.slice());
+    }
     if (typeof deps.onSaveCandidate === "function") deps.onSaveCandidate(record);
+    render();
     return record;
+  }
+
+  function restoreSavedCandidates() {
+    var adapter = deps.persistence;
+    if (!isObject(adapter) || typeof adapter.read !== "function") return;
+    var stored = adapter.read(SAVED_CANDIDATES_KEY);
+    if (!Array.isArray(stored) || !stored.length || state.savedCandidates.length) return;
+    stored.forEach(function (item) {
+      if (isObject(item)) state.savedCandidates.push(Object.assign({}, item));
+    });
+    state.savedConfirmCount = state.savedCandidates.length;
+  }
+
+  function toggleVibrationPlayback() {
+    if (state.disposed) return false;
+    state.vibrationPaused = !state.vibrationPaused;
+    render();
+    return state.vibrationPaused;
   }
 
   function getState() {
@@ -792,6 +867,8 @@ window.ACPScientificEvidence = (function () {
       framesRendered: state.framesRendered,
       sceneCount: state.scenes.length,
       savedCandidates: state.savedCandidates.slice(),
+      savedConfirmCount: state.savedConfirmCount,
+      vibrationPaused: state.vibrationPaused,
       energyActions: state.energyActions.slice(),
     };
   }
@@ -825,6 +902,8 @@ window.ACPScientificEvidence = (function () {
     registerTick: registerTick,
     toggleClaim: toggleClaim,
     saveEnergyCandidate: saveEnergyCandidate,
+    toggleVibrationPlayback: toggleVibrationPlayback,
+    prefersReducedMotion: prefersReducedMotion,
     render: render,
     getState: getState,
   };
