@@ -1,11 +1,17 @@
 # ACP2 Plan A — Selectivity Producer Request (A-25a)
 
-Status: **open request to C T-40a / B23b.** A (science track) has frozen the
-two-path selectivity fixture and its endpoint definitions. This document is a
-request for the one registered research submission and for the authorized
-artifacts; it is **not** a submission by A, it does **not** issue a run key and
-it does **not** claim a result. A does not start a scheduler, a Controller, a QC
-process, an SSH/LSF session or a production database write from this request.
+Status: **still open after A-25b (2026-10-23).** C T-40a has not submitted, B23b
+has not executed or exported, and no public `run_id` exists. A has frozen the
+two-path selectivity fixture and its endpoint definitions, and A-25b has
+published the bounded absent-producer report
+(`science/selectivity-evidence-report.json`: `platform_evidence_state =
+NOT_VERIFIED`, `real_run = false`, both path statuses `not_evaluated`, H6 open).
+The published report does not create producer evidence and does not upgrade
+this request. A (science track) requests the one registered research submission
+and the authorized artifacts; this document is **not** a submission by A, it
+does **not** issue a run key and it does **not** claim a result. A does not start
+a scheduler, a Controller, a QC process, an SSH/LSF session or a production
+database write from this request.
 
 Handoff chain (must keep this order):
 
@@ -197,3 +203,28 @@ The 3-substituted regioisomer, other methyl acrylate conformers, solvent
 effects, tunneling, experimental rates, alternative paths, the complete
 mechanism, the global minimum and general method accuracy are out of scope.
 Their absence is a limitation, not evidence for either path.
+
+## 9. A-25b outcome — this request is still open
+
+A-25b (todo 46) consumed the registered-reference / B23b / budget contract and
+published the bounded report `science/selectivity-evidence-report.json`. The
+report was produced from the **absent-producer** state because none of the
+required producer artifacts exists yet:
+
+| Required input | State on 2026-10-23 | Consequence |
+|---|---|---|
+| Registered `owner=C, scenario=experience:cross-domain-live, subcase=selectivity, phase=experience:selectivity` record | absent | public key incomplete; `run_id` never invented |
+| C T-40a single research submission | not submitted | chain stops at the first handoff |
+| B23b `integration_ready` authorized artifacts (declared edge `B23b:selectivity-authorized-artifacts`) | not exported; machine id unpublished | both path statuses `not_evaluated` |
+| B/C cross-domain budget table covering `nmr`, `thermo`, `selectivity` | absent | no per-subrow TaskRef/step/QC counts or cumulative total can be audited |
+
+The published report therefore records `platform_evidence_state =
+NOT_VERIFIED`, `real_run = false`, `constructed = true`, `preference = null`,
+both path statuses `not_evaluated`, every limitation and `h6_open = true`. It is
+a bounded contract consumer, not evidence that C T-40a or B23b ran.
+
+A-25b is complete as a consumer. It becomes a real selectivity row only when
+C T-40a submits, B23b exports both paths at `integration_ready` under a unique
+B/C-issued `run_id`, and the B/C budget table records the `nmr`, `thermo` and
+`selectivity` subrows without resetting the cumulative total. C T-40b signs
+only after that real A-25b audit; this request stays open until then.

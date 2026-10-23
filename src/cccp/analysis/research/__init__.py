@@ -25,6 +25,7 @@ from . import evidence as evidence
 from . import provenance as provenance
 from . import question as question
 from . import reaction as reaction
+from . import selectivity as selectivity
 from . import validators as validators
 from .artifact_manifest import (
     ARTIFACT_ROLES,
@@ -163,6 +164,30 @@ from .reaction import (
     UnsupportedSchemaVersionError,
     canonical_json,
     read_historical_reaction,
+)
+from .selectivity import (
+    B23B_EDGE_ARTIFACT_ID,
+    B23B_READINESS,
+    BUDGET_DOMAINS,
+    PREFERENCE_TOLERANCE_KCAL_PER_MOL,
+    SELECTIVITY_OWNER,
+    SELECTIVITY_PHASE,
+    SELECTIVITY_SCENARIO,
+    SELECTIVITY_SUBCASE,
+    SELECTIVITY_VALIDATOR_VERSION,
+    B23bArtifacts,
+    CrossDomainBudgetTable,
+    SelectivityAuditResult,
+    SelectivityAuthorizedArtifact,
+    SelectivityBudgetSubrow,
+    SelectivityPathEvaluation,
+    SelectivityPathRecord,
+    SelectivityPublicKey,
+    SelectivityReferenceError,
+    build_selectivity_audit,
+    cross_domain_budget_validator_id,
+    selectivity_reference_validator_id,
+    selectivity_relative_preference_validator_id,
 )
 from .validators import (
     ACTIVATION_ENERGY_COMPARABILITY_VALIDATOR_ID,
@@ -410,4 +435,27 @@ __all__ = [
     "validate_ts_frequency_count",
     "validate_ts_mapped_mode",
     "validators",
+    "B23B_READINESS",
+    "B23B_EDGE_ARTIFACT_ID",
+    "BUDGET_DOMAINS",
+    "PREFERENCE_TOLERANCE_KCAL_PER_MOL",
+    "SELECTIVITY_OWNER",
+    "SELECTIVITY_PHASE",
+    "SELECTIVITY_SCENARIO",
+    "SELECTIVITY_SUBCASE",
+    "SELECTIVITY_VALIDATOR_VERSION",
+    "B23bArtifacts",
+    "CrossDomainBudgetTable",
+    "SelectivityAuditResult",
+    "SelectivityAuthorizedArtifact",
+    "SelectivityBudgetSubrow",
+    "SelectivityPathEvaluation",
+    "SelectivityPathRecord",
+    "SelectivityPublicKey",
+    "SelectivityReferenceError",
+    "build_selectivity_audit",
+    "cross_domain_budget_validator_id",
+    "selectivity",
+    "selectivity_reference_validator_id",
+    "selectivity_relative_preference_validator_id",
 ]
