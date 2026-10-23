@@ -2,8 +2,8 @@
   "schema": "acp2.contracts.manifest.v1",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
-  "contract_version": "1.2.0",
-  "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
+  "contract_version": "1.3.0",
+  "contract_digest": "aeecba1e9c21de16ed5c1c3a659ee88f0828225b1142bcf93a1ffbc897c9e55b",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "072d5a9b9d0b50b9ffe882c6158a0c5c86fef5470b24e166cb3424f829ebc13b",
+      "sha256": "b4386ef6caccedccfa9d0ce3227cde6fffd49cfe76ebe3bbcb857ff8a5a1830e",
       "delivered_by": "B00"
     },
     {
@@ -340,6 +340,15 @@
       "status": "delivered",
       "delivered_by": "B06",
       "sha256": "2a31b716f1b07ff73fc938d195c6b27fec9004e3d7a1808de4493396b888dd19"
+    },
+    {
+      "id": "events-recovery",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
+      "owner": "B",
+      "status": "delivered",
+      "note": "B19a freezes cross-research event identity, opaque cursor/max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules.",
+      "sha256": "9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
+      "delivered_by": "B19"
     }
   ],
   "deferred_capabilities": [
@@ -724,6 +733,11 @@
       "version": "1.2.0",
       "stage": "B18",
       "note": "B18a delivers A schema id/version/digest references in science-binding and adds the bounded step-DAG, evidence-manifest and research-resource sections; no already-delivered wire field was removed or renamed."
+    },
+    {
+      "version": "1.3.0",
+      "stage": "B19",
+      "note": "B19a delivers the cross-research events/recovery contract (event ID, opaque cursor + max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules) and its B19a-to-C handoff; no already-delivered wire field was removed or renamed."
     }
   ],
   "b01_deliverables": [
@@ -756,5 +770,58 @@
     "src/acp_services/entrypoints/application_params.py",
     "src/acp_services/entrypoints/status_projection.py",
     "src/acp/services_mcp_bootstrap.py"
-  ]
+  ],
+  "b19": {
+    "owner": "B",
+    "split": {
+      "B19a": "event/cursor/outbox/projection/recovery contract + fixture-level recovery, handed to C without a live client",
+      "B19b": "simulated C-session termination -> new-session cursor recovery + Controller restart duplicate reconciliation; real DSH row stays NOT_VERIFIED(c_dsh_absent)"
+    },
+    "contract": {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
+      "schema": "acp2.runtime.events-recovery.v1",
+      "version": "1.0.0",
+      "sha256": "9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
+      "digest": "sha256:fe8944ded15556bd7461ab2b10036bcaabf181ae5484297a98e80c61ca83f559"
+    },
+    "handoff": {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/B19a-to-C.json",
+      "schema": "acp2.runtime.b19a-handoff.v1",
+      "sha256": "8ba8e0bd9a181d7477cc51280db1ddec6e762e497d24510193ad74bef45f34c1",
+      "to": "C",
+      "status": "delivered"
+    },
+    "reuse": [
+      "runtime/events.py",
+      "runtime/outbox.py",
+      "runtime/projections.py",
+      "runtime/recovery.py"
+    ],
+    "business_state_ownership": {
+      "B": "task/approval/budget",
+      "C": "ResearchRecord question/proposal/round/task references",
+      "double_write": "forbidden"
+    },
+    "cursor": {
+      "wire": "opaque",
+      "max_age_s": 3600,
+      "reset_reasons": [
+        "cursor_expired",
+        "cursor_missing",
+        "cursor_invalid",
+        "cursor_ahead",
+        "retention_gap",
+        "permission_changed",
+        "service_restart",
+        "subscription_changed"
+      ]
+    },
+    "terminal_projection": "write-once per task/approval/budget target; stale or newer status events cannot revive it",
+    "rph_exit": "session exit is not task cancellation; terminal task stops immediately, non-terminal task continues without blocking the LLM",
+    "dsh": {
+      "status": "NOT_VERIFIED",
+      "reason": "c_dsh_absent",
+      "simulated_row_labeled": true
+    }
+  }
 }

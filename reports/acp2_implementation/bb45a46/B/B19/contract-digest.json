@@ -1,0 +1,11 @@
+{
+  "contract_digest": "sha256:fe8944ded15556bd7461ab2b10036bcaabf181ae5484297a98e80c61ca83f559",
+  "contract_path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
+  "contract_schema": "acp2.runtime.events-recovery.v1",
+  "contract_sha256": "sha256:9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
+  "contract_version": "1.0.0",
+  "digest_rule": "sha256 of canonical compact JSON (sort_keys=True, separators=(',', ':'), ensure_ascii=False) with this field set to the empty string",
+  "handoff_path": "docs/reference/next-change/acp2-contracts/runtime/B19a-to-C.json",
+  "handoff_sha256": "sha256:8ba8e0bd9a181d7477cc51280db1ddec6e762e497d24510193ad74bef45f34c1",
+  "schema": "acp2.b19.contract-digest.v1"
+}

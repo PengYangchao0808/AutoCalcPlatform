@@ -71,6 +71,9 @@ DELIVERED_IDS_BY_STAGE = {
     "B06": {
         "cross-track-requests",
     },
+    "B19": {
+        "events-recovery",
+    },
 }
 EXPECTED_TODOS = {
     "B00",

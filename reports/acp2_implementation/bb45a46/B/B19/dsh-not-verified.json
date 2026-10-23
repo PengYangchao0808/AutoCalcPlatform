@@ -1,0 +1,8 @@
+{
+  "detail": "C DSH is not delivered on this host. No DSH process was started, no handshake was fabricated, and no real session log is claimed. The simulated C-session row above uses the real Controller/approval/idempotency/event log and is labelled simulated.",
+  "reason": "c_dsh_absent",
+  "row": "c_dsh_termination_handshake",
+  "schema": "acp2.b19b.dsh-row.v1",
+  "simulated_row": "research-recovery.json (clearly labelled simulated=true)",
+  "status": "NOT_VERIFIED"
+}

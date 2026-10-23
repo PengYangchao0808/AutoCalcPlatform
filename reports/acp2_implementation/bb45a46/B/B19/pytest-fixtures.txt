@@ -1,0 +1,27 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-9.1.1, pluggy-1.6.0 -- /ACPServer/acp2-development/venvs/b/bin/python
+cachedir: .pytest_cache
+rootdir: /ACPServer/AutoCalcPlatform
+configfile: pyproject.toml
+plugins: anyio-4.15.1, cov-7.1.0, mock-3.15.1
+collecting ... collected 17 items
+
+tests/test_acp2_runtime_event_recovery.py::test_contract_freezes_event_cursor_and_recovery_fields PASSED [  5%]
+tests/test_acp2_runtime_event_recovery.py::test_contract_digest_is_reproducible PASSED [ 11%]
+tests/test_acp2_runtime_event_recovery.py::test_contract_is_registered_in_the_manifest_and_validator_is_valid PASSED [ 17%]
+tests/test_acp2_runtime_event_recovery.py::test_b19a_handoff_is_delivered_and_matches_the_contract PASSED [ 23%]
+tests/test_acp2_runtime_event_recovery.py::test_replay_from_cursor_survives_a_process_restart PASSED [ 29%]
+tests/test_acp2_runtime_event_recovery.py::test_cursor_is_opaque_and_bound_to_the_sequence_tail PASSED [ 35%]
+tests/test_acp2_runtime_event_recovery.py::test_duplicate_event_id_is_a_noop PASSED [ 41%]
+tests/test_acp2_runtime_event_recovery.py::test_out_of_order_and_newer_non_terminal_cannot_revive_terminal PASSED [ 47%]
+tests/test_acp2_runtime_event_recovery.py::test_same_revision_additive_fact_is_accepted_after_approval PASSED [ 52%]
+tests/test_acp2_runtime_event_recovery.py::test_cursor_expiry_resets_to_the_snapshot PASSED [ 58%]
+tests/test_acp2_runtime_event_recovery.py::test_expired_cursor_does_not_cause_a_second_submit PASSED [ 64%]
+tests/test_acp2_runtime_event_recovery.py::test_lost_cursor_rebuilds_state_and_dispatches_once PASSED [ 70%]
+tests/test_acp2_runtime_event_recovery.py::test_revocation_stops_delivery_mid_stream PASSED [ 76%]
+tests/test_acp2_runtime_event_recovery.py::test_chat_session_cannot_claim_project_authority PASSED [ 82%]
+tests/test_acp2_runtime_event_recovery.py::test_event_project_scope_mismatch_is_rejected PASSED [ 88%]
+tests/test_acp2_runtime_event_recovery.py::test_c_research_record_refs_are_reference_only PASSED [ 94%]
+tests/test_acp2_runtime_event_recovery.py::test_rph_exit_after_completion_does_not_wait_cancel_or_redispatch PASSED [100%]
+
+============================== 17 passed in 0.55s ==============================
