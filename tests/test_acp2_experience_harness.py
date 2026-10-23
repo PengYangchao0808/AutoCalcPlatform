@@ -425,6 +425,31 @@ def test_verify_receipt_rejects_sha_mismatch(harness, runtime_env, tmp_path):
     assert harness.main(["--verify-receipt", str(tampered_path)]) == 1
 
 
+def test_product_evidence_summary_is_not_a_b_receipt(harness, runtime_env, tmp_path):
+    """C product-evidence summaries must never masquerade as B receipts.
+
+    T-04/T-05/T-04a write ``acp2.experience.product-evidence.v1`` summaries with
+    C-owned fields (``checks``/``negative_checks``/``not_verified``).  The single
+    B validator must reject them, so a summary can never be cited as a PASS
+    receipt.
+    """
+
+    summary = {
+        "schema": "acp2.experience.product-evidence.v1",
+        "run_id": "20260101T000000Z-test",
+        "scenario": "node-dsh-install",
+        "result": "PASS",
+        "evidence_kind": "fixture",
+        "checks": [{"name": "toolchain", "result": "PASS"}],
+        "negative_checks": [],
+        "not_verified": [],
+        "artifacts": [],
+    }
+    path = tmp_path / "product-evidence-result.json"
+    path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    assert harness.main(["--verify-receipt", str(path)]) == 1
+
+
 # ---------------------------------------------------------------------------
 # Mode/subcase legality and dry-run routing
 # ---------------------------------------------------------------------------
