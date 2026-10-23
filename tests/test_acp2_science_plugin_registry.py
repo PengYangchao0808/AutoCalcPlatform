@@ -16,9 +16,12 @@ The suite pins the ACP2 boundary, not a plugin implementation:
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib
 import importlib.metadata
 import json
+import os
+import shutil
 import sys
 import uuid
 from pathlib import Path
@@ -57,6 +60,24 @@ from cccp.plugin import (
     scan_science_plugin_entry_points,
     validate_declared_recipe,
     validate_declared_validators,
+)
+from tests._acp2_external_plugin_harness import (
+    CAPABILITY_NAME as EXTERNAL_CAPABILITY_NAME,
+)
+from tests._acp2_external_plugin_harness import (
+    EXPECTED_OUTPUT as EXTERNAL_EXPECTED_OUTPUT,
+)
+from tests._acp2_external_plugin_harness import (
+    FIXED_INPUT as EXTERNAL_FIXED_INPUT,
+)
+from tests._acp2_external_plugin_harness import (
+    PLUGIN_NAME as EXTERNAL_PLUGIN_NAME,
+)
+from tests._acp2_external_plugin_harness import (
+    build_fixture_wheel,
+    create_isolated_venv,
+    install_wheel,
+    run_probe,
 )
 
 CAPABILITY = "readonly_validator"
@@ -474,3 +495,135 @@ def test_license_policy_is_applied_to_entry_point_manifests(
             license_policy=PluginLicensePolicy.default().narrowed(excluded={"MIT"}),
         )
     assert entry_point.load_calls == 0
+
+
+# ── external distribution: isolated install, enable and invocation (A-22b) ──
+
+
+@pytest.fixture(scope="module")
+def external_distribution(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
+    """Build and install the A-22 fixture in a throw-away virtual environment.
+
+    The shared integration environment is never modified: the wheel is built
+    offline and installed with ``pip install --no-deps --no-index`` into a
+    fresh venv created for this test module.  ``ACP2_A22_WORK_ROOT`` can pin
+    the working directory for evidence runs.
+    """
+    override = os.environ.get("ACP2_A22_WORK_ROOT")
+    if override:
+        root = Path(override) / f"pytest-{uuid.uuid4().hex[:8]}"
+        root.mkdir(parents=True, exist_ok=True)
+    else:
+        root = tmp_path_factory.mktemp("a22b-external")
+    wheel, build_argv, build_log = build_fixture_wheel(root / "wheel")
+    python, venv_argv = create_isolated_venv(root)
+    install_argv, install_result = install_wheel(python, wheel)
+    payload: dict[str, object] = {
+        "root": root,
+        "wheel": wheel,
+        "wheel_sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        "python": python,
+        "build_argv": build_argv,
+        "build_log": build_log,
+        "venv_argv": venv_argv,
+        "install_argv": install_argv,
+        "install_log": install_result.stdout + install_result.stderr,
+    }
+    yield payload
+    shutil.rmtree(root, ignore_errors=True)
+
+
+@pytest.fixture(scope="module")
+def external_distribution_probe(
+    external_distribution: dict[str, object],
+) -> dict[str, object]:
+    """Run the disabled/enabled/invoked probe inside the isolated venv."""
+    python = external_distribution["python"]
+    assert isinstance(python, Path)
+    return run_probe(
+        python,
+        "inspect",
+        EXTERNAL_FIXED_INPUT,
+        EXTERNAL_EXPECTED_OUTPUT,
+    )
+
+
+class TestExternalDistribution:
+    def test_external_distribution_discovery_is_metadata_only_and_disabled(
+        self,
+        external_distribution: dict[str, object],
+        external_distribution_probe: dict[str, object],
+    ) -> None:
+        probe = external_distribution_probe
+        assert probe["ok"] is True
+        assert probe["discovered_names"] == [EXTERNAL_PLUGIN_NAME]
+        assert probe["entry_points_scanned"] == 1
+        assert probe["module_imported_after_discovery"] is False
+        assert probe["preloaded_before_enable"] is False
+        assert probe["disabled_error"] == "PluginDisabledError"
+        assert probe["is_trusted"] is False
+        assert probe["trust_level"] == "untrusted"
+
+        status = probe["status_before"]
+        assert isinstance(status, dict)
+        assert status["described"]["state"] == "present"
+        assert status["installed"]["state"] == "present"
+        assert status["enabled"]["state"] == "absent"
+        assert status["verified"]["state"] == "not_verified"
+        assert (
+            status["entry_point"] == f"{SCIENCE_PLUGIN_ENTRY_POINT_GROUP}:acp2_external_validator"
+        )
+        assert status["capability_ids"] == [EXTERNAL_CAPABILITY_NAME]
+
+        after_enable = probe["status_after_enable"]
+        assert isinstance(after_enable, dict)
+        assert after_enable["enabled"]["state"] == "present"
+        assert after_enable["verified"] == status["verified"]
+
+        assert "--no-isolation" in external_distribution["build_argv"]
+        assert "--no-deps" in external_distribution["install_argv"]
+        assert "--no-index" in external_distribution["install_argv"]
+
+    def test_external_distribution_enabled_invocation_returns_valid_result(
+        self,
+        external_distribution_probe: dict[str, object],
+    ) -> None:
+        probe = external_distribution_probe
+        expected = json.loads(EXTERNAL_EXPECTED_OUTPUT.read_text(encoding="utf-8"))
+        result = probe["result"]
+        assert isinstance(result, dict)
+        assert result == expected
+        assert result["task"] == TaskKind.SINGLEPOINT.value
+        assert result["status"] == "completed"
+        assert result["complete"] is True
+        assert result["units"] == {"coordinates": "angstrom", "energy": "hartree"}
+        assert result["atom_order"] == result["symbols"] == ["O", "H", "H"]
+        assert result["capability_schema"] == "acp2.science.external.native_singlepoint"
+        assert probe["result_schema_version"] == 1
+        assert probe["plugin_lock_digest_stable"] is True
+        assert isinstance(probe["plugin_lock_digest"], str)
+        assert len(probe["plugin_lock_digest"]) == 64
+
+    def test_external_distribution_digest_matches_installed_metadata(
+        self,
+        external_distribution: dict[str, object],
+        external_distribution_probe: dict[str, object],
+    ) -> None:
+        probe = external_distribution_probe
+        installed = probe["installed"]
+        assert isinstance(installed, dict)
+        assert installed["version"] == "1.0.0"
+        assert installed["license"] == "MIT"
+        assert installed["entry_point_group"] == SCIENCE_PLUGIN_ENTRY_POINT_GROUP
+        assert installed["entry_point_name"] == "acp2_external_validator"
+        assert installed["entry_point_value"] == "acp2_fixture_validator.plugin:PLUGIN"
+        assert installed["distribution_digest"] == installed["manifest_distribution_digest"]
+        assert installed["fixture_evidence_digest"] == installed["manifest_fixture_evidence_digest"]
+        assert installed["distribution_digest"].startswith("sha256:")
+        assert len(installed["distribution_digest"]) == len("sha256:") + 64
+
+        python = external_distribution["python"]
+        assert isinstance(python, Path)
+        assert installed["package_path"].startswith(str(python.parent.parent))
+        wheel_sha256 = external_distribution["wheel_sha256"]
+        assert isinstance(wheel_sha256, str) and len(wheel_sha256) == 64
