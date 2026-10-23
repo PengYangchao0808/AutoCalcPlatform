@@ -1,0 +1,9 @@
+# port check after stopping both test controllers
+18772/18773 free
+--- production 8765 (not touched) ---
+LISTEN 0      2048         0.0.0.0:8765       0.0.0.0:*   
+--- lock files ---
+lock check done
+--- db counts ---
+jobs 0
+tasks 0
