@@ -141,11 +141,12 @@ A consumes these platform/experience handoffs; it does not re-implement them:
 - **R3-07 three validation layers.** JSON structure (type/required/enum/bounds/refs), CCCP scientific semantics (mapping/roles/method/state/units/applicability) and Runtime platform constraints (project/permission/enablement/resources) are distinct. Unknown execution fields are rejected for new execution requests; historical reads preserve unknown fields but gain no execution/recovery eligibility; unknown major versions never execute. The UI subset uses standard `minimum/maximum` and nullable types; custom UI-only keys are not expected to be enforced by a general validator.
 - **R3-09 role-owned interpreters.** A's development tests use `$ACP2_A_PYTHON` and assert `cccp.__file__` resolves inside the A worktree; platform integration evidence uses `$ACP2_INTEGRATION_PYTHON` and the frozen candidate; wheel probes use a separately recorded clean interpreter. The live artifact-validation rows 23/25 use A's harness under `$ACP2_A_PYTHON` as science-artifact validation and do not claim A executed the frozen integration service. Reusing `$ACP2_PYTHON` for every role is not accepted.
 - **R3-10 static/live decoupling.** Static validators (todo 22), the artifact-snapshot consumer (todo 24) and plugin manifest/registry (todos 38-42) depend on contracts and synthetic real-format fixtures, not on a successful real singlepoint or DA positive. Their live rows remain `NOT_VERIFIED` until the corresponding real environment exists.
-- **R3-11 DA capability split.** ADR-008 distinguishes the execution/validation chain (known starting geometry or candidate, frozen method) from research candidate search (user input, bounded proposals). A labels the source of every starting structure; a known TS is never presented as a search success. Budget is derived from representative step timings before the full chain is frozen.
+- **R3-11 DA capability split.** ADR-008 distinguishes the execution/validation chain (known starting geometry or candidate, frozen method) from research candidate search (user input, bounded proposals). A labels the source of every starting structure; a known TS is never presented as a search success. Search capability is not proven by the known-candidate chain or by a control-loop PASS. A owns `science/requests/search-contract.md` (input categories, candidate source/count, generation steps, screening/rejection reasons, validators and success criteria); A-20 records search as a separate row. If search is in H4 scope and unexecuted, H4 stays open; if it is deferred, the owner must ratify the scope reduction. Budget is derived from representative step timings before the full chain is frozen.
 - **R3-12 CDXML scope.** A declares CDXML outside the initial supported input scope; B/C must not claim a complete ChemDraw input chain until an owner and parser are added. The supported initial formats are the existing structure/reaction inputs, with unsupported features rejected explicitly.
 - **R3-14 early packaging preview.** Todo 2 records the distribution/top-level package ownership and a minimal wheel smoke plan early; the full independent package remains P5.
 - **B18 execution handoff (R3-01):** A delivers the compiled recipe definition plus `OutputRef` selectors to B18; B18a/b/c own the execution loop, persistence, retries and recovery. A registers this edge in the cross-track ledger with readiness and never executes the DAG itself.
-- **R3-04 / R4-01 selectivity producer.** A-25/A-26 use the single registered reference `owner=C, scenario=experience:cross-domain-live, subcase=selectivity` (not a separate `selectivity-live` scenario). A provides the two-path fixture and criteria (A-25a); C T-40a makes the single research submission; B23b executes and exports the authorized artifacts; A-25b audits them; C T-40b presents and signs. A records the request in `science/requests/selectivity-producer.md` and the cross-track ledger, and cannot close the selectivity row alone. A `NOT_VERIFIED` in A must not be presented by B/C as a completed P4 claim.
+- **R3-04 / R4-01 / R5-02 selectivity producer.** A-25/A-26 use the single registered reference `owner=C, scenario=experience:cross-domain-live, subcase=selectivity` (not a separate `selectivity-live` scenario). A provides the two-path fixture and criteria (A-25a); C T-40a makes the single research submission; B23b executes and exports the authorized artifacts; A-25b audits them; C T-40b presents and signs. A records the request in `science/requests/selectivity-producer.md` and the cross-track ledger, and cannot close the selectivity row alone. `subcase` is display metadata, not public identity: A references the record only when `(owner, scenario, phase, run_id)` is unique, with the registered `experience:selectivity` phase
+; if two subcases share one public key, A records `NOT_VERIFIED` instead of merging them.
 - **D01 approval vs automation.** A's checks are agent-executed; user approval and independent reproduction are separate facts owned by the user/B/C. A never simulates a human approval as an automated PASS.
 - **D10/D11 science-field rules.** Provenance requires a method/software identity only for results that depend on an electronic-structure method; pure analysis records algorithm/version/input digest instead. Ensemble weights use a declared raw-or-normalized input policy with explicit tolerance and recorded normalization provenance.
 
@@ -232,7 +233,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
  All `science/*.md`, `science/examples/**`, `science/requests/**` and `science/handoff-H*.json` paths are relative to `docs/reference/next-change/acp2-contracts/science/` (Plan A line 52).
 - **P0 gate (todo 17):** static capability contracts, registry and binding; reaction/recipe research types are listed as in-progress unless already delivered. Real computation is explicitly not run.
 - **P1 gate (todo 26):** real singlepoint plus optimized/frequency artifacts and Local/LSF reconciliation. If LSF is unavailable, H3 stays open.
-- **P2 gate (todo 37):** three independent records: (a) scenario `result` - did the required operation, assertions and evidence delivery complete; (b) scientific claim `status` - `supported / refuted / inconclusive / not_evaluated` per claim, bound to validator and inputs; (c) H4 closure - requires a real valid TS (one imaginary mode + mapped mode), bidirectional IRC with both endpoints, and comparable energies, plus honest negative cases. A PASS on a "correctly reports inconclusive" negative scenario does not replace the required positive evidence. If the budget ends without a valid positive, H4 stays open and A continues independent work.
+- **P2 gate (todo 37):** three independent records: (a) scenario `result` - did the required operation, assertions and evidence delivery complete; (b) scientific claim `status` - `supported / refuted / inconclusive / not_evaluated` per claim, bound to validator and inputs; (c) H4 closure - requires a real valid TS (one imaginary mode + mapped mode), bidirectional IRC with both endpoints, and comparable energies, plus honest negative cases. A PASS on a "correctly reports inconclusive" negative scenario does not replace the required positive evidence. If the budget ends without a valid positive, H4 stays open and A continues independent work. Search is part of P2/H4 by default: A-20 consumes `B20a-search`; a missing or `NOT_VERIFIED` producer keeps H4 open, and any deferral requires owner-ratified `search_scope=DEFERRED` synchronized across B/C and the main plan. A control-loop or known-candidate PASS never substitutes for search.
 - **P3 gate (todo 42):** one external plugin distribution discovered, enabled, invoked and safely rejected on conflicts.
 - **P4 gate (todo 47):** NMR/thermochemistry reuse plus selectivity evidence and version regression. A required selectivity row that is `NOT_VERIFIED` keeps H6/P4 open; it is not labelled verified.
 - **P5 gate (todo 51):** A signs its own science H7 from B25a's candidate plus A-27b/A-28 verification; A does not wait for B26 or B25b. B aggregates after A-29 and C35.
@@ -240,7 +241,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
 
 ## Todos
 
-- [ ] 1. A-00a: Freeze the science baseline, worktree and ownership boundary
+- [x] 1. A-00a: Freeze the science baseline, worktree and ownership boundary
   What to do / Must NOT do: Read the root and nested knowledge bases, Plan A, the execution index, the review and the acceptance runbook. Consume B00's final re-frozen baseline: accept either a full commit SHA or a reproducible patch manifest with digest, and treat `096cdffe...` as the historical reference, not an assumed final base. Record `git rev-parse HEAD`, `git status --short`, the current branch, the frozen base revision, every dirty path, the patch/diff digest, the worktree path, `$ACP2_A_PYTHON`, the absolute `$ACP2_EVIDENCE` root and the three package import locations. Create or reuse the science worktree so it actually contains the pending business fixes; write `science/baseline.md` and `science/path-map.md`. Do not edit, clean, reset or stash any existing working-tree changes; do not start from the old HEAD and assume the fixes are carried.
   Closes: GAP-13
   Parallelization: Wave 1 | Blocked by: none | Blocks: 2-51
@@ -250,18 +251,19 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `chore(cccp): lock ACP2 science baseline and ownership boundary`
   Recommended task executor category: deep-low - baseline and cross-track ownership reasoning that the executor can settle from the cited documents.
 
-- [ ] 2. A-00b: Inventory workflows, task kinds, existing APIs and compatibility surface
-  What to do / Must NOT do: Build the frozen inventory: the fifteen active workflows, the fifteen task kinds and their mapping (including cases where names differ), the request/result/context contracts, the task cores, the capability matrix and selection seam, the plugin layer, the scientific products and the compatibility forwarders. Write the mapping and the not-implemented list into `science/baseline.md`; generate `science/cross-track-dependencies.json` with A's external edges (task ID, product ID, producer, consumer, phase, precondition, artifact_id, version, digest, readiness `contract_ready|implementation_ready|integration_ready|verified`, and explicit and/or conditions) and check it for missing IDs and cycles. Add `science/packaging-preview.md` with the current distribution/top-level package ownership, files/assets, dependency closure and a minimal wheel smoke plan; flag any missing package-data or import-boundary risk early. Record which rows are static facts and which need later real evidence. Do not reopen already-closed debug defects; do not infer a one-to-one workflow-to-task mapping.
+- [x] 2. A-00b: Inventory workflows, task kinds, existing APIs and compatibility surface
+  What to do / Must NOT do: Build the frozen inventory: the fifteen active workflows, the fifteen task kinds and their mapping (including cases where names differ), the request/result/context contracts, the task cores, the capability matrix and selection seam, the plugin layer, the scientific products and the compatibility forwarders. Write the mapping and the not-implemented list into `science/baseline.md`; generate `science/cross-track-dependencies.json` with A's external edges (task ID, product ID, producer, consumer, phase, precondition, artifact_id, version, digest, readiness `contract_ready|implementation_ready|integration_ready|verified`, and explicit and/or conditions) and check it for missing IDs and cycles. Add `science/packaging-preview.md` with the current distribution/top-level package ownership, files/assets, dependency closure and a minimal wheel smoke plan; reuse the existing `packaging/README.md`, role build configurations and `scripts/build_release.py`, and record what already exists before proposing any gap; flag any missing package-data or import-boundary risk early. Record which rows are static facts and which need later real evidence. Do not re-plan existing packaging capability as a blank-slate task. Do not reopen already-closed debug defects; do not infer a one-to-one workflow-to-task mapping.
   Closes: GAP-1
   Parallelization: Wave 1 | Blocked by: 1 | Blocks: 5
-  References: `src/acp/workflows/registry.py`; `src/cccp/calculation/requests.py:54-72`; `src/cccp/calculation/tasks/__init__.py:5-37`; `src/cccp/calculation/selection.py:188-288`; `src/cccp/backends/matrix.py:82-310`; `src/cccp/plugin/metadata.py:155-242`; `tests/test_architecture_invariants.py:91-123`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md:158-168,356-382`.
-  Acceptance criteria (agent-executable): the inventory table has exactly fifteen active workflows and fifteen task kinds; every workflow row has an explicit mapping or an explicit not-a-task-kind reason; every mismatched name is called out; `cross-track-dependencies.json` parses, every referenced ID exists, the readiness/AND-OR schema is used, and a cycle checker reports none; `packaging-preview.md` names each top-level package/file/asset owner and the wheel smoke command; `"$ACP2_A_PYTHON" -m pytest tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_recovery_fixtures_smoke.py -q` exits 0.
+  References: `src/acp/workflows/registry.py`; `src/cccp/calculation/requests.py:54-72`; `src/cccp/calculation/tasks/__init__.py:5-37`; `src/cccp/calculation/selection.py:188-288`; `src/cccp/backends/matrix.py:82-310`; `src/cccp/plugin/metadata.py:155-242`; `tests/test_architecture_invariants.py:91-123`; `packaging/README.md`; `scripts/build_release.py`; `reports/architecture_repair_20261022/REPORT.md`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:174-186`.
+  Acceptance criteria (agent-executable): the inventory table has exactly fifteen active workflows and fifteen task kinds; every workflow row has an explicit mapping or an explicit not-a-task-kind reason; every mismatched name is called out; `cross-track-dependencies.json` parses, every referenced ID exists, the readiness/AND-OR schema is used, and a cycle checker reports none; the ledger enumerates the P2/P4 external edges (`B20a-exec`, `B20a-search`, `B23b`, `C T-40a`, `C T-40b`, `B08`) with artifact-level readiness and digest; `packaging-preview.md` names each top-level package/file/asset owner and the wheel smoke command, records the existing three role configs plus `scripts/build_release.py`, and proposes only the science delta;
+ `"$ACP2_A_PYTHON" -m pytest tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_recovery_fixtures_smoke.py -q` exits 0.
   QA scenarios (name the exact tool + invocation): happy: run the guard suites and validate the cross-track ledger plus the packaging preview; failure: add a dependency on a nonexistent B product or a package-data path missing from the preview and confirm the ledger/preview validator rejects it. Evidence `$ACP2_EVIDENCE/A/A-00/<run-id>/result.json`
 
   Commit: Y | `docs(cccp): record ACP2 workflow/task compatibility inventory`
   Recommended task executor category: unspecified-low - mechanical inventory with a few cross-file lookups.
 
-- [ ] 3. A-01a: Author the capability, task-binding and error schemas
+- [x] 3. A-01a: Author the capability, task-binding and error schemas
   What to do / Must NOT do: Under `docs/reference/next-change/acp2-contracts/science/`, write `capability.schema.json`, `task-binding.schema.json` and `errors.schema.json`. Freeze the scientific fields: schema, schema version, capability id, implementation id, input schema, output schema, preconditions, completion checks, limitations, compatibility, provenance requirements and execution semantics. Separate the three validation layers: JSON structure (type/required/enum/minimum/maximum/refs), CCCP scientific semantics, and Runtime platform constraints. Add `schema_dialect` (the JSON Schema dialect and supported keyword subset) and a `ui_subset_version`; use standard `minimum`/`maximum` and nullable types rather than custom `range`/`nullable` keywords. Define unknown-field policy: new execution requests reject unsupported execution fields; historical reads preserve unknown fields but gain no execution/recovery eligibility; unknown major versions never execute. Define error records for unknown major version, duplicate capability id, unknown implementation, disabled provider, unavailable binary and invalid scientific input. In the task-binding schema, reference the existing request/result/context serialization and state explicitly that the context is never serialized. Do not add platform job status, account, queue or price fields.
   Closes: GAP-1
   Parallelization: Wave 2 | Blocked by: 1 | Blocks: 4, 11
@@ -271,7 +273,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `docs(cccp): add ACP2 capability and task-binding schemas`
   Recommended task executor category: deep-high - a cross-package contract whose field semantics must stay compatible with the existing envelopes.
 
-- [ ] 4. A-01b: Add capability examples, positive/negative fixtures, contract test and first handoff
+- [x] 4. A-01b: Add capability examples, positive/negative fixtures, contract test and first handoff
   What to do / Must NOT do: Add `science/examples/capability-energy.json` and `science/examples/task-binding-singlepoint.json`; add the real fixture files `tests/fixtures/acp2/science/contracts/capability_valid.json`, `capability_unknown_version.json`, `capability_duplicate_id.json`, `capability_unsupported_provider.json`, `capability_unknown_execution_field.json` and `historical_read_unknown_field.json` (never literal braces in a path). Deliver `tests/test_acp2_science_schema.py` first, using only standard-library JSON parsing plus a restricted assertion helper that declares its supported keyword set and rejects unsupported schema constraints rather than silently skipping them; no third-party schema engine. When B01's draft `acceptance-result.schema.json` is available, also deliver `science/examples/receipt-valid.json` and `receipt-invalid.json` and validate them through the shared validator; if the draft is not yet published, record `NOT_VERIFIED` and deliver immediately when it is, without waiting for B05 or A17. Publish `science/handoff-H1.json` in its minimal form with file digests, field owners, positive/negative fixtures and compatibility scope. Do not treat a described capability as installed or available.
   Closes: GAP-1, GAP-4
   Parallelization: Wave 3 | Blocked by: 3 | Blocks: 17
@@ -281,7 +283,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): add ACP2 capability contract fixtures and handoff`
   Recommended task executor category: unspecified-high - multi-file test and fixture work with a clear contract.
 
-- [ ] 5. A-02a: Author the reaction and question schemas plus semantic rules
+- [x] 5. A-02a: Author the reaction and question schemas plus semantic rules
   What to do / Must NOT do: Write `reaction.schema.json` and `question.schema.json`; freeze structure references, species, atom mapping, bond changes, charge, multiplicity, stereochemistry, conditions and declared input uncertainty. The question schema freezes question type, hypothesis references, required evidence types and comparison conditions, and excludes model roles, cost and job status. Write `science/semantic-rules.md` covering stable atom ids on both sides, one-to-one maps, element and stoichiometry conservation, explicit unknown stereo/conditions, and the distinction between cannot-interpret-the-input and representable-but-not-applicable. Declare CDXML outside the initial supported input scope and align the supported list with the experience track: MOL/SDF/SMILES plus the existing structure upload; CDXML is `DEFERRED`. Unsupported features are rejected explicitly rather than silently dropped. B/C must not claim a complete ChemDraw/CDXML chain until an owner and parser are added. Do not add LLM roles, budgets or platform state.
   Closes: GAP-1
   Parallelization: Wave 2 | Blocked by: 1, 2 | Blocks: 6
@@ -291,7 +293,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `docs(cccp): add ACP2 reaction and question schemas`
   Recommended task executor category: deep-high - scientific identity semantics that must not be coerced.
 
-- [ ] 6. A-02b: Add reaction/question examples, positive/negative fixtures and tests
+- [x] 6. A-02b: Add reaction/question examples, positive/negative fixtures and tests
   What to do / Must NOT do: Add `science/examples/reaction-da.json`, `science/examples/question-activation.json` and the `tests/fixtures/acp2/science/contracts/reaction/` positive and negative set: valid simple reaction, duplicate map, missing product, charge mismatch and ambiguous stereo. Deliver `tests/test_acp2_science_reaction_contract.py` before declaring the task done. Assert that unknown stereochemistry stays unknown, that a net reaction never claims a single elementary step, and that conservation violations are rejected.
   Closes: GAP-1, GAP-4
   Parallelization: Wave 3 | Blocked by: 5 | Blocks: 9
@@ -301,7 +303,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): add ACP2 reaction and question contract fixtures`
   Recommended task executor category: unspecified-high - multi-file contract fixtures and assertions.
 
-- [ ] 7. A-03a: Author the evidence, provenance and recipe schemas
+- [x] 7. A-03a: Author the evidence, provenance and recipe schemas
   What to do / Must NOT do: Write `evidence.schema.json`, `provenance.schema.json` and a minimal `recipe.schema.json`, plus `science/evidence-semantics.md` describing the four claim statuses, execution-versus-claim separation, source/digest requirements, explicit units and the missing-check vocabulary. Freeze per-claim statuses `supported`, `refuted`, `inconclusive`, `not_evaluated`, plus validator id/version, source references, missing checks, units and limitations. Freeze provenance derivation: for electronic-structure results require method/software/basis/state; for pure analysis use algorithm/version/input digest instead of inventing a quantum method. Include temperature, standard state and reference state where applicable. The recipe schema must include steps, typed references, edges, required/diagnostic-only flags, validators, applicability and bounded alternatives. Do not map execution terminal states to claim support; do not put queue, account or job status in the recipe.
   Closes: GAP-1
   Parallelization: Wave 2 | Blocked by: 1 | Blocks: 8
@@ -311,7 +313,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `docs(cccp): add ACP2 evidence, provenance and recipe schemas`
   Recommended task executor category: deep-high - the execution-versus-claim separation is the central scientific contract.
 
-- [ ] 8. A-03b: Add evidence/provenance fixtures, tests and the H1 update
+- [x] 8. A-03b: Add evidence/provenance fixtures, tests and the H1 update
   What to do / Must NOT do: Add the contract fixtures: negative cases (missing IRC, corrupt digest, partial output, unknown evidence status) and positive/historical cases (completed-but-inconclusive, historical schema that must stay readable through the adapter). Deliver `tests/test_acp2_science_evidence_contract.py`; assert that a missing source or digest mismatch cannot be supported, that model text cannot impersonate a validator, that an unknown evidence status is rejected, and that completed-but-inconclusive and historical payloads are accepted. Update `science/handoff-H1.json` with the new files, versions and compatibility range; do not rewrite the previously published minimal fields.
   Closes: GAP-1, GAP-4
   Parallelization: Wave 3 | Blocked by: 7 | Blocks: 9, 10
@@ -321,7 +323,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): add ACP2 evidence and provenance contract fixtures`
   Recommended task executor category: unspecified-high - multi-file fixtures plus a versioned handoff update.
 
-- [ ] 9. A-04a: Implement the reaction and question public types
+- [x] 9. A-04a: Implement the reaction and question public types
   What to do / Must NOT do: If the frozen baseline has no equivalent, create `src/cccp/analysis/research/reaction.py` and `question.py` with frozen dataclasses, explicit `to_dict`/`from_dict`, schema-version checks and a package `__init__.py` that exports only. Reuse the existing structure, electronic-state and method types; do not create a second atom or spin model. Historical reading uses a recognizable schema adapter and preserves unknown fields instead of filling defaults.
   Closes: GAP-2
   Parallelization: Wave 3 | Blocked by: 6, 8 | Blocks: 10
@@ -331,7 +333,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add public reaction and question science types`
   Recommended task executor category: unspecified-high - standard pure-type implementation with strict serialization.
 
-- [ ] 10. A-04b: Implement evidence/provenance types, adapters and import-purity test
+- [x] 10. A-04b: Implement evidence/provenance types, adapters and import-purity test
   What to do / Must NOT do: Add `src/cccp/analysis/research/evidence.py` and `provenance.py`; wire `ArtifactRef` and `Provenance` from the calculation contracts without redefining them. Provide version adapters for historical payloads; unknown values stay unknown. Add an import-purity test that proves loading the research package does not pull task execution, QC interfaces or platform modules.
   Closes: GAP-2
   Parallelization: Wave 4 | Blocked by: 9 | Blocks: 27
@@ -341,7 +343,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add evidence and provenance science types`
   Recommended task executor category: unspecified-high - pure-type implementation plus a precise import-purity check.
 
-- [ ] 11. A-05a: Build the capability contracts and read-only registry
+- [x] 11. A-05a: Build the capability contracts and read-only registry
   What to do / Must NOT do: Create `src/cccp/calculation/capabilities/contracts.py` and `registry.py`, plus `tests/test_acp2_science_registry.py` for the generic registry behavior (deterministic ordering, unknown capability, duplicate implementation, incompatible state). Define the scientific descriptor and a read-only query surface with deterministic ordering. Separate capability from implementation and expose distinct described/installed/available/verified projections. Reuse `calculation/selection.py` and `cccp.software.resolve_executable`; do not create a second software resolver or a capability-to-backend selection algorithm. Do not seed the built-in catalog yet; todo 12 does that.
   Closes: GAP-3
   Parallelization: Wave 4 | Blocked by: 4 | Blocks: 12, 13
@@ -351,7 +353,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add read-only scientific capability registry`
   Recommended task executor category: deep-low - the shape is specified and the existing selection seam is the authority.
 
-- [ ] 12. A-05b: Seed and test the built-in capability catalog
+- [x] 12. A-05b: Seed and test the built-in capability catalog
   What to do / Must NOT do: Add `capabilities/builtin.py` registering `electronic.energy`, `geometry.optimize`, `vibration.compute` and the pure-analysis `vibration.analyze`. The first three bind to existing task kinds; `vibration.analyze` consumes existing frequency or Hessian products through the analysis layer and must never start a calculation. Other families remain explicitly unsupported. Extend `tests/test_acp2_science_registry.py` covering the four seeded capabilities, deterministic order, conflict ids, unknown provider and incompatible state.
   Closes: GAP-3, GAP-4
   Parallelization: Wave 5 | Blocked by: 11 | Blocks: 14
@@ -361,7 +363,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): seed built-in science capabilities`
   Recommended task executor category: deep-high - the analysis-versus-compute distinction is a hard scientific boundary.
 
-- [ ] 13. A-06a: Bind capabilities to the existing task API
+- [x] 13. A-06a: Bind capabilities to the existing task API
   What to do / Must NOT do: Create `capabilities/task_binding.py` to convert capability inputs into the existing `TaskRequest` and validate scientific preconditions only. The binding also validates a direct reference to an existing `TaskKind` from the fifteen-task inventory (not only the three compute capabilities), so a recipe step can name an existing task kind without inventing a capability. Execution delegates to `run_singlepoint`, `run_optimize` or `run_frequency` for the seeded capabilities and never adds a new execution path. Keep the existing schema versions and payload types; add fields only through a versioned compatibility path. Write a spy test proving each capability reaches exactly one task implementation and that preflight produces no artifact directory and no subprocess.
   Closes: GAP-3, GAP-4
   Parallelization: Wave 5 | Blocked by: 11 | Blocks: 14
@@ -371,7 +373,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): bind science capabilities to existing task cores`
   Recommended task executor category: deep-high - the single-execution-station invariant is the core risk.
 
-- [ ] 14. A-06b: Publish the fifteen-task compatibility matrix and repair the package export gap
+- [x] 14. A-06b: Publish the fifteen-task compatibility matrix and repair the package export gap
   What to do / Must NOT do: Add `science/task-compatibility-matrix.md` covering all fifteen task kinds, their capabilities, option/payload types and execution status. Add the missing `run_xtb_constrained_opt`, `XtbConstrainedOptOptions` and `XtbConstrainedOptPayload` entries to the `cccp.calculation` lazy export table and a regression test. Do not change any task behavior; do not rename or remove an existing export.
   Closes: GAP-4, GAP-8
   Parallelization: Wave 6 | Blocked by: 12, 13 | Blocks: 17
@@ -381,7 +383,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `fix(cccp): expose all fifteen task cores and record compatibility`
   Recommended task executor category: deep-low - a narrow export repair plus a documentation matrix; the defect is already verified.
 
-- [ ] 15. A-07a: Implement recipe contracts, validation and required/diagnostic semantics
+- [x] 15. A-07a: Implement recipe contracts, validation and required/diagnostic semantics
   What to do / Must NOT do: Create `src/cccp/calculation/recipes/contracts.py` and `validation.py`. Define scientific steps with stable `step_id`, references to a registered capability or an existing `TaskKind` from the fifteen-task inventory (recorded through the binding), typed `OutputRef` selectors for upstream products, edges, required and diagnostic-only flags, validators, applicability and bounded alternatives. Reject cycles, dangling dependencies, failure propagation from a required upstream to a downstream step, and any diagnostic step treated as required. Do not include scheduler, account or central job status; do not add an execution loop or second dispatcher.
   Closes: GAP-3
   Parallelization: Wave 6 | Blocked by: 14 | Blocks: 16
@@ -391,7 +393,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add scientific recipe contracts and validation`
   Recommended task executor category: deep-high - dependency and required-step invariants drive recovery correctness.
 
-- [ ] 16. A-07b: Compile recipes and define the science identity boundary
+- [x] 16. A-07b: Compile recipes and define the science identity boundary
   What to do / Must NOT do: Create `recipes/compile.py` producing a typed `TaskRequest` DAG with canonical JSON and a schema digest. A compiles the definition only; B18 owns the execution loop, persistence, retries and cancellation, and A must not add a second dispatcher. Freeze two identities. The plan-definition digest covers the Recipe, initial inputs, method, versions, parameters, `OutputRef` selectors and allowed bounded alternatives, and is computed before approval; it excludes `approval_ref`, approval status, display name and timestamps so routine approval/evidence append does not invalidate the approved science. The step execution identity is materialized at dispatch from actual upstream content digests, materialized parameters and implementation/provider versions; an unresolved `OutputRef` selector is an error at dispatch, not a silent skip. Science identity must cover method, structure content, atom mapping and roles, charge/multiplicity/electronic state, materialized dependency digests, provider/plugin versions and comparison conditions; it must exclude job id and display name. Reuse `analysis/identity.py` primitives and write `science/identity-boundary.md` describing how the recipe identities join the existing plan/step identity without creating a second recovery truth. Add `tests/test_acp2_science_recipe.py`.
   Closes: GAP-3, GAP-4
   Parallelization: Wave 6 | Blocked by: 8, 15 | Blocks: 29
@@ -401,7 +403,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): compile recipes with deterministic science identity`
   Recommended task executor category: deep-high - identity correctness is argued from invariants and crosses the recovery contract.
 
-- [ ] 17. A-08: Close the P0 static science gate and publish the handoff
+- [x] 17. A-08: Close the P0 static science gate and publish the handoff
   What to do / Must NOT do: Verify the H1 capability/task contracts, the registry and the binding; if the recipe round-trip has been delivered, verify it, otherwise list the research types and recipes as still in progress. Reuse the receipt samples delivered in todo 4 and confirm they still pass the shared validator; do not create a second sample set. Consume B05's launch file and minimal read-only capabilities; do not treat B04's premature MCP-adapter check as H2 evidence. Record the actual server, client and harness revisions and the H2 test candidate. Add compatibility notes and the unsupported-capability list. Put dependency, F4-amendment and shared-file requests into `science/requests/`. Publish `science/handoff-H2.json` separating static pass, real computation not run, and external MCP/DSH evidence references. Freeze the contract version. Do not claim real execution; do not include a test file that has not been delivered in the required command; do not make reaction/recipe pre-research a hard precondition of this gate.
   Closes: GAP-1, GAP-3, GAP-4, GAP-12
   Parallelization: Wave 6 | Blocked by: 14 | Blocks: 18, 20
@@ -411,7 +413,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `chore(cccp): close ACP2 P0 science gate`
   Recommended task executor category: deep-low - a gate-summary task whose facts are already produced.
 
-- [ ] 18. A-09a: Freeze the small-molecule singlepoint fixture
+- [x] 18. A-09a: Freeze the small-molecule singlepoint fixture
   What to do / Must NOT do: Choose a small closed-shell molecule; deliver `tests/fixtures/acp2/science/singlepoint/input.xyz`, `request.json`, `expected-science.json` and `fixture-manifest.json` with original coordinates, charge, multiplicity, atom order, method/basis actually available in the target environment and allowed tolerances. Separate parse correctness, normal termination, energy presence and unit correctness. Do not invent a reference energy before the real run; do not default an invalid spin.
   Closes: GAP-4, GAP-12
   Parallelization: Wave 7 | Blocked by: 17 | Blocks: 19, 21
@@ -421,7 +423,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): freeze ACP2 singlepoint science fixture`
   Recommended task executor category: unspecified-high - fixture design with scientific parameters and digests.
 
-- [ ] 19. A-09b: Add the fixture contract test and the platform request
+- [x] 19. A-09b: Add the fixture contract test and the platform request
   What to do / Must NOT do: Deliver `tests/test_acp2_science_fixtures.py` and run `-k singlepoint`; assert digest stability, required scientific fields, invalid-electron-count rejection, missing-structure rejection and wrong-method rejection. Write `science/requests/runtime-fixture-singlepoint.md` with the fields the platform owner needs; do not present a task-request JSON as an MCP submit body.
   Closes: GAP-4, GAP-12
   Parallelization: Wave 8 | Blocked by: 18 | Blocks: 21
@@ -431,7 +433,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): validate ACP2 singlepoint fixture contract`
   Recommended task executor category: unspecified-high - test and platform-request authoring.
 
-- [ ] 20. A-10a: Deliver the science acceptance harness skeleton
+- [x] 20. A-10a: Deliver the science acceptance harness skeleton
   What to do / Must NOT do: Create `scripts/acceptance/acp2_science.py` implementing `--help`, `--dry-run`, the scenario/flag contract from Plan A section 1.3 (`science:installed-singlepoint`, `science:validate-artifacts`, `science:validate-da-ts`, `science:validate-da-irc`, `science:validate-da-report`, `science:installed-examples`, with short CLI aliases), structured result writing and the exit codes `0=PASS`, `1=FAIL`, `2=NOT_VERIFIED`, `3=usage`. Use B01's `acceptance-result.schema.json` and the shared validator; add only an `extensions.science` area. Reuse the valid/invalid samples from todo 4 and assert the harness writer's output is equivalent to the canonical sample. `--dry-run` checks paths and budgets only and never creates a work root or a job. Emit `command` as an array plus separate `cwd`, `started_at`/`finished_at` and `artifacts[{path,size_bytes,sha256}]`. Do not start a controller, a scheduler or a QC subprocess.
   Closes: GAP-5, GAP-6
   Parallelization: Wave 7 | Blocked by: 17 | Blocks: 21
@@ -441,7 +443,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add ACP2 science acceptance harness`
   Recommended task executor category: unspecified-high - a new harness with a strict CLI/evidence contract.
 
-- [ ] 21. A-10b: Implement and run the standalone singlepoint scenario
+- [x] 21. A-10b: Implement and run the standalone singlepoint scenario
   What to do / Must NOT do: Implement `science:installed-singlepoint` through the public CCCP API only; require a run spec containing the interpreter/source or wheel digest, executable software and version, an independent native work root, total/phase/scenario caps, separate TaskRef/step/QC/attempt/bsub counts, queue/compute/client/total deadlines and an approved run key. Preflight the budget and refuse to run when any cap is exhausted or any required field is missing. Record the actual server, client and harness revisions and the H2 test candidate. Record the real command, native output, task request/result and software version. Independently parse the native output and compare energy and units. Do not touch the central jobs database, SSH or a production run root.
   Closes: GAP-5, GAP-6, GAP-8, GAP-12
   Parallelization: Wave 8 | Blocked by: 19, 20 | Blocks: 22, 23, 26
@@ -451,7 +453,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): run standalone ACP2 singlepoint acceptance`
   Recommended task executor category: deep-low - real-environment execution whose decisions are settling the run and parsing the output.
 
-- [ ] 22. A-11a: Freeze the optimize/frequency fixture and stationary-point validators
+- [x] 22. A-11a: Freeze the optimize/frequency fixture and stationary-point validators
   What to do / Must NOT do: Add `tests/fixtures/acp2/science/optfreq/` with the initial structure, optimize request, frequency request, source references and scientific checks. Add `src/cccp/analysis/research/validators.py` with deterministic checks for optimization convergence, frequency membership of the optimized structure, method/state consistency, and the distinction among no check, missing evidence and contradiction. Build the static validators against the TaskResult/frequency-product contract and synthetic real-format outputs; do not wait for a real singlepoint. Freeze low-frequency thresholds and numeric tolerances before running; write `tests/test_acp2_science_stationary_point.py`. Real artifacts are validated only in todo 23.
   Closes: GAP-2, GAP-4
   Parallelization: Wave 8 | Blocked by: 17 | Blocks: 23, 26
@@ -461,7 +463,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add stationary-point science validators`
   Recommended task executor category: deep-high - scientific correctness is argued from convergence and mode invariants.
 
-- [ ] 23. A-11b: Validate real optimize/frequency artifacts through the shared scenario
+- [x] 23. A-11b: Validate real optimize/frequency artifacts through the shared scenario
   What to do / Must NOT do: Implement and use `science:validate-artifacts` against the platform-prepared authorized snapshot for the registered `dsh-optfreq-live` run; confirm that ID is present in the platform registry before use. Consume the manifest reader delivered in todo 24. Verify the frequency is on the optimized structure, with the same method and electronic state, and record convergence and all modes. Record the actual server, client and harness revisions and the P1 test candidate. Do not run a second expensive job; do not accept a task id as scientific evidence without the snapshot and native output.
   Closes: GAP-5, GAP-6, GAP-8, GAP-12
   Parallelization: Wave 9 | Blocked by: 21, 22, 24 | Blocks: 25, 26
@@ -471,7 +473,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): validate real ACP2 optimize/frequency artifacts`
   Recommended task executor category: deep-low - artifact consumption and scientific cross-check with a clear fixture.
 
-- [ ] 24. A-12a: Implement the artifact-snapshot consumer at the platform boundary
+- [x] 24. A-12a: Implement the artifact-snapshot consumer at the platform boundary
   What to do / Must NOT do: Split the responsibility. B Data owns authorization, revocation, freeze and export of an immutable input snapshot. The A harness validates the platform binding and export eligibility against that snapshot. `src/cccp/analysis/research/artifact_manifest.py` validates only content digest, artifact role, schema/generation as opaque provenance, and scientific identity (structure/method/units/mapping); it never decides permission, revocation or whether a generation is current, and never imports `acp_services`. Build the static consumer against positive and negative synthetic snapshots; do not wait for a real singlepoint. Reject path escapes, digest mismatches and structural mismatches in CCCP; reject a missing/ineligible export in the harness. Never read the central jobs database, SSH or a production task path directly. Add `tests/test_acp2_science_artifact_validation.py`.
   Closes: GAP-5, GAP-6
   Parallelization: Wave 8 | Blocked by: 17 | Blocks: 23, 25, 26
@@ -481,7 +483,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): consume authorized science artifact snapshots`
   Recommended task executor category: deep-high - the authorization/science boundary is an architecture invariant.
 
-- [ ] 25. A-12b: Cross-check Local and LSF scientific results and provenance
+- [x] 25. A-12b: Cross-check Local and LSF scientific results and provenance
   What to do / Must NOT do: Reuse the delivered real-environment harness interface to inspect the baseline, then consume the platform Local/LSF run records and the experience track MCP call records. Consume B07's frozen `max_queue_wait_seconds`, `max_run_seconds`, `max_prepare_seconds` and `cleanup_seconds`; derive the harness timeout from those values instead of keeping an independent fixed value. Record `$ACP2_INTEGRATION_SOURCE` and `$ACP2_INTEGRATION_PYTHON` for any live integrated record, distinct from A's own source/interpreter. Verify the native output, actual method and software version, task result, artifact SHA-256, full scientific body and auxiliary frequency products, not merely the existence of a manifest. Test a cold cache, a cache eviction/rebuild, a cross-attempt replacement, a controller restart and an out-of-order/stale response; separate queue wait, scientific runtime, client request and overall acceptance deadlines. B11 must distinguish `completed_science_run` from `control_cancel_run` with different TaskRefs; A does not require a cancelled run to produce a completed scientific result, but requires the correct terminal state, stop confirmation and receipt. Compare the same environment and input within the frozen tolerance; do not assert numeric equality across different methods or versions. Record the actual server, client and harness revisions. With no LSF configuration, record `NOT_VERIFIED` and keep the row open.
   Closes: GAP-5, GAP-6, GAP-12
   Parallelization: Wave 9 | Blocked by: 23, 24 | Blocks: 26
@@ -491,7 +493,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): cross-check ACP2 Local and LSF science provenance`
   Recommended task executor category: deep-low - evidence reconciliation with explicit environment gates.
 
-- [ ] 26. A-13: Close the P1 science and same-task gate
+- [x] 26. A-13: Close the P1 science and same-task gate
   What to do / Must NOT do: Verify that CLI, HTTP/Workbench and MCP/DSH read the same task and attempt returned by the first submit. Check the same task result, product schema, manifest generation/digest and scientific validation. Add negative checks for completed-but-missing-energy, an old attempt and an old generation. Confirm the existing active workflow contract is intact. Publish `science/handoff-H3.json` with per-combination Local/LSF status; do not mark an unexecuted combination verified.
   Closes: GAP-5, GAP-6, GAP-12
   Parallelization: Wave 9 | Blocked by: 21, 23, 24, 25 | Blocks: none. H3 gates the P2 real-run todos through the phase-gate rule; it is not a dependency of the static Diels-Alder fixture.
@@ -501,7 +503,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `chore(cccp): close ACP2 P1 science gate`
   Recommended task executor category: deep-low - gate reconciliation whose facts come from the platform and experience tracks.
 
-- [ ] 27. A-14a: Freeze the limited Diels-Alder v1 fixture
+- [x] 27. A-14a: Freeze the limited Diels-Alder v1 fixture
   What to do / Must NOT do: Freeze the first candidate as gas-phase, neutral, closed-shell, single-elementary butadiene plus ethene to cyclohexene, with explicit single-conformation/sampling boundaries. Deliver `tests/fixtures/acp2/science/diels_alder/v1/` with `reaction.json`, `question.json`, `reactants.xyz`, `product.xyz`, `fixture-manifest.json` and `acceptance.json`, including exact mapped structures, bond changes and atom order. State the only allowed questions: connectivity of this candidate path to the specified endpoints and the activation energy under the frozen method/conditions; state that this symmetric example cannot support endo/exo selectivity. Freeze method, basis, solvent, temperature, standard state, candidate cap and resource budget before any real run. Derive the budget from representative step timings before freezing the full chain; if no timing evidence exists, record `unmeasured` and keep H4 open. State whether queue wait counts toward total wall time and the in-flight stop/export-window rule in the fixture manifest.
   Closes: GAP-4, GAP-9
   Parallelization: Wave 10 | Blocked by: 10, 17 | Blocks: 28. Static definition may proceed after the research types and the P0 gate; the real Diels-Alder run still waits for H3 and a registered run key.
@@ -511,17 +513,17 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): freeze ACP2 Diels-Alder v1 science fixture`
   Recommended task executor category: deep-high - atom mapping and scientific scope definition are correctness-critical.
 
-- [ ] 28. A-14b: Add DA mapping/conservation tests and the ADR input request
-  What to do / Must NOT do: Extend `tests/test_acp2_science_fixtures.py` with exact mapping, element/charge conservation, duplicate-map, missing-product and ambiguous-stereo rejection. Write `science/requests/ADR-008-input.md` with the scientific scope, pre-registered criteria and explicit limitations for the platform owner's shared ADR. Separate execution-chain validation (known starting geometry or candidate, frozen method) from research candidate search (user input, bounded proposals); label the source of every starting structure and do not present a known TS as a search success. Record whether queue wait counts toward total wall time, the in-flight stop rule and the reserved evidence-export window. Do not claim this fixture supports a selectivity conclusion.
+- [x] 28. A-14b: Add DA mapping/conservation tests and the ADR input request
+  What to do / Must NOT do: Extend `tests/test_acp2_science_fixtures.py` with exact mapping, element/charge conservation, duplicate-map, missing-product and ambiguous-stereo rejection. Write `science/requests/ADR-008-input.md` with the scientific scope, pre-registered criteria and explicit limitations for the platform owner's shared ADR. Separate execution-chain validation (known starting geometry or candidate, frozen method) from research candidate search (user input, bounded proposals); label the source of every starting structure and do not present a known TS as a search success. Write `science/requests/search-contract.md` with input categories, candidate source/count, generation steps, screening/rejection reasons, validators and success criteria; search is a separate evidence row and is not proven by a control-loop PASS. Record whether queue wait counts toward total wall time, the in-flight stop rule and the reserved evidence-export window. Do not claim this fixture supports a selectivity conclusion.
   Closes: GAP-4, GAP-9, GAP-12
   Parallelization: Wave 10 | Blocked by: 27 | Blocks: 29, 30
-  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:221-229`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:230`; `docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md:316-328`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md:304-321`.
-  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_fixtures.py -k diels_alder -q` exits 0; the ADR input names the method, basis, solvent, temperature, standard state, candidate cap, resource budget, execution-chain/search split, starting-structure source, queue/stop/export rules and all out-of-scope questions; no fixture field requests endo/exo.
+  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:221-229`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:230`; `docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md:316-328`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md:304-321`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:144-158`.
+  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_fixtures.py -k diels_alder -q` exits 0; the ADR input names the method, basis, solvent, temperature, standard state, candidate cap, resource budget, execution-chain/search split, starting-structure source, queue/stop/export rules and all out-of-scope questions; `search-contract.md` names the input category, candidate source/count, generation steps, screening/rejection reasons, validators and success criteria; no fixture field requests endo/exo.
   QA scenarios (name the exact tool + invocation): happy: run the DA fixture tests and print the five assertions; failure: change one product element and confirm conservation fails. Evidence `$ACP2_EVIDENCE/A/A-14/result.json`
   Commit: Y | `test(cccp): validate ACP2 Diels-Alder scope and mapping`
   Recommended task executor category: unspecified-high - fixture tests plus a concise ADR input.
 
-- [ ] 29. A-15a: Author the limited DA recipe and compile fixture
+- [x] 29. A-15a: Author the limited DA recipe and compile fixture
   What to do / Must NOT do: Add `diels_alder/v1/recipe.json` covering bounded structure preparation/conformation, candidate paths, transition-state optimization, frequency, bidirectional IRC, endpoint checks and energy/thermochemistry comparison, each marked required with bounded alternatives. Compile it to a typed task-request DAG using only a registered capability or an existing task kind through the binding (for example the existing optimize task in transition-state mode, the existing IRC task and the existing thermochemistry task); record parameter/dependency digests. A compiles only; B18 executes the DAG and owns the loop, persistence and retries. Do not create a named-reaction execution engine; do not guess a transition-state mode by array position.
   Closes: GAP-3, GAP-9
   Parallelization: Wave 10 | Blocked by: 16, 28 | Blocks: 30. Static compilation only; the real recipe execution waits for H3 and the registered run key.
@@ -531,7 +533,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add limited Diels-Alder scientific recipe`
   Recommended task executor category: deep-high - recipe composition determines what scientific conclusions are possible.
 
-- [ ] 30. A-15b: Test DA recipe compilation, native mode provenance and upstream blocking
+- [x] 30. A-15b: Test DA recipe compilation, native mode provenance and upstream blocking
   What to do / Must NOT do: Add `tests/test_acp2_science_da_recipe.py`; assert the compiled DAG, required/diagnostic flags, bounded alternatives and native transition-state mode mapping (native printed index plus provenance, never positional guessing). Assert that a failed required upstream blocks its dependents and that frequency/IRC cannot be optional while connectivity is claimed. Do not add platform-state fields.
   Closes: GAP-3, GAP-4, GAP-9
   Parallelization: Wave 10 | Blocked by: 29 | Blocks: 31, 32
@@ -541,7 +543,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): validate ACP2 Diels-Alder recipe DAG`
   Recommended task executor category: deep-high - upstream/blocking semantics and mode identity are recovery-critical.
 
-- [ ] 31. A-16a: Implement the transition-state and frequency validator
+- [x] 31. A-16a: Implement the transition-state and frequency validator
   What to do / Must NOT do: Extend `analysis/research/validators.py` with deterministic checks for optimization convergence, exactly one imaginary frequency for a first-order saddle candidate, the mapped mode, and the distinction between a local saddle candidate and proven connectivity. State each claim's scope precisely: a nonconverged optimization refutes the proposition that this optimization converged, not a stronger proposition that no stationary point exists in the region; missing evidence is `inconclusive`/`not_evaluated`, not `refuted`. Reuse the existing frequency parser and tsmode validation; do not copy formulas. Add wrong-mode, multiple-imaginary and missing-frequency fixtures.
   Closes: GAP-2, GAP-4
   Parallelization: Wave 10 | Blocked by: 28, 30 | Blocks: 33, 36
@@ -551,7 +553,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add deterministic transition-state validators`
   Recommended task executor category: deep-high - scientific claim status is argued from mode and convergence invariants.
 
-- [ ] 32. A-16b: Implement IRC endpoint/connectivity and energy-comparability validators
+- [x] 32. A-16b: Implement IRC endpoint/connectivity and energy-comparability validators
   What to do / Must NOT do: Extend the validators for bidirectional IRC completion, endpoint geometry and bond-topology mapping, atom-order stability, and electronic-state/method/reference-state comparability. Allow the two IRC directions to be swapped only when the mapping proves the same target reaction. Distinguish `not_evaluated`, `inconclusive` and `refuted`. Add wrong-endpoint, one-sided-IRC, wrong-charge and incomparable-energy fixtures, labelling constructed data separately from real output.
   Closes: GAP-2, GAP-4
   Parallelization: Wave 10 | Blocked by: 30, 31 | Blocks: 33, 34, 36
@@ -561,37 +563,38 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): add IRC and energy-comparability validators`
   Recommended task executor category: deep-high - endpoint identity and comparability are the highest-risk scientific judgments.
 
-- [ ] 33. A-17: Validate real DA transition-state candidates and frequencies
-  What to do / Must NOT do: First validate the reactant/product geometries and the small budget; then consume the platform-executed frozen recipe candidates and transition-state optimization/frequency results, using the platform-registered `da-runtime`/`da-research-live` IDs from the registry (not an assumed name). Keep every candidate selection/rejection reason and the bounded search range, and label whether the starting structure is a user input, a frozen known candidate, or a generated candidate. A known starting TS proves the execution/validation chain, not research search capability. Keep three records separate: the scenario `result` (did validation complete with valid artifacts), the scientific claim `status` (may be `inconclusive`), and H4 closure (still open without a real positive candidate). If no qualified transition state is found, publish the honest `inconclusive` claim with the raw failure; never substitute an example structure. Do not start a second DA job.
+- [x] 33. A-17: Validate real DA transition-state candidates and frequencies
+  What to do / Must NOT do: First validate the reactant/product geometries and the small budget; then consume the B20a-exec artifacts (`22b`; R5-01 semantic candidate `B.B20a.exec`) and the platform-executed frozen recipe candidates/transition-state optimization/frequency results, using the platform-registered `da-runtime`/`da-research-live` IDs from the registry (not an assumed name). Do not treat `B20a-ready` as execution evidence; consume `B20a-exec` and do not wait for `B20b`, `B20c` or C35. Keep every candidate selection/rejection reason and the bounded search range, and label whether the starting structure is a user input, a frozen known candidate, or a generated candidate. A known starting TS proves the execution/validation chain, not research search capability. Keep three records separate: the scenario `result` (did validation complete with valid artifacts), the scientific claim `status` (may be `inconclusive`), and H4 closure (still open without a real positive candidate). If no qualified transition state is found, publish the honest `inconclusive` claim with the raw failure; never substitute an example structure. Do not start a second DA job.
   Closes: GAP-5, GAP-6, GAP-9, GAP-12
   Parallelization: Wave 11 | Blocked by: 31, 32 | Blocks: 34, 35, 37
-  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:251-259`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md:127-139`; `docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md:316-328`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:124-129`.
+  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:251-259`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md:127-139`; `docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md:316-328`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:124-129`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:59-91,144-158`.
   Acceptance criteria (agent-executable): with the registered `da-runtime`/`da-research-live` artifacts, `"$ACP2_A_PYTHON" scripts/acceptance/acp2_science.py --scenario science:validate-da-ts --fixture tests/fixtures/acp2/science/diels_alder/v1/fixture-manifest.json --input-manifest "$ACP2_ARTIFACT_MANIFEST" --out "$ACP2_EVIDENCE/A/A-17/validation" --timeout 300` exits 0 when the validation completes, even if the claim is `inconclusive`; the stage report separates scenario result from claim status and H4 readiness; a missing/invalid artifact is `FAIL` or `NOT_VERIFIED`, not a scientific `inconclusive`; no example TS is used as a substitute.
   QA scenarios (name the exact tool + invocation): happy: validate the real candidate and print scenario result, claim status and H4 readiness separately; failure: point at an old attempt artifact and confirm rejection; no candidate found must leave H4 open, not PASS. Evidence `$ACP2_EVIDENCE/A/A-17/<run-id>/result.json`
   Commit: Y | `test(cccp): validate real ACP2 Diels-Alder TS candidates`
   Recommended task executor category: deep-low - real artifact validation with a frozen recipe and criteria.
 
-- [ ] 34. A-18: Validate real bidirectional IRC and endpoint assignment
-  What to do / Must NOT do: Consume the platform forward/reverse IRC results for the current transition-state identity, including native steps, termination reasons and final structures. Perform any frozen endpoint optimization; if it was not performed, state that endpoints may not be minima. Use stable atom mapping and bond changes to verify both target endpoints, not visual similarity. Verify IRC and TS share method/state and that cross-attempt provenance is traceable. Record scenario result and claim status separately. One-sided success, a different reactant, a too-short path or mapping ambiguity stays uncertain and leaves H4 open.
+- [x] 34. A-18: Validate real bidirectional IRC and endpoint assignment
+  What to do / Must NOT do: Consume the platform forward/reverse IRC results for the current transition-state identity, including native steps, termination reasons and final structures. Consume the `B20a-exec` artifacts (`22b`; R5-01 semantic candidate `B.B20a.exec`); `B20a-ready` is only the execution interface and is not execution evidence. Do not wait for `B20b`, `B20c` or C35. Perform any frozen endpoint optimization; if it was not performed, state that endpoints may not be minima. Use stable atom mapping and bond changes to verify both target endpoints, not visual similarity. Verify IRC and TS share method/state and that cross-attempt provenance is traceable. Record scenario result and claim status separately. One-sided success, a different reactant, a too-short path or mapping ambiguity stays uncertain and leaves H4 open.
   Closes: GAP-5, GAP-6, GAP-9, GAP-12
   Parallelization: Wave 11 | Blocked by: 33 | Blocks: 36, 37
-  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:261-269`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md:127-139`; `src/cccp/calculation/tasks/irc.py:111`; `src/cccp/calculation/irc_endpoints.py`; `src/cccp/analysis/pes/atom_mapping.py:114`.
+  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:261-269`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md:127-139`; `src/cccp/calculation/tasks/irc.py:111`; `src/cccp/calculation/irc_endpoints.py`; `src/cccp/analysis/pes/atom_mapping.py:114`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:59-91`.
   Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" scripts/acceptance/acp2_science.py --scenario science:validate-da-irc --fixture tests/fixtures/acp2/science/diels_alder/v1/fixture-manifest.json --input-manifest "$ACP2_ARTIFACT_MANIFEST" --out "$ACP2_EVIDENCE/A/A-18/validation" --timeout 300` exits 0 for a valid two-direction path; `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_da_validators.py -k endpoint -q` exits 0; a one-sided path is recorded as an `inconclusive` claim and does not close H4.
   QA scenarios (name the exact tool + invocation): happy: validate the real two-direction path and print endpoint mappings; failure: delete the reverse direction and confirm connectivity is not supported. Evidence `$ACP2_EVIDENCE/A/A-18/<run-id>/result.json`
   Commit: Y | `test(cccp): validate real ACP2 bidirectional IRC`
   Recommended task executor category: deep-low - artifact validation against a frozen endpoint rule.
 
-- [ ] 35. A-19a: Build thermochemistry and activation-energy comparability
-  What to do / Must NOT do: Reuse the existing thermochemistry normalization, Shermo adapter and ensemble thermochemistry; do not copy constants or standard-state formulas. Check method, electronic state, temperature, standard state, reference state and stoichiometry across reactant, TS and product. Separate electronic barriers from free-energy barriers. If thermochemistry is incomplete, report only the electronic barrier and never invent a free-energy barrier. Add `tests/test_acp2_science_energy_comparability.py`.
+- [x] 35. A-19a: Build thermochemistry and activation-energy comparability
+  What to do / Must NOT do: Reuse the existing thermochemistry normalization, Shermo adapter and ensemble thermochemistry; do not copy constants or standard-state formulas. Consume the `B20a-exec` artifacts (`22b`; R5-01 semantic candidate `B.B20a.exec`) and the A-17 audited identities; A-18 endpoint identity is reconciled in A-19b; `B20a-ready` and `B20b` are not science inputs.
+ Check method, electronic state, temperature, standard state, reference state and stoichiometry across reactant, TS and product. Separate electronic barriers from free-energy barriers. If thermochemistry is incomplete, report only the electronic barrier and never invent a free-energy barrier. Add `tests/test_acp2_science_energy_comparability.py`.
   Closes: GAP-2, GAP-4, GAP-9
   Parallelization: Wave 11 | Blocked by: 30, 33 | Blocks: 36
-  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:271-279`; `src/cccp/qc/thermo_normalize.py`; `src/cccp/qc/shermo_adapter.py`; `src/cccp/analysis/ensemble/thermo.py:27-114`; `src/cccp/calculation/tasks/thermochemistry.py:51`.
+  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:271-279`; `src/cccp/qc/thermo_normalize.py`; `src/cccp/qc/shermo_adapter.py`; `src/cccp/analysis/ensemble/thermo.py:27-114`; `src/cccp/calculation/tasks/thermochemistry.py:51`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:59-91`.
   Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_energy_comparability.py tests/test_cccp_task_thermochemistry.py -q` exits 0; mixing electronic and free energies is rejected; different standard states/methods cannot be subtracted; a missing reactant component is rejected; a missing thermochemistry step yields no free-energy claim.
   QA scenarios (name the exact tool + invocation): happy: compare a valid electronic barrier and a valid free-energy barrier; failure: subtract energies from different standard states and confirm refusal. Evidence `$ACP2_EVIDENCE/A/A-19/result.json`
   Commit: Y | `feat(cccp): add thermochemistry comparability checks`
   Recommended task executor category: deep-high - unit/reference-state correctness drives the headline scientific result.
 
-- [ ] 36. A-19b: Assemble the final EvidenceReport, provenance and report scenario
+- [x] 36. A-19b: Assemble the final EvidenceReport, provenance and report scenario
   What to do / Must NOT do: Generate the claim-by-claim report from actually completed steps; keep execution facts separate from claim status; include conformation/sampling limits, tolerances, model boundaries and failed candidates. Attach `ScientificProvenance` with model, method, basis, software and plugin versions, temperature and standard/reference states. Implement `science:validate-da-report`. Record three separate fields: scenario result, per-claim status and H4 readiness. Do not write any model-generated natural-language conclusion back as a validated fact; do not let a completed scenario imply a supported claim.
   Closes: GAP-2, GAP-5, GAP-6, GAP-9
   Parallelization: Wave 11 | Blocked by: 33, 34, 35 | Blocks: 37
@@ -601,17 +604,18 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): assemble ACP2 Diels-Alder evidence report`
   Recommended task executor category: deep-high - execution/claim separation is the core scientific contract.
 
-- [ ] 37. A-20: Run the DA failure/reverse-case gate and publish H4
-  What to do / Must NOT do: Use fixed negative artifacts to check missing frequency, wrong endpoint, corrupt digest, old provider version and mismatched standard state. Consume the platform injected failures (worker interruption, publication failure, recovery, late receipt) and the four B08 crash windows (reservation before persist, persisted before submission start, submitted with lost response, restart replay); verify that no duplicate directory, reservation, QC process or bsub was created, no accepted task is permanently undispatched, and only results with valid identity and complete facts are reused. Confirm publication retry does not relaunch expensive QC. A blocked required step, rejected approval or rejected budget cannot produce a completed science chain. Keep H4 closure separate from both scenario results and claim status: H4 closes only when the required real positive evidence exists (valid TS with one imaginary mode and mapped mode, bidirectional IRC with both endpoints, comparable energies); a correctly reported `inconclusive` negative case proves honesty but does not replace the positive. Record every H4 row as `PASS`, `FAIL` or `NOT_VERIFIED`; if the budget ends without a valid positive, save the real result, keep H4 open and continue independent work. Do not substitute negative-case robustness for the required real positive evidence.
+- [x] 37. A-20: Run the DA failure/reverse-case gate and publish H4
+  What to do / Must NOT do: Use fixed negative artifacts to check missing frequency, wrong endpoint, corrupt digest, old provider version and mismatched standard state. Consume the platform injected failures (worker interruption, publication failure, recovery, late receipt) and the four B08 crash windows (reservation before persist, persisted before submission start, submitted with lost response, restart replay); verify that no duplicate directory, reservation, QC process or bsub was created, no accepted task is permanently undispatched, and only results with valid identity and complete facts are reused. Confirm publication retry does not relaunch expensive QC. A blocked required step, rejected approval or rejected budget cannot produce a completed science chain. Publish A-20 before B20b aggregates; A-20 is the science signoff B20b consumes, so never wait for B20b, B20c or C25. Keep H4 closure separate from both scenario results and claim status: H4 closes only when the required real positive evidence exists (valid TS with one imaginary mode and mapped mode, bidirectional IRC with both endpoints, comparable energies); a correctly reported `inconclusive` negative case proves honesty but does not replace the positive. Consume `science/requests/search-contract.md` and `B20a-search` (the B-plan search producer, with its artifact ID, readiness and digest) as a separate row from the known-candidate execution chain. Search is in P2/H4 scope by default: a search `PASS` requires the `B20a-search` producer and evidence satisfying the contract's success criteria; `NOT_VERIFIED`, missing artifacts, or a control-loop/known-candidate PASS leaves H4 open. A deferral is a scope reduction only after the owner ratifies `search_scope=DEFERRED` and B/C/main-plan records are synchronized; without that, H4 remains open. Record every H4 row as `PASS`, `FAIL` or `NOT_VERIFIED`; if the budget ends without a valid positive, save the real result, keep H4 open and continue independent work. Do not substitute negative-case robustness for the required real positive evidence.
   Closes: GAP-5, GAP-6, GAP-9, GAP-12
-  Parallelization: Wave 11 | Blocked by: 33, 34, 35, 36 | Blocks: none
-  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:281-289`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md:99-107,127-139`; `docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md:316-328`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:131-143`.
-  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_da_validators.py tests/test_acp2_science_energy_comparability.py tests/test_acp2_science_recipe.py tests/test_recovery_fixtures_smoke.py -q` exits 0; `handoff-H4.json` records scenario result, claim status and H4 closure separately; a required `NOT_VERIFIED` or `inconclusive` positive row keeps H4 open; the B08 four-window evidence shows no duplicate directory/reservation/QC/bsub and no permanently undispatched task; no recovery case reuses an artifact whose identity changed.
+  Parallelization: Wave 11 | Blocked by: 33, 34, 35, 36 | Blocks: none in A; external B20b consumes A-20
+  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:281-289`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md:99-107,127-139`; `docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md:316-328,388-408`; `.omo/plans/acp2-plan-c-rph-workbench.md:543-547`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:131-143`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:59-91,144-158`.
+  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_da_validators.py tests/test_acp2_science_energy_comparability.py tests/test_acp2_science_recipe.py tests/test_recovery_fixtures_smoke.py -q` exits 0; `handoff-H4.json` records scenario result, claim status and H4 closure separately; a required `NOT_VERIFIED` or `inconclusive` positive row keeps H4 open; the search row is recorded separately from the known-candidate chain; `B20a-search` is cited with its artifact ID, readiness and digest, and its `search-contract.md` success criteria must be satisfied for a search `PASS`; missing or `NOT_VERIFIED` `B20a-search` keeps H4 open; a deferral is accepted only with owner-ratified `search_scope=DEFERRED` and synchronized B/C/main-plan records;
+ the B08 four-window evidence shows no duplicate directory/reservation/QC/bsub and no permanently undispatched task; no recovery case reuses an artifact whose identity changed.
   QA scenarios (name the exact tool + invocation): happy: run the H4 suite, reconcile the B08 crash records and validate the handoff; failure: flip a required unverified positive row to PASS and confirm the handoff validator rejects it. Evidence `$ACP2_EVIDENCE/A/A-20/<run-id>/result.json`
   Commit: Y | `chore(cccp): close ACP2 Diels-Alder science gate`
   Recommended task executor category: deep-low - gate consolidation with explicit three-state rules.
 
-- [ ] 38. A-21a: Extend the plugin manifest for capability kind, validators, recipes and trust evidence
+- [x] 38. A-21a: Extend the plugin manifest for capability kind, validators, recipes and trust evidence
   What to do / Must NOT do: Extend `src/cccp/plugin/metadata.py` inside the existing manifest: capability kind, implementation id, recipe/validator references, science-version range, distribution digest, verified fixture evidence, a trust-level field and a declared-license policy. This is static contract work: it depends on the capability schema/registry and P0 contracts, not on a successful DA result. Define a typed `PluginLicenseError` and an explicit accepted-license policy (unknown or empty license fails closed; the platform owner may narrow it). Add entry-point candidate discovery to the existing `src/cccp/plugin/discovery.py` for the `cccp.science_plugins` group (version 1), using `importlib.metadata.entry_points` metadata-only scanning: metadata is read without importing plugin code, and loaders are invoked only after explicit enablement. Write `science/requests/ADR-007-input.md` with the trust-level, manifest-field, compatibility and rollback input the platform owner needs for the shared ADR. Provide backward-compatible adapters for old metadata and a legacy negative test. Keep `never_overrides_builtin` enforced. Do not create a second manifest module; do not claim the in-process host is a sandbox.
   Closes: GAP-7
   Parallelization: Wave 12 | Blocked by: 12, 17 | Blocks: 39, 40
@@ -621,7 +625,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): extend plugin manifest for scientific capabilities`
   Recommended task executor category: deep-high - manifest compatibility and trust semantics cross the plugin contract.
 
-- [ ] 39. A-21b: Integrate capability/recipe/validator discovery and invocation boundaries
+- [x] 39. A-21b: Integrate capability/recipe/validator discovery and invocation boundaries
   What to do / Must NOT do: Extend discovery, host and SDK so a plugin can declare capability, recipe and validator references, but discovery remains metadata-only and enablement remains explicit. Scientific execution stays in the existing task layer; a pure-analysis plugin cannot spawn a process. Update the catalog projection so described, installed, enabled and verified are separate. Add `tests/test_acp2_science_plugin_registry.py`.
   Closes: GAP-7
   Parallelization: Wave 12 | Blocked by: 38 | Blocks: 40, 41, 42
@@ -631,7 +635,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): integrate plugin science discovery boundaries`
   Recommended task executor category: deep-high - discovery/invocation boundaries are a security and architecture contract.
 
-- [ ] 40. A-22a: Build the external science plugin distribution fixture
+- [x] 40. A-22a: Build the external science plugin distribution fixture
   What to do / Must NOT do: Under `tests/fixtures/acp2/science/external_plugin/`, add a minimal independently installable distribution with its own `pyproject.toml`, version, license, metadata, entry point in the A-21-delivered `cccp.science_plugins` group (version 1) and a fixed native input. Implement a read-only validator or data converter; do not copy the implementation into core. Do not modify the root `pyproject.toml`.
   Closes: GAP-7
   Parallelization: Wave 12 | Blocked by: 39 | Blocks: 41, 42
@@ -641,7 +645,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): add external ACP2 science plugin fixture`
   Recommended task executor category: unspecified-high - a small distribution with its own packaging and metadata.
 
-- [ ] 41. A-22b: Install, enable and verify the external plugin without core edits
+- [x] 41. A-22b: Install, enable and verify the external plugin without core edits
   What to do / Must NOT do: In an isolated virtual environment, install the fixture distribution, confirm it is not loaded while disabled, then enable it and invoke the capability on the fixed input. Verify the digest lock, capability schema, output units and atom order. Record the build/install command, package digest and actual invocation. Do not install into the shared integration environment; do not auto-enable from metadata.
   Closes: GAP-7
   Parallelization: Wave 12 | Blocked by: 40 | Blocks: 42
@@ -651,7 +655,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): verify external ACP2 plugin install and invocation`
   Recommended task executor category: deep-low - isolated environment and plugin boundary verification.
 
-- [ ] 42. A-23: Validate plugin conflicts, upgrades and historical read-only access for H5
+- [x] 42. A-23: Validate plugin conflicts, upgrades and historical read-only access for H5
   What to do / Must NOT do: Test duplicate capability names, duplicate implementation ids, incompatible API ranges, missing dependencies, unknown/empty licenses, corrupt fixture data and untrusted/unverified trust levels. Keep a v1 artifact, install v2, confirm new tasks use v2 explicitly while v1 artifacts remain readable without rerunning. Freeze the metadata-to-capability-to-recipe-to-provenance chain. Publish `handoff-H5.json` and the plugin compatibility/rollback matrix. Explicitly prove that discovery never calls a loader and an unverified plugin cannot be auto-enabled or silently substituted; do not claim process-level sandboxing, because process/permission limits belong to the platform owner.
   Closes: GAP-7, GAP-12
   Parallelization: Wave 12 | Blocked by: 39, 40, 41 | Blocks: 43
@@ -661,7 +665,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `chore(cccp): close ACP2 plugin ecosystem gate`
   Recommended task executor category: deep-low - compatibility testing with explicit failure taxonomy.
 
-- [ ] 43. A-24a: Bind NMR shielding to the science protocol
+- [x] 43. A-24a: Bind NMR shielding to the science protocol
   What to do / Must NOT do: Select the existing NMR shielding/comparison capability and give it a typed descriptor and task binding without building a new NMR engine. Add molecule/atom mapping, experimental-spectrum source, solvent/reference/scaling conditions and model-asset version to provenance; convert deterministic checks into an evidence report and report limitations when the reference or coverage is insufficient. Preserve existing assets and notices.
   Closes: GAP-9
   Parallelization: Wave 13 | Blocked by: 42 | Blocks: 44, 46, 47
@@ -671,7 +675,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): bind NMR shielding to the science protocol`
   Recommended task executor category: deep-high - atom mapping and reference-state provenance are domain-critical.
 
-- [ ] 44. A-24b: Bind ensemble thermochemistry and add the cross-domain tests
+- [x] 44. A-24b: Bind ensemble thermochemistry and add the cross-domain tests
   What to do / Must NOT do: Give the existing ensemble thermochemistry capability a typed descriptor and binding; add temperature, standard state and component weights to provenance; declare the weight policy explicitly. Accept raw finite positive weights with a non-zero sum and normalize them with a recorded tolerance, or accept an explicitly normalized set within that tolerance; record which form was supplied and the resulting normalized weights. There is no third "silently normalize anything" path. Add the cross-domain test covering valid, missing, partial and corrupt data for both NMR and thermochemistry, and write `science/cross-domain-compatibility.md` with the unit/mapping/reference/version compatibility rules. This joint test consumes the NMR descriptor from todo 43 and follows the matrix dependency `Depends on: 43`; do not dispatch it before 43 completes. Do not duplicate the existing thermochemistry formulas or constants.
   Closes: GAP-9
   Parallelization: Wave 13 | Blocked by: 43 | Blocks: 46, 47
@@ -681,7 +685,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `feat(cccp): bind ensemble thermochemistry to the science protocol`
   Recommended task executor category: deep-high - weight normalization and cross-domain provenance are correctness-critical.
 
-- [ ] 45. A-25a: Freeze the selectivity fixture with distinguishable endpoints
+- [x] 45. A-25a: Freeze the selectivity fixture with distinguishable endpoints
   What to do / Must NOT do: Choose a simple Diels-Alder or other limited selectivity case whose endpoints are stereochemically distinguishable with the available method and budget. Freeze structures, atom mapping, endo/exo definitions and comparable paths before running. State the required conformation/TS coverage and the missing-path policy. Write `science/requests/selectivity-producer.md` with the two-path inputs, acceptance criteria, run-key request, budget and the single registered reference `owner=C, scenario=experience:cross-domain-live, subcase=selectivity`. Deliver `tests/test_acp2_science_selectivity.py` with the endpoint-distinguishability test; the evidence assertions are added in todo 46. Do not reuse the symmetric A-14 fixture; do not equate two single-point minima with a selectivity prediction.
   Closes: GAP-10
   Parallelization: Wave 13 | Blocked by: 42 | Blocks: 46
@@ -691,37 +695,39 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): freeze ACP2 selectivity fixture`
   Recommended task executor category: deep-high - stereochemical identity and endpoint distinguishability are subtle.
 
-- [ ] 46. A-25b: Produce the selectivity evidence and bounded real-run report
-  What to do / Must NOT do: Consume the platform-executed limited multi-hypothesis recipe and its artifacts within the frozen budget; A does not submit the job. This row requires the registered `owner=C, scenario=experience:cross-domain-live, subcase=selectivity` reference with two distinguishable paths, a run key and a budget. The handoff chain is A-25a → C T-40a → B23b → A-25b → C T-40b; the C40a→B23b edge is owned by C/B. A-25a must exist before C T-40a, B23b must produce the authorized artifacts before A-25b, and C T-40b signs after A-25b. The B23b artifact edge is `integration_ready` (artifacts exported), not B23 whole-task `verified`. Consume the B/C cross-domain budget table covering `nmr`, `thermo` and `selectivity`, including per-subrow TaskRef/step/QC counts and the cumulative total; reuse existing authorized artifacts where available, and never reset the cumulative budget by changing `run_id`. If the reference or B23b artifacts are absent, record `NOT_VERIFIED` and keep A-26/H6 open rather than silently completing P4. If either side lacks a qualified path, report `inconclusive`, not a relative preference. Produce a bounded selectivity EvidenceReport with all limitations and no experimental quantitative claim. Do not invent a platform scenario name.
+- [x] 46. A-25b: Produce the selectivity evidence and bounded real-run report
+  What to do / Must NOT do: Consume the platform-executed limited multi-hypothesis recipe and its artifacts within the frozen budget; A does not submit the job. This row requires the registered `owner=C, scenario=experience:cross-domain-live, subcase=selectivity` reference with two distinguishable paths, a run key and a budget. The handoff chain is A-25a → C T-40a → B23b → A-25b → C T-40b; the C40a→B23b edge is owned by C/B. Use the B plan's `B23b` artifact ID (the B dependency table may show `23b`); record the exact machine ID B publishes and do not rely on the numeric `23` prefix alone.
+ A-25a must exist before C T-40a, B23b must produce the authorized artifacts before A-25b, and C T-40b signs after A-25b. The B23b artifact edge is `integration_ready` (artifacts exported), not B23 whole-task `verified`. `subcase` is display metadata; A requires a unique `(owner, scenario, phase, run_id)` with the registered `experience:selectivity` phase, and records `NOT_VERIFIED` if two subcases share one public key.
+ Consume the B/C cross-domain budget table covering `nmr`, `thermo` and `selectivity`, including per-subrow TaskRef/step/QC counts and the cumulative total; reuse existing authorized artifacts where available, and never reset the cumulative budget by changing `run_id`. If the reference or B23b artifacts are absent, record `NOT_VERIFIED` and keep A-26/H6 open rather than silently completing P4. If either side lacks a qualified path, report `inconclusive`, not a relative preference. Produce a bounded selectivity EvidenceReport with all limitations and no experimental quantitative claim. Do not invent a platform scenario name.
   Closes: GAP-10, GAP-12
   Parallelization: Wave 13 | Blocked by: 43, 44, 45 | Blocks: 47
-  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:335-343`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:129`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md:170-180`; `tests/test_acp2_science_energy_comparability.py`.
-  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_selectivity.py tests/test_acp2_science_energy_comparability.py -q` exits 0; both hypotheses have valid evidence before any preference is stated; one missing path yields `inconclusive`; the report records the budget and coverage, including per-subrow TaskRef/step/QC counts and the cumulative total for `nmr`/`thermo`/`selectivity`, plus reused artifacts; the `experience:cross-domain-live`/`selectivity` reference and B23b `integration_ready` artifacts are registered, otherwise the result is `NOT_VERIFIED` and H6 remains open.
+  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:335-343`; `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md:129`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md:170-180`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:93-113`; `tests/test_acp2_science_energy_comparability.py`.
+  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_selectivity.py tests/test_acp2_science_energy_comparability.py -q` exits 0; both hypotheses have valid evidence before any preference is stated; one missing path yields `inconclusive`; the report records the budget and coverage, including per-subrow TaskRef/step/QC counts and the cumulative total for `nmr`/`thermo`/`selectivity`, plus reused artifacts; the `experience:cross-domain-live`/`selectivity` record has a unique public `(owner, scenario, phase, run_id)` and B23b `integration_ready` artifacts, otherwise the result is `NOT_VERIFIED` and H6 remains open.
   QA scenarios (name the exact tool + invocation): happy: produce the report from both qualified paths; failure: remove one path and confirm the report refuses a preference. Evidence `$ACP2_EVIDENCE/A/A-25/result.json`
   Commit: Y | `feat(cccp): produce bounded ACP2 selectivity evidence`
   Recommended task executor category: deep-high - the conclusion is only valid if both competing paths are qualified.
 
-- [ ] 47. A-26: Run cross-domain/version regression and publish H6
-  What to do / Must NOT do: Check units, mapping, references, schema upgrades and derived identity across singlepoint, optfreq, DA, NMR and thermochemistry. Test old schema read-only, explicit rejection of unsupported fields and conservative recovery after a model/plugin digest change. Rerun only changed science paths. Confirm scientific output does not depend on account tier or project permission. Consume the C T-40b selectivity signoff before publishing H6; if it is absent, H6 remains open. Publish `handoff-H6.json` with the applicability/verification matrix.
+- [x] 47. A-26: Run cross-domain/version regression and publish H6
+  What to do / Must NOT do: Check units, mapping, references, schema upgrades and derived identity across singlepoint, optfreq, DA, NMR and thermochemistry. Test old schema read-only, explicit rejection of unsupported fields and conservative recovery after a model/plugin digest change. Rerun only changed science paths. Confirm scientific output does not depend on account tier or project permission. Consume the C T-40b selectivity signoff before publishing H6; if it is absent, H6 remains open. For P4, consume per-subcase rows by their unique phase rather than a parent aggregate that cannot distinguish `nmr`/`thermo`/`selectivity`. Publish `handoff-H6.json` with the applicability/verification matrix.
   Closes: GAP-9, GAP-10, GAP-12
   Parallelization: Wave 13 | Blocked by: 43, 44, 45, 46 | Blocks: 48
   References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:345-353`; `src/cccp/analysis/identity.py:43-151`; `tests/test_recovery_fixtures_smoke.py`; `tests/test_architecture_invariants.py`.
-  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_cross_domain.py tests/test_acp2_science_selectivity.py tests/test_acp2_science_evidence_contract.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_isolation.py -q` exits 0; an old schema remains readable; an unsupported new field is rejected; a digest change forces conservative recomputation; the matrix has no unverified row labelled verified; the `nmr`/`thermo`/`selectivity` budget allocation is recorded and existing authorized artifacts are reused where possible.
+  Acceptance criteria (agent-executable): `"$ACP2_A_PYTHON" -m pytest tests/test_acp2_science_cross_domain.py tests/test_acp2_science_selectivity.py tests/test_acp2_science_evidence_contract.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_isolation.py -q` exits 0; an old schema remains readable; an unsupported new field is rejected; a digest change forces conservative recomputation; the matrix has no unverified row labelled verified; the `nmr`/`thermo`/`selectivity` budget allocation is recorded and existing authorized artifacts are reused where possible; P4 consumes per-subcase rows keyed by the unique phases `experience:nmr`, `experience:thermo` and `experience:selectivity`, requires the C T-40b selectivity signoff, and rejects a parent-only aggregate that cannot distinguish them.
   QA scenarios (name the exact tool + invocation): happy: run the cross-domain suite and print the version matrix; failure: change a plugin digest but reuse the old result and confirm the reuse guard fails. Evidence `$ACP2_EVIDENCE/A/A-26/result.json`
   Commit: Y | `chore(cccp): close ACP2 cross-domain gate`
   Recommended task executor category: deep-low - regression consolidation with explicit version rules.
 
-- [ ] 48. A-27a: Audit standalone dependencies and deliver the packaging request
-  What to do / Must NOT do: Audit the public science imports and prove the independent package does not import ACP, ACP Services or DSH. Write `science/requests/packaging.md` and an exact patch for the platform owner covering package inclusion, runtime dependencies, science assets/licenses, Python support range and package data. Do not edit `pyproject.toml`, versions, CI or the root package; do not split the root package yourself.
+- [x] 48. A-27a: Audit standalone dependencies and deliver the packaging request
+  What to do / Must NOT do: Audit the public science imports and prove the independent package does not import ACP, ACP Services or DSH. Consume the existing `packaging/README.md`, role build configurations and `scripts/build_release.py`; request only the delta needed for the science package and do not re-create working role packaging. Write `science/requests/packaging.md` and an exact patch for the platform owner covering package inclusion, runtime dependencies, science assets/licenses, Python support range and package data. Do not edit `pyproject.toml`, versions, CI or the root package; do not split the root package yourself.
   Closes: GAP-11, GAP-12
   Parallelization: Wave 14 | Blocked by: 47 | Blocks: 49, 50
-  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:357-366`; `pyproject.toml:24-39,75-98`; `tests/test_packaging_assets.py`; `src/cccp/analysis/nmr/model_assets/`.
-  Acceptance criteria (agent-executable): the dependency audit finds no `acp`, `acp_services` or DSH import in the science import closure; the request contains an exact patch and a rollback note; the asset/license list includes the NMR model assets and notices; a dry-run of the patch applies cleanly in a scratch copy.
+  References: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md:357-366`; `pyproject.toml:24-39,75-98`; `packaging/README.md`; `packaging/roles/cccp/pyproject.toml`; `scripts/build_release.py`; `scripts/acceptance/check_release_artifacts.py`; `scripts/acceptance/release_role_probe.py`; `tests/test_packaging_assets.py`; `src/cccp/analysis/nmr/model_assets/`; `docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md:174-186`.
+  Acceptance criteria (agent-executable): the dependency audit finds no `acp`, `acp_services` or DSH import in the science import closure; the request contains an exact patch and a rollback note; the asset/license list includes the NMR model assets and notices; the request reuses the existing role build configs, `scripts/build_release.py`, `check_release_artifacts.py` and `release_role_probe.py`, and asks only for the science delta rather than a blank-slate rebuild; a dry-run of the patch applies cleanly in a scratch copy.
   QA scenarios (name the exact tool + invocation): happy: run the import-closure audit and print the forbidden-module result; failure: add a temporary `acp` import to a scratch copy and confirm the audit fails, then remove it. Evidence `$ACP2_EVIDENCE/A/A-27/result.json`
   Commit: Y | `docs(cccp): request ACP2 independent packaging changes`
   Recommended task executor category: unspecified-high - dependency and asset auditing with a precise patch request.
 
-- [ ] 49. A-27b: Verify the installed package in a clean environment
+- [x] 49. A-27b: Verify the installed package in a clean environment
   What to do / Must NOT do: After the platform owner delivers the actual wheel, install it in a clean environment with no source path or editable install, run from a directory outside the repository, and execute pure imports, fixture parsing and a small independent probe. The test may use `$ACP2_A_PYTHON` only as the test runner; it must create or spawn a separate clean interpreter for the probe and record that interpreter path. Assert module `__file__` comes from the installed package. Without software, import and discovery must still work and execution must fail with a typed unavailable error. Add `tests/test_acp2_science_installed_package.py`.
   Closes: GAP-11, GAP-12
   Parallelization: Wave 14 | Blocked by: 48 | Blocks: 50, 51
@@ -731,7 +737,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `test(cccp): verify ACP2 wheel in a clean environment`
   Recommended task executor category: deep-low - clean-environment installation and import verification.
 
-- [ ] 50. A-28: Write the runnable science SDK and plugin guide
+- [x] 50. A-28: Write the runnable science SDK and plugin guide
   What to do / Must NOT do: Write `science/user-guide.md` covering installation, import without software, configuring software, singlepoint/optimize/frequency, reading reports, units/mapping, failure interpretation, resource limits and cleanup. Add runnable `science/examples/` for a public-API singlepoint, recipe compilation, report reading and external plugin integration. Keep standalone science use separate from platform-controlled research. Do not use `python -m cccp`; do not claim an example ran unless it ran in the frozen environment.
   Closes: GAP-11
   Parallelization: Wave 14 | Blocked by: 49 | Blocks: 51
@@ -741,7 +747,7 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
   Commit: Y | `docs(cccp): add ACP2 science SDK and plugin guide`
   Recommended task executor category: writing - user-facing documentation with executable examples.
 
-- [ ] 51. A-29: Close the final science release gate and publish H7
+- [x] 51. A-29: Close the final science release gate and publish H7
   What to do / Must NOT do: Verify the H0 baseline and H1-H6 revisions, schema/provider/plugin/fixture digests and each row scope; update the support matrix. Run the required science regression and the independent wheel probe; rerun only changed or still-doubtful paths. Check no reverse import, one execution station, fifteen active workflows, compatibility shims, historical readers and model assets. Ensure every actual step has a command, native evidence and a PASS/FAIL/NOT_VERIFIED result. Sign A's own science H7 from B25a's candidate plus A-27b/A-28 verification; do not wait for B26, B25b or C35. B aggregates H7 after A-29 and C35. Publish `handoff-H7.json`, the release note, capability/version/limitation matrix and replay index. Do not claim a required row passed when it was not executed; do not restart or release the production service.
   Closes: GAP-6, GAP-11, GAP-12
   Parallelization: Wave 14 | Blocked by: 49, 50 | Blocks: none
@@ -755,19 +761,19 @@ Waves are phase-aligned. Within a wave, dispatch a todo only when every dependen
 
 > F1 and F2 run in parallel after ALL todos; F3 uses the platform-scheduled shared resource window; F4 runs last and consumes F1-F3. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
 
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   Verify every one of the fifty-one implementation rows has an immutable evidence directory, the exact command from its acceptance criteria, the required PASS/FAIL/NOT_VERIFIED result, and a commit on `acp2/a-science`. Confirm no row skipped a named dependency, no phase gate closed with a required NOT_VERIFIED row, and no A-owned file is missing from the commit list. Recompute the GAP-1 through GAP-13 closure matrix and the IS-1 through IS-13 delivery matrix against the actual todo rows, not the draft. Validate `science/cross-track-dependencies.json` (no missing ID, no cycle), the B01 protocol samples, and the separate server/client/harness revisions. Cross-check the dependency matrix against the actual evidence timestamps and ensure no run directory was overwritten. Evidence `$ACP2_EVIDENCE/A/F1/<run-id>/result.json`.
   Recommended task executor category: deep-low - audit against the written plan, not a re-implementation.
 
-- [ ] F2. Code quality and architecture review
+- [x] F2. Code quality and architecture review
   Compare every touched file against B00's full Ruff JSON baseline (rule, path, line/column and stable fingerprint, not only counts): no new diagnostic fingerprint and no weakened rule/exclude. Run Ruff on the changed files only; the baseline command may be non-zero because of old diagnostics, and full-repository cleanup is a separate task, not this gate. Confirm no new dependency, no bare `except Exception`, PEP 604 annotations in new code, `__init__.py` export-only, no ACP/DSH import in `src/cccp`, no task import in the research pure types, no second `run_*` implementation, and no backend subprocess. Run `tests/test_architecture_invariants.py`, `tests/test_cccp_isolation.py`, `tests/test_recovery_fixtures_smoke.py` and `tests/test_packaging_assets.py`. Reject any change that weakened an existing gate. Evidence `$ACP2_EVIDENCE/A/F2/<run-id>/result.json`.
   Recommended task executor category: deep-low - quality and invariant review with concrete commands.
 
-- [ ] F3. Real manual QA
+- [x] F3. Real manual QA
   From a clean shell and outside-repository directory, run the documented software-free SDK example, the harness `--help`/`--dry-run`, and the installed-wheel probe. For the real singlepoint and artifact-validation checks, first verify the immutable receipts from the frozen candidate; resubmit only when the platform owner schedules a new resource window and records why the existing evidence cannot be reused. Do not duplicate a real submission merely to re-prove an unchanged candidate. Confirm stdout/stderr separation, exit codes, artifact digests, and that `--dry-run` created no work root or job. Confirm a missing prerequisite yields exit 2 and no PASS, and record the actual server/client/harness revisions. Evidence `$ACP2_EVIDENCE/A/F3/<run-id>/result.json`.
   Recommended task executor category: deep-low - operator-style end-to-end verification.
 
-- [ ] F4. Ideal-state fidelity
+- [x] F4. Ideal-state fidelity
   Runs last, after F1-F3. Check every IS-1 through IS-13 row against delivered behavior, one by one, using the success-criteria table and the F1-F3 results. A shortfall becomes a new implementation row, never a note. Confirm the scientific claims are no broader than the frozen fixtures, the execution-versus-claim distinction survives in every report, and the fifteen active workflows and compatibility surfaces still work. Evidence `$ACP2_EVIDENCE/A/F4/<run-id>/result.json`.
   Recommended task executor category: deep-low - 1:1 fidelity check against the ideal-state ledger.
 
