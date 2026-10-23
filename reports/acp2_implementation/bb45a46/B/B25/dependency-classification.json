@@ -1,0 +1,159 @@
+{
+  "classes": {
+    "DSH": {
+      "dependencies": [],
+      "meaning": "external Node/pnpm research-DSH workspace; not a Python distribution dependency",
+      "note": "No DSH npm package or Node runtime is bundled in any wheel. rph/DSH publication is C-owned and ADR-005-gated."
+    },
+    "browser": {
+      "dependencies": [
+        "playwright"
+      ],
+      "meaning": "browser automation tooling, root-only optional extra",
+      "note": "playwright is declared only in the root [project.optional-dependencies].browser; it is absent from the cccp role and from the cccp-only install."
+    },
+    "control": {
+      "dependencies": [
+        "acp-worker",
+        "fastapi",
+        "uvicorn",
+        "python-multipart",
+        "zipstream-ng",
+        "paramiko"
+      ],
+      "meaning": "platform/control-plane or transport packages, never imported by the cccp-only install"
+    },
+    "science-node": {
+      "dependencies": [
+        "numpy",
+        "rdkit",
+        "pyyaml",
+        "scipy",
+        "matplotlib",
+        "openpyxl",
+        "typing-extensions",
+        "nmrglue",
+        "openbabel",
+        "qml"
+      ],
+      "meaning": "required for the cccp science import/execution closure and/or the remote node runtime floor",
+      "note": "requirements-node.txt is unchanged (sha256 f21f3a327cb1d581ffaf54ee5bb2b9e1916948156e3f48e52a68269f28cc3758); nmrglue ships to nodes, openbabel/qml stay optional extras."
+    }
+  },
+  "installed_absence": {
+    "cccp_only": {
+      "acp": true,
+      "acp-services": true,
+      "fastapi": true,
+      "paramiko": true,
+      "playwright": true,
+      "uvicorn": true
+    },
+    "web": {
+      "fastapi": true,
+      "paramiko": true,
+      "uvicorn": true
+    },
+    "worker_only": {
+      "acp": true,
+      "fastapi": true
+    }
+  },
+  "installed_packages": {
+    "cccp_only": [
+      "cccp",
+      "contourpy",
+      "cycler",
+      "et-xmlfile",
+      "fonttools",
+      "kiwisolver",
+      "matplotlib",
+      "numpy",
+      "openpyxl",
+      "packaging",
+      "pillow",
+      "pip",
+      "pyparsing",
+      "python-dateutil",
+      "pyyaml",
+      "rdkit",
+      "scipy",
+      "setuptools",
+      "six",
+      "typing-extensions",
+      "tzdata"
+    ],
+    "web": [
+      "acp-web",
+      "acp-worker",
+      "annotated-doc",
+      "annotated-types",
+      "anyio",
+      "bcrypt",
+      "cccp",
+      "cffi",
+      "click",
+      "contourpy",
+      "cryptography",
+      "cycler",
+      "et-xmlfile",
+      "fastapi",
+      "fonttools",
+      "h11",
+      "idna",
+      "invoke",
+      "kiwisolver",
+      "matplotlib",
+      "numpy",
+      "openpyxl",
+      "opentelemetry-api",
+      "packaging",
+      "paramiko",
+      "pillow",
+      "pip",
+      "pycparser",
+      "pydantic",
+      "pydantic-core",
+      "pynacl",
+      "pyparsing",
+      "python-dateutil",
+      "python-multipart",
+      "pyyaml",
+      "rdkit",
+      "scipy",
+      "setuptools",
+      "six",
+      "starlette",
+      "typing-extensions",
+      "typing-inspection",
+      "tzdata",
+      "uvicorn",
+      "zipstream-ng"
+    ],
+    "worker_only": [
+      "acp-worker",
+      "cccp",
+      "contourpy",
+      "cycler",
+      "et-xmlfile",
+      "fonttools",
+      "kiwisolver",
+      "matplotlib",
+      "numpy",
+      "openpyxl",
+      "packaging",
+      "pillow",
+      "pip",
+      "pyparsing",
+      "python-dateutil",
+      "pyyaml",
+      "rdkit",
+      "scipy",
+      "setuptools",
+      "six",
+      "typing-extensions",
+      "tzdata"
+    ]
+  },
+  "schema": "acp2.b25.dependency_classification.v1"
+}

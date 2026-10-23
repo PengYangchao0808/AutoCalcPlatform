@@ -1,0 +1,10 @@
+{
+  "attempt": 1,
+  "databases": [],
+  "job_id": "b25-worker-receipt",
+  "jobs_db": false,
+  "result": "PASS",
+  "schema": "acp2.b25.worker_receipt_check.v1",
+  "state": "completed",
+  "submission_id": "sub_bd47b9f656d8e342"
+}

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "acp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Auto-Calc Platform: automated computational chemistry workflows (acp CLI) backed by the cccp (Computational Chemistry Connection Package) QC interface library"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -66,7 +66,7 @@ dev = [
     "httpx>=0.27",
 ]
 browser = [
-    "playwright>=1.40",
+    "playwright==1.63.0",
 ]
 
 [project.scripts]
@@ -95,6 +95,13 @@ include = ["cccp*", "acp*", "acp_services*"]
 # the same integration batch as T55. T39 removes the stale `acp.nmr` line
 # above once the old directory is gone.
 "cccp.analysis.nmr" = ["model_assets/*"]
+# A-27a science packaging request: the frozen contract corpus lands under
+# `src/cccp/analysis/research/contracts/` (A-owned, byte-identical to the
+# docs copy). The glob is inert until that directory lands, so applying it
+# cannot break a wheel now; it keeps the root `acp` distribution and the
+# independent `cccp` role in lockstep.
+"cccp.analysis.research" = ["contracts/*.json", "contracts/*.md", "contracts/examples/*.json"]
+"cccp" = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

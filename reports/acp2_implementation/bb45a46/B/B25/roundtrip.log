@@ -1,0 +1,26 @@
+Processing /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0.tar.gz
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Processing /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp-worker-0.3.0.tar.gz
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Processing /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp-web-0.3.0.tar.gz
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: cccp, acp-worker, acp-web
+  Building wheel for cccp (pyproject.toml): started
+  Building wheel for cccp (pyproject.toml): finished with status 'done'
+  Created wheel for cccp: filename=cccp-0.3.0-py3-none-any.whl size=44570219 sha256=177f05ea6871fc1bb4fe25ead16a96aa5e57dc895b0b2ec52471700352f90cd2
+  Stored in directory: /home/xieningke/.cache/pip/wheels/54/88/3d/473d7b5be4688dffabd4473c02add02b7fa741bfa4b8b5bbde
+  Building wheel for acp-worker (pyproject.toml): started
+  Building wheel for acp-worker (pyproject.toml): finished with status 'done'
+  Created wheel for acp-worker: filename=acp_worker-0.3.0-py3-none-any.whl size=613376 sha256=60e6e3440b7cc219432f5ae450f4b3a2f803eb4d97f02a370bd33b084a951b5e
+  Stored in directory: /home/xieningke/.cache/pip/wheels/a1/b6/ef/72a4e6b49dedd2d4610b3cd8ab77f248c5af7bd7f4a7cf6f28
+  Building wheel for acp-web (pyproject.toml): started
+  Building wheel for acp-web (pyproject.toml): finished with status 'done'
+  Created wheel for acp-web: filename=acp_web-0.3.0-py3-none-any.whl size=2230317 sha256=337bdf8cc9942eab278237eb1ead6fa61e2109cda7692c31d70731d52f8a9ae3
+  Stored in directory: /home/xieningke/.cache/pip/wheels/fd/40/0e/9130816b5a4706164b286a878f52b86a5bc9e13ec4813b97cf
+Successfully built cccp acp-worker acp-web
+
+[notice] A new release of pip available: 22.3.1 -> 26.2.2
+[notice] To update, run: /ACPServer/acp2-development/venvs/b/bin/python -m pip install --upgrade pip

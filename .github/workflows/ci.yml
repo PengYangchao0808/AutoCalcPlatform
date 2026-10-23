@@ -82,3 +82,53 @@ jobs:
       #   run: ruff check src tests
       # - name: Check formatting with ruff
       #   run: ruff format --check src tests
+
+  # C B-req-06: the private `rph/` pnpm workspace is built only when the
+  # committed lockfile exists; the repository root deliberately carries no
+  # package.json/pnpm-workspace.yaml/lockfile. The static-asset mount itself
+  # is B25b scope, not this build job.
+  rph-detect:
+    runs-on: ubuntu-latest
+    outputs:
+      present: ${{ steps.detect.outputs.present }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: |
+          if [ -f rph/pnpm-lock.yaml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  rph:
+    needs: rph-detect
+    if: needs.rph-detect.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rph
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+      - name: Configure out-of-tree pnpm store
+        run: pnpm config set store-dir "$RUNNER_TEMP/pnpm-store"
+      - name: Install frozen lockfile
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Test
+        run: pnpm test
+      - name: Check boundaries and typecheck
+        run: pnpm check
+      - name: Retain release packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: rph-dist-packages
+          path: rph/dist-packages/*.tgz
+          if-no-files-found: error

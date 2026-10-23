@@ -1,0 +1,27 @@
+{
+  "result": "PASS",
+  "wheels": {
+    "acp_web-0.3.0-py3-none-any.whl": {
+      "owners": [
+        "acp",
+        "acp_web_assets"
+      ],
+      "files": 395,
+      "sdist_roundtrip": "PASS"
+    },
+    "acp_worker-0.3.0-py3-none-any.whl": {
+      "owners": [
+        "acp_services"
+      ],
+      "files": 98,
+      "sdist_roundtrip": "PASS"
+    },
+    "cccp-0.3.0-py3-none-any.whl": {
+      "owners": [
+        "cccp"
+      ],
+      "files": 198,
+      "sdist_roundtrip": "PASS"
+    }
+  }
+}

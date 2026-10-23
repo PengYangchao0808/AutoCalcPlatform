@@ -1,0 +1,116 @@
+{
+  "schema": "acp2.b25.summary.v1",
+  "task": "B25a (todo 30) — build the actual ACP 2.0 packages with separated roles",
+  "generated_at": "2026-10-23T12:14:00Z",
+  "commit_subject": "build(release): build separate ACP 2.0 role packages",
+  "build_source_revision": "0ff488273591b3ed4379d2bfdacbf9519e94e970",
+  "build_source_tree": "2c988d9b4867d8d0c67d957c72bd7afde5682de5",
+  "clean_worktree": true,
+  "worktree": "/tmp/opencode/acp2-b25-clean",
+  "version": "0.3.0",
+  "version_rationale": "No reviewed input specified a different version; 0.3.0 is the pre-release ACP 2.0 packaging candidate, not a production release. All four locations match.",
+  "version_locations": {
+    "src/cccp/__init__.py": "0.3.0",
+    "src/cccp/version.py": "0.3.0",
+    "src/acp/__init__.py": "0.3.0",
+    "pyproject.toml": "0.3.0"
+  },
+  "commands": [
+    "/ACPServer/acp2-development/venvs/b/bin/python scripts/build_release.py --source /tmp/opencode/acp2-b25-clean --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release",
+    "/ACPServer/acp2-development/venvs/b/bin/python -m build --no-isolation --outdir /tmp/opencode/b25-root-build /tmp/opencode/acp2-b25-clean",
+    "/ACPServer/acp2-development/venvs/b/bin/python -m pip wheel --no-deps --no-build-isolation --wheel-dir /tmp/opencode/b25-roundtrip /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0.tar.gz /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp-worker-0.3.0.tar.gz /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp-web-0.3.0.tar.gz",
+    "/ACPServer/acp2-development/venvs/b/bin/python scripts/acceptance/check_release_artifacts.py --artifacts /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release --roundtrip-wheels /tmp/opencode/b25-roundtrip --source /tmp/opencode/acp2-b25-clean --output /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/artifacts-acceptance.json",
+    "env -u PYTHONPATH /tmp/opencode/b25-cccp-venv/bin/python /tmp/opencode/acp2-b25-clean/scripts/acceptance/release_role_probe.py --role cccp --output /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/cccp-role-probe.json",
+    "env -u PYTHONPATH /tmp/opencode/b25-worker-venv/bin/python /tmp/opencode/b25_worker_receipt_check.py",
+    "env -u PYTHONPATH /tmp/opencode/b25-web-venv/bin/python /tmp/opencode/acp2-b25-clean/scripts/acceptance/release_role_probe.py --role web --output /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/web-role-probe.json",
+    "/ACPServer/acp2-development/venvs/b/bin/python -m pytest tests/test_packaging_assets.py tests/test_services_packaging_roles.py -q"
+  ],
+  "artifacts": {
+    "acp_web-0.3.0-py3-none-any.whl": {
+      "sha256": "c2464eb828b8327865edf4b32741ac6870dfdaef1d8eb8f9cfae497052fd2c04",
+      "manifest_payload_files": 401,
+      "installed_payload_files": 395,
+      "top_level": ["acp", "acp_web_assets"],
+      "web_asset_files": 98,
+      "license_notice_present": true
+    },
+    "acp-web-0.3.0.tar.gz": {
+      "sha256": "181b036e9835391e5ee485ff5323a867000219e5096b713859cc02d9bdc08715",
+      "files": 452,
+      "required_sdist_files_present": ["VERSION", "requirements-role.txt", "MANIFEST.in", "LICENSE"]
+    },
+    "acp_worker-0.3.0-py3-none-any.whl": {
+      "sha256": "a32cf0bfd8f7d413532f6ee0925aeb316bd46d3f25abdc84bbd6252dc86176f5",
+      "manifest_payload_files": 104,
+      "installed_payload_files": 98,
+      "top_level": ["acp_services"],
+      "license_notice_present": true
+    },
+    "acp-worker-0.3.0.tar.gz": {
+      "sha256": "616838e072eea5363c3e0a0f250d0e15f38c66c9641c54535e0c5de0560e393b",
+      "files": 122,
+      "required_sdist_files_present": ["VERSION", "requirements-role.txt", "MANIFEST.in", "LICENSE"]
+    },
+    "cccp-0.3.0-py3-none-any.whl": {
+      "sha256": "f83936eeb246e5d696ea518711394561d14490415efb64ee80501236dfc548a0",
+      "manifest_payload_files": 203,
+      "installed_payload_files": 198,
+      "top_level": ["cccp"],
+      "model_asset_files": 8,
+      "model_asset_names": [
+        "LICENSE-DP5",
+        "NOTICE.md",
+        "atomic_reps.gz",
+        "c_w_kde_mean_s_0.025.p",
+        "folded_scaled_errors.p",
+        "frag_reps.gz",
+        "i_w_kde_mean_s_0.025.p",
+        "tms_references.txt"
+      ],
+      "py_typed": true,
+      "license_notice_present": true
+    },
+    "cccp-0.3.0.tar.gz": {
+      "sha256": "882da3f6baed4be48d1fd1d792946b655bdab19e19f9a155af17eec46862be45",
+      "files": 239,
+      "required_sdist_files_present": ["VERSION", "requirements-role.txt", "MANIFEST.in", "LICENSE"]
+    },
+    "root_acp-0.3.0-py3-none-any.whl": {
+      "sha256": "e0a66958eee23d605ce33025f405ed9c609809337ebd8994940972f1a94545a3",
+      "entries": 577,
+      "note": "supplemental root distribution build from the same clean worktree"
+    },
+    "root_acp-0.3.0.tar.gz": {
+      "sha256": "2976cfadf8dbcb922f96cde568fda27b2f9d0719ff52abda591443d32733a825",
+      "note": "supplemental root distribution build from the same clean worktree"
+    }
+  },
+  "role_release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+  "dependency_classification": "reports/acp2_implementation/bb45a46/B/B25/dependency-classification.json",
+  "install_results": "reports/acp2_implementation/bb45a46/B/B25/install-results.json",
+  "version_sync": "reports/acp2_implementation/bb45a46/B/B25/version-sync.json",
+  "reviewed_requests": "reports/acp2_implementation/bb45a46/B/B25/reviewed-requests.json",
+  "adr_005_policy_draft": "reports/acp2_implementation/bb45a46/B/B25/adr-005-policy-draft.md",
+  "checks": {
+    "role_artifact_acceptance": "PASS",
+    "root_build": "PASS",
+    "cccp_only_install_and_science_probe": "PASS",
+    "worker_only_receipt_without_jobs_db": "PASS",
+    "web_static_assets": "PASS",
+    "web_http_role_probe": "NOT_VERIFIED(candidate_origin_policy_mismatch)",
+    "worker_full_role_probe_replay_refusal": "NOT_VERIFIED(candidate_recovery_boundary_gap)",
+    "pytest_packaging": "PASS (18 passed)",
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "json_validation": "PASS",
+    "c35_input_cycle": "not_observed"
+  },
+  "not_verified": [
+    "A-27a 14-file research contract corpus absent from the B checkout; package-data glob is inert in this build.",
+    "Worker replay-refusal and Web HTTP runtime need the uncommitted B24/B24b working-tree fixes; B25b must re-run them against the fixed candidate.",
+    "DSH/browser runtime not exercised; DSH is external Node and browser is a root-only extra.",
+    "C32 static-asset manifest/mount is absent; versioned read-only mount is B25b scope.",
+    "Public open-source release and any license change are ADR-005 user decisions and are not claimed."
+  ],
+  "production_8765_touched": false
+}
