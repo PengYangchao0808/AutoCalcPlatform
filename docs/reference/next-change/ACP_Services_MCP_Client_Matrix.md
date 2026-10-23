@@ -89,12 +89,29 @@ commands return structured `unsupported_capability` (`binding=B06`,
 The **official DSH client handshake is still NOT_VERIFIED** (H2 gate, C-owned).
 The B05 evidence covers the stdlib probe and the process-level matrix only.
 
+### B25b installed-entry verification (2026-10-23)
+
+The clean role-wheel install (`acp-web` 0.3.0 in a fresh venv) launched the real entry as
+`acp mcp serve --controller http://127.0.0.1:<isolated-port>` against an isolated Lab server.
+`initialize` negotiated `2025-06-18` (supported set exactly `("2025-06-18",)`) and `tools/list`
+returned the eight P1 tools by name: `acp_capabilities`, `acp_preflight`, `acp_submit`,
+`acp_status`, `acp_cancel`, `acp_prepare_artifact`, `acp_read_artifact`, `acp_analyze`.
+The run is recorded in `reports/acp2_implementation/bb45a46/B/B25/mcp-tools.json` and in the
+`b25.stdio_mcp_eight_tools` assertion.
+
+This closes the **installed-entry** part of the B25b scope only. The official DSH client handshake
+remains `NOT_VERIFIED` (H2 gate, C-owned), and the `dsh-official-mcp-client` row above is unchanged.
+The launch-template metadata (`entrypoint: acp_services.entrypoints.mcp`) names the protocol owner;
+the runnable command is the `acp mcp serve` console entry, which composes the same module through
+`src/acp/services_mcp_bootstrap.py`.
+
 ## Change record (append-only)
 
 | Date | Item | Action | Reason |
 |---|---|---|---|
 | 2026-10-19 | Locked version `2025-06-18`; 8-tool allowlist; stdio matrix | add | B08-2 initial freeze |
 | 2026-10-22 | Real stdio transport; advertised supported set; lifecycle gate; explicit batch rejection; DSH row `NOT_VERIFIED` | update | B05 tested set unchanged (`2025-06-18`) + real subprocess/probe evidence; no new version claimed |
+| 2026-10-23 | Installed-wheel stdio entry re-verified (`protocol 2025-06-18`, eight tools) | update | B25b clean role-wheel install; DSH official handshake still `NOT_VERIFIED` |
 
 <!-- SERVICES_STATUS_SYNC:todo70 -->
 ## 实施状态同步（2026-10-19 / todo 70）

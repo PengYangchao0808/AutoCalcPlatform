@@ -344,7 +344,10 @@ def test_help_dry_run_and_check_only_are_not_scenario_pass(
 
     run_document = _read(stub_out / _read(summary)["runs"][0])
     assert run_document["result"] == "NOT_VERIFIED"
-    assert run_document["extensions"]["b01.skeleton"] is True
+    # B25b implements package-install for real; without --fixture it records a
+    # named prerequisite failure, not the old B01 skeleton placeholder.
+    assert run_document["extensions"]["b25.reason"].startswith("fixture_missing")
+    assert "b01.skeleton" not in run_document["extensions"]
 
 
 def test_live_receipt_identity_comes_from_controller_health(monkeypatch: Any) -> None:

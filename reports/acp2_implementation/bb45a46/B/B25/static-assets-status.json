@@ -1,0 +1,6 @@
+{
+  "expected_path": "<repo>/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+  "mount": "/experience/<release_id>/",
+  "note": "C has not published experience/static-assets.manifest.json; no mount was fabricated",
+  "status": "NOT_VERIFIED(c_static_assets_absent)"
+}

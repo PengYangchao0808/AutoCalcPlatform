@@ -41,3 +41,8 @@ src/cccp/   # QC 底座（four-layer ①qc → ②backends → ③calculation；
 ## ANTI-PATTERNS
 - **Version duplication**: `__version__` lives in four files across the two packages — diverges easily
 - **No CLI / no `__main__.py`**: the legacy CLI (`cli.py`, `__main__.py`) and `conformer-search` console_script were deleted in the cccp rename; `python -m cccp` does NOT work — use the unified `acp` CLI instead
+
+## INSTALLED PACKAGE (B25b, 2026-10-23)
+- `cccp` installs standalone: no `acp`, `acp_services`, `fastapi` or Controller is required for the public scientific API.
+- Wheel assets include `analysis/nmr/model_assets/{NOTICE.md,LICENSE-DP5,*.gz,*.p,*.txt}`, `cccp/py.typed`, `cccp/plugin/sdk.py` and the AGENTS docs; the controlled singlepoint sample runs from the installed venv.
+- Version stays `0.3.0` in the four repository locations; a CCCP release must not require DSH/browser dependencies.

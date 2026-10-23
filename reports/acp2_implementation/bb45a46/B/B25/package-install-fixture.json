@@ -1,0 +1,39 @@
+{
+  "schema": "acp2.package-install.fixture.v1",
+  "fixture_id": "fx-package-install-v1",
+  "release_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release",
+  "root_wheel_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B25/root-build",
+  "expected_version": "0.3.0",
+  "python": "/usr/bin/python3.11",
+  "source_root": "<repo>",
+  "root_wheel": "acp-0.3.0-py3-none-any.whl",
+  "root_wheel_sha256": "7cba73083e444f8e2be12176eebcbe16012aa4954a4d5052606d83ea6eaf484d",
+  "sample_config": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/docs/sample-config.yaml",
+  "schema_files": [
+    "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/docs/acceptance-result.schema.json",
+    "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/docs/mcp-launch.schema.json"
+  ],
+  "doc_files": [
+    "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/docs/standalone-recipe.md",
+    "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/docs/mcp-client-matrix.md"
+  ],
+  "a_c_evidence": [
+    {
+      "id": "A-27b",
+      "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z"
+    },
+    {
+      "id": "A-28",
+      "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z"
+    },
+    {
+      "id": "C33",
+      "path": "<acp2-dev>/evidence/C/clean-install-live"
+    },
+    {
+      "id": "C34",
+      "path": "<acp2-dev>/evidence/C/operator-runbook-live"
+    }
+  ],
+  "static_assets_manifest": "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json"
+}

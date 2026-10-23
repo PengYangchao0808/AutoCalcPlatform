@@ -1,0 +1,23 @@
+$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -m acp --help
+exit=0
+--- stdout ---
+usage: acp [-h] {run,doctor,init,task,mcp} ...
+
+Auto-Calc Platform (ACP) — Computational chemistry workflows
+
+positional arguments:
+  {run,doctor,init,task,mcp}
+    run                 Run a computational workflow
+    doctor              Deployment self-check for remote compute nodes
+    init                Interactive setup wizard for the user config
+                        (software, remote nodes, web access)
+    task                Local task management against the persistent run_root
+                        store
+    mcp                 MCP adapter entrypoints (stdio; never starts a
+                        Controller)
+
+options:
+  -h, --help            show this help message and exit
+
+--- stderr ---
+

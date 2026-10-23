@@ -64,6 +64,22 @@
 | B | `src/acp/scheduler/remote/{runner,sync}.py`（远端冻结组、release、receipt 与 task_result） | B | B | `878e355` | T30（冻结先于选择、manifest 最后提交、三窗口） | `tests/test_services_chain_switch.py` 与 `tests/test_remote_phase1.py` PASS；真实 LSF 为 NOT_VERIFIED | `c12490e` | integrated |
 | B | `src/cccp/analysis/structure/parsers.py`（path_safe）+ `src/acp/intake/parsers.py`（Path_safe 旧导入面） | B | A/B | `878e355` | T33（命名诊断与兼容别名） | `tests/test_acp_intake.py` 与 T33 import smoke PASS；旧 `Path_safe` 仍可导入 | `ab987e5` | integrated |
 
+| B | `packaging/roles/**`、`scripts/build_release.py`、`release/release-manifest.json`（0.3.0 角色 wheel/sdist） | B | A（A-27b）、C（C33）、B（B25b/B26a） | `672b651` | B25a 冻结；A-27a 打包规格；C32 静态资产请求 | `scripts/acceptance/check_release_artifacts.py` + `release_role_probe.py`；B25b `package-install` 校验摘要与安装 | B25b（本提交） | integrated |
+| B | 独立安装验收与发布路径（`scripts/acceptance/acp2_package_install.py`、`reports/acp2_implementation/bb45a46/B/B25/`） | B | B26a/B26b、A/C 文档引用 | `672b651` | B25a 实际制品；A-27b/A-28 原始回执（C33/C34 未发布） | 干净 venv 安装四个发行、CCCP 无 Controller、Lab/MCP/CLI、资产/notice/license、四版本位置；`package-install` 返回 0 | B25b（本提交） | integrated |
+
+## B25b raw install/operation aggregation (2026-10-23)
+
+> 本表只汇总 A/C 已落盘的原始事实。B25b 不重签科学或体验结论；缺失路径保留 `NOT_VERIFIED` 与预期路径。
+
+| track | task | registered path | observed | B25b treatment |
+|---|---|---|---|---|
+| A | A-27b | `<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | raw result present; its own `platform_row` still records `NOT_VERIFIED` because it was produced before the B25a candidate | aggregated as raw evidence; no science re-sign-off |
+| A | A-28 | `<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | raw result `PASS` on the A-built cccp-0.2.0 wheel | aggregated; does not replace B25b's 0.3.0 install |
+| C | C33 | `<acp2-dev>/evidence/C/clean-install-live` | absent | `NOT_VERIFIED` at the registered path |
+| C | C34 | `<acp2-dev>/evidence/C/operator-runbook-live` | absent | `NOT_VERIFIED` at the registered path |
+| C | static assets | `<repo>/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | absent | `NOT_VERIFIED(c_static_assets_absent)`; no mount fabricated |
+| C | C35 | n/a | not a B25b prerequisite | not signed |
+
 ## Deferred capability handoffs (T36)
 
 **Scope:** 以下六项是 GAP-14 的显式 deferred capability handoff。它们**不是**本批实施任务；

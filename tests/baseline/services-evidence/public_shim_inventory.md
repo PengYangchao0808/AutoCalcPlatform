@@ -71,6 +71,7 @@ PY
 
 | 面 | 实现驻点 | 兼容/调用面 | 状态 | 守护测试 |
 |---|---|---|---|---|
+| 公网同源配置（2026-10-22） | `src/acp_services/workspace/boundary.py:OriginPolicy.public_origin` | `src/acp/api/server.py` 优先读取 `ACP_PUBLIC_ORIGIN`，否则读取 `acp init` 写入的 `deployment.params.public_origin`；原 OriginPolicy 默认语义保留 | `[CLOSED]`（模块回归范围） | `tests/test_services_local_boundary.py`；`tests/test_services_init_unified.py`；`tests/test_acp_drafts.py` |
 | 冻结 attempt 生产器与执行权 | `src/acp_services/runtime/attempt_freeze.py`（AttemptFreezeSpec、write_frozen_attempt、AttemptLockExecutionRight） | ACP 侧 `acp.calculations.attempt_freeze` builder；`src/acp/scheduler/{runner,remote/runner}.py`；`worker_bootstrap` | `[CLOSED]` | `tests/test_services_chain_switch.py`；`tests/test_services_worker_bootstrap.py` |
 | attempt 完成服务 | `src/acp_services/runtime/attempt_completion.py`（AttemptSnapshot、AttemptCompletionService） | `src/acp/services_completion_bootstrap.py:JobStoreAdvancePort`；`src/acp/scheduler/manager.py` | `[CLOSED]` | `tests/test_services_worker_contract.py`；`tests/test_services_chain_switch.py` |
 | receipt 身份契约 | `src/acp_services/runtime/receipt_identity.py`（ReceiptIdentity、compare_receipt_identity） | `worker.py` 与 `receipts.py` 共用；`worker_bootstrap.py` 冲突路径 | `[CLOSED]` | `tests/test_services_worker_contract.py`；`tests/test_services_worker_bootstrap.py` |
@@ -82,7 +83,26 @@ PY
 | singlepoint 默认 envelope 集合 | `src/acp_services/runtime/execution_chain.py`（DEFAULT_ENVELOPE_WORKFLOWS） | 既有 legacy 路径保留；DEFAULT 与 ENABLED 分离 | `[CLOSED]` | `tests/test_services_workflow_enablement.py` |
 | 远端冻结链 | `src/acp/scheduler/remote/runner.py`（_upload_frozen_envelope、receipt 与 task_result fetch） | `src/acp/scheduler/remote/sync.py`（sync 含 src/acp_services） | `[CLOSED]`（真实 LSF 为 `NOT_VERIFIED`） | `tests/test_services_chain_switch.py`；`tests/test_remote_phase1.py` |
 | `Path_safe` 公共命名兼容 | `src/cccp/analysis/structure/parsers.py:path_safe` | `Path_safe` 兼容别名；`src/acp/intake/parsers.py` 旧导入面保留 | `[RETAINED]` | `tests/test_acp_intake.py`；T33 import smoke |
+| 本地异常死亡停止核验（2026-10-22） | `runtime/attempt_recovery.py:CgroupAttemptRecovery`；`runtime/cgroup.py` 纯资源计划 | `worker_bootstrap --execution-cgroup-root` / `ACP_EXECUTION_CGROUP_ROOT`；原 `runtime.isolation.CgroupV2Plan` / `EnvelopeProcessGroup` 保留同对象重导出 | `[OPEN]`：受控验证通过，真实委派环境 NOT_VERIFIED；旧无约束 claim 继续拒绝 | `tests/test_services_cgroup_attempt_recovery.py`；`tests/test_services_isolation.py` |
 
 **兼容面结论：** 上述公开面均为加性或新驻点；旧 identity forwarder（`acp.scheduler.{store,migrations}`、
 `acp.calculations.{contracts,step_result,step_requirements}`、`acp.catalog.method_levels_to_cli_flags`）
 保持 `is` 同一对象，未新增第二实现。
+
+## 7. B25b installed-wheel compatibility check (2026-10-23)
+
+The clean role-wheel install in `reports/acp2_implementation/bb45a46/B/B25/` re-verified the
+public shim surface **from installed site-packages**, not from this checkout:
+
+| surface | installed check | status |
+|---|---|---|
+| `acp.calculations.primitives` | imports from `…/site-packages/acp/…`; tasks execute from `cccp.calculation` | `[RETAINED]` |
+| `acp.backends` | pure re-export shim imports; implementation remains `cccp.backends` | `[RETAINED]` |
+| `acp.compat.legacy.manifests` | read-only reader imports from the installed `acp` package | `[RETAINED]` |
+| `acp.scheduler.store.JobStore is acp_services.store.store.JobStore` | identity `True` in the installed web venv | `[RETAINED]` |
+| `acp.calculations.contracts.CalculationPlan is acp_services.runtime.plan_contracts.CalculationPlan` | identity `True` in the installed web venv | `[RETAINED]` |
+| `acp` console command | `acp --help` works in the installed web and root role venvs | `[RETAINED]` |
+
+Evidence: `b25.compat_imports` and `b25.standalone_cli` in the package-install receipt. No shim was
+deleted or re-implemented; the root `acp` distribution and the three role distributions remain
+mutually exclusive installation choices.

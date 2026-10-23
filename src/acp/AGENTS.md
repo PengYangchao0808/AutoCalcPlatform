@@ -119,3 +119,9 @@ acp/
 - **Retired catalog entries retained**: ensemble/benchmark/energy 等保留 `status:"retired"` + `visible:False`；NMR 已于 P1a 重新激活（`status:"active"`）
 - **Forwarder re-implementation**: putting logic back into `scheduler/store.py`, `scheduler/migrations.py`, `calculations/{contracts,step_result,step_requirements}.py`, or `catalog.method_levels_to_cli_flags` breaks the single implementation root; they must stay pure identity re-exports
 - **Deleting compat surfaces for line count**: `calculations/primitives`, `backends`, `compat/legacy`, retired engine shims and recovery fixtures are retained (root ANTI #31)
+
+## RELEASE ROLES (B25b, 2026-10-23)
+- The installed `acp-web` wheel is a first-class entry: `acp` console script and `acp mcp serve` both resolve from venv site-packages, not this checkout.
+- Compat imports stay importable from the wheel: `acp.calculations.primitives`, `acp.backends`, `acp.compat.legacy.manifests`; `acp` forwards store/contracts to `acp_services` as the same object (see root ANTI #30).
+- Root `acp` and the three role distributions are mutually exclusive install choices; do not mix their same-path files.
+- Release/install evidence: `reports/acp2_implementation/bb45a46/B/B25/`; scenario `scripts/acceptance/acp2_package_install.py`.
