@@ -1,0 +1,32 @@
+{
+  "components": [
+    {
+      "component_id": "conf-1",
+      "gibbs_hartree": -100.0,
+      "weight": 0.4
+    },
+    {
+      "component_id": "conf-2",
+      "gibbs_hartree": -99.998,
+      "weight": 0.3
+    },
+    {
+      "component_id": "conf-3",
+      "gibbs_hartree": -99.995,
+      "weight": 0.1
+    }
+  ],
+  "constructed": true,
+  "description": "Constructed three-component ensemble used to exercise the explicit weight policy. The weights sum to 0.8 so the raw-normalization path and its recorded provenance are testable. No thermochemistry calculation ran and the Gibbs values are placeholders, not computed free energies.",
+  "domain": "thermochemistry",
+  "ensemble_id": "constructed-conformer-ensemble",
+  "fixture_id": "ensemble-thermochemistry-weights-constructed",
+  "real_run": false,
+  "schema": "acp2.science.domain-fixture",
+  "schema_version": 1,
+  "standard_state": "1atm",
+  "temperature_kelvin": 298.15,
+  "weight_tolerance": 1e-09,
+  "weights_mode": "raw",
+  "weights_sum_supplied": 0.8
+}
