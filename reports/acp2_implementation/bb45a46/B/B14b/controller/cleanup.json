@@ -1,0 +1,13 @@
+{
+  "schema": "acp2.b14b.cleanup.v1",
+  "controller_pid": 1051867,
+  "controller_stopped": true,
+  "port_18774_free": true,
+  "health_after_stop_exit": 7,
+  "production_port_8765_touched": false,
+  "run_root_preserved_for_evidence": true,
+  "mcp_adapter_processes_remaining": 0,
+  "orca_processes_remaining": 0,
+  "ss_file": "B/B14b/controller/ss-after-stop.txt",
+  "recorded_at_utc": "2026-10-23T03:35:00Z"
+}

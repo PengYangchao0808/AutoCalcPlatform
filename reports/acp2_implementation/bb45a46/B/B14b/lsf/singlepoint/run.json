@@ -1,0 +1,22 @@
+{
+  "schema": "acp2.b14b.capability-run.v1",
+  "capability": "singlepoint",
+  "backend": "lsf",
+  "result": "NOT_VERIFIED",
+  "fixture_id": "fx-lsf-singlepoint-v1",
+  "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+  "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "missing_prerequisites": [
+    "bsub",
+    "bjobs",
+    "bhosts",
+    "bqueues",
+    "LSF_ENVDIR",
+    "ACP_LSF_NODE"
+  ],
+  "reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+  "submitted": false,
+  "remote_job_attempted": false,
+  "recorded_at_utc": "2026-10-23T03:20:41Z"
+}

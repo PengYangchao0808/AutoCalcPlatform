@@ -1,0 +1,158 @@
+{
+  "schema": "acp2.b14b.capability-run.v1",
+  "capability": "singlepoint",
+  "backend": "local",
+  "result": "PASS",
+  "fixture_id": "fx-local-singlepoint-h2-sto3g-v1",
+  "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+  "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+  "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "controller": "http://127.0.0.1:18774",
+  "task_ref": "20261023_111633_001_singlepoint",
+  "attempt": 1,
+  "release_id": "28b9a5b5e038090a",
+  "release_digest": "42a004836eec9fad89a9c54a06cdfb62cf674ed3da5fac9deda832b0f968dd19",
+  "submission_id": "sub_f053d2ccba100cfb",
+  "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+  "result_digest": "sha256:7a443c5e8d1192429e166f6d058cc861d7d006405eca1a7d65f40556c6e1c2dd",
+  "result_manifest_digest": "sha256:a2bc8d41b00072ccd94780c689fee79d634095a57080fa4701883fa055af3d3b",
+  "work_dir": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
+  "orca_binary": "/home/xieningke/orca611/orca",
+  "orca_output": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+  "orca_terminated_normally": true,
+  "orca_energy_hartree": -1.116759307204,
+  "orca_pids": [
+    1053969
+  ],
+  "orca_max_concurrent": 1,
+  "job_started_events": 1,
+  "observed": {
+    "status": "completed",
+    "energy_hartree": -1.116759307204,
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "frequencies": [],
+    "n_imaginary": null,
+    "optimization_status": null,
+    "required_facts": [
+      "energy_hartree"
+    ],
+    "exit_code": 0,
+    "manifest_status": "completed"
+  },
+  "assertions": [
+    {
+      "name": "one_mcp_submission_one_task",
+      "status": "PASS",
+      "detail": "task_count_before=0 after=1"
+    },
+    {
+      "name": "job_completed",
+      "status": "PASS",
+      "detail": "status=completed attempt=1"
+    },
+    {
+      "name": "real_orca_process_once",
+      "status": "PASS",
+      "detail": "pids=[1053969] max_concurrent=1 samples=278"
+    },
+    {
+      "name": "orca_terminated_normally",
+      "status": "PASS",
+      "detail": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out"
+    },
+    {
+      "name": "orca_energy_matches_task_result",
+      "status": "PASS",
+      "detail": "orca=-1.116759307204 task_result=-1.116759307204"
+    },
+    {
+      "name": "task_result_complete",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "name": "attempt_and_release_agree",
+      "status": "PASS",
+      "detail": "attempt=1 release_id=28b9a5b5e038090a"
+    },
+    {
+      "name": "exactly_one_dispatch",
+      "status": "PASS",
+      "detail": "job.started=1"
+    },
+    {
+      "name": "capability_science",
+      "status": "PASS",
+      "detail": "frequencies=[] (singlepoint must not emit modes)"
+    }
+  ],
+  "native_artifacts": [
+    {
+      "path": "native/RESULT__task_result.json",
+      "size_bytes": 1965,
+      "sha256": "4df24be5efd501dcabb446160b056c29d48d2d26e904f12d3b6fc9064038a1cf"
+    },
+    {
+      "path": "native/RESULT__result_manifest.json",
+      "size_bytes": 1247,
+      "sha256": "a2bc8d41b00072ccd94780c689fee79d634095a57080fa4701883fa055af3d3b"
+    },
+    {
+      "path": "native/RESULT__scientific_result.json",
+      "size_bytes": 917,
+      "sha256": "5d1db95684b821476a3a83b58b5e22ffa9eebf9e4ad2d83f6ae8620bbdef6d52"
+    },
+    {
+      "path": "native/RESULT__energy__singlepoint_energy.json",
+      "size_bytes": 241,
+      "sha256": "3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d"
+    },
+    {
+      "path": "native/RESULT__structures__singlepoint_final.xyz",
+      "size_bytes": 112,
+      "sha256": "961b92ef359b1f02e6d443f2f7480df8d7c41d7df8de055d1451ccb44f7c27fe"
+    },
+    {
+      "path": "native/execution_receipt.json",
+      "size_bytes": 1699,
+      "sha256": "2fca719aca44ed04b7753171cc4a81f73ded77cc38e9d6e7db2ab546b33f7cc4"
+    },
+    {
+      "path": "native/job.json",
+      "size_bytes": 6582,
+      "sha256": "6cfc53f46f35a358526161568181c3926441a57faf6e47150a64d6dc2b35c8a1"
+    },
+    {
+      "path": "native/task.json",
+      "size_bytes": 969,
+      "sha256": "05f0552779b1209dd30006a1f24abb4d474b8f5db186edfdd043a9135690fc08"
+    },
+    {
+      "path": "native/sp.out",
+      "size_bytes": 41904,
+      "sha256": "e970d7bc4c8d74912413ae9c9a1bbf3ed6e9d8d47c7fcb0b512bd5bf7dd4d497"
+    },
+    {
+      "path": "native/sp.inp",
+      "size_bytes": 161,
+      "sha256": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6"
+    }
+  ],
+  "written_at_utc": "2026-10-23T03:16:39Z"
+}

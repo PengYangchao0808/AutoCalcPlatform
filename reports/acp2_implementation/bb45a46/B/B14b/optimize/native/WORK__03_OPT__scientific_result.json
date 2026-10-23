@@ -1,0 +1,34 @@
+{
+  "artifacts": [
+    {
+      "path": "optimize.inp",
+      "type": "output"
+    },
+    {
+      "path": "optimize.out",
+      "type": "log"
+    }
+  ],
+  "kind": "optimize",
+  "result_id": "v2:4f818dcd0c76cd8d1ac9556ca4121dd6-step0-optimize",
+  "summary": {
+    "coords": [
+      [
+        0.0,
+        0.0,
+        0.013863
+      ],
+      [
+        0.0,
+        0.0,
+        0.726137
+      ]
+    ],
+    "energy_hartree": -1.11751709882,
+    "errors": [],
+    "metadata": {
+      "optimization_status": "converged"
+    },
+    "status": "completed"
+  }
+}

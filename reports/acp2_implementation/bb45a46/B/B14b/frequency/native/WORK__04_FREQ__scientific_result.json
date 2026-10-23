@@ -1,0 +1,41 @@
+{
+  "artifacts": [
+    {
+      "path": "freq.inp",
+      "type": "output"
+    },
+    {
+      "path": "freq.out",
+      "type": "log"
+    },
+    {
+      "path": "normal_modes.json",
+      "type": "normal_modes"
+    }
+  ],
+  "kind": "frequency",
+  "result_id": "v2:180e1d062ba2993034c848cffaecacde-step0-frequency",
+  "summary": {
+    "coords": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "energy_hartree": -1.116773191779,
+    "errors": [],
+    "frequencies": [
+      5038.6
+    ],
+    "metadata": {
+      "n_imaginary": 0
+    },
+    "status": "completed"
+  }
+}

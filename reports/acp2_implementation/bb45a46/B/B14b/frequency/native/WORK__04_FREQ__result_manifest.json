@@ -1,0 +1,26 @@
+{
+  "products": [
+    {
+      "id": "freq.inp",
+      "kind": "file",
+      "label": "freq.inp",
+      "path": "freq.inp"
+    },
+    {
+      "id": "freq.out",
+      "kind": "file",
+      "label": "freq.out",
+      "path": "freq.out"
+    },
+    {
+      "id": "normal_modes.json",
+      "kind": "file",
+      "label": "normal_modes.json",
+      "path": "normal_modes.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "v2:180e1d062ba2993034c848cffaecacde-step0-frequency",
+  "version": 2,
+  "workflow": "frequency"
+}
