@@ -1,0 +1,219 @@
+{
+  "schema": "acp2.science.replay-index.v1",
+  "generated_by": "A-29",
+  "generated_at": "2026-10-23T05:39:50Z",
+  "worktree": "/ACPServer/acp2-development/A",
+  "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+  "entries": [
+    {
+      "entry_id": "full-science-gate",
+      "row_ids": [
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "A-27b",
+        "A-28"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_*.py tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_recovery_fixtures_smoke.py tests/test_packaging_assets.py -q",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+        "docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+        "docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+        "docs/reference/next-change/acp2-contracts/science/evidence-semantics.md",
+        "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+        "docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json",
+        "docs/reference/next-change/acp2-contracts/science/examples/question-activation.json",
+        "docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+        "docs/reference/next-change/acp2-contracts/science/examples/task-binding-singlepoint.json",
+        "docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+        "docs/reference/next-change/acp2-contracts/science/question.schema.json",
+        "docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+        "docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+        "docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+        "docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/gate.stdout.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/gate.exit-code"
+      ]
+    },
+    {
+      "entry_id": "installed-package-wheel-probe",
+      "row_ids": [
+        "A-27b",
+        "A-28"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_installed_package.py -q",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "tests/test_acp2_science_installed_package.py",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z/result.json",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stdout.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stderr.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.exit-code",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/wheel/cccp-0.2.0-py3-none-any.whl"
+      ]
+    },
+    {
+      "entry_id": "handoff-revision-and-digest-table",
+      "row_ids": [
+        "H0",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python /ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/verify_revisions.py",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "docs/reference/next-change/acp2-contracts/science/baseline.md",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
+        "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/verify-revisions.stdout.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/verify-revisions.exit-code"
+      ]
+    },
+    {
+      "entry_id": "reverse-import-scan",
+      "row_ids": [
+        "H0"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python /ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/scan_reverse_imports.py",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/reverse-imports.stdout.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/reverse-imports.exit-code"
+      ]
+    },
+    {
+      "entry_id": "architecture-guards-and-workflows",
+      "row_ids": [
+        "H0"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_architecture_invariants.py::test_unique_primitive_definitions tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered tests/test_acp2_science_p1_gate.py -q",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "tests/test_architecture_invariants.py",
+        "tests/test_acp2_science_p1_gate.py",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h3.stdout.log"
+      ]
+    },
+    {
+      "entry_id": "compatibility-and-assets",
+      "row_ids": [
+        "H0",
+        "H5"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_packaging_assets.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_isolation.py -q",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "tests/test_packaging_assets.py",
+        "tests/test_recovery_fixtures_smoke.py",
+        "tests/test_cccp_isolation.py",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h5.stdout.log"
+      ]
+    },
+    {
+      "entry_id": "h7-validator-and-adversarial-probes",
+      "row_ids": [
+        "H0",
+        "B25a-release-candidate"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h7_gate.py -q",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+        "tests/test_acp2_science_h7_gate.py",
+        "docs/reference/next-change/acp2-contracts/science/replay-index.json"
+      ]
+    },
+    {
+      "entry_id": "sdk-documented-examples",
+      "row_ids": [
+        "A-28"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_installed_package.py -k documented_examples -q",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "docs/reference/next-change/acp2-contracts/science/examples/singlepoint_public_api.py",
+        "docs/reference/next-change/acp2-contracts/science/examples/compile_recipe.py",
+        "docs/reference/next-change/acp2-contracts/science/examples/read_report.py",
+        "docs/reference/next-change/acp2-contracts/science/examples/external_plugin.py",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z/result.json",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/harness-absent/result.json",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/harness-present/result.json",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/wheel/cccp-0.2.0-py3-none-any.whl"
+      ]
+    },
+    {
+      "entry_id": "b25a-absence-check",
+      "row_ids": [
+        "B25a-release-candidate"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python /ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/check_b25a_absent.py",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z/result.json",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stdout.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stderr.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.exit-code",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/b25a-absence.stdout.log"
+      ]
+    },
+    {
+      "entry_id": "manual-qa",
+      "row_ids": [
+        "H0"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h7_gate.py -q",
+      "cwd": "/ACPServer/acp2-development/A",
+      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "evidence_records": [
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/manual-qa-happy.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/manual-qa-failure.log"
+      ]
+    }
+  ]
+}

@@ -422,6 +422,25 @@
       "readiness": "contract_ready",
       "task_id": "A-26",
       "version": null
+    },
+    {
+      "artifact_id": "H7:science-release-handoff",
+      "consumer": "A-29",
+      "digest": "sha256:aafe1dba70cc0fb10005eeec95468cc872405da4a24f75bd1e6fd33085867bb4",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B25a has not published a release-candidate wheel, and H3 real Local/LSF rows, H4 real DA/search rows and H6 selectivity/C T-40b remain NOT_VERIFIED. H7 is signed by A as its own science handoff only; release_readiness.ready is false.",
+      "phase": "main",
+      "preconditions": {
+        "and": [
+          "B25a:release-candidate"
+        ],
+        "or": []
+      },
+      "producer": "A-29",
+      "product": "science release handoff H7 (handoff-H7.json) + release note + capability support matrix + replay index",
+      "readiness": "implementation_ready",
+      "task_id": "A-29",
+      "version": "1"
     }
   ],
   "schema": "acp2.science.cross-track-dependencies.v1",
