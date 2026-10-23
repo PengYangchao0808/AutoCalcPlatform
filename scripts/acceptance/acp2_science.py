@@ -7537,6 +7537,21 @@ def _installed_examples_dir() -> Path:
     return _repo_root() / SCIENCE_EXAMPLES_RELPATH
 
 
+def _installed_example_artifacts(wheel: Path) -> list[dict[str, Any]]:
+    """Pin the wheel, the four example sources and the input fixtures."""
+    paths: list[Path] = [
+        wheel,
+        *(_installed_examples_dir() / name for name in INSTALLED_EXAMPLE_FILES),
+    ]
+    paths.extend(
+        _repo_root() / relative
+        for mappings in INSTALLED_EXAMPLE_INPUTS.values()
+        for _local_name, relative in mappings
+    )
+    entries = [_artifact_entry(path) for path in paths]
+    return [entry for entry in entries if entry is not None]
+
+
 def _dependency_roots() -> tuple[Path, ...]:
     """Return installed third-party roots only; the source tree is never added."""
     roots: list[Path] = []
@@ -7882,6 +7897,7 @@ def _execute_installed_examples(
             extra={"examples": record},
             extra_json=extra_json,
             extra_bytes=extra_bytes,
+            extra_artifacts=_installed_example_artifacts(wheel),
         )
 
     return _finish_scenario(
@@ -7901,6 +7917,7 @@ def _execute_installed_examples(
         extra={"examples": record},
         extra_json=extra_json,
         extra_bytes=extra_bytes,
+        extra_artifacts=_installed_example_artifacts(wheel),
     )
 
 
