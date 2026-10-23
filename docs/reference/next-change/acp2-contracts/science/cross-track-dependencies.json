@@ -138,6 +138,25 @@
       "version": "1"
     },
     {
+      "artifact_id": "A-26:h6-cross-domain-handoff",
+      "consumer": "C T-40b",
+      "digest": "sha256:f690e7e993125b509e4f5a55ce9465323292346dddfdabc0beacb4e4533b0bd0",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "A-26 delivered handoff-H6.json (schema_version 1) with h6_closure.status=open, closed=false, real_run=false and the nmr/thermo rows PASS only for static/constructed contract verification. The selectivity subcase and the C T-40b signoff row stay NOT_VERIFIED because no C T-40a submission, B23b authorized artifact, real A-25b audit or public run_id exists. C T-40b signs only after a real A-25b audit; this file's presence never upgrades evidence_state.",
+      "phase": "experience:selectivity",
+      "preconditions": {
+        "and": [
+          "A-25b:selectivity-audit-report"
+        ],
+        "or": []
+      },
+      "producer": "A-26",
+      "product": "H6 cross-domain/version applicability matrix with per-subcase rows keyed by experience:nmr/experience:thermo/experience:selectivity, the constructed budget allocation, fixture digests and producer states",
+      "readiness": "implementation_ready",
+      "task_id": "A-26",
+      "version": "1"
+    },
+    {
       "artifact_id": "B00:candidate-overlay-snapshot",
       "consumer": "A-00a",
       "digest": "sha256:3fb835b5069f96642bf6bb889a804532bbb70b69cf796d21208a6e3364117734",
