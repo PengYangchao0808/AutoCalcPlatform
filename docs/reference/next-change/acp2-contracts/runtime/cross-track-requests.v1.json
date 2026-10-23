@@ -61,6 +61,20 @@
         "docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md"
       ],
       "residual": "Not delivered by B06: this request is repo/CI/release publication scope, not runtime entry binding. Owner remains B25a with B12 consuming the static-asset manifest."
+    },
+    {
+      "request_id": "C-defect-scientific-evidence-token",
+      "from": "C",
+      "owner": "C",
+      "status": "open",
+      "step": "C",
+      "expected": "C-owned frontend/js/workbench/features/scientific-evidence.js must stop colliding with the B addModel token-ceiling guard: line 751 declares a local callback variable named token and calls token.fn(), which the guard's addModel-token regex flags as a token-ceiling bypass. Rename the local callback (or otherwise remove the token.fn() shape) without weakening the guard; the guard stays as-is.",
+      "evidence": [
+        "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
+        "frontend/js/workbench/features/scientific-evidence.js:751",
+        "C HEAD e03a9dd9f6897ca0a8d43e69a10b22a20097f05d (same failure: token.fn() name collision)"
+      ],
+      "residual": "Open and C-owned; B did not edit frontend/**. The skill is recorded NOT_VERIFIED for the integration candidate until C fixes it at its own HEAD; this row is the visible cross-track request, not a PASS."
     }
   ]
 }

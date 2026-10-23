@@ -1,0 +1,23 @@
+diff --git a/src/acp/services_data_bootstrap.py b/src/acp/services_data_bootstrap.py
+index 726e734..64cc02c 100644
+--- a/src/acp/services_data_bootstrap.py
++++ b/src/acp/services_data_bootstrap.py
+@@ -1130,6 +1130,18 @@ class _CompositePrepareExecutor:
+         self._catalog = catalog
+         self._artifact = artifact
+ 
++    # -- compatibility entry point (legacy direct prefetch) -------------
++
++    def prefetch(self, job_id: str) -> PrepareExecutionResult:
++        """Forward the legacy direct prefetch to the catalog mechanism.
++
++        The manager's terminal/startup prefetch is always a whole-catalog
++        operation (it carries no ``purpose``), so the composite delegates to
++        the catalog executor's identity-checked prefetch instead of
++        duplicating lease synthesis or purpose routing here.
++        """
++        return self._catalog.prefetch(job_id)
++
+     def execute(self, lease: PrepareLease) -> PrepareExecutionResult:
+         purpose = str(dict(lease.payload or {}).get("purpose") or "")
+         if purpose == "artifact":

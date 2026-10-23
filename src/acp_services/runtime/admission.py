@@ -52,6 +52,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -872,10 +873,26 @@ class ReservationLedger:
         with self._lock:
             conn = self._connect()
             try:
-                conn.execute("PRAGMA journal_mode=WAL;")
+                self._enable_wal(conn)
                 conn.executescript(_CREATE_TABLE_SQL)
             finally:
                 conn.close()
+
+    @staticmethod
+    def _enable_wal(conn: sqlite3.Connection) -> None:
+        # ``PRAGMA journal_mode=WAL`` returns SQLITE_BUSY without consulting
+        # busy_timeout while another connection flips the same file, so two
+        # concurrent first opens would otherwise fail the schema init.  Wait
+        # explicitly inside the same 5 s budget instead.
+        deadline = time.monotonic() + 5.0
+        while True:
+            try:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                return
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.02)
 
     # -- reads ---------------------------------------------------------------
 
