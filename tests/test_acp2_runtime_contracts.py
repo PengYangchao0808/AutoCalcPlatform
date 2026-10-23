@@ -410,13 +410,22 @@ def test_science_binding_maps_the_existing_singlepoint_task() -> None:
             continue
         assert bare in targets, f"field_map target {target} is not a TaskRequest field"
     assert single["step_requirements"]["singlepoint"]["requires_geometry"] is True
-    assert binding["reserved_science_contracts"]["entries"]
-    for entry in binding["reserved_science_contracts"]["entries"]:
+    assert binding["science_contracts"]["entries"]
+    for entry in binding["science_contracts"]["entries"]:
         assert entry["owner"] == "A"
         assert entry["types_copied"] is False
-        assert entry["digest_or_pending"] == "PENDING"
+        assert entry["status"] == "delivered"
+        assert entry["digest"].startswith("sha256:")
+        assert len(entry["digest"]) == 71
         assert "properties" not in entry
         assert "fields" not in entry
+    # The historical reservation key stays readable and points at the same
+    # delivered digests (B18a increments it, it is not a second contract).
+    reserved = binding["reserved_science_contracts"]["entries"]
+    assert reserved
+    for entry in reserved:
+        assert entry["status"] == "delivered"
+        assert entry["digest_or_pending"].startswith("sha256:")
 
 
 def test_science_binding_positive_sample_parses_as_a_task_request() -> None:
@@ -805,7 +814,7 @@ def _contract_digest(manifest: dict[str, Any]) -> str:
 
 
 def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) -> None:
-    assert manifest["contract_version"] == "1.1.0"
+    assert manifest["contract_version"] == "1.2.0"
     delivered = {entry["id"]: entry for entry in manifest["contracts"]}
     b03_ids = {
         "application-api",

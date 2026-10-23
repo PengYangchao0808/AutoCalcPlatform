@@ -50,6 +50,9 @@ __all__ = [
     "CANONICAL_DIGEST_VERSION",
     "CanonicalDigestError",
     "CanonicalProjection",
+    "C_PLAN_DEFINITION_FIELDS",
+    "C_PLAN_SCIENCE_FIELDS",
+    "C_PLAN_BUDGET_FIELDS",
     "PLAN_DEFINITION_FIELDS",
     "PLAN_IGNORED_FIELDS",
     "PROPOSAL_IGNORED_FIELDS",
@@ -60,6 +63,8 @@ __all__ = [
     "frozen_plan_definition",
     "plan_digest",
     "proposal_digest",
+    "proposal_plan_definition",
+    "proposal_plan_definition_digest",
 ]
 
 #: Frozen spec id from B03.
@@ -462,6 +467,105 @@ def proposal_digest(proposal: Mapping[str, Any]) -> CanonicalProjection:
         label="proposal",
     )
     return _projection(filtered, set_fields=("capability_ids",))
+
+
+#: C's frozen ``plan_definition_digest`` projection
+#: (``experience/plan-identity.md`` §1.1).  This is an *additive* projection:
+#: the existing B03 ``PLAN_DEFINITION_FIELDS`` and every digest produced from it
+#: stay byte-identical.  A proposal that carries C's fields can be projected
+#: here and compared with C's reference implementation.
+C_PLAN_SCIENCE_FIELDS: tuple[str, ...] = (
+    "capability_steps",
+    "initial_inputs",
+    "method",
+    "mapping",
+    "charge",
+    "multiplicity",
+    "allowed_substitutions",
+)
+C_PLAN_BUDGET_FIELDS: tuple[str, ...] = (
+    "model_requests",
+    "input_tokens",
+    "output_tokens",
+    "task_refs",
+    "recipe_steps",
+    "qc_invocations",
+    "wall_seconds",
+    "queue_seconds",
+)
+C_PLAN_DEFINITION_FIELDS: tuple[str, ...] = (
+    "recipe_digest",
+    "science",
+    "budget",
+)
+
+
+def _drop_null_members(value: Any) -> Any:
+    """Drop null object members recursively (C's ``drop_null_optional_fields``).
+
+    Absent and null mean the same thing for an optional member; the
+    canonicalization itself rejects null, so the projection removes it first.
+    """
+    if isinstance(value, Mapping):
+        return {
+            _nfc(key): _drop_null_members(item) for key, item in value.items() if item is not None
+        }
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_drop_null_members(item) for item in value]
+    return value
+
+
+def proposal_plan_definition(proposal: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a C Proposal onto its frozen ``plan_definition_digest`` input.
+
+    Only ``recipe_digest`` + the seven ``science`` fields + the eight ``budget``
+    numbers are included.  Approval state, timestamps, display names, decision,
+    human edits, allowed-change summaries and later TaskRef/evidence refs are
+    excluded by construction.  Null optional members are dropped before the
+    single canonicalization.
+    """
+    if not isinstance(proposal, Mapping):
+        raise CanonicalDigestError(
+            "root_not_object", f"proposal must be an object, got {type(proposal).__name__}"
+        )
+    for field_name in C_PLAN_DEFINITION_FIELDS:
+        if field_name not in proposal:
+            raise CanonicalDigestError(
+                "missing_science_field", f"proposal is missing {field_name!r}"
+            )
+    science = proposal["science"]
+    budget = proposal["budget"]
+    if not isinstance(science, Mapping):
+        raise CanonicalDigestError("missing_science_field", "proposal.science must be an object")
+    if not isinstance(budget, Mapping):
+        raise CanonicalDigestError("missing_science_field", "proposal.budget must be an object")
+    missing_science = [name for name in C_PLAN_SCIENCE_FIELDS if name not in science]
+    if missing_science:
+        raise CanonicalDigestError(
+            "missing_science_field",
+            "proposal.science is missing: " + ", ".join(missing_science),
+        )
+    missing_budget = [name for name in C_PLAN_BUDGET_FIELDS if name not in budget]
+    if missing_budget:
+        raise CanonicalDigestError(
+            "missing_science_field",
+            "proposal.budget is missing: " + ", ".join(missing_budget),
+        )
+    projected = {
+        "recipe_digest": proposal["recipe_digest"],
+        "science": {name: science[name] for name in C_PLAN_SCIENCE_FIELDS},
+        "budget": {name: budget[name] for name in C_PLAN_BUDGET_FIELDS},
+    }
+    return _drop_null_members(projected)
+
+
+def proposal_plan_definition_digest(proposal: Mapping[str, Any]) -> CanonicalProjection:
+    """C's ``plan_definition_digest`` computed by B16's single canonicalization.
+
+    This is the cross-track identity proof: C's reference projection and B's
+    helper must produce the same digest for the same Proposal bytes.
+    """
+    return _projection(proposal_plan_definition(proposal))
 
 
 def frozen_plan_definition(

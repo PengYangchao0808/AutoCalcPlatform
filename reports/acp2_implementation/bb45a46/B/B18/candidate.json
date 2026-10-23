@@ -1,0 +1,90 @@
+{
+  "base_revision": "7f0fa7ee4942ac587ce4eccb48008e68feb1ce42",
+  "branch": "feat/frontend-plan1-closure",
+  "candidate_revision": "sha256:c08246ebfc5ee0105d2e07903da6def673de40b02160e584703fa96c4e95bf26",
+  "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B18 working-tree files",
+  "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
+  "contract_version": "1.2.0",
+  "controller_command": "/ACPServer/acp2-development/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18778 --run-root /ACPServer/acp2-development/data/b/run-root-b18 --poll-interval 1 --no-browser",
+  "controller_health": {
+    "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.2.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-23T08:06:06.301209Z",
+    "status": "ok"
+  },
+  "fixture": "reports/acp2_implementation/bb45a46/B/B18/fixtures/da-preflight.json",
+  "fixture_sha256": "d0cecbe488b060c7d36f1d5d0f6dcdb0d82884a32c2c8d9edd87e7cce7accad0",
+  "schema": "acp2.b18.candidate.v1",
+  "source_checkout": "/ACPServer/AutoCalcPlatform",
+  "source_composition": "current working tree (PYTHONPATH=/ACPServer/AutoCalcPlatform/src)",
+  "working_tree_files": [
+    {
+      "path": "src/acp_services/runtime/science_binding.py",
+      "sha256": "44b2d3546363df8b29a724c9f2d04bc3c313e3f60ca15f627fb747a4c3dc3687"
+    },
+    {
+      "path": "src/acp_services/runtime/step_dag.py",
+      "sha256": "f18e713baa87b7a200dbdf5a2b6ce2dd63d0cfb2ee4147c9596c0a34b12ee29a"
+    },
+    {
+      "path": "src/acp_services/data/research_resources.py",
+      "sha256": "4987ff75d8c68a566bc1fecfb14bd93e29126b7ce147ce4b5da6fc5bcf179750"
+    },
+    {
+      "path": "src/acp_services/runtime/canonical_digest.py",
+      "sha256": "0f56d19d7e30339df2bfc12935f48b43048197d95ec13cfbad56095b8cd619f2"
+    },
+    {
+      "path": "scripts/acceptance/acp2_runtime.py",
+      "sha256": "ffe67994c4feb036113d2f2f0b8da8c623669a76527609800ec778655f927bb3"
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+      "sha256": "b6ceeb339bf09cb2783cf1104db656d45140eb1150d1fb5632bd6f9b4c38a9a3"
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "sha256": "14231d70216135ef1c3c342d1a5d11e968caa0c836e862e7d82f85f56975ae69"
+    },
+    {
+      "path": "tests/test_acp2_runtime_science_binding.py",
+      "sha256": "fa121c404a6ef55851c531d1cd9e8493b0fcc9323bd498228e75b666e08e7af7"
+    },
+    {
+      "path": "tests/test_acp2_runtime_contracts.py",
+      "sha256": "9e03c8528f43ca9be6cfcb32a39a54819f5bd9cf30d59dbf34cae7d19b398497"
+    },
+    {
+      "path": "tests/fixtures/acp2/science/b18/capability-energy.json",
+      "sha256": "8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846"
+    },
+    {
+      "path": "tests/fixtures/acp2/science/b18/task-binding-singlepoint.json",
+      "sha256": "de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6"
+    },
+    {
+      "path": "tests/fixtures/acp2/science/b18/reaction-da.json",
+      "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2"
+    },
+    {
+      "path": "tests/fixtures/acp2/science/b18/p2-minimal-form.json",
+      "sha256": "7e87af0f4f65c6c1a8224fdaee868dd65c1ddf2eb824674f56da46f82562846c"
+    },
+    {
+      "path": "tests/fixtures/acp2/science/b18/evidence-report.json",
+      "sha256": "7148684b5143d6628ebf68d2942f28e841d69d5c71bc83dc176878b28140bbc6"
+    },
+    {
+      "path": "tests/fixtures/acp2/science/b18/proposal.valid.json",
+      "sha256": "cf15149cb4c49b34f8816f9415c531440b9794a7e8552b3782050ccada4d3b76"
+    },
+    {
+      "path": "tests/fixtures/acp2/science/b18/research-record.valid.json",
+      "sha256": "db4fbdafbdfbac2c546e7b2e701f8aa1347e2a9c5e985fe107c7423794c83674"
+    }
+  ]
+}

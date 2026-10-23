@@ -1,0 +1,124 @@
+{
+  "claim_interpretation": "not_interpreted",
+  "claim_statuses": [
+    {
+      "claim_id": "c-static-supported",
+      "status": "supported"
+    },
+    {
+      "claim_id": "c-static-refuted",
+      "status": "refuted"
+    },
+    {
+      "claim_id": "c-static-inconclusive",
+      "status": "inconclusive"
+    },
+    {
+      "claim_id": "c-static-not-evaluated",
+      "status": "not_evaluated"
+    }
+  ],
+  "evidence_class": "STATIC/SIMULATED",
+  "execution_terminal_state": "completed",
+  "limitations": [
+    "STATIC/SIMULATED fixture only; no real QC execution."
+  ],
+  "native_files": [
+    {
+      "attempt": 1,
+      "authorization": {
+        "action": "read",
+        "allowed": true,
+        "authorization_version": 0,
+        "principal_id": "b18-preflight",
+        "project_id": "proj-b18",
+        "scope": "local-single"
+      },
+      "availability": "ready",
+      "digest": "sha256:4e126dca11757b6e65b27642c3003ce7f607e69de85acca49bdf5cbb513c8540",
+      "generation": 1,
+      "job_id": "b18-static",
+      "media_type": "application/octet-stream",
+      "operation_id": "",
+      "relative_path": "native/stdout.txt",
+      "resource_id": "evidence_report_native_0",
+      "schema": "acp2.artifact-ref.v1",
+      "size_bytes": 18,
+      "source_refs": [
+        {
+          "role": "native_output"
+        }
+      ],
+      "source_schema": "",
+      "version": 1
+    },
+    {
+      "attempt": 1,
+      "authorization": {
+        "action": "read",
+        "allowed": true,
+        "authorization_version": 0,
+        "principal_id": "b18-preflight",
+        "project_id": "proj-b18",
+        "scope": "local-single"
+      },
+      "availability": "ready",
+      "digest": "sha256:fee1ffbdc1f1525d88bf42a5e5bbc3a49b6cf33dc7e7b0b1c24218fea595dfe1",
+      "generation": 1,
+      "job_id": "b18-static",
+      "media_type": "application/octet-stream",
+      "operation_id": "",
+      "relative_path": "native/stderr.txt",
+      "resource_id": "evidence_report_native_1",
+      "schema": "acp2.artifact-ref.v1",
+      "size_bytes": 18,
+      "source_refs": [
+        {
+          "role": "native_output"
+        }
+      ],
+      "source_schema": "",
+      "version": 1
+    }
+  ],
+  "provenance_digest": "sha256:7b4a011e688025b3f8382dd43fe53fcc3beabbc47044eb45211f95eb3e40f181",
+  "report": {
+    "attempt": 1,
+    "authorization": {
+      "action": "read",
+      "allowed": true,
+      "authorization_version": 0,
+      "principal_id": "b18-preflight",
+      "project_id": "proj-b18",
+      "scope": "local-single"
+    },
+    "availability": "ready",
+    "digest": "sha256:69c2f2c6f07b90ed3f09a3c9d6806cc6c9e965cafce9fbbe8274d7d9bdc1fcae",
+    "generation": 1,
+    "job_id": "b18-static",
+    "media_type": "application/json",
+    "operation_id": "",
+    "relative_path": "evidence_report.json",
+    "resource_id": "evidence_report",
+    "schema": "acp2.artifact-ref.v1",
+    "size_bytes": 2084,
+    "source_refs": [
+      {
+        "artifact_path": "native/stdout.txt",
+        "digest": "{'algorithm': 'sha256', 'value': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}",
+        "role": "native_output"
+      },
+      {
+        "artifact_path": "native/stdout.txt",
+        "digest": "{'algorithm': 'sha256', 'value': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}",
+        "role": "native_output"
+      }
+    ],
+    "source_schema": "acp2.science.evidence-report.v1",
+    "version": 1
+  },
+  "report_id": "report-b18-static-singlepoint",
+  "schema": "acp2.runtime.evidence-manifest.v1",
+  "served_digest": "sha256:69c2f2c6f07b90ed3f09a3c9d6806cc6c9e965cafce9fbbe8274d7d9bdc1fcae",
+  "task_execution_completed": true
+}
