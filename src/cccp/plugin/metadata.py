@@ -38,7 +38,12 @@ from enum import Enum
 from typing import Any
 
 from cccp.calculation.capabilities.contracts import TASK_KINDS, CapabilityKind
-from cccp.plugin.errors import PluginLicenseError, PluginMetadataError
+from cccp.plugin.errors import (
+    PluginFixtureIntegrityError,
+    PluginImplementationConflictError,
+    PluginLicenseError,
+    PluginMetadataError,
+)
 from cccp.version import __version__
 
 PLUGIN_API_VERSION = 1
@@ -742,6 +747,20 @@ class PluginMetadata:
         capability_names = [capability.name for capability in self.capabilities]
         if len(set(capability_names)) != len(capability_names):
             raise PluginMetadataError("capability names must be unique")
+        implementation_ids = [
+            capability.implementation_id
+            for capability in self.capabilities
+            if capability.implementation_id
+        ]
+        if len(set(implementation_ids)) != len(implementation_ids):
+            duplicate = next(
+                item for item in implementation_ids if implementation_ids.count(item) > 1
+            )
+            raise PluginImplementationConflictError(
+                self.name,
+                implementation_id=duplicate,
+                reason="capability implementation ids must be unique within one plugin",
+            )
         if not self.error_semantics.never_overrides_builtin:
             raise PluginMetadataError("error_semantics.never_overrides_builtin must be True")
         if not _range_expression_is_well_formed(self.science_version_range):
@@ -923,6 +942,72 @@ class PluginMetadata:
         )
 
 
+def verify_fixture_evidence(
+    metadata: PluginMetadata,
+    *,
+    fixture_id: str,
+    computed_digest: str,
+) -> PluginFixtureEvidence:
+    """Compare a recomputed fixture digest with the declared evidence.
+
+    The platform owner recomputes the digest from the installed fixture bytes
+    and passes it here.  The manifest can only carry a claim, so a missing
+    record, an unverified record or a digest mismatch fails closed with
+    :class:`PluginFixtureIntegrityError` and never changes the trust level.
+
+    Args:
+        metadata: The frozen plugin metadata record.
+        fixture_id: Evidence record to verify.
+        computed_digest: ``sha256:<64 lowercase hex>`` recomputed by the caller.
+
+    Returns:
+        The matching :class:`PluginFixtureEvidence` record.
+
+    Raises:
+        PluginFixtureIntegrityError: The record is missing, unverified, or its
+            declared digest differs from *computed_digest*.
+    """
+    try:
+        digest = _optional_digest(computed_digest, field_name="computed_digest")
+    except PluginMetadataError as exc:
+        raise PluginFixtureIntegrityError(
+            metadata.name,
+            fixture_id=fixture_id,
+            reason=f"computed digest is malformed: {exc}",
+        ) from exc
+    if digest is None:
+        raise PluginFixtureIntegrityError(
+            metadata.name,
+            fixture_id=fixture_id,
+            reason="computed digest must not be null",
+        )
+    evidence = next(
+        (record for record in metadata.fixture_evidence if record.fixture_id == fixture_id),
+        None,
+    )
+    if evidence is None:
+        raise PluginFixtureIntegrityError(
+            metadata.name,
+            fixture_id=fixture_id,
+            reason="fixture evidence is not declared",
+        )
+    if not evidence.verified:
+        raise PluginFixtureIntegrityError(
+            metadata.name,
+            fixture_id=fixture_id,
+            reason="declared fixture evidence is not marked verified",
+        )
+    if evidence.digest != digest:
+        raise PluginFixtureIntegrityError(
+            metadata.name,
+            fixture_id=fixture_id,
+            reason=(
+                f"declared digest {evidence.digest!r} does not match recomputed digest {digest!r}"
+            ),
+        )
+    return evidence
+
+
 @dataclass(frozen=True, slots=True)
 class BuiltinIdentity:
     """Version identity of the host itself.
@@ -971,4 +1056,5 @@ __all__ = [
     "ResourceRequirements",
     "ScienceSoftwareVersion",
     "api_version_in_range",
+    "verify_fixture_evidence",
 ]

@@ -37,6 +37,8 @@ from cccp.plugin.errors import (
     PluginDependencyUnavailableError,
     PluginDisabledError,
     PluginError,
+    PluginFixtureIntegrityError,
+    PluginImplementationConflictError,
     PluginLicenseError,
     PluginLoadError,
     PluginMetadataError,
@@ -82,6 +84,7 @@ from cccp.plugin.metadata import (
     ResourceRequirements,
     ScienceSoftwareVersion,
     api_version_in_range,
+    verify_fixture_evidence,
 )
 from cccp.plugin.readonly_parser import (
     ORCA_READONLY_PARSER_NAME,
@@ -178,8 +181,10 @@ __all__ = [
     "PluginError",
     "PluginFailureReport",
     "PluginFixtureEvidence",
+    "PluginFixtureIntegrityError",
     "PluginHost",
     "PluginIdentityScope",
+    "PluginImplementationConflictError",
     "PluginLicenseError",
     "PluginLicensePolicy",
     "PluginLoader",
@@ -222,5 +227,6 @@ __all__ = [
     "validate_declared_recipe",
     "validate_declared_validators",
     "validate_result_contract",
+    "verify_fixture_evidence",
     "XyzReadonlyParserPlugin",
 ]

@@ -43,12 +43,16 @@ def _run(argv: list[str], *, env: dict[str, str] | None = None) -> subprocess.Co
     )
 
 
-def build_fixture_wheel(outdir: Path) -> tuple[Path, list[str], str]:
+def build_fixture_wheel(
+    outdir: Path, *, fixture_root: Path = FIXTURE_ROOT
+) -> tuple[Path, list[str], str]:
     """Build the fixture wheel offline and return ``(wheel, argv, log)``.
 
     Uses ``python -m build --wheel --no-isolation`` when the ``build`` module
     is importable (the platform build tool), otherwise falls back to
-    ``pip wheel --no-deps --no-index --no-build-isolation``.
+    ``pip wheel --no-deps --no-index --no-build-isolation``.  ``fixture_root``
+    selects the distribution source tree (the A-22 fixture by default, the
+    A-23 upgrade pair when supplied).
     """
     outdir.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
@@ -63,7 +67,7 @@ def build_fixture_wheel(outdir: Path) -> tuple[Path, list[str], str]:
             "--no-isolation",
             "--outdir",
             str(outdir),
-            str(FIXTURE_ROOT),
+            str(fixture_root),
         ]
     else:
         argv = [
@@ -76,7 +80,7 @@ def build_fixture_wheel(outdir: Path) -> tuple[Path, list[str], str]:
             "--no-build-isolation",
             "-w",
             str(outdir),
-            str(FIXTURE_ROOT),
+            str(fixture_root),
         ]
     result = _run(argv, env=env)
     log = result.stdout + result.stderr
@@ -147,12 +151,12 @@ def uninstall_distribution(
     return argv, result
 
 
-def run_probe(python: Path, *args: object) -> dict[str, object]:
-    """Run the probe in the isolated venv and return its JSON payload."""
+def run_python_script(python: Path, script: Path, *args: object) -> dict[str, object]:
+    """Run *script* in the isolated venv and return its JSON payload."""
     env = dict(os.environ)
     existing = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = str(SOURCE_ROOT) if not existing else f"{SOURCE_ROOT}{os.pathsep}{existing}"
-    argv = [str(python), str(PROBE_SCRIPT), *(str(arg) for arg in args)]
+    argv = [str(python), str(script), *(str(arg) for arg in args)]
     result = _run(argv, env=env)
     if result.returncode != 0:
         raise AssertionError(f"probe failed ({result.returncode}):\n{result.stdout}{result.stderr}")
@@ -160,6 +164,11 @@ def run_probe(python: Path, *args: object) -> dict[str, object]:
         return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise AssertionError(f"probe did not emit JSON:\n{result.stdout}{result.stderr}") from exc
+
+
+def run_probe(python: Path, *args: object) -> dict[str, object]:
+    """Run the A-22 probe in the isolated venv and return its JSON payload."""
+    return run_python_script(python, PROBE_SCRIPT, *args)
 
 
 __all__ = [
@@ -182,6 +191,7 @@ __all__ = [
     "create_isolated_venv",
     "install_wheel",
     "run_probe",
+    "run_python_script",
     "uninstall_distribution",
     "venv_python",
 ]

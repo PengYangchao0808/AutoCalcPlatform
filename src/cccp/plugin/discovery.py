@@ -36,6 +36,7 @@ from cccp.calculation.capabilities.contracts import CapabilityState
 from cccp.calculation.requests import TaskKind
 from cccp.plugin.errors import (
     PluginCapabilityConflictError,
+    PluginImplementationConflictError,
     PluginMetadataError,
     PluginNameConflictError,
     PluginVersionMismatchError,
@@ -338,6 +339,8 @@ def discover_plugins(
             candidates declare the same name.
         PluginCapabilityConflictError: a capability is reserved for a
             built-in task, or two candidates declare the same capability.
+        PluginImplementationConflictError: two candidates declare the same
+            implementation id.
         PluginVersionMismatchError: the declared API or science range
             excludes the host.
 
@@ -346,6 +349,7 @@ def discover_plugins(
     identity = BuiltinIdentity() if builtin is None else builtin
     seen: set[str] = set()
     seen_capabilities: dict[str, str] = {}
+    seen_implementations: dict[str, str] = {}
     discovered: list[PluginMetadata] = []
     origins: list[PluginOrigin] = []
     for candidate in candidates:
@@ -384,6 +388,18 @@ def discover_plugins(
                     reason=f"duplicate capability already declared by {previous!r}",
                 )
             seen_capabilities[capability.name] = metadata.name
+            if capability.implementation_id:
+                previous_implementation = seen_implementations.get(capability.implementation_id)
+                if previous_implementation is not None:
+                    raise PluginImplementationConflictError(
+                        metadata.name,
+                        implementation_id=capability.implementation_id,
+                        reason=(
+                            "duplicate implementation id already declared by "
+                            f"{previous_implementation!r}"
+                        ),
+                    )
+                seen_implementations[capability.implementation_id] = metadata.name
         seen.add(metadata.name)
         discovered.append(metadata)
         origins.append(
