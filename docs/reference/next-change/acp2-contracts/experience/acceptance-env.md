@@ -175,6 +175,16 @@ Order of checks:
 `ACP2_RS_FORWARD` carries the forwarded flags; `--out`/`--timeout` are captured
 by `c_accept` so the harness receives exactly one of each.
 
+`c_accept` accepts `approval-budget-live 600 --phase approval` (T-27's required
+invocation). The leaf remains `<run_id>/approval`, but the harness normalizes
+the written public phase to `experience:fixture` and records
+`evidence_kind=fixture`, because the approval content is fixture-only (Node
+module suite + digest matrix, no Controller/DSH/model/QC/LSF/browser process).
+`--phase budget` stays `NOT_VERIFIED(b16_handoff)` and also records fixture
+evidence; `--phase aggregate` stays `NOT_VERIFIED` while that child is
+`NOT_VERIFIED`. A fixture-only scenario never claims a live phase, and
+`--mode live` is a usage error (`3`) for it. See `harness-contract.md` §4.
+
 ## 6. Evidence-root resolution (adopted B00 baseline)
 
 `c_accept` reads B00's committed `runtime/baseline-lock.json` — first

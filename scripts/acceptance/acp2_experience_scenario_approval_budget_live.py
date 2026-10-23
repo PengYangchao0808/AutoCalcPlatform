@@ -14,11 +14,11 @@ harness-resolved through ``context.identity.phase``:
   child rows and must stay ``NOT_VERIFIED`` while the budget row is
   ``NOT_VERIFIED``.  Run order is approval → budget → aggregate.
 
-The public receipt field ``evidence_kind`` is owned by the frozen harness
-(harness-contract.md §4: an explicit common phase such as ``--phase approval``
-is written as ``evidence_kind=live``).  This body never fakes that field; it
-asserts the fixture *content* of the approval evidence and records the content
-kind in the matrix and extensions.
+The harness normalizes ``--phase approval`` to the public phase
+``experience:fixture`` through a scenario-level phase alias
+(harness-contract.md §4), so the receipt honestly publishes
+``evidence_kind=fixture``.  The requested phase remains visible to this body as
+``context.identity.requested_phase``.  No live approval row is ever claimed.
 """
 
 from __future__ import annotations
@@ -49,9 +49,7 @@ SCENARIO_ID = "approval-budget-live"
 FEATURE_SOURCE = "frontend/js/workbench/features/research-approval.js"
 TEST_SOURCE = "frontend/js/module_tests/acp2_approval.test.js"
 RUN_ALL = "frontend/js/module_tests/run_all.js"
-PLAN_IDENTITY = (
-    "docs/reference/next-change/acp2-contracts/experience/plan-identity.md"
-)
+PLAN_IDENTITY = "docs/reference/next-change/acp2-contracts/experience/plan-identity.md"
 
 MIN_APPROVAL_CASES = 8
 
@@ -200,9 +198,7 @@ def _phase_approval(context: Any) -> int:
         f"passed={passed} failed={failed} minimum={MIN_APPROVAL_CASES}",
     )
 
-    missing_phrases = [
-        name for name, phrase in REQUIRED_TEST_PHRASES.items() if phrase not in log
-    ]
+    missing_phrases = [name for name, phrase in REQUIRED_TEST_PHRASES.items() if phrase not in log]
     covered = sorted(set(REQUIRED_TEST_PHRASES) - set(missing_phrases))
     _assertion(
         context,
@@ -211,9 +207,12 @@ def _phase_approval(context: Any) -> int:
         f"missing={missing_phrases} covered={covered}",
     )
 
+    public_phase = getattr(context.identity, "phase", None)
     matrix = {
         "evidence_kind": "fixture",
         "public_evidence_kind": kind,
+        "requested_phase": "approval",
+        "public_phase": public_phase,
         "phase": "approval",
         "feature_module": FEATURE_SOURCE,
         "test_module": TEST_SOURCE,
@@ -244,14 +243,13 @@ def _phase_approval(context: Any) -> int:
     _assertion(
         context,
         "approval.evidence_kind_fixture_content",
-        content_is_fixture and kind in ("fixture", "live"),
-        f"content evidence_kind=fixture; public evidence_kind={kind} "
-        "(harness-contract.md §4 maps an explicit common phase to live; the "
-        "field is never faked here)",
+        content_is_fixture and kind == "fixture",
+        f"content evidence_kind=fixture; public evidence_kind={kind}",
     )
 
     context.extensions["experience.approval_budget"] = {
         "phase": "approval",
+        "public_phase": public_phase,
         "evidence_kind": "fixture",
         "public_evidence_kind": kind,
         "bind_tuple": BIND_TUPLE,
@@ -262,7 +260,8 @@ def _phase_approval(context: Any) -> int:
 
 
 def scenario_approval_budget_live(context: Any) -> int:
-    phase = getattr(context.identity, "phase", None)
+    identity = context.identity
+    phase = getattr(identity, "requested_phase", None) or getattr(identity, "phase", None)
     if phase == "approval":
         return _phase_approval(context)
     if phase == "budget":

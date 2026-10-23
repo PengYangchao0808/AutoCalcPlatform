@@ -94,6 +94,8 @@ Before writing, the harness normalizes:
 | C input | Written phase | Evidence kind |
 | --- | --- | --- |
 | explicit `--phase` (common) | unchanged | `main`/`approval`/`budget`/... → `live`; `aggregate` → `aggregate` |
+| `approval-budget-live --phase approval` | `experience:fixture` (scenario alias) | `fixture` |
+| `approval-budget-live --phase budget` | `budget` (unchanged) | `fixture` (gap, `NOT_VERIFIED`) |
 | `--subcase control` on `research-loop-live` | `experience:control` | `live` |
 | `--subcase search` on `research-loop-live` | `experience:search` | `live` |
 | `--subcase nmr` on `cross-domain-live` | `experience:nmr` | `live` |
@@ -104,6 +106,27 @@ Before writing, the harness normalizes:
 | no mode/subcase, fixture-default scenario | `experience:fixture` | `fixture` |
 | no mode/subcase, live-default scenario | `experience:live` | `live` |
 | no mode/subcase, `p2-closeout` / release scenarios | `main` | `live` |
+
+### Scenario-level phase alias (fixture-only evidence)
+
+`approval-budget-live` is a scenario whose current evidence content is
+fixture-only: the approval row runs the zero-dependency Node approval-card
+suite and the plan-digest matrix, and the budget row is
+`NOT_VERIFIED(b16_handoff)`. The CLI still accepts B01's common phase
+`--phase approval` (T-27's required invocation), but the harness normalizes it
+to the public phase `experience:fixture` and writes `evidence_kind=fixture`.
+The scenario body reads the original value from
+`ResolvedIdentity.requested_phase`; the receipt never carries the common
+`approval` phase for this scenario.
+
+Rule: **a fixture-only scenario can never claim a live phase.** It must not
+publish `evidence_kind=live`, and `--mode live` is a usage error (`3`) for such
+a scenario. `--phase budget` remains `NOT_VERIFIED(b16_handoff)` and is
+recorded as fixture evidence because no live budget artifact exists; the
+aggregate parent stays `NOT_VERIFIED` while that budget child is
+`NOT_VERIFIED`. When B16/B17 deliver live approval/budget endpoints, the
+scenario is removed from the fixture-only set in the same change that starts
+publishing live rows.
 
 `--subcase` is legal only for `cross-domain-live` with
 `nmr|thermo|selectivity` and `research-loop-live` with `control|search`. Any
