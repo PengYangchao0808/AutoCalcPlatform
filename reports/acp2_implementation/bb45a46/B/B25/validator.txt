@@ -1,7 +1,9 @@
 VALID: artifacts-acceptance.json
 VALID: cccp-import-check.json
 VALID: cccp-role-probe.json
+VALID: cleanup.json
 VALID: dependency-classification.json
+VALID: digest-consistency.json
 VALID: install-results.json
 VALID: reviewed-requests.json
 VALID: summary.json

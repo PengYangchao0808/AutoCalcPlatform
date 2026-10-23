@@ -1,25 +1,25 @@
 {
-  "schema": "acp2.b25.cleanup.v1",
-  "cleaned_at": "2026-10-23T12:18:00Z",
+  "active_test_pids": [],
+  "cleaned_at": "2026-10-23T12:35:00Z",
+  "production_8765_touched": false,
   "removed": [
-    "/tmp/opencode/acp2-b25-clean (git worktree removed)",
+    "/tmp/opencode/acp2-b25-fix (git worktree removed)",
+    "/tmp/opencode/b25-fix-roundtrip",
+    "/tmp/opencode/b25-fix-cccp-venv",
+    "/tmp/opencode/b25-fix-worker-venv",
+    "/tmp/opencode/b25-fix-web-venv",
+    "/tmp/opencode/acp2-b25-clean",
     "/tmp/opencode/b25-root-build",
-    "/tmp/opencode/b25-roundtrip",
-    "/tmp/opencode/b25-cccp-venv",
-    "/tmp/opencode/b25-worker-venv",
-    "/tmp/opencode/b25-web-venv",
-    "/tmp/opencode/b25-smoke",
-    "/tmp/opencode/b25-pipcheck",
-    "/tmp/opencode/b25_worker_receipt_check.py"
+    "/tmp/opencode/b25-roundtrip"
   ],
   "retained": {
-    "release_artifacts": "reports/acp2_implementation/bb45a46/B/B25/release",
-    "reason": "A-27b/A-28/C33/C34/B25b consume the actual B25a wheels/sdists; digests are also recorded in summary.json and release-manifest.json",
-    "committed_to_git": false
+    "authoritative_release_artifacts": "reports/acp2_implementation/bb45a46/B/B25/release",
+    "committed_to_git": false,
+    "reason": "A-27b/A-28/C33/C34/B25b consume the actual B25a wheels/sdists; every recorded digest is verified against these retained files",
+    "supplemental_root_build": "reports/acp2_implementation/bb45a46/B/B25/root-build"
   },
-  "worktree_removed": true,
+  "schema": "acp2.b25.cleanup.v1",
   "temp_venvs_removed": true,
-  "production_8765_touched": false,
   "test_ports_touched": false,
-  "active_test_pids": []
+  "worktree_removed": true
 }

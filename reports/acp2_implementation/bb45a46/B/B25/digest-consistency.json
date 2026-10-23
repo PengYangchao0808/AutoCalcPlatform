@@ -1,0 +1,29 @@
+{
+  "artifact_count": 20,
+  "checked": {
+    "install-results:cccp:sdist": "fbe9dd22233f230e27fbd75c978959d690755b81ae97b98e54291dc356f6d4cc",
+    "install-results:cccp:wheel": "f437cf68f4038ce4de623ca7ac65292e4c65f0a30950257c018850e635d96dd3",
+    "install-results:web:sdist": "60069ec0c5ad260bbd67afa95824f10d220f49fa885e5d99838095f9fb11ab72",
+    "install-results:web:wheel": "630077d1a1f30f3a885c946b7e058a88ea71aedcc69b07eac47d14b8c2b95d92",
+    "install-results:worker:sdist": "ceff0a603b9f4add5bd8a94ac7d840b0aaec9195cf690fd7de0bdcbeffabeac1",
+    "install-results:worker:wheel": "59d045813012cf9a338ca6640d6e0bca09b08d43ad30130a581959e542b7eee9",
+    "release-manifest:acp-web-0.3.0.tar.gz": "60069ec0c5ad260bbd67afa95824f10d220f49fa885e5d99838095f9fb11ab72",
+    "release-manifest:acp-worker-0.3.0.tar.gz": "ceff0a603b9f4add5bd8a94ac7d840b0aaec9195cf690fd7de0bdcbeffabeac1",
+    "release-manifest:acp_web-0.3.0-py3-none-any.whl": "630077d1a1f30f3a885c946b7e058a88ea71aedcc69b07eac47d14b8c2b95d92",
+    "release-manifest:acp_worker-0.3.0-py3-none-any.whl": "59d045813012cf9a338ca6640d6e0bca09b08d43ad30130a581959e542b7eee9",
+    "release-manifest:cccp-0.3.0-py3-none-any.whl": "f437cf68f4038ce4de623ca7ac65292e4c65f0a30950257c018850e635d96dd3",
+    "release-manifest:cccp-0.3.0.tar.gz": "fbe9dd22233f230e27fbd75c978959d690755b81ae97b98e54291dc356f6d4cc",
+    "summary:acp-web-0.3.0.tar.gz": "60069ec0c5ad260bbd67afa95824f10d220f49fa885e5d99838095f9fb11ab72",
+    "summary:acp-worker-0.3.0.tar.gz": "ceff0a603b9f4add5bd8a94ac7d840b0aaec9195cf690fd7de0bdcbeffabeac1",
+    "summary:acp_web-0.3.0-py3-none-any.whl": "630077d1a1f30f3a885c946b7e058a88ea71aedcc69b07eac47d14b8c2b95d92",
+    "summary:acp_worker-0.3.0-py3-none-any.whl": "59d045813012cf9a338ca6640d6e0bca09b08d43ad30130a581959e542b7eee9",
+    "summary:cccp-0.3.0-py3-none-any.whl": "f437cf68f4038ce4de623ca7ac65292e4c65f0a30950257c018850e635d96dd3",
+    "summary:cccp-0.3.0.tar.gz": "fbe9dd22233f230e27fbd75c978959d690755b81ae97b98e54291dc356f6d4cc",
+    "summary:root_acp-0.3.0-py3-none-any.whl": "e0c76fa19f09c882947553411e06d1a53dbe5d3a9dcb21047fae3fedbad84917",
+    "summary:root_acp-0.3.0.tar.gz": "1ebd408e4657f8894021d98984ec82673ca9050ef80741dc8c2fa9a995e9e3fe"
+  },
+  "errors": [],
+  "evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B25",
+  "result": "PASS",
+  "schema": "acp2.b25.digest_consistency.v1"
+}
