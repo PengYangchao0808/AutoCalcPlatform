@@ -1,0 +1,3 @@
+command: /usr/bin/python3.11 scripts/acceptance/validate_acp2_contracts.py
+VALID: <repo>/docs/reference/next-change/acp2-contracts/manifest.json
+exit=0

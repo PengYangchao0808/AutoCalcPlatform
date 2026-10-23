@@ -1,0 +1,61 @@
+{
+  "candidate": {
+    "landed_head": "3871ccbdc02c7dae69fb2103bc4921ae13ca58ee",
+    "release_source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
+    "source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "generated_at": "2026-10-23T15:51:28Z",
+  "h7_status": "OPEN",
+  "missing_external_rows": [
+    "A-20",
+    "A-29",
+    "C24a",
+    "C25",
+    "C33",
+    "C34",
+    "C35"
+  ],
+  "non_owner_signature_count": 0,
+  "non_owner_signatures": [],
+  "owner": "B",
+  "row_count": 5,
+  "rows": [
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+      "owner": "B",
+      "reason": "Artifacts, source and all eight digests verified on disk.",
+      "row_id": "H7-release-candidate",
+      "status": "PASS"
+    },
+    {
+      "expected_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "owner": "A",
+      "reason": "A has not published the H7 science sign-off; B does not sign A scope.",
+      "row_id": "A-29-science-signoff",
+      "status": "NOT_VERIFIED(a29_absent)"
+    },
+    {
+      "expected_path": "<acp2-dev>/C/experience-release-closeout/",
+      "owner": "C",
+      "reason": "C35 is absent. The C plan lists C32-C34, not B26, so the disposition is c35_absent (no C35_INPUT_CYCLE).",
+      "row_id": "C35-experience-closeout",
+      "status": "NOT_VERIFIED(c35_absent)"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",
+      "owner": "B",
+      "reason": "B26a is self-reproduction by the authoring session; no independent operator was available.",
+      "row_id": "independent-operator",
+      "status": "NOT_VERIFIED(independent_operator_absent)"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
+      "owner": "B",
+      "reason": "C33/C34 evidence, LSF, DSH/browser and running-task disconnect recovery remain NOT_VERIFIED.",
+      "row_id": "c33-c34-install-and-lsf-dsh",
+      "status": "NOT_VERIFIED(prerequisite_gap)"
+    }
+  ],
+  "rule": "A row is signed only by its owner. B never signs A/C scope and never promotes a missing row to PASS.",
+  "schema": "acp2.h7.open_rows.v1"
+}

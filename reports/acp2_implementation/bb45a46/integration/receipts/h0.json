@@ -1,0 +1,115 @@
+{
+  "artifacts": [
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B00/manifest.json",
+      "sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
+      "size_bytes": 23421
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B00/head-sha.txt",
+      "sha256": "c8fdf54b4a9b5ed5e712ccb9412f8db3a0703df8bb6401d991136aeca257e195",
+      "size_bytes": 41
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B02/summary.json",
+      "sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
+      "size_bytes": 3896
+    },
+    {
+      "path": "<repo>/docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+      "sha256": "6492f241dcea22f59f79971406b91d49d72d63c1f1a872019fa27d647a9470ab",
+      "size_bytes": 5716
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "immutable receipts aggregated; no science re-executed",
+      "name": "aggregate_only_no_rerun",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "name": "gate_result",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/usr/bin/python3.11",
+    "/tmp/opencode/gen_h7.py"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "<repo>",
+  "evidence_kind": "aggregate",
+  "exit_code": 0,
+  "extensions": {
+    "integration.gate_status": "CLOSED",
+    "integration.handoff": "H0",
+    "integration.notes": [
+      "H0 is a historical freeze; the final source candidate is independently recorded in h7-index.json."
+    ],
+    "integration.reuse_mapping": [
+      {
+        "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
+        "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
+        "receipt_sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
+        "unchanged": [
+          "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
+          "A/B/C path ownership globs",
+          "contract manifest identity and baseline-lock rule"
+        ]
+      },
+      {
+        "rationale": "Environment identity is host-level and was not changed by B-fix-4 (no dependency, config, or interpreter change).",
+        "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
+        "receipt_sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
+        "unchanged": [
+          "isolated worktree and host environment",
+          "three-package import source at the P0 baseline"
+        ]
+      }
+    ],
+    "integration.signatures": {
+      "A": [],
+      "B": [
+        "B"
+      ],
+      "C": []
+    }
+  },
+  "finished_at": "2026-10-23T15:51:28Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "integration",
+  "phase": "aggregate",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "h0-final-20261023T155128Z",
+  "scenario": "integration:h0-final",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T15:51:28Z",
+  "sub_results": [
+    {
+      "phase": "h0-b00-manifest",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
+      "result": "PASS"
+    },
+    {
+      "phase": "h0-b02-environment",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
+      "result": "PASS"
+    }
+  ],
+  "submission_id": null
+}

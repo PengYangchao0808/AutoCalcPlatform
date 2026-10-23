@@ -1,0 +1,96 @@
+{
+  "artifacts": [
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B07/summary.json",
+      "sha256": "37e8a93f1d5aca81057ba9faea21ab59f53218fbe4a3731b56119f1e1b6f20bb",
+      "size_bytes": 456
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
+      "sha256": "d2921531965cffd2480aa00fa0546708a4b8538e2a496f43e72625aadbf872e9",
+      "size_bytes": 10343
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B13/dsh-disconnect.json",
+      "sha256": "28887aa273316adefb70653413b7315a1854e35fa5610099c54f1492af160c5a",
+      "size_bytes": 317
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
+      "sha256": "3b038d7cafa0db2caa525326ccfbe089ce9c3ade2cf32578d27f585d71cc5b0d",
+      "size_bytes": 22701
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "immutable receipts aggregated; no science re-executed",
+      "name": "aggregate_only_no_rerun",
+      "status": "PASS"
+    },
+    {
+      "detail": "c_dsh_handshake_absent;lsf_prerequisite_missing",
+      "name": "gate_result",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/usr/bin/python3.11",
+    "/tmp/opencode/gen_h7.py"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "<repo>",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "integration.gate_status": "OPEN",
+    "integration.handoff": "H2",
+    "integration.notes": [
+      "B07 environment/daemon rows PASS; the real stdio MCP probe passes.",
+      "C's official DSH discovery receipts remain NOT_VERIFIED(controller_unavailable); LSF is absent by design."
+    ],
+    "integration.reuse_mapping": [],
+    "integration.signatures": {
+      "A": [],
+      "B": [
+        "B"
+      ],
+      "C": []
+    }
+  },
+  "finished_at": "2026-10-23T15:51:28Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "integration",
+  "phase": "aggregate",
+  "reason": "c_dsh_handshake_absent;lsf_prerequisite_missing",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "h2-final-20261023T155128Z",
+  "scenario": "integration:h2-final",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T15:51:28Z",
+  "sub_results": [
+    {
+      "phase": "h2-b07-environment",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B07/summary.json",
+      "result": "PASS"
+    },
+    {
+      "phase": "h2-c-dsh",
+      "receipt": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
+      "result": "NOT_VERIFIED"
+    }
+  ],
+  "submission_id": null
+}

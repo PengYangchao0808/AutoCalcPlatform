@@ -1,0 +1,112 @@
+{
+  "artifacts": [
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B01/validate-samples.txt",
+      "sha256": "f86d2ce76d45a0b09a79efa1af4d4fe67326ee7801ae8c7dac91063c0127549e",
+      "size_bytes": 1720
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B03/validator-happy.txt",
+      "sha256": "def0dced08ec732043794ca66f3e57006145f4009741bc562837c971d72b96a9",
+      "size_bytes": 98
+    },
+    {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B03/dependencies-validation.log",
+      "sha256": "c00ceee16e64160fbe89ece48f89ecca01009bde33f18610351e930dee27f7cc",
+      "size_bytes": 2872
+    },
+    {
+      "path": "<repo>/docs/reference/next-change/acp2-contracts/manifest.json",
+      "sha256": "5ddf8c4ae0bd88517328d787a16b66976f9a599dfffa135f9ea950a693e7eaeb",
+      "size_bytes": 35805
+    },
+    {
+      "path": "<repo>/docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+      "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e",
+      "size_bytes": 11264
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "immutable receipts aggregated; no science re-executed",
+      "name": "aggregate_only_no_rerun",
+      "status": "PASS"
+    },
+    {
+      "detail": "a_science_contract_fixture_absent;c_authored_sample_absent",
+      "name": "gate_result",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/usr/bin/python3.11",
+    "/tmp/opencode/gen_h7.py"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "<repo>",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "integration.gate_status": "OPEN",
+    "integration.handoff": "H1",
+    "integration.notes": [
+      "B01 harness and B03 application contracts validate (25/25 sample expectations).",
+      "A's science cross-track dependency fixture and a C-authored (not B-authored exemplar) sample are still absent, so the H1 freeze is not closed.",
+      "No FAIL was relabelled; the missing rows are NOT_VERIFIED with their evidence."
+    ],
+    "integration.reuse_mapping": [],
+    "integration.signatures": {
+      "A": [],
+      "B": [
+        "B"
+      ],
+      "C": []
+    }
+  },
+  "finished_at": "2026-10-23T15:51:28Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "integration",
+  "phase": "aggregate",
+  "reason": "a_science_contract_fixture_absent;c_authored_sample_absent",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "h1-final-20261023T155128Z",
+  "scenario": "integration:h1-final",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T15:51:28Z",
+  "sub_results": [
+    {
+      "phase": "h1-b01-harness",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B01/validate-samples.txt",
+      "result": "PASS"
+    },
+    {
+      "phase": "h1-b03-contracts",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B03/validator-happy.txt",
+      "result": "PASS"
+    },
+    {
+      "phase": "h1-a-cross-track",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B03/dependencies-validation.log",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h1-c-authored-sample",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B01/validate-samples.txt",
+      "result": "NOT_VERIFIED"
+    }
+  ],
+  "submission_id": null
+}

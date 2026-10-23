@@ -1,0 +1,4 @@
+command: /usr/bin/python3.11 -m pytest tests/test_services_doc_sync.py tests/test_services_closure_record.py -q
+.................................                                        [100%]
+33 passed in 0.86s
+exit=0
