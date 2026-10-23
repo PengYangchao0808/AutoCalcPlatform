@@ -1,0 +1,173 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_concurrent_lifespan_race_exactly_one_owner ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5423/test_concurrent_lifespan_race_0')
+
+    def test_concurrent_lifespan_race_exactly_one_owner(tmp_path: Path) -> None:
+        from acp.api.server import create_app
+    
+        run_root = tmp_path / "runs"
+        barrier = threading.Barrier(2)
+        release = threading.Event()
+        outcomes: list[str] = []
+        outcomes_lock = threading.Lock()
+    
+        def run(app) -> None:
+            try:
+                barrier.wait(timeout=15)
+                with TestClient(app) as client:
+                    assert client.get("/api/status").status_code == 200
+                    with outcomes_lock:
+                        outcomes.append("ok")
+                    release.wait(timeout=15)
+            except RuntimeError as exc:
+                with outcomes_lock:
+                    outcomes.append(f"refused:{exc}")
+    
+        apps = [create_app(run_root=run_root), create_app(run_root=run_root)]
+        threads = [threading.Thread(target=run, args=(app,)) for app in apps]
+        for thread in threads:
+            thread.start()
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            with outcomes_lock:
+                if outcomes:
+                    break
+            time.sleep(0.02)
+        release.set()
+        for thread in threads:
+            thread.join(timeout=30)
+    
+        assert outcomes.count("ok") == 1, outcomes
+>       assert sum(1 for outcome in outcomes if outcome.startswith("refused:")) == 1, outcomes
+E       AssertionError: ['ok']
+E       assert 0 == 1
+E        +  where 0 = sum(<generator object test_concurrent_lifespan_race_exactly_one_owner.<locals>.<genexpr> at 0x7f9e472cfae0>)
+
+tests/test_acp_lifespan_ownership.py:120: AssertionError
+=============================== warnings summary ===============================
+../../home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+../../home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53
+  /home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner
+  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-1 (run)
+  
+  Traceback (most recent call last):
+    File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "/usr/lib64/python3.11/threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "<repo>/tests/test_acp_lifespan_ownership.py", line 96, in run
+      with TestClient(app) as client:
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 698, in __enter__
+      portal.call(self.wait_startup)
+    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 340, in call
+      return cast(T_Retval, self.start_task_soon(func, *args).result())
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 456, in result
+      return self.__get_result()
+             ^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+      raise self._exception
+    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+      retval = await retval_or_awaitable
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 733, in wait_startup
+      await receive()
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 724, in receive
+      self.task.result()
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 449, in result
+      return self.__get_result()
+             ^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+      raise self._exception
+    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+      retval = await retval_or_awaitable
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 714, in lifespan
+      await self.app(scope, self.stream_receive.receive, self.stream_send.send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
+      await super().__call__(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
+      await self.middleware_stack(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 151, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 49, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
+      await self.middleware_stack(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 2726, in app
+      await self.lifespan(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 648, in lifespan
+      async with self.lifespan_context(app) as maybe_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "<repo>/src/acp/api/server.py", line 294, in lifespan
+      admission = build_local_admission(
+                  ^^^^^^^^^^^^^^^^^^^^^^
+    File "<repo>/src/acp_services/runtime/local_admission.py", line 538, in build_local_admission
+      return LocalAdmission.build(
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "<repo>/src/acp_services/runtime/local_admission.py", line 358, in build
+      ledger = ReservationLedger(str(db_path))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "<repo>/src/acp_services/runtime/admission.py", line 861, in __init__
+      self._init_schema()
+    File "<repo>/src/acp_services/runtime/admission.py", line 875, in _init_schema
+      conn.execute("PRAGMA journal_mode=WAL;")
+  sqlite3.OperationalError: database is locked
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner
+1 failed, 3 warnings in 3.10s

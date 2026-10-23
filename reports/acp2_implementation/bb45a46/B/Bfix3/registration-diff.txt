@@ -1,0 +1,31 @@
+diff --git a/tests/test_f4_scope_audit.py b/tests/test_f4_scope_audit.py
+index 4d1f45c..1e499a7 100644
+--- a/tests/test_f4_scope_audit.py
++++ b/tests/test_f4_scope_audit.py
+@@ -2633,6 +2633,16 @@ MIGRATION_STATION_PREFIXES = (
+     "src/acp/services_data_bootstrap.py",
+     "src/acp/services_events_bootstrap.py",
+     "src/acp/services_publication_bootstrap.py",
++    # ACP 2.0 Plan B B05 seam: the MCP stdio composition root
++    # (``build_mcp_runtime``) wires the Controller client into
++    # ``acp_services.entrypoints.mcp``; registered as an exact file so the
++    # R1 boundary keeps auditing it (no whole-directory exemption).
++    "src/acp/services_mcp_bootstrap.py",
++    # Pre-existing run-root contract change in the shared worktree
++    # (``normalize_configured_run_root`` consumed by ``acp init``); registered
++    # as an exact file so the audit processes it instead of flagging it as an
++    # unaudited change.
++    "src/acp/core/paths.py",
+     # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
+     # station (unified answers/plan/persist + pure node validation); the
+     # package-wide module-level-paramiko ban below is the added tooth.
+@@ -2874,6 +2884,9 @@ SERVICES_BOOTSTRAP_STATIONS = (
+     "src/acp/services_data_bootstrap.py",
+     "src/acp/services_events_bootstrap.py",
+     "src/acp/services_publication_bootstrap.py",
++    # ACP 2.0 Plan B B05 seam: MCP stdio composition root (wires ports, never
++    # opens SSH/runs QC or constructs a second ``ServicesPorts``).
++    "src/acp/services_mcp_bootstrap.py",
+ )
+ 
+ SERVICES_RELOCATION_SHIMS = (
