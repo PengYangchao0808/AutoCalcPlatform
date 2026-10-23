@@ -14,7 +14,7 @@ BASE = REPO_ROOT / "reports/acp2_implementation/bb45a46"
 INTEGRATION = BASE / "integration"
 H7_INDEX = INTEGRATION / "h7-index.json"
 SUMMARY = INTEGRATION / "summary.json"
-RELEASE_DIR = BASE / "B/B25/release-fix4"
+RELEASE_DIR = BASE / "B/B25/release-fix5"
 WORKFLOWS = ("H0", "H1", "H2", "H3", "H4", "H5", "H6", "H7")
 RESULT_VALUES = {"PASS", "FAIL", "NOT_VERIFIED"}
 
@@ -130,7 +130,7 @@ def test_production_was_not_deployed_or_restarted() -> None:
     assert cleanup["reconciled_stale_jobs"][0]["now"] == "cancelled"
 
 
-def test_release_fix4_digests_resolve() -> None:
+def test_release_fix5_digests_resolve() -> None:
     manifest = _read(RELEASE_DIR / "release-manifest.json")
     source = _read(RELEASE_DIR / "source.json")
     candidate = _read(INTEGRATION / "release-candidate.json")
@@ -138,7 +138,7 @@ def test_release_fix4_digests_resolve() -> None:
     assert manifest["version"] == "0.3.0"
     assert manifest["source"]["revision"] == source["source_revision"]
     assert index["source_candidate"]["release_source_revision"] == source["source_revision"]
-    assert source["source_revision"] == "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+    assert source["source_revision"] == "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2"
     assert len(manifest["artifacts"]) == 6
     for name, digest in manifest["artifacts"].items():
         artifact = RELEASE_DIR / name

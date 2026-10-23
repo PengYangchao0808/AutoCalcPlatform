@@ -1,86 +1,140 @@
 {
   "artifacts": {
     "acp-web-0.3.0.tar.gz": {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/acp-web-0.3.0.tar.gz",
-      "sha256": "5d7c5a3f735ee5a10b553c1e4d095a0d32cd25a377573d01858e73b91019d67f",
-      "size_bytes": 2045103
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-web-0.3.0.tar.gz",
+      "sha256": "3186b347377599c1e71514bdccc52d1ebf2811eb73b6d802d18b2141a8c927a7",
+      "size_bytes": 2046926
     },
     "acp-worker-0.3.0.tar.gz": {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/acp-worker-0.3.0.tar.gz",
-      "sha256": "badb68d3ea69ab5fe95711049ed26db4d9304f8969ede6443a29da0963c8e17b",
-      "size_bytes": 580065
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-worker-0.3.0.tar.gz",
+      "sha256": "223fd6aec2760c35d5346f56edf5b17a3dc0376481e5ea4b48348d36493358b5",
+      "size_bytes": 580783
     },
     "acp_web-0.3.0-py3-none-any.whl": {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/acp_web-0.3.0-py3-none-any.whl",
-      "sha256": "68077f7d9734276b46a1a68fc207f5cde0582788f0218ebffed851763fdf41b1",
-      "size_bytes": 2231055
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_web-0.3.0-py3-none-any.whl",
+      "sha256": "d055e869de602cf1a257d4542243849806b3e3ebe805b78c70a412e8e5a2b210",
+      "size_bytes": 2233023
     },
     "acp_worker-0.3.0-py3-none-any.whl": {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/acp_worker-0.3.0-py3-none-any.whl",
-      "sha256": "f30e72ca56e620520987f1408eccdd69b181a81c353a8cec461df268bcb38471",
-      "size_bytes": 613821
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_worker-0.3.0-py3-none-any.whl",
+      "sha256": "edd849a75b28f58bba54d8613ec14e1ecae46a325d51d3874967fc683c6ec949",
+      "size_bytes": 614654
     },
     "cccp-0.3.0-py3-none-any.whl": {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/cccp-0.3.0-py3-none-any.whl",
-      "sha256": "088604cdbe52bbc98c879edb6cb3ccca486f9ed68d8ecd4471e296b9c5110445",
-      "size_bytes": 44570219
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0-py3-none-any.whl",
+      "sha256": "b505413147e3c3a07c9b405631e3ee244d0dc9f7a8f699a45ec112ec692c559c",
+      "size_bytes": 44570492
     },
     "cccp-0.3.0.tar.gz": {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4/cccp-0.3.0.tar.gz",
-      "sha256": "b8c712f3ebf2afd9eee547f80797b74b70534bed3005506059df0256c7e8e96f",
-      "size_bytes": 44429542
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0.tar.gz",
+      "sha256": "31631e2f5c131ccba6e08ffac23035feb7670d226b0349cb6816c23959aea425",
+      "size_bytes": 44429877
     },
     "root-build/acp-0.3.0-py3-none-any.whl": {
-      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build/acp-0.3.0-py3-none-any.whl",
-      "sha256": "423a9cd8f533429d3f2a78284ccf0d5f058c5e590c169790be6e663c982fed63",
-      "size_bytes": 46402365
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/root-build/acp-0.3.0-py3-none-any.whl",
+      "sha256": "64548f8f25e6251532b8b551067f6a0c432a2668bfc20edd310ed2fcb7e4c56a",
+      "size_bytes": 46404596
     },
     "root-build/acp-0.3.0.tar.gz": {
-      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build/acp-0.3.0.tar.gz",
-      "sha256": "01fbe86f4231703a180a92e11ae735e41b4fc0a8c81b59fef677372fed4d0f2f",
-      "size_bytes": 46059517
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/root-build/acp-0.3.0.tar.gz",
+      "sha256": "f449f77d4c89476847a610ef3577a13ce6c1efb30dc77cdc8a5a522411b28987",
+      "size_bytes": 46062358
     }
   },
-  "artifacts_note": "Six role artifacts are in release-manifest.json; the two root-build artifacts are the supplemental root distribution digests recorded by B-fix-4.",
+  "artifacts_note": "Six role artifacts are in release-manifest.json; the two root-build artifacts are the supplemental root distribution digests recorded by B-fix-5 in release-fix5/source.json. All eight digests were recomputed from disk.",
   "digests_verified": true,
-  "generated_at": "2026-10-23T15:51:28Z",
+  "generated_at": "2026-10-23T18:40:00Z",
   "index": "reports/acp2_implementation/bb45a46/integration/h7-index.json",
   "installed_validation": {
     "authorization": "PASS",
+    "bare_root_cli_singlepoint": "PASS",
     "cccp_without_controller_sample": "PASS",
-    "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4/summary.json",
+    "cross_entry_release_projection": "PASS",
+    "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/summary.json",
     "installed_lab": "PASS",
+    "installed_release_manifest": "PASS",
     "installed_scheduler_task": "PASS",
-    "package_install": "PASS"
+    "lsf_normal_singlepoint": "PASS",
+    "package_install": "PASS",
+    "package_install_candidate_identity": "PASS"
+  },
+  "installed_validation_detail": {
+    "bare_root": {
+      "energy_hartree": -1.116773191779,
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/bare-root/singlepoint.log",
+      "exit_code": 0,
+      "note": "Root wheel with no extras ran `acp run singlepoint` without paramiko."
+    },
+    "cross_entry": {
+      "all_equal": true,
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/three-entry-compare.json",
+      "fields": [
+        "release_id",
+        "release_digest",
+        "plan_digest",
+        "submission_id"
+      ],
+      "note": "HTTP GET /api/v1/jobs/{id}, CLI query and MCP status expose identical values."
+    },
+    "installed_release_manifest": {
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json",
+      "file_count": 510,
+      "local_identity_match": true,
+      "project_root": "/tmp/opencode/fix5-qa/venvs/root/lib/python3.11/site-packages",
+      "release_id": "1c79785a657c6614"
+    },
+    "lsf_normal": {
+      "energy_hartree": -1.116759307204,
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/remote/facts.json"
+      ],
+      "job_id": "1765",
+      "orca_version": "6.1.1",
+      "release_digest": "c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1",
+      "release_id": "1c79785a657c6614",
+      "state": "completed",
+      "submission_id": "sub_0fea781820a81666"
+    },
+    "package_install_candidate_identity": {
+      "candidate_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/summary.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json"
+      ],
+      "note": "Derived from release_manifest.source.revision; installed Lab health matches."
+    }
   },
   "known_gaps": [
     "A-29 and C35 signatures absent; H7 remains OPEN.",
-    "C33/C34 install evidence and C static-asset manifest absent.",
+    "C33/C34 install evidence, C DSH/model scope and C static-asset manifest absent.",
     "No independent external operator: B26a is self-reproduction.",
-    "LSF live execution, C DSH/browser handshake and running-task disconnect recovery remain NOT_VERIFIED.",
+    "C DSH/browser handshake and running-task disconnect recovery remain NOT_VERIFIED.",
+    "H4 (limited Diels-Alder) and H6 (selectivity/real-DA, A/C readability) remain OPEN.",
     "ADR-005 licensing/open-source boundary remains a user decision; no license change was made."
   ],
   "production_deployed": false,
   "production_service_restarted": false,
   "release_artifact_count": 8,
-  "release_candidate_id": "acp2.plan-b.h7.release-fix4",
+  "release_candidate_id": "acp2.plan-b.h7.release-fix5",
   "release_manifest": {
-    "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
-    "sha256": "1f47a5e094dabc41f12654b627783df4bdf4ac29995fd5fbc149068bc06a7ef0",
-    "size_bytes": 88583
+    "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+    "sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
+    "size_bytes": 88578
   },
   "release_source": {
-    "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
-    "sha256": "94c988c7e677324c9f20ee1c87b76a63dc48491d932726efb8093131459cf6e7",
-    "size_bytes": 2880
+    "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
+    "sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+    "size_bytes": 2612
   },
   "schema": "acp2.release.candidate.v1",
   "source_candidate": {
-    "base_release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
-    "label": "release-fix4",
-    "landed_head": "3871ccbdc02c7dae69fb2103bc4921ae13ca58ee",
-    "revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
-    "tree": "c9844959c4c39814234a0a46c71d6f70a42456a4"
+    "base_release_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+    "label": "release-fix5",
+    "landed_head": "09fc41da9171e1d466c0036a114feb272652e028",
+    "revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
   },
   "version": "0.3.0",
   "version_locations": {

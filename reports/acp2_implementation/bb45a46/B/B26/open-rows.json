@@ -1,10 +1,10 @@
 {
   "candidate": {
-    "landed_head": "3871ccbdc02c7dae69fb2103bc4921ae13ca58ee",
-    "release_source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
-    "source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+    "landed_head": "09fc41da9171e1d466c0036a114feb272652e028",
+    "release_source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
+    "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2"
   },
-  "generated_at": "2026-10-23T15:51:28Z",
+  "generated_at": "2026-10-23T18:40:00Z",
   "h7_status": "OPEN",
   "missing_external_rows": [
     "A-20",
@@ -18,13 +18,24 @@
   "non_owner_signature_count": 0,
   "non_owner_signatures": [],
   "owner": "B",
-  "row_count": 5,
+  "row_count": 6,
   "rows": [
     {
-      "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
       "owner": "B",
-      "reason": "Artifacts, source and all eight digests verified on disk.",
+      "reason": "Release-fix5 artifacts, source 6ec01ec and all eight digests verified on disk.",
       "row_id": "H7-release-candidate",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json"
+      ],
+      "owner": "B",
+      "reason": "Real LSF normal singlepoint (bsub job 1765) terminal completed with release_id 1c79785a657c6614, submission_id sub_0fea781820a81666 and -1.116759307204 Ha; installed release sync 510 files with matching release_id. LSF/installed-sync gap closed.",
+      "row_id": "h3-lsf-normal-and-installed-sync",
       "status": "PASS"
     },
     {
@@ -51,8 +62,8 @@
     {
       "evidence": "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
       "owner": "B",
-      "reason": "C33/C34 evidence, LSF, DSH/browser and running-task disconnect recovery remain NOT_VERIFIED.",
-      "row_id": "c33-c34-install-and-lsf-dsh",
+      "reason": "C33/C34 install evidence, DSH/browser/model scope and running-task disconnect recovery remain NOT_VERIFIED. LSF is no longer a gap (B-fix-5 job 1765).",
+      "row_id": "c33-c34-install-and-dsh",
       "status": "NOT_VERIFIED(prerequisite_gap)"
     }
   ],

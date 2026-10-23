@@ -1,8 +1,8 @@
 # ACP 2.0 Plan B — install, upgrade and rollback path
 
-**Candidate:** `acp2.plan-b.h7.release-fix4` · version `0.3.0`
-**Source:** `abec2bc4f1d302827248d36171973df5bc1bc4dd`
-**Artifacts:** `reports/acp2_implementation/bb45a46/B/B25/release-fix4/`
+**Candidate:** `acp2.plan-b.h7.release-fix5` · version `0.3.0`
+**Source:** `6ec01ec96fa81b89bec8ff321c38e3db2dc154d2`
+**Artifacts:** `reports/acp2_implementation/bb45a46/B/B25/release-fix5/`
 **Scope:** reviewable release candidate only. No production deployment is authorized by
 this document, and `acp.service` was not restarted.
 
@@ -24,7 +24,7 @@ Do not mix both releases in the same environment.
 python3.11 -m venv /opt/acp-0.3.0
 /opt/acp-0.3.0/bin/python -m pip install -U pip setuptools wheel
 /opt/acp-0.3.0/bin/python -m pip install \
-  --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4 \
+  --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5 \
   'cccp==0.3.0' 'acp-worker==0.3.0' 'acp-web==0.3.0'
 ```
 
@@ -37,7 +37,11 @@ env -u PYTHONPATH /opt/acp-0.3.0/bin/acp --help
 ```
 
 Expected: all three modules resolve under `/opt/acp-0.3.0/lib/.../site-packages`.
-`acp --help` exits 0.
+`acp --help` exits 0. An installed role release resolves its execution tree from the
+installed package roots and adds the release root to `PYTHONPATH` when it syncs a remote
+node (B-fix-5); a source checkout keeps the historical `src` line. The remote release
+manifest is expected to be non-empty (510 files for this candidate) with
+`release_id=1c79785a657c6614`.
 
 ## 3. Lab and MCP smoke (isolated run root and loopback port)
 
@@ -58,7 +62,7 @@ at production `/var/lib/acp/runs`.
 2. Install the new role set into a fresh venv (preferred) or upgrade in place:
    ```bash
    /opt/acp-0.2.x/bin/python -m pip install --upgrade \
-     --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix4 \
+     --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5 \
      'cccp==0.3.0' 'acp-worker==0.3.0' 'acp-web==0.3.0'
    ```
 3. Run the schema/backup path before serving:
@@ -79,8 +83,9 @@ Rollback is code rollback only; do **not** delete the jobs DB or run root.
 
 1. Stop the test Controller.
 2. Reinstall the previous release into a fresh venv from its retained artifact directory
-   (for the previous line, `B/B25/release/`; the original B25a artifacts are under
-   `B/B25/release-b25a-original/`).
+   (`B/B25/release-fix4/` for the immediately previous candidate; the earlier
+   `B/B25/release/` line and the original B25a artifacts under
+   `B/B25/release-b25a-original/` are also retained).
 3. Restore the backed-up run root only if the upgrade wrote new schema and the previous
    version cannot read it. Prefer reading the backup in a separate path first.
 4. Re-run the old version's `acp task query` against a copy and confirm every identity,
@@ -92,9 +97,13 @@ data directory. None is part of this candidate's rollback.
 
 ## 6. Known gaps and gates
 
-- H4/H6/H7 are OPEN; A-29 and C35 have not signed.
-- C33/C34 install evidence, C static assets, LSF, DSH/browser, and running-task
-  disconnect recovery are `NOT_VERIFIED`.
+- H4/H6/H7 are OPEN; A-29 and C35 have not signed. H3 also stays OPEN on C DSH/Workbench
+  and the A audit.
+- C33/C34 install evidence, C DSH/model scope, C static assets, DSH/browser and
+  running-task disconnect recovery are `NOT_VERIFIED`.
+- LSF normal execution is verified for this candidate: real `bsub` job `1765` completed
+  with `release_id=1c79785a657c6614`; multi-project/recovery LSF dimensions under H6 were
+  not re-run.
 - The release candidate was not deployed to production. Production rollout requires
   prior explicit user authorization and the release gate; this plan never restarts
   `acp.service`.

@@ -31,7 +31,7 @@
     }
   ],
   "c35": {
-    "b25a_input_rule": "C35 consumes B25a plus C33/C34 install facts; the B final index supplies release-fix4 digests only.",
+    "b25a_input_rule": "C35 consumes B25a plus C33/C34 install facts; the B final index supplies release-fix5 digests only.",
     "b26_mentioned_in_c35_section": false,
     "c35_prerequisites": "C32-C34; A/B/C candidate SHA agreement; required scenario evidence (no B26 prerequisite in the C plan)",
     "disposition": "c35_absent",
@@ -99,15 +99,16 @@
     "rule": "sha256 over sorted '<repo-relative path> <file sha256>\\n' for every artifact referenced by the H0-H7 receipts",
     "value": "3c16877f422933b47243e255f8b3a45efea05bfe1dd176f5f643a6764a7b8aa3"
   },
-  "generated_at": "2026-10-23T15:51:28Z",
+  "generated_at": "2026-10-23T18:40:00Z",
   "harness_revision": {
     "path": "scripts/acceptance/acp2_runtime.py",
     "rule": "sha256 of the harness file used to validate this index",
-    "value": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5"
+    "value": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b"
   },
   "notes": [
     "Every row has an explicit PASS/FAIL/NOT_VERIFIED result and immutable evidence path.",
     "Reused PASS rows carry an applicability mapping; the final source SHA is not claimed to equal every raw receipt SHA.",
+    "B-fix-5 records a real LSF normal singlepoint (bsub job 1765) plus an installed-release sync/identity PASS, so H3's LSF gap and H7's installed-sync gap are closed; H3 still stays OPEN on C DSH/Workbench and the A audit.",
     "H4/H6/H7 stay OPEN; H2/H3/H1 also remain OPEN because their own receipts/rows are NOT_VERIFIED.",
     "No FAIL was rewritten as NOT_VERIFIED and no A/C row was signed by B."
   ],
@@ -152,7 +153,7 @@
         }
       ],
       "owner": "B",
-      "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/LSF/DSH rows absent",
+      "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/DSH rows absent",
       "result": "NOT_VERIFIED",
       "scope": "IN_SCOPE",
       "signed_by": [
@@ -166,7 +167,9 @@
     "artifact": "integration/release-candidate.json",
     "artifact_count": 8,
     "digests_verified": true,
-    "source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+    "label": "release-fix5",
+    "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
+    "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
     "version": "0.3.0"
   },
   "rerun_commands": [
@@ -194,7 +197,7 @@
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
+          "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4/B-fix-5 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
           "receipt_sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
           "unchanged": [
@@ -204,7 +207,7 @@
           ]
         },
         {
-          "rationale": "Environment identity is host-level and was not changed by B-fix-4 (no dependency, config, or interpreter change).",
+          "rationale": "Environment identity is host-level and was not changed by B-fix-4/B-fix-5 (no dependency, config, or interpreter change).",
           "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
           "receipt_sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
           "unchanged": [
@@ -272,16 +275,21 @@
         "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
         "reports/acp2_implementation/bb45a46/B/B14b/rerun-index.json",
         "reports/acp2_implementation/bb45a46/B/B11/summary.json",
-        "reports/acp2_implementation/bb45a46/B/B10/summary.json"
+        "reports/acp2_implementation/bb45a46/B/B10/summary.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/remote/facts.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json"
       ],
       "gate_status": "OPEN",
       "handoff": "H3",
       "notes": [
-        "h3_status is OPEN in the frozen H3 receipt. Local singlepoint/optimize/frequency PASS; LSF, C DSH/Workbench and A audit are NOT_VERIFIED.",
-        "The three local PASS rows are not promoted to H3 closure."
+        "h3_status is OPEN in the frozen H3 receipt. Local singlepoint/optimize/frequency PASS (B14b).",
+        "B-fix-5 adds a real LSF normal singlepoint PASS: bsub job 1765 terminal completed, release_id 1c79785a657c6614, submission_id sub_0fea781820a81666, energy -1.116759307204 Ha; the installed release sync produced 510 files and the same release_id. The LSF prerequisite gap is closed.",
+        "C DSH/Workbench and the A scientific audit remain NOT_VERIFIED, so H3 stays OPEN and is not promoted to closure."
       ],
       "owner": "B",
-      "reason": "lsf_prerequisite_missing;c_dsh_browser_absent;a_scientific_audit_absent",
+      "reason": "c_dsh_browser_absent;a_scientific_audit_absent",
       "result": "NOT_VERIFIED",
       "reuse_mapping": [],
       "scope": "IN_SCOPE",
@@ -325,14 +333,14 @@
       "notes": [
         "H5 plugin install (B21) and upgrade/rollback (B22) rows PASS with real infrastructure-adapter execution and historical read-only behavior.",
         "Process/OS isolation, LSF, DSH and Chromium remain NOT_VERIFIED in the H5 manifest and are not H5 closure rows.",
-        "The PASS is a reused immutable receipt: applicability is recorded above rather than claiming a rerun on abec2bc."
+        "The PASS is a reused immutable receipt: applicability is recorded above rather than claiming a rerun on 6ec01ec."
       ],
       "owner": "B",
       "reason": null,
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "B-fix-4 changes only src/acp/calculations/attempt_freeze.py and tests/test_acp_attempt_freeze.py. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call local_release_identity. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and abec2bc.",
+          "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
           "receipt_sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
           "unchanged": [
@@ -359,11 +367,12 @@
       "gate_status": "OPEN",
       "handoff": "H6",
       "notes": [
-        "h6_status is OPEN. B-owned migration/backup/restore, four-combination and legacy readers PASS; LSF, C DSH, A/C readability, selectivity B23b and real DA remain NOT_VERIFIED.",
+        "h6_status is OPEN. B-owned migration/backup/restore, four-combination and legacy readers PASS; C DSH, A/C readability, selectivity B23b and real DA remain NOT_VERIFIED.",
+        "B-fix-5's real LSF normal singlepoint (job 1765) closes the basic LSF loop recorded under H3/H7; H6's own multi-project isolation and running-task recovery dimensions were not re-run and stay open.",
         "No production restart or production run-root write was executed."
       ],
       "owner": "B",
-      "reason": "h6_open: LSF/DSH/A-readability/C-readability/selectivity/real-DA missing",
+      "reason": "h6_open: DSH/A-readability/C-readability/selectivity/real-DA missing",
       "result": "NOT_VERIFIED",
       "reuse_mapping": [],
       "scope": "IN_SCOPE",
@@ -376,18 +385,22 @@
       "evidence": [
         "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
         "reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",
-        "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
-        "reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
-        "reports/acp2_implementation/bb45a46/B/Bfix4/summary.json"
+        "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+        "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/summary.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/three-entry-compare.json"
       ],
       "gate_status": "OPEN",
       "handoff": "H7",
       "notes": [
-        "The release candidate artifacts and digests are frozen and verified, but H7 remains OPEN because A-29 and C35 signatures are absent and the B26a reproduction is same-agent, not independent.",
+        "Release-fix5 artifacts and digests are frozen and verified; the installed release reports 510 files with release_id 1c79785a657c6614 and the real LSF normal singlepoint (job 1765) completed with the same release_id, so the installed-sync and LSF gaps are closed.",
+        "H7 remains OPEN because A-29 and C35 signatures are absent, C33/C34 install evidence and C DSH/model scope are absent, and the B26a reproduction is same-agent, not independent.",
         "C35 is absent and its plan does not list B26 as a prerequisite: disposition c35_absent, not C35_INPUT_CYCLE."
       ],
       "owner": "B",
-      "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/LSF/DSH rows absent",
+      "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/DSH rows absent",
       "result": "NOT_VERIFIED",
       "reuse_mapping": [],
       "scope": "IN_SCOPE",
@@ -400,56 +413,95 @@
   "schema": "acp2.h7.index.v1",
   "schema_version": 1,
   "source_candidate": {
-    "landed_head": "3871ccbdc02c7dae69fb2103bc4921ae13ca58ee",
-    "landed_head_relation": "landed B-fix-4 commit on feat/frontend-plan1-closure; same attempt_freeze/test blobs as the release build commit, different tree because the B25b line also carries the workspace public_origin fix",
-    "landed_head_tree": "3263a8557495d9be08bb4159552fe7fcd7f1ef7a",
+    "landed_head": "09fc41da9171e1d466c0036a114feb272652e028",
+    "landed_head_relation": "landed B-fix-5 evidence commit on main (docs/evidence only); the release was built from a detached clean worktree at 6ec01ec, whose tree e2b2377 is the build source, so the landed tree differs only by report/evidence files",
+    "landed_head_tree": "b0718da04b2acd32e886c82a03b3217cf99cad97",
     "raw_receipt_shas_need_not_match": true,
-    "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix4",
-    "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
-    "release_manifest_sha256": "1f47a5e094dabc41f12654b627783df4bdf4ac29995fd5fbc149068bc06a7ef0",
+    "release_base_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+    "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
+    "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+    "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
     "release_source_is_final_candidate": true,
-    "release_source_json": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
-    "release_source_json_sha256": "94c988c7e677324c9f20ee1c87b76a63dc48491d932726efb8093131459cf6e7",
-    "release_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
-    "release_source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
+    "release_source_json": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
+    "release_source_json_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+    "release_source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "release_source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
     "version": "0.3.0"
   },
   "tested_matrix": [
     {
-      "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+      "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
       "owner": "B",
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "Digests were recomputed from the frozen artifacts in this pass.",
-          "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
-          "receipt_sha256": "1f47a5e094dabc41f12654b627783df4bdf4ac29995fd5fbc149068bc06a7ef0",
+          "rationale": "B-fix-5 rebuilt the role artifacts from the clean commit 6ec01ec; all six manifest digests and both root-build digests were recomputed from disk in this refresh and cross-checked against release-fix5/source.json.",
+          "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+          "receipt_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
           "unchanged": [
-            "artifact bytes",
-            "release source abec2bc",
-            "dependency classification"
+            "artifact bytes (six role artifacts + two root-build artifacts)",
+            "release source 6ec01ec and tree e2b2377",
+            "dependency classification and version 0.3.0"
+          ]
+        },
+        {
+          "rationale": "The release source identity used by the installed validation is the same source.json consumed by this index.",
+          "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
+          "receipt_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+          "unchanged": [
+            "source revision 6ec01ec and tree e2b2377",
+            "eight artifact digests",
+            "historical release directories untouched"
           ]
         }
       ],
-      "row_id": "release-fix4-artifacts"
+      "row_id": "release-fix5-artifacts"
     },
     {
-      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4/package-install/scheduler-task/scheduler-task.json",
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json",
       "owner": "B",
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "The B-fix-4 rerun was executed against the release-fix4 artifacts that are the final candidate; it is the same source and dependency set.",
-          "receipt": "reports/acp2_implementation/bb45a46/B/Bfix4/package-install/package-install-main-20261023T144151Z-1697579-37cb416e.json",
-          "receipt_sha256": "153863c00aee6fcb55905d704467add26c04cfcaaff67a762cf6fb597999ef1a",
+          "rationale": "B-fix-5 re-ran the package-install scenario against release-fix5; the receipt derives candidate_revision 6ec01ec from release_manifest.source.revision and the installed Lab health matches it, with one real scheduler task completed.",
+          "receipt": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json",
+          "receipt_sha256": "37e0f23d39b18f7a02e10ce4429621fb00c16716f92b1f241da224e4811916a5",
           "unchanged": [
-            "release candidate artifacts (same digests)",
+            "release-fix5 artifacts (same digests)",
             "acp/cccp/acp_services installed code",
-            "package-install fixture and validator"
+            "package-install fixture and validator assertions"
           ]
         }
       ],
       "row_id": "package-install-installed-scheduler-task"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+      "owner": "B",
+      "result": "PASS",
+      "reuse_mapping": [
+        {
+          "rationale": "Real LSF normal singlepoint executed by bsub as job 1765: terminal state completed, exit_code 0, release_id 1c79785a657c6614 and submission_id sub_0fea781820a81666. ORCA 6.1.1 finished with -1.116759307204 Ha. This closes the LSF prerequisite gap that kept H3/H7 rows NOT_VERIFIED.",
+          "receipt": "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+          "receipt_sha256": "f0b7c72fc33b8b7c21cbcd168bf1f6e8b052056a3b581770fa27b3482d9877f3",
+          "unchanged": [
+            "scheduler submission and terminal receipt",
+            "release identity 1c79785a657c6614",
+            "ORCA output and final energy"
+          ]
+        },
+        {
+          "rationale": "The installed release sync produced a 510-file manifest with the same release_id as the local identity, closing the installed-sync gap.",
+          "receipt": "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json",
+          "receipt_sha256": "014b2068ed9a8b366c7fe79930d92e63687eeb2fcfff17252624ae965276de3d",
+          "unchanged": [
+            "installed site-packages project root",
+            "sync_files == manifest_files == 510",
+            "local_identity release_id match"
+          ]
+        }
+      ],
+      "row_id": "h3-lsf-normal-and-installed-sync"
     },
     {
       "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
@@ -457,7 +509,7 @@
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "D2 was a reused-fixture-state defect; the harness fix resets fixture jobs to PAUSED, while the 12 assertions are unchanged.",
+          "rationale": "D2 was a reused-fixture-state defect; the harness fix resets fixture jobs to PAUSED, while the 12 assertions are unchanged. B-fix-5 does not touch the B15 harness or authz code.",
           "receipt": "reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
           "receipt_sha256": "ead98a93dfd079634f01006b804448c5b281f8b23db3f8a94bd3a8e1f55278ff",
           "unchanged": [
@@ -475,7 +527,7 @@
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "B-fix-4 does not touch src/cccp, ORCA invocation, or the local execution chain; only the installed-wheel release-identity helper changed. These rows are reused and are not promoted to H3 closure.",
+          "rationale": "B-fix-5 does not touch src/cccp, ORCA invocation, or the local execution chain; it changes the installed-release sync/remote-import path and the API release projection. These rows are reused and are not promoted to H3 closure.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
           "receipt_sha256": "5c59082214294dabf91e64135af56f4790fcb0ad37ff57531ef2aed3d5339d46",
           "unchanged": [
@@ -493,7 +545,7 @@
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "No H5 row executes a task (all platform refs null) or calls the B-fix-4 helper; inputs and validator are unchanged.",
+          "rationale": "No H5 row executes a task (all platform refs null) or calls the installed-release identity helper; inputs and validator are unchanged between abec2bc and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
           "receipt_sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
           "unchanged": [
