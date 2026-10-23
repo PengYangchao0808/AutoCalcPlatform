@@ -1,0 +1,105 @@
+{
+  "schema": "acp2.b25.reviewed-requests.v1",
+  "generated_at": "2026-10-23T12:05:00Z",
+  "applied_by": "B25a",
+  "version_bump_performed_by_b25a": true,
+  "version": "0.3.0",
+  "requests": [
+    {
+      "id": "A-27a/packaging.md",
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.md",
+      "sha256": "6a83a285b574f4b2348abeacdaae8cb1fc90008402fbe60d9c08f697386937c3",
+      "decision": "applied-with-gap",
+      "applied_to": [
+        "packaging/roles/cccp/pyproject.toml [tool.setuptools.package-data].cccp.analysis.research",
+        "pyproject.toml [tool.setuptools.package-data].cccp.analysis.research"
+      ],
+      "detail": "The package-data glob is applied to both distributions. The 14-file corpus is absent from this B checkout, so the glob is inert in this build; A-27b must record the corpus gap as NOT_VERIFIED until A-49/50 lands it. No science file was copied by B.",
+      "rollback": "Revert the two package-data keys; no installed science import depends on them."
+    },
+    {
+      "id": "A-27a/packaging.patch",
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
+      "sha256": "e7c3186ac03ef565b4d0380bf04c4a185b39fd730db03831a10432fd216c07b8",
+      "decision": "applied",
+      "detail": "The one-hunk patch is reproduced in packaging/roles/cccp/pyproject.toml and mirrored in the root distribution. No test assertion was changed or relaxed."
+    },
+    {
+      "id": "A-27a/dependency-requests.md",
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
+      "sha256": "5082907a836caf09a3b86dad448d6c1cbad05f7d4feeb029de6c5004124657fa",
+      "decision": "applied",
+      "detail": "No new runtime dependency was requested or added; requirements-node.txt is unchanged. The B25a release candidate is built for A-27b/A-28/A-29 consumption."
+    },
+    {
+      "id": "A-08/shared-file-requests.md",
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md",
+      "sha256": "d64a887a53f601675dfb1f0f1e9e3af949a93c8a384be821c944fea0c2a48692",
+      "decision": "queued",
+      "owner_after_b25a": "B docs / B25b",
+      "detail": "README/DevDoc 14->15 workflow-count prose corrections are documentation-only and are not part of the B25a packaging commit. No AGENTS.md edit was requested."
+    },
+    {
+      "id": "A-21a/ADR-007-input.md",
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/ADR-007-input.md",
+      "decision": "not-applied",
+      "detail": "The cccp.science_plugins entry-point group/version remains an ADR decision. B25a adds no entry-point group and no loader; the existing console-script set is unchanged."
+    },
+    {
+      "id": "C/B-req-06",
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md",
+      "sha256": "e16267ff713a2d7cd984add8340e38f0a61b2bab9dbf05f79b94531aad471d33",
+      "decision": "applied-partial",
+      "applied_to": [
+        ".github/workflows/ci.yml rph-detect + rph jobs"
+      ],
+      "detail": "The conditional CI job runs only when rph/pnpm-lock.yaml exists, with the frozen Node/pnpm pair, out-of-tree store, frozen-lockfile install, build, test and boundary check. The repository root still has no package.json/pnpm-workspace.yaml/lockfile. The versioned static-asset mount and digest rejection are B25b scope and are not claimed here.",
+      "static_asset_manifest_state": "NOT_VERIFIED(c32_static_assets_absent_in_b_checkout)"
+    },
+    {
+      "id": "C/B-req-12",
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md",
+      "sha256": "c79f504dacd2efe8d431e2ee1e3ec01dffd298bfd7c823f12361a8bc0a76c2f3",
+      "decision": "queued",
+      "owner_after_b25a": "B25b / B02b",
+      "detail": "B25a built the packages and ran the role probes; full clean-install acceptance is B25b. The environment and package-smoke rows are not merged into one PASS."
+    },
+    {
+      "id": "B22/packaging-requests.json",
+      "owner": "B",
+      "path": "reports/acp2_implementation/bb45a46/B/B22/packaging-requests.json",
+      "decision": "consumed",
+      "detail": "All nine B22 reviewed entries are consumed: the version bump is performed once here, the A package-data patch and release candidate are applied, ADR-007/C B-req-12 remain queued to their owners, and C B-req-06 is partially applied as above."
+    }
+  ],
+  "entry_points": {
+    "root": {
+      "acp": "acp.cli:main"
+    },
+    "cccp_role": {},
+    "worker_role": {
+      "acp-worker": "acp_services.worker_bootstrap:main"
+    },
+    "web_role": {
+      "acp": "acp.cli:main"
+    },
+    "cccp.science_plugins": "not-added-pending-ADR-007"
+  },
+  "requirements_node": {
+    "path": "requirements-node.txt",
+    "changed": false,
+    "sha256": "f21f3a327cb1d581ffaf54ee5bb2b9e1916948156e3f48e52a68269f28cc3758"
+  },
+  "c35_input_cycle": {
+    "recorded": false,
+    "status": "not_observed",
+    "evidence": "C plan C32-C35 names C32/C33/C34 and B25a; C33 explicitly says it does not wait for B25b, and no C task lists B26 as a C35 prerequisite. C35 is authored against B25a."
+  }
+}

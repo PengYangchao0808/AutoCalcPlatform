@@ -163,3 +163,49 @@ def test_critical_nmr_assets_exist() -> None:
     models_dir = ROOT / "src" / "cccp" / "analysis" / "nmr" / "model_assets"
     for name in _CRITICAL_ASSETS:
         assert (models_dir / name).is_file(), f"missing NMR model asset: {name}"
+
+
+# ---------------------------------------------------------------------------
+# 4. Four version locations + A-27a contract-corpus declaration
+# ---------------------------------------------------------------------------
+
+
+def test_four_version_locations_agree() -> None:
+    import ast
+
+    values = {}
+    for relpath in ("src/cccp/__init__.py", "src/cccp/version.py"):
+        tree = ast.parse((ROOT / relpath).read_text(encoding="utf-8"))
+        values[relpath] = next(
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__version__"
+                for target in node.targets
+            )
+        )
+    acp_tree = ast.parse((ROOT / "src/acp/__init__.py").read_text(encoding="utf-8"))
+    values["src/acp/__init__.py"] = [
+        ast.literal_eval(node.value)
+        for node in ast.walk(acp_tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets
+        )
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    ][-1]
+    values["pyproject.toml"] = _load_pyproject()["project"]["version"]
+    assert len(set(values.values())) == 1, f"partial version bump: {values}"
+
+
+def test_research_contract_corpus_is_declared_for_both_distributions() -> None:
+    root_patterns = _load_pyproject()["tool"]["setuptools"]["package-data"]
+    assert "cccp.analysis.research" in root_patterns, (
+        "root acp distribution must declare the A-27a contract corpus package-data"
+    )
+    role = tomllib.loads((ROOT / "packaging/roles/cccp/pyproject.toml").read_text(encoding="utf-8"))
+    assert "cccp.analysis.research" in role["tool"]["setuptools"]["package-data"], (
+        "independent cccp role must declare the A-27a contract corpus package-data"
+    )

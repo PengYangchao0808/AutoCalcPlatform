@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/tmp/opencode/acp2-b25-clean/scripts/acceptance/release_role_probe.py", line 191, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/tmp/opencode/acp2-b25-clean/scripts/acceptance/release_role_probe.py", line 182, in main
+    facts.update(worker_probe(root))
+                 ^^^^^^^^^^^^^^^^^^
+  File "/tmp/opencode/acp2-b25-clean/scripts/acceptance/release_role_probe.py", line 107, in worker_probe
+    assert refused.returncode != 0
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

@@ -1,0 +1,2543 @@
+* Getting build dependencies for sdist...
+running egg_info
+creating src/acp.egg-info
+writing src/acp.egg-info/PKG-INFO
+writing dependency_links to src/acp.egg-info/dependency_links.txt
+writing entry points to src/acp.egg-info/entry_points.txt
+writing requirements to src/acp.egg-info/requires.txt
+writing top-level names to src/acp.egg-info/top_level.txt
+writing manifest file 'src/acp.egg-info/SOURCES.txt'
+reading manifest file 'src/acp.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/acp.egg-info/SOURCES.txt'
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+* Building sdist...
+running sdist
+running egg_info
+writing src/acp.egg-info/PKG-INFO
+writing dependency_links to src/acp.egg-info/dependency_links.txt
+writing entry points to src/acp.egg-info/entry_points.txt
+writing requirements to src/acp.egg-info/requires.txt
+writing top-level names to src/acp.egg-info/top_level.txt
+reading manifest file 'src/acp.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/acp.egg-info/SOURCES.txt'
+running check
+creating acp-0.3.0
+creating acp-0.3.0/src
+creating acp-0.3.0/src/acp
+creating acp-0.3.0/src/acp.egg-info
+creating acp-0.3.0/src/acp/api
+creating acp-0.3.0/src/acp/backends
+creating acp-0.3.0/src/acp/calculations
+creating acp-0.3.0/src/acp/calculations/batch
+creating acp-0.3.0/src/acp/calculations/irc
+creating acp-0.3.0/src/acp/calculations/pes
+creating acp-0.3.0/src/acp/calculations/primitives
+creating acp-0.3.0/src/acp/calculations/tsmode
+creating acp-0.3.0/src/acp/chem
+creating acp-0.3.0/src/acp/compat
+creating acp-0.3.0/src/acp/compat/legacy
+creating acp-0.3.0/src/acp/confsearch
+creating acp-0.3.0/src/acp/confsearch/protocols
+creating acp-0.3.0/src/acp/confsearch/shared
+creating acp-0.3.0/src/acp/core
+creating acp-0.3.0/src/acp/init_wizard
+creating acp-0.3.0/src/acp/intake
+creating acp-0.3.0/src/acp/io
+creating acp-0.3.0/src/acp/nmr
+creating acp-0.3.0/src/acp/results
+creating acp-0.3.0/src/acp/scheduler
+creating acp-0.3.0/src/acp/scheduler/remote
+creating acp-0.3.0/src/acp/storage
+creating acp-0.3.0/src/acp/workflows
+creating acp-0.3.0/src/acp_services
+creating acp-0.3.0/src/acp_services/contracts
+creating acp-0.3.0/src/acp_services/data
+creating acp-0.3.0/src/acp_services/entrypoints
+creating acp-0.3.0/src/acp_services/runtime
+creating acp-0.3.0/src/acp_services/store
+creating acp-0.3.0/src/acp_services/workspace
+creating acp-0.3.0/src/cccp
+creating acp-0.3.0/src/cccp/analysis
+creating acp-0.3.0/src/cccp/analysis/bounded
+creating acp-0.3.0/src/cccp/analysis/confsearch
+creating acp-0.3.0/src/cccp/analysis/ensemble
+creating acp-0.3.0/src/cccp/analysis/nmr
+creating acp-0.3.0/src/cccp/analysis/nmr/model_assets
+creating acp-0.3.0/src/cccp/analysis/pes
+creating acp-0.3.0/src/cccp/analysis/sampling
+creating acp-0.3.0/src/cccp/analysis/structure
+creating acp-0.3.0/src/cccp/analysis/tsmode
+creating acp-0.3.0/src/cccp/analysis/xtbmd
+creating acp-0.3.0/src/cccp/backends
+creating acp-0.3.0/src/cccp/calculation
+creating acp-0.3.0/src/cccp/calculation/products
+creating acp-0.3.0/src/cccp/calculation/tasks
+creating acp-0.3.0/src/cccp/core
+creating acp-0.3.0/src/cccp/io
+creating acp-0.3.0/src/cccp/pipeline
+creating acp-0.3.0/src/cccp/plugin
+creating acp-0.3.0/src/cccp/qc
+creating acp-0.3.0/src/cccp/qc/cluster
+creating acp-0.3.0/src/cccp/qc/interfaces
+creating acp-0.3.0/src/cccp/qc/runners
+creating acp-0.3.0/src/cccp/utils
+copying files to acp-0.3.0...
+copying LICENSE -> acp-0.3.0
+copying README.md -> acp-0.3.0
+copying pyproject.toml -> acp-0.3.0
+copying src/acp/__init__.py -> acp-0.3.0/src/acp
+copying src/acp/__main__.py -> acp-0.3.0/src/acp
+copying src/acp/catalog.py -> acp-0.3.0/src/acp
+copying src/acp/cli.py -> acp-0.3.0/src/acp
+copying src/acp/services_bootstrap.py -> acp-0.3.0/src/acp
+copying src/acp/services_completion_bootstrap.py -> acp-0.3.0/src/acp
+copying src/acp/services_data_bootstrap.py -> acp-0.3.0/src/acp
+copying src/acp/services_events_bootstrap.py -> acp-0.3.0/src/acp
+copying src/acp/services_mcp_bootstrap.py -> acp-0.3.0/src/acp
+copying src/acp/services_publication_bootstrap.py -> acp-0.3.0/src/acp
+copying src/acp.egg-info/PKG-INFO -> acp-0.3.0/src/acp.egg-info
+copying src/acp.egg-info/SOURCES.txt -> acp-0.3.0/src/acp.egg-info
+copying src/acp.egg-info/dependency_links.txt -> acp-0.3.0/src/acp.egg-info
+copying src/acp.egg-info/entry_points.txt -> acp-0.3.0/src/acp.egg-info
+copying src/acp.egg-info/requires.txt -> acp-0.3.0/src/acp.egg-info
+copying src/acp.egg-info/top_level.txt -> acp-0.3.0/src/acp.egg-info
+copying src/acp/api/__init__.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/batch_preview.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/drafts.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/job_status_view.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/mechanism_readonly.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/mechanism_readonly_schemas.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/routes.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/schemas.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/server.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/v1_routes.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/v1_schemas.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/v2_approvals.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/v2_budgets.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/v2_routes.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/v2_schemas.py -> acp-0.3.0/src/acp/api
+copying src/acp/api/v2_structure_sources.py -> acp-0.3.0/src/acp/api
+copying src/acp/backends/__init__.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/base.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/batch.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/capabilities.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/censo_backend.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/crest.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/external.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/external_backend.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/isostat_backend.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/matrix.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/molclus_backend.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/orca.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/registry.py -> acp-0.3.0/src/acp/backends
+copying src/acp/backends/xtb.py -> acp-0.3.0/src/acp/backends
+copying src/acp/calculations/__init__.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/attempt_freeze.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/attempt_publication.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/checkpoint.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/contracts.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/executor.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/identity.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/legacy_adapters.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/levels.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/plans.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/progress.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/result_publication.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/step_requirements.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/step_result.py -> acp-0.3.0/src/acp/calculations
+copying src/acp/calculations/batch/__init__.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/_items.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/_manifest.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/_singlepoint_execution.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/_singlepoint_frames.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/_singlepoint_models.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/_tag.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/_xyz.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/effective_config.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/engine.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/loaders.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/models.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/options.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/profiles.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/batch/singlepoint.py -> acp-0.3.0/src/acp/calculations/batch
+copying src/acp/calculations/irc/__init__.py -> acp-0.3.0/src/acp/calculations/irc
+copying src/acp/calculations/irc/contracts.py -> acp-0.3.0/src/acp/calculations/irc
+copying src/acp/calculations/irc/source.py -> acp-0.3.0/src/acp/calculations/irc
+copying src/acp/calculations/irc/validation.py -> acp-0.3.0/src/acp/calculations/irc
+copying src/acp/calculations/pes/__init__.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/atom_mapping.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/atom_selection.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/bond_changes.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/candidates.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/contracts.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/engine.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/outputs.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/path_analysis.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/path_selection.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/review.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/scan.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/scan_snapshot.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/pes/validation.py -> acp-0.3.0/src/acp/calculations/pes
+copying src/acp/calculations/primitives/__init__.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/_common.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/_thermochemistry_input.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/_thermochemistry_support.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/casscf.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/frequency.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/irc.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/irc_trajectory.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/optimization_trajectory.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/optimize.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/scan.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/singlepoint.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/primitives/thermochemistry.py -> acp-0.3.0/src/acp/calculations/primitives
+copying src/acp/calculations/tsmode/__init__.py -> acp-0.3.0/src/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/contracts.py -> acp-0.3.0/src/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/engine.py -> acp-0.3.0/src/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/mode_mapping.py -> acp-0.3.0/src/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/source.py -> acp-0.3.0/src/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/validation.py -> acp-0.3.0/src/acp/calculations/tsmode
+copying src/acp/chem/__init__.py -> acp-0.3.0/src/acp/chem
+copying src/acp/chem/composition.py -> acp-0.3.0/src/acp/chem
+copying src/acp/chem/embedding.py -> acp-0.3.0/src/acp/chem
+copying src/acp/compat/__init__.py -> acp-0.3.0/src/acp/compat
+copying src/acp/compat/legacy/__init__.py -> acp-0.3.0/src/acp/compat/legacy
+copying src/acp/compat/legacy/batch_loaders.py -> acp-0.3.0/src/acp/compat/legacy
+copying src/acp/compat/legacy/layouts.py -> acp-0.3.0/src/acp/compat/legacy
+copying src/acp/compat/legacy/manifests.py -> acp-0.3.0/src/acp/compat/legacy
+copying src/acp/confsearch/__init__.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/contracts.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/engine.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/manifest.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/profiles.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/report.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/result_helpers.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/sampling.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/sampling_models.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/selection.py -> acp-0.3.0/src/acp/confsearch
+copying src/acp/confsearch/protocols/__init__.py -> acp-0.3.0/src/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/_common.py -> acp-0.3.0/src/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/censo_crest.py -> acp-0.3.0/src/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/xtb_crest.py -> acp-0.3.0/src/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/xtb_md.py -> acp-0.3.0/src/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/xtbmd_censo.py -> acp-0.3.0/src/acp/confsearch/protocols
+copying src/acp/confsearch/shared/__init__.py -> acp-0.3.0/src/acp/confsearch/shared
+copying src/acp/confsearch/shared/artifacts.py -> acp-0.3.0/src/acp/confsearch/shared
+copying src/acp/confsearch/shared/boltzmann.py -> acp-0.3.0/src/acp/confsearch/shared
+copying src/acp/confsearch/shared/deduplication.py -> acp-0.3.0/src/acp/confsearch/shared
+copying src/acp/confsearch/shared/helpers.py -> acp-0.3.0/src/acp/confsearch/shared
+copying src/acp/confsearch/shared/provenance.py -> acp-0.3.0/src/acp/confsearch/shared
+copying src/acp/core/__init__.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/config.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/keywords.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/models.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/paths.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/registry.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/stage_labels.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/state.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/utils.py -> acp-0.3.0/src/acp/core
+copying src/acp/core/workflow.py -> acp-0.3.0/src/acp/core
+copying src/acp/init_wizard/__init__.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/answers.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/capabilities.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/flows.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/gating.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/lab_doctor.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/newnode.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/options.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/persist.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/plan.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/prompts.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/sniff_local.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/init_wizard/sniff_remote.py -> acp-0.3.0/src/acp/init_wizard
+copying src/acp/intake/__init__.py -> acp-0.3.0/src/acp/intake
+copying src/acp/intake/models.py -> acp-0.3.0/src/acp/intake
+copying src/acp/intake/parsers.py -> acp-0.3.0/src/acp/intake
+copying src/acp/intake/storage.py -> acp-0.3.0/src/acp/intake
+copying src/acp/io/__init__.py -> acp-0.3.0/src/acp/io
+copying src/acp/io/structures.py -> acp-0.3.0/src/acp/io
+copying src/acp/nmr/__init__.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/analysis_revision.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/assignment.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/atomic_diagnostics.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/averaging.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/carbon_processor.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/dp5q_stub.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/enumerate.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/equivalence.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/error_model.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/fchl.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/io.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/iterative_assignment.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/method_config.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/models.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/probability.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/protocol.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/proton_processor.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/reference_validation.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/report.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/scaling.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/shift_predictor.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/spectra.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/spectra_registry.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/nmr/structure_map.py -> acp-0.3.0/src/acp/nmr
+copying src/acp/results/__init__.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/crest_parser.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/energy_graph.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/frame_candidate_annotations.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/frame_candidate_geometry.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/frame_candidate_store.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/frame_candidates.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/frames.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/frames_adapter.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/frequencies.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/irc_projection.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/irc_remote_live.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/manifest.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/optimization.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/orca_parser.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/pes_profile.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/pes_scan_live.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/remote_structure_cache.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/sampling_graph.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/structure_migration.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/structure_policy.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/structure_snapshots.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/structure_viewer.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/thermochemistry.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/vibration_projection.py -> acp-0.3.0/src/acp/results
+copying src/acp/results/xtb_parser.py -> acp-0.3.0/src/acp/results
+copying src/acp/scheduler/__init__.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/artifacts.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/auto_tags.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/capabilities.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/edit_parameters.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/events.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/files.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/input_snapshot.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/job_edit.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/jobs.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/local_cleanup.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/logs.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/manager.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/metrics.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/migrations.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/molecule_groups.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/naming.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/nodes.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/processctl.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/projects.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/provenance.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/registration.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/resources.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/runner.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/stage_tasks.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/store.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/structure_source_indexer.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/structure_source_store.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/structure_sources.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/task_views.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/tasks.py -> acp-0.3.0/src/acp/scheduler
+copying src/acp/scheduler/remote/__init__.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/cleanup.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/config.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/fetcher.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/monitor.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/node_manager.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/paths.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/release.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/runner.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/script_gen.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/sftp.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/ssh.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/submission.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/scheduler/remote/sync.py -> acp-0.3.0/src/acp/scheduler/remote
+copying src/acp/storage/__init__.py -> acp-0.3.0/src/acp/storage
+copying src/acp/storage/backend.py -> acp-0.3.0/src/acp/storage
+copying src/acp/storage/layout.py -> acp-0.3.0/src/acp/storage
+copying src/acp/storage/manifest.py -> acp-0.3.0/src/acp/storage
+copying src/acp/storage/mapping.py -> acp-0.3.0/src/acp/storage
+copying src/acp/storage/record.py -> acp-0.3.0/src/acp/storage
+copying src/acp/workflows/__init__.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/_helpers.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/batch_optimize.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/energy.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/energy_shared.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/ensemble.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/ensemble_thermo.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/irc.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/nmr.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/orca_gradient.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/pes_search.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/registry.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/simple.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/tsmode.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/xtb_constrained_opt.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/xtb_path.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/xtbmd_censo_energy.py -> acp-0.3.0/src/acp/workflows
+copying src/acp/workflows/xtbmd_md.py -> acp-0.3.0/src/acp/workflows
+copying src/acp_services/__init__.py -> acp-0.3.0/src/acp_services
+copying src/acp_services/bootstrap.py -> acp-0.3.0/src/acp_services
+copying src/acp_services/events.py -> acp-0.3.0/src/acp_services
+copying src/acp_services/worker_bootstrap.py -> acp-0.3.0/src/acp_services
+copying src/acp_services/contracts/__init__.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/access.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/action_gating.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/adapters.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/config_plan.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/config_validation.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/envelope.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/events.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/contracts/injection.py -> acp-0.3.0/src/acp_services/contracts
+copying src/acp_services/data/__init__.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/archive.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/artifacts.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/budget.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/contracts.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/helpers.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/import_.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/namespaces.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/operations.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/read_root.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/research_resources.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/resource_read.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/storage_binding.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/data/transfer.py -> acp-0.3.0/src/acp_services/data
+copying src/acp_services/entrypoints/__init__.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/entrypoints/application_params.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/entrypoints/controller_client.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/entrypoints/diagnostics.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/entrypoints/machine_output.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/entrypoints/mcp.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/entrypoints/mcp_stdio.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/entrypoints/status_projection.py -> acp-0.3.0/src/acp_services/entrypoints
+copying src/acp_services/runtime/__init__.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/adapter_bootstrap.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/adapter_registry.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/admission.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/analysis_capabilities.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/approvals.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/attempt_completion.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/attempt_freeze.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/canonical_digest.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/capability_registry.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/commands.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/errors.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/events.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/execution_chain.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/execution_right.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/freshness.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/helpers.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/idempotency.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/isolation.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/lab_capabilities.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/lineage.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/local_admission.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/metering_decoupling.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/metering_policy.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/method_flags.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/outbox.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/plan_contracts.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/projections.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/provisioning.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/quota.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/receipt_identity.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/receipts.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/recovery.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/research_budget.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/research_events.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/science_binding.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/step_dag.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/step_requirements.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/step_result.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/usage.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/usage_units.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/worker.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/runtime/workflow_enablement.py -> acp-0.3.0/src/acp_services/runtime
+copying src/acp_services/store/__init__.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/layout.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/legacy_method.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/migrations.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/molecule_groups.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/naming.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/record.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/records.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/store/store.py -> acp-0.3.0/src/acp_services/store
+copying src/acp_services/workspace/__init__.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/admin.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/boundary.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/entry_authz.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/http_identity.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/identity_lifecycle.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/identity_mapping.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/keys.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/projects.py -> acp-0.3.0/src/acp_services/workspace
+copying src/acp_services/workspace/server_identity.py -> acp-0.3.0/src/acp_services/workspace
+copying src/cccp/__init__.py -> acp-0.3.0/src/cccp
+copying src/cccp/config.py -> acp-0.3.0/src/cccp
+copying src/cccp/py.typed -> acp-0.3.0/src/cccp
+copying src/cccp/software.py -> acp-0.3.0/src/cccp
+copying src/cccp/version.py -> acp-0.3.0/src/cccp
+copying src/cccp/analysis/__init__.py -> acp-0.3.0/src/cccp/analysis
+copying src/cccp/analysis/frequency_products.py -> acp-0.3.0/src/cccp/analysis
+copying src/cccp/analysis/identity.py -> acp-0.3.0/src/cccp/analysis
+copying src/cccp/analysis/orca_parser.py -> acp-0.3.0/src/cccp/analysis
+copying src/cccp/analysis/bounded/__init__.py -> acp-0.3.0/src/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/chunking.py -> acp-0.3.0/src/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/errors.py -> acp-0.3.0/src/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/identity.py -> acp-0.3.0/src/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/manifest.py -> acp-0.3.0/src/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/multiresolution.py -> acp-0.3.0/src/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/subsampling.py -> acp-0.3.0/src/cccp/analysis/bounded
+copying src/cccp/analysis/confsearch/__init__.py -> acp-0.3.0/src/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/boltzmann.py -> acp-0.3.0/src/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/contracts.py -> acp-0.3.0/src/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/result_helpers.py -> acp-0.3.0/src/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/selection.py -> acp-0.3.0/src/cccp/analysis/confsearch
+copying src/cccp/analysis/ensemble/__init__.py -> acp-0.3.0/src/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/assembly.py -> acp-0.3.0/src/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/inputs.py -> acp-0.3.0/src/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/levels.py -> acp-0.3.0/src/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/selection.py -> acp-0.3.0/src/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/solvent.py -> acp-0.3.0/src/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/thermo.py -> acp-0.3.0/src/cccp/analysis/ensemble
+copying src/cccp/analysis/nmr/__init__.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/analysis_revision.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/assets.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/assignment.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/atomic_diagnostics.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/averaging.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/carbon_processor.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/dp5q_stub.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/enumerate.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/equivalence.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/error_model.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/fchl.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/io.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/iterative_assignment.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/method_config.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/models.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/probability.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/protocol.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/proton_processor.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/reference_validation.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/report.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/scaling.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/shift_predictor.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/spectra.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/spectra_registry.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/structure_map.py -> acp-0.3.0/src/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/model_assets/LICENSE-DP5 -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/NOTICE.md -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/atomic_reps.gz -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/c_w_kde_mean_s_0.025.p -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/folded_scaled_errors.p -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/frag_reps.gz -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/i_w_kde_mean_s_0.025.p -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/tms_references.txt -> acp-0.3.0/src/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/pes/__init__.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/pes/atom_mapping.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/pes/atom_selection.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/pes/bond_changes.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/pes/candidates.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/pes/path_analysis.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/pes/path_selection.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/pes/validation.py -> acp-0.3.0/src/cccp/analysis/pes
+copying src/cccp/analysis/sampling/__init__.py -> acp-0.3.0/src/cccp/analysis/sampling
+copying src/cccp/analysis/sampling/deduplication.py -> acp-0.3.0/src/cccp/analysis/sampling
+copying src/cccp/analysis/sampling/models.py -> acp-0.3.0/src/cccp/analysis/sampling
+copying src/cccp/analysis/sampling/pipeline.py -> acp-0.3.0/src/cccp/analysis/sampling
+copying src/cccp/analysis/structure/__init__.py -> acp-0.3.0/src/cccp/analysis/structure
+copying src/cccp/analysis/structure/embedding.py -> acp-0.3.0/src/cccp/analysis/structure
+copying src/cccp/analysis/structure/models.py -> acp-0.3.0/src/cccp/analysis/structure
+copying src/cccp/analysis/structure/parsers.py -> acp-0.3.0/src/cccp/analysis/structure
+copying src/cccp/analysis/structure/structures.py -> acp-0.3.0/src/cccp/analysis/structure
+copying src/cccp/analysis/structure/topology.py -> acp-0.3.0/src/cccp/analysis/structure
+copying src/cccp/analysis/tsmode/__init__.py -> acp-0.3.0/src/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/contracts.py -> acp-0.3.0/src/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/mode_mapping.py -> acp-0.3.0/src/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/source.py -> acp-0.3.0/src/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/validation.py -> acp-0.3.0/src/cccp/analysis/tsmode
+copying src/cccp/analysis/xtbmd/__init__.py -> acp-0.3.0/src/cccp/analysis/xtbmd
+copying src/cccp/analysis/xtbmd/energy_filter.py -> acp-0.3.0/src/cccp/analysis/xtbmd
+copying src/cccp/analysis/xtbmd/trajectory.py -> acp-0.3.0/src/cccp/analysis/xtbmd
+copying src/cccp/backends/__init__.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/base.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/capabilities.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/censo_backend.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/crest.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/external.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/external_backend.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/isostat_backend.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/matrix.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/molclus_backend.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/orca.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/registry.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/backends/xtb.py -> acp-0.3.0/src/cccp/backends
+copying src/cccp/calculation/__init__.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/_common.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/batch.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/context.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/contracts.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/energy_adapters.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/errors.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/frequency_parse.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/irc_endpoints.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/irc_trajectory.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/optimization_trajectory.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/progress.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/requests.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/results.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/selection.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/xtbmd_adapters.py -> acp-0.3.0/src/cccp/calculation
+copying src/cccp/calculation/products/__init__.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/products/contracts.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/products/curve.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/products/derived.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/products/registry.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/products/serialize.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/products/structure.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/products/vibration.py -> acp-0.3.0/src/cccp/calculation/products
+copying src/cccp/calculation/tasks/__init__.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/casscf.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/censo_refine.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/clustering.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/conformer_search.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/frequency.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/irc.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/md_sampling.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/nmr_shielding.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/optimize.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/orca_gradient.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/scan.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/singlepoint.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/thermochemistry.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/xtb_constrained_opt.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/xtb_path_search.py -> acp-0.3.0/src/cccp/calculation/tasks
+copying src/cccp/core/__init__.py -> acp-0.3.0/src/cccp/core
+copying src/cccp/core/candidates.py -> acp-0.3.0/src/cccp/core
+copying src/cccp/core/protocols.py -> acp-0.3.0/src/cccp/core
+copying src/cccp/core/registry.py -> acp-0.3.0/src/cccp/core
+copying src/cccp/core/state_manager.py -> acp-0.3.0/src/cccp/core
+copying src/cccp/io/__init__.py -> acp-0.3.0/src/cccp/io
+copying src/cccp/io/input_handler.py -> acp-0.3.0/src/cccp/io
+copying src/cccp/pipeline/__init__.py -> acp-0.3.0/src/cccp/pipeline
+copying src/cccp/pipeline/executor.py -> acp-0.3.0/src/cccp/pipeline
+copying src/cccp/plugin/__init__.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/plugin/discovery.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/plugin/errors.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/plugin/example_xyz.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/plugin/host.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/plugin/metadata.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/plugin/readonly_parser.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/plugin/sdk.py -> acp-0.3.0/src/cccp/plugin
+copying src/cccp/qc/__init__.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/hessian_policy.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/keyword_registry.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/method_meta.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/resolved_spec.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/shermo_adapter.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/thermo_normalize.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/translation.py -> acp-0.3.0/src/cccp/qc
+copying src/cccp/qc/cluster/__init__.py -> acp-0.3.0/src/cccp/qc/cluster
+copying src/cccp/qc/interfaces/__init__.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/base.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/censo.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/constraints.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/crest.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/hess_file.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/isostat.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/molclus.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/orca.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/orca_ts.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/route_render.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb_path.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb_scan.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb_thermo.py -> acp-0.3.0/src/cccp/qc/interfaces
+copying src/cccp/qc/runners/__init__.py -> acp-0.3.0/src/cccp/qc/runners
+copying src/cccp/utils/__init__.py -> acp-0.3.0/src/cccp/utils
+copying src/cccp/utils/constants.py -> acp-0.3.0/src/cccp/utils
+copying src/cccp/utils/file_io.py -> acp-0.3.0/src/cccp/utils
+copying src/cccp/utils/geometry_tools.py -> acp-0.3.0/src/cccp/utils
+copying src/cccp/utils/resource_utils.py -> acp-0.3.0/src/cccp/utils
+copying src/cccp/utils/solvent_map.py -> acp-0.3.0/src/cccp/utils
+Writing acp-0.3.0/setup.cfg
+Creating tar archive
+removing 'acp-0.3.0' (and everything under it)
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+* Building wheel from sdist
+* Getting build dependencies for wheel...
+running egg_info
+writing src/acp.egg-info/PKG-INFO
+writing dependency_links to src/acp.egg-info/dependency_links.txt
+writing entry points to src/acp.egg-info/entry_points.txt
+writing requirements to src/acp.egg-info/requires.txt
+writing top-level names to src/acp.egg-info/top_level.txt
+reading manifest file 'src/acp.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/acp.egg-info/SOURCES.txt'
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+* Building wheel...
+running bdist_wheel
+running build
+running build_py
+creating build
+creating build/lib
+creating build/lib/acp
+copying src/acp/__init__.py -> build/lib/acp
+copying src/acp/__main__.py -> build/lib/acp
+copying src/acp/catalog.py -> build/lib/acp
+copying src/acp/cli.py -> build/lib/acp
+copying src/acp/services_bootstrap.py -> build/lib/acp
+copying src/acp/services_completion_bootstrap.py -> build/lib/acp
+copying src/acp/services_data_bootstrap.py -> build/lib/acp
+copying src/acp/services_events_bootstrap.py -> build/lib/acp
+copying src/acp/services_mcp_bootstrap.py -> build/lib/acp
+copying src/acp/services_publication_bootstrap.py -> build/lib/acp
+creating build/lib/acp_services
+copying src/acp_services/__init__.py -> build/lib/acp_services
+copying src/acp_services/bootstrap.py -> build/lib/acp_services
+copying src/acp_services/events.py -> build/lib/acp_services
+copying src/acp_services/worker_bootstrap.py -> build/lib/acp_services
+creating build/lib/cccp
+copying src/cccp/__init__.py -> build/lib/cccp
+copying src/cccp/config.py -> build/lib/cccp
+copying src/cccp/software.py -> build/lib/cccp
+copying src/cccp/version.py -> build/lib/cccp
+creating build/lib/acp/api
+copying src/acp/api/__init__.py -> build/lib/acp/api
+copying src/acp/api/batch_preview.py -> build/lib/acp/api
+copying src/acp/api/drafts.py -> build/lib/acp/api
+copying src/acp/api/job_status_view.py -> build/lib/acp/api
+copying src/acp/api/mechanism_readonly.py -> build/lib/acp/api
+copying src/acp/api/mechanism_readonly_schemas.py -> build/lib/acp/api
+copying src/acp/api/routes.py -> build/lib/acp/api
+copying src/acp/api/schemas.py -> build/lib/acp/api
+copying src/acp/api/server.py -> build/lib/acp/api
+copying src/acp/api/v1_routes.py -> build/lib/acp/api
+copying src/acp/api/v1_schemas.py -> build/lib/acp/api
+copying src/acp/api/v2_approvals.py -> build/lib/acp/api
+copying src/acp/api/v2_budgets.py -> build/lib/acp/api
+copying src/acp/api/v2_routes.py -> build/lib/acp/api
+copying src/acp/api/v2_schemas.py -> build/lib/acp/api
+copying src/acp/api/v2_structure_sources.py -> build/lib/acp/api
+creating build/lib/acp/backends
+copying src/acp/backends/__init__.py -> build/lib/acp/backends
+copying src/acp/backends/base.py -> build/lib/acp/backends
+copying src/acp/backends/batch.py -> build/lib/acp/backends
+copying src/acp/backends/capabilities.py -> build/lib/acp/backends
+copying src/acp/backends/censo_backend.py -> build/lib/acp/backends
+copying src/acp/backends/crest.py -> build/lib/acp/backends
+copying src/acp/backends/external.py -> build/lib/acp/backends
+copying src/acp/backends/external_backend.py -> build/lib/acp/backends
+copying src/acp/backends/isostat_backend.py -> build/lib/acp/backends
+copying src/acp/backends/matrix.py -> build/lib/acp/backends
+copying src/acp/backends/molclus_backend.py -> build/lib/acp/backends
+copying src/acp/backends/orca.py -> build/lib/acp/backends
+copying src/acp/backends/registry.py -> build/lib/acp/backends
+copying src/acp/backends/xtb.py -> build/lib/acp/backends
+creating build/lib/acp/calculations
+copying src/acp/calculations/__init__.py -> build/lib/acp/calculations
+copying src/acp/calculations/attempt_freeze.py -> build/lib/acp/calculations
+copying src/acp/calculations/attempt_publication.py -> build/lib/acp/calculations
+copying src/acp/calculations/checkpoint.py -> build/lib/acp/calculations
+copying src/acp/calculations/contracts.py -> build/lib/acp/calculations
+copying src/acp/calculations/executor.py -> build/lib/acp/calculations
+copying src/acp/calculations/identity.py -> build/lib/acp/calculations
+copying src/acp/calculations/legacy_adapters.py -> build/lib/acp/calculations
+copying src/acp/calculations/levels.py -> build/lib/acp/calculations
+copying src/acp/calculations/plans.py -> build/lib/acp/calculations
+copying src/acp/calculations/progress.py -> build/lib/acp/calculations
+copying src/acp/calculations/result_publication.py -> build/lib/acp/calculations
+copying src/acp/calculations/step_requirements.py -> build/lib/acp/calculations
+copying src/acp/calculations/step_result.py -> build/lib/acp/calculations
+creating build/lib/acp/chem
+copying src/acp/chem/__init__.py -> build/lib/acp/chem
+copying src/acp/chem/composition.py -> build/lib/acp/chem
+copying src/acp/chem/embedding.py -> build/lib/acp/chem
+creating build/lib/acp/compat
+copying src/acp/compat/__init__.py -> build/lib/acp/compat
+creating build/lib/acp/confsearch
+copying src/acp/confsearch/__init__.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/contracts.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/engine.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/manifest.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/profiles.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/report.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/result_helpers.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/sampling.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/sampling_models.py -> build/lib/acp/confsearch
+copying src/acp/confsearch/selection.py -> build/lib/acp/confsearch
+creating build/lib/acp/core
+copying src/acp/core/__init__.py -> build/lib/acp/core
+copying src/acp/core/config.py -> build/lib/acp/core
+copying src/acp/core/keywords.py -> build/lib/acp/core
+copying src/acp/core/models.py -> build/lib/acp/core
+copying src/acp/core/paths.py -> build/lib/acp/core
+copying src/acp/core/registry.py -> build/lib/acp/core
+copying src/acp/core/stage_labels.py -> build/lib/acp/core
+copying src/acp/core/state.py -> build/lib/acp/core
+copying src/acp/core/utils.py -> build/lib/acp/core
+copying src/acp/core/workflow.py -> build/lib/acp/core
+creating build/lib/acp/init_wizard
+copying src/acp/init_wizard/__init__.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/answers.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/capabilities.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/flows.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/gating.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/lab_doctor.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/newnode.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/options.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/persist.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/plan.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/prompts.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/sniff_local.py -> build/lib/acp/init_wizard
+copying src/acp/init_wizard/sniff_remote.py -> build/lib/acp/init_wizard
+creating build/lib/acp/intake
+copying src/acp/intake/__init__.py -> build/lib/acp/intake
+copying src/acp/intake/models.py -> build/lib/acp/intake
+copying src/acp/intake/parsers.py -> build/lib/acp/intake
+copying src/acp/intake/storage.py -> build/lib/acp/intake
+creating build/lib/acp/io
+copying src/acp/io/__init__.py -> build/lib/acp/io
+copying src/acp/io/structures.py -> build/lib/acp/io
+creating build/lib/acp/nmr
+copying src/acp/nmr/__init__.py -> build/lib/acp/nmr
+copying src/acp/nmr/analysis_revision.py -> build/lib/acp/nmr
+copying src/acp/nmr/assignment.py -> build/lib/acp/nmr
+copying src/acp/nmr/atomic_diagnostics.py -> build/lib/acp/nmr
+copying src/acp/nmr/averaging.py -> build/lib/acp/nmr
+copying src/acp/nmr/carbon_processor.py -> build/lib/acp/nmr
+copying src/acp/nmr/dp5q_stub.py -> build/lib/acp/nmr
+copying src/acp/nmr/enumerate.py -> build/lib/acp/nmr
+copying src/acp/nmr/equivalence.py -> build/lib/acp/nmr
+copying src/acp/nmr/error_model.py -> build/lib/acp/nmr
+copying src/acp/nmr/fchl.py -> build/lib/acp/nmr
+copying src/acp/nmr/io.py -> build/lib/acp/nmr
+copying src/acp/nmr/iterative_assignment.py -> build/lib/acp/nmr
+copying src/acp/nmr/method_config.py -> build/lib/acp/nmr
+copying src/acp/nmr/models.py -> build/lib/acp/nmr
+copying src/acp/nmr/probability.py -> build/lib/acp/nmr
+copying src/acp/nmr/protocol.py -> build/lib/acp/nmr
+copying src/acp/nmr/proton_processor.py -> build/lib/acp/nmr
+copying src/acp/nmr/reference_validation.py -> build/lib/acp/nmr
+copying src/acp/nmr/report.py -> build/lib/acp/nmr
+copying src/acp/nmr/scaling.py -> build/lib/acp/nmr
+copying src/acp/nmr/shift_predictor.py -> build/lib/acp/nmr
+copying src/acp/nmr/spectra.py -> build/lib/acp/nmr
+copying src/acp/nmr/spectra_registry.py -> build/lib/acp/nmr
+copying src/acp/nmr/structure_map.py -> build/lib/acp/nmr
+creating build/lib/acp/results
+copying src/acp/results/__init__.py -> build/lib/acp/results
+copying src/acp/results/crest_parser.py -> build/lib/acp/results
+copying src/acp/results/energy_graph.py -> build/lib/acp/results
+copying src/acp/results/frame_candidate_annotations.py -> build/lib/acp/results
+copying src/acp/results/frame_candidate_geometry.py -> build/lib/acp/results
+copying src/acp/results/frame_candidate_store.py -> build/lib/acp/results
+copying src/acp/results/frame_candidates.py -> build/lib/acp/results
+copying src/acp/results/frames.py -> build/lib/acp/results
+copying src/acp/results/frames_adapter.py -> build/lib/acp/results
+copying src/acp/results/frequencies.py -> build/lib/acp/results
+copying src/acp/results/irc_projection.py -> build/lib/acp/results
+copying src/acp/results/irc_remote_live.py -> build/lib/acp/results
+copying src/acp/results/manifest.py -> build/lib/acp/results
+copying src/acp/results/optimization.py -> build/lib/acp/results
+copying src/acp/results/orca_parser.py -> build/lib/acp/results
+copying src/acp/results/pes_profile.py -> build/lib/acp/results
+copying src/acp/results/pes_scan_live.py -> build/lib/acp/results
+copying src/acp/results/remote_structure_cache.py -> build/lib/acp/results
+copying src/acp/results/sampling_graph.py -> build/lib/acp/results
+copying src/acp/results/structure_migration.py -> build/lib/acp/results
+copying src/acp/results/structure_policy.py -> build/lib/acp/results
+copying src/acp/results/structure_snapshots.py -> build/lib/acp/results
+copying src/acp/results/structure_viewer.py -> build/lib/acp/results
+copying src/acp/results/thermochemistry.py -> build/lib/acp/results
+copying src/acp/results/vibration_projection.py -> build/lib/acp/results
+copying src/acp/results/xtb_parser.py -> build/lib/acp/results
+creating build/lib/acp/scheduler
+copying src/acp/scheduler/__init__.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/artifacts.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/auto_tags.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/capabilities.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/edit_parameters.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/events.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/files.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/input_snapshot.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/job_edit.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/jobs.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/local_cleanup.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/logs.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/manager.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/metrics.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/migrations.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/molecule_groups.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/naming.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/nodes.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/processctl.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/projects.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/provenance.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/registration.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/resources.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/runner.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/stage_tasks.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/store.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/structure_source_indexer.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/structure_source_store.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/structure_sources.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/task_views.py -> build/lib/acp/scheduler
+copying src/acp/scheduler/tasks.py -> build/lib/acp/scheduler
+creating build/lib/acp/storage
+copying src/acp/storage/__init__.py -> build/lib/acp/storage
+copying src/acp/storage/backend.py -> build/lib/acp/storage
+copying src/acp/storage/layout.py -> build/lib/acp/storage
+copying src/acp/storage/manifest.py -> build/lib/acp/storage
+copying src/acp/storage/mapping.py -> build/lib/acp/storage
+copying src/acp/storage/record.py -> build/lib/acp/storage
+creating build/lib/acp/workflows
+copying src/acp/workflows/__init__.py -> build/lib/acp/workflows
+copying src/acp/workflows/_helpers.py -> build/lib/acp/workflows
+copying src/acp/workflows/batch_optimize.py -> build/lib/acp/workflows
+copying src/acp/workflows/energy.py -> build/lib/acp/workflows
+copying src/acp/workflows/energy_shared.py -> build/lib/acp/workflows
+copying src/acp/workflows/ensemble.py -> build/lib/acp/workflows
+copying src/acp/workflows/ensemble_thermo.py -> build/lib/acp/workflows
+copying src/acp/workflows/irc.py -> build/lib/acp/workflows
+copying src/acp/workflows/nmr.py -> build/lib/acp/workflows
+copying src/acp/workflows/orca_gradient.py -> build/lib/acp/workflows
+copying src/acp/workflows/pes_search.py -> build/lib/acp/workflows
+copying src/acp/workflows/registry.py -> build/lib/acp/workflows
+copying src/acp/workflows/simple.py -> build/lib/acp/workflows
+copying src/acp/workflows/tsmode.py -> build/lib/acp/workflows
+copying src/acp/workflows/xtb_constrained_opt.py -> build/lib/acp/workflows
+copying src/acp/workflows/xtb_path.py -> build/lib/acp/workflows
+copying src/acp/workflows/xtbmd_censo_energy.py -> build/lib/acp/workflows
+copying src/acp/workflows/xtbmd_md.py -> build/lib/acp/workflows
+creating build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/__init__.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/_items.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/_manifest.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/_singlepoint_execution.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/_singlepoint_frames.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/_singlepoint_models.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/_tag.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/_xyz.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/effective_config.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/engine.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/loaders.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/models.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/options.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/profiles.py -> build/lib/acp/calculations/batch
+copying src/acp/calculations/batch/singlepoint.py -> build/lib/acp/calculations/batch
+creating build/lib/acp/calculations/irc
+copying src/acp/calculations/irc/__init__.py -> build/lib/acp/calculations/irc
+copying src/acp/calculations/irc/contracts.py -> build/lib/acp/calculations/irc
+copying src/acp/calculations/irc/source.py -> build/lib/acp/calculations/irc
+copying src/acp/calculations/irc/validation.py -> build/lib/acp/calculations/irc
+creating build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/__init__.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/atom_mapping.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/atom_selection.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/bond_changes.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/candidates.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/contracts.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/engine.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/outputs.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/path_analysis.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/path_selection.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/review.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/scan.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/scan_snapshot.py -> build/lib/acp/calculations/pes
+copying src/acp/calculations/pes/validation.py -> build/lib/acp/calculations/pes
+creating build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/__init__.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/_common.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/_thermochemistry_input.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/_thermochemistry_support.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/casscf.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/frequency.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/irc.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/irc_trajectory.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/optimization_trajectory.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/optimize.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/scan.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/singlepoint.py -> build/lib/acp/calculations/primitives
+copying src/acp/calculations/primitives/thermochemistry.py -> build/lib/acp/calculations/primitives
+creating build/lib/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/__init__.py -> build/lib/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/contracts.py -> build/lib/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/engine.py -> build/lib/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/mode_mapping.py -> build/lib/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/source.py -> build/lib/acp/calculations/tsmode
+copying src/acp/calculations/tsmode/validation.py -> build/lib/acp/calculations/tsmode
+creating build/lib/acp/compat/legacy
+copying src/acp/compat/legacy/__init__.py -> build/lib/acp/compat/legacy
+copying src/acp/compat/legacy/batch_loaders.py -> build/lib/acp/compat/legacy
+copying src/acp/compat/legacy/layouts.py -> build/lib/acp/compat/legacy
+copying src/acp/compat/legacy/manifests.py -> build/lib/acp/compat/legacy
+creating build/lib/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/__init__.py -> build/lib/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/_common.py -> build/lib/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/censo_crest.py -> build/lib/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/xtb_crest.py -> build/lib/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/xtb_md.py -> build/lib/acp/confsearch/protocols
+copying src/acp/confsearch/protocols/xtbmd_censo.py -> build/lib/acp/confsearch/protocols
+creating build/lib/acp/confsearch/shared
+copying src/acp/confsearch/shared/__init__.py -> build/lib/acp/confsearch/shared
+copying src/acp/confsearch/shared/artifacts.py -> build/lib/acp/confsearch/shared
+copying src/acp/confsearch/shared/boltzmann.py -> build/lib/acp/confsearch/shared
+copying src/acp/confsearch/shared/deduplication.py -> build/lib/acp/confsearch/shared
+copying src/acp/confsearch/shared/helpers.py -> build/lib/acp/confsearch/shared
+copying src/acp/confsearch/shared/provenance.py -> build/lib/acp/confsearch/shared
+creating build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/__init__.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/cleanup.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/config.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/fetcher.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/monitor.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/node_manager.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/paths.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/release.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/runner.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/script_gen.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/sftp.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/ssh.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/submission.py -> build/lib/acp/scheduler/remote
+copying src/acp/scheduler/remote/sync.py -> build/lib/acp/scheduler/remote
+creating build/lib/acp_services/contracts
+copying src/acp_services/contracts/__init__.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/access.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/action_gating.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/adapters.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/config_plan.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/config_validation.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/envelope.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/events.py -> build/lib/acp_services/contracts
+copying src/acp_services/contracts/injection.py -> build/lib/acp_services/contracts
+creating build/lib/acp_services/data
+copying src/acp_services/data/__init__.py -> build/lib/acp_services/data
+copying src/acp_services/data/archive.py -> build/lib/acp_services/data
+copying src/acp_services/data/artifacts.py -> build/lib/acp_services/data
+copying src/acp_services/data/budget.py -> build/lib/acp_services/data
+copying src/acp_services/data/contracts.py -> build/lib/acp_services/data
+copying src/acp_services/data/helpers.py -> build/lib/acp_services/data
+copying src/acp_services/data/import_.py -> build/lib/acp_services/data
+copying src/acp_services/data/namespaces.py -> build/lib/acp_services/data
+copying src/acp_services/data/operations.py -> build/lib/acp_services/data
+copying src/acp_services/data/read_root.py -> build/lib/acp_services/data
+copying src/acp_services/data/research_resources.py -> build/lib/acp_services/data
+copying src/acp_services/data/resource_read.py -> build/lib/acp_services/data
+copying src/acp_services/data/storage_binding.py -> build/lib/acp_services/data
+copying src/acp_services/data/transfer.py -> build/lib/acp_services/data
+creating build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/__init__.py -> build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/application_params.py -> build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/controller_client.py -> build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/diagnostics.py -> build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/machine_output.py -> build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/mcp.py -> build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/mcp_stdio.py -> build/lib/acp_services/entrypoints
+copying src/acp_services/entrypoints/status_projection.py -> build/lib/acp_services/entrypoints
+creating build/lib/acp_services/runtime
+copying src/acp_services/runtime/__init__.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/adapter_bootstrap.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/adapter_registry.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/admission.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/analysis_capabilities.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/approvals.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/attempt_completion.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/attempt_freeze.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/canonical_digest.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/capability_registry.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/commands.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/errors.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/events.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/execution_chain.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/execution_right.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/freshness.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/helpers.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/idempotency.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/isolation.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/lab_capabilities.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/lineage.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/local_admission.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/metering_decoupling.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/metering_policy.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/method_flags.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/outbox.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/plan_contracts.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/projections.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/provisioning.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/quota.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/receipt_identity.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/receipts.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/recovery.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/research_budget.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/research_events.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/science_binding.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/step_dag.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/step_requirements.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/step_result.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/usage.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/usage_units.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/worker.py -> build/lib/acp_services/runtime
+copying src/acp_services/runtime/workflow_enablement.py -> build/lib/acp_services/runtime
+creating build/lib/acp_services/store
+copying src/acp_services/store/__init__.py -> build/lib/acp_services/store
+copying src/acp_services/store/layout.py -> build/lib/acp_services/store
+copying src/acp_services/store/legacy_method.py -> build/lib/acp_services/store
+copying src/acp_services/store/migrations.py -> build/lib/acp_services/store
+copying src/acp_services/store/molecule_groups.py -> build/lib/acp_services/store
+copying src/acp_services/store/naming.py -> build/lib/acp_services/store
+copying src/acp_services/store/record.py -> build/lib/acp_services/store
+copying src/acp_services/store/records.py -> build/lib/acp_services/store
+copying src/acp_services/store/store.py -> build/lib/acp_services/store
+creating build/lib/acp_services/workspace
+copying src/acp_services/workspace/__init__.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/admin.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/boundary.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/entry_authz.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/http_identity.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/identity_lifecycle.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/identity_mapping.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/keys.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/projects.py -> build/lib/acp_services/workspace
+copying src/acp_services/workspace/server_identity.py -> build/lib/acp_services/workspace
+creating build/lib/cccp/analysis
+copying src/cccp/analysis/__init__.py -> build/lib/cccp/analysis
+copying src/cccp/analysis/frequency_products.py -> build/lib/cccp/analysis
+copying src/cccp/analysis/identity.py -> build/lib/cccp/analysis
+copying src/cccp/analysis/orca_parser.py -> build/lib/cccp/analysis
+creating build/lib/cccp/backends
+copying src/cccp/backends/__init__.py -> build/lib/cccp/backends
+copying src/cccp/backends/base.py -> build/lib/cccp/backends
+copying src/cccp/backends/capabilities.py -> build/lib/cccp/backends
+copying src/cccp/backends/censo_backend.py -> build/lib/cccp/backends
+copying src/cccp/backends/crest.py -> build/lib/cccp/backends
+copying src/cccp/backends/external.py -> build/lib/cccp/backends
+copying src/cccp/backends/external_backend.py -> build/lib/cccp/backends
+copying src/cccp/backends/isostat_backend.py -> build/lib/cccp/backends
+copying src/cccp/backends/matrix.py -> build/lib/cccp/backends
+copying src/cccp/backends/molclus_backend.py -> build/lib/cccp/backends
+copying src/cccp/backends/orca.py -> build/lib/cccp/backends
+copying src/cccp/backends/registry.py -> build/lib/cccp/backends
+copying src/cccp/backends/xtb.py -> build/lib/cccp/backends
+creating build/lib/cccp/calculation
+copying src/cccp/calculation/__init__.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/_common.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/batch.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/context.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/contracts.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/energy_adapters.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/errors.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/frequency_parse.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/irc_endpoints.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/irc_trajectory.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/optimization_trajectory.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/progress.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/requests.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/results.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/selection.py -> build/lib/cccp/calculation
+copying src/cccp/calculation/xtbmd_adapters.py -> build/lib/cccp/calculation
+creating build/lib/cccp/core
+copying src/cccp/core/__init__.py -> build/lib/cccp/core
+copying src/cccp/core/candidates.py -> build/lib/cccp/core
+copying src/cccp/core/protocols.py -> build/lib/cccp/core
+copying src/cccp/core/registry.py -> build/lib/cccp/core
+copying src/cccp/core/state_manager.py -> build/lib/cccp/core
+creating build/lib/cccp/io
+copying src/cccp/io/__init__.py -> build/lib/cccp/io
+copying src/cccp/io/input_handler.py -> build/lib/cccp/io
+creating build/lib/cccp/pipeline
+copying src/cccp/pipeline/__init__.py -> build/lib/cccp/pipeline
+copying src/cccp/pipeline/executor.py -> build/lib/cccp/pipeline
+creating build/lib/cccp/plugin
+copying src/cccp/plugin/__init__.py -> build/lib/cccp/plugin
+copying src/cccp/plugin/discovery.py -> build/lib/cccp/plugin
+copying src/cccp/plugin/errors.py -> build/lib/cccp/plugin
+copying src/cccp/plugin/example_xyz.py -> build/lib/cccp/plugin
+copying src/cccp/plugin/host.py -> build/lib/cccp/plugin
+copying src/cccp/plugin/metadata.py -> build/lib/cccp/plugin
+copying src/cccp/plugin/readonly_parser.py -> build/lib/cccp/plugin
+copying src/cccp/plugin/sdk.py -> build/lib/cccp/plugin
+creating build/lib/cccp/qc
+copying src/cccp/qc/__init__.py -> build/lib/cccp/qc
+copying src/cccp/qc/hessian_policy.py -> build/lib/cccp/qc
+copying src/cccp/qc/keyword_registry.py -> build/lib/cccp/qc
+copying src/cccp/qc/method_meta.py -> build/lib/cccp/qc
+copying src/cccp/qc/resolved_spec.py -> build/lib/cccp/qc
+copying src/cccp/qc/shermo_adapter.py -> build/lib/cccp/qc
+copying src/cccp/qc/thermo_normalize.py -> build/lib/cccp/qc
+copying src/cccp/qc/translation.py -> build/lib/cccp/qc
+creating build/lib/cccp/utils
+copying src/cccp/utils/__init__.py -> build/lib/cccp/utils
+copying src/cccp/utils/constants.py -> build/lib/cccp/utils
+copying src/cccp/utils/file_io.py -> build/lib/cccp/utils
+copying src/cccp/utils/geometry_tools.py -> build/lib/cccp/utils
+copying src/cccp/utils/resource_utils.py -> build/lib/cccp/utils
+copying src/cccp/utils/solvent_map.py -> build/lib/cccp/utils
+creating build/lib/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/__init__.py -> build/lib/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/chunking.py -> build/lib/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/errors.py -> build/lib/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/identity.py -> build/lib/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/manifest.py -> build/lib/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/multiresolution.py -> build/lib/cccp/analysis/bounded
+copying src/cccp/analysis/bounded/subsampling.py -> build/lib/cccp/analysis/bounded
+creating build/lib/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/__init__.py -> build/lib/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/boltzmann.py -> build/lib/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/contracts.py -> build/lib/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/result_helpers.py -> build/lib/cccp/analysis/confsearch
+copying src/cccp/analysis/confsearch/selection.py -> build/lib/cccp/analysis/confsearch
+creating build/lib/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/__init__.py -> build/lib/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/assembly.py -> build/lib/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/inputs.py -> build/lib/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/levels.py -> build/lib/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/selection.py -> build/lib/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/solvent.py -> build/lib/cccp/analysis/ensemble
+copying src/cccp/analysis/ensemble/thermo.py -> build/lib/cccp/analysis/ensemble
+creating build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/__init__.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/analysis_revision.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/assets.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/assignment.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/atomic_diagnostics.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/averaging.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/carbon_processor.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/dp5q_stub.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/enumerate.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/equivalence.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/error_model.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/fchl.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/io.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/iterative_assignment.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/method_config.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/models.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/probability.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/protocol.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/proton_processor.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/reference_validation.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/report.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/scaling.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/shift_predictor.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/spectra.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/spectra_registry.py -> build/lib/cccp/analysis/nmr
+copying src/cccp/analysis/nmr/structure_map.py -> build/lib/cccp/analysis/nmr
+creating build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/__init__.py -> build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/atom_mapping.py -> build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/atom_selection.py -> build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/bond_changes.py -> build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/candidates.py -> build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/path_analysis.py -> build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/path_selection.py -> build/lib/cccp/analysis/pes
+copying src/cccp/analysis/pes/validation.py -> build/lib/cccp/analysis/pes
+creating build/lib/cccp/analysis/sampling
+copying src/cccp/analysis/sampling/__init__.py -> build/lib/cccp/analysis/sampling
+copying src/cccp/analysis/sampling/deduplication.py -> build/lib/cccp/analysis/sampling
+copying src/cccp/analysis/sampling/models.py -> build/lib/cccp/analysis/sampling
+copying src/cccp/analysis/sampling/pipeline.py -> build/lib/cccp/analysis/sampling
+creating build/lib/cccp/analysis/structure
+copying src/cccp/analysis/structure/__init__.py -> build/lib/cccp/analysis/structure
+copying src/cccp/analysis/structure/embedding.py -> build/lib/cccp/analysis/structure
+copying src/cccp/analysis/structure/models.py -> build/lib/cccp/analysis/structure
+copying src/cccp/analysis/structure/parsers.py -> build/lib/cccp/analysis/structure
+copying src/cccp/analysis/structure/structures.py -> build/lib/cccp/analysis/structure
+copying src/cccp/analysis/structure/topology.py -> build/lib/cccp/analysis/structure
+creating build/lib/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/__init__.py -> build/lib/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/contracts.py -> build/lib/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/mode_mapping.py -> build/lib/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/source.py -> build/lib/cccp/analysis/tsmode
+copying src/cccp/analysis/tsmode/validation.py -> build/lib/cccp/analysis/tsmode
+creating build/lib/cccp/analysis/xtbmd
+copying src/cccp/analysis/xtbmd/__init__.py -> build/lib/cccp/analysis/xtbmd
+copying src/cccp/analysis/xtbmd/energy_filter.py -> build/lib/cccp/analysis/xtbmd
+copying src/cccp/analysis/xtbmd/trajectory.py -> build/lib/cccp/analysis/xtbmd
+creating build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/__init__.py -> build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/contracts.py -> build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/curve.py -> build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/derived.py -> build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/registry.py -> build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/serialize.py -> build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/structure.py -> build/lib/cccp/calculation/products
+copying src/cccp/calculation/products/vibration.py -> build/lib/cccp/calculation/products
+creating build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/__init__.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/casscf.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/censo_refine.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/clustering.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/conformer_search.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/frequency.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/irc.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/md_sampling.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/nmr_shielding.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/optimize.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/orca_gradient.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/scan.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/singlepoint.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/thermochemistry.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/xtb_constrained_opt.py -> build/lib/cccp/calculation/tasks
+copying src/cccp/calculation/tasks/xtb_path_search.py -> build/lib/cccp/calculation/tasks
+creating build/lib/cccp/qc/cluster
+copying src/cccp/qc/cluster/__init__.py -> build/lib/cccp/qc/cluster
+creating build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/__init__.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/base.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/censo.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/constraints.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/crest.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/hess_file.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/isostat.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/molclus.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/orca.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/orca_ts.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/route_render.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb_path.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb_scan.py -> build/lib/cccp/qc/interfaces
+copying src/cccp/qc/interfaces/xtb_thermo.py -> build/lib/cccp/qc/interfaces
+creating build/lib/cccp/qc/runners
+copying src/cccp/qc/runners/__init__.py -> build/lib/cccp/qc/runners
+running egg_info
+writing src/acp.egg-info/PKG-INFO
+writing dependency_links to src/acp.egg-info/dependency_links.txt
+writing entry points to src/acp.egg-info/entry_points.txt
+writing requirements to src/acp.egg-info/requires.txt
+writing top-level names to src/acp.egg-info/top_level.txt
+reading manifest file 'src/acp.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/acp.egg-info/SOURCES.txt'
+copying src/cccp/py.typed -> build/lib/cccp
+creating build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/LICENSE-DP5 -> build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/NOTICE.md -> build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/atomic_reps.gz -> build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/c_w_kde_mean_s_0.025.p -> build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/folded_scaled_errors.p -> build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/frag_reps.gz -> build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/i_w_kde_mean_s_0.025.p -> build/lib/cccp/analysis/nmr/model_assets
+copying src/cccp/analysis/nmr/model_assets/tms_references.txt -> build/lib/cccp/analysis/nmr/model_assets
+installing to build/bdist.linux-x86_64/wheel
+running install
+running install_lib
+creating build/bdist.linux-x86_64
+creating build/bdist.linux-x86_64/wheel
+creating build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/__init__.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/__main__.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/catalog.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/cli.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/services_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/services_completion_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/services_data_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/services_events_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/services_mcp_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp
+copying build/lib/acp/services_publication_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp
+creating build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/__init__.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/batch_preview.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/drafts.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/job_status_view.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/mechanism_readonly.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/mechanism_readonly_schemas.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/routes.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/schemas.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/server.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/v1_routes.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/v1_schemas.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/v2_approvals.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/v2_budgets.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/v2_routes.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/v2_schemas.py -> build/bdist.linux-x86_64/wheel/acp/api
+copying build/lib/acp/api/v2_structure_sources.py -> build/bdist.linux-x86_64/wheel/acp/api
+creating build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/__init__.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/base.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/batch.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/capabilities.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/censo_backend.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/crest.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/external.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/external_backend.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/isostat_backend.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/matrix.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/molclus_backend.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/orca.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/registry.py -> build/bdist.linux-x86_64/wheel/acp/backends
+copying build/lib/acp/backends/xtb.py -> build/bdist.linux-x86_64/wheel/acp/backends
+creating build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/__init__.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/attempt_freeze.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/attempt_publication.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/checkpoint.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/contracts.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/executor.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/identity.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/legacy_adapters.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/levels.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/plans.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/progress.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/result_publication.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/step_requirements.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+copying build/lib/acp/calculations/step_result.py -> build/bdist.linux-x86_64/wheel/acp/calculations
+creating build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/__init__.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/_items.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/_manifest.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/_singlepoint_execution.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/_singlepoint_frames.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/_singlepoint_models.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/_tag.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/_xyz.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/effective_config.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/engine.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/loaders.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/models.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/options.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/profiles.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+copying build/lib/acp/calculations/batch/singlepoint.py -> build/bdist.linux-x86_64/wheel/acp/calculations/batch
+creating build/bdist.linux-x86_64/wheel/acp/calculations/irc
+copying build/lib/acp/calculations/irc/__init__.py -> build/bdist.linux-x86_64/wheel/acp/calculations/irc
+copying build/lib/acp/calculations/irc/contracts.py -> build/bdist.linux-x86_64/wheel/acp/calculations/irc
+copying build/lib/acp/calculations/irc/source.py -> build/bdist.linux-x86_64/wheel/acp/calculations/irc
+copying build/lib/acp/calculations/irc/validation.py -> build/bdist.linux-x86_64/wheel/acp/calculations/irc
+creating build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/__init__.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/atom_mapping.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/atom_selection.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/bond_changes.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/candidates.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/contracts.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/engine.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/outputs.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/path_analysis.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/path_selection.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/review.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/scan.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/scan_snapshot.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+copying build/lib/acp/calculations/pes/validation.py -> build/bdist.linux-x86_64/wheel/acp/calculations/pes
+creating build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/__init__.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/_common.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/_thermochemistry_input.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/_thermochemistry_support.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/casscf.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/frequency.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/irc.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/irc_trajectory.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/optimization_trajectory.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/optimize.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/scan.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/singlepoint.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+copying build/lib/acp/calculations/primitives/thermochemistry.py -> build/bdist.linux-x86_64/wheel/acp/calculations/primitives
+creating build/bdist.linux-x86_64/wheel/acp/calculations/tsmode
+copying build/lib/acp/calculations/tsmode/__init__.py -> build/bdist.linux-x86_64/wheel/acp/calculations/tsmode
+copying build/lib/acp/calculations/tsmode/contracts.py -> build/bdist.linux-x86_64/wheel/acp/calculations/tsmode
+copying build/lib/acp/calculations/tsmode/engine.py -> build/bdist.linux-x86_64/wheel/acp/calculations/tsmode
+copying build/lib/acp/calculations/tsmode/mode_mapping.py -> build/bdist.linux-x86_64/wheel/acp/calculations/tsmode
+copying build/lib/acp/calculations/tsmode/source.py -> build/bdist.linux-x86_64/wheel/acp/calculations/tsmode
+copying build/lib/acp/calculations/tsmode/validation.py -> build/bdist.linux-x86_64/wheel/acp/calculations/tsmode
+creating build/bdist.linux-x86_64/wheel/acp/chem
+copying build/lib/acp/chem/__init__.py -> build/bdist.linux-x86_64/wheel/acp/chem
+copying build/lib/acp/chem/composition.py -> build/bdist.linux-x86_64/wheel/acp/chem
+copying build/lib/acp/chem/embedding.py -> build/bdist.linux-x86_64/wheel/acp/chem
+creating build/bdist.linux-x86_64/wheel/acp/compat
+copying build/lib/acp/compat/__init__.py -> build/bdist.linux-x86_64/wheel/acp/compat
+creating build/bdist.linux-x86_64/wheel/acp/compat/legacy
+copying build/lib/acp/compat/legacy/__init__.py -> build/bdist.linux-x86_64/wheel/acp/compat/legacy
+copying build/lib/acp/compat/legacy/batch_loaders.py -> build/bdist.linux-x86_64/wheel/acp/compat/legacy
+copying build/lib/acp/compat/legacy/layouts.py -> build/bdist.linux-x86_64/wheel/acp/compat/legacy
+copying build/lib/acp/compat/legacy/manifests.py -> build/bdist.linux-x86_64/wheel/acp/compat/legacy
+creating build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/__init__.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/contracts.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/engine.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/manifest.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/profiles.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/report.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/result_helpers.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/sampling.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/sampling_models.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+copying build/lib/acp/confsearch/selection.py -> build/bdist.linux-x86_64/wheel/acp/confsearch
+creating build/bdist.linux-x86_64/wheel/acp/confsearch/protocols
+copying build/lib/acp/confsearch/protocols/__init__.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/protocols
+copying build/lib/acp/confsearch/protocols/_common.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/protocols
+copying build/lib/acp/confsearch/protocols/censo_crest.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/protocols
+copying build/lib/acp/confsearch/protocols/xtb_crest.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/protocols
+copying build/lib/acp/confsearch/protocols/xtb_md.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/protocols
+copying build/lib/acp/confsearch/protocols/xtbmd_censo.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/protocols
+creating build/bdist.linux-x86_64/wheel/acp/confsearch/shared
+copying build/lib/acp/confsearch/shared/__init__.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/shared
+copying build/lib/acp/confsearch/shared/artifacts.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/shared
+copying build/lib/acp/confsearch/shared/boltzmann.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/shared
+copying build/lib/acp/confsearch/shared/deduplication.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/shared
+copying build/lib/acp/confsearch/shared/helpers.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/shared
+copying build/lib/acp/confsearch/shared/provenance.py -> build/bdist.linux-x86_64/wheel/acp/confsearch/shared
+creating build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/__init__.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/config.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/keywords.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/models.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/paths.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/registry.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/stage_labels.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/state.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/utils.py -> build/bdist.linux-x86_64/wheel/acp/core
+copying build/lib/acp/core/workflow.py -> build/bdist.linux-x86_64/wheel/acp/core
+creating build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/__init__.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/answers.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/capabilities.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/flows.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/gating.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/lab_doctor.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/newnode.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/options.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/persist.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/plan.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/prompts.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/sniff_local.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+copying build/lib/acp/init_wizard/sniff_remote.py -> build/bdist.linux-x86_64/wheel/acp/init_wizard
+creating build/bdist.linux-x86_64/wheel/acp/intake
+copying build/lib/acp/intake/__init__.py -> build/bdist.linux-x86_64/wheel/acp/intake
+copying build/lib/acp/intake/models.py -> build/bdist.linux-x86_64/wheel/acp/intake
+copying build/lib/acp/intake/parsers.py -> build/bdist.linux-x86_64/wheel/acp/intake
+copying build/lib/acp/intake/storage.py -> build/bdist.linux-x86_64/wheel/acp/intake
+creating build/bdist.linux-x86_64/wheel/acp/io
+copying build/lib/acp/io/__init__.py -> build/bdist.linux-x86_64/wheel/acp/io
+copying build/lib/acp/io/structures.py -> build/bdist.linux-x86_64/wheel/acp/io
+creating build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/__init__.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/analysis_revision.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/assignment.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/atomic_diagnostics.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/averaging.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/carbon_processor.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/dp5q_stub.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/enumerate.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/equivalence.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/error_model.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/fchl.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/io.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/iterative_assignment.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/method_config.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/models.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/probability.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/protocol.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/proton_processor.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/reference_validation.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/report.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/scaling.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/shift_predictor.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/spectra.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/spectra_registry.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+copying build/lib/acp/nmr/structure_map.py -> build/bdist.linux-x86_64/wheel/acp/nmr
+creating build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/__init__.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/crest_parser.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/energy_graph.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/frame_candidate_annotations.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/frame_candidate_geometry.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/frame_candidate_store.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/frame_candidates.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/frames.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/frames_adapter.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/frequencies.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/irc_projection.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/irc_remote_live.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/manifest.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/optimization.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/orca_parser.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/pes_profile.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/pes_scan_live.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/remote_structure_cache.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/sampling_graph.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/structure_migration.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/structure_policy.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/structure_snapshots.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/structure_viewer.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/thermochemistry.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/vibration_projection.py -> build/bdist.linux-x86_64/wheel/acp/results
+copying build/lib/acp/results/xtb_parser.py -> build/bdist.linux-x86_64/wheel/acp/results
+creating build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/__init__.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/artifacts.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/auto_tags.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/capabilities.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/edit_parameters.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/events.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/files.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/input_snapshot.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/job_edit.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/jobs.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/local_cleanup.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/logs.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/manager.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/metrics.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/migrations.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/molecule_groups.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/naming.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/nodes.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/processctl.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/projects.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/provenance.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/registration.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/resources.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/runner.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/stage_tasks.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/store.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/structure_source_indexer.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/structure_source_store.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/structure_sources.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/task_views.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+copying build/lib/acp/scheduler/tasks.py -> build/bdist.linux-x86_64/wheel/acp/scheduler
+creating build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/__init__.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/cleanup.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/config.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/fetcher.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/monitor.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/node_manager.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/paths.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/release.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/runner.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/script_gen.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/sftp.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/ssh.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/submission.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+copying build/lib/acp/scheduler/remote/sync.py -> build/bdist.linux-x86_64/wheel/acp/scheduler/remote
+creating build/bdist.linux-x86_64/wheel/acp/storage
+copying build/lib/acp/storage/__init__.py -> build/bdist.linux-x86_64/wheel/acp/storage
+copying build/lib/acp/storage/backend.py -> build/bdist.linux-x86_64/wheel/acp/storage
+copying build/lib/acp/storage/layout.py -> build/bdist.linux-x86_64/wheel/acp/storage
+copying build/lib/acp/storage/manifest.py -> build/bdist.linux-x86_64/wheel/acp/storage
+copying build/lib/acp/storage/mapping.py -> build/bdist.linux-x86_64/wheel/acp/storage
+copying build/lib/acp/storage/record.py -> build/bdist.linux-x86_64/wheel/acp/storage
+creating build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/__init__.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/_helpers.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/batch_optimize.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/energy.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/energy_shared.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/ensemble.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/ensemble_thermo.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/irc.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/nmr.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/orca_gradient.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/pes_search.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/registry.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/simple.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/tsmode.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/xtb_constrained_opt.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/xtb_path.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/xtbmd_censo_energy.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+copying build/lib/acp/workflows/xtbmd_md.py -> build/bdist.linux-x86_64/wheel/acp/workflows
+creating build/bdist.linux-x86_64/wheel/acp_services
+copying build/lib/acp_services/__init__.py -> build/bdist.linux-x86_64/wheel/acp_services
+copying build/lib/acp_services/bootstrap.py -> build/bdist.linux-x86_64/wheel/acp_services
+copying build/lib/acp_services/events.py -> build/bdist.linux-x86_64/wheel/acp_services
+copying build/lib/acp_services/worker_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp_services
+creating build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/__init__.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/access.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/action_gating.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/adapters.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/config_plan.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/config_validation.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/envelope.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/events.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+copying build/lib/acp_services/contracts/injection.py -> build/bdist.linux-x86_64/wheel/acp_services/contracts
+creating build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/__init__.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/archive.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/artifacts.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/budget.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/contracts.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/helpers.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/import_.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/namespaces.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/operations.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/read_root.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/research_resources.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/resource_read.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/storage_binding.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+copying build/lib/acp_services/data/transfer.py -> build/bdist.linux-x86_64/wheel/acp_services/data
+creating build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/__init__.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/application_params.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/controller_client.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/diagnostics.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/machine_output.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/mcp.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/mcp_stdio.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+copying build/lib/acp_services/entrypoints/status_projection.py -> build/bdist.linux-x86_64/wheel/acp_services/entrypoints
+creating build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/__init__.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/adapter_bootstrap.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/adapter_registry.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/admission.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/analysis_capabilities.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/approvals.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/attempt_completion.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/attempt_freeze.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/canonical_digest.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/capability_registry.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/commands.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/errors.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/events.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/execution_chain.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/execution_right.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/freshness.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/helpers.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/idempotency.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/isolation.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/lab_capabilities.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/lineage.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/local_admission.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/metering_decoupling.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/metering_policy.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/method_flags.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/outbox.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/plan_contracts.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/projections.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/provisioning.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/quota.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/receipt_identity.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/receipts.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/recovery.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/research_budget.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/research_events.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/science_binding.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/step_dag.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/step_requirements.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/step_result.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/usage.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/usage_units.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/worker.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+copying build/lib/acp_services/runtime/workflow_enablement.py -> build/bdist.linux-x86_64/wheel/acp_services/runtime
+creating build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/__init__.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/layout.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/legacy_method.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/migrations.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/molecule_groups.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/naming.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/record.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/records.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+copying build/lib/acp_services/store/store.py -> build/bdist.linux-x86_64/wheel/acp_services/store
+creating build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/__init__.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/admin.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/boundary.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/entry_authz.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/http_identity.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/identity_lifecycle.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/identity_mapping.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/keys.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/projects.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+copying build/lib/acp_services/workspace/server_identity.py -> build/bdist.linux-x86_64/wheel/acp_services/workspace
+creating build/bdist.linux-x86_64/wheel/cccp
+copying build/lib/cccp/__init__.py -> build/bdist.linux-x86_64/wheel/cccp
+copying build/lib/cccp/config.py -> build/bdist.linux-x86_64/wheel/cccp
+copying build/lib/cccp/software.py -> build/bdist.linux-x86_64/wheel/cccp
+copying build/lib/cccp/version.py -> build/bdist.linux-x86_64/wheel/cccp
+creating build/bdist.linux-x86_64/wheel/cccp/analysis
+copying build/lib/cccp/analysis/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis
+copying build/lib/cccp/analysis/frequency_products.py -> build/bdist.linux-x86_64/wheel/cccp/analysis
+copying build/lib/cccp/analysis/identity.py -> build/bdist.linux-x86_64/wheel/cccp/analysis
+copying build/lib/cccp/analysis/orca_parser.py -> build/bdist.linux-x86_64/wheel/cccp/analysis
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+copying build/lib/cccp/analysis/bounded/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+copying build/lib/cccp/analysis/bounded/chunking.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+copying build/lib/cccp/analysis/bounded/errors.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+copying build/lib/cccp/analysis/bounded/identity.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+copying build/lib/cccp/analysis/bounded/manifest.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+copying build/lib/cccp/analysis/bounded/multiresolution.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+copying build/lib/cccp/analysis/bounded/subsampling.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/bounded
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/confsearch
+copying build/lib/cccp/analysis/confsearch/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/confsearch
+copying build/lib/cccp/analysis/confsearch/boltzmann.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/confsearch
+copying build/lib/cccp/analysis/confsearch/contracts.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/confsearch
+copying build/lib/cccp/analysis/confsearch/result_helpers.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/confsearch
+copying build/lib/cccp/analysis/confsearch/selection.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/confsearch
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+copying build/lib/cccp/analysis/ensemble/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+copying build/lib/cccp/analysis/ensemble/assembly.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+copying build/lib/cccp/analysis/ensemble/inputs.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+copying build/lib/cccp/analysis/ensemble/levels.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+copying build/lib/cccp/analysis/ensemble/selection.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+copying build/lib/cccp/analysis/ensemble/solvent.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+copying build/lib/cccp/analysis/ensemble/thermo.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/ensemble
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/analysis_revision.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/assets.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/assignment.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/atomic_diagnostics.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/averaging.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/carbon_processor.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/dp5q_stub.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/enumerate.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/equivalence.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/error_model.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/fchl.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/io.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/iterative_assignment.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/method_config.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/models.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/probability.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/protocol.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/proton_processor.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/reference_validation.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/report.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/scaling.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/shift_predictor.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/spectra.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/spectra_registry.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+copying build/lib/cccp/analysis/nmr/structure_map.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/LICENSE-DP5 -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/NOTICE.md -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/atomic_reps.gz -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/c_w_kde_mean_s_0.025.p -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/folded_scaled_errors.p -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/frag_reps.gz -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/i_w_kde_mean_s_0.025.p -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+copying build/lib/cccp/analysis/nmr/model_assets/tms_references.txt -> build/bdist.linux-x86_64/wheel/cccp/analysis/nmr/model_assets
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/atom_mapping.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/atom_selection.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/bond_changes.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/candidates.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/path_analysis.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/path_selection.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+copying build/lib/cccp/analysis/pes/validation.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/pes
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/sampling
+copying build/lib/cccp/analysis/sampling/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/sampling
+copying build/lib/cccp/analysis/sampling/deduplication.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/sampling
+copying build/lib/cccp/analysis/sampling/models.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/sampling
+copying build/lib/cccp/analysis/sampling/pipeline.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/sampling
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/structure
+copying build/lib/cccp/analysis/structure/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/structure
+copying build/lib/cccp/analysis/structure/embedding.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/structure
+copying build/lib/cccp/analysis/structure/models.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/structure
+copying build/lib/cccp/analysis/structure/parsers.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/structure
+copying build/lib/cccp/analysis/structure/structures.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/structure
+copying build/lib/cccp/analysis/structure/topology.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/structure
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/tsmode
+copying build/lib/cccp/analysis/tsmode/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/tsmode
+copying build/lib/cccp/analysis/tsmode/contracts.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/tsmode
+copying build/lib/cccp/analysis/tsmode/mode_mapping.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/tsmode
+copying build/lib/cccp/analysis/tsmode/source.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/tsmode
+copying build/lib/cccp/analysis/tsmode/validation.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/tsmode
+creating build/bdist.linux-x86_64/wheel/cccp/analysis/xtbmd
+copying build/lib/cccp/analysis/xtbmd/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/xtbmd
+copying build/lib/cccp/analysis/xtbmd/energy_filter.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/xtbmd
+copying build/lib/cccp/analysis/xtbmd/trajectory.py -> build/bdist.linux-x86_64/wheel/cccp/analysis/xtbmd
+creating build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/base.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/capabilities.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/censo_backend.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/crest.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/external.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/external_backend.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/isostat_backend.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/matrix.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/molclus_backend.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/orca.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/registry.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+copying build/lib/cccp/backends/xtb.py -> build/bdist.linux-x86_64/wheel/cccp/backends
+creating build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/_common.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/batch.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/context.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/contracts.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/energy_adapters.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/errors.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/frequency_parse.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/irc_endpoints.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/irc_trajectory.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/optimization_trajectory.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/progress.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/requests.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/results.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/selection.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+copying build/lib/cccp/calculation/xtbmd_adapters.py -> build/bdist.linux-x86_64/wheel/cccp/calculation
+creating build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/contracts.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/curve.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/derived.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/registry.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/serialize.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/structure.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+copying build/lib/cccp/calculation/products/vibration.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/products
+creating build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/casscf.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/censo_refine.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/clustering.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/conformer_search.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/frequency.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/irc.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/md_sampling.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/nmr_shielding.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/optimize.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/orca_gradient.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/scan.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/singlepoint.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/thermochemistry.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/xtb_constrained_opt.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+copying build/lib/cccp/calculation/tasks/xtb_path_search.py -> build/bdist.linux-x86_64/wheel/cccp/calculation/tasks
+creating build/bdist.linux-x86_64/wheel/cccp/core
+copying build/lib/cccp/core/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/core
+copying build/lib/cccp/core/candidates.py -> build/bdist.linux-x86_64/wheel/cccp/core
+copying build/lib/cccp/core/protocols.py -> build/bdist.linux-x86_64/wheel/cccp/core
+copying build/lib/cccp/core/registry.py -> build/bdist.linux-x86_64/wheel/cccp/core
+copying build/lib/cccp/core/state_manager.py -> build/bdist.linux-x86_64/wheel/cccp/core
+creating build/bdist.linux-x86_64/wheel/cccp/io
+copying build/lib/cccp/io/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/io
+copying build/lib/cccp/io/input_handler.py -> build/bdist.linux-x86_64/wheel/cccp/io
+creating build/bdist.linux-x86_64/wheel/cccp/pipeline
+copying build/lib/cccp/pipeline/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/pipeline
+copying build/lib/cccp/pipeline/executor.py -> build/bdist.linux-x86_64/wheel/cccp/pipeline
+creating build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/discovery.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/errors.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/example_xyz.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/host.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/metadata.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/readonly_parser.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+copying build/lib/cccp/plugin/sdk.py -> build/bdist.linux-x86_64/wheel/cccp/plugin
+creating build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/hessian_policy.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/keyword_registry.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/method_meta.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/resolved_spec.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/shermo_adapter.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/thermo_normalize.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+copying build/lib/cccp/qc/translation.py -> build/bdist.linux-x86_64/wheel/cccp/qc
+creating build/bdist.linux-x86_64/wheel/cccp/qc/cluster
+copying build/lib/cccp/qc/cluster/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/qc/cluster
+creating build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/base.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/censo.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/constraints.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/crest.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/hess_file.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/isostat.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/molclus.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/orca.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/orca_ts.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/route_render.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/xtb.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/xtb_path.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/xtb_scan.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+copying build/lib/cccp/qc/interfaces/xtb_thermo.py -> build/bdist.linux-x86_64/wheel/cccp/qc/interfaces
+creating build/bdist.linux-x86_64/wheel/cccp/qc/runners
+copying build/lib/cccp/qc/runners/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/qc/runners
+creating build/bdist.linux-x86_64/wheel/cccp/utils
+copying build/lib/cccp/utils/__init__.py -> build/bdist.linux-x86_64/wheel/cccp/utils
+copying build/lib/cccp/utils/constants.py -> build/bdist.linux-x86_64/wheel/cccp/utils
+copying build/lib/cccp/utils/file_io.py -> build/bdist.linux-x86_64/wheel/cccp/utils
+copying build/lib/cccp/utils/geometry_tools.py -> build/bdist.linux-x86_64/wheel/cccp/utils
+copying build/lib/cccp/utils/resource_utils.py -> build/bdist.linux-x86_64/wheel/cccp/utils
+copying build/lib/cccp/utils/solvent_map.py -> build/bdist.linux-x86_64/wheel/cccp/utils
+copying build/lib/cccp/py.typed -> build/bdist.linux-x86_64/wheel/cccp
+running install_egg_info
+Copying src/acp.egg-info to build/bdist.linux-x86_64/wheel/acp-0.3.0-py3.11.egg-info
+running install_scripts
+creating build/bdist.linux-x86_64/wheel/acp-0.3.0.dist-info/WHEEL
+creating '/tmp/opencode/b25-root-build/tmp1cute9t4/acp-0.3.0-py3-none-any.whl' and adding 'build/bdist.linux-x86_64/wheel' to it
+adding 'acp/__init__.py'
+adding 'acp/__main__.py'
+adding 'acp/catalog.py'
+adding 'acp/cli.py'
+adding 'acp/services_bootstrap.py'
+adding 'acp/services_completion_bootstrap.py'
+adding 'acp/services_data_bootstrap.py'
+adding 'acp/services_events_bootstrap.py'
+adding 'acp/services_mcp_bootstrap.py'
+adding 'acp/services_publication_bootstrap.py'
+adding 'acp/api/__init__.py'
+adding 'acp/api/batch_preview.py'
+adding 'acp/api/drafts.py'
+adding 'acp/api/job_status_view.py'
+adding 'acp/api/mechanism_readonly.py'
+adding 'acp/api/mechanism_readonly_schemas.py'
+adding 'acp/api/routes.py'
+adding 'acp/api/schemas.py'
+adding 'acp/api/server.py'
+adding 'acp/api/v1_routes.py'
+adding 'acp/api/v1_schemas.py'
+adding 'acp/api/v2_approvals.py'
+adding 'acp/api/v2_budgets.py'
+adding 'acp/api/v2_routes.py'
+adding 'acp/api/v2_schemas.py'
+adding 'acp/api/v2_structure_sources.py'
+adding 'acp/backends/__init__.py'
+adding 'acp/backends/base.py'
+adding 'acp/backends/batch.py'
+adding 'acp/backends/capabilities.py'
+adding 'acp/backends/censo_backend.py'
+adding 'acp/backends/crest.py'
+adding 'acp/backends/external.py'
+adding 'acp/backends/external_backend.py'
+adding 'acp/backends/isostat_backend.py'
+adding 'acp/backends/matrix.py'
+adding 'acp/backends/molclus_backend.py'
+adding 'acp/backends/orca.py'
+adding 'acp/backends/registry.py'
+adding 'acp/backends/xtb.py'
+adding 'acp/calculations/__init__.py'
+adding 'acp/calculations/attempt_freeze.py'
+adding 'acp/calculations/attempt_publication.py'
+adding 'acp/calculations/checkpoint.py'
+adding 'acp/calculations/contracts.py'
+adding 'acp/calculations/executor.py'
+adding 'acp/calculations/identity.py'
+adding 'acp/calculations/legacy_adapters.py'
+adding 'acp/calculations/levels.py'
+adding 'acp/calculations/plans.py'
+adding 'acp/calculations/progress.py'
+adding 'acp/calculations/result_publication.py'
+adding 'acp/calculations/step_requirements.py'
+adding 'acp/calculations/step_result.py'
+adding 'acp/calculations/batch/__init__.py'
+adding 'acp/calculations/batch/_items.py'
+adding 'acp/calculations/batch/_manifest.py'
+adding 'acp/calculations/batch/_singlepoint_execution.py'
+adding 'acp/calculations/batch/_singlepoint_frames.py'
+adding 'acp/calculations/batch/_singlepoint_models.py'
+adding 'acp/calculations/batch/_tag.py'
+adding 'acp/calculations/batch/_xyz.py'
+adding 'acp/calculations/batch/effective_config.py'
+adding 'acp/calculations/batch/engine.py'
+adding 'acp/calculations/batch/loaders.py'
+adding 'acp/calculations/batch/models.py'
+adding 'acp/calculations/batch/options.py'
+adding 'acp/calculations/batch/profiles.py'
+adding 'acp/calculations/batch/singlepoint.py'
+adding 'acp/calculations/irc/__init__.py'
+adding 'acp/calculations/irc/contracts.py'
+adding 'acp/calculations/irc/source.py'
+adding 'acp/calculations/irc/validation.py'
+adding 'acp/calculations/pes/__init__.py'
+adding 'acp/calculations/pes/atom_mapping.py'
+adding 'acp/calculations/pes/atom_selection.py'
+adding 'acp/calculations/pes/bond_changes.py'
+adding 'acp/calculations/pes/candidates.py'
+adding 'acp/calculations/pes/contracts.py'
+adding 'acp/calculations/pes/engine.py'
+adding 'acp/calculations/pes/outputs.py'
+adding 'acp/calculations/pes/path_analysis.py'
+adding 'acp/calculations/pes/path_selection.py'
+adding 'acp/calculations/pes/review.py'
+adding 'acp/calculations/pes/scan.py'
+adding 'acp/calculations/pes/scan_snapshot.py'
+adding 'acp/calculations/pes/validation.py'
+adding 'acp/calculations/primitives/__init__.py'
+adding 'acp/calculations/primitives/_common.py'
+adding 'acp/calculations/primitives/_thermochemistry_input.py'
+adding 'acp/calculations/primitives/_thermochemistry_support.py'
+adding 'acp/calculations/primitives/casscf.py'
+adding 'acp/calculations/primitives/frequency.py'
+adding 'acp/calculations/primitives/irc.py'
+adding 'acp/calculations/primitives/irc_trajectory.py'
+adding 'acp/calculations/primitives/optimization_trajectory.py'
+adding 'acp/calculations/primitives/optimize.py'
+adding 'acp/calculations/primitives/scan.py'
+adding 'acp/calculations/primitives/singlepoint.py'
+adding 'acp/calculations/primitives/thermochemistry.py'
+adding 'acp/calculations/tsmode/__init__.py'
+adding 'acp/calculations/tsmode/contracts.py'
+adding 'acp/calculations/tsmode/engine.py'
+adding 'acp/calculations/tsmode/mode_mapping.py'
+adding 'acp/calculations/tsmode/source.py'
+adding 'acp/calculations/tsmode/validation.py'
+adding 'acp/chem/__init__.py'
+adding 'acp/chem/composition.py'
+adding 'acp/chem/embedding.py'
+adding 'acp/compat/__init__.py'
+adding 'acp/compat/legacy/__init__.py'
+adding 'acp/compat/legacy/batch_loaders.py'
+adding 'acp/compat/legacy/layouts.py'
+adding 'acp/compat/legacy/manifests.py'
+adding 'acp/confsearch/__init__.py'
+adding 'acp/confsearch/contracts.py'
+adding 'acp/confsearch/engine.py'
+adding 'acp/confsearch/manifest.py'
+adding 'acp/confsearch/profiles.py'
+adding 'acp/confsearch/report.py'
+adding 'acp/confsearch/result_helpers.py'
+adding 'acp/confsearch/sampling.py'
+adding 'acp/confsearch/sampling_models.py'
+adding 'acp/confsearch/selection.py'
+adding 'acp/confsearch/protocols/__init__.py'
+adding 'acp/confsearch/protocols/_common.py'
+adding 'acp/confsearch/protocols/censo_crest.py'
+adding 'acp/confsearch/protocols/xtb_crest.py'
+adding 'acp/confsearch/protocols/xtb_md.py'
+adding 'acp/confsearch/protocols/xtbmd_censo.py'
+adding 'acp/confsearch/shared/__init__.py'
+adding 'acp/confsearch/shared/artifacts.py'
+adding 'acp/confsearch/shared/boltzmann.py'
+adding 'acp/confsearch/shared/deduplication.py'
+adding 'acp/confsearch/shared/helpers.py'
+adding 'acp/confsearch/shared/provenance.py'
+adding 'acp/core/__init__.py'
+adding 'acp/core/config.py'
+adding 'acp/core/keywords.py'
+adding 'acp/core/models.py'
+adding 'acp/core/paths.py'
+adding 'acp/core/registry.py'
+adding 'acp/core/stage_labels.py'
+adding 'acp/core/state.py'
+adding 'acp/core/utils.py'
+adding 'acp/core/workflow.py'
+adding 'acp/init_wizard/__init__.py'
+adding 'acp/init_wizard/answers.py'
+adding 'acp/init_wizard/capabilities.py'
+adding 'acp/init_wizard/flows.py'
+adding 'acp/init_wizard/gating.py'
+adding 'acp/init_wizard/lab_doctor.py'
+adding 'acp/init_wizard/newnode.py'
+adding 'acp/init_wizard/options.py'
+adding 'acp/init_wizard/persist.py'
+adding 'acp/init_wizard/plan.py'
+adding 'acp/init_wizard/prompts.py'
+adding 'acp/init_wizard/sniff_local.py'
+adding 'acp/init_wizard/sniff_remote.py'
+adding 'acp/intake/__init__.py'
+adding 'acp/intake/models.py'
+adding 'acp/intake/parsers.py'
+adding 'acp/intake/storage.py'
+adding 'acp/io/__init__.py'
+adding 'acp/io/structures.py'
+adding 'acp/nmr/__init__.py'
+adding 'acp/nmr/analysis_revision.py'
+adding 'acp/nmr/assignment.py'
+adding 'acp/nmr/atomic_diagnostics.py'
+adding 'acp/nmr/averaging.py'
+adding 'acp/nmr/carbon_processor.py'
+adding 'acp/nmr/dp5q_stub.py'
+adding 'acp/nmr/enumerate.py'
+adding 'acp/nmr/equivalence.py'
+adding 'acp/nmr/error_model.py'
+adding 'acp/nmr/fchl.py'
+adding 'acp/nmr/io.py'
+adding 'acp/nmr/iterative_assignment.py'
+adding 'acp/nmr/method_config.py'
+adding 'acp/nmr/models.py'
+adding 'acp/nmr/probability.py'
+adding 'acp/nmr/protocol.py'
+adding 'acp/nmr/proton_processor.py'
+adding 'acp/nmr/reference_validation.py'
+adding 'acp/nmr/report.py'
+adding 'acp/nmr/scaling.py'
+adding 'acp/nmr/shift_predictor.py'
+adding 'acp/nmr/spectra.py'
+adding 'acp/nmr/spectra_registry.py'
+adding 'acp/nmr/structure_map.py'
+adding 'acp/results/__init__.py'
+adding 'acp/results/crest_parser.py'
+adding 'acp/results/energy_graph.py'
+adding 'acp/results/frame_candidate_annotations.py'
+adding 'acp/results/frame_candidate_geometry.py'
+adding 'acp/results/frame_candidate_store.py'
+adding 'acp/results/frame_candidates.py'
+adding 'acp/results/frames.py'
+adding 'acp/results/frames_adapter.py'
+adding 'acp/results/frequencies.py'
+adding 'acp/results/irc_projection.py'
+adding 'acp/results/irc_remote_live.py'
+adding 'acp/results/manifest.py'
+adding 'acp/results/optimization.py'
+adding 'acp/results/orca_parser.py'
+adding 'acp/results/pes_profile.py'
+adding 'acp/results/pes_scan_live.py'
+adding 'acp/results/remote_structure_cache.py'
+adding 'acp/results/sampling_graph.py'
+adding 'acp/results/structure_migration.py'
+adding 'acp/results/structure_policy.py'
+adding 'acp/results/structure_snapshots.py'
+adding 'acp/results/structure_viewer.py'
+adding 'acp/results/thermochemistry.py'
+adding 'acp/results/vibration_projection.py'
+adding 'acp/results/xtb_parser.py'
+adding 'acp/scheduler/__init__.py'
+adding 'acp/scheduler/artifacts.py'
+adding 'acp/scheduler/auto_tags.py'
+adding 'acp/scheduler/capabilities.py'
+adding 'acp/scheduler/edit_parameters.py'
+adding 'acp/scheduler/events.py'
+adding 'acp/scheduler/files.py'
+adding 'acp/scheduler/input_snapshot.py'
+adding 'acp/scheduler/job_edit.py'
+adding 'acp/scheduler/jobs.py'
+adding 'acp/scheduler/local_cleanup.py'
+adding 'acp/scheduler/logs.py'
+adding 'acp/scheduler/manager.py'
+adding 'acp/scheduler/metrics.py'
+adding 'acp/scheduler/migrations.py'
+adding 'acp/scheduler/molecule_groups.py'
+adding 'acp/scheduler/naming.py'
+adding 'acp/scheduler/nodes.py'
+adding 'acp/scheduler/processctl.py'
+adding 'acp/scheduler/projects.py'
+adding 'acp/scheduler/provenance.py'
+adding 'acp/scheduler/registration.py'
+adding 'acp/scheduler/resources.py'
+adding 'acp/scheduler/runner.py'
+adding 'acp/scheduler/stage_tasks.py'
+adding 'acp/scheduler/store.py'
+adding 'acp/scheduler/structure_source_indexer.py'
+adding 'acp/scheduler/structure_source_store.py'
+adding 'acp/scheduler/structure_sources.py'
+adding 'acp/scheduler/task_views.py'
+adding 'acp/scheduler/tasks.py'
+adding 'acp/scheduler/remote/__init__.py'
+adding 'acp/scheduler/remote/cleanup.py'
+adding 'acp/scheduler/remote/config.py'
+adding 'acp/scheduler/remote/fetcher.py'
+adding 'acp/scheduler/remote/monitor.py'
+adding 'acp/scheduler/remote/node_manager.py'
+adding 'acp/scheduler/remote/paths.py'
+adding 'acp/scheduler/remote/release.py'
+adding 'acp/scheduler/remote/runner.py'
+adding 'acp/scheduler/remote/script_gen.py'
+adding 'acp/scheduler/remote/sftp.py'
+adding 'acp/scheduler/remote/ssh.py'
+adding 'acp/scheduler/remote/submission.py'
+adding 'acp/scheduler/remote/sync.py'
+adding 'acp/storage/__init__.py'
+adding 'acp/storage/backend.py'
+adding 'acp/storage/layout.py'
+adding 'acp/storage/manifest.py'
+adding 'acp/storage/mapping.py'
+adding 'acp/storage/record.py'
+adding 'acp/workflows/__init__.py'
+adding 'acp/workflows/_helpers.py'
+adding 'acp/workflows/batch_optimize.py'
+adding 'acp/workflows/energy.py'
+adding 'acp/workflows/energy_shared.py'
+adding 'acp/workflows/ensemble.py'
+adding 'acp/workflows/ensemble_thermo.py'
+adding 'acp/workflows/irc.py'
+adding 'acp/workflows/nmr.py'
+adding 'acp/workflows/orca_gradient.py'
+adding 'acp/workflows/pes_search.py'
+adding 'acp/workflows/registry.py'
+adding 'acp/workflows/simple.py'
+adding 'acp/workflows/tsmode.py'
+adding 'acp/workflows/xtb_constrained_opt.py'
+adding 'acp/workflows/xtb_path.py'
+adding 'acp/workflows/xtbmd_censo_energy.py'
+adding 'acp/workflows/xtbmd_md.py'
+adding 'acp_services/__init__.py'
+adding 'acp_services/bootstrap.py'
+adding 'acp_services/events.py'
+adding 'acp_services/worker_bootstrap.py'
+adding 'acp_services/contracts/__init__.py'
+adding 'acp_services/contracts/access.py'
+adding 'acp_services/contracts/action_gating.py'
+adding 'acp_services/contracts/adapters.py'
+adding 'acp_services/contracts/config_plan.py'
+adding 'acp_services/contracts/config_validation.py'
+adding 'acp_services/contracts/envelope.py'
+adding 'acp_services/contracts/events.py'
+adding 'acp_services/contracts/injection.py'
+adding 'acp_services/data/__init__.py'
+adding 'acp_services/data/archive.py'
+adding 'acp_services/data/artifacts.py'
+adding 'acp_services/data/budget.py'
+adding 'acp_services/data/contracts.py'
+adding 'acp_services/data/helpers.py'
+adding 'acp_services/data/import_.py'
+adding 'acp_services/data/namespaces.py'
+adding 'acp_services/data/operations.py'
+adding 'acp_services/data/read_root.py'
+adding 'acp_services/data/research_resources.py'
+adding 'acp_services/data/resource_read.py'
+adding 'acp_services/data/storage_binding.py'
+adding 'acp_services/data/transfer.py'
+adding 'acp_services/entrypoints/__init__.py'
+adding 'acp_services/entrypoints/application_params.py'
+adding 'acp_services/entrypoints/controller_client.py'
+adding 'acp_services/entrypoints/diagnostics.py'
+adding 'acp_services/entrypoints/machine_output.py'
+adding 'acp_services/entrypoints/mcp.py'
+adding 'acp_services/entrypoints/mcp_stdio.py'
+adding 'acp_services/entrypoints/status_projection.py'
+adding 'acp_services/runtime/__init__.py'
+adding 'acp_services/runtime/adapter_bootstrap.py'
+adding 'acp_services/runtime/adapter_registry.py'
+adding 'acp_services/runtime/admission.py'
+adding 'acp_services/runtime/analysis_capabilities.py'
+adding 'acp_services/runtime/approvals.py'
+adding 'acp_services/runtime/attempt_completion.py'
+adding 'acp_services/runtime/attempt_freeze.py'
+adding 'acp_services/runtime/canonical_digest.py'
+adding 'acp_services/runtime/capability_registry.py'
+adding 'acp_services/runtime/commands.py'
+adding 'acp_services/runtime/errors.py'
+adding 'acp_services/runtime/events.py'
+adding 'acp_services/runtime/execution_chain.py'
+adding 'acp_services/runtime/execution_right.py'
+adding 'acp_services/runtime/freshness.py'
+adding 'acp_services/runtime/helpers.py'
+adding 'acp_services/runtime/idempotency.py'
+adding 'acp_services/runtime/isolation.py'
+adding 'acp_services/runtime/lab_capabilities.py'
+adding 'acp_services/runtime/lineage.py'
+adding 'acp_services/runtime/local_admission.py'
+adding 'acp_services/runtime/metering_decoupling.py'
+adding 'acp_services/runtime/metering_policy.py'
+adding 'acp_services/runtime/method_flags.py'
+adding 'acp_services/runtime/outbox.py'
+adding 'acp_services/runtime/plan_contracts.py'
+adding 'acp_services/runtime/projections.py'
+adding 'acp_services/runtime/provisioning.py'
+adding 'acp_services/runtime/quota.py'
+adding 'acp_services/runtime/receipt_identity.py'
+adding 'acp_services/runtime/receipts.py'
+adding 'acp_services/runtime/recovery.py'
+adding 'acp_services/runtime/research_budget.py'
+adding 'acp_services/runtime/research_events.py'
+adding 'acp_services/runtime/science_binding.py'
+adding 'acp_services/runtime/step_dag.py'
+adding 'acp_services/runtime/step_requirements.py'
+adding 'acp_services/runtime/step_result.py'
+adding 'acp_services/runtime/usage.py'
+adding 'acp_services/runtime/usage_units.py'
+adding 'acp_services/runtime/worker.py'
+adding 'acp_services/runtime/workflow_enablement.py'
+adding 'acp_services/store/__init__.py'
+adding 'acp_services/store/layout.py'
+adding 'acp_services/store/legacy_method.py'
+adding 'acp_services/store/migrations.py'
+adding 'acp_services/store/molecule_groups.py'
+adding 'acp_services/store/naming.py'
+adding 'acp_services/store/record.py'
+adding 'acp_services/store/records.py'
+adding 'acp_services/store/store.py'
+adding 'acp_services/workspace/__init__.py'
+adding 'acp_services/workspace/admin.py'
+adding 'acp_services/workspace/boundary.py'
+adding 'acp_services/workspace/entry_authz.py'
+adding 'acp_services/workspace/http_identity.py'
+adding 'acp_services/workspace/identity_lifecycle.py'
+adding 'acp_services/workspace/identity_mapping.py'
+adding 'acp_services/workspace/keys.py'
+adding 'acp_services/workspace/projects.py'
+adding 'acp_services/workspace/server_identity.py'
+adding 'cccp/__init__.py'
+adding 'cccp/config.py'
+adding 'cccp/py.typed'
+adding 'cccp/software.py'
+adding 'cccp/version.py'
+adding 'cccp/analysis/__init__.py'
+adding 'cccp/analysis/frequency_products.py'
+adding 'cccp/analysis/identity.py'
+adding 'cccp/analysis/orca_parser.py'
+adding 'cccp/analysis/bounded/__init__.py'
+adding 'cccp/analysis/bounded/chunking.py'
+adding 'cccp/analysis/bounded/errors.py'
+adding 'cccp/analysis/bounded/identity.py'
+adding 'cccp/analysis/bounded/manifest.py'
+adding 'cccp/analysis/bounded/multiresolution.py'
+adding 'cccp/analysis/bounded/subsampling.py'
+adding 'cccp/analysis/confsearch/__init__.py'
+adding 'cccp/analysis/confsearch/boltzmann.py'
+adding 'cccp/analysis/confsearch/contracts.py'
+adding 'cccp/analysis/confsearch/result_helpers.py'
+adding 'cccp/analysis/confsearch/selection.py'
+adding 'cccp/analysis/ensemble/__init__.py'
+adding 'cccp/analysis/ensemble/assembly.py'
+adding 'cccp/analysis/ensemble/inputs.py'
+adding 'cccp/analysis/ensemble/levels.py'
+adding 'cccp/analysis/ensemble/selection.py'
+adding 'cccp/analysis/ensemble/solvent.py'
+adding 'cccp/analysis/ensemble/thermo.py'
+adding 'cccp/analysis/nmr/__init__.py'
+adding 'cccp/analysis/nmr/analysis_revision.py'
+adding 'cccp/analysis/nmr/assets.py'
+adding 'cccp/analysis/nmr/assignment.py'
+adding 'cccp/analysis/nmr/atomic_diagnostics.py'
+adding 'cccp/analysis/nmr/averaging.py'
+adding 'cccp/analysis/nmr/carbon_processor.py'
+adding 'cccp/analysis/nmr/dp5q_stub.py'
+adding 'cccp/analysis/nmr/enumerate.py'
+adding 'cccp/analysis/nmr/equivalence.py'
+adding 'cccp/analysis/nmr/error_model.py'
+adding 'cccp/analysis/nmr/fchl.py'
+adding 'cccp/analysis/nmr/io.py'
+adding 'cccp/analysis/nmr/iterative_assignment.py'
+adding 'cccp/analysis/nmr/method_config.py'
+adding 'cccp/analysis/nmr/models.py'
+adding 'cccp/analysis/nmr/probability.py'
+adding 'cccp/analysis/nmr/protocol.py'
+adding 'cccp/analysis/nmr/proton_processor.py'
+adding 'cccp/analysis/nmr/reference_validation.py'
+adding 'cccp/analysis/nmr/report.py'
+adding 'cccp/analysis/nmr/scaling.py'
+adding 'cccp/analysis/nmr/shift_predictor.py'
+adding 'cccp/analysis/nmr/spectra.py'
+adding 'cccp/analysis/nmr/spectra_registry.py'
+adding 'cccp/analysis/nmr/structure_map.py'
+adding 'cccp/analysis/nmr/model_assets/LICENSE-DP5'
+adding 'cccp/analysis/nmr/model_assets/NOTICE.md'
+adding 'cccp/analysis/nmr/model_assets/atomic_reps.gz'
+adding 'cccp/analysis/nmr/model_assets/c_w_kde_mean_s_0.025.p'
+adding 'cccp/analysis/nmr/model_assets/folded_scaled_errors.p'
+adding 'cccp/analysis/nmr/model_assets/frag_reps.gz'
+adding 'cccp/analysis/nmr/model_assets/i_w_kde_mean_s_0.025.p'
+adding 'cccp/analysis/nmr/model_assets/tms_references.txt'
+adding 'cccp/analysis/pes/__init__.py'
+adding 'cccp/analysis/pes/atom_mapping.py'
+adding 'cccp/analysis/pes/atom_selection.py'
+adding 'cccp/analysis/pes/bond_changes.py'
+adding 'cccp/analysis/pes/candidates.py'
+adding 'cccp/analysis/pes/path_analysis.py'
+adding 'cccp/analysis/pes/path_selection.py'
+adding 'cccp/analysis/pes/validation.py'
+adding 'cccp/analysis/sampling/__init__.py'
+adding 'cccp/analysis/sampling/deduplication.py'
+adding 'cccp/analysis/sampling/models.py'
+adding 'cccp/analysis/sampling/pipeline.py'
+adding 'cccp/analysis/structure/__init__.py'
+adding 'cccp/analysis/structure/embedding.py'
+adding 'cccp/analysis/structure/models.py'
+adding 'cccp/analysis/structure/parsers.py'
+adding 'cccp/analysis/structure/structures.py'
+adding 'cccp/analysis/structure/topology.py'
+adding 'cccp/analysis/tsmode/__init__.py'
+adding 'cccp/analysis/tsmode/contracts.py'
+adding 'cccp/analysis/tsmode/mode_mapping.py'
+adding 'cccp/analysis/tsmode/source.py'
+adding 'cccp/analysis/tsmode/validation.py'
+adding 'cccp/analysis/xtbmd/__init__.py'
+adding 'cccp/analysis/xtbmd/energy_filter.py'
+adding 'cccp/analysis/xtbmd/trajectory.py'
+adding 'cccp/backends/__init__.py'
+adding 'cccp/backends/base.py'
+adding 'cccp/backends/capabilities.py'
+adding 'cccp/backends/censo_backend.py'
+adding 'cccp/backends/crest.py'
+adding 'cccp/backends/external.py'
+adding 'cccp/backends/external_backend.py'
+adding 'cccp/backends/isostat_backend.py'
+adding 'cccp/backends/matrix.py'
+adding 'cccp/backends/molclus_backend.py'
+adding 'cccp/backends/orca.py'
+adding 'cccp/backends/registry.py'
+adding 'cccp/backends/xtb.py'
+adding 'cccp/calculation/__init__.py'
+adding 'cccp/calculation/_common.py'
+adding 'cccp/calculation/batch.py'
+adding 'cccp/calculation/context.py'
+adding 'cccp/calculation/contracts.py'
+adding 'cccp/calculation/energy_adapters.py'
+adding 'cccp/calculation/errors.py'
+adding 'cccp/calculation/frequency_parse.py'
+adding 'cccp/calculation/irc_endpoints.py'
+adding 'cccp/calculation/irc_trajectory.py'
+adding 'cccp/calculation/optimization_trajectory.py'
+adding 'cccp/calculation/progress.py'
+adding 'cccp/calculation/requests.py'
+adding 'cccp/calculation/results.py'
+adding 'cccp/calculation/selection.py'
+adding 'cccp/calculation/xtbmd_adapters.py'
+adding 'cccp/calculation/products/__init__.py'
+adding 'cccp/calculation/products/contracts.py'
+adding 'cccp/calculation/products/curve.py'
+adding 'cccp/calculation/products/derived.py'
+adding 'cccp/calculation/products/registry.py'
+adding 'cccp/calculation/products/serialize.py'
+adding 'cccp/calculation/products/structure.py'
+adding 'cccp/calculation/products/vibration.py'
+adding 'cccp/calculation/tasks/__init__.py'
+adding 'cccp/calculation/tasks/casscf.py'
+adding 'cccp/calculation/tasks/censo_refine.py'
+adding 'cccp/calculation/tasks/clustering.py'
+adding 'cccp/calculation/tasks/conformer_search.py'
+adding 'cccp/calculation/tasks/frequency.py'
+adding 'cccp/calculation/tasks/irc.py'
+adding 'cccp/calculation/tasks/md_sampling.py'
+adding 'cccp/calculation/tasks/nmr_shielding.py'
+adding 'cccp/calculation/tasks/optimize.py'
+adding 'cccp/calculation/tasks/orca_gradient.py'
+adding 'cccp/calculation/tasks/scan.py'
+adding 'cccp/calculation/tasks/singlepoint.py'
+adding 'cccp/calculation/tasks/thermochemistry.py'
+adding 'cccp/calculation/tasks/xtb_constrained_opt.py'
+adding 'cccp/calculation/tasks/xtb_path_search.py'
+adding 'cccp/core/__init__.py'
+adding 'cccp/core/candidates.py'
+adding 'cccp/core/protocols.py'
+adding 'cccp/core/registry.py'
+adding 'cccp/core/state_manager.py'
+adding 'cccp/io/__init__.py'
+adding 'cccp/io/input_handler.py'
+adding 'cccp/pipeline/__init__.py'
+adding 'cccp/pipeline/executor.py'
+adding 'cccp/plugin/__init__.py'
+adding 'cccp/plugin/discovery.py'
+adding 'cccp/plugin/errors.py'
+adding 'cccp/plugin/example_xyz.py'
+adding 'cccp/plugin/host.py'
+adding 'cccp/plugin/metadata.py'
+adding 'cccp/plugin/readonly_parser.py'
+adding 'cccp/plugin/sdk.py'
+adding 'cccp/qc/__init__.py'
+adding 'cccp/qc/hessian_policy.py'
+adding 'cccp/qc/keyword_registry.py'
+adding 'cccp/qc/method_meta.py'
+adding 'cccp/qc/resolved_spec.py'
+adding 'cccp/qc/shermo_adapter.py'
+adding 'cccp/qc/thermo_normalize.py'
+adding 'cccp/qc/translation.py'
+adding 'cccp/qc/cluster/__init__.py'
+adding 'cccp/qc/interfaces/__init__.py'
+adding 'cccp/qc/interfaces/base.py'
+adding 'cccp/qc/interfaces/censo.py'
+adding 'cccp/qc/interfaces/constraints.py'
+adding 'cccp/qc/interfaces/crest.py'
+adding 'cccp/qc/interfaces/hess_file.py'
+adding 'cccp/qc/interfaces/isostat.py'
+adding 'cccp/qc/interfaces/molclus.py'
+adding 'cccp/qc/interfaces/orca.py'
+adding 'cccp/qc/interfaces/orca_ts.py'
+adding 'cccp/qc/interfaces/route_render.py'
+adding 'cccp/qc/interfaces/xtb.py'
+adding 'cccp/qc/interfaces/xtb_path.py'
+adding 'cccp/qc/interfaces/xtb_scan.py'
+adding 'cccp/qc/interfaces/xtb_thermo.py'
+adding 'cccp/qc/runners/__init__.py'
+adding 'cccp/utils/__init__.py'
+adding 'cccp/utils/constants.py'
+adding 'cccp/utils/file_io.py'
+adding 'cccp/utils/geometry_tools.py'
+adding 'cccp/utils/resource_utils.py'
+adding 'cccp/utils/solvent_map.py'
+adding 'acp-0.3.0.dist-info/LICENSE'
+adding 'acp-0.3.0.dist-info/METADATA'
+adding 'acp-0.3.0.dist-info/WHEEL'
+adding 'acp-0.3.0.dist-info/entry_points.txt'
+adding 'acp-0.3.0.dist-info/top_level.txt'
+adding 'acp-0.3.0.dist-info/RECORD'
+removing build/bdist.linux-x86_64/wheel
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+Successfully built acp-0.3.0.tar.gz and acp-0.3.0-py3-none-any.whl

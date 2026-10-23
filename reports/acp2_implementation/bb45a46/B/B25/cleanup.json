@@ -1,0 +1,25 @@
+{
+  "schema": "acp2.b25.cleanup.v1",
+  "cleaned_at": "2026-10-23T12:18:00Z",
+  "removed": [
+    "/tmp/opencode/acp2-b25-clean (git worktree removed)",
+    "/tmp/opencode/b25-root-build",
+    "/tmp/opencode/b25-roundtrip",
+    "/tmp/opencode/b25-cccp-venv",
+    "/tmp/opencode/b25-worker-venv",
+    "/tmp/opencode/b25-web-venv",
+    "/tmp/opencode/b25-smoke",
+    "/tmp/opencode/b25-pipcheck",
+    "/tmp/opencode/b25_worker_receipt_check.py"
+  ],
+  "retained": {
+    "release_artifacts": "reports/acp2_implementation/bb45a46/B/B25/release",
+    "reason": "A-27b/A-28/C33/C34/B25b consume the actual B25a wheels/sdists; digests are also recorded in summary.json and release-manifest.json",
+    "committed_to_git": false
+  },
+  "worktree_removed": true,
+  "temp_venvs_removed": true,
+  "production_8765_touched": false,
+  "test_ports_touched": false,
+  "active_test_pids": []
+}
