@@ -537,7 +537,7 @@ def _admission_http_error(decision: Any) -> HTTPException:
     return HTTPException(
         status_code=status_code,
         detail={
-            "code": "admission_denied",
+            "code": reason if reason.startswith("budget_") else "admission_denied",
             "message": str(getattr(decision, "detail", "") or "resource admission denied"),
             "params": {
                 "reason_code": reason,
@@ -2597,11 +2597,14 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             action=ACTION_SUBMIT,
             request_payload=req.model_dump(exclude_none=True),
         )
+    budget_claim = _budget_claim_from_approval(approval)
     try:
         if idempotency_context is None:
-            record = _commands(request).submit(spec)
+            record = _commands(request).submit(spec, budget=budget_claim)
         else:
-            record = _commands(request).submit(spec, idempotency=idempotency_context)
+            record = _commands(request).submit(
+                spec, idempotency=idempotency_context, budget=budget_claim
+            )
     except (AdmissionRefusedError, IdempotencyReservationDeniedError) as exc:
         raise _admission_http_error(exc.decision) from exc
     except IdempotencyConflictError as exc:
@@ -8341,6 +8344,29 @@ def _enforce_approval(request: Request, req: Any) -> Any:
         )
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.detail()) from exc
+
+
+def _budget_claim_from_approval(approval: Any) -> dict[str, Any] | None:
+    """Server-side research budget quote derived from the approved record.
+
+    The client's ``budget`` payload is only compared with the approval digest by
+    B16; the effective limits come from the persisted approval, never from the
+    request.  The budget id is project+proposal (independent of ``run_id``).
+    """
+    if approval is None:
+        return None
+    approved_budget = getattr(approval, "budget", None)
+    if not approved_budget:
+        return None
+    from acp_services.runtime.research_budget import budget_id_for
+
+    return {
+        "budget_id": budget_id_for(str(approval.project_id), str(approval.proposal_ref)),
+        "budget": dict(approved_budget),
+        "approved_budget": dict(approved_budget),
+        "approval_ref": str(approval.approval_id),
+        "project_id": str(approval.project_id),
+    }
 
 
 def _research_project(manager: JobManager, project_id: str | None) -> str | None:

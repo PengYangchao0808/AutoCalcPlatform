@@ -148,10 +148,13 @@ class _JobSubmissionAdapter:
         *,
         group_id: str | None = None,
         idempotency: Any | None = None,
+        budget: Any | None = None,
     ) -> Any:
-        if idempotency is None:
-            return self._manager.submit(spec, group_id)
-        return self._manager.submit(spec, group_id, idempotency=idempotency)
+        if budget is None:
+            if idempotency is None:
+                return self._manager.submit(spec, group_id)
+            return self._manager.submit(spec, group_id, idempotency=idempotency)
+        return self._manager.submit(spec, group_id, idempotency=idempotency, budget=budget)
 
 
 class _JobEditAdapter:
@@ -187,8 +190,9 @@ class _UnattachedJobSubmission:
         *,
         group_id: str | None = None,
         idempotency: Any | None = None,
+        budget: Any | None = None,
     ) -> Any:
-        del idempotency
+        del idempotency, budget
         raise RuntimeError(_unattached_message())
 
 

@@ -1,0 +1,42 @@
+{
+  "accepted": 1,
+  "after": {
+    "bsub_available": false,
+    "bsub_calls": 0,
+    "bsub_path": null,
+    "job_rows": 2,
+    "orca_pids": [],
+    "work_dirs": [
+      "B16_Alpha/3_water_O_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.960000_H_0.000000_0.930000_-0.240000_sing",
+      "B16_Alpha/3_water_O_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.960000_H_0.000000_0.930000_-0.240000_sing__02"
+    ]
+  },
+  "before": {
+    "bsub_available": false,
+    "bsub_calls": 0,
+    "bsub_path": null,
+    "job_rows": 1,
+    "orca_pids": [],
+    "work_dirs": [
+      "B16_Alpha/3_water_O_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.960000_H_0.000000_0.930000_-0.240000_sing"
+    ]
+  },
+  "rejected": 1,
+  "results": [
+    {
+      "code": "budget_exhausted",
+      "index": 1,
+      "job_id": "",
+      "rule": "",
+      "status": 403
+    },
+    {
+      "code": "",
+      "index": 0,
+      "job_id": "20261023_135518_002_b17-race-0",
+      "rule": "",
+      "status": 201
+    }
+  ],
+  "schema": "acp2.b17.concurrent-last-unit.v1"
+}

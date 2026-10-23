@@ -452,6 +452,7 @@ class QuotaReservation:
     window_end: datetime
     period_unit: str
     period_timezone: str
+    research_round: str = ""
     external_job_id: str | None = None
     result_ref: str | None = None
     lease_until: str = ""
@@ -487,6 +488,7 @@ class QuotaReservation:
             "window_end": self.window_end.isoformat(),
             "period_unit": self.period_unit,
             "period_timezone": self.period_timezone,
+            "research_round": self.research_round,
             "external_job_id": self.external_job_id,
             "result_ref": self.result_ref,
             "lease_until": self.lease_until,
@@ -673,6 +675,7 @@ CREATE TABLE IF NOT EXISTS quota_reservations (
     window_end          TEXT NOT NULL,
     period_unit         TEXT NOT NULL,
     period_timezone     TEXT NOT NULL,
+    research_round      TEXT NOT NULL DEFAULT '',
     external_job_id     TEXT,
     result_ref          TEXT,
     lease_until         TEXT NOT NULL DEFAULT '',
@@ -732,6 +735,7 @@ def _row_to_reservation(row: sqlite3.Row) -> QuotaReservation:
         window_end=datetime.fromisoformat(row["window_end"]),
         period_unit=row["period_unit"],
         period_timezone=row["period_timezone"],
+        research_round=(row["research_round"] if "research_round" in row.keys() else ""),
         external_job_id=row["external_job_id"],
         result_ref=row["result_ref"],
         lease_until=row["lease_until"],
@@ -754,6 +758,7 @@ class _ReservationSpec:
     window_start: datetime
     window_end: datetime
     period: BillingPeriod
+    research_round: str | None = None
     external_job_id: str | None = None
     result_ref: str | None = None
     lease_until: str = ""
@@ -806,8 +811,20 @@ class QuotaLedger:
             try:
                 conn.execute("PRAGMA journal_mode=WAL;")
                 conn.executescript(_SCHEMA_SQL)
+                self._ensure_column(
+                    conn,
+                    "quota_reservations",
+                    "research_round",
+                    "research_round TEXT NOT NULL DEFAULT ''",
+                )
             finally:
                 conn.close()
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+        columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
     # -- policy snapshots (append-only) -------------------------------------
 
@@ -875,7 +892,7 @@ class QuotaLedger:
     # -- budgets -------------------------------------------------------------
 
     def set_budget(self, scope_type: str, scope_id: str, core_hours: Decimal) -> None:
-        if scope_type not in ("user", "project"):
+        if scope_type not in ("user", "project", "research_round"):
             raise QuotaValidationError(f"unknown budget scope {scope_type!r}")
         amount = _dec(core_hours)
         if amount < 0:
@@ -954,6 +971,11 @@ class QuotaLedger:
                 "SELECT * FROM quota_reservations WHERE state != ? AND principal_id=?",
                 (QuotaState.RELEASED, scope_id),
             ).fetchall()
+        elif scope_type == "research_round":
+            reservation_rows = conn.execute(
+                "SELECT * FROM quota_reservations WHERE state != ? AND research_round=?",
+                (QuotaState.RELEASED, scope_id),
+            ).fetchall()
         else:
             reservation_rows = conn.execute(
                 "SELECT * FROM quota_reservations WHERE state != ? AND project_id=?",
@@ -975,18 +997,32 @@ class QuotaLedger:
             finally:
                 conn.close()
 
-    def available(self, principal_id: str, project_id: str) -> Decimal | None:
-        """Effective remaining budget = ``min`` of the user/project remainders."""
+    def available(
+        self,
+        principal_id: str,
+        project_id: str,
+        research_round: str | None = None,
+    ) -> Decimal | None:
+        """Effective remaining budget = ``min`` of the configured remainders."""
         with self._lock:
             conn = self._connect()
             try:
                 user_budget = self._budget_in(conn, "user", principal_id)
                 project_budget = self._budget_in(conn, "project", project_id)
+                round_budget = (
+                    None
+                    if not research_round
+                    else self._budget_in(conn, "research_round", str(research_round))
+                )
                 remainders: list[Decimal] = []
                 if user_budget is not None:
                     remainders.append(user_budget - self._consumed(conn, "user", principal_id))
                 if project_budget is not None:
                     remainders.append(project_budget - self._consumed(conn, "project", project_id))
+                if round_budget is not None and research_round:
+                    remainders.append(
+                        round_budget - self._consumed(conn, "research_round", str(research_round))
+                    )
             finally:
                 conn.close()
         if not remainders:
@@ -1009,6 +1045,7 @@ class QuotaLedger:
         *,
         user_budget: Decimal | None,
         project_budget: Decimal | None,
+        research_round_budget: Decimal | None = None,
     ) -> _ReserveOutcome:
         now = self._clock()
         segments = self._build_segments(spec)
@@ -1016,7 +1053,7 @@ class QuotaLedger:
             conn = self._connect()
             try:
                 conn.execute("BEGIN IMMEDIATE")
-                if user_budget is None and project_budget is None:
+                if user_budget is None and project_budget is None and research_round_budget is None:
                     conn.execute("ROLLBACK")
                     return _ReserveOutcome(False, QuotaReason.NO_BUDGET, "no budget configured")
 
@@ -1045,6 +1082,20 @@ class QuotaLedger:
                             f"project budget {project_budget} - consumed {project_consumed} < "
                             f"requested {spec.reserved_core_hours}",
                         )
+                if research_round_budget is not None and spec.research_round:
+                    round_consumed = self._consumed(
+                        conn, "research_round", str(spec.research_round)
+                    )
+                    if round_consumed >= research_round_budget:
+                        looks_exhausted = True
+                    elif round_consumed + spec.reserved_core_hours > research_round_budget:
+                        conn.execute("ROLLBACK")
+                        return _ReserveOutcome(
+                            False,
+                            QuotaReason.INSUFFICIENT_BUDGET,
+                            f"research round budget {research_round_budget} - consumed "
+                            f"{round_consumed} < requested {spec.reserved_core_hours}",
+                        )
                 if looks_exhausted:
                     conn.execute("ROLLBACK")
                     return _ReserveOutcome(
@@ -1059,10 +1110,10 @@ class QuotaLedger:
                            reservation_id, job_id, attempt, principal_id, project_id, mode,
                            state, policy_version, policy_digest, reserved_core_hours,
                            settled_core_hours, cores, walltime_s, window_start, window_end,
-                           period_unit, period_timezone, external_job_id, result_ref,
-                           lease_until, created_at, updated_at)
+                           period_unit, period_timezone, research_round, external_job_id,
+                           result_ref, lease_until, created_at, updated_at)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0', ?, ?, ?, ?,
-                               ?, ?, ?, ?, ?, ?, ?)""",
+                               ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         reservation_id,
                         spec.job_id,
@@ -1080,6 +1131,7 @@ class QuotaLedger:
                         spec.window_end.isoformat(),
                         spec.period.unit,
                         spec.period.timezone,
+                        str(spec.research_round or ""),
                         spec.external_job_id,
                         spec.result_ref,
                         spec.lease_until,
@@ -1103,7 +1155,13 @@ class QuotaLedger:
                     )
                 self._emit(conn, reservation_id, "reserve", str(spec.reserved_core_hours))
                 available = self._available_in(
-                    conn, spec.principal_id, spec.project_id, user_budget, project_budget
+                    conn,
+                    spec.principal_id,
+                    spec.project_id,
+                    user_budget,
+                    project_budget,
+                    research_round_budget,
+                    spec.research_round,
                 )
                 conn.execute("COMMIT")
             except BaseException:
@@ -1122,12 +1180,18 @@ class QuotaLedger:
         project_id: str,
         user_budget: Decimal | None,
         project_budget: Decimal | None,
+        research_round_budget: Decimal | None = None,
+        research_round: str | None = None,
     ) -> Decimal | None:
         remainders: list[Decimal] = []
         if user_budget is not None:
             remainders.append(user_budget - self._consumed(conn, "user", principal_id))
         if project_budget is not None:
             remainders.append(project_budget - self._consumed(conn, "project", project_id))
+        if research_round_budget is not None and research_round:
+            remainders.append(
+                research_round_budget - self._consumed(conn, "research_round", research_round)
+            )
         return min(remainders) if remainders else None
 
     @staticmethod
@@ -1409,7 +1473,7 @@ class QuotaLedger:
         amount: Decimal,
         authorized_by: str,
     ) -> str:
-        if scope_type not in ("user", "project"):
+        if scope_type not in ("user", "project", "research_round"):
             raise QuotaValidationError(f"unknown top-up scope {scope_type!r}")
         if _dec(amount) <= 0:
             raise QuotaValidationError("top-up amount must be positive")
@@ -1652,6 +1716,7 @@ class QuotaService:
         external_job_id: str | None = None,
         result_ref: str | None = None,
         lease_until: str = "",
+        research_round: str | None = None,
     ) -> QuotaDecision:
         """Admit a job under the selected mode, reserving before dispatch.
 
@@ -1720,6 +1785,7 @@ class QuotaService:
             window_start=window_start,
             window_end=window_end,
             period=policy.period,
+            research_round=research_round,
             external_job_id=external_job_id,
             result_ref=result_ref,
             lease_until=lease_until,
@@ -1728,6 +1794,11 @@ class QuotaService:
             spec,
             user_budget=self._ledger.get_budget("user", principal_id),
             project_budget=self._ledger.get_budget("project", project_id),
+            research_round_budget=(
+                None
+                if not research_round
+                else self._ledger.get_budget("research_round", str(research_round))
+            ),
         )
         if not outcome.reserved or outcome.reservation is None:
             exhausted = outcome.reason_code == QuotaReason.EXHAUSTED
@@ -1779,8 +1850,13 @@ class QuotaService:
     def reservations_for_job(self, job_id: str) -> list[QuotaReservation]:
         return self._ledger.list_reservations(job_id=job_id)
 
-    def available(self, principal_id: str, project_id: str) -> Decimal | None:
-        return self._ledger.available(principal_id, project_id)
+    def available(
+        self,
+        principal_id: str,
+        project_id: str,
+        research_round: str | None = None,
+    ) -> Decimal | None:
+        return self._ledger.available(principal_id, project_id, research_round)
 
     # -- top-up --------------------------------------------------------------
 
