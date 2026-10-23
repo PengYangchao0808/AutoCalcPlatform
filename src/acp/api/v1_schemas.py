@@ -326,6 +326,13 @@ class V1JobRecordModel(BaseModel):
     name_updated_at: str | None = None
     attempt: int = 1
     revision: int = 0
+    # Execution identity facts carried by the attempt's frozen group/receipt.
+    # Additive and optional: legacy rows and remote-unmirrored attempts stay
+    # ``None`` rather than inventing a release.
+    release_id: str | None = None
+    release_digest: str | None = None
+    plan_digest: str | None = None
+    submission_id: str | None = None
 
 
 class V1JobCreateRequest(BaseModel):

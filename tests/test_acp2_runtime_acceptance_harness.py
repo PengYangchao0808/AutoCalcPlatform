@@ -388,3 +388,65 @@ def test_fixture_receipt_identity_keeps_frozen_baseline(monkeypatch: Any) -> Non
     assert candidate == harness.BASELINE_CANDIDATE_REVISION
     assert server == harness.SERVER_CANDIDATE_REVISION
     assert error is None
+
+
+def _load_package_install_module() -> Any:
+    script = REPO_ROOT / "scripts" / "acceptance" / "acp2_package_install.py"
+    spec = importlib.util.spec_from_file_location("acp2_package_install", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_package_install_candidate_revision_comes_from_release_manifest(
+    tmp_path: Path,
+) -> None:
+    module = _load_package_install_module()
+    revision = "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+    (tmp_path / "release-manifest.json").write_text(
+        json.dumps({"source": {"revision": revision, "clean": True}}),
+        encoding="utf-8",
+    )
+
+    assert module.candidate_revision_from_release(tmp_path) == (
+        revision,
+        "release_manifest.source.revision",
+    )
+    assert (
+        harness.candidate_revision_from_extensions(
+            "package-install", {"b25.candidate_revision": revision}
+        )
+        == revision
+    )
+    assert (
+        harness.candidate_revision_from_extensions(
+            "package-install", {"b25.candidate_revision": harness.BASELINE_CANDIDATE_REVISION}
+        )
+        == harness.BASELINE_CANDIDATE_REVISION
+    )
+    assert harness.candidate_revision_from_extensions("local-singlepoint", {}) is None
+
+
+def test_package_install_candidate_revision_falls_back_to_source_json(
+    tmp_path: Path,
+) -> None:
+    module = _load_package_install_module()
+    (tmp_path / "release-manifest.json").write_text("{}", encoding="utf-8")
+    revision = "0123456789abcdef0123456789abcdef01234567"
+    (tmp_path / "source.json").write_text(
+        json.dumps({"source_revision": revision}), encoding="utf-8"
+    )
+
+    assert module.candidate_revision_from_release(tmp_path) == (
+        revision,
+        "source.json.source_revision",
+    )
+
+
+def test_package_install_candidate_revision_rejects_baseline_only(tmp_path: Path) -> None:
+    module = _load_package_install_module()
+    (tmp_path / "release-manifest.json").write_text(
+        json.dumps({"source": {"revision": "not-a-sha"}}), encoding="utf-8"
+    )
+    assert module.candidate_revision_from_release(tmp_path) == (None, "unavailable")

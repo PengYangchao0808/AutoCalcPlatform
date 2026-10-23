@@ -120,8 +120,7 @@ def _count_find_workflow_state(monkeypatch: pytest.MonkeyPatch) -> dict[str, int
 def _jobs_dump(manager: Any) -> list[tuple[Any, ...]]:
     with sqlite3.connect(str(manager.store.db_path)) as conn:
         return conn.execute(
-            "SELECT id, status, revision, attempt, spec_json, result_json "
-            "FROM jobs ORDER BY id"
+            "SELECT id, status, revision, attempt, spec_json, result_json FROM jobs ORDER BY id"
         ).fetchall()
 
 
@@ -354,3 +353,80 @@ def test_projection_from_dict_filters_unknown_fields() -> None:
     assert projection.fields == {"stage_index": 1}
     assert projection.basis_revision == 4
     assert projection.to_dict()["task_id"] == "t"
+
+
+def test_status_projection_surfaces_attempt_release_facts(tmp_path: Path) -> None:
+    from acp_services.entrypoints.status_projection import project_task_status
+
+    work = tmp_path / "facts"
+    frozen = work / "WORK" / "00_RUNTIME" / "frozen"
+    frozen.mkdir(parents=True)
+    (frozen / "envelope.json").write_text(
+        json.dumps(
+            {
+                "release_id": "2c7ffd56045b5bd5",
+                "release_digest": (
+                    "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3"
+                ),
+                "plan_digest": "v2:3825a8cc8e1a1b83f54e0661109f8c20",
+                "submission_id": "sub_ecbe6eb39d6861a0",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (work / "execution_receipt.json").write_text(
+        json.dumps({"release_id": "2c7ffd56045b5bd5", "state": "completed"}),
+        encoding="utf-8",
+    )
+
+    projection = project_task_status(
+        {
+            "job_id": "job-facts",
+            "status": "completed",
+            "attempt": 1,
+            "revision": 6,
+            "work_dir": str(work),
+            # Simulate a legacy HTTP row that predates these fields.
+            "release_id": None,
+            "release_digest": None,
+            "plan_digest": None,
+            "submission_id": None,
+        }
+    )
+
+    assert projection["release_id"] == "2c7ffd56045b5bd5"
+    assert projection["release_digest"].startswith("b59ec6b6")
+    assert projection["plan_digest"] == "v2:3825a8cc8e1a1b83f54e0661109f8c20"
+    assert projection["submission_id"] == "sub_ecbe6eb39d6861a0"
+    assert projection["task_ref"]["release"] == {
+        "release_id": "2c7ffd56045b5bd5",
+        "release_digest": projection["release_digest"],
+    }
+
+
+def test_http_job_row_projects_release_facts(client: TestClient, tmp_path: Path) -> None:
+    work = tmp_path / "http-facts"
+    record = _seed_running_job(client, job_id="http-facts", work_dir=work)
+    frozen = work / "WORK" / "00_RUNTIME" / "frozen"
+    frozen.mkdir(parents=True)
+    (frozen / "envelope.json").write_text(
+        json.dumps(
+            {
+                "release_id": "2c7ffd56045b5bd5",
+                "release_digest": (
+                    "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3"
+                ),
+                "plan_digest": "v2:3825a8cc8e1a1b83f54e0661109f8c20",
+                "submission_id": "sub_ecbe6eb39d6861a0",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/api/v1/jobs/{record.id}")
+    assert response.status_code == 200, response.text
+    row = response.json()
+    assert row["release_id"] == "2c7ffd56045b5bd5"
+    assert row["release_digest"].startswith("b59ec6b6")
+    assert row["plan_digest"] == "v2:3825a8cc8e1a1b83f54e0661109f8c20"
+    assert row["submission_id"] == "sub_ecbe6eb39d6861a0"

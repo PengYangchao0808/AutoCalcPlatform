@@ -14,10 +14,30 @@ imports no :mod:`acp` code.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
-__all__ = ["STATUS_SCHEMA_VERSION", "project_operation_status", "project_task_status"]
+__all__ = [
+    "STATUS_SCHEMA_VERSION",
+    "attempt_release_facts",
+    "project_operation_status",
+    "project_task_status",
+]
+
+#: Immutable execution facts an attempt writes beside its result.  The frozen
+#: envelope is authoritative when present; the receipt fills older attempts.
+_ATTEMPT_FACT_FILES: tuple[str, ...] = (
+    "WORK/00_RUNTIME/frozen/envelope.json",
+    "execution_receipt.json",
+)
+_RELEASE_FACT_KEYS: tuple[str, ...] = (
+    "release_id",
+    "release_digest",
+    "plan_digest",
+    "submission_id",
+)
 
 #: Wire version of the projection (additive fields only).
 STATUS_SCHEMA_VERSION = 1
@@ -35,6 +55,34 @@ def _task_id(payload: Mapping[str, Any], fallback: str = "") -> str:
         if isinstance(value, str) and value:
             return value
     return fallback
+
+
+def attempt_release_facts(work_dir: str | Path | None) -> dict[str, str]:
+    """Read the attempt's release/plan/submission facts from its own files.
+
+    This is a read-only normalisation for status projections: it never writes,
+    never resolves remote resources and returns an empty mapping when the
+    files are absent (legacy rows, remote-unmirrored attempts).  Only string
+    facts already written by the attempt are passed through.
+    """
+    if not work_dir:
+        return {}
+    root = Path(work_dir)
+    facts: dict[str, str] = {}
+    for relative in _ATTEMPT_FACT_FILES:
+        try:
+            payload = json.loads((root / relative).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(payload, Mapping):
+            continue
+        for key in _RELEASE_FACT_KEYS:
+            if key in facts:
+                continue
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                facts[key] = value
+    return facts
 
 
 def project_task_status(
@@ -61,16 +109,17 @@ def project_task_status(
         attempt = 1
     revision = _as_int(row.get("revision"))
     state = row.get("state") or row.get("status") or "unknown"
+    facts = attempt_release_facts(row.get("work_dir"))
     task_ref: dict[str, Any] = {
         "task_id": task_id,
         "job_id": task_id,
         "attempt": attempt,
     }
-    release_id = row.get("release_id")
+    release_id = row.get("release_id") or facts.get("release_id")
     if isinstance(release_id, str) and release_id:
         task_ref["release"] = {
             "release_id": release_id,
-            "release_digest": row.get("release_digest"),
+            "release_digest": row.get("release_digest") or facts.get("release_digest"),
         }
     projection: dict[str, Any] = {
         "schema_version": STATUS_SCHEMA_VERSION,
@@ -100,6 +149,9 @@ def project_task_status(
     ):
         if key in row:
             projection[key] = row[key]
+    for key in _RELEASE_FACT_KEYS:
+        if not projection.get(key) and key in facts:
+            projection[key] = facts[key]
     return projection
 
 

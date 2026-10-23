@@ -1556,6 +1556,24 @@ def _controller_task_count(controller: str, timeout: float) -> int:
     return len(jobs) if isinstance(jobs, list) else 0
 
 
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def candidate_revision_from_extensions(scenario: str, extensions: Mapping[str, Any]) -> str | None:
+    """Return the installed candidate identity recorded by a scenario handler.
+
+    ``package-install`` installs wheels whose release manifest pins the exact
+    source revision.  That revision is the candidate; the harness baseline
+    constant is only a fallback for receipts with no installed artifact.
+    """
+    if scenario != "package-install":
+        return None
+    value = extensions.get("b25.candidate_revision")
+    if isinstance(value, str) and _FULL_SHA_RE.fullmatch(value):
+        return value
+    return None
+
+
 def resolve_candidate_identity(
     evidence_kind: str, controller: str | None, timeout: float
 ) -> tuple[str, str, str | None]:
@@ -16332,6 +16350,10 @@ def execute_scenario(
         ]
     if timeout_record is not None:
         extensions["b01.timeout_cleanup"] = "timeout-cleanup.json"
+    installed_candidate = candidate_revision_from_extensions(spec.scenario, extensions)
+    if installed_candidate is not None:
+        candidate_revision = installed_candidate
+        server_revision = installed_candidate
     if identity_error is not None:
         result = "FAIL"
         reason = identity_error

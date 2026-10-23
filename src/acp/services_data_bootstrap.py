@@ -42,11 +42,6 @@ from acp.results.frame_candidate_store import (
     write_authority,
 )
 from acp.results.remote_structure_cache import RemoteStructureCache
-from acp.scheduler.remote.paths import (
-    compose_remote_dir,
-    resolve_remote_dir,
-    storage_relative_path,
-)
 from acp.scheduler.structure_source_store import StructureSourceStore, source_uid_for
 from acp.storage.manifest import ResultManifest
 from acp_services.data.archive import (
@@ -451,9 +446,16 @@ class _StorageAllocationAdapter:
 
     # --- StorageAllocationPort -----------------------------------------
     def storage_relative_path(self, *, work_dir: str, run_root: str) -> str:
+        # Imported lazily: the local singlepoint/publication path must not
+        # require the optional [remote] extra (paramiko) just because this
+        # allocation adapter is present in the same module.
+        from acp.scheduler.remote.paths import storage_relative_path
+
         return storage_relative_path(SimpleNamespace(work_dir=work_dir), run_root)
 
     def compose_remote_dir(self, relative_path: str, *, endpoint: str) -> str:
+        from acp.scheduler.remote.paths import compose_remote_dir
+
         return compose_remote_dir(relative_path, self._node(endpoint))
 
     def resolve_legacy_dir(
@@ -483,6 +485,8 @@ class _StorageAllocationAdapter:
         record = SimpleNamespace(
             id=job_id, attempt=attempt, work_dir=work_dir, result=result, spec=spec
         )
+        from acp.scheduler.remote.paths import resolve_remote_dir
+
         node = self._node(endpoint, run_root=run_root)
         remote_dir, fallback = resolve_remote_dir(
             record, node, explicit=explicit, probe=probe, run_root=run_root
