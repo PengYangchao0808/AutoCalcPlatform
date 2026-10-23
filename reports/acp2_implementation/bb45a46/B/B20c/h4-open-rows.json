@@ -1,0 +1,160 @@
+{
+  "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+  "closed_claims": 0,
+  "generated_at": "2026-10-23T09:32:36Z",
+  "h4_status": "OPEN",
+  "mechanism_proven": false,
+  "non_owner_signature_count": 0,
+  "non_owner_signatures": [],
+  "owner": "B",
+  "required_row_ids": [
+    "H4-01-valid-ts",
+    "H4-02-bidirectional-irc",
+    "H4-03-endpoint-connectivity",
+    "H4-04-comparable-energy",
+    "H4-search",
+    "A-20-science-signoff",
+    "C25-experience-closeout"
+  ],
+  "row_count": 7,
+  "rows": [
+    {
+      "b_evidence_owner": "B",
+      "claim_status": "not_evaluated",
+      "label": "H4-01",
+      "open_reason": "B20a-exec has not published the authorized TS optimize/frequency step receipts and artifacts: no real magnitude/mode record, snapshot digest, attempt or release exists. A constructed validator PASS is not real evidence.",
+      "owner": "A",
+      "producer": "B20a-exec",
+      "required_for_h4_closure": true,
+      "row_id": "H4-01-valid-ts",
+      "signature_required_from": "A",
+      "signed_by": [],
+      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+      },
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "b_evidence_owner": "B",
+      "claim_status": "not_evaluated",
+      "label": "H4-02",
+      "open_reason": "B20a-exec has not published the authorized forward/reverse IRC step receipts and artifacts: no real direction results, native step counts, terminal states or snapshot digest exist.",
+      "owner": "A",
+      "producer": "B20a-exec",
+      "required_for_h4_closure": true,
+      "row_id": "H4-02-bidirectional-irc",
+      "signature_required_from": "A",
+      "signed_by": [],
+      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+      },
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "b_evidence_owner": "B",
+      "claim_status": "not_evaluated",
+      "label": "H4-03",
+      "open_reason": "B20a-exec has not published the authorized endpoint geometries or the mapped product structure; no real atom-order-stable endpoint mapping exists.",
+      "owner": "A",
+      "producer": "B20a-exec",
+      "required_for_h4_closure": true,
+      "row_id": "H4-03-endpoint-connectivity",
+      "signature_required_from": "A",
+      "signed_by": [],
+      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+      },
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "b_evidence_owner": "B",
+      "claim_status": "not_evaluated",
+      "label": "H4-04",
+      "open_reason": "B20a-exec has not published authorized energy/thermochemistry artifacts; additionally B18 must reconcile the frozen 1_bar_ideal_gas standard state with the ThermochemistryOptions 1atm/1M lexicon before a real run.",
+      "owner": "A",
+      "producer": "B20a-exec",
+      "required_for_h4_closure": true,
+      "row_id": "H4-04-comparable-energy",
+      "signature_required_from": "A",
+      "signed_by": [],
+      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+      },
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "b_evidence_owner": "B",
+      "claim_status": "not_evaluated",
+      "label": "H4-search",
+      "open_reason": "B20a-search has not published its separate search evidence row: no input category, candidate source/count, generation steps, rejection reasons, validators or success criteria exist. A control-loop or known-candidate PASS is explicitly not search evidence.",
+      "owner": "A",
+      "producer": "B20a-search",
+      "required_for_h4_closure": true,
+      "row_id": "H4-search",
+      "signature_required_from": "A",
+      "signed_by": [],
+      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+      },
+      "status": "NOT_VERIFIED(search_not_declared)"
+    },
+    {
+      "accepted_path_patterns": [
+        "<repo>/reports/acp2_implementation/bb45a46/A/A-20/result.json",
+        "<repo>/reports/acp2_implementation/bb45a46/A/A-20/run-id/result.json"
+      ],
+      "b_evidence_owner": "B",
+      "claim_status": "not_evaluated",
+      "digest": null,
+      "expected_handoff_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "expected_handoff_schema": "handoff_id=H4, handoff_version=1 (contract_set=acp2.science v1)",
+      "expected_path": "<repo>/reports/acp2_implementation/bb45a46/A/A-20/result.json",
+      "expected_schema": "acp2.acceptance.v1",
+      "fabricated_digest": false,
+      "label": "A-20",
+      "open_reason": "A-20 has not published the real-run failure/reverse-case gate result; the only A H4 document present is the provisional handoff whose own h4_closure.closed is false.",
+      "owner": "A",
+      "present": false,
+      "producer": "A-20",
+      "required_for_h4_closure": true,
+      "row_id": "A-20-science-signoff",
+      "signature_required_from": "A",
+      "signed_by": [],
+      "status": "NOT_VERIFIED(a20_absent)"
+    },
+    {
+      "b_evidence_owner": "B",
+      "claim_status": "not_evaluated",
+      "digest": null,
+      "expected_path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
+      "expected_receipt_root": "<repo>/reports/acp2_implementation/bb45a46/C/p2-closeout",
+      "expected_receipt_schema": "acp2.acceptance.v1",
+      "expected_schema": "acp2.experience.handoff.v1 (H2-shaped; no explicit schema field in the H2 precedent)",
+      "fabricated_digest": false,
+      "label": "C25",
+      "open_reason": "C T-36 / C25 is blocked on T-34/T-35; no p2-closeout receipt and no experience/handoffs/H4.json exist on this host.",
+      "owner": "C",
+      "present": false,
+      "producer": "C T-36 / C25",
+      "required_for_h4_closure": true,
+      "row_id": "C25-experience-closeout",
+      "signature_required_from": "C",
+      "signed_by": [],
+      "status": "NOT_VERIFIED(c25_absent)"
+    }
+  ],
+  "rule": "Every row is open and unsigned. A row may only be signed by its owner (A for science, C for experience); B records execution facts and never signs an A/C row.",
+  "schema": "acp2.b20c.open-rows.v1",
+  "supported_claims": 0,
+  "todo": "24 / B20c"
+}

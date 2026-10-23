@@ -1,0 +1,101 @@
+{
+  "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+  "commands": [
+    {
+      "argv": [
+        "<acp2-dev>/venvs/b/bin/python",
+        "scripts/acceptance/acp2_runtime.py",
+        "--scenario",
+        "da-runtime",
+        "--phase",
+        "da-submit",
+        "--controller",
+        "http://127.0.0.1:18781",
+        "--fixture",
+        "<acp2-dev>/data/b/fixtures/da/da-run.json",
+        "--out",
+        "<repo>/reports/acp2_implementation/bb45a46/B/B20",
+        "--timeout",
+        "14400"
+      ],
+      "cwd": "<repo>",
+      "env": {
+        "ACP_CANDIDATE_REVISION": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+        "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root-b20a",
+        "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+        "CONFSEARCH_ORCA_PATH": "/home/<user>/orca611/orca",
+        "LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+        "PYTHONPATH": "<repo>/src"
+      },
+      "phase": "B20a-exec",
+      "result_expected": "NOT_VERIFIED(c24a_absent) until C24a publishes the single approved submission",
+      "source_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B20/scenario-command.txt"
+    },
+    {
+      "argv": [
+        "<acp2-dev>/venvs/b/bin/python",
+        "scripts/acceptance/acp2_runtime.py",
+        "--check-only",
+        "<repo>/reports/acp2_implementation/bb45a46/B/B20/summary.json"
+      ],
+      "cwd": "<repo>",
+      "phase": "B20a-ready-check",
+      "result_expected": "VALID (tool check only, never a scenario PASS)",
+      "source_evidence": "<repo>/.omo/evidence/task-22-acp2-parallel-plan-b-runtime.md"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3.11",
+        "-m",
+        "pytest",
+        "tests/test_acp2_runtime_science_handoff.py",
+        "-q"
+      ],
+      "cwd": "<repo>",
+      "env": {
+        "PYTHONPATH": "src:."
+      },
+      "phase": "B20b",
+      "result_expected": "test suite passes; H4 stays open",
+      "source_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/validation-log.json"
+    },
+    {
+      "argv": null,
+      "phase": "B20a-search",
+      "reason": "No search producer command exists; a known-candidate chain is not search evidence.",
+      "result_expected": "NOT_VERIFIED(search_not_declared)",
+      "source_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3.11",
+        "-m",
+        "pytest",
+        "tests/test_acp2_runtime_h4_closeout.py",
+        "-q"
+      ],
+      "cwd": "<repo>",
+      "env": {
+        "PYTHONPATH": "src:."
+      },
+      "phase": "B20c-validation",
+      "result_expected": "PASS (aggregation only; H4 remains OPEN)"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3.11",
+        "scripts/acceptance/validate_acp2_contracts.py",
+        "--manifest",
+        "docs/reference/next-change/acp2-contracts/manifest.json"
+      ],
+      "cwd": "<repo>",
+      "phase": "contract-validation",
+      "result_expected": "VALID"
+    }
+  ],
+  "generated_at": "2026-10-23T09:32:36Z",
+  "owner": "B",
+  "rule": "Every command is a real argv array with no placeholder; a phase that has no producer records a named gap instead of an invented command.",
+  "schema": "acp2.b20c.rerun-index.v1",
+  "todo": "24 / B20c"
+}

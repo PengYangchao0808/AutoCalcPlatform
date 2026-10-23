@@ -1,0 +1,363 @@
+{
+  "a20_ref": {
+    "digest": null,
+    "expected_handoff_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+    "expected_handoff_schema": "handoff_id=H4, handoff_version=1",
+    "expected_path": "<repo>/reports/acp2_implementation/bb45a46/A/A-20/result.json",
+    "expected_schema": "acp2.acceptance.v1",
+    "fabricated_digest": false,
+    "observed_contract_handoff": {
+      "h4_closure_closed": false,
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "role": "provisional contract handoff; not the A-20 real-run sign-off",
+      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+      "status": "NOT_VERIFIED"
+    },
+    "owner": "A",
+    "present": false,
+    "signed_by": [],
+    "status": "NOT_VERIFIED(a20_absent)"
+  },
+  "adr_008_boundary": {
+    "b_role": "prepare run evidence only; no scientific call",
+    "fixture_selection_owner": "A/user",
+    "scientific_acceptance_owner": "A/user"
+  },
+  "aggregation_result": "PASS",
+  "c25_ref": {
+    "digest": null,
+    "expected_path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
+    "expected_receipt_root": "<repo>/reports/acp2_implementation/bb45a46/C/p2-closeout",
+    "expected_receipt_schema": "acp2.acceptance.v1",
+    "expected_schema": "acp2.experience.handoff.v1 (H2-shaped)",
+    "fabricated_digest": false,
+    "observed": {
+      "c24a_present": false,
+      "c24b_present": false,
+      "t34_plan_state": "[~] blocked by T-23..T-33 + A-14..A-16 + B20a-ready",
+      "t35_plan_state": "[~] blocked by T-34 + A-17..A-19 + B20a-exec"
+    },
+    "owner": "C",
+    "present": false,
+    "signed_by": [],
+    "status": "NOT_VERIFIED(c25_absent)"
+  },
+  "candidate": {
+    "base_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd",
+    "candidate_revision": "sha256:c415d71598e43ac5de1046616b5fbc4c1b808881eebe56c0731642027788932e",
+    "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+    "candidate_tree": "041706226619a403256a2ea206d05ad30a509033",
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "client_revision_status": "C HEAD read; C24a/C25 absent",
+    "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
+    "contract_version": "1.3.0",
+    "env_digest": "d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6",
+    "freeze_kind": "verified_immutable_overlay",
+    "freeze_record": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/p2-candidate.json",
+    "freeze_record_sha256": "872271bc4946f11a2edf8c3c7daba0b980a86c55d775e2bee923a0fbf435f0c0",
+    "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
+    "overlay_root": "<acp2-dev>/data/b/b20-candidate",
+    "overlay_verification_result": "PASS",
+    "parent_revision": "430b4ba09378bf3a63839be3610ad3d7a075a861",
+    "server_revision": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462"
+  },
+  "closed": false,
+  "closeout_input_digest": "d7795d45f952db139583e6b85292b1b905699c7574b9dc427faf66cdcc7fce3b",
+  "closeout_input_digest_rule": "sha256 over sorted lines '<repo-relative path> <file sha256>\\n' for these input entries only; the closeout's own result file is not an input",
+  "closeout_input_set": {
+    "artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/closeout-input-set.json",
+    "entry_count": 8,
+    "phase_results": [
+      "B20a-ready",
+      "B20a-exec",
+      "B20a-search",
+      "B20b",
+      "B19",
+      "B18",
+      "B17",
+      "B16"
+    ],
+    "sha256": "a3463d40f9dc8f0d6bc1075d592bcd93803e0c1d8b62a56c7824c132f3b137ca"
+  },
+  "closeout_result_path": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+  "da_fixture_run_keys": {
+    "fixture": {
+      "path": "<acp2-dev>/data/b/fixtures/da/da-run.json",
+      "role": "da_run_fixture",
+      "sha256": "ef543b6936d2e91cb64a831af3edb39aa2acf1a85d9db770df367780bb399486",
+      "size_bytes": 2413
+    },
+    "phase": "da-submit",
+    "phase_result": {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "role": "b20a_exec_phase_result",
+      "sha256": "51cc4c89453cae166b79f4ec0e69e166703503fdf56f1c05cb9cec051e25bdcc",
+      "size_bytes": 10977
+    },
+    "platform_refs": {
+      "attempt": null,
+      "job_id": null,
+      "manifest_generation": null,
+      "operation_id": null,
+      "release_id": null,
+      "submission_id": null
+    },
+    "platform_refs_rule": "all null because B20a-exec stopped before dispatch; no value is invented",
+    "run_id": "20261023T091047Z-1425776-5bf82a03",
+    "run_key": "da-runtime/da-submit/20261023T091047Z-1425776-5bf82a03",
+    "scenario": "da-runtime",
+    "search_run_key": null,
+    "search_status": "NOT_VERIFIED(search_not_declared)"
+  },
+  "final_reference_digest": "e915a12a447ef998e9309217d62c18f5c7c087b99a95836c4c66e3503a2f84d7",
+  "final_reference_digest_rule": "sha256 of canonical JSON (sort_keys=True, separators=(',',':'), ensure_ascii=False) of this document with final_reference_digest set to the empty string",
+  "generated_at": "2026-10-23T09:32:36Z",
+  "generated_at_head": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+  "h4_status": "OPEN",
+  "limitations": [
+    "B20a-exec is NOT_VERIFIED(c24a_absent): no task, QC, prepare, reservation or submission exists.",
+    "B20a-search is NOT_VERIFIED(search_not_declared): a known-candidate chain is not search evidence.",
+    "A-20 and C25 are absent; B does not sign their scope.",
+    "H4-01..H4-04 remain NOT_VERIFIED; no supported claim and no mechanism conclusion.",
+    "One readiness/negative PASS does not cover an unexecuted control or failure case."
+  ],
+  "mechanism_proven": false,
+  "open_rows": {
+    "a20_present": true,
+    "artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
+    "c25_present": true,
+    "h4_01_to_04_present": true,
+    "h4_search_present": true,
+    "row_count": 7,
+    "row_ids": [
+      "H4-01-valid-ts",
+      "H4-02-bidirectional-irc",
+      "H4-03-endpoint-connectivity",
+      "H4-04-comparable-energy",
+      "H4-search",
+      "A-20-science-signoff",
+      "C25-experience-closeout"
+    ],
+    "rows": [
+      {
+        "owner": "A",
+        "row_id": "H4-01-valid-ts",
+        "signed_by": [],
+        "status": "NOT_VERIFIED"
+      },
+      {
+        "owner": "A",
+        "row_id": "H4-02-bidirectional-irc",
+        "signed_by": [],
+        "status": "NOT_VERIFIED"
+      },
+      {
+        "owner": "A",
+        "row_id": "H4-03-endpoint-connectivity",
+        "signed_by": [],
+        "status": "NOT_VERIFIED"
+      },
+      {
+        "owner": "A",
+        "row_id": "H4-04-comparable-energy",
+        "signed_by": [],
+        "status": "NOT_VERIFIED"
+      },
+      {
+        "owner": "A",
+        "row_id": "H4-search",
+        "signed_by": [],
+        "status": "NOT_VERIFIED(search_not_declared)"
+      },
+      {
+        "owner": "A",
+        "row_id": "A-20-science-signoff",
+        "signed_by": [],
+        "status": "NOT_VERIFIED(a20_absent)"
+      },
+      {
+        "owner": "C",
+        "row_id": "C25-experience-closeout",
+        "signed_by": [],
+        "status": "NOT_VERIFIED(c25_absent)"
+      }
+    ],
+    "sha256": "232daf2bc7158b44231ee3548d6f326ec6ec6f1e7498309d7bacea38e757ef5f"
+  },
+  "owner": "B",
+  "promotion_allowed": false,
+  "rerun_commands": [
+    {
+      "argv": [
+        "<acp2-dev>/venvs/b/bin/python",
+        "scripts/acceptance/acp2_runtime.py",
+        "--scenario",
+        "da-runtime",
+        "--phase",
+        "da-submit",
+        "--controller",
+        "http://127.0.0.1:18781",
+        "--fixture",
+        "<acp2-dev>/data/b/fixtures/da/da-run.json",
+        "--out",
+        "<repo>/reports/acp2_implementation/bb45a46/B/B20",
+        "--timeout",
+        "14400"
+      ],
+      "cwd": "<repo>",
+      "env": {
+        "ACP_CANDIDATE_REVISION": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+        "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root-b20a",
+        "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+        "CONFSEARCH_ORCA_PATH": "/home/<user>/orca611/orca",
+        "LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+        "PYTHONPATH": "<repo>/src"
+      },
+      "phase": "B20a-exec",
+      "result_expected": "NOT_VERIFIED(c24a_absent) until C24a publishes the single approved submission",
+      "source_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B20/scenario-command.txt"
+    },
+    {
+      "argv": [
+        "<acp2-dev>/venvs/b/bin/python",
+        "scripts/acceptance/acp2_runtime.py",
+        "--check-only",
+        "<repo>/reports/acp2_implementation/bb45a46/B/B20/summary.json"
+      ],
+      "cwd": "<repo>",
+      "phase": "B20a-ready-check",
+      "result_expected": "VALID (tool check only, never a scenario PASS)",
+      "source_evidence": "<repo>/.omo/evidence/task-22-acp2-parallel-plan-b-runtime.md"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3.11",
+        "-m",
+        "pytest",
+        "tests/test_acp2_runtime_science_handoff.py",
+        "-q"
+      ],
+      "cwd": "<repo>",
+      "env": {
+        "PYTHONPATH": "src:."
+      },
+      "phase": "B20b",
+      "result_expected": "test suite passes; H4 stays open",
+      "source_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/validation-log.json"
+    },
+    {
+      "argv": null,
+      "phase": "B20a-search",
+      "reason": "No search producer command exists; a known-candidate chain is not search evidence.",
+      "result_expected": "NOT_VERIFIED(search_not_declared)",
+      "source_evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3.11",
+        "-m",
+        "pytest",
+        "tests/test_acp2_runtime_h4_closeout.py",
+        "-q"
+      ],
+      "cwd": "<repo>",
+      "env": {
+        "PYTHONPATH": "src:."
+      },
+      "phase": "B20c-validation",
+      "result_expected": "PASS (aggregation only; H4 remains OPEN)"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3.11",
+        "scripts/acceptance/validate_acp2_contracts.py",
+        "--manifest",
+        "docs/reference/next-change/acp2-contracts/manifest.json"
+      ],
+      "cwd": "<repo>",
+      "phase": "contract-validation",
+      "result_expected": "VALID"
+    }
+  ],
+  "rerun_index": {
+    "artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/rerun-index.json",
+    "command_count": 6,
+    "sha256": "f2c5d435779c786858503855942a344a02609c05589fc909f5b8ad54e260eba0"
+  },
+  "result_scope": "aggregation_only",
+  "reusable_research_records": {
+    "artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/reusable-research-records.json",
+    "sha256": "2c5321d4dd54a0964c7bfd901f50464536c1f9e83e4d871ff73342d97e7a4c0e"
+  },
+  "run_spec": {
+    "aggregate_budget_seconds": 120,
+    "export_budget_seconds": 900,
+    "partition_check": "13380 + 900 + 120 = 14400",
+    "ref": {
+      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "role": "shared_da_run_spec",
+      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+      "size_bytes": 3680
+    },
+    "science_deadline_seconds": 13380,
+    "started_at": null,
+    "started_at_status": "NOT_VERIFIED(c24a_absent)",
+    "timeout_env": "ACP2_DA_TIMEOUT=14400",
+    "total_budget_seconds": 14400,
+    "verdict": {
+      "evidence_phase_failed_by_elapsed_time": false,
+      "rule": "The shared 13380/900/120/14400 spec is one cumulative budget. The export and aggregate windows are used and H4 closes by actual evidence, never by elapsed time."
+    }
+  },
+  "schema": "acp2.h4.closeout.v1",
+  "scientific_result": "NOT_VERIFIED",
+  "self_exclusion": {
+    "closeout_result_path": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+    "closeout_result_repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+    "closeout_self_in_input_set": false,
+    "rule": "closeout_input_digest is computed from the eight other P2 phase results before this file exists; this file's final_reference_digest is what the index consumes.",
+    "validated_before_write": true
+  },
+  "signers": {
+    "A": null,
+    "B": {
+      "does_not_sign": [
+        "A-20",
+        "C25",
+        "H4-01-valid-ts",
+        "H4-02-bidirectional-irc",
+        "H4-03-endpoint-connectivity",
+        "H4-04-comparable-energy",
+        "H4-search",
+        "scientific_acceptance",
+        "adr_008_fixture_selection",
+        "mechanism_conclusion"
+      ],
+      "owner": "B",
+      "signed": true,
+      "signed_facts": {
+        "a20_reference_absent_recorded": true,
+        "b20a_exec_stopped_before_dispatch": true,
+        "c25_reference_absent_recorded": true,
+        "candidate_overlay_matches_commit": true,
+        "no_moving_worktree_claimed": true,
+        "qc_invocations": 0,
+        "run_spec_partition_valid": true,
+        "submission_attempted": false,
+        "tasks_created_by_b20a": 0
+      },
+      "signed_scope": [
+        "candidate_freeze",
+        "execution_facts",
+        "release_identity",
+        "attempt_identity",
+        "manifest_identity",
+        "budget_partition",
+        "evidence_reference_resolution"
+      ]
+    },
+    "C": null,
+    "non_owner_signatures": []
+  },
+  "todo": "24 / B20c"
+}
