@@ -1,0 +1,37 @@
+{
+  "descriptor": {
+    "adapter_id": "acp.storage.sideeffect",
+    "capabilities": [
+      "storage.sideeffect"
+    ],
+    "claims_process_isolation": false,
+    "description": "External infrastructure adapter fixture; no science parser.",
+    "descriptor_schema": "acp2.adapter.v1",
+    "entrypoint": {
+      "attribute": "run",
+      "module": "adapter"
+    },
+    "environment": [],
+    "kind": "storage",
+    "resource_limits": {
+      "max_concurrency": 1,
+      "max_cpu_seconds": 30,
+      "max_io_bytes": 1048576,
+      "max_memory_bytes": 33554432
+    },
+    "supported_schema": [
+      "acp2.adapter.v1"
+    ],
+    "trust_level": "discover-only",
+    "verification_fixture": "verification.json",
+    "version": "1.0.0"
+  },
+  "descriptor_digest": "a37202780e70c5284699a87f7dbda2d0ee7ca576d7bee77349b1dd6b22c825eb",
+  "effective_trust_level": "trusted-explicit",
+  "enabled": true,
+  "entrypoint_digest": "bda60e52d1afd38ae32dd7f41edc9d602f905cee99fa7bd91b31e3f1c53fa6e7",
+  "entrypoint_path": "<acp2-dev>/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.py",
+  "installed_at": "2026-10-23T09:52:35Z",
+  "installed_by": "controller",
+  "schema": "acp2.adapter.installed.v1"
+}

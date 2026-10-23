@@ -1,0 +1,182 @@
+{
+  "core_source_edited_for_plugin": false,
+  "files": [
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-conflict-1.0.0/adapter.json",
+      "relative": "storage-conflict-1.0.0/adapter.json",
+      "sha256": "b75b37653f65dc1d82cf9ab07f1dc8513e16d76920b137f2e11b3683ce8bc8ee",
+      "size_bytes": 631
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-conflict-1.0.0/adapter.py",
+      "relative": "storage-conflict-1.0.0/adapter.py",
+      "sha256": "d0cd56d1ff894940911f4f4513b3c304466e2581c2e8ff4f13038d2c49f0e73e",
+      "size_bytes": 1458
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-conflict-1.0.0/verification.json",
+      "relative": "storage-conflict-1.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.0.0/__pycache__/adapter.cpython-311.pyc",
+      "relative": "storage-inventory-1.0.0/__pycache__/adapter.cpython-311.pyc",
+      "sha256": "6c1bfa3bc045caf0157645cbc3036f47abd1c211534d1f1f046d3e45d0f35288",
+      "size_bytes": 2920
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.0.0/adapter.json",
+      "relative": "storage-inventory-1.0.0/adapter.json",
+      "sha256": "61b836e06bf7e99b40babd964c97ec0b2117b67ed98a234cdafd86fed797f0f4",
+      "size_bytes": 659
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.0.0/adapter.py",
+      "relative": "storage-inventory-1.0.0/adapter.py",
+      "sha256": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+      "size_bytes": 1459
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.0.0/verification.json",
+      "relative": "storage-inventory-1.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.1.0/__pycache__/adapter.cpython-311.pyc",
+      "relative": "storage-inventory-1.1.0/__pycache__/adapter.cpython-311.pyc",
+      "sha256": "5b0e41a23c1b249ad483e3ccc6218fc52326a38e49a18cb72379939f46cc2694",
+      "size_bytes": 2920
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.1.0/adapter.json",
+      "relative": "storage-inventory-1.1.0/adapter.json",
+      "sha256": "5266acf69c4e421ae6a4b82d973a90c7e681dbd3523db91b704cd8616202fccc",
+      "size_bytes": 659
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.1.0/adapter.py",
+      "relative": "storage-inventory-1.1.0/adapter.py",
+      "sha256": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+      "size_bytes": 1459
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.1.0/verification.json",
+      "relative": "storage-inventory-1.1.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-isolation-claim-1.0.0/adapter.json",
+      "relative": "storage-isolation-claim-1.0.0/adapter.json",
+      "sha256": "510b1d2563db43ff484646704ef0a1423957fb3d1e2fbc62b1a0b0e96d6a0a30",
+      "size_bytes": 645
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-isolation-claim-1.0.0/adapter.py",
+      "relative": "storage-isolation-claim-1.0.0/adapter.py",
+      "sha256": "dc73903d7c346fee5690fdb66197d851393a6dd00bcb8e5a3f052682ba9000f9",
+      "size_bytes": 1465
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-isolation-claim-1.0.0/verification.json",
+      "relative": "storage-isolation-claim-1.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.json",
+      "relative": "storage-missing-env-1.0.0/adapter.json",
+      "sha256": "756de91ce804bcf2a9d9117a27888f03b41eecc125ab817eac644f459a723526",
+      "size_bytes": 664
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.py",
+      "relative": "storage-missing-env-1.0.0/adapter.py",
+      "sha256": "bb21e83fab25297cf2f252ffdc0223593d4776c44ffc5541f27fb54f80eab8d8",
+      "size_bytes": 1461
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-missing-env-1.0.0/verification.json",
+      "relative": "storage-missing-env-1.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-science-1.0.0/adapter.json",
+      "relative": "storage-science-1.0.0/adapter.json",
+      "sha256": "e0d5c8b41ff2a54050c4feb8aae929014be66b8b59fd59065be90568421b14c0",
+      "size_bytes": 626
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-science-1.0.0/adapter.py",
+      "relative": "storage-science-1.0.0/adapter.py",
+      "sha256": "7fb938e89b4cf796eee3727b831d7012a5595798d3c34474559105877f199ec5",
+      "size_bytes": 1457
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-science-1.0.0/verification.json",
+      "relative": "storage-science-1.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.json",
+      "relative": "storage-sideeffect-1.0.0/adapter.json",
+      "sha256": "c6a438287e1c24ad3e87bc52127b2d2252e794fed99bef576d64e3ce62a12d98",
+      "size_bytes": 636
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.py",
+      "relative": "storage-sideeffect-1.0.0/adapter.py",
+      "sha256": "bda60e52d1afd38ae32dd7f41edc9d602f905cee99fa7bd91b31e3f1c53fa6e7",
+      "size_bytes": 350
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-sideeffect-1.0.0/verification.json",
+      "relative": "storage-sideeffect-1.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.json",
+      "relative": "storage-untrusted-1.0.0/adapter.json",
+      "sha256": "fb987e1fc2f975f8d5c05c61f798cbcd28181ed0ab176ff543abfe4579c92acf",
+      "size_bytes": 634
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.py",
+      "relative": "storage-untrusted-1.0.0/adapter.py",
+      "sha256": "d088495e9a5072d33196757a0a2eedadf36df02165dc9ebdeb6c9bde98ed88a8",
+      "size_bytes": 1459
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-untrusted-1.0.0/verification.json",
+      "relative": "storage-untrusted-1.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.json",
+      "relative": "storage-wrong-version-2.0.0/adapter.json",
+      "sha256": "8cd8ee2fed23434ce5a20aeaa12f489613052a971dfe88e6e4fa1287a2f343d2",
+      "size_bytes": 642
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.py",
+      "relative": "storage-wrong-version-2.0.0/adapter.py",
+      "sha256": "9b2fdcae982756edf2e60462d9ffdbd24e32af3b247474f12f38364e8e721951",
+      "size_bytes": 1463
+    },
+    {
+      "path": "<acp2-dev>/data/b/plugins/b21/storage-wrong-version-2.0.0/verification.json",
+      "relative": "storage-wrong-version-2.0.0/verification.json",
+      "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
+      "size_bytes": 84
+    }
+  ],
+  "inside_repository": false,
+  "plugin_root": "<acp2-dev>/data/b/plugins/b21",
+  "schema": "acp2.b21.external-plugin-bundle.v1"
+}

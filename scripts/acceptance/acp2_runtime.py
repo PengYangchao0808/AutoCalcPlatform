@@ -11271,6 +11271,784 @@ def _b15_stream_revoke(
     }
 
 
+B21_FIXTURE_SCHEMA = "acp2.b21.plugin-fixture.v1"
+
+
+def _b21_fixture(path: str) -> dict[str, Any]:
+    document = _b15_read_json(Path(path))
+    if not isinstance(document, dict) or document.get("schema") != B21_FIXTURE_SCHEMA:
+        raise ValueError(f"fixture is not {B21_FIXTURE_SCHEMA}")
+    if not str(document.get("plugin_root") or "").strip():
+        raise ValueError("fixture.plugin_root is required")
+    expected = document.get("expected")
+    tasks = document.get("tasks")
+    negative = document.get("negative")
+    if not isinstance(expected, dict) or not isinstance(tasks, dict):
+        raise ValueError("fixture.expected and fixture.tasks are required mappings")
+    if not isinstance(negative, dict):
+        raise ValueError("fixture.negative is required")
+    for key in ("adapter_id", "version", "upgrade_version", "capability"):
+        if not expected.get(key):
+            raise ValueError(f"fixture.expected.{key} is required")
+    for key in ("old", "new"):
+        task = tasks.get(key)
+        if not isinstance(task, dict) or not task.get("task_id"):
+            raise ValueError(f"fixture.tasks.{key}.task_id is required")
+        if not isinstance(task.get("attempt"), int):
+            raise ValueError(f"fixture.tasks.{key}.attempt must be an integer")
+    return document
+
+
+def _b21_authorization(
+    action: str,
+    adapter_id: str,
+    version: str,
+    digest: str,
+    authorized_by: str,
+    *,
+    expires_at: str | None = None,
+):
+    from acp_services.runtime.adapter_registry import AdapterAuthorization
+
+    return AdapterAuthorization(
+        action=action,
+        adapter_id=adapter_id,
+        version=version,
+        descriptor_digest=digest,
+        authorized_by=authorized_by,
+        issued_at=_utcnow(),
+        expires_at=expires_at,
+    )
+
+
+def _run_infra_plugin(
+    phase_name: str,
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B21: external infrastructure adapter discovery/install/enable/freeze.
+
+    The registry is platform-only.  Discovery is metadata-only; a plugin that
+    writes a marker on import proves it was not executed.  Install/enable need
+    server-side authorization facts.  The old task keeps its frozen v1 adapter
+    after v1.1.0 is installed and enabled.  Local regression is run for real;
+    LSF/Slurm live rows are NOT_VERIFIED without a real environment.
+    """
+
+    from acp_services.runtime.adapter_registry import (
+        AdapterRegistry,
+        AdapterRegistryError,
+    )
+
+    try:
+        fixture = _b21_fixture(fixture_path)
+    except ValueError as exc:
+        return (
+            EXIT_NOT_VERIFIED,
+            [{"name": "b21.fixture_schema", "status": "NOT_VERIFIED", "detail": str(exc)}],
+            {"b21.reason": str(exc)},
+        )
+
+    expected = fixture["expected"]
+    tasks = fixture["tasks"]
+    negative = fixture["negative"]
+    adapter_id = str(expected["adapter_id"])
+    version_v1 = str(expected["version"])
+    version_v2 = str(expected["upgrade_version"])
+    capability = str(expected["capability"])
+    authorized_by = str(fixture.get("authorized_by") or "controller")
+    trusted = [str(item) for item in fixture.get("trusted_adapter_ids", [])]
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Deterministic per-run workspace: only the fixture-owned state root is
+    # cleared; the external plugin bundle itself is never modified.
+    state_root = Path(str(fixture.get("state_root") or (out_dir / "adapter-state")))
+    if state_root.exists():
+        shutil.rmtree(state_root)
+    state_root.mkdir(parents=True, exist_ok=True)
+    work_root = out_dir / "workspace"
+    if work_root.exists():
+        shutil.rmtree(work_root)
+    work_root.mkdir(parents=True, exist_ok=True)
+
+    assertions: list[dict[str, Any]] = []
+    rejection_rows: list[dict[str, Any]] = []
+    artifacts: list[dict[str, Any]] = []
+
+    def add(name: str, ok: bool, detail: str, *, not_verified: bool = False) -> None:
+        assertions.append(
+            {
+                "name": name,
+                "status": "PASS" if ok else ("NOT_VERIFIED" if not_verified else "FAIL"),
+                "detail": detail,
+            }
+        )
+
+    def expect_error(name: str, expected_code: str, function: Any) -> None:
+        try:
+            function()
+        except AdapterRegistryError as exc:
+            passed = exc.code == expected_code
+            rejection_rows.append(
+                {
+                    "case": name,
+                    "expected_code": expected_code,
+                    "actual_code": exc.code,
+                    "passed": passed,
+                    "detail": exc.detail,
+                }
+            )
+            add(name, passed, f"expected={expected_code} actual={exc.code}")
+        else:
+            rejection_rows.append(
+                {
+                    "case": name,
+                    "expected_code": expected_code,
+                    "actual_code": "no_error",
+                    "passed": False,
+                    "detail": "call succeeded when it should have been rejected",
+                }
+            )
+            add(name, False, f"expected={expected_code} actual=no_error")
+
+    def emit(name: str, document: Any) -> Path:
+        path = _b15_write_json(out_dir / f"{phase_token}-{name}", document)
+        artifacts.append(
+            {
+                "path": path.name,
+                "size_bytes": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+        )
+        return path
+
+    phase_token = _safe_name(phase_name)
+    plugin_root = Path(str(fixture["plugin_root"]))
+    previous_plugin_env = os.environ.get("ACP2_B21_PLUGIN_ENV")
+    previous_missing_env = os.environ.get("ACP2_B21_MISSING_ENV")
+    os.environ["ACP2_B21_PLUGIN_ENV"] = "1"
+    os.environ.pop("ACP2_B21_MISSING_ENV", None)
+    marker = plugin_root / "storage-sideeffect-1.0.0" / str(negative["marker_name"])
+    if marker.exists():
+        marker.unlink()
+
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "control",
+        "acceptance.target": "local",
+        "b21.plugin_root": str(plugin_root),
+        "b21.state_root": str(state_root),
+        "b21.phase": phase_name,
+        "b21.fixture": str(fixture_path),
+    }
+    if controller:
+        extensions["b21.controller"] = controller
+
+    try:
+        registry = AdapterRegistry(
+            plugin_root=plugin_root,
+            state_root=state_root,
+            trusted_adapter_ids=trusted,
+            authorized_principals=[authorized_by, "controller"],
+        )
+        task_count_before: int | None = None
+        if controller and controller_reachable(controller):
+            try:
+                task_count_before = _controller_task_count(controller, min(timeout, 10.0))
+            except (OSError, ValueError, urllib.error.URLError):
+                task_count_before = None
+
+        # 1. Discovery is metadata-only; reject isolation/science claims.
+        report = registry.discover()
+        discovered = {
+            (item.descriptor.adapter_id, item.descriptor.version): item for item in report.adapters
+        }
+        monitoring_modules = sorted(
+            name
+            for name, module in list(sys.modules.items())
+            if name.startswith("acp_adapter_")
+            or (
+                getattr(module, "__file__", None) is not None
+                and str(plugin_root) in str(getattr(module, "__file__", ""))
+            )
+        )
+        discovery_document = report.to_dict()
+        discovery_document["side_effect_marker"] = {
+            "path": str(marker),
+            "exists": marker.exists(),
+        }
+        discovery_document["plugin_modules_in_sys_modules"] = monitoring_modules
+        emit("discovery.json", discovery_document)
+        add(
+            "b21.discovery.external_adapter",
+            (adapter_id, version_v1) in discovered and (adapter_id, version_v2) in discovered,
+            f"discovered {adapter_id}@{version_v1} and @{version_v2}",
+        )
+        rejected_codes = {(row.code, Path(row.path).parent.name) for row in report.rejected}
+        add(
+            "b21.discovery.isolation_claim_rejected",
+            any(
+                code == "adapter_isolation_claim_rejected" and "isolation-claim" in name
+                for code, name in rejected_codes
+            ),
+            f"rejected={sorted(rejected_codes)}",
+        )
+        add(
+            "b21.discovery.science_capability_rejected",
+            any(
+                code == "science_capability_forbidden" and "science" in name
+                for code, name in rejected_codes
+            ),
+            f"rejected={sorted(rejected_codes)}",
+        )
+        add(
+            "b21.discovery.no_execution",
+            not marker.exists() and not monitoring_modules,
+            f"marker={marker.exists()} modules={monitoring_modules}",
+        )
+
+        if (adapter_id, version_v1) not in discovered:
+            emit(
+                "rejection-matrix.json",
+                {
+                    "schema": "acp2.b21.rejection-matrix.v1",
+                    "rows": rejection_rows,
+                },
+            )
+            return (
+                EXIT_FAIL,
+                assertions,
+                {
+                    **extensions,
+                    "b21.reason": "expected_external_adapter_not_discovered",
+                    "b21.artifacts": artifacts,
+                },
+            )
+        v1 = discovered[(adapter_id, version_v1)]
+        v2 = discovered.get((adapter_id, version_v2))
+
+        # 2. Authorization is a server-side fact, never plugin metadata.
+        authz_rows: list[dict[str, Any]] = []
+        expect_error(
+            "b21.authorization.install_requires_fact",
+            "adapter_authorization_required",
+            lambda: registry.install(adapter_id, version_v1, authorization=None),
+        )
+        wrong_action = _b21_authorization(
+            "adapter.enable", adapter_id, version_v1, v1.descriptor_digest, authorized_by
+        )
+        expect_error(
+            "b21.authorization.install_wrong_action",
+            "adapter_authorization_invalid",
+            lambda: registry.install(adapter_id, version_v1, authorization=wrong_action),
+        )
+        wrong_principal = _b21_authorization(
+            "adapter.install", adapter_id, version_v1, v1.descriptor_digest, "untrusted-client"
+        )
+        expect_error(
+            "b21.authorization.install_wrong_principal",
+            "adapter_authorization_invalid",
+            lambda: registry.install(adapter_id, version_v1, authorization=wrong_principal),
+        )
+        expired = _b21_authorization(
+            "adapter.install",
+            adapter_id,
+            version_v1,
+            v1.descriptor_digest,
+            authorized_by,
+            expires_at="2000-01-01T00:00:00Z",
+        )
+        expect_error(
+            "b21.authorization.install_expired",
+            "adapter_authorization_expired",
+            lambda: registry.install(adapter_id, version_v1, authorization=expired),
+        )
+        install_auth = _b21_authorization(
+            "adapter.install", adapter_id, version_v1, v1.descriptor_digest, authorized_by
+        )
+        installed_v1 = registry.install(adapter_id, version_v1, authorization=install_auth)
+        authz_rows.append(
+            {
+                "action": "adapter.install",
+                "adapter_id": adapter_id,
+                "version": version_v1,
+                "descriptor_digest": v1.descriptor_digest,
+                "authorized_by": authorized_by,
+                "result": "installed",
+            }
+        )
+        expect_error(
+            "b21.authorization.enable_requires_fact",
+            "adapter_authorization_required",
+            lambda: registry.enable(adapter_id, version_v1, authorization=None),
+        )
+        enable_auth = _b21_authorization(
+            "adapter.enable", adapter_id, version_v1, v1.descriptor_digest, authorized_by
+        )
+        registry.enable(adapter_id, version_v1, authorization=enable_auth)
+        authz_rows.append(
+            {
+                "action": "adapter.enable",
+                "adapter_id": adapter_id,
+                "version": version_v1,
+                "descriptor_digest": v1.descriptor_digest,
+                "authorized_by": authorized_by,
+                "result": "enabled",
+            }
+        )
+        emit(
+            "authorization.json",
+            {"schema": "acp2.b21.authorization.v1", "rows": authz_rows},
+        )
+        add(
+            "b21.authorization.server_side_fact",
+            registry.is_enabled(adapter_id, version_v1),
+            f"enabled={registry.is_enabled(adapter_id, version_v1)}",
+        )
+
+        # 3. Freeze v1 into the old task BEFORE the upgrade.
+        old_task = tasks["old"]
+        new_task = tasks["new"]
+        freeze_old = registry.freeze_for_task(
+            str(old_task["task_id"]),
+            int(old_task["attempt"]),
+            adapters={adapter_id: version_v1},
+        )
+        old_frozen = freeze_old.adapter(adapter_id)
+        emit(
+            "frozen-task-v1.json",
+            {
+                "schema": "acp2.b21.frozen-task.v1",
+                "task": freeze_old.to_dict(),
+                "descriptor": v1.descriptor.to_dict(),
+                "descriptor_digest": v1.descriptor_digest,
+                "entrypoint_digest": v1.entrypoint_digest,
+                "installed_descriptor_digest": installed_v1.descriptor_digest,
+            },
+        )
+        add(
+            "b21.freeze.v1_exact_digest",
+            old_frozen.version == version_v1
+            and old_frozen.descriptor_digest == v1.descriptor_digest
+            and old_frozen.entrypoint_digest == v1.entrypoint_digest,
+            f"version={old_frozen.version} descriptor={old_frozen.descriptor_digest[:12]} "
+            f"entrypoint={(old_frozen.entrypoint_digest or '')[:12]}",
+        )
+
+        # 4. A real infrastructure operation through the installed plugin.
+        sample = work_root / "inventory.txt"
+        sample.write_text("b21 infrastructure adapter sample\n", encoding="utf-8")
+        expected_sha = sha256_file(sample)
+        inventory = registry.invoke(
+            adapter_id,
+            version_v1,
+            "inventory",
+            {"path": str(sample)},
+            allow_execution=True,
+        )
+        invocation_v1 = {
+            "operation": "inventory",
+            "adapter_id": adapter_id,
+            "version": version_v1,
+            "result": inventory,
+        }
+        emit("plugin-run-v1.json", {"schema": "acp2.b21.plugin-run.v1", **invocation_v1})
+        add(
+            "b21.plugin.real_infrastructure_operation",
+            isinstance(inventory, dict)
+            and inventory.get("version") == version_v1
+            and inventory.get("sha256") == expected_sha
+            and inventory.get("science") is False,
+            f"result={inventory}",
+        )
+
+        # 5. Install/enable v1.1.0; new tasks get v2, old tasks keep v1.
+        if v2 is None:
+            add("b21.upgrade.discovered", False, f"{adapter_id}@{version_v2} missing")
+        else:
+            install_v2 = _b21_authorization(
+                "adapter.install", adapter_id, version_v2, v2.descriptor_digest, authorized_by
+            )
+            registry.install(adapter_id, version_v2, authorization=install_v2)
+            enable_v2 = _b21_authorization(
+                "adapter.enable", adapter_id, version_v2, v2.descriptor_digest, authorized_by
+            )
+            registry.enable(adapter_id, version_v2, authorization=enable_v2)
+            add(
+                "b21.upgrade.new_active_version",
+                registry.active_version(adapter_id) == version_v2,
+                f"active={registry.active_version(adapter_id)}",
+            )
+            freeze_new = registry.freeze_for_task(
+                str(new_task["task_id"]), int(new_task["attempt"])
+            )
+            new_frozen = freeze_new.adapter(adapter_id)
+            emit(
+                "frozen-task-v2.json",
+                {
+                    "schema": "acp2.b21.frozen-task.v1",
+                    "task": freeze_new.to_dict(),
+                    "descriptor": v2.descriptor.to_dict(),
+                    "descriptor_digest": v2.descriptor_digest,
+                    "entrypoint_digest": v2.entrypoint_digest,
+                },
+            )
+            add(
+                "b21.freeze.v2_exact_digest",
+                new_frozen.version == version_v2
+                and new_frozen.descriptor_digest == v2.descriptor_digest,
+                f"version={new_frozen.version} descriptor={new_frozen.descriptor_digest[:12]}",
+            )
+            # Old-task read-back is independent of the newly enabled version.
+            read_old = registry.read_task_freeze(str(old_task["task_id"]), int(old_task["attempt"]))
+            frozen_old_again = read_old.adapter(adapter_id)
+            installed_old = registry.verify_frozen_adapter(frozen_old_again)
+            old_inventory = registry.invoke_frozen(
+                frozen_old_again,
+                "inventory",
+                {"path": str(sample)},
+                allow_execution=True,
+            )
+            new_inventory = registry.invoke(
+                adapter_id,
+                version_v2,
+                "inventory",
+                {"path": str(sample)},
+                allow_execution=True,
+            )
+            emit(
+                "old-task-readback.json",
+                {
+                    "schema": "acp2.b21.old-task-readback.v1",
+                    "task_id": old_task["task_id"],
+                    "attempt": old_task["attempt"],
+                    "frozen": frozen_old_again.to_dict(),
+                    "resolved_version": installed_old.descriptor.version,
+                    "new_task": {
+                        "task_id": new_task["task_id"],
+                        "attempt": new_task["attempt"],
+                        "frozen_version": new_frozen.version,
+                    },
+                    "old_task_operation_result": old_inventory,
+                    "new_task_operation_result": new_inventory,
+                },
+            )
+            add(
+                "b21.old_task.frozen_adapter_readback",
+                frozen_old_again.version == version_v1
+                and frozen_old_again.descriptor_digest == v1.descriptor_digest
+                and installed_old.descriptor.version == version_v1,
+                f"old={frozen_old_again.version} new={new_frozen.version}",
+            )
+            add(
+                "b21.old_task.uses_frozen_adapter",
+                isinstance(old_inventory, dict)
+                and old_inventory.get("version") == version_v1
+                and isinstance(new_inventory, dict)
+                and new_inventory.get("version") == version_v2,
+                "old_result="
+                f"{old_inventory.get('version') if isinstance(old_inventory, dict) else None} "
+                "new_result="
+                f"{new_inventory.get('version') if isinstance(new_inventory, dict) else None}",
+            )
+
+        # 6. Metadata never triggers execution; explicit opt-in is required.
+        side_effect_id = str(negative["side_effect_adapter_id"])
+        side_effect = discovered.get((side_effect_id, "1.0.0"))
+        if side_effect is not None:
+            side_install = _b21_authorization(
+                "adapter.install",
+                side_effect_id,
+                "1.0.0",
+                side_effect.descriptor_digest,
+                authorized_by,
+            )
+            registry.install(side_effect_id, "1.0.0", authorization=side_install)
+            side_enable = _b21_authorization(
+                "adapter.enable",
+                side_effect_id,
+                "1.0.0",
+                side_effect.descriptor_digest,
+                authorized_by,
+            )
+            registry.enable(side_effect_id, "1.0.0", authorization=side_enable)
+        expect_error(
+            "b21.metadata.explicit_execution_required",
+            "execution_requires_explicit_allow",
+            lambda: registry.invoke(
+                adapter_id,
+                version_v1,
+                "inventory",
+                {"path": str(sample)},
+                allow_execution=False,
+            ),
+        )
+        add(
+            "b21.metadata.install_enable_did_not_execute",
+            not marker.exists(),
+            f"marker_exists={marker.exists()}",
+        )
+
+        # 7. Rejection matrix.
+        wrong_id = str(negative["wrong_version_adapter_id"])
+        incompatible = discovered.get((wrong_id, "2.0.0"))
+        if incompatible is not None:
+            incompatible_auth = _b21_authorization(
+                "adapter.install",
+                wrong_id,
+                "2.0.0",
+                incompatible.descriptor_digest,
+                authorized_by,
+            )
+            expect_error(
+                "b21.reject.wrong_version_incompatible",
+                "adapter_version_incompatible",
+                lambda: registry.install(wrong_id, "2.0.0", authorization=incompatible_auth),
+            )
+        expect_error(
+            "b21.reject.unknown_version_no_auto_replace",
+            "adapter_version_not_installed",
+            lambda: registry.enable(
+                adapter_id,
+                str(negative["unknown_version"]),
+                authorization=_b21_authorization(
+                    "adapter.enable",
+                    adapter_id,
+                    str(negative["unknown_version"]),
+                    v2.descriptor_digest if v2 is not None else v1.descriptor_digest,
+                    authorized_by,
+                ),
+            ),
+        )
+        add(
+            "b21.reject.active_version_unchanged",
+            registry.active_version(adapter_id) == version_v2,
+            f"active={registry.active_version(adapter_id)}",
+        )
+
+        missing_id = str(negative["missing_environment_adapter_id"])
+        missing = discovered.get((missing_id, "1.0.0"))
+        if missing is not None:
+            missing_auth = _b21_authorization(
+                "adapter.install",
+                missing_id,
+                "1.0.0",
+                missing.descriptor_digest,
+                authorized_by,
+            )
+            expect_error(
+                "b21.reject.missing_environment",
+                "adapter_environment_missing",
+                lambda: registry.install(missing_id, "1.0.0", authorization=missing_auth),
+            )
+            rejection_rows[-1]["missing_environment"] = [str(negative["missing_environment_token"])]
+
+        conflict_id = str(negative["capability_conflict_adapter_id"])
+        conflict = discovered.get((conflict_id, "1.0.0"))
+        if conflict is not None:
+            conflict_auth = _b21_authorization(
+                "adapter.install",
+                conflict_id,
+                "1.0.0",
+                conflict.descriptor_digest,
+                authorized_by,
+            )
+            expect_error(
+                "b21.reject.capability_conflict",
+                "adapter_capability_conflict",
+                lambda: registry.install(conflict_id, "1.0.0", authorization=conflict_auth),
+            )
+
+        untrusted_id = str(negative["untrusted_adapter_id"])
+        untrusted = discovered.get((untrusted_id, "1.0.0"))
+        if untrusted is not None:
+            untrusted_auth = _b21_authorization(
+                "adapter.install",
+                untrusted_id,
+                "1.0.0",
+                untrusted.descriptor_digest,
+                authorized_by,
+            )
+            expect_error(
+                "b21.reject.untrusted_plugin",
+                "adapter_untrusted",
+                lambda: registry.install(untrusted_id, "1.0.0", authorization=untrusted_auth),
+            )
+            add(
+                "b21.reject.untrusted_not_enabled",
+                not registry.is_enabled(untrusted_id, "1.0.0"),
+                f"enabled={registry.is_enabled(untrusted_id, '1.0.0')}",
+            )
+
+        isolation = registry.isolation_report()
+        emit("isolation.json", isolation)
+        add(
+            "b21.isolation.not_implied_by_metadata",
+            isolation["process_isolation"] == "NOT_VERIFIED"
+            and isolation["sandbox"] is False
+            and isolation["trusted_plugins_only"] is True,
+            f"process_isolation={isolation['process_isolation']} sandbox={isolation['sandbox']}",
+        )
+        emit(
+            "rejection-matrix.json",
+            {
+                "schema": "acp2.b21.rejection-matrix.v1",
+                "rows": rejection_rows,
+            },
+        )
+
+        # 8. Local/LSF/Slurm compatibility matrix.  Local regression is real;
+        #    LSF/Slurm live rows are NOT_VERIFIED without a real environment.
+        local_command = fixture.get("local_regression_command")
+        local_ok = False
+        local_detail = "no local_regression_command in fixture"
+        if (
+            isinstance(local_command, list)
+            and local_command
+            and all(isinstance(item, str) for item in local_command)
+        ):
+            regression_env = dict(os.environ)
+            existing_pythonpath = regression_env.get("PYTHONPATH", "")
+            regression_env["PYTHONPATH"] = (
+                str(REPO_ROOT / "src")
+                if not existing_pythonpath
+                else str(REPO_ROOT / "src") + os.pathsep + existing_pythonpath
+            )
+            try:
+                completed = subprocess.run(
+                    local_command,
+                    cwd=str(REPO_ROOT),
+                    env=regression_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=min(max(5.0, timeout), 300.0),
+                    check=False,
+                )
+                local_ok = completed.returncode == 0
+                local_detail = (
+                    f"command exit={completed.returncode}; "
+                    f"stdout_tail={completed.stdout.strip().splitlines()[-1:] or ['']}"
+                )
+                log_path = out_dir / f"{phase_token}-local-regression.log"
+                log_path.write_text(
+                    "$ "
+                    + " ".join(local_command)
+                    + "\n\n"
+                    + "--- stdout ---\n"
+                    + completed.stdout
+                    + "\n--- stderr ---\n"
+                    + completed.stderr,
+                    encoding="utf-8",
+                )
+                artifacts.append(
+                    {
+                        "path": log_path.name,
+                        "size_bytes": log_path.stat().st_size,
+                        "sha256": sha256_file(log_path),
+                    }
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                local_detail = f"{type(exc).__name__}: {exc}"
+        local_installed = registry.installed("platform.scheduler.local", "1.0.0")
+        local_lsf = registry.installed("platform.scheduler.lsf", "1.0.0")
+        compatibility = {
+            "schema": "acp2.b21.compatibility.v1",
+            "rows": [
+                {
+                    "backend": "local",
+                    "status": "PASS" if local_ok else "FAIL",
+                    "adapter_id": local_installed.descriptor.adapter_id,
+                    "version": local_installed.descriptor.version,
+                    "detail": local_detail,
+                },
+                {
+                    "backend": "lsf",
+                    "status": "NOT_VERIFIED",
+                    "adapter_id": local_lsf.descriptor.adapter_id,
+                    "version": local_lsf.descriptor.version,
+                    "detail": "no live LSF client/queue attached; descriptor only, no bsub run",
+                },
+                {
+                    "backend": "slurm",
+                    "status": "NOT_VERIFIED",
+                    "detail": (
+                        "no real Slurm environment; submit/cancel/recover were not "
+                        "executed, so Slurm is not claimed"
+                    ),
+                },
+            ],
+        }
+        emit("compatibility-matrix.json", compatibility)
+        add("b21.regression.local", local_ok, local_detail)
+        add(
+            "b21.lsf.not_verified",
+            compatibility["rows"][1]["status"] == "NOT_VERIFIED",
+            "LSF live row is NOT_VERIFIED (no environment)",
+        )
+        add(
+            "b21.slurm.not_verified",
+            compatibility["rows"][2]["status"] == "NOT_VERIFIED",
+            "Slurm row is NOT_VERIFIED (no environment)",
+        )
+
+        # 9. No second Controller / no task side effect.
+        if controller and task_count_before is not None:
+            try:
+                task_count_after = _controller_task_count(controller, min(timeout, 10.0))
+                emit(
+                    "controller-observation.json",
+                    {
+                        "schema": "acp2.b21.controller-observation.v1",
+                        "controller": controller,
+                        "tasks_before": task_count_before,
+                        "tasks_after": task_count_after,
+                    },
+                )
+                add(
+                    "b21.controller.no_second_authority",
+                    task_count_after == task_count_before,
+                    f"tasks {task_count_before}->{task_count_after}",
+                )
+            except (OSError, ValueError, urllib.error.URLError) as exc:
+                add(
+                    "b21.controller.no_second_authority",
+                    False,
+                    f"controller count failed after adapter flow: {exc}",
+                )
+        elif controller:
+            extensions["b21.controller_state"] = "unreachable"
+
+        extensions["b21.artifacts"] = artifacts
+        extensions["b21.adapter"] = {
+            "adapter_id": adapter_id,
+            "versions": [version_v1, version_v2],
+            "capability": capability,
+            "trusted": adapter_id in trusted,
+        }
+        extensions["b21.rejection_rows"] = rejection_rows
+        extensions["b21.compatibility"] = compatibility
+
+        failed = [row["name"] for row in assertions if row["status"] == "FAIL"]
+        not_verified = [row["name"] for row in assertions if row["status"] == "NOT_VERIFIED"]
+        if failed:
+            extensions["b21.reason"] = "assertion_failed:" + ",".join(failed)
+            return EXIT_FAIL, assertions, extensions
+        if not_verified:
+            extensions["b21.reason"] = "assertion_not_verified:" + ",".join(not_verified)
+            return EXIT_NOT_VERIFIED, assertions, extensions
+        return EXIT_PASS, assertions, extensions
+    finally:
+        if previous_plugin_env is None:
+            os.environ.pop("ACP2_B21_PLUGIN_ENV", None)
+        else:
+            os.environ["ACP2_B21_PLUGIN_ENV"] = previous_plugin_env
+        if previous_missing_env is None:
+            os.environ.pop("ACP2_B21_MISSING_ENV", None)
+        else:
+            os.environ["ACP2_B21_MISSING_ENV"] = previous_missing_env
+
+
 def _run_multitenant_authz(
     controller: str | None,
     fixture_path: str,
@@ -11773,7 +12551,9 @@ def dry_run_commands(
         )
     elif spec.scenario == "infra-plugin":
         commands.append(
-            f"{shlex.quote(sys.executable)} scripts/build_release.py --check {shlex.quote(fixture)}"
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
+            f"--scenario infra-plugin --phase {shlex.quote(phase_name)} "
+            f"--fixture {shlex.quote(fixture)} --out {shlex.quote(out)}"
         )
     elif spec.scenario == "migration":
         commands.append(f"{shlex.quote(sys.executable)} -m acp task export {shlex.quote(fixture)}")
@@ -12042,6 +12822,23 @@ def execute_scenario(
             return code_value
 
         handler = da_submit
+    elif spec.scenario == "infra-plugin":
+
+        def infra_plugin(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_infra_plugin(
+                phase_name,
+                args.controller,
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b21.artifacts", [])
+            outcome["reason"] = extensions.get("b21.reason")
+            return code_value
+
+        handler = infra_plugin
     elif spec.scenario == "multitenant":
         if phase_name != "multitenant:authz":
 
@@ -12109,6 +12906,7 @@ def execute_scenario(
         "control-recovery",
         "multitenant",
         "approval-budget",
+        "infra-plugin",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         result = (
             "PASS"
@@ -12142,6 +12940,7 @@ def execute_scenario(
         "control-recovery",
         "multitenant",
         "approval-budget",
+        "infra-plugin",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))

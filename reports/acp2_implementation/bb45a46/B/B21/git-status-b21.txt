@@ -1,0 +1,6 @@
+ M scripts/acceptance/acp2_runtime.py
+?? reports/acp2_implementation/bb45a46/B/B21/
+?? src/acp_services/contracts/adapters.py
+?? src/acp_services/runtime/adapter_bootstrap.py
+?? src/acp_services/runtime/adapter_registry.py
+?? tests/test_acp2_runtime_adapter_registry.py

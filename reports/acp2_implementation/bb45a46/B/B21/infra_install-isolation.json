@@ -1,0 +1,8 @@
+{
+  "execution_model": "in-process",
+  "process_isolation": "NOT_VERIFIED",
+  "reason": "an in-process adapter is not a sandbox; process/OS isolation is a separate capability and is NOT_VERIFIED until an execution environment measures it",
+  "sandbox": false,
+  "schema": "acp2.adapter.isolation.v1",
+  "trusted_plugins_only": true
+}

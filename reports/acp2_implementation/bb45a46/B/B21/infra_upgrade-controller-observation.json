@@ -1,0 +1,6 @@
+{
+  "controller": "http://127.0.0.1:18782",
+  "schema": "acp2.b21.controller-observation.v1",
+  "tasks_after": 0,
+  "tasks_before": 0
+}
