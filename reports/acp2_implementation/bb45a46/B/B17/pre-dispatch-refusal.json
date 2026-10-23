@@ -1,0 +1,32 @@
+{
+  "after": {
+    "bsub_available": false,
+    "bsub_calls": 0,
+    "bsub_path": null,
+    "job_rows": 1,
+    "orca_pids": [],
+    "work_dirs": [
+      "B16_Alpha/3_water_O_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.960000_H_0.000000_0.930000_-0.240000_sing"
+    ]
+  },
+  "before": {
+    "bsub_available": false,
+    "bsub_calls": 0,
+    "bsub_path": null,
+    "job_rows": 1,
+    "orca_pids": [],
+    "work_dirs": [
+      "B16_Alpha/3_water_O_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.960000_H_0.000000_0.930000_-0.240000_sing"
+    ]
+  },
+  "code": "budget_exhausted",
+  "delta": {
+    "bsub_calls": 0,
+    "job_rows": 0,
+    "orca_pids": 0,
+    "work_dirs": 0
+  },
+  "rule": "",
+  "schema": "acp2.b17.pre-dispatch-refusal.v1",
+  "status": 403
+}

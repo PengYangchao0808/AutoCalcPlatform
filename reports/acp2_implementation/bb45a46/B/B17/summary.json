@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
+  "contract_version": "1.1.0",
+  "generated_at": "2026-10-23T05:55:25Z",
+  "runs": [
+    "approval-budget-budget-20261023T055511Z-1288545-5606219e.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

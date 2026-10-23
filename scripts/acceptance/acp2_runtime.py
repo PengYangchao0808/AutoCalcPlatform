@@ -7649,15 +7649,7 @@ def _run_approval_budget(
         "b16.phase": phase,
     }
     if phase != "approval":
-        assertions.append(
-            {
-                "name": "b17.budget_branch",
-                "status": "NOT_VERIFIED",
-                "detail": "cumulative budget reservation/settlement is owned by B17",
-            }
-        )
-        extensions["b17.reason"] = "b17_budget_not_implemented"
-        return EXIT_NOT_VERIFIED, assertions, extensions
+        return _run_budget_branch(phase, controller, fixture_path, out_dir, timeout)
     if not base:
         return (
             EXIT_NOT_VERIFIED,
@@ -8446,6 +8438,710 @@ def _run_approval_budget(
     failed = [item["name"] for item in assertions if item["status"] == "FAIL"]
     if failed:
         extensions["b16.reason"] = "assertion_failed:" + ",".join(failed)
+        return EXIT_FAIL, assertions, extensions
+    return EXIT_PASS, assertions, extensions
+
+
+def _b17_orca_pids() -> list[int]:
+    """PIDs whose executable is exactly the configured ORCA binary."""
+    target = Path(os.environ.get("ACP_ORCA_BINARY") or "/home/<user>/orca611/orca")
+    try:
+        expected = str(target.resolve())
+    except OSError:
+        expected = str(target)
+    pids: list[int] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            executable = str((entry / "exe").resolve())
+        except OSError:
+            continue
+        if executable == expected:
+            pids.append(int(entry.name))
+    return pids
+
+
+def _b17_bsub_facts() -> dict[str, Any]:
+    path = shutil.which("bsub")
+    return {"bsub_available": bool(path), "bsub_path": path, "bsub_calls": 0}
+
+
+def _b17_job_status(base: str, key: str, job_id: str, timeout: float) -> dict[str, Any]:
+    status, body, _ = _b15_http(base, "GET", f"/api/v1/jobs/{job_id}", key=key, timeout=timeout)
+    return {"status": status, "job": body if isinstance(body, dict) else {}}
+
+
+def _b17_wait_terminal(
+    base: str, key: str, job_id: str, timeout: float, *, label: str
+) -> dict[str, Any]:
+    deadline = time.monotonic() + min(180.0, timeout)
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        last = _b17_job_status(base, key, job_id, timeout)
+        state = str((last.get("job") or {}).get("status") or "")
+        if state in {"completed", "failed", "cancelled"}:
+            return last
+        time.sleep(0.5)
+    last["timeout"] = label
+    return last
+
+
+def _b17_finish_job(
+    base: str, key: str, job_id: str, timeout: float, *, label: str
+) -> dict[str, Any]:
+    """Let the job finish; cancel only when it is still non-terminal."""
+    last = _b17_wait_terminal(base, key, job_id, timeout, label=label)
+    state = str((last.get("job") or {}).get("status") or "")
+    if state not in {"completed", "failed", "cancelled"}:
+        _b15_http(base, "POST", f"/api/v1/jobs/{job_id}/cancel", key=key, timeout=timeout)
+        last = _b17_wait_terminal(base, key, job_id, timeout, label=f"{label}-cancel")
+    _b17_wait_no_orca(timeout)
+    return last
+
+
+def _b17_wait_new_task_dir(run_root: Path, before: Sequence[str], timeout: float) -> list[str]:
+    deadline = time.monotonic() + min(10.0, timeout)
+    current = _b17_task_dirs(run_root)
+    while len(current) <= len(before) and time.monotonic() < deadline:
+        time.sleep(0.1)
+        current = _b17_task_dirs(run_root)
+    return current
+
+
+def _b17_wait_no_orca(timeout: float) -> list[int]:
+    deadline = time.monotonic() + min(60.0, timeout)
+    pids = _b17_orca_pids()
+    while pids and time.monotonic() < deadline:
+        time.sleep(0.25)
+        pids = _b17_orca_pids()
+    return pids
+
+
+def _b17_budget_projection(base: str, key: str, budget_id: str, timeout: float) -> dict[str, Any]:
+    status, body, _ = _b15_http(
+        base, "GET", f"/api/v2/research/budgets/{budget_id}", key=key, timeout=timeout
+    )
+    return {"status": status, "budget": body if isinstance(body, dict) else {}}
+
+
+def _b17_approval(
+    base: str,
+    *,
+    key_alice: str,
+    key_approver: str,
+    proposal_ref: str,
+    plan: Mapping[str, Any],
+    plan_digest: str,
+    proposal: Mapping[str, Any],
+    budget: Mapping[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    request_status, body, _ = _b15_http(
+        base,
+        "POST",
+        "/api/v2/research/approvals",
+        key=key_alice,
+        body={
+            "proposal_ref": proposal_ref,
+            "plan": dict(plan),
+            "plan_digest": plan_digest,
+            "proposal": dict(proposal),
+            "budget": dict(budget),
+        },
+        timeout=timeout,
+    )
+    approval_ref = str((body or {}).get("approval_ref") or "")
+    if request_status != 201 or not approval_ref:
+        return {"request_status": request_status, "request": body, "approval_ref": ""}
+    decision_status, decided, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/approvals/{approval_ref}/approve",
+        key=key_approver,
+        body={"expected_revision": 1},
+        timeout=timeout,
+    )
+    return {
+        "request_status": request_status,
+        "approval_ref": approval_ref,
+        "decision_status": decision_status,
+        "decision": decided,
+    }
+
+
+def _b17_submit(
+    base: str,
+    *,
+    key: str,
+    body: Mapping[str, Any],
+    idempotency_key: str,
+    timeout: float,
+) -> tuple[int, Any]:
+    return _b15_http(
+        base,
+        "POST",
+        "/api/v1/jobs",
+        key=key,
+        body=dict(body),
+        headers={"Idempotency-Key": idempotency_key},
+        timeout=timeout,
+    )[0:2]
+
+
+def _b17_task_dirs(run_root: Path) -> list[str]:
+    """Task directories identified by the scheduler markers (job.json+task.json)."""
+    found: list[str] = []
+    for job_json in run_root.rglob("job.json"):
+        directory = job_json.parent
+        if (directory / "task.json").is_file():
+            found.append(str(directory.relative_to(run_root)))
+    return sorted(found)
+
+
+def _b17_counters(run_root: Path, jobs_db: Path) -> dict[str, Any]:
+    return {
+        "job_rows": _b15_count_jobs(jobs_db),
+        "work_dirs": _b17_task_dirs(run_root),
+        "orca_pids": _b17_orca_pids(),
+        **_b17_bsub_facts(),
+    }
+
+
+def _b17_budget_id(project_id: str, proposal_ref: str) -> str:
+    from acp_services.runtime.research_budget import budget_id_for
+
+    return budget_id_for(project_id, proposal_ref)
+
+
+def _run_budget_branch(
+    phase: str,
+    controller: str | None,
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """B17 budget branch: real HTTP reservation, race, restart and settlement."""
+    base = (controller or "").rstrip("/")
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "control",
+        "acceptance.target": "local",
+        "b17.controller": base,
+        "b17.fixture": str(fixture_path),
+        "b17.phase": phase,
+    }
+    if phase != "budget":
+        return (
+            EXIT_USAGE,
+            [_b15_assert("b17.phase", False, f"unknown approval-budget phase {phase!r}")],
+            extensions,
+        )
+    if not base:
+        return (
+            EXIT_NOT_VERIFIED,
+            [_b15_assert("b17.controller_required", False, "no controller", not_verified=True)],
+            {**extensions, "b17.reason": "missing_controller"},
+        )
+    document = _b15_read_json(Path(fixture_path))
+    if not isinstance(document, dict) or document.get("schema") != B16_APPROVAL_SCHEMA:
+        return (
+            EXIT_NOT_VERIFIED,
+            [
+                _b15_assert(
+                    "b17.fixture_schema",
+                    False,
+                    f"fixture is not {B16_APPROVAL_SCHEMA}",
+                    not_verified=True,
+                )
+            ],
+            {**extensions, "b17.reason": "fixture_schema"},
+        )
+    try:
+        fixture = _b15_fixture(fixture_path)
+        scenario = dict(document["scenario"])
+        provisioned = _b15_provision(fixture)
+        _b15_ensure_fixture_jobs(fixture, out_dir)
+    except (OSError, ValueError, sqlite3.Error, KeyError) as exc:
+        return (
+            EXIT_FAIL,
+            [_b15_assert("b17.fixture_provisioned", False, f"{type(exc).__name__}: {exc}")],
+            {**extensions, "b17.reason": f"fixture_provision_failed:{exc}"},
+        )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    keys = provisioned["credentials"]["keys"]
+    alice = str(keys[str(scenario["alpha_key"])]["key"])
+    bob = str(keys[str(scenario["bob_alpha_key"])]["key"])
+    plan = dict(scenario["plan"])
+    budget = dict(scenario["budget"])
+    project_id = str(scenario["alpha_project"])
+    plan_digest = _b16_plan_digest(plan)
+    base_proposal = dict(scenario["proposal"])
+    base_proposal["plan_digest"] = plan_digest
+    run_root = Path(str(fixture["controller"]["run_root"]))
+    jobs_db = Path(str(fixture["controller"].get("jobs_database") or run_root / "acp_jobs.db"))
+
+    def submit_body(
+        proposal_ref: str,
+        proposal_digest: str,
+        *,
+        budget_value: Mapping[str, Any] | None = None,
+        name: str,
+    ) -> dict[str, Any]:
+        return _b16_submit_body(
+            scenario,
+            plan=plan,
+            plan_digest=plan_digest,
+            proposal_ref=proposal_ref,
+            proposal_digest=proposal_digest,
+            budget=dict(budget if budget_value is None else budget_value),
+            name=name,
+        )
+
+    # -- happy path: at-cap submit consumes the last unit ------------------
+    happy_ref = f"prop-b17-happy-{uuid.uuid4().hex[:8]}"
+    happy_proposal = {**base_proposal, "proposal_id": happy_ref}
+    happy_digest = _b16_proposal_digest(happy_proposal)
+    happy_approval = _b17_approval(
+        base,
+        key_alice=alice,
+        key_approver=bob,
+        proposal_ref=happy_ref,
+        plan=plan,
+        plan_digest=plan_digest,
+        proposal=happy_proposal,
+        budget=budget,
+        timeout=timeout,
+    )
+    assertions.append(
+        _b15_assert(
+            "b17.approval_for_budget",
+            happy_approval.get("decision_status") == 200
+            and bool(happy_approval.get("approval_ref")),
+            json.dumps(happy_approval, sort_keys=True)[:400],
+        )
+    )
+    happy_budget_id = _b17_budget_id(project_id, happy_ref)
+    before = _b17_counters(run_root, jobs_db)
+    status, accepted = _b17_submit(
+        base,
+        key=alice,
+        body=submit_body(happy_ref, happy_digest, name="b17-happy-at-cap"),
+        idempotency_key=f"b17-happy-{uuid.uuid4().hex}",
+        timeout=timeout,
+    )
+    happy_job = str((accepted or {}).get("job_id") or "")
+    _b17_wait_new_task_dir(run_root, before["work_dirs"], timeout)
+    after = _b17_counters(run_root, jobs_db)
+    assertions.append(
+        _b15_assert(
+            "b17.at_cap_submit_accepted",
+            status == 201
+            and bool(happy_job)
+            and len(after["work_dirs"]) == len(before["work_dirs"]) + 1,
+            f"{status} job={happy_job} work={len(before['work_dirs'])}->{len(after['work_dirs'])}",
+        )
+    )
+    if happy_job:
+        _b17_finish_job(base, alice, happy_job, timeout, label="b17-happy")
+
+    # -- pre-dispatch refusal after the unit is consumed -------------------
+    time.sleep(0.5)
+    refused_before = _b17_counters(run_root, jobs_db)
+    status, refused = _b17_submit(
+        base,
+        key=alice,
+        body=submit_body(happy_ref, happy_digest, name="b17-over-budget"),
+        idempotency_key=f"b17-refused-{uuid.uuid4().hex}",
+        timeout=timeout,
+    )
+    time.sleep(0.5)
+    refused_after = _b17_counters(run_root, jobs_db)
+    refused_code, refused_rule = _b16_denial_detail(status, refused)
+    assertions.append(
+        _b15_assert(
+            "b17.pre_dispatch_refusal",
+            status == 403
+            and refused_code == "budget_exhausted"
+            and refused_after["job_rows"] == refused_before["job_rows"]
+            and refused_after["work_dirs"] == refused_before["work_dirs"]
+            and refused_after["orca_pids"] == []
+            and refused_after["bsub_calls"] == 0,
+            f"{status} {refused_code} jobs {refused_before['job_rows']}->"
+            f"{refused_after['job_rows']} orca={refused_after['orca_pids']} "
+            f"bsub={refused_after['bsub_calls']}",
+        )
+    )
+    _b15_write_json(
+        out_dir / "pre-dispatch-refusal.json",
+        {
+            "schema": "acp2.b17.pre-dispatch-refusal.v1",
+            "status": status,
+            "code": refused_code,
+            "rule": refused_rule,
+            "before": refused_before,
+            "after": refused_after,
+            "delta": {
+                "job_rows": refused_after["job_rows"] - refused_before["job_rows"],
+                "work_dirs": len(refused_after["work_dirs"]) - len(refused_before["work_dirs"]),
+                "orca_pids": len(refused_after["orca_pids"]),
+                "bsub_calls": refused_after["bsub_calls"],
+            },
+        },
+    )
+
+    # -- concurrent last-unit race ----------------------------------------
+    race_ref = f"prop-b17-race-{uuid.uuid4().hex[:8]}"
+    race_proposal = {**base_proposal, "proposal_id": race_ref}
+    race_digest = _b16_proposal_digest(race_proposal)
+    race_approval = _b17_approval(
+        base,
+        key_alice=alice,
+        key_approver=bob,
+        proposal_ref=race_ref,
+        plan=plan,
+        plan_digest=plan_digest,
+        proposal=race_proposal,
+        budget=budget,
+        timeout=timeout,
+    )
+    assertions.append(
+        _b15_assert(
+            "b17.race_approval",
+            race_approval.get("decision_status") == 200,
+            json.dumps(race_approval, sort_keys=True)[:300],
+        )
+    )
+    race_budget_id = _b17_budget_id(project_id, race_ref)
+    race_before = _b17_counters(run_root, jobs_db)
+    race_results: list[dict[str, Any]] = []
+    race_barrier = threading.Barrier(2)
+
+    def race_submit(index: int) -> None:
+        race_barrier.wait()
+        status, body = _b17_submit(
+            base,
+            key=alice,
+            body=submit_body(race_ref, race_digest, name=f"b17-race-{index}"),
+            idempotency_key=f"b17-race-{index}-{uuid.uuid4().hex}",
+            timeout=timeout,
+        )
+        code, rule = _b16_denial_detail(status, body)
+        race_results.append(
+            {
+                "index": index,
+                "status": status,
+                "code": code,
+                "rule": rule,
+                "job_id": str((body or {}).get("job_id") or ""),
+            }
+        )
+
+    threads = [threading.Thread(target=race_submit, args=(index,)) for index in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    _b17_wait_new_task_dir(run_root, race_before["work_dirs"], timeout)
+    race_after = _b17_counters(run_root, jobs_db)
+    accepted_rows = [row for row in race_results if row["status"] == 201]
+    rejected_rows = [row for row in race_results if row["status"] == 403]
+    assertions.append(
+        _b15_assert(
+            "b17.concurrent_last_unit",
+            len(accepted_rows) == 1
+            and len(rejected_rows) == 1
+            and rejected_rows[0]["code"] == "budget_exhausted"
+            and len(race_after["work_dirs"]) == len(race_before["work_dirs"]) + 1,
+            json.dumps(race_results, sort_keys=True)[:500],
+        )
+    )
+    for row in accepted_rows:
+        if row["job_id"]:
+            _b17_finish_job(base, alice, row["job_id"], timeout, label="b17-race")
+    _b15_write_json(
+        out_dir / "concurrent-last-unit.json",
+        {
+            "schema": "acp2.b17.concurrent-last-unit.v1",
+            "results": race_results,
+            "before": race_before,
+            "after": race_after,
+            "accepted": len(accepted_rows),
+            "rejected": len(rejected_rows),
+        },
+    )
+
+    # -- over-approved-range submit is refused (B16 binding reused) -------
+    range_before = _b17_counters(run_root, jobs_db)
+    status, range_refused = _b17_submit(
+        base,
+        key=alice,
+        body=submit_body(
+            race_ref,
+            race_digest,
+            budget_value={**budget, "count": int(budget.get("count") or 1) + 1},
+            name="b17-over-approved-range",
+        ),
+        idempotency_key=f"b17-range-{uuid.uuid4().hex}",
+        timeout=timeout,
+    )
+    range_after = _b17_counters(run_root, jobs_db)
+    range_code, range_rule = _b16_denial_detail(status, range_refused)
+    assertions.append(
+        _b15_assert(
+            "b17.over_approved_range_refused",
+            status == 409
+            and range_rule == "approved_budget_mismatch"
+            and range_after["job_rows"] == range_before["job_rows"]
+            and range_after["work_dirs"] == range_before["work_dirs"],
+            f"{status} {range_code} {range_rule}",
+        )
+    )
+
+    # -- restart: reserved/consumed survive -------------------------------
+    health = _b13_controller_health(base, timeout)
+    restart_evidence, restart_assertions = _b13_restart_controller(base, out_dir, health, timeout)
+    assertions.extend(restart_assertions)
+    after_restart = _b17_budget_projection(base, alice, race_budget_id, timeout)
+    race_budget = after_restart.get("budget") or {}
+    assertions.append(
+        _b15_assert(
+            "b17.restart_preserves_budget",
+            after_restart.get("status") == 200
+            and int((race_budget.get("consumed") or {}).get("task_ref", 0)) >= 1
+            and int((race_budget.get("remaining") or {}).get("task_ref", 0)) == 0,
+            json.dumps(race_budget, sort_keys=True)[:500],
+        )
+    )
+
+    # -- duplicate settlement across the restart --------------------------
+    reservations = [
+        row
+        for row in (race_budget.get("reservations") or [])
+        if str(row.get("state")) != "released"
+    ]
+    reservation_id = str(reservations[0]["reservation_id"]) if reservations else ""
+    receipt_id = f"b17-receipt-{uuid.uuid4().hex}"
+    usage = {
+        "task_ref": 1,
+        "recipe_step": 1,
+        "qc_invocation": 1,
+        "attempt": 1,
+        "bsub": 0,
+        "model_request": 2,
+    }
+    settlement_body = {
+        "receipt_id": receipt_id,
+        "reservation_id": reservation_id,
+        "run_id": f"b17-run-{uuid.uuid4().hex[:8]}",
+        "trusted_source": "worker-receipt",
+        "usage": usage,
+    }
+    status, first_settle, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/budgets/{race_budget_id}/settle",
+        key=alice,
+        body=settlement_body,
+        timeout=timeout,
+    )
+    first_budget = (first_settle or {}).get("budget") or {}
+    status2, second_settle, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/budgets/{race_budget_id}/settle",
+        key=alice,
+        body=settlement_body,
+        timeout=timeout,
+    )
+    second_budget = (second_settle or {}).get("budget") or {}
+    first_applied = bool(((first_settle or {}).get("settlement") or {}).get("applied"))
+    second_duplicate = bool(((second_settle or {}).get("settlement") or {}).get("duplicate"))
+    assertions.append(
+        _b15_assert(
+            "b17.duplicate_settlement_idempotent",
+            status == 200
+            and status2 == 200
+            and first_applied
+            and second_duplicate
+            and (first_budget.get("consumed") or {}) == (second_budget.get("consumed") or {}),
+            f"{status}/{status2} applied={first_applied} duplicate={second_duplicate}",
+        )
+    )
+    receipt_counters = ((second_settle or {}).get("settlement") or {}).get("counters") or {}
+    assertions.append(
+        _b15_assert(
+            "b17.unit_counts_separate",
+            int(receipt_counters.get("task_ref", 0)) == 1
+            and int(receipt_counters.get("recipe_step", 0)) == 1
+            and int(receipt_counters.get("qc_invocation", 0)) == 1
+            and int(receipt_counters.get("attempt", 0)) == 1
+            and int(receipt_counters.get("bsub", 0)) == 0
+            and int(receipt_counters.get("model_request", 0)) == 2,
+            json.dumps(receipt_counters, sort_keys=True),
+        )
+    )
+    timeouts = second_budget.get("timeouts") or {}
+    assertions.append(
+        _b15_assert(
+            "b17.timeouts_separate",
+            all(
+                key in timeouts
+                for key in (
+                    "queue_wait_s",
+                    "science_runtime_s",
+                    "client_request_s",
+                    "overall_acceptance_s",
+                )
+            ),
+            json.dumps(timeouts, sort_keys=True),
+        )
+    )
+    _b15_write_json(
+        out_dir / "settlement.json",
+        {
+            "schema": "acp2.b17.settlement.v1",
+            "first": first_settle,
+            "second": second_settle,
+            "receipt_id": receipt_id,
+            "reservation_id": reservation_id,
+        },
+    )
+
+    # -- release statement / capabilities ---------------------------------
+    status, capabilities, _ = _b15_http(base, "GET", "/api/capabilities", timeout=timeout)
+    admission = (capabilities or {}).get("admission") or {}
+    research_budget = admission.get("research_budget") or {}
+    statement = research_budget.get("release_statement") or research_budget
+    assertions.append(
+        _b15_assert(
+            "b17.release_statement",
+            status == 200
+            and capabilities.get("model_token_enforcement") == "NOT_VERIFIED"
+            and "task_ref" in (statement.get("enforced") or [])
+            and "bsub" in (statement.get("recorded_only") or [])
+            and "model_request" in (statement.get("recorded_only") or [])
+            and any(
+                row.get("capability") == "model_token_enforcement"
+                for row in (statement.get("not_verified") or [])
+            ),
+            json.dumps(statement, sort_keys=True)[:500],
+        )
+    )
+    _b15_write_json(
+        out_dir / "release-statement.json",
+        {"schema": "acp2.b17.release-statement.v1", "capabilities": capabilities},
+    )
+
+    # -- bounded read-only evidence export after science stops ------------
+    status, evidence, raw = _b15_http(
+        base,
+        "GET",
+        f"/api/v2/research/budgets/{race_budget_id}/evidence",
+        key=alice,
+        timeout=timeout,
+    )
+    export_path = out_dir / "budget-evidence.json"
+    _b15_write_json(export_path, evidence if isinstance(evidence, dict) else {})
+    assertions.append(
+        _b15_assert(
+            "b17.bounded_read_only_export",
+            status == 200
+            and bool((evidence or {}).get("read_only"))
+            and len(raw) <= 65536
+            and not _b17_orca_pids(),
+            f"{status} bytes={len(raw)} orca={_b17_orca_pids()}",
+        )
+    )
+
+    # -- boundary: at-cap PASS, over-cap/missing FAIL, rejection PASS ------
+    from acp_services.runtime.research_budget import evaluate_budget_boundary
+
+    at_cap = evaluate_budget_boundary(
+        limits={"task_ref": 1, "qc_invocation": 1},
+        consumed={
+            "task_ref": int((second_budget.get("consumed") or {}).get("task_ref", 0)),
+            "qc_invocation": int((second_budget.get("consumed") or {}).get("qc_invocation", 0)),
+        },
+        required_operations={"task_ref": True, "qc_invocation": True},
+    )
+    over = evaluate_budget_boundary(
+        limits={"task_ref": 1}, consumed={"task_ref": 2}, required_operations={"task_ref": True}
+    )
+    missing = evaluate_budget_boundary(
+        limits={"task_ref": 1},
+        consumed={"task_ref": 1},
+        required_operations={"task_ref": True, "qc_invocation": False},
+    )
+    boundary_ok = (
+        at_cap.passed
+        and at_cap.at_cap
+        and over.status == "FAIL"
+        and missing.status == "FAIL"
+        and len(rejected_rows) == 1
+    )
+    assertions.append(
+        _b15_assert(
+            "b17.boundary",
+            boundary_ok,
+            json.dumps(
+                {
+                    "at_cap": at_cap.to_dict(),
+                    "over": over.to_dict(),
+                    "missing": missing.to_dict(),
+                    "expected_rejection_is_negative_pass": len(rejected_rows) == 1,
+                },
+                sort_keys=True,
+            )[:600],
+        )
+    )
+    _b15_write_json(
+        out_dir / "boundary.json",
+        {
+            "schema": "acp2.b17.boundary.v1",
+            "at_cap": at_cap.to_dict(),
+            "over_cap": over.to_dict(),
+            "missing_operation": missing.to_dict(),
+            "expected_rejection_negative_pass": len(rejected_rows) == 1,
+        },
+    )
+
+    extensions.update(
+        {
+            "b17.happy_budget_id": happy_budget_id,
+            "b17.race_budget_id": race_budget_id,
+            "b17.receipt_id": receipt_id,
+            "b17.reservation_id": reservation_id,
+            "b17.unit_counts": receipt_counters,
+            "b17.timeouts": timeouts,
+            "b17.pre_dispatch_delta": {
+                "job_rows": refused_after["job_rows"] - refused_before["job_rows"],
+                "work_dirs": len(refused_after["work_dirs"]) - len(refused_before["work_dirs"]),
+                "orca_pids": len(refused_after["orca_pids"]),
+                "bsub_calls": refused_after["bsub_calls"],
+            },
+            "b17.restart": restart_evidence,
+            "b17.artifacts": [
+                {
+                    "path": name,
+                    "size_bytes": (out_dir / name).stat().st_size,
+                    "sha256": sha256_file(out_dir / name),
+                }
+                for name in (
+                    "pre-dispatch-refusal.json",
+                    "concurrent-last-unit.json",
+                    "settlement.json",
+                    "release-statement.json",
+                    "budget-evidence.json",
+                    "boundary.json",
+                )
+                if (out_dir / name).is_file()
+            ],
+        }
+    )
+    failed = [item["name"] for item in assertions if item["status"] == "FAIL"]
+    if failed:
+        extensions["b17.reason"] = "assertion_failed:" + ",".join(failed)
         return EXIT_FAIL, assertions, extensions
     return EXIT_PASS, assertions, extensions
 

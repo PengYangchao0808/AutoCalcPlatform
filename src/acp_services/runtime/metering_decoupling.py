@@ -56,6 +56,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from acp_services.runtime.research_budget import (
+    PUBLICATION_FAILURE_DOES_NOT_RECHARGE_NOTE,
+)
+from acp_services.runtime.research_budget import (
+    RELEASE_RULES as SETTLEMENT_RELEASE_RULES,
+)
 from acp_services.runtime.usage import (
     CollectionSource,
     UsageRecord,
@@ -94,6 +100,10 @@ __all__ = [
     "is_usage_basis",
     "require_trusted_usage_source",
     "audit_decoupling",
+    # settlement release policy (B17)
+    "SETTLEMENT_RELEASE_RULES",
+    "PUBLICATION_FAILURE_DOES_NOT_RECHARGE_NOTE",
+    "release_decision",
 ]
 
 #: Executable statement that accounting/usage state is a platform fact with no
@@ -583,3 +593,15 @@ def audit_decoupling(
             )
 
     return DecouplingAudit(violations=tuple(violations), checked_modules=("ledger", "decoupling"))
+
+
+def release_decision(event: str) -> dict[str, object]:
+    """Return the frozen release rule for *event* (unknown events release nothing)."""
+    rule = SETTLEMENT_RELEASE_RULES.get(str(event))
+    if rule is None:
+        return {
+            "release_reserved_units": False,
+            "recharges_computation": False,
+            "detail": f"unknown settlement event {event!r}; nothing is released or re-charged",
+        }
+    return dict(rule)

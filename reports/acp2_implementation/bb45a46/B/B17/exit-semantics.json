@@ -1,0 +1,9 @@
+{
+  "approval-budget/budget": {
+    "exit": 0,
+    "result": "PASS",
+    "run": "approval-budget-budget-20261023T055511Z-1288545-5606219e.json"
+  },
+  "rule": "B17 closes the budget branch; the B16 approval branch is evidenced in B/B16.",
+  "schema": "acp2.b17.exit-semantics.v1"
+}

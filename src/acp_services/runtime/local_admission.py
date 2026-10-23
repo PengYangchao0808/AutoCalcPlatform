@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any
@@ -43,7 +44,13 @@ from acp_services.runtime.idempotency import (
     ReservationIdempotency,
     ReservationPort,
 )
-from acp_services.runtime.usage import usage_id_for
+from acp_services.runtime.research_budget import (
+    BudgetConfigurationError,
+    BudgetReason,
+    parse_budget_policy,
+    release_statement,
+)
+from acp_services.runtime.usage import UsageUnitCounts, usage_id_for
 
 __all__ = [
     "ADMISSION_ENFORCEMENT",
@@ -289,6 +296,7 @@ class _ControllerReservationPort:
         action: str,
         idempotency_key: str,
         spec: Any,
+        budget: Mapping[str, Any] | None = None,
     ) -> str:
         reservation_id = "res_" + str(claim_id)
         request = self._admission.request_for_spec(claim_id, spec)
@@ -327,9 +335,56 @@ class _ControllerReservationPort:
                 reason_code=decision.reason_code,
                 exceeded=decision.exceeded,
             )
+        try:
+            budget_decision = self._admission.reserve_budget_for_claim(
+                budget,
+                claim_id=str(claim_id),
+                task_ref=str(claim_id),
+                admission_reservation_id=str(decision.reservation_id or reservation_id),
+            )
+        except BudgetConfigurationError as exc:
+            self._admission.ledger.release(str(decision.reservation_id or reservation_id))
+            raise IdempotencyReservationDeniedError(
+                str(exc),
+                decision=AdmissionDecision(
+                    admitted=False,
+                    reason_code=BudgetReason.INVALID,
+                    detail=str(exc),
+                    mode=decision.mode,
+                    enforced=True,
+                ),
+                reason_code=BudgetReason.INVALID,
+            ) from exc
+        if budget_decision is not None and not budget_decision.admitted:
+            self._admission.ledger.release(str(decision.reservation_id or reservation_id))
+            exceeded = (
+                {
+                    "scope": "research_budget",
+                    "dimension": budget_decision.exhausted_unit or "remaining",
+                    "requested": dict(budget_decision.requested),
+                },
+            )
+            raise IdempotencyReservationDeniedError(
+                budget_decision.detail or budget_decision.reason_code,
+                decision=AdmissionDecision(
+                    admitted=False,
+                    reason_code=budget_decision.reason_code,
+                    detail=budget_decision.detail,
+                    mode=decision.mode,
+                    enforced=True,
+                    effective_bounds=decision.effective_bounds,
+                    policy_version=decision.policy_version,
+                    exceeded=exceeded,
+                ),
+                reason_code=budget_decision.reason_code,
+                exceeded=exceeded,
+            )
         return decision.reservation_id or reservation_id
 
     def release_for_claim(self, claim_id: str) -> bool:
+        self._admission.ledger.release_research_budget(
+            claim_id=str(claim_id), event="submit_failed"
+        )
         return bool(self._admission.ledger.release_for_claim(str(claim_id)))
 
 
@@ -401,7 +456,12 @@ class LocalAdmission:
     # -- submit / dispatch / release ------------------------------------
 
     def admit_job(
-        self, job_id: str, spec: Any, *, project_id: str | None = None
+        self,
+        job_id: str,
+        spec: Any,
+        *,
+        project_id: str | None = None,
+        budget: Mapping[str, Any] | None = None,
     ) -> AdmissionDecision:
         """Pre-claim admission for the legacy (no-idempotency) submit path."""
         request = self.request_for_spec(job_id, spec)
@@ -415,10 +475,80 @@ class LocalAdmission:
                     f"{self.verified_project!r}"
                 ),
             )
-        return self.controller.admit(
+        decision = self.controller.admit(
             replace(request, project_id=project),
             queued=True,
             reservation_id="res_job_" + str(job_id),
+        )
+        if not decision.allowed:
+            return decision
+        try:
+            budget_decision = self.reserve_budget_for_claim(
+                budget,
+                claim_id=str(job_id),
+                task_ref=str(job_id),
+                admission_reservation_id=str(decision.reservation_id or ""),
+            )
+        except BudgetConfigurationError as exc:
+            self.controller.release(str(decision.reservation_id or ""))
+            return AdmissionDecision(
+                admitted=False,
+                reason_code=BudgetReason.INVALID,
+                detail=str(exc),
+                mode=decision.mode,
+                enforced=True,
+            )
+        if budget_decision is not None and not budget_decision.admitted:
+            self.controller.release(str(decision.reservation_id or ""))
+            return AdmissionDecision(
+                admitted=False,
+                reason_code=budget_decision.reason_code,
+                detail=budget_decision.detail,
+                mode=decision.mode,
+                enforced=True,
+                effective_bounds=decision.effective_bounds,
+                policy_version=decision.policy_version,
+                exceeded=(
+                    {
+                        "scope": "research_budget",
+                        "dimension": budget_decision.exhausted_unit or "remaining",
+                        "requested": dict(budget_decision.requested),
+                    },
+                ),
+            )
+        return decision
+
+    def reserve_budget_for_claim(
+        self,
+        budget: Mapping[str, Any] | None,
+        *,
+        claim_id: str,
+        task_ref: str,
+        admission_reservation_id: str,
+    ) -> Any | None:
+        """Define (idempotently) and reserve the server-quoted budget."""
+        if not budget:
+            return None
+        budget_id = str(budget.get("budget_id") or "").strip()
+        definition = budget.get("budget")
+        if not budget_id or not isinstance(definition, Mapping):
+            return None
+        policy = parse_budget_policy(
+            definition,
+            budget_id=budget_id,
+            approved_budget=(budget.get("approved_budget") or definition),
+            approval_ref=str(budget.get("approval_ref") or ""),
+            project_id=str(budget.get("project_id") or self.verified_project or ""),
+        )
+        self.ledger.define_research_budget(policy)
+        return self.ledger.reserve_research_budget(
+            budget_id,
+            {"task_ref": 1, "attempt": 1},
+            reservation_id="bres_" + str(claim_id),
+            task_ref=str(task_ref),
+            run_id=str(budget.get("run_id") or ""),
+            claim_id=str(claim_id),
+            admission_reservation_id=str(admission_reservation_id),
         )
 
     def result_for_reservation(
@@ -440,6 +570,15 @@ class LocalAdmission:
         }
         if decision is not None:
             payload["reason_code"] = decision.reason_code
+        if reservation_id:
+            budget_reservation = self.ledger.research_budget_for_admission(str(reservation_id))
+            if budget_reservation is not None:
+                payload["budget"] = {
+                    "budget_id": budget_reservation.budget_id,
+                    "reservation_id": budget_reservation.reservation_id,
+                    "units": dict(budget_reservation.units),
+                    "state": budget_reservation.state,
+                }
         return payload
 
     def reservation_id_for_record(self, record: Any) -> str | None:
@@ -457,18 +596,41 @@ class LocalAdmission:
         reservation_id = self.reservation_id_for_record(record)
         if reservation_id is None:
             return None
-        return self.controller.revalidate(reservation_id)
+        decision = self.controller.revalidate(reservation_id)
+        if decision.allowed:
+            self.ledger.mark_research_budget_dispatched(str(reservation_id))
+        return decision
 
     def release_job(self, record: Any) -> bool:
-        """Release the job's reservation (idempotent)."""
+        """Release the job's reservation and apply the frozen budget release rule."""
         reservation_id = self.reservation_id_for_record(record)
         if reservation_id is None:
             return False
+        budget_reservation = self.ledger.research_budget_for_admission(reservation_id)
+        if budget_reservation is not None:
+            event = (
+                "cancel_before_dispatch"
+                if budget_reservation.state == "reserved"
+                else "cancel_after_dispatch"
+            )
+            self.ledger.release_research_budget(
+                admission_reservation_id=reservation_id, event=event
+            )
         return self.controller.release(reservation_id)
 
     def release_reservation_id(self, reservation_id: str | None) -> bool:
         if not reservation_id:
             return False
+        budget_reservation = self.ledger.research_budget_for_admission(str(reservation_id))
+        if budget_reservation is not None:
+            event = (
+                "cancel_before_dispatch"
+                if budget_reservation.state == "reserved"
+                else "cancel_after_dispatch"
+            )
+            self.ledger.release_research_budget(
+                admission_reservation_id=str(reservation_id), event=event
+            )
         return self.controller.release(str(reservation_id))
 
     def record_usage(self, record: Any) -> bool:
@@ -495,14 +657,31 @@ class LocalAdmission:
             remote = result.get("remote")
             if isinstance(remote, dict) and remote.get("submission_id") is not None:
                 submission_id = str(remote["submission_id"])
-        return self.controller.record_usage_receipt(
-            usage_id_for(str(record.id), int(getattr(record, "attempt", 1) or 1), submission_id),
+        usage_id = usage_id_for(
+            str(record.id), int(getattr(record, "attempt", 1) or 1), submission_id
+        )
+        recorded = self.controller.record_usage_receipt(
+            usage_id,
             reservation_id=reservation_id,
             job_id=str(record.id),
             attempt=int(getattr(record, "attempt", 1) or 1),
             cores=cores,
             seconds=seconds,
         )
+        budget_reservation = self.ledger.research_budget_for_admission(reservation_id)
+        if budget_reservation is not None:
+            self.ledger.settle_research_budget(
+                budget_reservation.budget_id,
+                receipt_id=usage_id,
+                reservation_id=budget_reservation.reservation_id,
+                counters=UsageUnitCounts(
+                    task_ref=1,
+                    attempt=int(getattr(record, "attempt", 1) or 1),
+                ),
+                run_id=str(getattr(record, "id", "")),
+                trusted_source="controller-terminal-receipt",
+            )
+        return recorded
 
     def reservation_port(self) -> ReservationPort:
         return _ControllerReservationPort(self)
@@ -525,6 +704,15 @@ class LocalAdmission:
             "limits": self.limits.to_dict(),
             "occupancy": occupancy,
             "usage": self.controller.usage_totals(),
+            "research_budget": {
+                "ledger": "durable-reservation-ledger",
+                "budget_identity": "project+proposal_ref (independent of run_id)",
+                "model_token_enforcement": "NOT_VERIFIED",
+                "model_proxy_owner": (
+                    "C (acp2_experience_budget_proxy.py, C T-13); B does not proxy tokens"
+                ),
+                **release_statement(),
+            },
         }
 
 

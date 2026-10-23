@@ -113,7 +113,20 @@ __all__ = [
     "collect_local_allocated_usage",
     "select_metering_level",
     "build_usage_record",
+    "USAGE_UNIT_FIELDS",
+    "USAGE_UNIT_ALIASES",
+    "USAGE_NOT_UNIFIED_BILLING_NOTE",
+    "UsageUnitCounts",
+    "normalize_usage_unit",
 ]
+
+from acp_services.runtime.usage_units import (  # noqa: E402 - compatibility re-export
+    USAGE_NOT_UNIFIED_BILLING_NOTE,
+    USAGE_UNIT_ALIASES,
+    USAGE_UNIT_FIELDS,
+    UsageUnitCounts,
+    normalize_usage_unit,
+)
 
 #: Executable statement that a usage record is a platform fact, not a scientific
 #: identity input.  Referenced verbatim by the acceptance tests.

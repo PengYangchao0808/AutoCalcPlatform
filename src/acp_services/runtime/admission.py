@@ -49,6 +49,7 @@ Author: ACP Services (B lane, todo 49).
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import threading
@@ -62,6 +63,22 @@ from typing import Any, Protocol, runtime_checkable
 from acp_services.contracts.access import ResourceGrantSpec
 from acp_services.runtime.helpers import utc_now_iso
 from acp_services.runtime.idempotency import ReservationIdempotency
+from acp_services.runtime.research_budget import (
+    RECEIPT_CONSUMED_UNITS,
+    RELEASE_RULES,
+    UNIT_CAPABILITIES,
+    BudgetConfigurationError,
+    BudgetDecision,
+    BudgetPolicy,
+    BudgetProjection,
+    BudgetReason,
+    BudgetRelease,
+    BudgetReservation,
+    BudgetSettlement,
+    BudgetState,
+    release_statement,
+)
+from acp_services.runtime.usage_units import UsageUnitCounts, normalize_usage_unit
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +107,16 @@ __all__ = [
     "ReservationLedger",
     "AdmissionController",
     "render_admission_decision",
+    # research budget value objects (B17)
+    "BudgetDecision",
+    "BudgetPolicy",
+    "BudgetProjection",
+    "BudgetReason",
+    "BudgetRelease",
+    "BudgetReservation",
+    "BudgetSettlement",
+    "BudgetState",
+    "release_statement",
 ]
 
 #: Hard-limit capability values.  Only ``enforced`` permits a quota-only
@@ -679,6 +706,55 @@ CREATE TABLE IF NOT EXISTS admission_usage_receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_admission_usage_reservation
     ON admission_usage_receipts(reservation_id);
+CREATE TABLE IF NOT EXISTS research_budget_policies (
+    budget_id     TEXT PRIMARY KEY,
+    approval_ref  TEXT NOT NULL DEFAULT '',
+    project_id    TEXT NOT NULL DEFAULT '',
+    policy_json   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_budget_reservations (
+    reservation_id           TEXT PRIMARY KEY,
+    budget_id                TEXT NOT NULL,
+    units_json               TEXT NOT NULL,
+    state                    TEXT NOT NULL,
+    task_ref                 TEXT NOT NULL DEFAULT '',
+    run_id                   TEXT NOT NULL DEFAULT '',
+    claim_id                 TEXT NOT NULL DEFAULT '',
+    admission_reservation_id TEXT NOT NULL DEFAULT '',
+    detail                   TEXT NOT NULL DEFAULT '',
+    created_at               TEXT NOT NULL,
+    updated_at               TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_research_budget_claim
+    ON research_budget_reservations(budget_id, claim_id)
+    WHERE claim_id != '';
+CREATE INDEX IF NOT EXISTS idx_research_budget_state
+    ON research_budget_reservations(budget_id, state);
+CREATE INDEX IF NOT EXISTS idx_research_budget_task
+    ON research_budget_reservations(task_ref);
+CREATE INDEX IF NOT EXISTS idx_research_budget_admission
+    ON research_budget_reservations(admission_reservation_id);
+CREATE TABLE IF NOT EXISTS research_budget_receipts (
+    receipt_id      TEXT PRIMARY KEY,
+    budget_id       TEXT NOT NULL,
+    reservation_id  TEXT NOT NULL,
+    run_id          TEXT NOT NULL DEFAULT '',
+    usage_json      TEXT NOT NULL,
+    trusted_source  TEXT NOT NULL,
+    applied         INTEGER NOT NULL DEFAULT 0,
+    recorded_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_research_budget_receipts_budget
+    ON research_budget_receipts(budget_id);
+CREATE TABLE IF NOT EXISTS research_budget_events (
+    seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject    TEXT NOT NULL,
+    event      TEXT NOT NULL,
+    detail     TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -1424,6 +1500,619 @@ class ReservationLedger:
             finally:
                 conn.close()
         return cursor.rowcount == 1
+
+    # -- research budget ledger (same SQLite database, same lock) -----------
+
+    @staticmethod
+    def _budget_policy_in(conn: sqlite3.Connection, budget_id: str) -> BudgetPolicy | None:
+        row = conn.execute(
+            "SELECT * FROM research_budget_policies WHERE budget_id=?", (str(budget_id),)
+        ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["policy_json"])
+        return BudgetPolicy(
+            budget_id=str(row["budget_id"]),
+            limits=payload.get("limits") or {},
+            approved_limits=payload.get("approved_limits") or {},
+            timeouts=payload.get("timeouts") or {},
+            approval_ref=str(row["approval_ref"] or ""),
+            project_id=str(row["project_id"] or ""),
+        )
+
+    @staticmethod
+    def _budget_consumed_in(conn: sqlite3.Connection, budget_id: str) -> dict[str, int]:
+        consumed = {unit: 0 for unit in UNIT_CAPABILITIES}
+        rows = conn.execute(
+            "SELECT units_json FROM research_budget_reservations WHERE budget_id=? AND state != ?",
+            (str(budget_id), BudgetState.RELEASED),
+        ).fetchall()
+        for row in rows:
+            for unit, amount in (json.loads(row["units_json"]) or {}).items():
+                consumed[unit] = consumed.get(unit, 0) + int(amount)
+        receipts = conn.execute(
+            "SELECT usage_json FROM research_budget_receipts WHERE budget_id=?",
+            (str(budget_id),),
+        ).fetchall()
+        for row in receipts:
+            for unit, amount in (json.loads(row["usage_json"]) or {}).items():
+                if unit in RECEIPT_CONSUMED_UNITS:
+                    consumed[unit] = consumed.get(unit, 0) + int(amount)
+        return consumed
+
+    def define_research_budget(self, policy: BudgetPolicy) -> BudgetPolicy:
+        """Persist one budget policy; a limit change after reservation is refused."""
+        payload = {
+            "limits": dict(policy.limits),
+            "approved_limits": dict(policy.approved_limits),
+            "timeouts": dict(policy.timeouts),
+        }
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                existing = self._budget_policy_in(conn, policy.budget_id)
+                if existing is not None and (
+                    dict(existing.limits) != dict(policy.limits)
+                    or dict(existing.approved_limits) != dict(policy.approved_limits)
+                ):
+                    decided = conn.execute(
+                        "SELECT COUNT(*) AS n FROM research_budget_reservations "
+                        "WHERE budget_id=? AND state != ?",
+                        (policy.budget_id, BudgetState.RELEASED),
+                    ).fetchone()
+                    if int(decided["n"] if decided is not None else 0) > 0:
+                        conn.execute("ROLLBACK")
+                        raise BudgetConfigurationError(
+                            "budget limits changed after reservations were made"
+                        )
+                conn.execute(
+                    """INSERT INTO research_budget_policies (
+                           budget_id, approval_ref, project_id, policy_json,
+                           created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(budget_id) DO UPDATE SET
+                           approval_ref=excluded.approval_ref,
+                           project_id=excluded.project_id,
+                           policy_json=excluded.policy_json,
+                           updated_at=excluded.updated_at""",
+                    (
+                        policy.budget_id,
+                        policy.approval_ref,
+                        policy.project_id,
+                        json.dumps(payload, sort_keys=True),
+                        now,
+                        now,
+                    ),
+                )
+                conn.execute(
+                    "INSERT INTO research_budget_events (subject, event, detail, created_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (policy.budget_id, "budget_defined", "", now),
+                )
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return policy
+
+    def get_research_budget(self, budget_id: str) -> BudgetPolicy | None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                return self._budget_policy_in(conn, budget_id)
+            finally:
+                conn.close()
+
+    def reserve_research_budget(
+        self,
+        budget_id: str,
+        units: Mapping[str, Any],
+        *,
+        reservation_id: str,
+        task_ref: str = "",
+        run_id: str = "",
+        claim_id: str = "",
+        admission_reservation_id: str = "",
+        detail: str = "",
+    ) -> BudgetDecision:
+        """Atomically check the remaining budget and insert one reservation."""
+        requested: dict[str, int] = {}
+        for raw_unit, raw_amount in (units or {}).items():
+            unit = normalize_usage_unit(raw_unit)
+            amount = int(raw_amount)
+            if amount < 0:
+                raise BudgetConfigurationError(f"{unit} amount must be non-negative")
+            if amount:
+                requested[unit] = requested.get(unit, 0) + amount
+        if not requested:
+            return BudgetDecision(
+                True, BudgetReason.ADMITTED, budget_id=budget_id, reservation_id=reservation_id
+            )
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                policy = self._budget_policy_in(conn, budget_id)
+                if policy is None:
+                    conn.execute("ROLLBACK")
+                    return BudgetDecision(
+                        False,
+                        BudgetReason.NOT_CONFIGURED,
+                        budget_id=budget_id,
+                        detail="no persisted budget exists for this research round",
+                        requested=requested,
+                    )
+                if claim_id:
+                    linked = conn.execute(
+                        "SELECT * FROM research_budget_reservations "
+                        "WHERE budget_id=? AND claim_id=?",
+                        (budget_id, claim_id),
+                    ).fetchone()
+                    if linked is not None:
+                        conn.execute("COMMIT")
+                        return BudgetDecision(
+                            True,
+                            BudgetReason.ADMITTED,
+                            budget_id=budget_id,
+                            reservation_id=str(linked["reservation_id"]),
+                            detail="already_reserved",
+                            requested=requested,
+                        )
+                consumed = self._budget_consumed_in(conn, budget_id)
+                for unit, limit in policy.limits.items():
+                    if UNIT_CAPABILITIES.get(unit) != "enforced":
+                        continue
+                    if requested.get(unit, 0) <= 0 and consumed.get(unit, 0) < limit:
+                        continue
+                    if consumed.get(unit, 0) + requested.get(unit, 0) > limit:
+                        conn.execute("ROLLBACK")
+                        remaining = {
+                            name: max(0, cap - consumed.get(name, 0))
+                            for name, cap in policy.limits.items()
+                        }
+                        return BudgetDecision(
+                            False,
+                            BudgetReason.EXHAUSTED,
+                            budget_id=budget_id,
+                            detail=(
+                                f"{unit} budget {limit} - consumed {consumed.get(unit, 0)} < "
+                                f"requested {requested.get(unit, 0)}; new dispatch refused"
+                            ),
+                            exhausted_unit=unit,
+                            requested=requested,
+                            remaining=remaining,
+                        )
+                conn.execute(
+                    """INSERT INTO research_budget_reservations (
+                           reservation_id, budget_id, units_json, state, task_ref,
+                           run_id, claim_id, admission_reservation_id, detail,
+                           created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        str(reservation_id),
+                        budget_id,
+                        json.dumps(requested, sort_keys=True),
+                        BudgetState.RESERVED,
+                        str(task_ref),
+                        str(run_id),
+                        str(claim_id),
+                        str(admission_reservation_id),
+                        str(detail),
+                        now,
+                        now,
+                    ),
+                )
+                conn.execute(
+                    "INSERT INTO research_budget_events (subject, event, detail, created_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (
+                        str(reservation_id),
+                        "budget_reserve",
+                        json.dumps(requested, sort_keys=True),
+                        now,
+                    ),
+                )
+                remaining = {
+                    unit: max(0, cap - consumed.get(unit, 0) - requested.get(unit, 0))
+                    for unit, cap in policy.limits.items()
+                }
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return BudgetDecision(
+            True,
+            BudgetReason.ADMITTED,
+            budget_id=budget_id,
+            reservation_id=str(reservation_id),
+            requested=requested,
+            remaining=remaining,
+        )
+
+    def settle_research_budget(
+        self,
+        budget_id: str,
+        *,
+        receipt_id: str,
+        reservation_id: str,
+        counters: UsageUnitCounts,
+        run_id: str = "",
+        trusted_source: str = "controller-receipt",
+    ) -> BudgetSettlement:
+        """Settle from one trusted receipt; a duplicate id changes nothing."""
+        identifier = str(receipt_id or "").strip()
+        if not identifier:
+            raise BudgetConfigurationError("receipt_id must be non-empty")
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM research_budget_reservations WHERE reservation_id=? "
+                    "AND budget_id=?",
+                    (str(reservation_id), str(budget_id)),
+                ).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    return BudgetSettlement(
+                        False,
+                        False,
+                        BudgetReason.RESERVATION_NOT_FOUND,
+                        budget_id,
+                        str(reservation_id),
+                        identifier,
+                        counters,
+                    )
+                if str(row["state"]) == BudgetState.RELEASED:
+                    conn.execute("ROLLBACK")
+                    return BudgetSettlement(
+                        False,
+                        False,
+                        BudgetReason.RESERVATION_RELEASED,
+                        budget_id,
+                        str(reservation_id),
+                        identifier,
+                        counters,
+                    )
+                cursor = conn.execute(
+                    """INSERT OR IGNORE INTO research_budget_receipts (
+                           receipt_id, budget_id, reservation_id, run_id, usage_json,
+                           trusted_source, applied, recorded_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 1, ?)""",
+                    (
+                        identifier,
+                        budget_id,
+                        str(reservation_id),
+                        str(run_id),
+                        json.dumps(counters.to_dict(), sort_keys=True),
+                        str(trusted_source),
+                        now,
+                    ),
+                )
+                if cursor.rowcount == 1:
+                    conn.execute(
+                        "UPDATE research_budget_reservations SET state=?, updated_at=? "
+                        "WHERE reservation_id=? AND state != ?",
+                        (
+                            BudgetState.SETTLED,
+                            now,
+                            str(reservation_id),
+                            BudgetState.RELEASED,
+                        ),
+                    )
+                    conn.execute(
+                        "INSERT INTO research_budget_events (subject, event, detail, created_at) "
+                        "VALUES (?, ?, ?, ?)",
+                        (str(reservation_id), "budget_settle", identifier, now),
+                    )
+                    applied = True
+                else:
+                    applied = False
+                consumed = self._budget_consumed_in(conn, budget_id)
+                policy = self._budget_policy_in(conn, budget_id)
+                remaining = {
+                    unit: max(0, cap - consumed.get(unit, 0))
+                    for unit, cap in (policy.limits if policy is not None else {}).items()
+                }
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return BudgetSettlement(
+            applied,
+            not applied,
+            BudgetReason.SETTLED if applied else BudgetReason.DUPLICATE,
+            budget_id,
+            str(reservation_id),
+            identifier,
+            counters,
+            consumed,
+            remaining,
+        )
+
+    def mark_research_budget_dispatched(self, admission_reservation_id: str) -> bool:
+        """Promote a reservation to dispatched (revalidation) before any QC work."""
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                cursor = conn.execute(
+                    "UPDATE research_budget_reservations SET state=?, updated_at=? "
+                    "WHERE admission_reservation_id=? AND state=?",
+                    (
+                        BudgetState.DISPATCHED,
+                        now,
+                        str(admission_reservation_id),
+                        BudgetState.RESERVED,
+                    ),
+                )
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return cursor.rowcount == 1
+
+    def release_research_budget(
+        self,
+        *,
+        admission_reservation_id: str | None = None,
+        claim_id: str | None = None,
+        reservation_id: str | None = None,
+        event: str = "cancel_before_dispatch",
+    ) -> BudgetRelease:
+        """Apply the frozen release rule; computation already done is not refunded."""
+        rule = RELEASE_RULES.get(str(event)) or {
+            "release_reserved_units": False,
+            "detail": f"unknown settlement event {event!r}",
+        }
+        if not rule.get("release_reserved_units"):
+            return BudgetRelease(
+                False,
+                BudgetReason.HELD,
+                str(event),
+                str(rule.get("detail") or "held"),
+            )
+        clauses: list[str] = []
+        params: list[Any] = []
+        if admission_reservation_id:
+            clauses.append("admission_reservation_id=?")
+            params.append(str(admission_reservation_id))
+        if claim_id:
+            clauses.append("claim_id=?")
+            params.append(str(claim_id))
+        if reservation_id:
+            clauses.append("reservation_id=?")
+            params.append(str(reservation_id))
+        if not clauses:
+            return BudgetRelease(False, BudgetReason.RESERVATION_NOT_FOUND, str(event), "no key")
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM research_budget_reservations WHERE " + " AND ".join(clauses),
+                    params,
+                ).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    return BudgetRelease(
+                        False, BudgetReason.RESERVATION_NOT_FOUND, str(event), "no reservation"
+                    )
+                cursor = conn.execute(
+                    "UPDATE research_budget_reservations SET state=?, updated_at=? "
+                    "WHERE reservation_id=? AND state IN (?, ?)",
+                    (
+                        BudgetState.RELEASED,
+                        now,
+                        str(row["reservation_id"]),
+                        BudgetState.RESERVED,
+                        BudgetState.DISPATCHED,
+                    ),
+                )
+                if cursor.rowcount:
+                    conn.execute(
+                        "INSERT INTO research_budget_events "
+                        "(subject, event, detail, created_at) VALUES (?, ?, ?, ?)",
+                        (str(row["reservation_id"]), "budget_release", str(event), now),
+                    )
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        if cursor.rowcount:
+            return BudgetRelease(True, BudgetReason.RELEASED, str(event), str(rule.get("detail")))
+        return BudgetRelease(False, BudgetReason.RELEASED, str(event), "already released")
+
+    def research_budget_for_admission(
+        self, admission_reservation_id: str
+    ) -> BudgetReservation | None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM research_budget_reservations "
+                    "WHERE admission_reservation_id=? "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (str(admission_reservation_id),),
+                ).fetchone()
+            finally:
+                conn.close()
+        return None if row is None else self._row_to_budget_reservation(row)
+
+    def research_budget_for_claim(self, claim_id: str) -> BudgetReservation | None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM research_budget_reservations WHERE claim_id=? "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (str(claim_id),),
+                ).fetchone()
+            finally:
+                conn.close()
+        return None if row is None else self._row_to_budget_reservation(row)
+
+    def research_budget_projection(self, budget_id: str) -> BudgetProjection | None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                policy = self._budget_policy_in(conn, budget_id)
+                if policy is None:
+                    return None
+                consumed = self._budget_consumed_in(conn, budget_id)
+                reservation_rows = conn.execute(
+                    "SELECT * FROM research_budget_reservations WHERE budget_id=? "
+                    "ORDER BY created_at, reservation_id",
+                    (str(budget_id),),
+                ).fetchall()
+                receipt_rows = conn.execute(
+                    "SELECT usage_json FROM research_budget_receipts WHERE budget_id=?",
+                    (str(budget_id),),
+                ).fetchall()
+            finally:
+                conn.close()
+        receipt_counters = {unit: 0 for unit in UNIT_CAPABILITIES}
+        for row in receipt_rows:
+            for unit, amount in (json.loads(row["usage_json"]) or {}).items():
+                receipt_counters[unit] = receipt_counters.get(unit, 0) + int(amount)
+        remaining = {
+            unit: max(0, cap - consumed.get(unit, 0)) for unit, cap in policy.limits.items()
+        }
+        return BudgetProjection(
+            policy=policy,
+            consumed=consumed,
+            remaining=remaining,
+            reservations=tuple(self._row_to_budget_reservation(row) for row in reservation_rows),
+            receipts=len(receipt_rows),
+            receipt_counters=receipt_counters,
+        )
+
+    @staticmethod
+    def _row_to_budget_reservation(row: sqlite3.Row) -> BudgetReservation:
+        return BudgetReservation(
+            reservation_id=str(row["reservation_id"]),
+            budget_id=str(row["budget_id"]),
+            units=json.loads(row["units_json"]) or {},
+            state=str(row["state"]),
+            task_ref=str(row["task_ref"] or ""),
+            run_id=str(row["run_id"] or ""),
+            claim_id=str(row["claim_id"] or ""),
+            admission_reservation_id=str(row["admission_reservation_id"] or ""),
+            detail=str(row["detail"] or ""),
+            created_at=str(row["created_at"] or ""),
+            updated_at=str(row["updated_at"] or ""),
+        )
+
+    def research_budget_evidence(
+        self,
+        budget_id: str,
+        *,
+        max_receipts: int = 25,
+        max_reservations: int = 50,
+        max_bytes: int = 65536,
+    ) -> dict[str, Any] | None:
+        """Bounded read-only export that stays available after science stops."""
+        projection = self.research_budget_projection(budget_id)
+        if projection is None:
+            return None
+        with self._lock:
+            conn = self._connect()
+            try:
+                receipts = [
+                    {
+                        "receipt_id": row["receipt_id"],
+                        "reservation_id": row["reservation_id"],
+                        "run_id": row["run_id"],
+                        "usage": json.loads(row["usage_json"]) or {},
+                        "trusted_source": row["trusted_source"],
+                        "applied": bool(row["applied"]),
+                        "recorded_at": row["recorded_at"],
+                    }
+                    for row in conn.execute(
+                        "SELECT * FROM research_budget_receipts WHERE budget_id=? "
+                        "ORDER BY recorded_at, receipt_id LIMIT ?",
+                        (str(budget_id), int(max_receipts) + 1),
+                    ).fetchall()
+                ]
+                events = [
+                    {
+                        "event": row["event"],
+                        "subject": row["subject"],
+                        "detail": row["detail"],
+                        "created_at": row["created_at"],
+                    }
+                    for row in conn.execute(
+                        "SELECT * FROM research_budget_events ORDER BY seq DESC LIMIT 100"
+                    ).fetchall()
+                ]
+            finally:
+                conn.close()
+        receipts_truncated = len(receipts) > int(max_receipts)
+        receipts = receipts[: int(max_receipts)]
+        reservations = [item.to_dict() for item in projection.reservations]
+        reservations_truncated = len(reservations) > int(max_reservations)
+        reservations = reservations[: int(max_reservations)]
+        budget_view = projection.to_dict()
+        budget_view.pop("reservations", None)
+        budget_view.pop("release_statement", None)
+        statement = release_statement()
+        document: dict[str, Any] = {
+            "schema": "acp2.research-budget-evidence.v1",
+            "read_only": True,
+            "budget": budget_view,
+            "reservations": reservations,
+            "reservations_truncated": reservations_truncated,
+            "receipts": receipts,
+            "receipts_truncated": receipts_truncated,
+            "events": events,
+            "release_statement": statement,
+            "bounds": {
+                "max_receipts": int(max_receipts),
+                "max_reservations": int(max_reservations),
+                "max_bytes": int(max_bytes),
+            },
+            "generated_at": self._clock(),
+        }
+
+        def _size() -> int:
+            return len(json.dumps(document, sort_keys=True))
+
+        if _size() > int(max_bytes):
+            document["release_statement"] = {
+                key: statement[key] for key in ("enforced", "recorded_only", "not_verified")
+            }
+        if _size() > int(max_bytes):
+            document["events"] = []
+        while _size() > int(max_bytes) and document["receipts"]:
+            document["receipts"].pop()
+            document["receipts_truncated"] = True
+        while _size() > int(max_bytes) and document["reservations"]:
+            document["reservations"].pop()
+            document["reservations_truncated"] = True
+        if _size() > int(max_bytes):
+            document.pop("release_statement", None)
+        return document
 
 
 # ---------------------------------------------------------------------------

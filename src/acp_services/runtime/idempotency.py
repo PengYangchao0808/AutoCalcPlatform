@@ -333,8 +333,9 @@ class ReservationPort(Protocol):
         action: str,
         idempotency_key: str,
         spec: Any,
+        budget: Any | None = None,
     ) -> str:
-        """Reserve resources for *claim_id* and return the reservation id."""
+        """Reserve resources (and optionally the research budget) for *claim_id*."""
         ...
 
     def release_for_claim(self, claim_id: str) -> bool:
@@ -370,7 +371,9 @@ class LedgerReservationPort:
         action: str,
         idempotency_key: str,
         spec: Any,
+        budget: Any | None = None,
     ) -> str:
+        del budget
         request = self._request_factory(claim_id, spec)
         outcome = self._ledger.reserve(
             request,

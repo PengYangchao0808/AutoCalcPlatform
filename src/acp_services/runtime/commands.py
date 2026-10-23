@@ -63,15 +63,20 @@ class RuntimeCommands:
         *,
         group_id: str | None = None,
         idempotency: Any | None = None,
+        budget: Any | None = None,
     ) -> Any:
         """Persist and enqueue *spec* through the injected submission port.
 
         ``idempotency`` is forwarded untouched (the port owns the persistent
         claim/finalize protocol); legacy callers omit it.
         """
-        if idempotency is None:
-            return self.submission.submit(spec, group_id=group_id)
-        return self.submission.submit(spec, group_id=group_id, idempotency=idempotency)
+        if budget is None:
+            if idempotency is None:
+                return self.submission.submit(spec, group_id=group_id)
+            return self.submission.submit(spec, group_id=group_id, idempotency=idempotency)
+        return self.submission.submit(
+            spec, group_id=group_id, idempotency=idempotency, budget=budget
+        )
 
     # -- control intents ---------------------------------------------------
     def pause(self, job_id: str) -> Any:

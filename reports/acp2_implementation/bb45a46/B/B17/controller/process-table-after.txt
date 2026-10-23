@@ -1,0 +1,2 @@
+    PID    PPID    PGID STAT                  STARTED CMD
+1288938 1288545 1288938 Ssl  Fri Oct 23 13:55:22 2026 <acp2-dev>/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18777 --run-root <acp2-dev>/data/b/run-root-b17 --poll-interval 1 --no-browser

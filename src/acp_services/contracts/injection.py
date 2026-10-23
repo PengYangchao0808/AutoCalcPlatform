@@ -178,6 +178,7 @@ class JobSubmissionPort(Protocol):
         *,
         group_id: str | None = None,
         idempotency: Any | None = None,
+        budget: Any | None = None,
     ) -> Any:
         """Validate, persist and enqueue *spec*; return the created record.
 

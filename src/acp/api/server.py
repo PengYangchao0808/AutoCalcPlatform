@@ -26,6 +26,7 @@ from acp.api.mechanism_readonly import router as mechanism_readonly_router
 from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
 from acp.api.v2_approvals import router as v2_approvals_router
+from acp.api.v2_budgets import router as v2_budgets_router
 from acp.api.v2_routes import router as v2_router
 from acp.api.v2_structure_sources import router as v2_struct_router
 from acp_services.contracts.access import DeploymentTier, is_loopback_host
@@ -422,6 +423,7 @@ def create_app(
     app.include_router(batch_preview_router, prefix="/api/v1")
     app.include_router(v2_router, prefix="/api/v2")
     app.include_router(v2_approvals_router, prefix="/api/v2")
+    app.include_router(v2_budgets_router, prefix="/api/v2")
     app.include_router(v2_struct_router, prefix="/api/v2")
     app.include_router(api_router, prefix="/api")
 

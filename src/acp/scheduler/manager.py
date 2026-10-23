@@ -927,6 +927,7 @@ class JobManager:
         group_id: str | None = None,
         *,
         idempotency: IdempotencyContext | None = None,
+        budget: dict[str, Any] | None = None,
     ) -> JobRecord:
         """Validate, persist, and enqueue a new job. Returns immediately.
 
@@ -943,10 +944,18 @@ class JobManager:
             idempotency: Optional verified-scope idempotency context.
         """
         if idempotency is None:
-            return self._submit_legacy(spec, group_id=group_id)
-        return self._submit_idempotent(spec, group_id=group_id, idempotency=idempotency)
+            return self._submit_legacy(spec, group_id=group_id, budget=budget)
+        return self._submit_idempotent(
+            spec, group_id=group_id, idempotency=idempotency, budget=budget
+        )
 
-    def _submit_legacy(self, spec: JobSpec, group_id: str | None = None) -> JobRecord:
+    def _submit_legacy(
+        self,
+        spec: JobSpec,
+        group_id: str | None = None,
+        *,
+        budget: dict[str, Any] | None = None,
+    ) -> JobRecord:
         """Original submit path (unchanged for legacy callers)."""
         if spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
@@ -968,7 +977,9 @@ class JobManager:
 
         admission_result: dict[str, Any] | None = None
         if self._admission is not None:
-            decision = self._admission.admit_job(job_id, spec, project_id=spec.project_id)
+            decision = self._admission.admit_job(
+                job_id, spec, project_id=spec.project_id, budget=budget
+            )
             if not decision.allowed:
                 raise AdmissionRefusedError(decision)
             admission_result = self._admission.result_for_reservation(
@@ -1051,6 +1062,7 @@ class JobManager:
         *,
         group_id: str | None,
         idempotency: IdempotencyContext,
+        budget: dict[str, Any] | None = None,
     ) -> JobRecord:
         if spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
@@ -1098,6 +1110,7 @@ class JobManager:
                     action=idempotency.action,
                     idempotency_key=idempotency.key,
                     spec=spec,
+                    budget=budget,
                 )
                 if self._admission is not None:
                     admission_result = self._admission.result_for_reservation(reservation_id)

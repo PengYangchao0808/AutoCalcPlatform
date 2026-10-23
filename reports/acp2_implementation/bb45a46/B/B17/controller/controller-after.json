@@ -1,0 +1,31 @@
+{
+  "argv": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "-m",
+    "acp.cli",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18777",
+    "--run-root",
+    "<acp2-dev>/data/b/run-root-b17",
+    "--poll-interval",
+    "1",
+    "--no-browser"
+  ],
+  "cwd": "<acp2-dev>/data/b/controller-config",
+  "health": {
+    "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
+    "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.1.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-23T05:55:24.018219Z",
+    "status": "ok"
+  },
+  "pid": 1288938,
+  "run_root": "<acp2-dev>/data/b/run-root-b17"
+}

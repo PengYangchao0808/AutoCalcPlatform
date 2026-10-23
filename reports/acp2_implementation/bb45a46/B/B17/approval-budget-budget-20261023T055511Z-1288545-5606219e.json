@@ -1,0 +1,251 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "{\"approval_ref\": \"ap_1e39c395d3d54676ae857ed6ab413b2f\", \"decision\": {\"allowed_change_range\": {}, \"approval_ref\": \"ap_1e39c395d3d54676ae857ed6ab413b2f\", \"approver_ref\": \"principal_b16_bob\", \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v",
+      "name": "b17.approval_for_budget",
+      "status": "PASS"
+    },
+    {
+      "detail": "201 job=20261023_135513_001_b17-happy-at-cap work=0->1",
+      "name": "b17.at_cap_submit_accepted",
+      "status": "PASS"
+    },
+    {
+      "detail": "403 budget_exhausted jobs 1->1 orca=[] bsub=0",
+      "name": "b17.pre_dispatch_refusal",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"approval_ref\": \"ap_a3ed138aeb04482094e566b2991afb4a\", \"decision\": {\"allowed_change_range\": {}, \"approval_ref\": \"ap_a3ed138aeb04482094e566b2991afb4a\", \"approver_ref\": \"principal_b16_bob\", \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa",
+      "name": "b17.race_approval",
+      "status": "PASS"
+    },
+    {
+      "detail": "[{\"code\": \"budget_exhausted\", \"index\": 1, \"job_id\": \"\", \"rule\": \"\", \"status\": 403}, {\"code\": \"\", \"index\": 0, \"job_id\": \"20261023_135518_002_b17-race-0\", \"rule\": \"\", \"status\": 201}]",
+      "name": "b17.concurrent_last_unit",
+      "status": "PASS"
+    },
+    {
+      "detail": "409 revision_conflict approved_budget_mismatch",
+      "name": "b17.over_approved_range_refused",
+      "status": "PASS"
+    },
+    {
+      "detail": "pid=1288395 port=18777",
+      "name": "b13.restart.controller_pid_found",
+      "status": "PASS"
+    },
+    {
+      "detail": "old_pid=1288395 alive=False",
+      "name": "b13.restart.controller_stopped",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"candidate_revision\": \"sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299\", \"contract_digest\": \"8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209\", \"contract_digest_scope\": \"delivered-contract-set\", \"contract_version\": \"1.1.0\", \"read_only\": true, \"schema_version\": 1, \"started_at\": \"2026-10-23T05:55:24.018219Z\", \"status\": \"ok\"}",
+      "name": "b13.restart.health_restored",
+      "status": "PASS"
+    },
+    {
+      "detail": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299 -> sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
+      "name": "b13.restart.same_candidate_revision",
+      "status": "PASS"
+    },
+    {
+      "detail": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209 -> 8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+      "name": "b13.restart.same_contract_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "old=1288395 new=1288938",
+      "name": "b13.restart.new_process_same_argv",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"approval_ref\": \"ap_a3ed138aeb04482094e566b2991afb4a\", \"approved_limits\": {\"task_ref\": 1}, \"budget_id\": \"rb_74aee28aaefe110e51aaa370\", \"consumed\": {\"attempt\": 1, \"bsub\": 0, \"model_request\": 0, \"qc_invocation\": 0, \"recipe_step\": 0, \"task_ref\": 1}, \"limits\": {\"task_ref\": 1}, \"project_id\": \"project_alpha\", \"receipt_counters\": {\"attempt\": 1, \"bsub\": 0, \"model_request\": 0, \"qc_invocation\": 0, \"recipe_step\": 0, \"task_ref\": 1}, \"receipts\": 1, \"release_statement\": {\"enforced\": [\"task_ref\", \"attempt\"], ",
+      "name": "b17.restart_preserves_budget",
+      "status": "PASS"
+    },
+    {
+      "detail": "200/200 applied=True duplicate=True",
+      "name": "b17.duplicate_settlement_idempotent",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"attempt\": 1, \"bsub\": 0, \"model_request\": 2, \"qc_invocation\": 1, \"recipe_step\": 1, \"task_ref\": 1}",
+      "name": "b17.unit_counts_separate",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"client_request_s\": 60.0, \"overall_acceptance_s\": 3600.0, \"queue_wait_s\": 0.0, \"science_runtime_s\": 60.0}",
+      "name": "b17.timeouts_separate",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"budget_identity\": \"project+proposal_ref (independent of run_id)\", \"enforced\": [\"task_ref\", \"attempt\"], \"ledger\": \"durable-reservation-ledger\", \"model_proxy_owner\": \"C (acp2_experience_budget_proxy.py, C T-13); B does not proxy tokens\", \"model_token_enforcement\": \"NOT_VERIFIED\", \"not_verified\": [{\"capability\": \"model_token_enforcement\", \"reason\": \"model-call proxy is C-owned (acp2_experience_budget_proxy.py, C T-13)\"}, {\"capability\": \"bsub_enforcement\", \"reason\": \"LSF is absent in this environm",
+      "name": "b17.release_statement",
+      "status": "PASS"
+    },
+    {
+      "detail": "200 bytes=7102 orca=[]",
+      "name": "b17.bounded_read_only_export",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"at_cap\": {\"at_cap\": true, \"detail\": \"within cap\", \"missing_operations\": [], \"over_cap\": {}, \"status\": \"PASS\"}, \"expected_rejection_is_negative_pass\": true, \"missing\": {\"at_cap\": true, \"detail\": \"required operations are missing\", \"missing_operations\": [\"qc_invocation\"], \"over_cap\": {}, \"status\": \"FAIL\"}, \"over\": {\"at_cap\": false, \"detail\": \"consumed units exceed the frozen cap\", \"missing_operations\": [], \"over_cap\": {\"task_ref\": 1}, \"status\": \"FAIL\"}}",
+      "name": "b17.boundary",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "2f6a2b3a8f13ad34aa64740ede9ca002977a0438bc1744e7d319b4a732b5d282",
+    "server_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299"
+  },
+  "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
+  "command": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "approval-budget",
+    "--phase",
+    "budget",
+    "--controller",
+    "http://127.0.0.1:18777",
+    "--fixture",
+    "<acp2-dev>/data/b/fixtures/approval-b17.json",
+    "--out",
+    "<repo>/reports/acp2_implementation/bb45a46/B/B17",
+    "--timeout",
+    "600"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "<repo>",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b17.artifacts": [
+      {
+        "path": "pre-dispatch-refusal.json",
+        "sha256": "140d45d7f6cded0ff9d2b462eb6ae14ebe3a9860c7de33e45cd81e9104cbba68",
+        "size_bytes": 760
+      },
+      {
+        "path": "concurrent-last-unit.json",
+        "sha256": "68e8fb5e803cfebc13128fe021eb339837099aa15cb9925be993bcb9d7412393",
+        "size_bytes": 1039
+      },
+      {
+        "path": "settlement.json",
+        "sha256": "c005b272a00cb1b86225243e9f8cc58fa4bd892916c1ce3bda875d116cc4bb7c",
+        "size_bytes": 15084
+      },
+      {
+        "path": "release-statement.json",
+        "sha256": "5e3b38bdb5886df8aadd0a33a9dc3eae58f5c8436ef79ae2d1c959980d31c580",
+        "size_bytes": 9411
+      },
+      {
+        "path": "budget-evidence.json",
+        "sha256": "e7da5fc456c663fe409fe4b4b666bb804ea70788d2f049df9940dcf2b16489ef",
+        "size_bytes": 9120
+      },
+      {
+        "path": "boundary.json",
+        "sha256": "68504e00d160c06ea7adb93fdd773ed8ec062f970d55cad30d7deb8e100367f2",
+        "size_bytes": 610
+      }
+    ],
+    "b17.controller": "http://127.0.0.1:18777",
+    "b17.fixture": "<acp2-dev>/data/b/fixtures/approval-b17.json",
+    "b17.happy_budget_id": "rb_28fd57098654617a33c02761",
+    "b17.phase": "budget",
+    "b17.pre_dispatch_delta": {
+      "bsub_calls": 0,
+      "job_rows": 0,
+      "orca_pids": 0,
+      "work_dirs": 0
+    },
+    "b17.race_budget_id": "rb_74aee28aaefe110e51aaa370",
+    "b17.receipt_id": "b17-receipt-e471d0b0b7b246029ab592d7b079261c",
+    "b17.reservation_id": "bres_idem_dce1566012c446779e30fcc8790a0b02",
+    "b17.restart": {
+      "command_before": [
+        "<acp2-dev>/venvs/b/bin/python",
+        "-m",
+        "acp.cli",
+        "run",
+        "serve",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18777",
+        "--run-root",
+        "<acp2-dev>/data/b/run-root-b17",
+        "--poll-interval",
+        "1",
+        "--no-browser"
+      ],
+      "cwd_before": "<acp2-dev>/data/b/controller-config",
+      "health_after": {
+        "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
+        "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+        "contract_digest_scope": "delivered-contract-set",
+        "contract_version": "1.1.0",
+        "read_only": true,
+        "schema_version": 1,
+        "started_at": "2026-10-23T05:55:24.018219Z",
+        "status": "ok"
+      },
+      "log": "controller/controller-restart-1792734922.log",
+      "parsed_before": {
+        "fault_file": null,
+        "fault_seam": false,
+        "module": "acp.cli",
+        "port": 18777,
+        "run_root": "<acp2-dev>/data/b/run-root-b17",
+        "script": null,
+        "source": null
+      },
+      "pid_after": 1288938,
+      "pid_before": 1288395,
+      "port": 18777,
+      "stopped": true
+    },
+    "b17.timeouts": {
+      "client_request_s": 60.0,
+      "overall_acceptance_s": 3600.0,
+      "queue_wait_s": 0.0,
+      "science_runtime_s": 60.0
+    },
+    "b17.unit_counts": {
+      "attempt": 1,
+      "bsub": 0,
+      "model_request": 2,
+      "qc_invocation": 1,
+      "recipe_step": 1,
+      "task_ref": 1
+    }
+  },
+  "finished_at": "2026-10-23T05:55:25Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "budget",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T055511Z-1288545-5606219e",
+  "scenario": "approval-budget",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T05:55:11Z",
+  "submission_id": null,
+  "usage": null
+}
