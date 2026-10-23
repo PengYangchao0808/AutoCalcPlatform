@@ -182,7 +182,7 @@ module.exports.register = async function (h) {
         "resource cap rendered: " + field);
     });
     assert(html.indexOf('data-ra-field="unit_basis"') !== -1, "cost basis row rendered");
-    assert(html.indexOf("per_scenario") !== -1, "cost basis unit_basis rendered");
+    assert(html.indexOf("per scenario") !== -1, "cost basis unit_basis humanized and rendered");
     assert(html.indexOf("fixture round") !== -1, "cost basis notes rendered");
   });
 
@@ -553,6 +553,27 @@ module.exports.register = async function (h) {
       "humanized invalidation reason shown");
     assert(visible.indexOf("Invalidated") !== -1, "humanized chip label shown");
     assert(visible.indexOf("Plan definition digest") !== -1, "humanized field label shown");
+  });
+
+  await test("machine enum values are humanized: no snake_case codes in visible copy", () => {
+    const ra = loadApproval();
+    const proposal = baseProposal();
+    proposal.allowed_change_scope = { mode: "finite_list", finite_substitutions: ["s1"] };
+    const card = approvedCard(ra, proposal);
+    const html = ra.renderApprovalCard(card, proposal);
+    const visible = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+    ["finite_list", "per_scenario", "custom_mode"].forEach((token) => {
+      assert(visible.indexOf(token) === -1, "raw enum absent: " + token);
+    });
+    assert(visible.indexOf("Finite substitution list only") !== -1,
+      "scope mode humanized");
+    assert(visible.indexOf("per scenario") !== -1, "unit basis humanized");
+    assertEq(ra.scopeModeLabel("finite_list"), "Finite substitution list only",
+      "scope label fallback");
+    assertEq(ra.unitBasisLabel("per_scenario"), "per scenario", "unit label fallback");
+    assertEq(ra.scopeModeLabel("custom_mode"), "custom mode",
+      "unknown enum is de-snake-cased");
+    assertEq(ra.scopeModeLabel(null), "—", "missing enum is an em dash");
   });
 
   await test("approval card uses the real ACPClient.research namespace, not an injected fake", async () => {

@@ -471,8 +471,9 @@ module.exports.register = async function (h) {
     assert(String(origin).indexOf("capability:") === 0, "baseline provenance is the capability default");
     h0.Q.setValue("method", "wB97X-D4");
     const live = h0.dom.getElementById("sq-source-method");
-    assert(String(live.textContent).indexOf("用户输入") !== -1, "edited field marked as a user edit");
-    assert(String(live.textContent).indexOf(origin) !== -1, "original provenance preserved in the line");
+    const liveHtml = String(live.innerHTML || "").replace(/<wbr>/g, "");
+    assert(liveHtml.indexOf("用户输入") !== -1, "edited field marked as a user edit");
+    assert(liveHtml.indexOf(origin) !== -1, "original provenance preserved in the line");
     const sources = h0.Q.getState().defaults.sources;
     assert(String(sources.method).indexOf("用户输入") !== -1, "state provenance updated");
     assert(String(sources.charge).indexOf("capability:") === 0, "untouched fields keep their provenance");
@@ -483,5 +484,21 @@ module.exports.register = async function (h) {
       "origin stays the capability source");
     h0.Q.render();
     assert(h0.bodyHtml().indexOf("用户输入") !== -1, "re-render shows the refreshed provenance");
+  });
+
+  await test("source provenance breaks only at separators, never inside a token", async () => {
+    const h0 = setup(h, routeSet({ capabilities: { body: QFIX.capabilities } }));
+    await h0.Q.discover();
+    const html = h0.bodyHtml();
+    const source = /id="sq-source-method"[^>]*>([\s\S]*?)<\/div>/.exec(html);
+    assert(source, "method source line rendered");
+    assert(source[1].indexOf("capability:<wbr>single_point_energy.<wbr>defaults.<wbr>method") !== -1,
+      "break opportunities sit after ':' and '.', not inside a word");
+    assert(source[1].replace(/<wbr>/g, "").indexOf("capability:single_point_energy.defaults.method") !== -1,
+      "the source identifier itself is unchanged");
+    const css = fs.readFileSync(
+      path.join(FRONTEND, "css", "workbench", "features.css"), "utf8");
+    assert(/\.science-question-source[^}]*overflow-wrap:\s*normal/s.test(css),
+      "source lines never split an unbreakable token to fill the width");
   });
 };
