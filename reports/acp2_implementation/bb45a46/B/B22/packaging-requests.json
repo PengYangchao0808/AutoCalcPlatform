@@ -1,0 +1,176 @@
+{
+  "decisions": [
+    {
+      "applied_by_b22": false,
+      "decision": "queued",
+      "owner": "B25a",
+      "request": "A packaging.md / packaging.patch",
+      "summary": "Add cccp.analysis.research contract corpus package-data after A-49/50 lands it; byte-identical copies; revert with git apply -R."
+    },
+    {
+      "applied_by_b22": false,
+      "decision": "queued",
+      "owner": "B25a",
+      "request": "A dependency-requests.md (B25a:release-candidate)",
+      "summary": "Build the three role wheels/sdists and release-manifest.json from the frozen candidate; no version bump in B22."
+    },
+    {
+      "applied_by_b22": false,
+      "decision": "queued",
+      "owner": "B25a / B docs",
+      "request": "A shared-file-requests.md",
+      "summary": "README/DevDoc 14->15 workflow-count corrections remain a B-owned documentation change, not a B22 edit."
+    },
+    {
+      "applied_by_b22": false,
+      "decision": "queued",
+      "owner": "B25a / platform ADR owner",
+      "request": "A ADR-007-input.md (entry point group cccp.science_plugins v1)",
+      "summary": "Freeze the group version and unknown-licence reject policy; no loader/entry-point change is made by B22."
+    },
+    {
+      "applied_by_b22": false,
+      "decision": "queued",
+      "owner": "B25b / B02b",
+      "request": "C B-req-12 (B02a/B02b split)",
+      "summary": "Keep environment and package-smoke acceptance separate; B22 does not merge them."
+    },
+    {
+      "applied_by_b22": false,
+      "decision": "queued",
+      "owner": "B25a",
+      "request": "C B-req-06 (rph static asset mount/CI)",
+      "summary": "Release asset mount and CI job review; B22 does not edit CI or frontend."
+    }
+  ],
+  "dependency_sync": {
+    "new_dependencies": [],
+    "pyproject_changed_by_b22": false,
+    "requirements_node_changed": false,
+    "requirements_node_path": "<repo>/requirements-node.txt",
+    "requirements_node_sha256": "f21f3a327cb1d581ffaf54ee5bb2b9e1916948156e3f48e52a68269f28cc3758"
+  },
+  "entry_point_requests": [
+    {
+      "change_requested": false,
+      "current": "acp = acp.cli:main",
+      "kind": "console_script",
+      "name": "acp"
+    },
+    {
+      "change_requested": false,
+      "current": "acp-worker = acp_services.worker_bootstrap:main",
+      "kind": "console_script",
+      "name": "acp-worker"
+    },
+    {
+      "applied_by_b22": false,
+      "change_requested": "freeze group version 1 and lazy-load only after explicit enable",
+      "current": null,
+      "kind": "entry_point_group",
+      "name": "cccp.science_plugins",
+      "owner": "A (manifest/trust text) / B25a (packaging decision)",
+      "status": "queued"
+    }
+  ],
+  "generated_at": "2026-10-23T10:22:26Z",
+  "owner": "B25a",
+  "reviewed_requests": [
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.md",
+      "queued_with": "B25a",
+      "read": true,
+      "sha256": "6a83a285b574f4b2348abeacdaae8cb1fc90008402fbe60d9c08f697386937c3"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
+      "queued_with": "B25a",
+      "read": true,
+      "sha256": "e7c3186ac03ef565b4d0380bf04c4a185b39fd730db03831a10432fd216c07b8"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
+      "queued_with": "B25a",
+      "read": true,
+      "sha256": "5082907a836caf09a3b86dad448d6c1cbad05f7d4feeb029de6c5004124657fa"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md",
+      "queued_with": "B25a",
+      "read": true,
+      "sha256": "d64a887a53f601675dfb1f0f1e9e3af949a93c8a384be821c944fea0c2a48692"
+    },
+    {
+      "owner": "A",
+      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/ADR-007-input.md",
+      "queued_with": "B25a / platform ADR owner",
+      "read": true,
+      "sha256": "6c4dc5fb9ba6eec59b67f0c9454494e6b461d51c79f87cf5e9e08f2d4c414c07"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md",
+      "queued_with": "B25a",
+      "read": true,
+      "sha256": "e16267ff713a2d7cd984add8340e38f0a61b2bab9dbf05f79b94531aad471d33"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-07.md",
+      "queued_with": "B03",
+      "read": true,
+      "sha256": "f27a4d0f6f9f6da6902e53506db72f1439bc3e4247a47d2ccc1673651e614962"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md",
+      "queued_with": "B25b",
+      "read": true,
+      "sha256": "c79f504dacd2efe8d431e2ee1e3ec01dffd298bfd7c823f12361a8bc0a76c2f3"
+    },
+    {
+      "owner": "C",
+      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-02.md",
+      "queued_with": "B01",
+      "read": true,
+      "sha256": "1a8bdad03c4d53896de9354f4a6abd6bd23563b71b6e43d49b13a20ce50960e2"
+    }
+  ],
+  "rollback": [
+    "Do not apply the A packaging patch until A-49/50 lands the 14-file corpus.",
+    "If applied, revert with: git -C <repo> apply -R <acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
+    "If a version bump is later applied by B25a, restore all four version locations from B25a's release commit; B22 holds no bump."
+  ],
+  "schema": "acp2.b22.packaging-requests.v1",
+  "version_bump_performed": false,
+  "version_locations": [
+    {
+      "evidence": "B22 changed no version location; B25a owns the bump",
+      "path": "src/cccp/__init__.py",
+      "sha256": "d94f6f0feb61500d523af6208ce64aee6955a128b999996102563b76fb73bb1a",
+      "unchanged_by_b22": true
+    },
+    {
+      "evidence": "B22 changed no version location; B25a owns the bump",
+      "path": "src/cccp/version.py",
+      "sha256": "73dd4133c2589d60bd236b2e9295c613f230557a80aafab2db4dee427efcd041",
+      "unchanged_by_b22": true
+    },
+    {
+      "evidence": "B22 changed no version location; B25a owns the bump",
+      "path": "src/acp/__init__.py",
+      "sha256": "967fa6dac2c0a4a586859a623f1a5d72ae496b1aede5f11eb2cad28321436acd",
+      "unchanged_by_b22": true
+    },
+    {
+      "evidence": "B22 changed no version location; B25a owns the bump",
+      "path": "pyproject.toml",
+      "sha256": "033f77c33c3c9f7839597455ff24d015549cf82abcf71ece7ad1780256396292",
+      "unchanged_by_b22": true
+    }
+  ]
+}

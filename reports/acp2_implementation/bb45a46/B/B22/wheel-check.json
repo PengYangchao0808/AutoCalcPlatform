@@ -1,0 +1,67 @@
+{
+  "artifacts": [
+    {
+      "name": "cccp-0.2.0-py3-none-any.whl",
+      "path": "/tmp/opencode/b22-wheel/cccp-0.2.0-py3-none-any.whl",
+      "sha256": "f416449f97791635deb2b95f1e24b28e70cc6fb0515dd4a8ab67079181249d52",
+      "size_bytes": 44580609
+    },
+    {
+      "name": "acp_worker-0.2.0-py3-none-any.whl",
+      "path": "/tmp/opencode/b22-wheel/acp_worker-0.2.0-py3-none-any.whl",
+      "sha256": "186d37a4838a6e82d72ed0659cd4bb3c7750ba56a540a8ba4fe9eaeacfa068d1",
+      "size_bytes": 629505
+    },
+    {
+      "name": "release-manifest.json",
+      "path": "/tmp/opencode/b22-wheel/release-manifest.json",
+      "sha256": "99d5ec7c4f856b556f24e95cf4eeb9738aadb0f3c7010754c66507b14be1520e",
+      "size_bytes": 83283
+    }
+  ],
+  "boundaries": {
+    "p2_candidate_modified": false,
+    "version_bump_performed": false
+  },
+  "builder": {
+    "command": "<acp2-dev>/venvs/b/bin/python scripts/build_release.py --source <repo> --out /tmp/opencode/b22-wheel --role all",
+    "exit": 0
+  },
+  "historical_read_after_uninstall": {
+    "path": "/tmp/opencode/b22-historical-artifact.txt",
+    "readable": true,
+    "sha256": "9cbc9fff49ebe769da3c80719e60c55a67199631be962c1290c4fa85bbba313d"
+  },
+  "install": {
+    "acp_services_file": "/tmp/opencode/b22-wheel-venv/lib64/python3.11/site-packages/acp_services/__init__.py",
+    "adapter_registry_file": "/tmp/opencode/b22-wheel-venv/lib64/python3.11/site-packages/acp_services/runtime/adapter_registry.py",
+    "capability_registry_file": "/tmp/opencode/b22-wheel-venv/lib64/python3.11/site-packages/acp_services/runtime/capability_registry.py",
+    "cccp_version": "0.2.0",
+    "exit": 0,
+    "worker_version": "0.2.0"
+  },
+  "new_modules_in_wheel": [
+    "acp_services/contracts/adapters.py",
+    "acp_services/runtime/adapter_registry.py",
+    "acp_services/runtime/capability_registry.py"
+  ],
+  "not_verified": [
+    "B25a release candidate wheels/sdists and clean-environment acceptance are outside B22",
+    "web/DSH/browser roles are not exercised by this check"
+  ],
+  "schema": "acp2.b22.wheel-check.v1",
+  "scope": "minimal local wheel build/install/uninstall; not the B25a release candidate",
+  "source_tree": "<repo> (working tree @ ded5cfd804675f7b341726990b925e08bc27794c, intentionally dirty)",
+  "status": "PASS",
+  "uninstall": {
+    "cccp_still_importable": true,
+    "command": "pip uninstall -y acp-worker",
+    "exit": 0,
+    "import_after_uninstall": "ModuleNotFoundError: acp_services"
+  },
+  "venv": {
+    "created_from": "/usr/bin/python3.11 -m venv",
+    "install_command": "pip install --no-index --no-deps cccp-0.2.0-py3-none-any.whl acp_worker-0.2.0-py3-none-any.whl",
+    "path": "/tmp/opencode/b22-wheel-venv"
+  }
+}

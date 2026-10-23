@@ -1,0 +1,64 @@
+{
+  "attempt": 1,
+  "declared_task_state": "RUNNING",
+  "evidence_class": "SIMULATED/FROZEN-ATTEMPT",
+  "freeze_unchanged": true,
+  "frozen_after_upgrade": {
+    "adapter_id": "acp.storage.inventory",
+    "capabilities": [
+      "storage.inventory"
+    ],
+    "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+    "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+    "environment": [
+      "env:ACP2_B21_PLUGIN_ENV"
+    ],
+    "kind": "storage",
+    "resource_limits": {
+      "max_concurrency": 1,
+      "max_cpu_seconds": 30,
+      "max_io_bytes": 1048576,
+      "max_memory_bytes": 33554432
+    },
+    "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+    "supported_schema": [
+      "acp2.adapter.v1"
+    ],
+    "trust_level": "trusted-explicit",
+    "verification_fixture": "verification.json",
+    "version": "1.0.0"
+  },
+  "frozen_before_upgrade": {
+    "adapter_id": "acp.storage.inventory",
+    "capabilities": [
+      "storage.inventory"
+    ],
+    "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+    "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+    "environment": [
+      "env:ACP2_B21_PLUGIN_ENV"
+    ],
+    "kind": "storage",
+    "resource_limits": {
+      "max_concurrency": 1,
+      "max_cpu_seconds": 30,
+      "max_io_bytes": 1048576,
+      "max_memory_bytes": 33554432
+    },
+    "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+    "supported_schema": [
+      "acp2.adapter.v1"
+    ],
+    "trust_level": "trusted-explicit",
+    "verification_fixture": "verification.json",
+    "version": "1.0.0"
+  },
+  "old_task_executes_v1_after_v2": true,
+  "overwritten_by_v2": false,
+  "schema": "acp2.b22.running-v1.v1",
+  "task_id": "b21-old-task",
+  "v1_entrypoint_digest_after": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+  "v1_entrypoint_digest_before": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+  "v1_payload_unchanged": true,
+  "v2_active_when_checked": true
+}

@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "adapter_id": "acp.storage.untrusted",
+      "effective_trust_level": "discover-only",
+      "enabled": false,
+      "entrypoint_importable": true,
+      "import_error": null,
+      "install_result": "adapter_untrusted"
+    },
+    {
+      "capability_id": "electronic.energy",
+      "execution_admission": "capability_license_unapproved",
+      "license_approved": false,
+      "license_state": "unknown",
+      "read_only_admission": "allowed"
+    }
+  ],
+  "schema": "acp2.b22.trust-boundary.v1"
+}

@@ -34,6 +34,7 @@ the registry never interprets result semantics.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import logging
@@ -60,6 +61,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "TASK_FREEZE_SCHEMA",
+    "TASK_ARTIFACT_SCHEMA",
     "DISCOVERY_SCHEMA",
     "ISOLATION_SCHEMA",
     "PROCESS_ISOLATION_NOT_VERIFIED",
@@ -80,12 +82,14 @@ __all__ = [
     "InstalledAdapter",
     "FrozenAdapter",
     "TaskAdapterFreeze",
+    "FrozenArtifact",
     "AdapterRegistry",
     "default_environment_probe",
 ]
 
 
 TASK_FREEZE_SCHEMA = "acp2.adapter.task-freeze.v1"
+TASK_ARTIFACT_SCHEMA = "acp2.adapter.frozen-artifact.v1"
 DISCOVERY_SCHEMA = "acp2.adapter.discovery.v1"
 ISOLATION_SCHEMA = "acp2.adapter.isolation.v1"
 PROCESS_ISOLATION_NOT_VERIFIED = "NOT_VERIFIED"
@@ -322,6 +326,7 @@ class FrozenAdapter:
     verification_fixture: str
     capabilities: tuple[str, ...]
     trust_level: str
+    snapshot_dir: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -336,6 +341,7 @@ class FrozenAdapter:
             "verification_fixture": self.verification_fixture,
             "capabilities": list(self.capabilities),
             "trust_level": self.trust_level,
+            "snapshot_dir": self.snapshot_dir,
         }
 
     @classmethod
@@ -354,6 +360,7 @@ class FrozenAdapter:
             verification_fixture=str(document["verification_fixture"]),
             capabilities=tuple(str(item) for item in document["capabilities"]),
             trust_level=str(document["trust_level"]),
+            snapshot_dir=(str(document["snapshot_dir"]) if document.get("snapshot_dir") else None),
         )
 
 
@@ -414,6 +421,51 @@ class TaskAdapterFreeze:
         raise AdapterNotFoundError(
             f"frozen task {self.task_id!r} does not reference {adapter_id!r}"
         )
+
+
+@dataclass(frozen=True)
+class FrozenArtifact:
+    """Read-only bytes of one task's frozen adapter.
+
+    This is the historical read path.  It is served from the per-task snapshot
+    written at freeze time, so it keeps working after the adapter version is
+    uninstalled or its plugin payload is removed.  It never consults the active
+    version and never imports the entrypoint.
+    """
+
+    adapter_id: str
+    version: str
+    descriptor_digest: str
+    entrypoint_digest: str | None
+    descriptor: Mapping[str, Any]
+    entrypoint_bytes: bytes | None
+    source: str
+    snapshot_dir: str | None
+    read_only: bool = True
+    schema: str = TASK_ARTIFACT_SCHEMA
+
+    def to_dict(self) -> dict[str, Any]:
+        """Metadata/digest projection; entrypoint bytes are never inlined."""
+
+        return {
+            "schema": self.schema,
+            "adapter_id": self.adapter_id,
+            "version": self.version,
+            "descriptor_digest": self.descriptor_digest,
+            "entrypoint_digest": self.entrypoint_digest,
+            "entrypoint_size_bytes": (
+                len(self.entrypoint_bytes) if self.entrypoint_bytes is not None else 0
+            ),
+            "entrypoint_sha256": (
+                hashlib.sha256(self.entrypoint_bytes).hexdigest()
+                if self.entrypoint_bytes is not None
+                else None
+            ),
+            "descriptor": dict(self.descriptor),
+            "source": self.source,
+            "snapshot_dir": self.snapshot_dir,
+            "read_only": self.read_only,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +547,7 @@ class AdapterRegistry:
         self._active: dict[str, str] = {}
         self._last_report: DiscoveryReport | None = None
         self._task_freezes: dict[tuple[str, int], TaskAdapterFreeze] = {}
+        self._snapshots: dict[tuple[str, int, str], FrozenArtifact] = {}
         self._register_builtins()
         self._load_state()
 
@@ -806,8 +859,10 @@ class AdapterRegistry:
                 "no adapters selected for the task freeze", code="task_freeze_invalid"
             )
         frozen: list[FrozenAdapter] = []
+        records: dict[str, InstalledAdapter] = {}
         for adapter_id, version in sorted(selections.items()):
             record = self.installed(adapter_id, version)
+            records[adapter_id] = record
             frozen.append(
                 FrozenAdapter(
                     adapter_id=record.descriptor.adapter_id,
@@ -821,6 +876,11 @@ class AdapterRegistry:
                     verification_fixture=record.descriptor.verification_fixture,
                     capabilities=tuple(sorted(record.descriptor.capabilities)),
                     trust_level=record.effective_trust_level,
+                    snapshot_dir=(
+                        str(self._snapshot_dir(task_id, attempt, adapter_id, version))
+                        if self.state_root is not None
+                        else None
+                    ),
                 )
             )
         freeze = TaskAdapterFreeze(
@@ -831,6 +891,7 @@ class AdapterRegistry:
         )
         self._task_freezes[(task_id, attempt)] = freeze
         self._persist_task_freeze(freeze)
+        self._write_task_snapshot(freeze, records)
         return freeze
 
     def read_task_freeze(self, task_id: str, attempt: int) -> TaskAdapterFreeze:
@@ -857,6 +918,130 @@ class AdapterRegistry:
             f"no adapter freeze recorded for task {task_id!r} attempt {attempt}",
             code="task_freeze_not_found",
         )
+
+    def read_frozen_artifact(
+        self,
+        task_id: str,
+        attempt: int,
+        adapter_id: str,
+    ) -> FrozenArtifact:
+        """Return a task's frozen adapter bytes without consulting active state.
+
+        The snapshot was written by :meth:`freeze_for_task`.  If the payload was
+        removed or the adapter uninstalled, the snapshot is still served; if no
+        snapshot exists the call fails with a named error instead of silently
+        resolving to the newest installed version.
+        """
+
+        freeze = self.read_task_freeze(task_id, attempt)
+        frozen = freeze.adapter(adapter_id)
+        cached = self._snapshots.get((task_id, attempt, adapter_id))
+        if cached is not None:
+            return cached
+        if frozen.snapshot_dir is not None:
+            artifact = self._read_snapshot(Path(frozen.snapshot_dir), frozen)
+            if artifact is not None:
+                self._snapshots[(task_id, attempt, adapter_id)] = artifact
+                return artifact
+        # Backward compatibility for a B21 freeze written before snapshots
+        # existed: read the installed record only when it is still present.
+        try:
+            record = self.installed(adapter_id, frozen.version)
+        except AdapterRegistryError as exc:
+            raise AdapterRegistryError(
+                f"no read-only snapshot for task {task_id!r} attempt {attempt} "
+                f"and {adapter_id}@{frozen.version} is not installed",
+                code="frozen_artifact_unavailable",
+            ) from exc
+        if record.descriptor_digest != frozen.descriptor_digest:
+            raise AdapterVersionRejectedError(
+                f"{adapter_id}@{frozen.version} descriptor digest changed after freeze",
+                code="adapter_digest_mismatch",
+            )
+        entrypoint_bytes: bytes | None = None
+        if record.entrypoint_path is not None:
+            entrypoint_bytes = Path(record.entrypoint_path).read_bytes()
+            actual = hashlib.sha256(entrypoint_bytes).hexdigest()
+            if actual != frozen.entrypoint_digest:
+                raise AdapterVersionRejectedError(
+                    f"{adapter_id}@{frozen.version} entrypoint bytes changed after freeze",
+                    code="adapter_entrypoint_digest_mismatch",
+                )
+        artifact = FrozenArtifact(
+            adapter_id=frozen.adapter_id,
+            version=frozen.version,
+            descriptor_digest=frozen.descriptor_digest,
+            entrypoint_digest=frozen.entrypoint_digest,
+            descriptor=record.descriptor.to_dict(),
+            entrypoint_bytes=entrypoint_bytes,
+            source=str(record.entrypoint_path or "installed"),
+            snapshot_dir=frozen.snapshot_dir,
+        )
+        self._snapshots[(task_id, attempt, adapter_id)] = artifact
+        return artifact
+
+    def uninstall(
+        self,
+        adapter_id: str,
+        version: str,
+        *,
+        authorization: AdapterAuthorization | None,
+        remove_payload: bool = False,
+    ) -> dict[str, Any]:
+        """Uninstall an exact installed adapter version.
+
+        Uninstalling removes the installation record and the active pointer,
+        never the task freezes/snapshots.  ``remove_payload`` also deletes the
+        plugin directory when it lives under the configured plugin root; the
+        historical read path still serves the frozen snapshot afterwards.
+        """
+
+        record = self.installed(adapter_id, version)
+        self._require_authorization(
+            authorization,
+            action="adapter.uninstall",
+            adapter_id=adapter_id,
+            version=version,
+            digest=record.descriptor_digest,
+        )
+        payload_removed = False
+        payload_path: str | None = None
+        if remove_payload and record.entrypoint_path is not None:
+            directory = Path(record.entrypoint_path).resolve().parent
+            payload_path = str(directory)
+            root = self.plugin_root.resolve() if self.plugin_root is not None else None
+            if root is not None and directory.is_relative_to(root) and directory != root:
+                shutil.rmtree(directory)
+                payload_removed = True
+            else:
+                raise AdapterRegistryError(
+                    f"refusing to remove payload outside the plugin root: {directory}",
+                    code="adapter_payload_removal_refused",
+                )
+        self._installed.pop((adapter_id, version), None)
+        if self._active.get(adapter_id) == version:
+            self._active.pop(adapter_id, None)
+        if self.state_root is not None:
+            record_path = self._installed_record_path(record)
+            if record_path.is_file():
+                record_path.unlink()
+        self._persist_active()
+        logger.info(
+            "uninstalled infrastructure adapter %s@%s payload_removed=%s",
+            adapter_id,
+            version,
+            payload_removed,
+        )
+        return {
+            "schema": "acp2.adapter.uninstall.v1",
+            "adapter_id": adapter_id,
+            "version": version,
+            "descriptor_digest": record.descriptor_digest,
+            "installed_record_removed": True,
+            "payload_removed": payload_removed,
+            "payload_path": payload_path,
+            "active_after": self._active.get(adapter_id),
+        }
 
     def verify_frozen_adapter(self, frozen: FrozenAdapter) -> InstalledAdapter:
         """Resolve an old task's frozen adapter by exact version and digest."""
@@ -1164,18 +1349,157 @@ class AdapterRegistry:
             ) from exc
         return result
 
-    # -- persistence ------------------------------------------------------
+    # -- frozen snapshots -------------------------------------------------
 
-    def _persist_installed(self, record: InstalledAdapter) -> None:
+    def _snapshot_dir(
+        self,
+        task_id: str,
+        attempt: int,
+        adapter_id: str,
+        version: str,
+    ) -> Path:
         if self.state_root is None:
-            return
-        path = (
+            raise AdapterRegistryError(
+                "frozen snapshots require a state root", code="state_root_missing"
+            )
+        return (
+            self.state_root
+            / "tasks"
+            / _SAFE_NAME.sub("_", task_id)
+            / f"attempt-{attempt}"
+            / "artifacts"
+            / _SAFE_NAME.sub("_", adapter_id)
+            / _SAFE_NAME.sub("_", version)
+        )
+
+    def _write_task_snapshot(
+        self,
+        freeze: TaskAdapterFreeze,
+        records: Mapping[str, InstalledAdapter],
+    ) -> None:
+        for frozen in freeze.adapters:
+            record = records.get(frozen.adapter_id)
+            if record is None:
+                continue
+            descriptor_document = record.descriptor.to_dict()
+            entrypoint_bytes: bytes | None = None
+            entrypoint_name: str | None = None
+            if record.entrypoint_path is not None:
+                source = Path(record.entrypoint_path)
+                entrypoint_bytes = source.read_bytes()
+                entrypoint_name = "entrypoint" + (source.suffix or ".py")
+            directory: Path | None = (
+                Path(frozen.snapshot_dir) if frozen.snapshot_dir is not None else None
+            )
+            if directory is not None:
+                directory.mkdir(parents=True, exist_ok=True)
+                _atomic_write_json(directory / "descriptor.json", descriptor_document)
+                if entrypoint_bytes is not None and entrypoint_name is not None:
+                    (directory / entrypoint_name).write_bytes(entrypoint_bytes)
+                _atomic_write_json(
+                    directory / "snapshot.json",
+                    {
+                        "schema": TASK_ARTIFACT_SCHEMA,
+                        "task_id": freeze.task_id,
+                        "attempt": freeze.attempt,
+                        "adapter_id": frozen.adapter_id,
+                        "version": frozen.version,
+                        "descriptor_digest": frozen.descriptor_digest,
+                        "entrypoint_digest": frozen.entrypoint_digest,
+                        "descriptor_file": "descriptor.json",
+                        "entrypoint_file": entrypoint_name,
+                        "source_descriptor": record.descriptor.to_dict(),
+                        "source_entrypoint_path": record.entrypoint_path,
+                        "frozen_at": freeze.frozen_at,
+                        "read_only": True,
+                    },
+                )
+            self._snapshots[(freeze.task_id, freeze.attempt, frozen.adapter_id)] = FrozenArtifact(
+                adapter_id=frozen.adapter_id,
+                version=frozen.version,
+                descriptor_digest=frozen.descriptor_digest,
+                entrypoint_digest=frozen.entrypoint_digest,
+                descriptor=descriptor_document,
+                entrypoint_bytes=entrypoint_bytes,
+                source=str(record.entrypoint_path or "installed"),
+                snapshot_dir=frozen.snapshot_dir,
+            )
+
+    def _read_snapshot(
+        self,
+        directory: Path,
+        frozen: FrozenAdapter,
+    ) -> FrozenArtifact | None:
+        descriptor_path = directory / "descriptor.json"
+        if not descriptor_path.is_file():
+            return None
+        try:
+            descriptor_document = json.loads(descriptor_path.read_text(encoding="utf-8"))
+            metadata = json.loads((directory / "snapshot.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(descriptor_document, Mapping) or not isinstance(metadata, Mapping):
+            return None
+        if str(metadata.get("adapter_id")) != frozen.adapter_id:
+            raise AdapterRegistryError(
+                f"snapshot adapter id mismatch: {metadata.get('adapter_id')!r}",
+                code="frozen_artifact_invalid",
+            )
+        if str(metadata.get("version")) != frozen.version:
+            raise AdapterRegistryError(
+                f"snapshot version mismatch: {metadata.get('version')!r}",
+                code="frozen_artifact_invalid",
+            )
+        if str(metadata.get("descriptor_digest")) != frozen.descriptor_digest:
+            raise AdapterVersionRejectedError(
+                f"{frozen.adapter_id}@{frozen.version} snapshot descriptor digest changed",
+                code="adapter_digest_mismatch",
+            )
+        entrypoint_bytes: bytes | None = None
+        entrypoint_name = metadata.get("entrypoint_file")
+        if isinstance(entrypoint_name, str) and entrypoint_name:
+            entrypoint_path = directory / entrypoint_name
+            if not entrypoint_path.is_file():
+                raise AdapterRegistryError(
+                    f"snapshot entrypoint is missing: {entrypoint_path}",
+                    code="frozen_artifact_unavailable",
+                )
+            entrypoint_bytes = entrypoint_path.read_bytes()
+            actual = hashlib.sha256(entrypoint_bytes).hexdigest()
+            if actual != frozen.entrypoint_digest:
+                raise AdapterVersionRejectedError(
+                    f"{frozen.adapter_id}@{frozen.version} snapshot entrypoint digest changed",
+                    code="adapter_entrypoint_digest_mismatch",
+                )
+        return FrozenArtifact(
+            adapter_id=frozen.adapter_id,
+            version=frozen.version,
+            descriptor_digest=frozen.descriptor_digest,
+            entrypoint_digest=frozen.entrypoint_digest,
+            descriptor=descriptor_document,
+            entrypoint_bytes=entrypoint_bytes,
+            source=str(metadata.get("source_entrypoint_path") or directory),
+            snapshot_dir=str(directory),
+        )
+
+    def _installed_record_path(self, record: InstalledAdapter) -> Path:
+        if self.state_root is None:
+            raise AdapterRegistryError(
+                "installed records require a state root", code="state_root_missing"
+            )
+        return (
             self.state_root
             / "installed"
             / _SAFE_NAME.sub("_", record.descriptor.adapter_id)
             / f"{record.descriptor.version}.json"
         )
-        _atomic_write_json(path, record.to_record())
+
+    # -- persistence ------------------------------------------------------
+
+    def _persist_installed(self, record: InstalledAdapter) -> None:
+        if self.state_root is None:
+            return
+        _atomic_write_json(self._installed_record_path(record), record.to_record())
 
     def _persist_active(self) -> None:
         if self.state_root is None:

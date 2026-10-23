@@ -1,0 +1,1836 @@
+{
+  "artifacts": [
+    {
+      "path": "infra_upgrade-discovery.json",
+      "sha256": "b4925c035ae8bc5ccb70d8f691ebe9a44c5d1d500999cebf4f2f348a22db0154",
+      "size_bytes": 13232
+    },
+    {
+      "path": "infra_upgrade-authorization.json",
+      "sha256": "aab7b1987591c851ea7ea055a3141d648569062b121f3684c81f6304ef93b9ea",
+      "size_bytes": 615
+    },
+    {
+      "path": "infra_upgrade-frozen-task-v1.json",
+      "sha256": "94b8ef2a5b250719184ca1baa676ed0153728918dec583920d666db99ae59073",
+      "size_bytes": 2250
+    },
+    {
+      "path": "infra_upgrade-plugin-run-v1.json",
+      "sha256": "a241e3e94f23928d50a2c2447a31ac0cab9f1517ad68c6edd064cc0ef3594bf7",
+      "size_bytes": 497
+    },
+    {
+      "path": "infra_upgrade-frozen-task-v2.json",
+      "sha256": "28b8dc251b942bfa0ab06ce815bc3f1b1768ddbb4d221af42d655701029ac807",
+      "size_bytes": 6479
+    },
+    {
+      "path": "infra_upgrade-old-task-readback.json",
+      "sha256": "da3d989bfc509ef3f6f91468468dbe7305866d2386f80f6a8149d24529371c89",
+      "size_bytes": 1843
+    },
+    {
+      "path": "infra_upgrade-isolation.json",
+      "sha256": "d4b9e93e192fdc95bc3f92fa1ac03c852b767b5787d925f272e2473cb3fb10e6",
+      "size_bytes": 334
+    },
+    {
+      "path": "infra_upgrade-rejection-matrix.json",
+      "sha256": "0c8bfbefa00e34c56dedc87b701d436b09e8ac26b778d4bf7af30626c7d3c776",
+      "size_bytes": 3452
+    },
+    {
+      "path": "infra_upgrade-local-regression.log",
+      "sha256": "5a67c6919acdf5b68af923830efe2cd563e716b3f17b2539004c9e336c75831d",
+      "size_bytes": 298
+    },
+    {
+      "path": "infra_upgrade-compatibility-matrix.json",
+      "sha256": "024ac55461c13b61948b22e1d3b69bf63d78f68432a03df46694b684756836c2",
+      "size_bytes": 670
+    },
+    {
+      "path": "infra_upgrade-controller-observation.json",
+      "sha256": "b1c3c2aefeae2b9e46540f21bfc799b6ec16348039f57ff422e01990f14dafcf",
+      "size_bytes": 136
+    },
+    {
+      "path": "infra_upgrade-running-v1.json",
+      "sha256": "fca3dd18f7d84b5c89a12dd03e0c18fa9c084470902444778155fe7461bae435",
+      "size_bytes": 2267
+    },
+    {
+      "path": "infra_upgrade-upgrade-rollback.json",
+      "sha256": "1cc9c4b0294214ff303169b4e86926343ce8309dfbf376de386a14c91bfdef14",
+      "size_bytes": 4910
+    },
+    {
+      "path": "infra_upgrade-trust-boundary.json",
+      "sha256": "35c949ad9e9a44eef8b71febed275b897cc699f4fdc569f4efb4790f37b7c06b",
+      "size_bytes": 525
+    },
+    {
+      "path": "infra_upgrade-third-party-capability.json",
+      "sha256": "4a346370781230f4d8b76068a206df58c4e7e94cca9e4da6b069121ae212a89b",
+      "size_bytes": 32029
+    },
+    {
+      "path": "h5-manifest.json",
+      "sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
+      "size_bytes": 22578
+    },
+    {
+      "path": "packaging-requests.json",
+      "sha256": "19daf50e9467c5fb639f0b3b57f2ee3e3aec2f80a5fa93aaa31a6f0b9a8dfd2e",
+      "size_bytes": 6870
+    },
+    {
+      "path": "infra_upgrade-b22-rejection-matrix.json",
+      "sha256": "523a353571a662e0ef4dac31342a8bfb3cc544894674796330699c47162e63b0",
+      "size_bytes": 1946
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "discovered acp.storage.inventory@1.0.0 and @1.1.0",
+      "name": "b21.discovery.external_adapter",
+      "status": "PASS"
+    },
+    {
+      "detail": "rejected=[('adapter_isolation_claim_rejected', 'storage-isolation-claim-1.0.0'), ('science_capability_forbidden', 'storage-science-1.0.0')]",
+      "name": "b21.discovery.isolation_claim_rejected",
+      "status": "PASS"
+    },
+    {
+      "detail": "rejected=[('adapter_isolation_claim_rejected', 'storage-isolation-claim-1.0.0'), ('science_capability_forbidden', 'storage-science-1.0.0')]",
+      "name": "b21.discovery.science_capability_rejected",
+      "status": "PASS"
+    },
+    {
+      "detail": "marker=False modules=[]",
+      "name": "b21.discovery.no_execution",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_authorization_required actual=adapter_authorization_required",
+      "name": "b21.authorization.install_requires_fact",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_authorization_invalid actual=adapter_authorization_invalid",
+      "name": "b21.authorization.install_wrong_action",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_authorization_invalid actual=adapter_authorization_invalid",
+      "name": "b21.authorization.install_wrong_principal",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_authorization_expired actual=adapter_authorization_expired",
+      "name": "b21.authorization.install_expired",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_authorization_required actual=adapter_authorization_required",
+      "name": "b21.authorization.enable_requires_fact",
+      "status": "PASS"
+    },
+    {
+      "detail": "enabled=True",
+      "name": "b21.authorization.server_side_fact",
+      "status": "PASS"
+    },
+    {
+      "detail": "version=1.0.0 descriptor=ae511f7aa91f entrypoint=98454e2d5574",
+      "name": "b21.freeze.v1_exact_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "result={'adapter_id': 'acp.storage.inventory', 'version': '1.0.0', 'operation': 'inventory', 'kind': 'storage', 'path': 'reports/acp2_implementation/bb45a46/B/B22/workspace/inventory.txt', 'exists': True, 'size_bytes': 34, 'sha256': 'a279afbc0db8860675416ecb1727092cab96588c6b1f642def1aaa8246b4fdf3', 'science': False}",
+      "name": "b21.plugin.real_infrastructure_operation",
+      "status": "PASS"
+    },
+    {
+      "detail": "active=1.1.0",
+      "name": "b21.upgrade.new_active_version",
+      "status": "PASS"
+    },
+    {
+      "detail": "version=1.1.0 descriptor=97ea1d8601e4",
+      "name": "b21.freeze.v2_exact_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "old=1.0.0 new=1.1.0",
+      "name": "b21.old_task.frozen_adapter_readback",
+      "status": "PASS"
+    },
+    {
+      "detail": "old_result=1.0.0 new_result=1.1.0",
+      "name": "b21.old_task.uses_frozen_adapter",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=execution_requires_explicit_allow actual=execution_requires_explicit_allow",
+      "name": "b21.metadata.explicit_execution_required",
+      "status": "PASS"
+    },
+    {
+      "detail": "marker_exists=False",
+      "name": "b21.metadata.install_enable_did_not_execute",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_version_incompatible actual=adapter_version_incompatible",
+      "name": "b21.reject.wrong_version_incompatible",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_version_not_installed actual=adapter_version_not_installed",
+      "name": "b21.reject.unknown_version_no_auto_replace",
+      "status": "PASS"
+    },
+    {
+      "detail": "active=1.1.0",
+      "name": "b21.reject.active_version_unchanged",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_environment_missing actual=adapter_environment_missing",
+      "name": "b21.reject.missing_environment",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_capability_conflict actual=adapter_capability_conflict",
+      "name": "b21.reject.capability_conflict",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_untrusted actual=adapter_untrusted",
+      "name": "b21.reject.untrusted_plugin",
+      "status": "PASS"
+    },
+    {
+      "detail": "enabled=False",
+      "name": "b21.reject.untrusted_not_enabled",
+      "status": "PASS"
+    },
+    {
+      "detail": "process_isolation=NOT_VERIFIED sandbox=False",
+      "name": "b21.isolation.not_implied_by_metadata",
+      "status": "PASS"
+    },
+    {
+      "detail": "command exit=0; stdout_tail=['58 passed in 2.02s']",
+      "name": "b21.regression.local",
+      "status": "PASS"
+    },
+    {
+      "detail": "LSF live row is NOT_VERIFIED (no environment)",
+      "name": "b21.lsf.not_verified",
+      "status": "PASS"
+    },
+    {
+      "detail": "Slurm row is NOT_VERIFIED (no environment)",
+      "name": "b21.slurm.not_verified",
+      "status": "PASS"
+    },
+    {
+      "detail": "tasks 0->0",
+      "name": "b21.controller.no_second_authority",
+      "status": "PASS"
+    },
+    {
+      "detail": "frozen_version=1.0.0 active=1.1.0",
+      "name": "b22.running_v1.freeze_immutable",
+      "status": "PASS"
+    },
+    {
+      "detail": "v1_entrypoint=98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+      "name": "b22.running_v1.payload_not_overwritten",
+      "status": "PASS"
+    },
+    {
+      "detail": "old_result_version=1.0.0",
+      "name": "b22.running_v1.executes_frozen_v1",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_version_not_installed actual=adapter_version_not_installed",
+      "name": "b22.uninstall.removed_execution",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_version_not_installed actual=adapter_version_not_installed",
+      "name": "b22.uninstall.removed_enable",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_version_not_installed actual=adapter_version_not_installed",
+      "name": "b22.uninstall.removed_frozen_execution",
+      "status": "PASS"
+    },
+    {
+      "detail": "version=1.1.0 read_only=True sha=808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+      "name": "b22.uninstall.v2_readonly_artifact",
+      "status": "PASS"
+    },
+    {
+      "detail": "v1_result_version=1.0.0",
+      "name": "b22.uninstall.v1_still_executes",
+      "status": "PASS"
+    },
+    {
+      "detail": "version=1.0.0 read_only=True",
+      "name": "b22.uninstall.v1_readonly_artifact_after_removal",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_version_not_installed actual=adapter_version_not_installed",
+      "name": "b22.uninstall.v1_frozen_execution_after_removal",
+      "status": "PASS"
+    },
+    {
+      "detail": "payload=<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0 removed=True",
+      "name": "b22.uninstall.payload_removed",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=adapter_untrusted actual=adapter_untrusted",
+      "name": "b22.trust.importable_still_untrusted",
+      "status": "PASS"
+    },
+    {
+      "detail": "imported=True trust=discover-only import_error=None",
+      "name": "b22.trust.importability_does_not_grant_trust",
+      "status": "PASS"
+    },
+    {
+      "detail": "capability=electronic.energy task_kind=singlepoint",
+      "name": "b22.capability.discovered",
+      "status": "PASS"
+    },
+    {
+      "detail": "approved=True trust=trusted-explicit",
+      "name": "b22.capability.registered",
+      "status": "PASS"
+    },
+    {
+      "detail": "purpose=execute digest=sha256:8210e6c0a",
+      "name": "b22.capability.admitted_and_frozen",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=PASS energy=-76.41891019874",
+      "name": "b22.capability.real_run",
+      "status": "PASS"
+    },
+    {
+      "detail": "read_only=True",
+      "name": "b22.capability.readonly_artifact",
+      "status": "PASS"
+    },
+    {
+      "detail": "schema=acp2.experience.view-model.v1 required=10 missing=[]",
+      "name": "b22.capability.c_view_model_dynamic_discovery",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=capability_license_unapproved actual=capability_license_unapproved",
+      "name": "b22.license.unknown_not_approved_for_execution",
+      "status": "PASS"
+    },
+    {
+      "detail": "approved=False purpose=read_only",
+      "name": "b22.license.unknown_read_only_path",
+      "status": "PASS"
+    },
+    {
+      "detail": "notices=3 unknown=1",
+      "name": "b22.h5.manifest_frozen",
+      "status": "PASS"
+    },
+    {
+      "detail": "rows=1",
+      "name": "b22.h5.unknown_license_not_approved",
+      "status": "PASS"
+    },
+    {
+      "detail": "B22 introduced no new third-party dependency",
+      "name": "b22.h5.no_new_dependency",
+      "status": "PASS"
+    },
+    {
+      "detail": "requests=9 version_bump=False",
+      "name": "b22.packaging.requests_recorded",
+      "status": "PASS"
+    },
+    {
+      "detail": "rows=6",
+      "name": "b22.rejection.named_errors",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "534def6293adb48e497a5b9ff4eeff2f857a0433e6dbb03068d39c1925787988",
+    "server_revision": "ded5cfd804675f7b341726990b925e08bc27794c"
+  },
+  "candidate_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
+  "command": [
+    "<acp2-dev>/venvs/b/bin/python",
+    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "infra-plugin",
+    "--phase",
+    "infra:upgrade",
+    "--controller",
+    "http://127.0.0.1:18783",
+    "--fixture",
+    "<acp2-dev>/data/b/fixtures/plugin/plugin-fixture.json",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B22",
+    "--timeout",
+    "900"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "<repo>",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b21.adapter": {
+      "adapter_id": "acp.storage.inventory",
+      "capability": "storage.inventory",
+      "trusted": true,
+      "versions": [
+        "1.0.0",
+        "1.1.0"
+      ]
+    },
+    "b21.artifacts": [
+      {
+        "path": "infra_upgrade-discovery.json",
+        "sha256": "b4925c035ae8bc5ccb70d8f691ebe9a44c5d1d500999cebf4f2f348a22db0154",
+        "size_bytes": 13232
+      },
+      {
+        "path": "infra_upgrade-authorization.json",
+        "sha256": "aab7b1987591c851ea7ea055a3141d648569062b121f3684c81f6304ef93b9ea",
+        "size_bytes": 615
+      },
+      {
+        "path": "infra_upgrade-frozen-task-v1.json",
+        "sha256": "94b8ef2a5b250719184ca1baa676ed0153728918dec583920d666db99ae59073",
+        "size_bytes": 2250
+      },
+      {
+        "path": "infra_upgrade-plugin-run-v1.json",
+        "sha256": "a241e3e94f23928d50a2c2447a31ac0cab9f1517ad68c6edd064cc0ef3594bf7",
+        "size_bytes": 497
+      },
+      {
+        "path": "infra_upgrade-frozen-task-v2.json",
+        "sha256": "28b8dc251b942bfa0ab06ce815bc3f1b1768ddbb4d221af42d655701029ac807",
+        "size_bytes": 6479
+      },
+      {
+        "path": "infra_upgrade-old-task-readback.json",
+        "sha256": "da3d989bfc509ef3f6f91468468dbe7305866d2386f80f6a8149d24529371c89",
+        "size_bytes": 1843
+      },
+      {
+        "path": "infra_upgrade-isolation.json",
+        "sha256": "d4b9e93e192fdc95bc3f92fa1ac03c852b767b5787d925f272e2473cb3fb10e6",
+        "size_bytes": 334
+      },
+      {
+        "path": "infra_upgrade-rejection-matrix.json",
+        "sha256": "0c8bfbefa00e34c56dedc87b701d436b09e8ac26b778d4bf7af30626c7d3c776",
+        "size_bytes": 3452
+      },
+      {
+        "path": "infra_upgrade-local-regression.log",
+        "sha256": "5a67c6919acdf5b68af923830efe2cd563e716b3f17b2539004c9e336c75831d",
+        "size_bytes": 298
+      },
+      {
+        "path": "infra_upgrade-compatibility-matrix.json",
+        "sha256": "024ac55461c13b61948b22e1d3b69bf63d78f68432a03df46694b684756836c2",
+        "size_bytes": 670
+      },
+      {
+        "path": "infra_upgrade-controller-observation.json",
+        "sha256": "b1c3c2aefeae2b9e46540f21bfc799b6ec16348039f57ff422e01990f14dafcf",
+        "size_bytes": 136
+      },
+      {
+        "path": "infra_upgrade-running-v1.json",
+        "sha256": "fca3dd18f7d84b5c89a12dd03e0c18fa9c084470902444778155fe7461bae435",
+        "size_bytes": 2267
+      },
+      {
+        "path": "infra_upgrade-upgrade-rollback.json",
+        "sha256": "1cc9c4b0294214ff303169b4e86926343ce8309dfbf376de386a14c91bfdef14",
+        "size_bytes": 4910
+      },
+      {
+        "path": "infra_upgrade-trust-boundary.json",
+        "sha256": "35c949ad9e9a44eef8b71febed275b897cc699f4fdc569f4efb4790f37b7c06b",
+        "size_bytes": 525
+      },
+      {
+        "path": "infra_upgrade-third-party-capability.json",
+        "sha256": "4a346370781230f4d8b76068a206df58c4e7e94cca9e4da6b069121ae212a89b",
+        "size_bytes": 32029
+      },
+      {
+        "path": "h5-manifest.json",
+        "sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
+        "size_bytes": 22578
+      },
+      {
+        "path": "packaging-requests.json",
+        "sha256": "19daf50e9467c5fb639f0b3b57f2ee3e3aec2f80a5fa93aaa31a6f0b9a8dfd2e",
+        "size_bytes": 6870
+      },
+      {
+        "path": "infra_upgrade-b22-rejection-matrix.json",
+        "sha256": "523a353571a662e0ef4dac31342a8bfb3cc544894674796330699c47162e63b0",
+        "size_bytes": 1946
+      }
+    ],
+    "b21.compatibility": {
+      "rows": [
+        {
+          "adapter_id": "platform.scheduler.local",
+          "backend": "local",
+          "detail": "command exit=0; stdout_tail=['58 passed in 2.02s']",
+          "status": "PASS",
+          "version": "1.0.0"
+        },
+        {
+          "adapter_id": "platform.scheduler.lsf",
+          "backend": "lsf",
+          "detail": "no live LSF client/queue attached; descriptor only, no bsub run",
+          "status": "NOT_VERIFIED",
+          "version": "1.0.0"
+        },
+        {
+          "backend": "slurm",
+          "detail": "no real Slurm environment; submit/cancel/recover were not executed, so Slurm is not claimed",
+          "status": "NOT_VERIFIED"
+        }
+      ],
+      "schema": "acp2.b21.compatibility.v1"
+    },
+    "b21.controller": "http://127.0.0.1:18783",
+    "b21.fixture": "<acp2-dev>/data/b/fixtures/plugin/plugin-fixture.json",
+    "b21.phase": "infra:upgrade",
+    "b21.plugin_root": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root",
+    "b21.rejection_rows": [
+      {
+        "actual_code": "adapter_authorization_required",
+        "case": "b21.authorization.install_requires_fact",
+        "detail": "adapter.install for acp.storage.inventory@1.0.0 needs a server-side authorization fact",
+        "expected_code": "adapter_authorization_required",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_authorization_invalid",
+        "case": "b21.authorization.install_wrong_action",
+        "detail": "authorization fact does not match the requested adapter action/identity",
+        "expected_code": "adapter_authorization_invalid",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_authorization_invalid",
+        "case": "b21.authorization.install_wrong_principal",
+        "detail": "principal 'untrusted-client' may not authorize adapters",
+        "expected_code": "adapter_authorization_invalid",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_authorization_expired",
+        "case": "b21.authorization.install_expired",
+        "detail": "authorization fact expired at 2000-01-01T00:00:00Z",
+        "expected_code": "adapter_authorization_expired",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_authorization_required",
+        "case": "b21.authorization.enable_requires_fact",
+        "detail": "adapter.enable for acp.storage.inventory@1.0.0 needs a server-side authorization fact",
+        "expected_code": "adapter_authorization_required",
+        "passed": true
+      },
+      {
+        "actual_code": "execution_requires_explicit_allow",
+        "case": "b21.metadata.explicit_execution_required",
+        "detail": "adapter execution requires allow_execution=True; discovery, install and enable never execute an entrypoint",
+        "expected_code": "execution_requires_explicit_allow",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_version_incompatible",
+        "case": "b21.reject.wrong_version_incompatible",
+        "detail": "acp.storage.wrong-version@2.0.0 has incompatible platform major 2; supported major is 1",
+        "expected_code": "adapter_version_incompatible",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_version_not_installed",
+        "case": "b21.reject.unknown_version_no_auto_replace",
+        "detail": "acp.storage.inventory@9.9.9 is not installed; the registry never substitutes another version",
+        "expected_code": "adapter_version_not_installed",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_environment_missing",
+        "case": "b21.reject.missing_environment",
+        "detail": "missing environment for acp.storage.missing-env@1.0.0: env:ACP2_B21_MISSING_ENV",
+        "expected_code": "adapter_environment_missing",
+        "missing_environment": [
+          "env:ACP2_B21_MISSING_ENV"
+        ],
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_capability_conflict",
+        "case": "b21.reject.capability_conflict",
+        "detail": "capability 'scheduler.local' is already owned by 'platform.scheduler.local@1.0.0'; 'acp.storage.conflict@1.0.0' cannot claim it",
+        "expected_code": "adapter_capability_conflict",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_untrusted",
+        "case": "b21.reject.untrusted_plugin",
+        "detail": "acp.storage.untrusted is discover-only; add it to the explicit platform trust allow-list to enable it",
+        "expected_code": "adapter_untrusted",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_version_not_installed",
+        "case": "b22.uninstall.removed_execution",
+        "detail": "acp.storage.inventory@1.1.0 is not installed; the registry never substitutes another version",
+        "expected_code": "adapter_version_not_installed",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_version_not_installed",
+        "case": "b22.uninstall.removed_enable",
+        "detail": "acp.storage.inventory@1.1.0 is not installed; the registry never substitutes another version",
+        "expected_code": "adapter_version_not_installed",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_version_not_installed",
+        "case": "b22.uninstall.removed_frozen_execution",
+        "detail": "acp.storage.inventory@1.1.0 is not installed; the registry never substitutes another version",
+        "expected_code": "adapter_version_not_installed",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_version_not_installed",
+        "case": "b22.uninstall.v1_frozen_execution_after_removal",
+        "detail": "acp.storage.inventory@1.0.0 is not installed; the registry never substitutes another version",
+        "expected_code": "adapter_version_not_installed",
+        "passed": true
+      },
+      {
+        "actual_code": "adapter_untrusted",
+        "case": "b22.trust.importable_still_untrusted",
+        "detail": "acp.storage.untrusted is discover-only; add it to the explicit platform trust allow-list to enable it",
+        "expected_code": "adapter_untrusted",
+        "passed": true
+      },
+      {
+        "actual_code": "capability_license_unapproved",
+        "case": "b22.license.unknown_not_approved_for_execution",
+        "detail": "capability_license_unapproved: electronic.energy@1.0.0 licence state 'unknown' is not approved; read-only admission only",
+        "expected_code": "capability_license_unapproved",
+        "passed": true
+      }
+    ],
+    "b21.state_root": "<acp2-dev>/data/b/plugin-state/b21",
+    "b22.h5_manifest": {
+      "path": "h5-manifest.json",
+      "sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768"
+    },
+    "b22.packaging_requests": {
+      "path": "packaging-requests.json",
+      "sha256": "19daf50e9467c5fb639f0b3b57f2ee3e3aec2f80a5fa93aaa31a6f0b9a8dfd2e"
+    },
+    "b22.running_v1": {
+      "attempt": 1,
+      "declared_task_state": "RUNNING",
+      "evidence_class": "SIMULATED/FROZEN-ATTEMPT",
+      "freeze_unchanged": true,
+      "frozen_after_upgrade": {
+        "adapter_id": "acp.storage.inventory",
+        "capabilities": [
+          "storage.inventory"
+        ],
+        "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+        "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+        "environment": [
+          "env:ACP2_B21_PLUGIN_ENV"
+        ],
+        "kind": "storage",
+        "resource_limits": {
+          "max_concurrency": 1,
+          "max_cpu_seconds": 30,
+          "max_io_bytes": 1048576,
+          "max_memory_bytes": 33554432
+        },
+        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "verification.json",
+        "version": "1.0.0"
+      },
+      "frozen_before_upgrade": {
+        "adapter_id": "acp.storage.inventory",
+        "capabilities": [
+          "storage.inventory"
+        ],
+        "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+        "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+        "environment": [
+          "env:ACP2_B21_PLUGIN_ENV"
+        ],
+        "kind": "storage",
+        "resource_limits": {
+          "max_concurrency": 1,
+          "max_cpu_seconds": 30,
+          "max_io_bytes": 1048576,
+          "max_memory_bytes": 33554432
+        },
+        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "verification.json",
+        "version": "1.0.0"
+      },
+      "old_task_executes_v1_after_v2": true,
+      "overwritten_by_v2": false,
+      "schema": "acp2.b22.running-v1.v1",
+      "task_id": "b21-old-task",
+      "v1_entrypoint_digest_after": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+      "v1_entrypoint_digest_before": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+      "v1_payload_unchanged": true,
+      "v2_active_when_checked": true
+    },
+    "b22.third_party": {
+      "c_view_model": {
+        "conformance": "PASS",
+        "missing_required_fields": [],
+        "required_fields": [
+          "snapshot_revision",
+          "project_id",
+          "task_ref",
+          "manifest_generation",
+          "artifacts",
+          "claims",
+          "clarifications",
+          "provenance",
+          "read_only",
+          "not_authoritative_for_science"
+        ],
+        "schema": "acp2.b22.view-model-consumption.v1",
+        "scope": "STRUCTURAL_CONFORMANCE_ONLY",
+        "snapshot": {
+          "artifacts": [
+            {
+              "artifact_id": "third-party-capability-descriptor",
+              "availability": "present",
+              "generation": 0,
+              "role": "capability-descriptor"
+            }
+          ],
+          "claims": [
+            {
+              "claim_id": "electronic.energy.third-party",
+              "statement": "The registered capability descriptor and binding were admitted; the claim is not interpreted by the platform.",
+              "status": "not_evaluated"
+            }
+          ],
+          "clarifications": [],
+          "manifest_generation": 0,
+          "not_authoritative_for_science": true,
+          "project_id": "acp2-b22",
+          "provenance": {
+            "digest": "sha256:7437285ef98c63c6f7c8a8e069bffc36fdd2b5fa6bbb69badc6e9f5b3b21b8bd",
+            "produced_at": "2026-10-23T10:22:26Z",
+            "producer_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
+            "source": "B22 third-party capability acceptance"
+          },
+          "read_only": true,
+          "snapshot_revision": 1,
+          "task_ref": {
+            "attempt": 1,
+            "job_id": "b22-third-party-task"
+          }
+        },
+        "unknown_top_level_fields": [],
+        "view_model_schema": {
+          "annotation_only_keywords": [
+            "format"
+          ],
+          "digest": "sha256:b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",
+          "required_fields": [
+            "snapshot_revision",
+            "project_id",
+            "task_ref",
+            "manifest_generation",
+            "artifacts",
+            "claims",
+            "clarifications",
+            "provenance",
+            "read_only",
+            "not_authoritative_for_science"
+          ],
+          "schema_id": "acp2.experience.view-model.v1",
+          "schema_version": "1.0.0",
+          "source": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
+          "supported_keywords": [
+            "$schema",
+            "$id",
+            "$ref",
+            "$comment",
+            "$defs",
+            "schema",
+            "schema_version",
+            "schema_dialect",
+            "ui_dialect",
+            "title",
+            "description",
+            "type",
+            "enum",
+            "const",
+            "required",
+            "properties",
+            "additionalProperties",
+            "items",
+            "minItems",
+            "maxItems",
+            "uniqueItems",
+            "minimum",
+            "maximum",
+            "minLength",
+            "maxLength",
+            "pattern",
+            "oneOf",
+            "anyOf",
+            "allOf",
+            "default",
+            "examples"
+          ],
+          "ui_dialect_version": "acp2.ui-subset.v1"
+        }
+      },
+      "capability": {
+        "binding_digest": "sha256:de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+        "binding_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root/energy/task-binding.json",
+        "capability_id": "electronic.energy",
+        "descriptor_digest": "sha256:8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+        "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root/energy/capability.json",
+        "effective_trust_level": "trusted-explicit",
+        "executed": false,
+        "implementation_id": "cccp.calculation.tasks.singlepoint",
+        "license_state": "unknown",
+        "task_kind": "singlepoint",
+        "version": "1.0.0"
+      },
+      "core_source_edits": [],
+      "core_source_unchanged": true,
+      "discovery": {
+        "capabilities": [
+          {
+            "binding_digest": "sha256:de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+            "binding_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root/energy/task-binding.json",
+            "capability_id": "electronic.energy",
+            "descriptor_digest": "sha256:8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+            "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root/energy/capability.json",
+            "effective_trust_level": "trusted-explicit",
+            "executed": false,
+            "implementation_id": "cccp.calculation.tasks.singlepoint",
+            "license_state": "unknown",
+            "task_kind": "singlepoint",
+            "version": "1.0.0"
+          }
+        ],
+        "capability_root": "reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root",
+        "execution": "none",
+        "rejected": [],
+        "scanned_at": "2026-10-23T10:22:24Z",
+        "schema": "acp2.capability.discovery.v1",
+        "view_model": {
+          "annotation_only_keywords": [
+            "format"
+          ],
+          "digest": "sha256:b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",
+          "required_fields": [
+            "snapshot_revision",
+            "project_id",
+            "task_ref",
+            "manifest_generation",
+            "artifacts",
+            "claims",
+            "clarifications",
+            "provenance",
+            "read_only",
+            "not_authoritative_for_science"
+          ],
+          "schema_id": "acp2.experience.view-model.v1",
+          "schema_version": "1.0.0",
+          "source": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
+          "supported_keywords": [
+            "$schema",
+            "$id",
+            "$ref",
+            "$comment",
+            "$defs",
+            "schema",
+            "schema_version",
+            "schema_dialect",
+            "ui_dialect",
+            "title",
+            "description",
+            "type",
+            "enum",
+            "const",
+            "required",
+            "properties",
+            "additionalProperties",
+            "items",
+            "minItems",
+            "maxItems",
+            "uniqueItems",
+            "minimum",
+            "maximum",
+            "minLength",
+            "maxLength",
+            "pattern",
+            "oneOf",
+            "anyOf",
+            "allOf",
+            "default",
+            "examples"
+          ],
+          "ui_dialect_version": "acp2.ui-subset.v1"
+        }
+      },
+      "execution_label": "REAL: cccp.calculation.run_singlepoint completed",
+      "freeze": {
+        "attempt": 1,
+        "frozen_at": "2026-10-23T10:22:24Z",
+        "purpose": "execute",
+        "registration": {
+          "binding_digest": "sha256:de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+          "capability_id": "electronic.energy",
+          "descriptor": {
+            "capability_id": "electronic.energy",
+            "compatibility": {
+              "backward_compatible_additions": "same_major_only",
+              "contract_version": "acp2.science.capability.v1",
+              "declared_major": 1,
+              "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+              "max_reader_schema_version": 1,
+              "min_reader_schema_version": 1,
+              "unknown_major_error_code": "unknown_major_version",
+              "unknown_major_version": "reject_and_never_execute"
+            },
+            "completion_checks": [
+              {
+                "compares": [
+                  "scf_convergence",
+                  "final_energy"
+                ],
+                "description": "The single-point SCF converged and reported a finite final energy.",
+                "evaluator": "cccp.calculation.tasks.singlepoint",
+                "failure_error_code": "invalid_scientific_input",
+                "id": "scf_converged",
+                "required": true
+              }
+            ],
+            "execution_semantics": {
+              "delegates_to_task_kind": "singlepoint",
+              "delegation_count": 1,
+              "kind": "compute",
+              "network_access": false,
+              "reads_existing_artifacts_only": false,
+              "side_effects": "artifacts_only",
+              "starts_subprocess": true,
+              "writes_artifacts": true
+            },
+            "extensions": {},
+            "implementation_id": "cccp.calculation.tasks.singlepoint",
+            "input_schema": {
+              "digest": null,
+              "ref": "cccp.calculation.requests#TaskRequest",
+              "schema_version": 1
+            },
+            "limitations": [
+              {
+                "applies_to": "energies from a single supplied geometry",
+                "id": "no_geometry_relaxation",
+                "severity": "info",
+                "text": "This capability evaluates one supplied structure; it does not optimize the geometry."
+              }
+            ],
+            "output_schema": {
+              "digest": null,
+              "ref": "cccp.calculation.results#TaskResult",
+              "schema_version": 1
+            },
+            "preconditions": [
+              {
+                "description": "A resolvable structure input is supplied.",
+                "error_code": "invalid_scientific_input",
+                "evaluated_by": "cccp",
+                "id": "structure_supplied",
+                "kind": "input",
+                "required": true
+              },
+              {
+                "description": "Charge and multiplicity are consistent with the electron count.",
+                "error_code": "invalid_scientific_input",
+                "evaluated_by": "cccp",
+                "id": "charge_multiplicity_consistent",
+                "kind": "scientific",
+                "required": true
+              }
+            ],
+            "projections": {
+              "available": {
+                "reason": "Availability is determined by Runtime, not by this descriptor.",
+                "state": "unknown"
+              },
+              "described": {
+                "state": "present"
+              },
+              "installed": {
+                "reason": "Named for contract illustration only; this fixture does not install anything.",
+                "state": "unknown"
+              },
+              "verified": {
+                "state": "not_verified"
+              }
+            },
+            "provenance_requirements": {
+              "artifact_digests": "required",
+              "input_digest": "required",
+              "method_identity": "required",
+              "notes": [
+                "Digests use cccp.analysis.identity.content_sha256."
+              ],
+              "software_version": "required",
+              "units": "required"
+            },
+            "schema": "acp2.science.capability",
+            "schema_version": 1,
+            "unknown_field_policy": {
+              "extension_namespace": "x-acp2-<owner>-<name>",
+              "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+              "new_execution_request": "reject_unsupported_execution_fields",
+              "unknown_major_version": "never_execute"
+            },
+            "validation_layers": {
+              "cccp_scientific_semantics": {
+                "checks": [
+                  "charge and multiplicity consistency",
+                  "method and basis applicability",
+                  "electronic-state applicability"
+                ],
+                "does_not_cover": [
+                  "provider enablement",
+                  "binary availability"
+                ],
+                "owner": "cccp"
+              },
+              "json_structure": {
+                "checks": [
+                  "required fields",
+                  "types",
+                  "enums",
+                  "patterns",
+                  "minimum and maximum"
+                ],
+                "does_not_cover": [
+                  "scientific applicability",
+                  "platform enablement"
+                ],
+                "owner": "contract"
+              },
+              "runtime_platform_constraints": {
+                "checks": [
+                  "provider enablement",
+                  "binary availability",
+                  "quota"
+                ],
+                "does_not_cover": [
+                  "scientific semantics",
+                  "JSON structure"
+                ],
+                "owner": "runtime"
+              }
+            }
+          },
+          "descriptor_digest": "sha256:8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+          "implementation_id": "cccp.calculation.tasks.singlepoint",
+          "license_approved": true,
+          "license_source": "<acp2-dev>/A/docs/LICENSE",
+          "license_state": "approved",
+          "registered_at": "2026-10-23T10:22:24Z",
+          "registered_by": "controller",
+          "schema": "acp2.capability.registration.v1",
+          "source": "reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root/energy",
+          "task_binding": {
+            "binding_id": "science.singlepoint",
+            "binding_output": {
+              "binding_metadata": {
+                "capability_id": "electronic.energy",
+                "context_serialized": false,
+                "delegation_target": "cccp.calculation.run_singlepoint",
+                "implementation_id": "cccp.calculation.tasks.singlepoint",
+                "request_contract_ref": "cccp.calculation.requests#TaskRequest",
+                "request_schema_version": 1,
+                "resolved_task_kind": "singlepoint",
+                "result_contract_ref": "cccp.calculation.results#TaskResult",
+                "result_schema_version": 1,
+                "selection_mode": "capability"
+              },
+              "request": {
+                "charge": 0,
+                "level": {
+                  "basis": "def2-TZVP",
+                  "method": "r2SCAN-3c"
+                },
+                "multiplicity": 1,
+                "resources": {
+                  "mem": "2GB",
+                  "nproc": 2
+                },
+                "schema_version": 1,
+                "structure": {
+                  "path": "structures/water.xyz",
+                  "role": "minimum",
+                  "source": "fixture"
+                },
+                "task": "singlepoint"
+              },
+              "request_json_validated_by": "cccp.calculation.requests.TaskRequest.from_dict"
+            },
+            "compatibility": {
+              "contract_version": "acp2.science.task-binding.v1",
+              "declared_major": 1,
+              "existing_contract_versions": {
+                "task_request": 1,
+                "task_result": 1
+              },
+              "max_reader_schema_version": 1,
+              "min_reader_schema_version": 1,
+              "unknown_major_error_code": "unknown_major_version",
+              "unknown_major_version": "reject_and_never_execute"
+            },
+            "context_contract": {
+              "module": "cccp.calculation.context",
+              "must_not_appear_as_field": true,
+              "serialization_rule": "runtime_only_never_json",
+              "serialized": false,
+              "type": "TaskContext"
+            },
+            "delegation": {
+              "entrypoint": "cccp.calculation.run_singlepoint",
+              "entrypoint_module": "cccp.calculation.tasks",
+              "max_invocations_per_binding": 1,
+              "no_batch_or_chain": true,
+              "no_second_executor": true,
+              "single": true
+            },
+            "preflight": {
+              "loads_plugins": false,
+              "network": false,
+              "outcomes": [
+                "ready",
+                "not_ready",
+                "unsupported_capability"
+              ],
+              "platform_constraint_owner": "runtime",
+              "side_effect_free": true,
+              "starts_subprocess": false,
+              "validates_json_structure": true,
+              "validates_platform_constraints": false,
+              "validates_scientific_preconditions": true,
+              "writes_artifacts": false
+            },
+            "request_contract": {
+              "authoritative": true,
+              "execution_unknown_field_rule": "reject_unsupported_execution_fields_at_binding_preflight",
+              "module": "cccp.calculation.requests",
+              "parser": "TaskRequest.from_dict",
+              "schema_version": 1,
+              "schema_version_rule": "S1_reject_any_version_other_than_1",
+              "serializer": "TaskRequest.to_dict",
+              "type": "TaskRequest",
+              "unknown_field_read_rule": "S2_ignore_unknown_fields_on_read"
+            },
+            "result_contract": {
+              "authoritative": true,
+              "module": "cccp.calculation.results",
+              "parser": "TaskResult.from_dict",
+              "schema_version": 1,
+              "schema_version_rule": "S1_reject_any_version_other_than_1",
+              "serializer": "TaskResult.to_dict",
+              "type": "TaskResult",
+              "unknown_field_read_rule": "S2_ignore_unknown_fields_on_read"
+            },
+            "schema": "acp2.science.task_binding",
+            "schema_version": 1,
+            "scientific_precondition_error": {
+              "covers": [
+                "charge_or_multiplicity",
+                "structure_role",
+                "method_or_basis",
+                "electronic_state",
+                "scientific_applicability"
+              ],
+              "detail_required": true,
+              "error_code": "invalid_scientific_input",
+              "error_schema_ref": "https://acp.local/acp2/science/errors.schema.json#/$defs/errorRecord",
+              "layer": "scientific",
+              "maps_from_error_kind": "invalid_input",
+              "message_template": "Invalid scientific input for field {field}: {reason}",
+              "retryable": false
+            },
+            "selection": {
+              "capability_id": "electronic.energy",
+              "mode": "capability",
+              "task_kind": null
+            },
+            "unknown_field_policy": {
+              "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+              "new_execution_request": "reject_unsupported_execution_fields_before_delegation",
+              "task_context": "never_serialized_never_a_field",
+              "unknown_major_version": "never_execute"
+            },
+            "unsupported_capability_error": {
+              "covers": [
+                "capability_not_in_registry",
+                "capability_implementation_not_registered"
+              ],
+              "detail_required": true,
+              "error_code": "unknown_implementation",
+              "error_schema_ref": "https://acp.local/acp2/science/errors.schema.json#/$defs/errorRecord",
+              "layer": "scientific",
+              "maps_from_error_kind": "unsupported_capability",
+              "message_template": "Capability {capability_id} has no registered implementation {implementation_id}.",
+              "retryable": false
+            },
+            "validation_layers": {
+              "cccp_scientific_semantics": {
+                "checks": [
+                  "charge and multiplicity consistency",
+                  "structure role",
+                  "method and basis",
+                  "electronic state"
+                ],
+                "does_not_cover": [
+                  "JSON structure",
+                  "platform constraints"
+                ],
+                "owner": "cccp"
+              },
+              "json_structure": {
+                "checks": [
+                  "required fields",
+                  "types",
+                  "enums",
+                  "patterns"
+                ],
+                "does_not_cover": [
+                  "scientific semantics",
+                  "platform constraints"
+                ],
+                "owner": "contract"
+              },
+              "runtime_platform_constraints": {
+                "checks": [
+                  "enablement",
+                  "binary probes",
+                  "quota"
+                ],
+                "does_not_cover": [
+                  "JSON structure",
+                  "scientific semantics"
+                ],
+                "owner": "runtime"
+              }
+            }
+          },
+          "task_kind": "singlepoint",
+          "trust_level": "trusted-explicit",
+          "version": "1.0.0",
+          "view_model_digest": "sha256:b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",
+          "view_model_required_fields": [
+            "snapshot_revision",
+            "project_id",
+            "task_ref",
+            "manifest_generation",
+            "artifacts",
+            "claims",
+            "clarifications",
+            "provenance",
+            "read_only",
+            "not_authoritative_for_science"
+          ]
+        },
+        "schema": "acp2.capability.freeze.v1",
+        "task_id": "b22-third-party-task"
+      },
+      "registration": {
+        "binding_digest": "sha256:de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+        "capability_id": "electronic.energy",
+        "descriptor": {
+          "capability_id": "electronic.energy",
+          "compatibility": {
+            "backward_compatible_additions": "same_major_only",
+            "contract_version": "acp2.science.capability.v1",
+            "declared_major": 1,
+            "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+            "max_reader_schema_version": 1,
+            "min_reader_schema_version": 1,
+            "unknown_major_error_code": "unknown_major_version",
+            "unknown_major_version": "reject_and_never_execute"
+          },
+          "completion_checks": [
+            {
+              "compares": [
+                "scf_convergence",
+                "final_energy"
+              ],
+              "description": "The single-point SCF converged and reported a finite final energy.",
+              "evaluator": "cccp.calculation.tasks.singlepoint",
+              "failure_error_code": "invalid_scientific_input",
+              "id": "scf_converged",
+              "required": true
+            }
+          ],
+          "execution_semantics": {
+            "delegates_to_task_kind": "singlepoint",
+            "delegation_count": 1,
+            "kind": "compute",
+            "network_access": false,
+            "reads_existing_artifacts_only": false,
+            "side_effects": "artifacts_only",
+            "starts_subprocess": true,
+            "writes_artifacts": true
+          },
+          "extensions": {},
+          "implementation_id": "cccp.calculation.tasks.singlepoint",
+          "input_schema": {
+            "digest": null,
+            "ref": "cccp.calculation.requests#TaskRequest",
+            "schema_version": 1
+          },
+          "limitations": [
+            {
+              "applies_to": "energies from a single supplied geometry",
+              "id": "no_geometry_relaxation",
+              "severity": "info",
+              "text": "This capability evaluates one supplied structure; it does not optimize the geometry."
+            }
+          ],
+          "output_schema": {
+            "digest": null,
+            "ref": "cccp.calculation.results#TaskResult",
+            "schema_version": 1
+          },
+          "preconditions": [
+            {
+              "description": "A resolvable structure input is supplied.",
+              "error_code": "invalid_scientific_input",
+              "evaluated_by": "cccp",
+              "id": "structure_supplied",
+              "kind": "input",
+              "required": true
+            },
+            {
+              "description": "Charge and multiplicity are consistent with the electron count.",
+              "error_code": "invalid_scientific_input",
+              "evaluated_by": "cccp",
+              "id": "charge_multiplicity_consistent",
+              "kind": "scientific",
+              "required": true
+            }
+          ],
+          "projections": {
+            "available": {
+              "reason": "Availability is determined by Runtime, not by this descriptor.",
+              "state": "unknown"
+            },
+            "described": {
+              "state": "present"
+            },
+            "installed": {
+              "reason": "Named for contract illustration only; this fixture does not install anything.",
+              "state": "unknown"
+            },
+            "verified": {
+              "state": "not_verified"
+            }
+          },
+          "provenance_requirements": {
+            "artifact_digests": "required",
+            "input_digest": "required",
+            "method_identity": "required",
+            "notes": [
+              "Digests use cccp.analysis.identity.content_sha256."
+            ],
+            "software_version": "required",
+            "units": "required"
+          },
+          "schema": "acp2.science.capability",
+          "schema_version": 1,
+          "unknown_field_policy": {
+            "extension_namespace": "x-acp2-<owner>-<name>",
+            "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+            "new_execution_request": "reject_unsupported_execution_fields",
+            "unknown_major_version": "never_execute"
+          },
+          "validation_layers": {
+            "cccp_scientific_semantics": {
+              "checks": [
+                "charge and multiplicity consistency",
+                "method and basis applicability",
+                "electronic-state applicability"
+              ],
+              "does_not_cover": [
+                "provider enablement",
+                "binary availability"
+              ],
+              "owner": "cccp"
+            },
+            "json_structure": {
+              "checks": [
+                "required fields",
+                "types",
+                "enums",
+                "patterns",
+                "minimum and maximum"
+              ],
+              "does_not_cover": [
+                "scientific applicability",
+                "platform enablement"
+              ],
+              "owner": "contract"
+            },
+            "runtime_platform_constraints": {
+              "checks": [
+                "provider enablement",
+                "binary availability",
+                "quota"
+              ],
+              "does_not_cover": [
+                "scientific semantics",
+                "JSON structure"
+              ],
+              "owner": "runtime"
+            }
+          }
+        },
+        "descriptor_digest": "sha256:8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+        "implementation_id": "cccp.calculation.tasks.singlepoint",
+        "license_approved": true,
+        "license_source": "<acp2-dev>/A/docs/LICENSE",
+        "license_state": "approved",
+        "registered_at": "2026-10-23T10:22:24Z",
+        "registered_by": "controller",
+        "schema": "acp2.capability.registration.v1",
+        "source": "reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root/energy",
+        "task_binding": {
+          "binding_id": "science.singlepoint",
+          "binding_output": {
+            "binding_metadata": {
+              "capability_id": "electronic.energy",
+              "context_serialized": false,
+              "delegation_target": "cccp.calculation.run_singlepoint",
+              "implementation_id": "cccp.calculation.tasks.singlepoint",
+              "request_contract_ref": "cccp.calculation.requests#TaskRequest",
+              "request_schema_version": 1,
+              "resolved_task_kind": "singlepoint",
+              "result_contract_ref": "cccp.calculation.results#TaskResult",
+              "result_schema_version": 1,
+              "selection_mode": "capability"
+            },
+            "request": {
+              "charge": 0,
+              "level": {
+                "basis": "def2-TZVP",
+                "method": "r2SCAN-3c"
+              },
+              "multiplicity": 1,
+              "resources": {
+                "mem": "2GB",
+                "nproc": 2
+              },
+              "schema_version": 1,
+              "structure": {
+                "path": "structures/water.xyz",
+                "role": "minimum",
+                "source": "fixture"
+              },
+              "task": "singlepoint"
+            },
+            "request_json_validated_by": "cccp.calculation.requests.TaskRequest.from_dict"
+          },
+          "compatibility": {
+            "contract_version": "acp2.science.task-binding.v1",
+            "declared_major": 1,
+            "existing_contract_versions": {
+              "task_request": 1,
+              "task_result": 1
+            },
+            "max_reader_schema_version": 1,
+            "min_reader_schema_version": 1,
+            "unknown_major_error_code": "unknown_major_version",
+            "unknown_major_version": "reject_and_never_execute"
+          },
+          "context_contract": {
+            "module": "cccp.calculation.context",
+            "must_not_appear_as_field": true,
+            "serialization_rule": "runtime_only_never_json",
+            "serialized": false,
+            "type": "TaskContext"
+          },
+          "delegation": {
+            "entrypoint": "cccp.calculation.run_singlepoint",
+            "entrypoint_module": "cccp.calculation.tasks",
+            "max_invocations_per_binding": 1,
+            "no_batch_or_chain": true,
+            "no_second_executor": true,
+            "single": true
+          },
+          "preflight": {
+            "loads_plugins": false,
+            "network": false,
+            "outcomes": [
+              "ready",
+              "not_ready",
+              "unsupported_capability"
+            ],
+            "platform_constraint_owner": "runtime",
+            "side_effect_free": true,
+            "starts_subprocess": false,
+            "validates_json_structure": true,
+            "validates_platform_constraints": false,
+            "validates_scientific_preconditions": true,
+            "writes_artifacts": false
+          },
+          "request_contract": {
+            "authoritative": true,
+            "execution_unknown_field_rule": "reject_unsupported_execution_fields_at_binding_preflight",
+            "module": "cccp.calculation.requests",
+            "parser": "TaskRequest.from_dict",
+            "schema_version": 1,
+            "schema_version_rule": "S1_reject_any_version_other_than_1",
+            "serializer": "TaskRequest.to_dict",
+            "type": "TaskRequest",
+            "unknown_field_read_rule": "S2_ignore_unknown_fields_on_read"
+          },
+          "result_contract": {
+            "authoritative": true,
+            "module": "cccp.calculation.results",
+            "parser": "TaskResult.from_dict",
+            "schema_version": 1,
+            "schema_version_rule": "S1_reject_any_version_other_than_1",
+            "serializer": "TaskResult.to_dict",
+            "type": "TaskResult",
+            "unknown_field_read_rule": "S2_ignore_unknown_fields_on_read"
+          },
+          "schema": "acp2.science.task_binding",
+          "schema_version": 1,
+          "scientific_precondition_error": {
+            "covers": [
+              "charge_or_multiplicity",
+              "structure_role",
+              "method_or_basis",
+              "electronic_state",
+              "scientific_applicability"
+            ],
+            "detail_required": true,
+            "error_code": "invalid_scientific_input",
+            "error_schema_ref": "https://acp.local/acp2/science/errors.schema.json#/$defs/errorRecord",
+            "layer": "scientific",
+            "maps_from_error_kind": "invalid_input",
+            "message_template": "Invalid scientific input for field {field}: {reason}",
+            "retryable": false
+          },
+          "selection": {
+            "capability_id": "electronic.energy",
+            "mode": "capability",
+            "task_kind": null
+          },
+          "unknown_field_policy": {
+            "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+            "new_execution_request": "reject_unsupported_execution_fields_before_delegation",
+            "task_context": "never_serialized_never_a_field",
+            "unknown_major_version": "never_execute"
+          },
+          "unsupported_capability_error": {
+            "covers": [
+              "capability_not_in_registry",
+              "capability_implementation_not_registered"
+            ],
+            "detail_required": true,
+            "error_code": "unknown_implementation",
+            "error_schema_ref": "https://acp.local/acp2/science/errors.schema.json#/$defs/errorRecord",
+            "layer": "scientific",
+            "maps_from_error_kind": "unsupported_capability",
+            "message_template": "Capability {capability_id} has no registered implementation {implementation_id}.",
+            "retryable": false
+          },
+          "validation_layers": {
+            "cccp_scientific_semantics": {
+              "checks": [
+                "charge and multiplicity consistency",
+                "structure role",
+                "method and basis",
+                "electronic state"
+              ],
+              "does_not_cover": [
+                "JSON structure",
+                "platform constraints"
+              ],
+              "owner": "cccp"
+            },
+            "json_structure": {
+              "checks": [
+                "required fields",
+                "types",
+                "enums",
+                "patterns"
+              ],
+              "does_not_cover": [
+                "scientific semantics",
+                "platform constraints"
+              ],
+              "owner": "contract"
+            },
+            "runtime_platform_constraints": {
+              "checks": [
+                "enablement",
+                "binary probes",
+                "quota"
+              ],
+              "does_not_cover": [
+                "JSON structure",
+                "scientific semantics"
+              ],
+              "owner": "runtime"
+            }
+          }
+        },
+        "task_kind": "singlepoint",
+        "trust_level": "trusted-explicit",
+        "version": "1.0.0",
+        "view_model_digest": "sha256:b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",
+        "view_model_required_fields": [
+          "snapshot_revision",
+          "project_id",
+          "task_ref",
+          "manifest_generation",
+          "artifacts",
+          "claims",
+          "clarifications",
+          "provenance",
+          "read_only",
+          "not_authoritative_for_science"
+        ]
+      },
+      "run": {
+        "attempted": true,
+        "energy_hartree": -76.41891019874,
+        "errors": [],
+        "evidence_class": "REAL",
+        "reason": null,
+        "status": "PASS",
+        "task_status": "completed"
+      },
+      "schema": "acp2.b22.third-party-capability.v1"
+    },
+    "b22.trust": {
+      "rows": [
+        {
+          "adapter_id": "acp.storage.untrusted",
+          "effective_trust_level": "discover-only",
+          "enabled": false,
+          "entrypoint_importable": true,
+          "import_error": null,
+          "install_result": "adapter_untrusted"
+        },
+        {
+          "capability_id": "electronic.energy",
+          "execution_admission": "capability_license_unapproved",
+          "license_approved": false,
+          "license_state": "unknown",
+          "read_only_admission": "allowed"
+        }
+      ]
+    },
+    "b22.upgrade_rollback": {
+      "adapter_id": "acp.storage.inventory",
+      "historical_read_only": {
+        "v1_old_task": {
+          "adapter_id": "acp.storage.inventory",
+          "descriptor": {
+            "adapter_id": "acp.storage.inventory",
+            "capabilities": [
+              "storage.inventory"
+            ],
+            "claims_process_isolation": false,
+            "description": "External infrastructure adapter fixture; no science parser.",
+            "descriptor_schema": "acp2.adapter.v1",
+            "entrypoint": {
+              "attribute": "run",
+              "module": "adapter"
+            },
+            "environment": [
+              "env:ACP2_B21_PLUGIN_ENV"
+            ],
+            "kind": "storage",
+            "resource_limits": {
+              "max_concurrency": 1,
+              "max_cpu_seconds": 30,
+              "max_io_bytes": 1048576,
+              "max_memory_bytes": 33554432
+            },
+            "supported_schema": [
+              "acp2.adapter.v1"
+            ],
+            "trust_level": "discover-only",
+            "verification_fixture": "verification.json",
+            "version": "1.0.0"
+          },
+          "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+          "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+          "entrypoint_sha256": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+          "entrypoint_size_bytes": 1459,
+          "read_only": true,
+          "schema": "acp2.adapter.frozen-artifact.v1",
+          "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+          "source": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.0.0/adapter.py",
+          "version": "1.0.0"
+        },
+        "v2_new_task": {
+          "adapter_id": "acp.storage.inventory",
+          "descriptor": {
+            "adapter_id": "acp.storage.inventory",
+            "capabilities": [
+              "storage.inventory"
+            ],
+            "claims_process_isolation": false,
+            "description": "External infrastructure adapter fixture; no science parser.",
+            "descriptor_schema": "acp2.adapter.v1",
+            "entrypoint": {
+              "attribute": "run",
+              "module": "adapter"
+            },
+            "environment": [
+              "env:ACP2_B21_PLUGIN_ENV"
+            ],
+            "kind": "storage",
+            "resource_limits": {
+              "max_concurrency": 1,
+              "max_cpu_seconds": 30,
+              "max_io_bytes": 1048576,
+              "max_memory_bytes": 33554432
+            },
+            "supported_schema": [
+              "acp2.adapter.v1"
+            ],
+            "trust_level": "discover-only",
+            "verification_fixture": "verification.json",
+            "version": "1.1.0"
+          },
+          "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+          "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+          "entrypoint_sha256": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+          "entrypoint_size_bytes": 1459,
+          "read_only": true,
+          "schema": "acp2.adapter.frozen-artifact.v1",
+          "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/acp.storage.inventory/1.1.0",
+          "source": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0/adapter.py",
+          "version": "1.1.0"
+        }
+      },
+      "new_execution_error": "adapter_version_not_installed",
+      "new_task": {
+        "attempt": 1,
+        "task_id": "b21-new-task"
+      },
+      "old_task": {
+        "attempt": 1,
+        "task_id": "b21-old-task"
+      },
+      "old_task_read_back_uses_v1_digest": true,
+      "schema": "acp2.b22.upgrade-rollback.v1",
+      "v1": {
+        "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+        "version": "1.0.0"
+      },
+      "v1_uninstall": {
+        "active_after": null,
+        "adapter_id": "acp.storage.inventory",
+        "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+        "installed_record_removed": true,
+        "payload_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.0.0",
+        "payload_removed": true,
+        "schema": "acp2.adapter.uninstall.v1",
+        "version": "1.0.0"
+      },
+      "v2": {
+        "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+        "version": "1.1.0"
+      },
+      "v2_payload_absent": true,
+      "v2_uninstall": {
+        "active_after": null,
+        "adapter_id": "acp.storage.inventory",
+        "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+        "installed_record_removed": true,
+        "payload_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0",
+        "payload_removed": true,
+        "schema": "acp2.adapter.uninstall.v1",
+        "version": "1.1.0"
+      }
+    }
+  },
+  "finished_at": "2026-10-23T10:22:26Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "infra:upgrade",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T102221Z-1496787-a936584b",
+  "scenario": "infra-plugin",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T10:22:21Z",
+  "submission_id": null,
+  "usage": null
+}
