@@ -1,0 +1,1 @@
+VALID: /tmp/opencode/bfix7/verify-final/docs/reference/next-change/acp2-contracts/manifest.json

@@ -9,11 +9,12 @@ are absent, H4/H6 remain open, and the external reproduction is not independent.
 | Candidate label | `bb45a46` |
 | Release source candidate | `6ec01ec96fa81b89bec8ff321c38e3db2dc154d2` (tree `e2b23771a47e7553738ef902cc4c1b62528fe508`) |
 | Release directory | `B/B25/release-fix5` (manifest sha256 `380b4915…`) |
-| Landed HEAD | `09fc41da9171e1d466c0036a114feb272652e028` (tree `b0718da04b2acd32e886c82a03b3217cf99cad97`) |
+| Landed code-fix HEAD | `493790709830eac4ce347b5fb81414050f7a1e21` (tree `f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a`) |
+| Landed HEAD delta | `6ec01ec..4937907 -- src`: 10 files, +823/-161 (B-fix-4/B-fix-5 runtime/cgroup/attempt recovery plus the B-fix-7 `batch/options.py` overlay). Release-fix5 remains built from `6ec01ec`; digests unchanged. |
 | Client revision | `39d4aeb20451c984e20d27e12270a15070adce12` (C HEAD; C24a/C25/C35 absent) |
 | A revision | `1b580a3dcda1351a0869353e6a505acde10dcfe0` (A HEAD; A-20/A-29 absent) |
 | Harness revision | `dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b` |
-| Evidence revision | `3c16877f422933b47243e255f8b3a45efea05bfe1dd176f5f643a6764a7b8aa3` |
+| Evidence revision | `0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d` |
 | Installed release identity | `release_id=1c79785a657c6614`, 510 files, `sync_files == manifest_files` |
 | LSF normal singlepoint | PASS — job `1765` terminal `completed`, `sub_0fea781820a81666`, −1.116759307204 Ha |
 | Contract | `1.3.0`; manifest `sha256:5ddf8c4a…`, acceptance schema `sha256:81f653be…` |

@@ -1,0 +1,19 @@
+B-fix-7 verification (rows 39-41)
+
+Candidate fix commit: 493790709830eac4ce347b5fb81414050f7a1e21 (tree f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a)
+Harness revision: a44e39a73960b735556dfc47608210300c4c6d95 (clean worktree, status --porcelain empty)
+Four-combination: exit 0; F0/S1 PASS, F1/S1 PASS; no candidate patch
+Legacy readers: exit 0; 41 passed
+B24 raw S0: F0/S0 FAIL, F1/S0 FAIL (unchanged)
+B24b S0 vocabulary: FAIL + NOT_APPLICABLE scope, no S0 closure
+
+Clean worktree verification at the docs(evidence) commit (status --porcelain empty):
+- pytest tests/test_acp2_runtime_h7_index.py -q: 8 passed
+- pytest tests/test_acp2_runtime_recovery_runbook.py tests/test_services_four_combination_records.py -q: 26 passed
+- /usr/bin/python3.11 scripts/acceptance/validate_acp2_contracts.py: exit 0
+- /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/integration/summary.json: exit 0
+- legacy-reader pytest: 41 passed
+- candidate X clean checkout: status --porcelain empty, HEAD 4937907, tree f0f9404
+
+Plan rows 39, 40 and 41 marked [x].
+Evidence files: candidate-clean.txt, harness-clean.txt, four-combination.exit, legacy-readers.txt, verify-*.txt, final-*.txt, historical-b24b-overlay/.

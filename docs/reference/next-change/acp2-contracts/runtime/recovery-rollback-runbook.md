@@ -3,7 +3,7 @@
 Status: **published** · H6: **OPEN** · production release: **false** · production restart executed: **false**.
 
 Owner: Plan B runtime (B24b, todo 29).
-Frozen candidate: `f32c6704e0348585a5a58ce8516450ab3afc7077` (`feat/frontend-plan1-closure`).
+Frozen H6 candidate: `493790709830eac4ce347b5fb81414050f7a1e21` (`feat/frontend-plan1-closure`). Historical migration evidence: `f32c6704e0348585a5a58ce8516450ab3afc7077` (B24b migration run; not re-attributed by B-fix-7).
 A reference: `1b580a3dcda1351a0869353e6a505acde10dcfe0` (`acp2/a-science`).
 C reference: `39d4aeb20451c984e20d27e12270a15070adce12` (`acp2/c-experience`).
 
@@ -43,7 +43,7 @@ export PYTHONPATH="$ACP2_REPO/src:$ACP2_REPO"
 export B24B_WORKSPACE=<acp2-dev>/data/b/b24b-migration
 export B24B_EVIDENCE="$ACP2_EVIDENCE/B/B24b"
 export B24B_FIXTURE=<acp2-dev>/data/b/fixtures/migration/b24b-migration.json
-export B24B_CANDIDATE=f32c6704e0348585a5a58ce8516450ab3afc7077
+export B24B_CANDIDATE=493790709830eac4ce347b5fb81414050f7a1e21
 export ACP_CANDIDATE_REVISION="$B24B_CANDIDATE"
 ```
 
@@ -59,7 +59,7 @@ test -f "$B24B_EVIDENCE/migration/summary.json"
 ss -ltnp | grep ':8765' || true
 ```
 
-Acceptance: `git rev-parse HEAD` is `f32c6704e0348585a5a58ce8516450ab3afc7077`; the B24b
+Acceptance: `git rev-parse HEAD` is `493790709830eac4ce347b5fb81414050f7a1e21` for the H6 four-combination/legacy-reader evidence; the B24b
 workspace marker exists; the production listener is observed but never touched. The B24b
 migration run was executed from this exact commit; a different SHA's evidence is not reused.
 
@@ -340,10 +340,9 @@ duplicate publication keeps one complete marker and unique product ids.
 
 The S1 cells are the H6 candidate-service combinations. S0 is the pre-P4 baseline service and
 is not an H6 execution target; its earlier baseline assertion failure is retained in B24 raw
-evidence, not reused as an H6 PASS. The candidate overlay is recorded because
-`f32c670` alone cannot construct `OriginPolicy(public_origin=...)` and does not forward the
-ordinary `BatchOptimize --method`; the overlay is the same working-tree delta B24a used.
-It changes no evidence claim.
+evidence, not reused as an H6 PASS. The reviewed `options.py` hunk is committed at the H6
+candidate (B-fix-7); the `boundary.py` hunk was already landed on the branch. The clean rerun
+applies no working-tree patch. The historical overlay patch file is retained for audit only.
 
 ```bash
 # label: REVERSIBLE
@@ -351,8 +350,7 @@ cd "$ACP2_REPO"
 /usr/bin/python3.11 scripts/acceptance/four_combinations.py \
   --out "$B24B_EVIDENCE/four-combination" \
   --f1-revision "$B24B_CANDIDATE" \
-  --cells 'F0/S1,F1/S1' \
-  --candidate-patch "$B24B_EVIDENCE/candidate-runnable-overlay.patch"
+  --cells 'F0/S1,F1/S1'
 ```
 
 Expected: exit `0`; `summary.json` has `F0/S1` PASS and `F1/S1` PASS; every one of the seven

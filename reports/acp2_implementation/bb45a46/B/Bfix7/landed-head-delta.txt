@@ -1,0 +1,15 @@
+$ git diff --stat 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2..493790709830eac4ce347b5fb81414050f7a1e21 -- src
+ src/acp/calculations/attempt_freeze.py       |  23 ++-
+ src/acp/calculations/attempt_publication.py  | 192 ++++++++++++++++++---
+ src/acp/calculations/batch/options.py        |  12 +-
+ src/acp/scheduler/remote/runner.py           |  12 +-
+ src/acp_services/runtime/attempt_freeze.py   | 241 +++++++++++++++++++++++----
+ src/acp_services/runtime/attempt_recovery.py | 143 ++++++++++++++++
+ src/acp_services/runtime/cgroup.py           |  97 +++++++++++
+ src/acp_services/runtime/isolation.py        |  74 +-------
+ src/acp_services/runtime/worker.py           | 145 +++++++++++++---
+ src/acp_services/worker_bootstrap.py         |  45 ++++-
+ 10 files changed, 823 insertions(+), 161 deletions(-)
+
+$ git diff --numstat 6ec01ec..4937907 -- src (totals)
+10 files, +823 -161

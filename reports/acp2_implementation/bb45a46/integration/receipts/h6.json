@@ -2,12 +2,12 @@
   "artifacts": [
     {
       "path": "<repo>/reports/acp2_implementation/bb45a46/B/B24b/h6-receipt.json",
-      "sha256": "6e10fc5049faae26ae95a4857e4d55e4208c3532a2ed68425697efc14e861a5a",
-      "size_bytes": 10125
+      "sha256": "1f1b6607d47bb11e9752b47183060cd4a0123a787d2c0488ee1fe1c34c5f4a34",
+      "size_bytes": 12182
     },
     {
       "path": "<repo>/reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
-      "sha256": "232589e98953b9f353a8cf0ba27ae332fdc1a72c72705b04c6497a469dd6752f",
+      "sha256": "82eec5571c349c6aa3a9058609fb3b1ed01e80a224d95f0fa78c3ec52f4e8a1d",
       "size_bytes": 2572
     },
     {

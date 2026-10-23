@@ -132,7 +132,8 @@
   "source_candidate": {
     "base_release_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
     "label": "release-fix5",
-    "landed_head": "09fc41da9171e1d466c0036a114feb272652e028",
+    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
     "revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
     "tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
   },

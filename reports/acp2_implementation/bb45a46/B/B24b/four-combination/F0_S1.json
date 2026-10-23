@@ -6,42 +6,46 @@
       "sha256": "5eb26d813e680530eb433017521d050991f41e434ae62b8c2daa662f7913c8ba"
     }
   ],
-  "candidate_patch_sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
-  "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "candidate_patch_sha256": null,
+  "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
   "cell": {
     "browser": {
       "api_responses": [
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v1/status"
+          "url": "http://127.0.0.1:40175/api/v1/status"
         },
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v1/projects"
+          "url": "http://127.0.0.1:40175/api/v1/projects"
         },
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v1/workflow-catalog"
+          "url": "http://127.0.0.1:40175/api/v1/workflow-catalog"
         },
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v1/maintenance/disk-usage"
+          "url": "http://127.0.0.1:40175/api/v1/maintenance/disk-usage"
         },
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+          "url": "http://127.0.0.1:40175/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
         },
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v1/jobs/20261023_194032_001_four-combo-F0S1/detail"
+          "url": "http://127.0.0.1:40175/api/v1/jobs/20261024_044709_001_four-combo-F0S1/detail"
         },
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v1/jobs/20261023_194032_001_four-combo-F0S1/files"
+          "url": "http://127.0.0.1:40175/api/v1/jobs/20261024_044709_001_four-combo-F0S1/files"
         },
         {
           "status": 200,
-          "url": "http://127.0.0.1:41533/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=false"
+          "url": "http://127.0.0.1:40175/api/v1/method-catalog"
+        },
+        {
+          "status": 200,
+          "url": "http://127.0.0.1:40175/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=false"
         }
       ],
       "chromium": "153.0.8010.12",
@@ -67,12 +71,12 @@
         "..."
       ],
       "artifacts": [
-        "0a36e8b1-1d21-4aee-831e-3e88a8a02431.completed.json",
-        "0a36e8b1-1d21-4aee-831e-3e88a8a02431.started.json",
-        "dcb825ac-59fd-405c-af80-83fe3dcc7e47.completed.json",
-        "dcb825ac-59fd-405c-af80-83fe3dcc7e47.started.json",
-        "ebfa4861-3abe-4431-9ee2-90cebd2a2e7e.completed.json",
-        "ebfa4861-3abe-4431-9ee2-90cebd2a2e7e.started.json",
+        "b7b1b53a-e5d8-4e22-a9e9-d70a088bb477.completed.json",
+        "b7b1b53a-e5d8-4e22-a9e9-d70a088bb477.started.json",
+        "c29dfd26-53ff-413c-9c29-85586df83007.completed.json",
+        "c29dfd26-53ff-413c-9c29-85586df83007.started.json",
+        "dcd89580-c567-40b1-af82-971a65094052.completed.json",
+        "dcd89580-c567-40b1-af82-971a65094052.started.json",
         "events.jsonl",
         "input_preview.xyz",
         "job.json",
@@ -82,7 +86,7 @@
       "ok": true,
       "status": "completed",
       "stderr_tail": [],
-      "work_dir": "/tmp/acp-four-gj1ccxk_/run_S1/demo_cli/uncategorized/four-combo-S1_fake",
+      "work_dir": "/tmp/acp-four-46i6zwfp/run_S1/demo_cli/uncategorized/four-combo-S1_fake",
       "workflow": "fake"
     },
     "frontend": {
@@ -149,8 +153,8 @@
         "legacy_entry_selected": true,
         "ok": true,
         "stderr_tail": [
-          "2026-10-23 19:40:21,168 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml",
-          "2026-10-23 19:40:21,459 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
+          "2026-10-24 04:46:58,679 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml",
+          "2026-10-24 04:46:58,990 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
         ],
         "workflow": "PESsearch"
       },
@@ -256,7 +260,7 @@
               "run",
               "Confsearch",
               "--input",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
               "--protocol",
               "xtb-crest",
               "--profile",
@@ -270,7 +274,7 @@
               "--temperature",
               "310",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/completed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/completed",
               "--nproc",
               "2",
               "--mem",
@@ -295,14 +299,14 @@
                     }
                   },
                   "energy_window": null,
-                  "input_source": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                  "input_source": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
                   "levels": null,
                   "max_conformers": null,
                   "md_params": {},
                   "multiplicity": 1,
                   "name": null,
                   "nproc": 2,
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/completed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/completed",
                   "preset": null,
                   "profile": "light",
                   "protocol": "xtb-crest",
@@ -314,7 +318,7 @@
               }
             ],
             "stderr": "",
-            "stdout": "2026-10-23 19:40:26,948 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:26,962 [INFO] acp.cli: Confsearch completed (xtb-crest + screen)\n2026-10-23 19:40:26,962 [INFO] acp.cli:   Conformers  : 0\n2026-10-23 19:40:26,962 [INFO] acp.cli:   Manifest    : None\n2026-10-23 19:40:26,962 [INFO] acp.cli:   G1 gate     : None\n"
+            "stdout": "2026-10-24 04:47:04,470 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:04,485 [INFO] acp.cli: Confsearch completed (xtb-crest + screen)\n2026-10-24 04:47:04,485 [INFO] acp.cli:   Conformers  : 0\n2026-10-24 04:47:04,485 [INFO] acp.cli:   Manifest    : None\n2026-10-24 04:47:04,485 [INFO] acp.cli:   G1 gate     : None\n"
           },
           {
             "command": [
@@ -324,7 +328,7 @@
               "run",
               "Confsearch",
               "--input",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
               "--protocol",
               "xtb-crest",
               "--profile",
@@ -338,7 +342,7 @@
               "--temperature",
               "310",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/failed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/failed",
               "--nproc",
               "2",
               "--mem",
@@ -363,14 +367,14 @@
                     }
                   },
                   "energy_window": null,
-                  "input_source": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                  "input_source": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
                   "levels": null,
                   "max_conformers": null,
                   "md_params": {},
                   "multiplicity": 1,
                   "name": null,
                   "nproc": 2,
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/failed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/failed",
                   "preset": null,
                   "profile": "light",
                   "protocol": "xtb-crest",
@@ -387,18 +391,18 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
-          "/tmp/acp-four-gj1ccxk_/F1",
+          "/tmp/acp-four-46i6zwfp/F1",
           "--workflow",
           "Confsearch",
           "--run-root",
-          "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch"
+          "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch"
         ],
         "driver_exit_code": 0,
         "ok": true,
-        "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+        "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
         "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
         "real_qc": "NOT_VERIFIED",
         "result": "PASS",
@@ -416,7 +420,7 @@
               "run",
               "PESsearch",
               "--input",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
               "--coordinate",
               "0,1,0.8,1.2",
               "--points",
@@ -426,7 +430,7 @@
               "--multiplicity",
               "1",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/completed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/completed",
               "--nproc",
               "2",
               "--mem",
@@ -462,9 +466,9 @@
                     "unit": "angstrom",
                     "values": []
                   },
-                  "input_xyz": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                  "input_xyz": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
                   "multiplicity": 1,
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/completed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/completed",
                   "reaction": null,
                   "strategy": "guided-scan"
                 },
@@ -472,7 +476,7 @@
               }
             ],
             "stderr": "",
-            "stdout": "2026-10-23 19:40:27,687 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:27,702 [INFO] acp.cli: PESsearch completed: 0 TS + 0 INT candidates\n2026-10-23 19:40:27,702 [INFO] acp.cli:   Manifest    : None\n"
+            "stdout": "2026-10-24 04:47:05,209 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:05,224 [INFO] acp.cli: PESsearch completed: 0 TS + 0 INT candidates\n2026-10-24 04:47:05,224 [INFO] acp.cli:   Manifest    : None\n"
           },
           {
             "command": [
@@ -482,7 +486,7 @@
               "run",
               "PESsearch",
               "--input",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
               "--coordinate",
               "0,1,0.8,1.2",
               "--points",
@@ -492,7 +496,7 @@
               "--multiplicity",
               "1",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/failed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/failed",
               "--nproc",
               "2",
               "--mem",
@@ -528,9 +532,9 @@
                     "unit": "angstrom",
                     "values": []
                   },
-                  "input_xyz": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                  "input_xyz": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
                   "multiplicity": 1,
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/failed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/failed",
                   "reaction": null,
                   "strategy": "guided-scan"
                 },
@@ -543,18 +547,18 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
-          "/tmp/acp-four-gj1ccxk_/F1",
+          "/tmp/acp-four-46i6zwfp/F1",
           "--workflow",
           "PESsearch",
           "--run-root",
-          "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch"
+          "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch"
         ],
         "driver_exit_code": 0,
         "ok": true,
-        "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+        "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
         "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
         "real_qc": "NOT_VERIFIED",
         "result": "PASS",
@@ -572,7 +576,7 @@
               "run",
               "BatchOptimize",
               "--items-file",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
               "--profile",
               "opt_only",
               "--method",
@@ -584,7 +588,7 @@
               "--multiplicity",
               "1",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/completed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/completed",
               "--nproc",
               "2",
               "--mem",
@@ -598,7 +602,7 @@
             "received": [
               {
                 "args": [
-                  "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                  "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
                 ],
                 "kwargs": {
                   "charge": 0,
@@ -663,7 +667,7 @@
                     "transition_state_scf_strategy": "normal"
                   },
                   "multiplicity": 1,
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/completed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/completed",
                   "profile": "opt_only",
                   "select": null
                 },
@@ -671,7 +675,7 @@
               }
             ],
             "stderr": "",
-            "stdout": "2026-10-23 19:40:28,449 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:28,465 [INFO] acp.cli: BatchOptimize completed: profile=opt_only\n2026-10-23 19:40:28,465 [INFO] acp.cli:   Manifest: None\n"
+            "stdout": "2026-10-24 04:47:05,933 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:05,948 [INFO] acp.cli: BatchOptimize completed: profile=opt_only\n2026-10-24 04:47:05,948 [INFO] acp.cli:   Manifest: None\n"
           },
           {
             "command": [
@@ -681,7 +685,7 @@
               "run",
               "BatchOptimize",
               "--items-file",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
               "--profile",
               "opt_only",
               "--method",
@@ -693,7 +697,7 @@
               "--multiplicity",
               "1",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/failed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/failed",
               "--nproc",
               "2",
               "--mem",
@@ -707,7 +711,7 @@
             "received": [
               {
                 "args": [
-                  "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                  "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
                 ],
                 "kwargs": {
                   "charge": 0,
@@ -772,7 +776,7 @@
                     "transition_state_scf_strategy": "normal"
                   },
                   "multiplicity": 1,
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/failed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/failed",
                   "profile": "opt_only",
                   "select": null
                 },
@@ -785,18 +789,18 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
-          "/tmp/acp-four-gj1ccxk_/F1",
+          "/tmp/acp-four-46i6zwfp/F1",
           "--workflow",
           "BatchOptimize",
           "--run-root",
-          "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize"
+          "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize"
         ],
         "driver_exit_code": 0,
         "ok": true,
-        "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+        "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
         "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
         "real_qc": "NOT_VERIFIED",
         "result": "PASS",
@@ -814,9 +818,9 @@
               "run",
               "XtbPathSearch",
               "--path-config",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/completed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/completed",
               "--nproc",
               "2",
               "--mem",
@@ -863,13 +867,13 @@
                       "orca_maxcore_safety": 0.8
                     }
                   },
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/completed"
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/completed"
                 },
                 "workflow": "XtbPathSearch"
               }
             ],
             "stderr": "",
-            "stdout": "2026-10-23 19:40:29,201 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:29,216 [INFO] acp.cli: XtbPathSearch completed\n2026-10-23 19:40:29,216 [INFO] acp.cli:   Frames      : N/A\n2026-10-23 19:40:29,216 [INFO] acp.cli:   Manifest    : N/A\n2026-10-23 19:40:29,216 [INFO] acp.cli:   PES profile : N/A\n"
+            "stdout": "2026-10-24 04:47:06,678 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:06,693 [INFO] acp.cli: XtbPathSearch completed\n2026-10-24 04:47:06,694 [INFO] acp.cli:   Frames      : N/A\n2026-10-24 04:47:06,694 [INFO] acp.cli:   Manifest    : N/A\n2026-10-24 04:47:06,694 [INFO] acp.cli:   PES profile : N/A\n"
           },
           {
             "command": [
@@ -879,9 +883,9 @@
               "run",
               "XtbPathSearch",
               "--path-config",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/failed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/failed",
               "--nproc",
               "2",
               "--mem",
@@ -928,7 +932,7 @@
                       "orca_maxcore_safety": 0.8
                     }
                   },
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/failed"
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/failed"
                 },
                 "workflow": "XtbPathSearch"
               }
@@ -939,18 +943,18 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
-          "/tmp/acp-four-gj1ccxk_/F1",
+          "/tmp/acp-four-46i6zwfp/F1",
           "--workflow",
           "XtbPathSearch",
           "--run-root",
-          "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch"
+          "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch"
         ],
         "driver_exit_code": 0,
         "ok": true,
-        "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+        "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
         "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
         "real_qc": "NOT_VERIFIED",
         "result": "PASS",
@@ -968,9 +972,9 @@
               "run",
               "XtbConstrainedOpt",
               "--opt-config",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/completed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/completed",
               "--nproc",
               "2",
               "--mem",
@@ -1047,13 +1051,13 @@
                       "orca_maxcore_safety": 0.8
                     }
                   },
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/completed"
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/completed"
                 },
                 "workflow": "XtbConstrainedOpt"
               }
             ],
             "stderr": "",
-            "stdout": "2026-10-23 19:40:29,970 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:29,985 [INFO] acp.cli: XtbConstrainedOpt completed\n2026-10-23 19:40:29,985 [INFO] acp.cli:   Converged   : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   E_effective : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   E_physical  : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   Manifest    : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   Evidence    : N/A\n"
+            "stdout": "2026-10-24 04:47:07,437 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:07,452 [INFO] acp.cli: XtbConstrainedOpt completed\n2026-10-24 04:47:07,452 [INFO] acp.cli:   Converged   : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   E_effective : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   E_physical  : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   Manifest    : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   Evidence    : N/A\n"
           },
           {
             "command": [
@@ -1063,9 +1067,9 @@
               "run",
               "XtbConstrainedOpt",
               "--opt-config",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/failed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/failed",
               "--nproc",
               "2",
               "--mem",
@@ -1142,7 +1146,7 @@
                       "orca_maxcore_safety": 0.8
                     }
                   },
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/failed"
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/failed"
                 },
                 "workflow": "XtbConstrainedOpt"
               }
@@ -1153,18 +1157,18 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
-          "/tmp/acp-four-gj1ccxk_/F1",
+          "/tmp/acp-four-46i6zwfp/F1",
           "--workflow",
           "XtbConstrainedOpt",
           "--run-root",
-          "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt"
+          "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt"
         ],
         "driver_exit_code": 0,
         "ok": true,
-        "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+        "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
         "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
         "real_qc": "NOT_VERIFIED",
         "result": "PASS",
@@ -1182,7 +1186,7 @@
               "run",
               "tsmode",
               "--source-bundle",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
               "--source-mode-index",
               "6",
               "--max-steps",
@@ -1193,7 +1197,7 @@
               "0.2",
               "--allow-unverified-mapping",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/completed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/completed",
               "--nproc",
               "2",
               "--mem",
@@ -1236,12 +1240,12 @@
                   },
                   "source_mode_index": 6
                 },
-                "task_root": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/completed/bundle",
+                "task_root": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/completed/bundle",
                 "workflow": "tsmode"
               }
             ],
             "stderr": "",
-            "stdout": "2026-10-23 19:40:30,765 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:30,812 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:30,827 [INFO] acp.cli: TS Mode completed\n"
+            "stdout": "2026-10-24 04:47:08,225 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:08,275 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:08,290 [INFO] acp.cli: TS Mode completed\n"
           },
           {
             "command": [
@@ -1251,7 +1255,7 @@
               "run",
               "tsmode",
               "--source-bundle",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
               "--source-mode-index",
               "6",
               "--max-steps",
@@ -1262,7 +1266,7 @@
               "0.2",
               "--allow-unverified-mapping",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/failed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/failed",
               "--nproc",
               "2",
               "--mem",
@@ -1305,7 +1309,7 @@
                   },
                   "source_mode_index": 6
                 },
-                "task_root": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/failed/bundle",
+                "task_root": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/failed/bundle",
                 "workflow": "tsmode"
               }
             ],
@@ -1315,18 +1319,18 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
-          "/tmp/acp-four-gj1ccxk_/F1",
+          "/tmp/acp-four-46i6zwfp/F1",
           "--workflow",
           "tsmode",
           "--run-root",
-          "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode"
+          "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode"
         ],
         "driver_exit_code": 0,
         "ok": true,
-        "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+        "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
         "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
         "real_qc": "NOT_VERIFIED",
         "result": "PASS",
@@ -1344,9 +1348,9 @@
               "run",
               "nmr",
               "--input",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz",
               "--spectrum",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
               "--nuclei",
               "1H",
               "--nmr-method",
@@ -1362,7 +1366,7 @@
               "--multiplicity",
               "1",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/completed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/completed",
               "--nproc",
               "2",
               "--mem",
@@ -1395,7 +1399,7 @@
                   "error_model": "goodman-legacy",
                   "ewin": 6.0,
                   "input_sources": [
-                    "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                    "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz"
                   ],
                   "max_conformers": 2,
                   "multiplicity": 1,
@@ -1405,10 +1409,10 @@
                   "nuclei": [
                     "1H"
                   ],
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/completed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/completed",
                   "solvent": "chloroform",
                   "solvent_model": "cpcm",
-                  "spectrum": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                  "spectrum": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
                   "stereocenters": null,
                   "tms_13c": null,
                   "tms_1h": null
@@ -1417,7 +1421,7 @@
               }
             ],
             "stderr": "",
-            "stdout": "2026-10-23 19:40:32,114 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:32,135 [INFO] acp.cli: NMR + DP4/DP5 workflow completed successfully\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Candidates        : N/A\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Report JSON       : N/A\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Report XLSX       : N/A\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Error model       : N/A\n"
+            "stdout": "2026-10-24 04:47:09,558 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:09,580 [INFO] acp.cli: NMR + DP4/DP5 workflow completed successfully\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Candidates        : N/A\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Report JSON       : N/A\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Report XLSX       : N/A\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Error model       : N/A\n"
           },
           {
             "command": [
@@ -1427,9 +1431,9 @@
               "run",
               "nmr",
               "--input",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz",
               "--spectrum",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
               "--nuclei",
               "1H",
               "--nmr-method",
@@ -1445,7 +1449,7 @@
               "--multiplicity",
               "1",
               "--output",
-              "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/failed",
+              "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/failed",
               "--nproc",
               "2",
               "--mem",
@@ -1478,7 +1482,7 @@
                   "error_model": "goodman-legacy",
                   "ewin": 6.0,
                   "input_sources": [
-                    "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                    "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz"
                   ],
                   "max_conformers": 2,
                   "multiplicity": 1,
@@ -1488,10 +1492,10 @@
                   "nuclei": [
                     "1H"
                   ],
-                  "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/failed",
+                  "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/failed",
                   "solvent": "chloroform",
                   "solvent_model": "cpcm",
-                  "spectrum": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                  "spectrum": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
                   "stereocenters": null,
                   "tms_13c": null,
                   "tms_1h": null
@@ -1505,18 +1509,18 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
-          "/tmp/acp-four-gj1ccxk_/F1",
+          "/tmp/acp-four-46i6zwfp/F1",
           "--workflow",
           "nmr",
           "--run-root",
-          "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr"
+          "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr"
         ],
         "driver_exit_code": 0,
         "ok": true,
-        "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+        "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
         "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
         "real_qc": "NOT_VERIFIED",
         "result": "PASS",
@@ -1566,14 +1570,14 @@
       "workflows_count": 15
     },
     "service_config_sha256": "4de5f3094ebdb9ec33c6ccd106f79f027966e38890509f6217c38e8011227b69",
-    "service_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+    "service_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
     "submission": {
       "created": true,
       "detail_status": 200,
       "files_status": 200,
       "final_status": "completed",
       "has_state_json": true,
-      "job_id": "20261023_194032_001_four-combo-F0S1",
+      "job_id": "20261024_044709_001_four-combo-F0S1",
       "list_status": 200,
       "listed": true,
       "missing_detail_status": 404,
@@ -1581,13 +1585,13 @@
     }
   },
   "environment": {
-    "cell_origin_port": 41533,
+    "cell_origin_port": 40175,
     "python": "3.11.13",
-    "repo": "<repo>",
-    "service_port": 49077
+    "repo": "/tmp/opencode/bfix7/harness",
+    "service_port": 43101
   },
   "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
-  "f1_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "f1_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
   "harness": "four_combinations.py",
   "harness_version": "3",
   "metrics": {
@@ -1707,7 +1711,7 @@
           "files_status": 200,
           "final_status": "completed",
           "has_state_json": true,
-          "job_id": "20261023_194032_001_four-combo-F0S1",
+          "job_id": "20261024_044709_001_four-combo-F0S1",
           "list_status": 200,
           "listed": true,
           "missing_detail_status": 404,
@@ -1751,8 +1755,8 @@
           "legacy_entry_selected": true,
           "ok": true,
           "stderr_tail": [
-            "2026-10-23 19:40:21,168 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml",
-            "2026-10-23 19:40:21,459 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
+            "2026-10-24 04:46:58,679 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml",
+            "2026-10-24 04:46:58,990 [ERROR] __main__: PESsearch requires --input, --from-artifact, --from-job, or a bond-scan source (--scan-config / --xyz-text)"
           ],
           "workflow": "PESsearch"
         },
@@ -1866,12 +1870,12 @@
             "..."
           ],
           "artifacts": [
-            "0a36e8b1-1d21-4aee-831e-3e88a8a02431.completed.json",
-            "0a36e8b1-1d21-4aee-831e-3e88a8a02431.started.json",
-            "dcb825ac-59fd-405c-af80-83fe3dcc7e47.completed.json",
-            "dcb825ac-59fd-405c-af80-83fe3dcc7e47.started.json",
-            "ebfa4861-3abe-4431-9ee2-90cebd2a2e7e.completed.json",
-            "ebfa4861-3abe-4431-9ee2-90cebd2a2e7e.started.json",
+            "b7b1b53a-e5d8-4e22-a9e9-d70a088bb477.completed.json",
+            "b7b1b53a-e5d8-4e22-a9e9-d70a088bb477.started.json",
+            "c29dfd26-53ff-413c-9c29-85586df83007.completed.json",
+            "c29dfd26-53ff-413c-9c29-85586df83007.started.json",
+            "dcd89580-c567-40b1-af82-971a65094052.completed.json",
+            "dcd89580-c567-40b1-af82-971a65094052.started.json",
             "events.jsonl",
             "input_preview.xyz",
             "job.json",
@@ -1881,7 +1885,7 @@
           "ok": true,
           "status": "completed",
           "stderr_tail": [],
-          "work_dir": "/tmp/acp-four-gj1ccxk_/run_S1/demo_cli/uncategorized/four-combo-S1_fake",
+          "work_dir": "/tmp/acp-four-46i6zwfp/run_S1/demo_cli/uncategorized/four-combo-S1_fake",
           "workflow": "fake"
         }
       ],
@@ -1896,35 +1900,39 @@
           "api_responses": [
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v1/status"
+              "url": "http://127.0.0.1:40175/api/v1/status"
             },
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v1/projects"
+              "url": "http://127.0.0.1:40175/api/v1/projects"
             },
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v1/workflow-catalog"
+              "url": "http://127.0.0.1:40175/api/v1/workflow-catalog"
             },
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v1/maintenance/disk-usage"
+              "url": "http://127.0.0.1:40175/api/v1/maintenance/disk-usage"
             },
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+              "url": "http://127.0.0.1:40175/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
             },
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v1/jobs/20261023_194032_001_four-combo-F0S1/detail"
+              "url": "http://127.0.0.1:40175/api/v1/jobs/20261024_044709_001_four-combo-F0S1/detail"
             },
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v1/jobs/20261023_194032_001_four-combo-F0S1/files"
+              "url": "http://127.0.0.1:40175/api/v1/jobs/20261024_044709_001_four-combo-F0S1/files"
             },
             {
               "status": 200,
-              "url": "http://127.0.0.1:41533/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=false"
+              "url": "http://127.0.0.1:40175/api/v1/method-catalog"
+            },
+            {
+              "status": 200,
+              "url": "http://127.0.0.1:40175/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=false"
             }
           ],
           "chromium": "153.0.8010.12",
@@ -1957,7 +1965,7 @@
                 "run",
                 "Confsearch",
                 "--input",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
                 "--protocol",
                 "xtb-crest",
                 "--profile",
@@ -1971,7 +1979,7 @@
                 "--temperature",
                 "310",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/completed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/completed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -1996,14 +2004,14 @@
                       }
                     },
                     "energy_window": null,
-                    "input_source": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                    "input_source": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
                     "levels": null,
                     "max_conformers": null,
                     "md_params": {},
                     "multiplicity": 1,
                     "name": null,
                     "nproc": 2,
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/completed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/completed",
                     "preset": null,
                     "profile": "light",
                     "protocol": "xtb-crest",
@@ -2015,7 +2023,7 @@
                 }
               ],
               "stderr": "",
-              "stdout": "2026-10-23 19:40:26,948 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:26,962 [INFO] acp.cli: Confsearch completed (xtb-crest + screen)\n2026-10-23 19:40:26,962 [INFO] acp.cli:   Conformers  : 0\n2026-10-23 19:40:26,962 [INFO] acp.cli:   Manifest    : None\n2026-10-23 19:40:26,962 [INFO] acp.cli:   G1 gate     : None\n"
+              "stdout": "2026-10-24 04:47:04,470 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:04,485 [INFO] acp.cli: Confsearch completed (xtb-crest + screen)\n2026-10-24 04:47:04,485 [INFO] acp.cli:   Conformers  : 0\n2026-10-24 04:47:04,485 [INFO] acp.cli:   Manifest    : None\n2026-10-24 04:47:04,485 [INFO] acp.cli:   G1 gate     : None\n"
             },
             {
               "command": [
@@ -2025,7 +2033,7 @@
                 "run",
                 "Confsearch",
                 "--input",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
                 "--protocol",
                 "xtb-crest",
                 "--profile",
@@ -2039,7 +2047,7 @@
                 "--temperature",
                 "310",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/failed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/failed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2064,14 +2072,14 @@
                       }
                     },
                     "energy_window": null,
-                    "input_source": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
+                    "input_source": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/inputs/water.xyz",
                     "levels": null,
                     "max_conformers": null,
                     "md_params": {},
                     "multiplicity": 1,
                     "name": null,
                     "nproc": 2,
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch/failed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch/failed",
                     "preset": null,
                     "profile": "light",
                     "protocol": "xtb-crest",
@@ -2088,18 +2096,18 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
-            "/tmp/acp-four-gj1ccxk_/F1",
+            "/tmp/acp-four-46i6zwfp/F1",
             "--workflow",
             "Confsearch",
             "--run-root",
-            "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/Confsearch"
+            "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/Confsearch"
           ],
           "driver_exit_code": 0,
           "ok": true,
-          "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+          "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
           "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
           "real_qc": "NOT_VERIFIED",
           "result": "PASS",
@@ -2117,7 +2125,7 @@
                 "run",
                 "PESsearch",
                 "--input",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
                 "--coordinate",
                 "0,1,0.8,1.2",
                 "--points",
@@ -2127,7 +2135,7 @@
                 "--multiplicity",
                 "1",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/completed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/completed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2163,9 +2171,9 @@
                       "unit": "angstrom",
                       "values": []
                     },
-                    "input_xyz": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                    "input_xyz": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
                     "multiplicity": 1,
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/completed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/completed",
                     "reaction": null,
                     "strategy": "guided-scan"
                   },
@@ -2173,7 +2181,7 @@
                 }
               ],
               "stderr": "",
-              "stdout": "2026-10-23 19:40:27,687 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:27,702 [INFO] acp.cli: PESsearch completed: 0 TS + 0 INT candidates\n2026-10-23 19:40:27,702 [INFO] acp.cli:   Manifest    : None\n"
+              "stdout": "2026-10-24 04:47:05,209 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:05,224 [INFO] acp.cli: PESsearch completed: 0 TS + 0 INT candidates\n2026-10-24 04:47:05,224 [INFO] acp.cli:   Manifest    : None\n"
             },
             {
               "command": [
@@ -2183,7 +2191,7 @@
                 "run",
                 "PESsearch",
                 "--input",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
                 "--coordinate",
                 "0,1,0.8,1.2",
                 "--points",
@@ -2193,7 +2201,7 @@
                 "--multiplicity",
                 "1",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/failed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/failed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2229,9 +2237,9 @@
                       "unit": "angstrom",
                       "values": []
                     },
-                    "input_xyz": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
+                    "input_xyz": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/inputs/water.xyz",
                     "multiplicity": 1,
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch/failed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch/failed",
                     "reaction": null,
                     "strategy": "guided-scan"
                   },
@@ -2244,18 +2252,18 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
-            "/tmp/acp-four-gj1ccxk_/F1",
+            "/tmp/acp-four-46i6zwfp/F1",
             "--workflow",
             "PESsearch",
             "--run-root",
-            "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/PESsearch"
+            "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/PESsearch"
           ],
           "driver_exit_code": 0,
           "ok": true,
-          "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+          "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
           "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
           "real_qc": "NOT_VERIFIED",
           "result": "PASS",
@@ -2273,7 +2281,7 @@
                 "run",
                 "BatchOptimize",
                 "--items-file",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
                 "--profile",
                 "opt_only",
                 "--method",
@@ -2285,7 +2293,7 @@
                 "--multiplicity",
                 "1",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/completed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/completed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2299,7 +2307,7 @@
               "received": [
                 {
                   "args": [
-                    "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                    "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
                   ],
                   "kwargs": {
                     "charge": 0,
@@ -2364,7 +2372,7 @@
                       "transition_state_scf_strategy": "normal"
                     },
                     "multiplicity": 1,
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/completed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/completed",
                     "profile": "opt_only",
                     "select": null
                   },
@@ -2372,7 +2380,7 @@
                 }
               ],
               "stderr": "",
-              "stdout": "2026-10-23 19:40:28,449 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:28,465 [INFO] acp.cli: BatchOptimize completed: profile=opt_only\n2026-10-23 19:40:28,465 [INFO] acp.cli:   Manifest: None\n"
+              "stdout": "2026-10-24 04:47:05,933 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:05,948 [INFO] acp.cli: BatchOptimize completed: profile=opt_only\n2026-10-24 04:47:05,948 [INFO] acp.cli:   Manifest: None\n"
             },
             {
               "command": [
@@ -2382,7 +2390,7 @@
                 "run",
                 "BatchOptimize",
                 "--items-file",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz",
                 "--profile",
                 "opt_only",
                 "--method",
@@ -2394,7 +2402,7 @@
                 "--multiplicity",
                 "1",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/failed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/failed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2408,7 +2416,7 @@
               "received": [
                 {
                   "args": [
-                    "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
+                    "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/inputs/water.xyz"
                   ],
                   "kwargs": {
                     "charge": 0,
@@ -2473,7 +2481,7 @@
                       "transition_state_scf_strategy": "normal"
                     },
                     "multiplicity": 1,
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize/failed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize/failed",
                     "profile": "opt_only",
                     "select": null
                   },
@@ -2486,18 +2494,18 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
-            "/tmp/acp-four-gj1ccxk_/F1",
+            "/tmp/acp-four-46i6zwfp/F1",
             "--workflow",
             "BatchOptimize",
             "--run-root",
-            "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/BatchOptimize"
+            "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/BatchOptimize"
           ],
           "driver_exit_code": 0,
           "ok": true,
-          "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+          "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
           "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
           "real_qc": "NOT_VERIFIED",
           "result": "PASS",
@@ -2515,9 +2523,9 @@
                 "run",
                 "XtbPathSearch",
                 "--path-config",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/completed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/completed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2564,13 +2572,13 @@
                         "orca_maxcore_safety": 0.8
                       }
                     },
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/completed"
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/completed"
                   },
                   "workflow": "XtbPathSearch"
                 }
               ],
               "stderr": "",
-              "stdout": "2026-10-23 19:40:29,201 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:29,216 [INFO] acp.cli: XtbPathSearch completed\n2026-10-23 19:40:29,216 [INFO] acp.cli:   Frames      : N/A\n2026-10-23 19:40:29,216 [INFO] acp.cli:   Manifest    : N/A\n2026-10-23 19:40:29,216 [INFO] acp.cli:   PES profile : N/A\n"
+              "stdout": "2026-10-24 04:47:06,678 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:06,693 [INFO] acp.cli: XtbPathSearch completed\n2026-10-24 04:47:06,694 [INFO] acp.cli:   Frames      : N/A\n2026-10-24 04:47:06,694 [INFO] acp.cli:   Manifest    : N/A\n2026-10-24 04:47:06,694 [INFO] acp.cli:   PES profile : N/A\n"
             },
             {
               "command": [
@@ -2580,9 +2588,9 @@
                 "run",
                 "XtbPathSearch",
                 "--path-config",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/inputs/request.json",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/failed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/failed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2629,7 +2637,7 @@
                         "orca_maxcore_safety": 0.8
                       }
                     },
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch/failed"
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch/failed"
                   },
                   "workflow": "XtbPathSearch"
                 }
@@ -2640,18 +2648,18 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
-            "/tmp/acp-four-gj1ccxk_/F1",
+            "/tmp/acp-four-46i6zwfp/F1",
             "--workflow",
             "XtbPathSearch",
             "--run-root",
-            "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbPathSearch"
+            "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbPathSearch"
           ],
           "driver_exit_code": 0,
           "ok": true,
-          "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+          "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
           "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
           "real_qc": "NOT_VERIFIED",
           "result": "PASS",
@@ -2669,9 +2677,9 @@
                 "run",
                 "XtbConstrainedOpt",
                 "--opt-config",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/completed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/completed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2748,13 +2756,13 @@
                         "orca_maxcore_safety": 0.8
                       }
                     },
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/completed"
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/completed"
                   },
                   "workflow": "XtbConstrainedOpt"
                 }
               ],
               "stderr": "",
-              "stdout": "2026-10-23 19:40:29,970 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:29,985 [INFO] acp.cli: XtbConstrainedOpt completed\n2026-10-23 19:40:29,985 [INFO] acp.cli:   Converged   : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   E_effective : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   E_physical  : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   Manifest    : N/A\n2026-10-23 19:40:29,985 [INFO] acp.cli:   Evidence    : N/A\n"
+              "stdout": "2026-10-24 04:47:07,437 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:07,452 [INFO] acp.cli: XtbConstrainedOpt completed\n2026-10-24 04:47:07,452 [INFO] acp.cli:   Converged   : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   E_effective : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   E_physical  : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   Manifest    : N/A\n2026-10-24 04:47:07,452 [INFO] acp.cli:   Evidence    : N/A\n"
             },
             {
               "command": [
@@ -2764,9 +2772,9 @@
                 "run",
                 "XtbConstrainedOpt",
                 "--opt-config",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/inputs/request.json",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/failed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/failed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2843,7 +2851,7 @@
                         "orca_maxcore_safety": 0.8
                       }
                     },
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt/failed"
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt/failed"
                   },
                   "workflow": "XtbConstrainedOpt"
                 }
@@ -2854,18 +2862,18 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
-            "/tmp/acp-four-gj1ccxk_/F1",
+            "/tmp/acp-four-46i6zwfp/F1",
             "--workflow",
             "XtbConstrainedOpt",
             "--run-root",
-            "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/XtbConstrainedOpt"
+            "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/XtbConstrainedOpt"
           ],
           "driver_exit_code": 0,
           "ok": true,
-          "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+          "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
           "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
           "real_qc": "NOT_VERIFIED",
           "result": "PASS",
@@ -2883,7 +2891,7 @@
                 "run",
                 "tsmode",
                 "--source-bundle",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
                 "--source-mode-index",
                 "6",
                 "--max-steps",
@@ -2894,7 +2902,7 @@
                 "0.2",
                 "--allow-unverified-mapping",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/completed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/completed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -2937,12 +2945,12 @@
                     },
                     "source_mode_index": 6
                   },
-                  "task_root": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/completed/bundle",
+                  "task_root": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/completed/bundle",
                   "workflow": "tsmode"
                 }
               ],
               "stderr": "",
-              "stdout": "2026-10-23 19:40:30,765 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:30,812 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:30,827 [INFO] acp.cli: TS Mode completed\n"
+              "stdout": "2026-10-24 04:47:08,225 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:08,275 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:08,290 [INFO] acp.cli: TS Mode completed\n"
             },
             {
               "command": [
@@ -2952,7 +2960,7 @@
                 "run",
                 "tsmode",
                 "--source-bundle",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/inputs/bundle.json",
                 "--source-mode-index",
                 "6",
                 "--max-steps",
@@ -2963,7 +2971,7 @@
                 "0.2",
                 "--allow-unverified-mapping",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/failed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/failed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -3006,7 +3014,7 @@
                     },
                     "source_mode_index": 6
                   },
-                  "task_root": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode/failed/bundle",
+                  "task_root": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode/failed/bundle",
                   "workflow": "tsmode"
                 }
               ],
@@ -3016,18 +3024,18 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
-            "/tmp/acp-four-gj1ccxk_/F1",
+            "/tmp/acp-four-46i6zwfp/F1",
             "--workflow",
             "tsmode",
             "--run-root",
-            "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/tsmode"
+            "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/tsmode"
           ],
           "driver_exit_code": 0,
           "ok": true,
-          "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+          "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
           "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
           "real_qc": "NOT_VERIFIED",
           "result": "PASS",
@@ -3045,9 +3053,9 @@
                 "run",
                 "nmr",
                 "--input",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz",
                 "--spectrum",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
                 "--nuclei",
                 "1H",
                 "--nmr-method",
@@ -3063,7 +3071,7 @@
                 "--multiplicity",
                 "1",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/completed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/completed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -3096,7 +3104,7 @@
                     "error_model": "goodman-legacy",
                     "ewin": 6.0,
                     "input_sources": [
-                      "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                      "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz"
                     ],
                     "max_conformers": 2,
                     "multiplicity": 1,
@@ -3106,10 +3114,10 @@
                     "nuclei": [
                       "1H"
                     ],
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/completed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/completed",
                     "solvent": "chloroform",
                     "solvent_model": "cpcm",
-                    "spectrum": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                    "spectrum": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
                     "stereocenters": null,
                     "tms_13c": null,
                     "tms_1h": null
@@ -3118,7 +3126,7 @@
                 }
               ],
               "stderr": "",
-              "stdout": "2026-10-23 19:40:32,114 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-gj1ccxk_/F1/config/defaults.yaml\n2026-10-23 19:40:32,135 [INFO] acp.cli: NMR + DP4/DP5 workflow completed successfully\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Candidates        : N/A\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Report JSON       : N/A\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Report XLSX       : N/A\n2026-10-23 19:40:32,136 [INFO] acp.cli:   Error model       : N/A\n"
+              "stdout": "2026-10-24 04:47:09,558 [INFO] cccp.config: Loaded defaults from: /tmp/acp-four-46i6zwfp/F1/config/defaults.yaml\n2026-10-24 04:47:09,580 [INFO] acp.cli: NMR + DP4/DP5 workflow completed successfully\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Candidates        : N/A\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Report JSON       : N/A\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Report XLSX       : N/A\n2026-10-24 04:47:09,580 [INFO] acp.cli:   Error model       : N/A\n"
             },
             {
               "command": [
@@ -3128,9 +3136,9 @@
                 "run",
                 "nmr",
                 "--input",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz",
                 "--spectrum",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
                 "--nuclei",
                 "1H",
                 "--nmr-method",
@@ -3146,7 +3154,7 @@
                 "--multiplicity",
                 "1",
                 "--output",
-                "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/failed",
+                "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/failed",
                 "--nproc",
                 "2",
                 "--mem",
@@ -3179,7 +3187,7 @@
                     "error_model": "goodman-legacy",
                     "ewin": 6.0,
                     "input_sources": [
-                      "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/water.xyz"
+                      "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/water.xyz"
                     ],
                     "max_conformers": 2,
                     "multiplicity": 1,
@@ -3189,10 +3197,10 @@
                     "nuclei": [
                       "1H"
                     ],
-                    "output_dir": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/failed",
+                    "output_dir": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/failed",
                     "solvent": "chloroform",
                     "solvent_model": "cpcm",
-                    "spectrum": "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
+                    "spectrum": "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr/inputs/spectrum.txt",
                     "stereocenters": null,
                     "tms_13c": null,
                     "tms_1h": null
@@ -3206,18 +3214,18 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "/tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
-            "/tmp/acp-four-gj1ccxk_/F1",
+            "/tmp/acp-four-46i6zwfp/F1",
             "--workflow",
             "nmr",
             "--run-root",
-            "/tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli/nmr"
+            "/tmp/acp-four-46i6zwfp/run_S1/ordinary_cli/nmr"
           ],
           "driver_exit_code": 0,
           "ok": true,
-          "product_cli": "/tmp/acp-four-gj1ccxk_/F1/src/acp/cli.py",
+          "product_cli": "/tmp/acp-four-46i6zwfp/F1/src/acp/cli.py",
           "product_cli_sha256": "27c7d61096773c73cbddb963d968a2c500f27ff3a428e7baeda57e46ebe9c4c1",
           "real_qc": "NOT_VERIFIED",
           "result": "PASS",
@@ -3226,7 +3234,7 @@
           "workflow": "nmr"
         }
       ],
-      "command": "/usr/bin/python3.11 <repo>/scripts/acceptance/ordinary_legacy_cli.py --worktree /tmp/acp-four-gj1ccxk_/F1 --run-root /tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli",
+      "command": "/usr/bin/python3.11 /tmp/opencode/bfix7/harness/scripts/acceptance/ordinary_legacy_cli.py --worktree /tmp/acp-four-46i6zwfp/F1 --run-root /tmp/acp-four-46i6zwfp/run_S1/ordinary_cli",
       "exit_code": 0,
       "id": "legacy_ordinary_submissions",
       "ok": true,

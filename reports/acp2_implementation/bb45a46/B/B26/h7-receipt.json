@@ -41,15 +41,36 @@
   },
   "candidate": {
     "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
-    "evidence_revision": "3c16877f422933b47243e255f8b3a45efea05bfe1dd176f5f643a6764a7b8aa3",
+    "evidence_revision": "0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d",
     "harness_revision": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b",
-    "landed_head": "09fc41da9171e1d466c0036a114feb272652e028",
+    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head_delta": {
+      "base_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+      "command": "git diff --stat 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2..493790709830eac4ce347b5fb81414050f7a1e21 -- src",
+      "deletions": 161,
+      "files": [
+        "src/acp/calculations/attempt_freeze.py",
+        "src/acp/calculations/attempt_publication.py",
+        "src/acp/calculations/batch/options.py",
+        "src/acp/scheduler/remote/runner.py",
+        "src/acp_services/runtime/attempt_freeze.py",
+        "src/acp_services/runtime/attempt_recovery.py",
+        "src/acp_services/runtime/cgroup.py",
+        "src/acp_services/runtime/isolation.py",
+        "src/acp_services/runtime/worker.py",
+        "src/acp_services/worker_bootstrap.py"
+      ],
+      "head_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "insertions": 823,
+      "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 6ec01ec and their digests are unchanged."
+    },
+    "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
     "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
     "release_source_json_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
     "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
     "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
   },
-  "generated_at": "2026-10-23T18:40:00Z",
+  "generated_at": "2026-10-23T20:51:56Z",
   "h7_status": "OPEN",
   "open_rows": [
     {
