@@ -1,0 +1,21 @@
+{
+  "rows": [
+    {
+      "action": "adapter.install",
+      "adapter_id": "acp.storage.inventory",
+      "authorized_by": "controller",
+      "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+      "result": "installed",
+      "version": "1.0.0"
+    },
+    {
+      "action": "adapter.enable",
+      "adapter_id": "acp.storage.inventory",
+      "authorized_by": "controller",
+      "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+      "result": "enabled",
+      "version": "1.0.0"
+    }
+  ],
+  "schema": "acp2.b21.authorization.v1"
+}

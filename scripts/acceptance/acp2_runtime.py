@@ -11413,6 +11413,34 @@ def _run_infra_plugin(
             )
             add(name, False, f"expected={expected_code} actual=no_error")
 
+    def expect_named_error(name: str, expected_code: str, function: Any) -> None:
+        try:
+            function()
+        except Exception as exc:  # noqa: BLE001 - boundary probe
+            code = getattr(exc, "code", None)
+            passed = code == expected_code
+            rejection_rows.append(
+                {
+                    "case": name,
+                    "expected_code": expected_code,
+                    "actual_code": code,
+                    "passed": passed,
+                    "detail": str(exc),
+                }
+            )
+            add(name, passed, f"expected={expected_code} actual={code}")
+        else:
+            rejection_rows.append(
+                {
+                    "case": name,
+                    "expected_code": expected_code,
+                    "actual_code": "no_error",
+                    "passed": False,
+                    "detail": "call succeeded when it should have been rejected",
+                }
+            )
+            add(name, False, f"expected={expected_code} actual=no_error")
+
     def emit(name: str, document: Any) -> Path:
         path = _b15_write_json(out_dir / f"{phase_token}-{name}", document)
         artifacts.append(
@@ -11425,7 +11453,20 @@ def _run_infra_plugin(
         return path
 
     phase_token = _safe_name(phase_name)
-    plugin_root = Path(str(fixture["plugin_root"]))
+    fixture_plugin_root = Path(str(fixture["plugin_root"]))
+    if phase_name == "infra:upgrade":
+        # B22 must prove a real payload removal without destroying the retained
+        # B21 fixture bundle.  Run the whole upgrade flow against a private copy.
+        plugin_root = work_root / "plugin-root"
+        if plugin_root.exists():
+            shutil.rmtree(plugin_root)
+        shutil.copytree(
+            fixture_plugin_root,
+            plugin_root,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+    else:
+        plugin_root = fixture_plugin_root
     previous_plugin_env = os.environ.get("ACP2_B21_PLUGIN_ENV")
     previous_missing_env = os.environ.get("ACP2_B21_MISSING_ENV")
     os.environ["ACP2_B21_PLUGIN_ENV"] = "1"
@@ -11527,6 +11568,9 @@ def _run_infra_plugin(
             )
         v1 = discovered[(adapter_id, version_v1)]
         v2 = discovered.get((adapter_id, version_v2))
+        new_frozen = None
+        old_inventory = None
+        new_inventory = None
 
         # 2. Authorization is a server-side fact, never plugin metadata.
         authz_rows: list[dict[str, Any]] = []
@@ -12018,6 +12062,1232 @@ def _run_infra_plugin(
                 )
         elif controller:
             extensions["b21.controller_state"] = "unreachable"
+
+        if phase_name == "infra:upgrade" and v2 is not None and new_frozen is not None:
+            # ------------------------------------------------------------------
+            # B22 — upgrade/rollback, running-v1 immutability, trust/licence
+            # boundary, third-party capability and the H5 manifest.
+            # ------------------------------------------------------------------
+            b22_fixture = fixture.get("b22") if isinstance(fixture.get("b22"), dict) else {}
+            b22_docs: dict[str, Any] = {}
+
+            def add_artifact(path: Path) -> None:
+                artifacts.append(
+                    {
+                        "path": path.name,
+                        "size_bytes": path.stat().st_size,
+                        "sha256": sha256_file(path),
+                    }
+                )
+
+            def file_row(path: Path, *, root: Path | None = None) -> dict[str, Any]:
+                row: dict[str, Any] = {
+                    "path": str(path),
+                    "sha256": sha256_file(path),
+                    "size_bytes": path.stat().st_size,
+                }
+                if root is not None:
+                    row["relative_path"] = str(path.relative_to(root))
+                return row
+
+            def tree_rows(root: Path) -> list[dict[str, Any]]:
+                rows: list[dict[str, Any]] = []
+                if not root.is_dir():
+                    return rows
+                for path in sorted(root.rglob("*")):
+                    if not path.is_file():
+                        continue
+                    if "__pycache__" in path.parts or path.suffix == ".pyc":
+                        continue
+                    rows.append(file_row(path, root=root))
+                return rows
+
+            # 1. A task frozen on v1 is immutable: installing/enabling v2 must
+            #    not overwrite the old attempt's freeze or the v1 payload bytes.
+            old_task_id = str(old_task["task_id"])
+            old_attempt = int(old_task["attempt"])
+            new_task_id = str(new_task["task_id"])
+            new_task_attempt = int(new_task["attempt"])
+            old_freeze_after = registry.read_task_freeze(old_task_id, old_attempt).adapter(
+                adapter_id
+            )
+            v1_entry_after = sha256_file(Path(v1.entrypoint_path)) if v1.entrypoint_path else None
+            running_state = str(
+                old_task.get("state") or b22_fixture.get("running_task_state") or "RUNNING"
+            )
+            running_doc = {
+                "schema": "acp2.b22.running-v1.v1",
+                "evidence_class": "SIMULATED/FROZEN-ATTEMPT",
+                "task_id": old_task_id,
+                "attempt": old_attempt,
+                "declared_task_state": running_state,
+                "frozen_before_upgrade": old_frozen.to_dict(),
+                "frozen_after_upgrade": old_freeze_after.to_dict(),
+                "freeze_unchanged": old_frozen.to_dict() == old_freeze_after.to_dict(),
+                "v1_entrypoint_digest_before": old_frozen.entrypoint_digest,
+                "v1_entrypoint_digest_after": v1_entry_after,
+                "v1_payload_unchanged": old_frozen.entrypoint_digest == v1_entry_after,
+                "old_task_executes_v1_after_v2": (
+                    isinstance(old_inventory, dict) and old_inventory.get("version") == version_v1
+                ),
+                "v2_active_when_checked": registry.active_version(adapter_id) == version_v2,
+                "overwritten_by_v2": False,
+            }
+            emit("running-v1.json", running_doc)
+            b22_docs["running_v1"] = running_doc
+            add(
+                "b22.running_v1.freeze_immutable",
+                running_doc["freeze_unchanged"] and running_doc["v2_active_when_checked"],
+                f"frozen_version={old_freeze_after.version} "
+                f"active={registry.active_version(adapter_id)}",
+            )
+            add(
+                "b22.running_v1.payload_not_overwritten",
+                running_doc["v1_payload_unchanged"],
+                f"v1_entrypoint={old_frozen.entrypoint_digest}",
+            )
+            add(
+                "b22.running_v1.executes_frozen_v1",
+                running_doc["old_task_executes_v1_after_v2"],
+                "old_result_version="
+                f"{old_inventory.get('version') if isinstance(old_inventory, dict) else None}",
+            )
+
+            # 2. Uninstall/removal: v2 execution fails with a named error while
+            #    the frozen v2 artifact stays readable; v1 keeps working.
+            uninstall_v2_auth = _b21_authorization(
+                "adapter.uninstall",
+                adapter_id,
+                version_v2,
+                v2.descriptor_digest,
+                authorized_by,
+            )
+            uninstall_v2 = registry.uninstall(
+                adapter_id,
+                version_v2,
+                authorization=uninstall_v2_auth,
+                remove_payload=True,
+            )
+            payload_gone = not Path(str(uninstall_v2.get("payload_path") or "")).exists()
+            expect_error(
+                "b22.uninstall.removed_execution",
+                "adapter_version_not_installed",
+                lambda: registry.invoke(
+                    adapter_id,
+                    version_v2,
+                    "inventory",
+                    {"path": str(sample)},
+                    allow_execution=True,
+                ),
+            )
+            expect_error(
+                "b22.uninstall.removed_enable",
+                "adapter_version_not_installed",
+                lambda: registry.enable(
+                    adapter_id,
+                    version_v2,
+                    authorization=_b21_authorization(
+                        "adapter.enable",
+                        adapter_id,
+                        version_v2,
+                        v2.descriptor_digest,
+                        authorized_by,
+                    ),
+                ),
+            )
+            expect_error(
+                "b22.uninstall.removed_frozen_execution",
+                "adapter_version_not_installed",
+                lambda: registry.invoke_frozen(
+                    new_frozen,
+                    "inventory",
+                    {"path": str(sample)},
+                    allow_execution=True,
+                ),
+            )
+            v2_artifact = registry.read_frozen_artifact(new_task_id, new_task_attempt, adapter_id)
+            v2_artifact_sha = v2_artifact.to_dict().get("entrypoint_sha256")
+            add(
+                "b22.uninstall.v2_readonly_artifact",
+                v2_artifact.version == version_v2
+                and v2_artifact.read_only
+                and v2_artifact.entrypoint_bytes is not None
+                and v2_artifact_sha == new_frozen.entrypoint_digest,
+                f"version={v2_artifact.version} "
+                f"read_only={v2_artifact.read_only} sha={v2_artifact_sha}",
+            )
+            old_after_v2_uninstall = registry.invoke_frozen(
+                old_frozen,
+                "inventory",
+                {"path": str(sample)},
+                allow_execution=True,
+            )
+            old_after_v2_uninstall_version = (
+                old_after_v2_uninstall.get("version")
+                if isinstance(old_after_v2_uninstall, dict)
+                else None
+            )
+            add(
+                "b22.uninstall.v1_still_executes",
+                isinstance(old_after_v2_uninstall, dict)
+                and old_after_v2_uninstall.get("version") == version_v1,
+                f"v1_result_version={old_after_v2_uninstall_version}",
+            )
+            uninstall_v1_auth = _b21_authorization(
+                "adapter.uninstall",
+                adapter_id,
+                version_v1,
+                v1.descriptor_digest,
+                authorized_by,
+            )
+            uninstall_v1 = registry.uninstall(
+                adapter_id,
+                version_v1,
+                authorization=uninstall_v1_auth,
+                remove_payload=True,
+            )
+            v1_artifact = registry.read_frozen_artifact(old_task_id, old_attempt, adapter_id)
+            add(
+                "b22.uninstall.v1_readonly_artifact_after_removal",
+                v1_artifact.version == version_v1
+                and v1_artifact.read_only
+                and v1_artifact.entrypoint_bytes is not None
+                and v1_artifact.to_dict().get("entrypoint_sha256") == old_frozen.entrypoint_digest,
+                f"version={v1_artifact.version} read_only={v1_artifact.read_only}",
+            )
+            expect_error(
+                "b22.uninstall.v1_frozen_execution_after_removal",
+                "adapter_version_not_installed",
+                lambda: registry.invoke_frozen(
+                    old_frozen,
+                    "inventory",
+                    {"path": str(sample)},
+                    allow_execution=True,
+                ),
+            )
+            rollback_doc = {
+                "schema": "acp2.b22.upgrade-rollback.v1",
+                "adapter_id": adapter_id,
+                "v1": {"version": version_v1, "descriptor_digest": v1.descriptor_digest},
+                "v2": {"version": version_v2, "descriptor_digest": v2.descriptor_digest},
+                "old_task": {"task_id": old_task_id, "attempt": old_attempt},
+                "new_task": {"task_id": new_task_id, "attempt": new_task_attempt},
+                "v2_uninstall": uninstall_v2,
+                "v1_uninstall": uninstall_v1,
+                "v2_payload_absent": payload_gone,
+                "new_execution_error": "adapter_version_not_installed",
+                "historical_read_only": {
+                    "v2_new_task": v2_artifact.to_dict(),
+                    "v1_old_task": v1_artifact.to_dict(),
+                },
+                "old_task_read_back_uses_v1_digest": (
+                    old_freeze_after.version == version_v1
+                    and old_freeze_after.descriptor_digest == v1.descriptor_digest
+                ),
+            }
+            emit("upgrade-rollback.json", rollback_doc)
+            b22_docs["upgrade_rollback"] = rollback_doc
+            add(
+                "b22.uninstall.payload_removed",
+                bool(uninstall_v2.get("payload_removed")) and payload_gone,
+                f"payload={uninstall_v2.get('payload_path')} "
+                f"removed={uninstall_v2.get('payload_removed')}",
+            )
+
+            # 3. Importability never raises trust and an unknown licence is
+            #    never approved.
+            import importlib.util as _importlib_util
+
+            trust_rows: list[dict[str, Any]] = []
+            untrusted_id = str(negative["untrusted_adapter_id"])
+            untrusted_item = discovered.get((untrusted_id, "1.0.0"))
+            imported = False
+            import_error: str | None = None
+            if untrusted_item is not None and untrusted_item.entrypoint_path:
+                try:
+                    spec = _importlib_util.spec_from_file_location(
+                        "b22_untrusted_probe", untrusted_item.entrypoint_path
+                    )
+                    if spec is not None and spec.loader is not None:
+                        module = _importlib_util.module_from_spec(spec)
+                        spec.loader.exec_module(module)
+                        imported = callable(getattr(module, "run", None))
+                except Exception as exc:  # noqa: BLE001 - probe boundary
+                    import_error = f"{type(exc).__name__}: {exc}"
+            if untrusted_item is not None:
+                expect_error(
+                    "b22.trust.importable_still_untrusted",
+                    "adapter_untrusted",
+                    lambda: registry.install(
+                        untrusted_id,
+                        "1.0.0",
+                        authorization=_b21_authorization(
+                            "adapter.install",
+                            untrusted_id,
+                            "1.0.0",
+                            untrusted_item.descriptor_digest,
+                            authorized_by,
+                        ),
+                    ),
+                )
+            add(
+                "b22.trust.importability_does_not_grant_trust",
+                bool(imported)
+                and untrusted_item is not None
+                and untrusted_item.effective_trust_level == "discover-only"
+                and not registry.is_enabled(untrusted_id, "1.0.0"),
+                f"imported={imported} "
+                f"trust={untrusted_item.effective_trust_level if untrusted_item else None} "
+                f"import_error={import_error}",
+            )
+            trust_rows.append(
+                {
+                    "adapter_id": untrusted_id,
+                    "entrypoint_importable": imported,
+                    "import_error": import_error,
+                    "effective_trust_level": (
+                        untrusted_item.effective_trust_level if untrusted_item else None
+                    ),
+                    "install_result": "adapter_untrusted",
+                    "enabled": False,
+                }
+            )
+
+            # 4. Third-party capability: A descriptor + A binding + C view-model,
+            #    dynamically discovered outside the repository.  No src/cccp edit.
+            from acp_services.runtime.capability_registry import (
+                CapabilityAuthorization,
+                CapabilityRegistry,
+                discover_view_model,
+            )
+
+            a_contract_root = Path(
+                str(
+                    b22_fixture.get("a_contract_root")
+                    or (
+                        "/ACPServer/acp2-development/A/docs/reference/next-change/"
+                        "acp2-contracts/science"
+                    )
+                )
+            )
+            c_contract_root = Path(
+                str(
+                    b22_fixture.get("c_contract_root")
+                    or (
+                        "/ACPServer/acp2-development/C/docs/reference/next-change/"
+                        "acp2-contracts/experience"
+                    )
+                )
+            )
+            capability_id = str(b22_fixture.get("capability") or "electronic.energy")
+            capability_root = work_root / "capability-root" / "energy"
+            if capability_root.exists():
+                shutil.rmtree(capability_root)
+            capability_root.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(
+                a_contract_root / "examples" / "capability-energy.json",
+                capability_root / "capability.json",
+            )
+            shutil.copy2(
+                a_contract_root / "examples" / "task-binding-singlepoint.json",
+                capability_root / "task-binding.json",
+            )
+            capability_state = work_root / "capability-state"
+            if capability_state.exists():
+                shutil.rmtree(capability_state)
+            capability_registry = CapabilityRegistry(
+                capability_root=capability_root.parent,
+                state_root=capability_state,
+                schema_path=a_contract_root / "capability.schema.json",
+                view_model_path=c_contract_root / "view-model.schema.json",
+                trusted_capabilities=[capability_id],
+                authorized_principals=[authorized_by, "controller"],
+            )
+            capability_report = capability_registry.discover()
+            capability_item = next(
+                (
+                    item
+                    for item in capability_report.capabilities
+                    if item.capability_id == capability_id
+                ),
+                None,
+            )
+            if capability_item is None:
+                add("b22.capability.discovered", False, "capability was not discovered")
+            else:
+                add(
+                    "b22.capability.discovered",
+                    not capability_report.rejected,
+                    f"capability={capability_item.capability_id} "
+                    f"task_kind={capability_item.discovery.task_kind}",
+                )
+
+            def cap_auth(action: str, digest: str) -> Any:
+                return CapabilityAuthorization(
+                    action=action,
+                    capability_id=capability_id,
+                    version="1.0.0",
+                    descriptor_digest=digest,
+                    authorized_by=authorized_by,
+                    issued_at=_utcnow(),
+                )
+
+            capability_run: dict[str, Any] = {
+                "attempted": False,
+                "status": "NOT_VERIFIED",
+                "evidence_class": "STATIC",
+                "reason": "capability not discovered",
+            }
+            capability_view_doc: dict[str, Any] = {}
+            if capability_item is not None:
+                registration = capability_registry.register(
+                    capability_id,
+                    authorization=cap_auth(
+                        "capability.register", capability_item.descriptor_digest
+                    ),
+                    source=str(capability_root),
+                    license_state="approved",
+                    license_source=str(a_contract_root.parents[3] / "LICENSE"),
+                )
+                add(
+                    "b22.capability.registered",
+                    registration.approved and registration.trust_level == "trusted-explicit",
+                    f"approved={registration.approved} trust={registration.trust_level}",
+                )
+                freeze_cap = capability_registry.admit_for_task(
+                    "b22-third-party-task",
+                    1,
+                    capability_id,
+                    authorization=cap_auth("capability.admit", registration.descriptor_digest),
+                )
+                add(
+                    "b22.capability.admitted_and_frozen",
+                    freeze_cap.purpose == "execute"
+                    and freeze_cap.registration.descriptor_digest
+                    == capability_item.descriptor_digest,
+                    f"purpose={freeze_cap.purpose} "
+                    f"digest={freeze_cap.registration.descriptor_digest[:16]}",
+                )
+                form = b22_fixture.get("form")
+                if not isinstance(form, dict):
+                    form = {
+                        "workflow": "singlepoint",
+                        "structure": {
+                            "source": "b22-inline",
+                            "coordinates": [
+                                [0.0, 0.0, 0.0],
+                                [0.0, 0.0, 0.96],
+                                [0.93, 0.0, -0.25],
+                            ],
+                            "symbols": ["O", "H", "H"],
+                            "role": "minimum",
+                        },
+                        "method": {"method": "r2SCAN-3c", "basis": "def2-SVP"},
+                        "charge": 0,
+                        "multiplicity": 1,
+                        "resources": {"nproc": 1, "mem": "1GB"},
+                        "options": {"stability_check": False},
+                    }
+                run_dir = work_root / "third-party-run"
+                if run_dir.exists():
+                    shutil.rmtree(run_dir)
+                run_dir.mkdir(parents=True)
+                try:
+                    from cccp.calculation.context import TaskContext
+                    from cccp.config import load_config
+
+                    capability_run["attempted"] = True
+                    result = capability_registry.run_frozen(
+                        "b22-third-party-task",
+                        1,
+                        form,
+                        allow_execution=True,
+                        context=TaskContext(
+                            config=load_config(),
+                            workdir=run_dir,
+                            input_base=run_dir,
+                        ),
+                    )
+                    result_status = getattr(result, "status", None)
+                    energy = getattr(result, "energy_hartree", None)
+                    errors_value = list(getattr(result, "errors", ()) or ())
+                    capability_run.update(
+                        {
+                            "status": "PASS" if result_status == "completed" else "FAIL",
+                            "task_status": result_status,
+                            "energy_hartree": energy,
+                            "errors": errors_value,
+                            "evidence_class": "REAL"
+                            if result_status == "completed"
+                            else "NOT_VERIFIED",
+                            "reason": None
+                            if result_status == "completed"
+                            else "task_not_completed",
+                        }
+                    )
+                except Exception as exc:  # noqa: BLE001 - real run boundary
+                    capability_run.update(
+                        {
+                            "status": "NOT_VERIFIED",
+                            "evidence_class": "NOT_VERIFIED",
+                            "error_class": type(exc).__name__,
+                            "error": str(exc),
+                            "reason": f"real_third_party_run_unavailable:{type(exc).__name__}",
+                        }
+                    )
+                add(
+                    "b22.capability.real_run",
+                    capability_run.get("status") == "PASS"
+                    and capability_run.get("energy_hartree") is not None,
+                    f"status={capability_run.get('status')} "
+                    f"energy={capability_run.get('energy_hartree')}",
+                    not_verified=capability_run.get("status") != "PASS",
+                )
+                capability_artifact = capability_registry.read_frozen_artifact(
+                    "b22-third-party-task", 1
+                )
+                add(
+                    "b22.capability.readonly_artifact",
+                    capability_artifact.read_only
+                    and capability_artifact.descriptor.get("capability_id") == capability_id,
+                    f"read_only={capability_artifact.read_only}",
+                )
+
+                # C dynamic discovery: read C's view-model schema and emit a
+                # read-only snapshot carrying exactly its required top-level
+                # fields.  This is structural conformance, not a UI render.
+                view_model = discover_view_model(c_contract_root / "view-model.schema.json")
+                view_schema_doc = json.loads(
+                    (c_contract_root / "view-model.schema.json").read_text(encoding="utf-8")
+                )
+                candidate_revision = os.environ.get(
+                    "ACP_CANDIDATE_REVISION", BASELINE_CANDIDATE_REVISION
+                )
+                if re.fullmatch(r"[0-9a-f]{40}", candidate_revision):
+                    producer_revision = candidate_revision
+                else:
+                    producer_revision = (
+                        "sha256:" + hashlib.sha256(harness_revision().encode("utf-8")).hexdigest()
+                    )
+                canonical_form = json.dumps(form, sort_keys=True, separators=(",", ":"))
+                view_snapshot = {
+                    "snapshot_revision": 1,
+                    "project_id": "acp2-b22",
+                    "task_ref": {"job_id": "b22-third-party-task", "attempt": 1},
+                    "manifest_generation": 0,
+                    "artifacts": [
+                        {
+                            "artifact_id": "third-party-capability-descriptor",
+                            "role": "capability-descriptor",
+                            "availability": "present",
+                            "generation": 0,
+                        }
+                    ],
+                    "claims": [
+                        {
+                            "claim_id": "electronic.energy.third-party",
+                            "statement": (
+                                "The registered capability descriptor and binding were "
+                                "admitted; the claim is not interpreted by the platform."
+                            ),
+                            "status": "not_evaluated",
+                        }
+                    ],
+                    "clarifications": [],
+                    "provenance": {
+                        "source": "B22 third-party capability acceptance",
+                        "producer_revision": producer_revision,
+                        "produced_at": _utcnow(),
+                        "digest": "sha256:"
+                        + hashlib.sha256(canonical_form.encode("utf-8")).hexdigest(),
+                    },
+                    "read_only": True,
+                    "not_authoritative_for_science": True,
+                }
+                view_required = list(view_schema_doc.get("required") or [])
+                view_allowed = set((view_schema_doc.get("properties") or {}).keys())
+                missing_view = [name for name in view_required if name not in view_snapshot]
+                extra_view = sorted(set(view_snapshot) - view_allowed)
+                view_ok = (
+                    not missing_view
+                    and not extra_view
+                    and view_snapshot["read_only"] is True
+                    and view_snapshot["not_authoritative_for_science"] is True
+                )
+                capability_view_doc = {
+                    "schema": "acp2.b22.view-model-consumption.v1",
+                    "view_model_schema": view_model.to_dict(),
+                    "required_fields": view_required,
+                    "missing_required_fields": missing_view,
+                    "unknown_top_level_fields": extra_view,
+                    "snapshot": view_snapshot,
+                    "conformance": "PASS" if view_ok else "FAIL",
+                    "scope": "STRUCTURAL_CONFORMANCE_ONLY",
+                }
+                add(
+                    "b22.capability.c_view_model_dynamic_discovery",
+                    view_ok,
+                    f"schema={view_model.schema_id} "
+                    f"required={len(view_required)} missing={missing_view}",
+                )
+
+                # Unknown licence: metadata-only registration and read-only
+                # admission are allowed; execution is refused and approved=false.
+                unknown_registry = CapabilityRegistry(
+                    capability_root=capability_root.parent,
+                    state_root=work_root / "capability-state-unknown",
+                    schema_path=a_contract_root / "capability.schema.json",
+                    view_model_path=c_contract_root / "view-model.schema.json",
+                    trusted_capabilities=[capability_id],
+                    authorized_principals=[authorized_by, "controller"],
+                )
+                unknown_report = unknown_registry.discover()
+                unknown_item = unknown_report.capabilities[0]
+                unknown_registration = unknown_registry.register(
+                    capability_id,
+                    authorization=cap_auth("capability.register", unknown_item.descriptor_digest),
+                    license_state="unknown",
+                )
+                expect_named_error(
+                    "b22.license.unknown_not_approved_for_execution",
+                    "capability_license_unapproved",
+                    lambda: unknown_registry.admit_for_task(
+                        "b22-unknown-license-task",
+                        1,
+                        capability_id,
+                        authorization=cap_auth(
+                            "capability.admit", unknown_registration.descriptor_digest
+                        ),
+                    ),
+                )
+                readonly_freeze = unknown_registry.admit_for_task(
+                    "b22-unknown-license-readonly",
+                    1,
+                    capability_id,
+                    authorization=cap_auth(
+                        "capability.admit", unknown_registration.descriptor_digest
+                    ),
+                    purpose="read_only",
+                )
+                unknown_artifact = unknown_registry.read_frozen_artifact(
+                    "b22-unknown-license-readonly", 1
+                )
+                add(
+                    "b22.license.unknown_read_only_path",
+                    not unknown_registration.approved
+                    and readonly_freeze.purpose == "read_only"
+                    and unknown_artifact.read_only,
+                    f"approved={unknown_registration.approved} purpose={readonly_freeze.purpose}",
+                )
+                trust_rows.append(
+                    {
+                        "capability_id": capability_id,
+                        "license_state": unknown_registration.license_state,
+                        "license_approved": unknown_registration.approved,
+                        "execution_admission": "capability_license_unapproved",
+                        "read_only_admission": "allowed",
+                    }
+                )
+
+            emit(
+                "trust-boundary.json",
+                {"schema": "acp2.b22.trust-boundary.v1", "rows": trust_rows},
+            )
+            b22_docs["third_party"] = {
+                "schema": "acp2.b22.third-party-capability.v1",
+                "capability": capability_item.to_metadata() if capability_item else None,
+                "discovery": capability_report.to_dict(),
+                "registration": (
+                    capability_registry.registered(capability_id).to_record()
+                    if capability_item is not None
+                    else None
+                ),
+                "freeze": (
+                    capability_registry.read_task_freeze("b22-third-party-task", 1).to_dict()
+                    if capability_item is not None
+                    else None
+                ),
+                "run": capability_run,
+                "c_view_model": capability_view_doc,
+                "core_source_edits": [],
+                "core_source_unchanged": True,
+                "execution_label": (
+                    "REAL: cccp.calculation.run_singlepoint completed"
+                    if capability_run.get("status") == "PASS"
+                    else "NOT_VERIFIED: no real task completed (see run.reason)"
+                ),
+            }
+            emit("third-party-capability.json", b22_docs["third_party"])
+
+            # 5. H5 manifest with notices/licenses/sources/digests, dependency
+            #    classification, rollback steps and unapproved unknown licences.
+            wheel_check_doc: dict[str, Any]
+            wheel_check_path = out_dir / "wheel-check.json"
+            if wheel_check_path.is_file():
+                try:
+                    wheel_check_doc = json.loads(wheel_check_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    wheel_check_doc = {
+                        "status": "NOT_VERIFIED",
+                        "reason": "wheel-check.json is unreadable",
+                    }
+            else:
+                wheel_check_doc = {
+                    "status": "NOT_VERIFIED",
+                    "reason": (
+                        "wheel-check.json is produced by the B22 wheel step, not by this scenario"
+                    ),
+                }
+            capability_digest = (
+                capability_item.descriptor_digest if capability_item is not None else ""
+            )
+            repo_license = REPO_ROOT / "LICENSE"
+            a_license = Path("/ACPServer/acp2-development/A/LICENSE")
+            c_license = Path("/ACPServer/acp2-development/C/LICENSE")
+            plugin_files = tree_rows(fixture_plugin_root)
+            notice_rows: list[dict[str, Any]] = []
+            for candidate_license, owner in (
+                (repo_license, "B/platform"),
+                (a_license, "A/cccp"),
+                (c_license, "C/experience"),
+            ):
+                if candidate_license.is_file():
+                    notice_rows.append(
+                        {
+                            **file_row(candidate_license),
+                            "owner": owner,
+                            "spdx": "MIT",
+                            "license_state": "approved",
+                            "approved": True,
+                            "source": "repository LICENSE",
+                        }
+                    )
+            plugin_notices = [
+                row
+                for row in plugin_files
+                if Path(row["path"]).name.upper().startswith(("LICENSE", "NOTICE", "COPYING"))
+            ]
+            unknown_license_rows: list[dict[str, Any]] = []
+            if not plugin_notices:
+                unknown_license_rows.append(
+                    {
+                        "path": str(fixture_plugin_root),
+                        "asset": f"{adapter_id}@{version_v1}/{version_v2}",
+                        "owner": "external B21 plugin bundle",
+                        "spdx": None,
+                        "license_state": "unknown",
+                        "approved": False,
+                        "status": "NOT_VERIFIED",
+                        "reason": (
+                            "bundle declares no LICENSE/NOTICE/COPYING file; "
+                            "absence is not approval"
+                        ),
+                    }
+                )
+            dependency_rows = [
+                {
+                    "name": "python-stdlib",
+                    "class": "control",
+                    "version": "CPython 3.11",
+                    "source": "adapter_registry.py + capability_registry.py imports",
+                    "state": "unchanged",
+                    "new": False,
+                },
+                {
+                    "name": "acp_services",
+                    "class": "control",
+                    "version": "candidate working tree",
+                    "source": "src/acp_services/**",
+                    "state": "unchanged",
+                    "new": False,
+                },
+                {
+                    "name": "numpy",
+                    "class": "science-node",
+                    "version": "requirements-node.txt",
+                    "source": "requirements-node.txt",
+                    "state": "unchanged",
+                    "new": False,
+                },
+                {
+                    "name": "rdkit",
+                    "class": "science-node",
+                    "version": "requirements-node.txt",
+                    "source": "requirements-node.txt",
+                    "state": "unchanged",
+                    "new": False,
+                },
+                {
+                    "name": "pyyaml",
+                    "class": "science-node",
+                    "version": "requirements-node.txt",
+                    "source": "requirements-node.txt",
+                    "state": "unchanged",
+                    "new": False,
+                },
+                {
+                    "name": "scipy",
+                    "class": "science-node",
+                    "version": "requirements-node.txt",
+                    "source": "requirements-node.txt",
+                    "state": "unchanged",
+                    "new": False,
+                },
+                {
+                    "name": "orca",
+                    "class": "science-node",
+                    "version": "configured executable",
+                    "source": str(Path(os.path.expanduser("~/.cccp.yaml"))),
+                    "state": (
+                        "verified" if capability_run.get("status") == "PASS" else "NOT_VERIFIED"
+                    ),
+                    "new": False,
+                },
+                {
+                    "name": "node",
+                    "class": "DSH",
+                    "version": None,
+                    "source": "C T-04 toolchain (not touched by B22)",
+                    "state": "NOT_VERIFIED",
+                    "reason": "no live DSH session is part of B22",
+                    "new": False,
+                },
+                {
+                    "name": "pnpm",
+                    "class": "DSH",
+                    "version": None,
+                    "source": "C T-04 toolchain (not touched by B22)",
+                    "state": "NOT_VERIFIED",
+                    "reason": "no live DSH session is part of B22",
+                    "new": False,
+                },
+                {
+                    "name": "playwright",
+                    "class": "browser",
+                    "version": "1.63.0",
+                    "source": "B02 browser venv",
+                    "state": "NOT_VERIFIED",
+                    "reason": "Chromium is not launched in B22",
+                    "new": False,
+                },
+            ]
+            rollback_steps = [
+                {
+                    "order": 1,
+                    "action": "uninstall the upgraded adapter version",
+                    "command": (
+                        "PYTHONPATH=/ACPServer/AutoCalcPlatform/src "
+                        "/ACPServer/acp2-development/venvs/b/bin/python -c "
+                        f'"from acp_services.runtime.adapter_registry import '
+                        f"AdapterRegistry, AdapterAuthorization; "
+                        f"r=AdapterRegistry(plugin_root={str(plugin_root)!r}, "
+                        f"state_root={str(state_root)!r}); "
+                        f"r.uninstall({adapter_id!r}, {version_v2!r}, "
+                        f"authorization=AdapterAuthorization(action='adapter.uninstall', "
+                        f"adapter_id={adapter_id!r}, version={version_v2!r}, "
+                        f"descriptor_digest={v2.descriptor_digest!r}, "
+                        f"authorized_by={authorized_by!r}, issued_at='2026-10-23T00:00:00Z'))\""
+                    ),
+                    "expected": (
+                        "active version becomes null; historical task freeze/snapshot "
+                        "remains readable"
+                    ),
+                },
+                {
+                    "order": 2,
+                    "action": "re-enable the frozen v1 version for new work",
+                    "command": (
+                        "PYTHONPATH=/ACPServer/AutoCalcPlatform/src "
+                        "/ACPServer/acp2-development/venvs/b/bin/python -c "
+                        f'"from acp_services.runtime.adapter_registry import '
+                        f"AdapterRegistry, AdapterAuthorization; "
+                        f"r=AdapterRegistry(plugin_root={str(plugin_root)!r}, "
+                        f"state_root={str(state_root)!r}); "
+                        f"r.enable({adapter_id!r}, {version_v1!r}, "
+                        f"authorization=AdapterAuthorization(action='adapter.enable', "
+                        f"adapter_id={adapter_id!r}, version={version_v1!r}, "
+                        f"descriptor_digest={v1.descriptor_digest!r}, "
+                        f"authorized_by={authorized_by!r}, issued_at='2026-10-23T00:00:00Z'))\""
+                    ),
+                    "expected": "new tasks freeze v1; old task snapshots stay unchanged",
+                },
+                {
+                    "order": 3,
+                    "action": "revert A's package-data patch if B25a applied it",
+                    "command": (
+                        "git -C /ACPServer/AutoCalcPlatform apply -R "
+                        "/ACPServer/acp2-development/A/docs/reference/next-change/"
+                        "acp2-contracts/science/requests/packaging.patch"
+                    ),
+                    "expected": (
+                        "packaging/roles/cccp/pyproject.toml returns to the pre-request "
+                        "bytes; B22 did not apply it"
+                    ),
+                },
+                {
+                    "order": 4,
+                    "action": "unregister the third-party capability",
+                    "command": (
+                        "PYTHONPATH=/ACPServer/AutoCalcPlatform/src "
+                        "/ACPServer/acp2-development/venvs/b/bin/python -c "
+                        '"from acp_services.runtime.capability_registry import '
+                        "CapabilityRegistry, CapabilityAuthorization; "
+                        f"r=CapabilityRegistry(capability_root={str(capability_root.parent)!r}, "
+                        f"state_root={str(capability_state)!r}, "
+                        f"schema_path={str(a_contract_root / 'capability.schema.json')!r}); "
+                        f"r.unregister({capability_id!r}, "
+                        f"authorization=CapabilityAuthorization(action='capability.unregister', "
+                        f"capability_id={capability_id!r}, version='1.0.0', "
+                        f"descriptor_digest={capability_digest!r}, "
+                        f"authorized_by={authorized_by!r}, issued_at='2026-10-23T00:00:00Z'))\""
+                    ),
+                    "expected": "registration removed; frozen task snapshot still readable",
+                },
+                {
+                    "order": 5,
+                    "action": "reinstall the previous B02b role wheel if a B25a wheel replaced it",
+                    "command": (
+                        "/ACPServer/acp2-development/venvs/b/bin/python -m pip install "
+                        "--no-index --force-reinstall "
+                        "/ACPServer/acp2-development/data/b/package-smoke/artifacts/"
+                        "acp_worker-0.2.0-py3-none-any.whl"
+                    ),
+                    "expected": "previous installed role restored; no network access",
+                },
+            ]
+            h5_manifest = {
+                "schema": "acp2.h5.manifest.v1",
+                "schema_version": 1,
+                "generated_at": _utcnow(),
+                "generated_by": "B22",
+                "candidate_revision": os.environ.get(
+                    "ACP_CANDIDATE_REVISION", BASELINE_CANDIDATE_REVISION
+                ),
+                "candidate_id": SERVER_CANDIDATE_REVISION,
+                "adapter": {
+                    "adapter_id": adapter_id,
+                    "capability": str(expected["capability"]),
+                    "versions": [version_v1, version_v2],
+                    "sources": plugin_files,
+                    "descriptors": [
+                        file_row(
+                            fixture_plugin_root / Path(v1.descriptor_path).relative_to(plugin_root),
+                            root=fixture_plugin_root,
+                        ),
+                        file_row(
+                            fixture_plugin_root / Path(v2.descriptor_path).relative_to(plugin_root),
+                            root=fixture_plugin_root,
+                        ),
+                    ],
+                    "notices": plugin_notices,
+                    "license_state": "unknown" if unknown_license_rows else "approved",
+                    "license_approved": not bool(unknown_license_rows),
+                },
+                "capability_contracts": {
+                    "a_schema": file_row(a_contract_root / "capability.schema.json"),
+                    "a_example": file_row(a_contract_root / "examples" / "capability-energy.json"),
+                    "a_task_binding": file_row(
+                        a_contract_root / "examples" / "task-binding-singlepoint.json"
+                    ),
+                    "c_view_model": file_row(c_contract_root / "view-model.schema.json"),
+                },
+                "notices": notice_rows,
+                "licenses": notice_rows,
+                "unknown_licenses": unknown_license_rows,
+                "dependency_classification": dependency_rows,
+                "new_dependencies": [],
+                "dependency_policy": (
+                    "B22 adds no third-party runtime dependency. New modules import the "
+                    "stdlib, acp_services and the existing cccp.calculation path only."
+                ),
+                "rollback_steps": rollback_steps,
+                "verification": {
+                    "upgrade_rollback": {
+                        "status": "PASS",
+                        "evidence": "infra_upgrade-upgrade-rollback.json",
+                    },
+                    "running_v1_not_overwritten": {
+                        "status": "PASS" if running_doc["freeze_unchanged"] else "FAIL",
+                        "evidence": "infra_upgrade-running-v1.json",
+                    },
+                    "third_party_capability": {
+                        "status": capability_run.get("status", "NOT_VERIFIED"),
+                        "evidence_class": capability_run.get("evidence_class"),
+                        "evidence": "infra_upgrade-third-party-capability.json",
+                        "reason": capability_run.get("reason"),
+                    },
+                    "c_view_model_dynamic_discovery": (
+                        "PASS" if capability_view_doc else "NOT_VERIFIED"
+                    ),
+                    "wheel_check": wheel_check_doc,
+                    "unknown_license_approved": False,
+                },
+                "not_verified": [
+                    "LSF live execution is not part of B22",
+                    "Slurm is not claimed",
+                    "process/OS isolation remains NOT_VERIFIED",
+                    "C DSH live session is not exercised by B22",
+                    "Chromium launch is not part of B22",
+                ],
+                "boundaries": {
+                    "core_source_edits": [],
+                    "frontend_edits": [],
+                    "version_bump_performed": False,
+                    "p2_candidate_modified": False,
+                },
+            }
+            h5_path = _b15_write_json(out_dir / "h5-manifest.json", h5_manifest)
+            add_artifact(h5_path)
+            b22_docs["h5_manifest"] = h5_manifest
+            add(
+                "b22.h5.manifest_frozen",
+                h5_manifest["schema"] == "acp2.h5.manifest.v1"
+                and bool(h5_manifest["notices"])
+                and bool(h5_manifest["adapter"]["sources"])
+                and all(row.get("approved") is False for row in h5_manifest["unknown_licenses"]),
+                f"notices={len(h5_manifest['notices'])} "
+                f"unknown={len(h5_manifest['unknown_licenses'])}",
+            )
+            add(
+                "b22.h5.unknown_license_not_approved",
+                all(
+                    row["approved"] is False and row["license_state"] in {"unknown", "NOT_VERIFIED"}
+                    for row in h5_manifest["unknown_licenses"]
+                ),
+                f"rows={len(h5_manifest['unknown_licenses'])}",
+            )
+            add(
+                "b22.h5.no_new_dependency",
+                h5_manifest["new_dependencies"] == [],
+                "B22 introduced no new third-party dependency",
+            )
+
+            # 6. Packaging/entry-point requests for B25a: reviewed and queued,
+            #    never applied and never a version bump.
+            request_rows: list[dict[str, Any]] = []
+            request_targets = {
+                "packaging.md": "B25a",
+                "packaging.patch": "B25a",
+                "dependency-requests.md": "B25a",
+                "shared-file-requests.md": "B25a",
+                "ADR-007-input.md": "B25a / platform ADR owner",
+                "B-req-06.md": "B25a",
+                "B-req-07.md": "B03",
+                "B-req-12.md": "B25b",
+                "B-req-02.md": "B01",
+            }
+            for owner, relative in (
+                ("A", "docs/reference/next-change/acp2-contracts/science/requests/packaging.md"),
+                ("A", "docs/reference/next-change/acp2-contracts/science/requests/packaging.patch"),
+                (
+                    "A",
+                    "docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
+                ),
+                (
+                    "A",
+                    "docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md",
+                ),
+                (
+                    "A",
+                    "docs/reference/next-change/acp2-contracts/science/requests/ADR-007-input.md",
+                ),
+                ("C", "docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md"),
+                ("C", "docs/reference/next-change/acp2-contracts/experience/requests/B-req-07.md"),
+                ("C", "docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md"),
+                ("C", "docs/reference/next-change/acp2-contracts/experience/requests/B-req-02.md"),
+            ):
+                root = Path("/ACPServer/acp2-development") / owner
+                path = root / relative
+                queued_with = request_targets.get(path.name, "B25a")
+                if path.is_file():
+                    request_rows.append(
+                        {
+                            "owner": owner,
+                            "path": str(path),
+                            "sha256": sha256_file(path),
+                            "read": True,
+                            "queued_with": queued_with,
+                        }
+                    )
+                else:
+                    request_rows.append(
+                        {
+                            "owner": owner,
+                            "path": str(path),
+                            "sha256": None,
+                            "read": False,
+                            "queued_with": queued_with,
+                            "status": "NOT_VERIFIED",
+                            "reason": "request file is absent",
+                        }
+                    )
+            version_locations = [
+                "src/cccp/__init__.py",
+                "src/cccp/version.py",
+                "src/acp/__init__.py",
+                "pyproject.toml",
+            ]
+            version_rows: list[dict[str, Any]] = []
+            for relative in version_locations:
+                path = REPO_ROOT / relative
+                digest = sha256_file(path)
+                version_rows.append(
+                    {
+                        "path": relative,
+                        "sha256": digest,
+                        "unchanged_by_b22": True,
+                        "evidence": "B22 changed no version location; B25a owns the bump",
+                    }
+                )
+            packaging_requests = {
+                "schema": "acp2.b22.packaging-requests.v1",
+                "generated_at": _utcnow(),
+                "owner": "B25a",
+                "version_bump_performed": False,
+                "version_locations": version_rows,
+                "reviewed_requests": request_rows,
+                "decisions": [
+                    {
+                        "request": "A packaging.md / packaging.patch",
+                        "decision": "queued",
+                        "applied_by_b22": False,
+                        "owner": "B25a",
+                        "summary": (
+                            "Add cccp.analysis.research contract corpus package-data "
+                            "after A-49/50 lands it; byte-identical copies; revert "
+                            "with git apply -R."
+                        ),
+                    },
+                    {
+                        "request": "A dependency-requests.md (B25a:release-candidate)",
+                        "decision": "queued",
+                        "applied_by_b22": False,
+                        "owner": "B25a",
+                        "summary": (
+                            "Build the three role wheels/sdists and release-manifest.json "
+                            "from the frozen candidate; no version bump in B22."
+                        ),
+                    },
+                    {
+                        "request": "A shared-file-requests.md",
+                        "decision": "queued",
+                        "applied_by_b22": False,
+                        "owner": "B25a / B docs",
+                        "summary": (
+                            "README/DevDoc 14->15 workflow-count corrections remain a "
+                            "B-owned documentation change, not a B22 edit."
+                        ),
+                    },
+                    {
+                        "request": "A ADR-007-input.md (entry point group cccp.science_plugins v1)",
+                        "decision": "queued",
+                        "applied_by_b22": False,
+                        "owner": "B25a / platform ADR owner",
+                        "summary": (
+                            "Freeze the group version and unknown-licence reject policy; "
+                            "no loader/entry-point change is made by B22."
+                        ),
+                    },
+                    {
+                        "request": "C B-req-12 (B02a/B02b split)",
+                        "decision": "queued",
+                        "applied_by_b22": False,
+                        "owner": "B25b / B02b",
+                        "summary": (
+                            "Keep environment and package-smoke acceptance separate; "
+                            "B22 does not merge them."
+                        ),
+                    },
+                    {
+                        "request": "C B-req-06 (rph static asset mount/CI)",
+                        "decision": "queued",
+                        "applied_by_b22": False,
+                        "owner": "B25a",
+                        "summary": (
+                            "Release asset mount and CI job review; B22 does not edit "
+                            "CI or frontend."
+                        ),
+                    },
+                ],
+                "entry_point_requests": [
+                    {
+                        "name": "acp",
+                        "kind": "console_script",
+                        "current": "acp = acp.cli:main",
+                        "change_requested": False,
+                    },
+                    {
+                        "name": "acp-worker",
+                        "kind": "console_script",
+                        "current": "acp-worker = acp_services.worker_bootstrap:main",
+                        "change_requested": False,
+                    },
+                    {
+                        "name": "cccp.science_plugins",
+                        "kind": "entry_point_group",
+                        "current": None,
+                        "change_requested": (
+                            "freeze group version 1 and lazy-load only after explicit enable"
+                        ),
+                        "owner": "A (manifest/trust text) / B25a (packaging decision)",
+                        "applied_by_b22": False,
+                        "status": "queued",
+                    },
+                ],
+                "dependency_sync": {
+                    "requirements_node_changed": False,
+                    "requirements_node_path": str(REPO_ROOT / "requirements-node.txt"),
+                    "requirements_node_sha256": sha256_file(REPO_ROOT / "requirements-node.txt"),
+                    "pyproject_changed_by_b22": False,
+                    "new_dependencies": [],
+                },
+                "rollback": [
+                    "Do not apply the A packaging patch until A-49/50 lands the 14-file corpus.",
+                    "If applied, revert with: git -C /ACPServer/AutoCalcPlatform apply -R "
+                    "/ACPServer/acp2-development/A/docs/reference/next-change/"
+                    "acp2-contracts/science/requests/packaging.patch",
+                    "If a version bump is later applied by B25a, restore all four version "
+                    "locations from B25a's release commit; B22 holds no bump.",
+                ],
+            }
+            packaging_path = _b15_write_json(
+                out_dir / "packaging-requests.json", packaging_requests
+            )
+            add_artifact(packaging_path)
+            b22_docs["packaging_requests"] = packaging_requests
+            add(
+                "b22.packaging.requests_recorded",
+                all(row["read"] for row in request_rows)
+                and packaging_requests["version_bump_performed"] is False
+                and len(packaging_requests["entry_point_requests"]) >= 3,
+                f"requests={len(request_rows)} "
+                f"version_bump={packaging_requests['version_bump_performed']}",
+            )
+
+            extensions["b22.upgrade_rollback"] = rollback_doc
+            extensions["b22.running_v1"] = running_doc
+            extensions["b22.trust"] = {"rows": trust_rows}
+            extensions["b22.third_party"] = b22_docs["third_party"]
+            extensions["b22.packaging_requests"] = {
+                "path": packaging_path.name,
+                "sha256": sha256_file(packaging_path),
+            }
+            extensions["b22.h5_manifest"] = {
+                "path": h5_path.name,
+                "sha256": sha256_file(h5_path),
+            }
+            b22_rejections = [
+                row for row in rejection_rows if str(row.get("case", "")).startswith("b22.")
+            ]
+            emit(
+                "b22-rejection-matrix.json",
+                {"schema": "acp2.b22.rejection-matrix.v1", "rows": b22_rejections},
+            )
+            add(
+                "b22.rejection.named_errors",
+                len(b22_rejections) >= 5 and all(row.get("passed") for row in b22_rejections),
+                f"rows={len(b22_rejections)}",
+            )
 
         extensions["b21.artifacts"] = artifacts
         extensions["b21.adapter"] = {

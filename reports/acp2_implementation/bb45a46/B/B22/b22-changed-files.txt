@@ -1,0 +1,7 @@
+B22 changed files (no src/cccp production edit):
+scripts/acceptance/acp2_runtime.py
+src/acp_services/runtime/adapter_registry.py
+reports/acp2_implementation/bb45a46/B/B22/
+src/acp_services/runtime/capability_registry.py
+tests/test_acp2_runtime_adapter_upgrade.py
+src/cccp files changed by B22: none

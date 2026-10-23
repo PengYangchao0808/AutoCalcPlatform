@@ -1,0 +1,47 @@
+{
+  "rows": [
+    {
+      "actual_code": "adapter_version_not_installed",
+      "case": "b22.uninstall.removed_execution",
+      "detail": "acp.storage.inventory@1.1.0 is not installed; the registry never substitutes another version",
+      "expected_code": "adapter_version_not_installed",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_version_not_installed",
+      "case": "b22.uninstall.removed_enable",
+      "detail": "acp.storage.inventory@1.1.0 is not installed; the registry never substitutes another version",
+      "expected_code": "adapter_version_not_installed",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_version_not_installed",
+      "case": "b22.uninstall.removed_frozen_execution",
+      "detail": "acp.storage.inventory@1.1.0 is not installed; the registry never substitutes another version",
+      "expected_code": "adapter_version_not_installed",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_version_not_installed",
+      "case": "b22.uninstall.v1_frozen_execution_after_removal",
+      "detail": "acp.storage.inventory@1.0.0 is not installed; the registry never substitutes another version",
+      "expected_code": "adapter_version_not_installed",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_untrusted",
+      "case": "b22.trust.importable_still_untrusted",
+      "detail": "acp.storage.untrusted is discover-only; add it to the explicit platform trust allow-list to enable it",
+      "expected_code": "adapter_untrusted",
+      "passed": true
+    },
+    {
+      "actual_code": "capability_license_unapproved",
+      "case": "b22.license.unknown_not_approved_for_execution",
+      "detail": "capability_license_unapproved: electronic.energy@1.0.0 licence state 'unknown' is not approved; read-only admission only",
+      "expected_code": "capability_license_unapproved",
+      "passed": true
+    }
+  ],
+  "schema": "acp2.b22.rejection-matrix.v1"
+}

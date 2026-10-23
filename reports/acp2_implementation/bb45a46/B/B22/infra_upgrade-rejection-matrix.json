@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "actual_code": "adapter_authorization_required",
+      "case": "b21.authorization.install_requires_fact",
+      "detail": "adapter.install for acp.storage.inventory@1.0.0 needs a server-side authorization fact",
+      "expected_code": "adapter_authorization_required",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_authorization_invalid",
+      "case": "b21.authorization.install_wrong_action",
+      "detail": "authorization fact does not match the requested adapter action/identity",
+      "expected_code": "adapter_authorization_invalid",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_authorization_invalid",
+      "case": "b21.authorization.install_wrong_principal",
+      "detail": "principal 'untrusted-client' may not authorize adapters",
+      "expected_code": "adapter_authorization_invalid",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_authorization_expired",
+      "case": "b21.authorization.install_expired",
+      "detail": "authorization fact expired at 2000-01-01T00:00:00Z",
+      "expected_code": "adapter_authorization_expired",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_authorization_required",
+      "case": "b21.authorization.enable_requires_fact",
+      "detail": "adapter.enable for acp.storage.inventory@1.0.0 needs a server-side authorization fact",
+      "expected_code": "adapter_authorization_required",
+      "passed": true
+    },
+    {
+      "actual_code": "execution_requires_explicit_allow",
+      "case": "b21.metadata.explicit_execution_required",
+      "detail": "adapter execution requires allow_execution=True; discovery, install and enable never execute an entrypoint",
+      "expected_code": "execution_requires_explicit_allow",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_version_incompatible",
+      "case": "b21.reject.wrong_version_incompatible",
+      "detail": "acp.storage.wrong-version@2.0.0 has incompatible platform major 2; supported major is 1",
+      "expected_code": "adapter_version_incompatible",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_version_not_installed",
+      "case": "b21.reject.unknown_version_no_auto_replace",
+      "detail": "acp.storage.inventory@9.9.9 is not installed; the registry never substitutes another version",
+      "expected_code": "adapter_version_not_installed",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_environment_missing",
+      "case": "b21.reject.missing_environment",
+      "detail": "missing environment for acp.storage.missing-env@1.0.0: env:ACP2_B21_MISSING_ENV",
+      "expected_code": "adapter_environment_missing",
+      "missing_environment": [
+        "env:ACP2_B21_MISSING_ENV"
+      ],
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_capability_conflict",
+      "case": "b21.reject.capability_conflict",
+      "detail": "capability 'scheduler.local' is already owned by 'platform.scheduler.local@1.0.0'; 'acp.storage.conflict@1.0.0' cannot claim it",
+      "expected_code": "adapter_capability_conflict",
+      "passed": true
+    },
+    {
+      "actual_code": "adapter_untrusted",
+      "case": "b21.reject.untrusted_plugin",
+      "detail": "acp.storage.untrusted is discover-only; add it to the explicit platform trust allow-list to enable it",
+      "expected_code": "adapter_untrusted",
+      "passed": true
+    }
+  ],
+  "schema": "acp2.b21.rejection-matrix.v1"
+}
