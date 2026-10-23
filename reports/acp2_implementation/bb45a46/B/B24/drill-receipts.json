@@ -1,0 +1,270 @@
+{
+  "cursor_expiry": {
+    "action": "cursor",
+    "claim_id": "idem_7a5fec8f43a14563be6d739146963ed7",
+    "expired": [
+      "idem_7a5fec8f43a14563be6d739146963ed7"
+    ],
+    "expired_state": "expired",
+    "lease_epoch": 1,
+    "no_duplicate_row": true,
+    "rows_after": 3,
+    "rows_before": 3,
+    "takeover_detail": "takeover",
+    "takeover_kind": "created"
+  },
+  "ledger_consistency": {
+    "action": "verify",
+    "approval": {
+      "approval_ref": "ap_e45a4f5a71074e249ec6fa557eb066ec",
+      "binding": {
+        "allowed_change_range": {},
+        "budget_digest": "sha256:583654019df6d71bbceb02914cb222ae781f260aa6e570c5a7551e9a5123335e",
+        "plan_digest": "sha256:e218ed4ca55ec01579591d225ab424a2c972d2d1db86be3304bd21124a271c66",
+        "project_id": "default",
+        "proposal_digest": "sha256:a5aa3be912482900abb08007b704037afcbc33fdb09e7500b276fecd7b5ffdb6"
+      },
+      "revision": 2,
+      "state": "approved"
+    },
+    "budget": {
+      "approval_ref": "ap_e45a4f5a71074e249ec6fa557eb066ec",
+      "budget_id": "mig-budget",
+      "limits": {
+        "attempt": 4,
+        "qc_invocation": 10,
+        "task_ref": 4
+      },
+      "projection": {
+        "approval_ref": "ap_e45a4f5a71074e249ec6fa557eb066ec",
+        "approved_limits": {
+          "attempt": 4,
+          "qc_invocation": 10,
+          "task_ref": 4
+        },
+        "budget_id": "mig-budget",
+        "consumed": {
+          "attempt": 1,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 2,
+          "recipe_step": 0,
+          "task_ref": 1
+        },
+        "limits": {
+          "attempt": 4,
+          "qc_invocation": 10,
+          "task_ref": 4
+        },
+        "project_id": "default",
+        "receipt_counters": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 0
+        },
+        "receipts": 0,
+        "release_statement": {
+          "enforced": [
+            "task_ref",
+            "attempt"
+          ],
+          "not_verified": [
+            {
+              "capability": "model_token_enforcement",
+              "reason": "model-call proxy is C-owned (acp2_experience_budget_proxy.py, C T-13)"
+            },
+            {
+              "capability": "bsub_enforcement",
+              "reason": "LSF is absent in this environment; bsub count is 0 and recorded only"
+            }
+          ],
+          "notes": {
+            "identity": "budget identity is project + proposal_ref (research round/batch); it is independent of run_id, so retries and restarts inherit the remaining batch",
+            "model_tokens": "model-token enforcement is NOT_VERIFIED; the model-call proxy is C-owned and B neither proxies tokens nor invents unified billing",
+            "publication": "A publication failure or retry never re-charges computation: usage is ingested once from the trusted receipt and publication is an independent step.",
+            "science": "budget/balance state never changes scientific behavior, TaskRequest or an algorithm result",
+            "settlement": "settlement comes from receipts/trusted usage; a duplicate receipt/event cannot charge twice because its deterministic receipt id is unique"
+          },
+          "recorded_only": [
+            "recipe_step",
+            "qc_invocation",
+            "bsub",
+            "model_request"
+          ],
+          "release_rules": {
+            "cancel_after_dispatch": {
+              "detail": "science already started; the consumed units stay charged",
+              "recharges_computation": false,
+              "release_reserved_units": false
+            },
+            "cancel_before_dispatch": {
+              "detail": "a queued reservation released before any QC invocation is refunded",
+              "recharges_computation": false,
+              "release_reserved_units": true
+            },
+            "publication_failure": {
+              "detail": "publication retries only republish; they never re-charge computation",
+              "recharges_computation": false,
+              "release_reserved_units": false
+            },
+            "publication_pending": {
+              "detail": "publication is a separate fact; pending publication keeps computation charged",
+              "recharges_computation": false,
+              "release_reserved_units": false
+            },
+            "recovery": {
+              "detail": "restart recovery replays reservations and receipts; it never resets a budget",
+              "recharges_computation": false,
+              "release_reserved_units": false
+            },
+            "replay": {
+              "detail": "a duplicate receipt/claim replay is idempotent and charges nothing new",
+              "recharges_computation": false,
+              "release_reserved_units": false
+            },
+            "science_failure": {
+              "detail": "a failed attempt that invoked QC consumes its units; a retry is a new attempt",
+              "recharges_computation": false,
+              "release_reserved_units": false
+            },
+            "submit_failed": {
+              "detail": "the claim never dispatched; its queued reservation is released",
+              "recharges_computation": false,
+              "release_reserved_units": true
+            }
+          },
+          "unit_consumption": {
+            "attempt": {
+              "consumed_at": "accepted submit/dispatch of an attempt",
+              "failure": "consumes the failed attempt",
+              "recovery": "same attempt recovery does not consume; continue/rerun is a new attempt",
+              "replay": "does not consume a second attempt"
+            },
+            "bsub": {
+              "consumed_at": "trusted receipt per real bsub",
+              "failure": "consumes when bsub was invoked",
+              "recovery": "does not re-issue bsub",
+              "replay": "does not re-consume the same receipt"
+            },
+            "model_request": {
+              "consumed_at": "trusted receipt from the C-owned model proxy",
+              "failure": "recorded when the trusted source reports it",
+              "recovery": "does not re-request tokens",
+              "replay": "does not re-consume the same receipt"
+            },
+            "qc_invocation": {
+              "consumed_at": "trusted receipt per QC process invocation",
+              "failure": "consumes when the process was invoked",
+              "recovery": "does not re-invoke a completed step",
+              "replay": "does not re-consume the same receipt"
+            },
+            "recipe_step": {
+              "consumed_at": "trusted receipt for a dispatched step",
+              "failure": "consumes when the step was invoked",
+              "recovery": "does not re-consume a completed step",
+              "replay": "does not re-consume the same receipt"
+            },
+            "task_ref": {
+              "consumed_at": "accepted submit, before any work directory",
+              "failure": "consumes",
+              "recovery": "does not consume a new TaskRef",
+              "replay": "does not consume a second TaskRef"
+            }
+          }
+        },
+        "remaining": {
+          "attempt": 3,
+          "qc_invocation": 8,
+          "task_ref": 3
+        },
+        "reservations": [
+          {
+            "admission_reservation_id": "",
+            "budget_id": "mig-budget",
+            "claim_id": "mig-claim-1",
+            "created_at": "2026-10-23T11:16:49.734606+00:00",
+            "detail": "B24a migration drill",
+            "reservation_id": "mig-budget-res-1",
+            "run_id": "mig-run-1",
+            "state": "reserved",
+            "task_ref": "mig_idem_job",
+            "units": {
+              "attempt": 1,
+              "qc_invocation": 2,
+              "task_ref": 1
+            },
+            "updated_at": "2026-10-23T11:16:49.734606+00:00"
+          }
+        ],
+        "timeouts": {
+          "client_request_s": 60.0,
+          "overall_acceptance_s": 3600.0,
+          "queue_wait_s": 0.0,
+          "science_runtime_s": 1800.0
+        },
+        "unit_capabilities": {
+          "attempt": "enforced",
+          "qc_invocation": "recorded-only",
+          "task_ref": "enforced"
+        }
+      }
+    },
+    "idempotency": {
+      "claim_id": "idem_44bc76781b5d4df3876c261679c8064e",
+      "request_digest": "sha256:9ca16a65e61ceb10f7b9a485dd30cfefb80074224ed7a711bf172426216e6fb1",
+      "state": "committed",
+      "task_id": "mig_idem_job"
+    },
+    "terminal": {
+      "job_id": "mig_done",
+      "revision": 0,
+      "status": "completed"
+    }
+  },
+  "lost_worker": {
+    "action": "lost-worker",
+    "recovered": {
+      "error": "worker_lost:pid=999999:no_live_process",
+      "from": "running",
+      "job_id": "mig_lost",
+      "revision": 1,
+      "to": "failed"
+    },
+    "recovery_scan_after": [],
+    "terminal_guard": "acp_services.runtime.attempt_completion._is_terminal",
+    "terminal_revival_blocked": true,
+    "terminal_selected_by_recovery_scan": false,
+    "terminal_unchanged": true
+  },
+  "old_duplicate_receipt": {
+    "action": "receipts",
+    "duplicate": {
+      "manifest_twice": "<acp2-dev>/data/b/b24-migration/drills/duplicate_receipt/result_manifest.json",
+      "product_ids": [
+        "sp_output.log"
+      ],
+      "product_ids_unique": true,
+      "publication_complete": true,
+      "publication_result_id": "v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint",
+      "result_id": "v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint"
+    },
+    "old_v1": {
+      "default_adopted": false,
+      "default_decision": "conservative_recompute",
+      "explicit_legacy_adopted": true
+    }
+  },
+  "publication_pending": {
+    "action": "publication",
+    "manifest_exists": true,
+    "marker_after_complete": true,
+    "marker_before": null,
+    "qc_calls": 0,
+    "qc_executed": false,
+    "recovered": true
+  },
+  "schema": "acp2.migration.drills.v1"
+}

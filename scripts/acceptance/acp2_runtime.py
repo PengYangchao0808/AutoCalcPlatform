@@ -1382,7 +1382,11 @@ def harness_revision() -> str:
     return sha256_file(SCRIPT_PATH)
 
 
-def _evidence_kind_for_phase(phase: str) -> str:
+def _evidence_kind_for_phase(phase: str, scenario: str | None = None) -> str:
+    if scenario == "migration":
+        # The migration scenario copies frozen fixtures into an isolated test
+        # workspace; it starts no Controller and creates no live task.
+        return "fixture"
     if phase == "fixture" or phase.endswith(":fixture"):
         return "fixture"
     if phase == "aggregate":
@@ -15138,7 +15142,7 @@ def _write_prerequisite_result(
     run_id = _new_run_id()
     timeout = args.timeout if args.timeout is not None else phase.timeout
     candidate_revision, server_revision, identity_error = resolve_candidate_identity(
-        _evidence_kind_for_phase(phase_name), args.controller, timeout
+        _evidence_kind_for_phase(phase_name, spec.scenario), args.controller, timeout
     )
     result = "NOT_VERIFIED"
     exit_code = EXIT_NOT_VERIFIED
@@ -15158,7 +15162,7 @@ def _write_prerequisite_result(
         reason=reason_value,
         exit_code=exit_code,
         command=dry_run_commands(spec, phase_name, phase, args),
-        evidence_kind=_evidence_kind_for_phase(phase_name),
+        evidence_kind=_evidence_kind_for_phase(phase_name, spec.scenario),
         assertions=[{"name": "prerequisite", "status": "NOT_VERIFIED", "detail": reason}],
         extensions={"b01.skeleton": True, "b01.prerequisite_failure": reason},
         candidate_revision=candidate_revision,
@@ -15180,6 +15184,767 @@ def _write_prerequisite_result(
     return EXIT_NOT_VERIFIED
 
 
+# ---------------------------------------------------------------------------
+# B24a migration / backup / restore scenario
+# ---------------------------------------------------------------------------
+
+MIGRATION_FIXTURE_SCHEMA = "acp2.migration.fixture.v1"
+MIGRATION_HELPER = REPO_ROOT / "scripts" / "acceptance" / "acp2_migration_helper.py"
+MIGRATION_SOURCE_FIXTURES = REPO_ROOT / "tests" / "baseline" / "recovery_fixtures"
+MIGRATION_ARTIFACT_DIRS = ("source-copy", "tasks", "legacy-root/tasks")
+MIGRATION_HEAD_TABLES = (
+    "jobs",
+    "tasks",
+    "stage_tasks",
+    "artifacts",
+    "job_outbox",
+    "approval_records",
+    "idempotency_records",
+    "structure_source_index",
+    "organization_events",
+)
+MIGRATION_ADMISSION_TABLES = (
+    "admission_reservations",
+    "research_budget_policies",
+    "research_budget_reservations",
+    "research_budget_receipts",
+    "research_budget_events",
+)
+
+
+def _migration_fixture(path: str) -> dict[str, Any]:
+    candidate = Path(path)
+    if candidate.is_dir():
+        candidate = candidate / "migration.json"
+    try:
+        document = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"migration fixture unreadable: {exc}") from exc
+    if not isinstance(document, dict) or document.get("schema") != MIGRATION_FIXTURE_SCHEMA:
+        raise ValueError(f"fixture is not {MIGRATION_FIXTURE_SCHEMA}")
+    for key in ("fixture_id", "source_fixtures", "workspace_root"):
+        if not str(document.get(key) or "").strip():
+            raise ValueError(f"fixture.{key} is required")
+    if int(document.get("target_schema_version") or 0) <= 0:
+        raise ValueError("fixture.target_schema_version is required")
+    if int(document.get("legacy_schema_version") or 0) <= 0:
+        raise ValueError("fixture.legacy_schema_version is required")
+    return document
+
+
+def _migration_helper(
+    action: str, arguments: Sequence[str], *, timeout: float = 180
+) -> tuple[int, dict[str, Any], str, str]:
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+    argv = [sys.executable, str(MIGRATION_HELPER), action, *arguments]
+    completed = subprocess.run(
+        argv, capture_output=True, text=True, timeout=timeout, env=env, check=False
+    )
+    payload: dict[str, Any] = {}
+    stdout = (completed.stdout or "").strip()
+    if stdout:
+        try:
+            parsed = json.loads(stdout)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            payload = parsed
+        else:
+            for line in reversed(stdout.splitlines()):
+                try:
+                    candidate = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(candidate, dict):
+                    payload = candidate
+                    break
+    return completed.returncode, payload, completed.stdout or "", completed.stderr or ""
+
+
+def _migration_file_digests(root: Path) -> dict[str, str]:
+    if not root.exists():
+        return {}
+    return {
+        path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _migration_tree_digest(root: Path) -> str:
+    digests = _migration_file_digests(root)
+    material = json.dumps(digests, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
+
+
+def _migration_artifact_digests(workspace: Path) -> dict[str, Any]:
+    return {
+        name: {
+            "tree_digest": _migration_tree_digest(workspace / name),
+            "files": _migration_file_digests(workspace / name),
+        }
+        for name in MIGRATION_ARTIFACT_DIRS
+    }
+
+
+def _migration_corrupt_artifacts(root: Path) -> list[dict[str, str]]:
+    corrupt: list[dict[str, str]] = []
+    for path in sorted(root.rglob("*.json")):
+        try:
+            json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            corrupt.append(
+                {
+                    "path": path.relative_to(root).as_posix(),
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+    return corrupt
+
+
+def _migration_table_state(db: Path, tables: Sequence[str]) -> dict[str, Any]:
+    if not db.is_file():
+        return {"present": False, "schema_version": 0, "counts": {}, "digests": {}}
+    conn = sqlite3.connect(str(db))
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+        schema_version = (
+            int(conn.execute("SELECT COUNT(*) AS n FROM _schema_migrations").fetchone()["n"])
+            if "_schema_migrations" in existing
+            else 0
+        )
+        counts: dict[str, int] = {}
+        digests: dict[str, str] = {}
+        for table in tables:
+            if table not in existing:
+                continue
+            rows = conn.execute(f"SELECT * FROM [{table}] ORDER BY rowid").fetchall()
+            counts[table] = len(rows)
+            material = json.dumps([list(row) for row in rows], sort_keys=True, default=str).encode(
+                "utf-8"
+            )
+            digests[table] = hashlib.sha256(material).hexdigest()
+        return {
+            "present": True,
+            "schema_version": schema_version,
+            "counts": counts,
+            "digests": digests,
+            "prepared_schema_version": (
+                int(
+                    conn.execute("SELECT MAX(id) AS v FROM _prepare_schema_migrations").fetchone()[
+                        "v"
+                    ]
+                )
+                if "_prepare_schema_migrations" in existing
+                else 0
+            ),
+        }
+    finally:
+        conn.close()
+
+
+def _migration_snapshot(workspace: Path, fixture: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "acp2.migration.snapshot.v1",
+        "fixture_id": fixture["fixture_id"],
+        "target_schema_version": int(fixture["target_schema_version"]),
+        "jobs_db": _migration_table_state(workspace / "db" / "acp_jobs.db", MIGRATION_HEAD_TABLES),
+        "admission_db": _migration_table_state(
+            workspace / "db" / "acp_admission.db", MIGRATION_ADMISSION_TABLES
+        ),
+        "artifacts": _migration_artifact_digests(workspace),
+    }
+
+
+def _migration_compare(before: Mapping[str, Any], after: Mapping[str, Any]) -> dict[str, Any]:
+    differences: list[str] = []
+
+    def walk(left: Any, right: Any, path: str) -> None:
+        if isinstance(left, Mapping) and isinstance(right, Mapping):
+            for key in sorted(set(left) | set(right)):
+                walk(left.get(key), right.get(key), f"{path}.{key}" if path else str(key))
+            return
+        if left != right:
+            differences.append(f"{path}: {left!r} != {right!r}")
+
+    walk(before, after, "")
+    return {"equal": not differences, "differences": differences}
+
+
+def _migration_online_backup(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        target.unlink()
+    src = sqlite3.connect(str(source))
+    dst = sqlite3.connect(str(target))
+    try:
+        with dst:
+            src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+def _migration_restore_database(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in ("", "-wal", "-shm"):
+        candidate = Path(str(target) + suffix)
+        if candidate.exists():
+            candidate.unlink()
+    _migration_online_backup(source, target)
+
+
+def _migration_restore_artifacts(backup: Path, workspace: Path) -> None:
+    for name in MIGRATION_ARTIFACT_DIRS:
+        source = backup / "artifacts" / name
+        target = workspace / name
+        if target.exists():
+            shutil.rmtree(target)
+        if source.exists():
+            shutil.copytree(source, target)
+
+
+def _migration_assert(name: str, ok: bool, detail: Any) -> dict[str, Any]:
+    rendered = (
+        detail if isinstance(detail, str) else json.dumps(detail, sort_keys=True, default=str)
+    )
+    return {"name": name, "status": "PASS" if ok else "FAIL", "detail": rendered}
+
+
+def _run_migration(
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "control",
+        "acceptance.target": "local",
+        "b24.fixture": str(fixture_path),
+    }
+    try:
+        fixture = _migration_fixture(fixture_path)
+    except ValueError as exc:
+        return (
+            EXIT_FAIL,
+            [_migration_assert("b24.fixture_schema", False, str(exc))],
+            {**extensions, "b24.reason": str(exc)},
+        )
+
+    source = Path(str(fixture["source_fixtures"])).resolve()
+    workspace = Path(str(fixture["workspace_root"])).resolve()
+    target_version = int(fixture["target_schema_version"])
+    legacy_version = int(fixture["legacy_schema_version"])
+    extensions.update(
+        {
+            "b24.fixture_id": fixture["fixture_id"],
+            "b24.source_fixtures": str(source),
+            "b24.workspace": str(workspace),
+        }
+    )
+    if not source.is_dir():
+        return (
+            EXIT_FAIL,
+            [_migration_assert("b24.source_fixtures_present", False, str(source))],
+            {**extensions, "b24.reason": "source_fixtures_missing"},
+        )
+    if workspace == Path("/") or workspace == REPO_ROOT or source.is_relative_to(workspace):
+        return (
+            EXIT_FAIL,
+            [_migration_assert("b24.workspace_isolated", False, str(workspace))],
+            {**extensions, "b24.reason": "workspace_not_isolated"},
+        )
+    marker = workspace / ".b24-migration-workspace"
+    if workspace.exists():
+        if not marker.is_file():
+            return (
+                EXIT_FAIL,
+                [
+                    _migration_assert(
+                        "b24.workspace_owned", False, "existing workspace has no ownership marker"
+                    )
+                ],
+                {**extensions, "b24.reason": "workspace_not_owned"},
+            )
+        shutil.rmtree(workspace)
+    workspace.mkdir(parents=True)
+    marker.write_text("B24a isolated migration workspace\n", encoding="utf-8")
+
+    pre_source_digests = _migration_file_digests(source)
+    shutil.copytree(
+        source,
+        workspace / "source-copy",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    corrupt_relative = str(fixture.get("corrupt_artifact") or "").strip()
+    if corrupt_relative:
+        corrupt_path = workspace / "source-copy" / corrupt_relative
+        corrupt_path.parent.mkdir(parents=True, exist_ok=True)
+        corrupt_path.write_text('{"truncated": \n', encoding="utf-8")
+
+    (workspace / "db").mkdir()
+    (workspace / "tasks").mkdir()
+    jobs_db = workspace / "db" / "acp_jobs.db"
+    admission_db = workspace / "db" / "acp_admission.db"
+
+    seed_code, seed, seed_stdout, seed_stderr = _migration_helper(
+        "seed",
+        [
+            "--db",
+            str(jobs_db),
+            "--admission-db",
+            str(admission_db),
+            "--root",
+            str(workspace),
+        ],
+        timeout=min(180.0, timeout),
+    )
+    if seed_code != 0:
+        return (
+            EXIT_FAIL,
+            [_migration_assert("b24.seed", False, f"exit={seed_code} stderr={seed_stderr[-800:]}")],
+            {**extensions, "b24.reason": "seed_failed"},
+        )
+    extensions["b24.seed"] = seed
+
+    pre_snapshot = _migration_snapshot(workspace, fixture)
+    corrupt_artifacts = _migration_corrupt_artifacts(workspace / "source-copy")
+    backup = workspace / "backup"
+    backup.mkdir()
+    _migration_online_backup(jobs_db, backup / "acp_jobs.db")
+    _migration_online_backup(admission_db, backup / "acp_admission.db")
+    for name in MIGRATION_ARTIFACT_DIRS:
+        if (workspace / name).exists():
+            shutil.copytree(workspace / name, backup / "artifacts" / name)
+    backup_manifest = {
+        "schema": "acp2.migration.backup.v1",
+        "fixture_id": fixture["fixture_id"],
+        "generated_at": _utcnow(),
+        "source_digests": pre_source_digests,
+        "snapshot": pre_snapshot,
+        "corrupt_artifacts": corrupt_artifacts,
+        "databases": {
+            "jobs": {
+                "sha256": sha256_file(backup / "acp_jobs.db"),
+                "path": str(backup / "acp_jobs.db"),
+            },
+            "admission": {
+                "sha256": sha256_file(backup / "acp_admission.db"),
+                "path": str(backup / "acp_admission.db"),
+            },
+        },
+        "artifact_tree": {
+            name: _migration_tree_digest(backup / "artifacts" / name)
+            for name in MIGRATION_ARTIFACT_DIRS
+            if (backup / "artifacts" / name).exists()
+        },
+    }
+    (backup / "manifest.json").write_text(
+        json.dumps(backup_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    extensions["b24.backup_manifest"] = str(backup / "manifest.json")
+
+    restore_pre = workspace / "restore-pre"
+    restore_pre.mkdir()
+    _migration_restore_database(backup / "acp_jobs.db", restore_pre / "acp_jobs.db")
+    _migration_restore_database(backup / "acp_admission.db", restore_pre / "acp_admission.db")
+    for name in MIGRATION_ARTIFACT_DIRS:
+        if (backup / "artifacts" / name).exists():
+            shutil.copytree(backup / "artifacts" / name, restore_pre / name)
+    restore_pre_snapshot = {
+        "schema": "acp2.migration.snapshot.v1",
+        "fixture_id": fixture["fixture_id"],
+        "target_schema_version": target_version,
+        "jobs_db": _migration_table_state(restore_pre / "acp_jobs.db", MIGRATION_HEAD_TABLES),
+        "admission_db": _migration_table_state(
+            restore_pre / "acp_admission.db", MIGRATION_ADMISSION_TABLES
+        ),
+        "artifacts": {
+            name: {
+                "tree_digest": _migration_tree_digest(restore_pre / name),
+                "files": _migration_file_digests(restore_pre / name),
+            }
+            for name in MIGRATION_ARTIFACT_DIRS
+        },
+    }
+    pre_restore_comparison = _migration_compare(pre_snapshot, restore_pre_snapshot)
+    assertions.append(
+        _migration_assert(
+            "b24.backup.restorable_before_migration",
+            pre_restore_comparison["equal"],
+            pre_restore_comparison,
+        )
+    )
+
+    migrate_code, migrate, migrate_stdout, migrate_stderr = _migration_helper(
+        "migrate", ["--db", str(jobs_db)], timeout=min(180.0, timeout)
+    )
+    post_migration = _migration_snapshot(workspace, fixture)
+    migration_comparison = _migration_compare(pre_snapshot, post_migration)
+    assertions.append(
+        _migration_assert(
+            "b24.migration.candidate_schema",
+            migrate_code == 0 and int(migrate.get("schema_version") or 0) == target_version,
+            {"exit": migrate_code, "result": migrate, "stderr": migrate_stderr[-500:]},
+        )
+    )
+    assertions.append(
+        _migration_assert(
+            "b24.migration.state_equal", migration_comparison["equal"], migration_comparison
+        )
+    )
+
+    _migration_restore_database(backup / "acp_jobs.db", jobs_db)
+    _migration_restore_database(backup / "acp_admission.db", admission_db)
+    _migration_restore_artifacts(backup, workspace)
+    post_restore = _migration_snapshot(workspace, fixture)
+    restore_comparison = _migration_compare(pre_snapshot, post_restore)
+    assertions.append(
+        _migration_assert(
+            "b24.restore.counts_digests_schema_equal",
+            restore_comparison["equal"],
+            restore_comparison,
+        )
+    )
+    restored_corrupt = _migration_corrupt_artifacts(workspace / "source-copy")
+    injected_corrupt = [row for row in restored_corrupt if row["path"] == corrupt_relative]
+    assertions.append(
+        _migration_assert(
+            "b24.corrupt_artifact.reported_not_skipped",
+            bool(corrupt_relative)
+            and bool(injected_corrupt)
+            and bool(injected_corrupt[0]["error"])
+            and (workspace / "source-copy" / corrupt_relative).is_file(),
+            {"injected": corrupt_relative, "observed": restored_corrupt},
+        )
+    )
+
+    legacy_dir = workspace / "legacy"
+    legacy_dir.mkdir()
+    legacy_db = legacy_dir / "acp_jobs.db"
+    legacy_code, legacy_seed, _, legacy_stderr = _migration_helper(
+        "seed-legacy",
+        ["--db", str(legacy_db), "--root", str(workspace / "legacy-root")],
+        timeout=min(180.0, timeout),
+    )
+    if legacy_code != 0:
+        return (
+            EXIT_FAIL,
+            assertions
+            + [
+                _migration_assert(
+                    "b24.legacy.seed", False, f"exit={legacy_code} stderr={legacy_stderr[-800:]}"
+                )
+            ],
+            {**extensions, "b24.reason": "legacy_seed_failed"},
+        )
+    legacy_pre = _migration_table_state(legacy_db, MIGRATION_HEAD_TABLES)
+    _migration_online_backup(legacy_db, backup / "legacy-acp_jobs.db")
+    kill_code, kill_payload, kill_stdout, kill_stderr = _migration_helper(
+        "kill-migrate", ["--db", str(legacy_db), "--kill-at", "023"], timeout=min(180.0, timeout)
+    )
+    interrupted = _migration_table_state(legacy_db, MIGRATION_HEAD_TABLES)
+    assertions.append(
+        _migration_assert(
+            "b24.interrupted_migration.readable_attributed",
+            kill_code in (-9, 137)
+            and interrupted["present"]
+            and interrupted["schema_version"] == legacy_version
+            and interrupted["counts"].get("jobs") == legacy_pre["counts"].get("jobs"),
+            {
+                "exit": kill_code,
+                "payload": kill_payload,
+                "stdout": kill_stdout[-300:],
+                "stderr": kill_stderr[-300:],
+                "schema_version": interrupted["schema_version"],
+                "jobs": interrupted["counts"].get("jobs"),
+                "expected_schema_version": legacy_version,
+            },
+        )
+    )
+    _migration_restore_database(backup / "legacy-acp_jobs.db", legacy_db)
+    legacy_restored = _migration_table_state(legacy_db, MIGRATION_HEAD_TABLES)
+    legacy_restore_comparison = _migration_compare(legacy_pre, legacy_restored)
+    assertions.append(
+        _migration_assert(
+            "b24.interrupted_migration.restored",
+            legacy_restore_comparison["equal"],
+            legacy_restore_comparison,
+        )
+    )
+    legacy_migrate_code, legacy_migrate, _, legacy_migrate_stderr = _migration_helper(
+        "migrate", ["--db", str(legacy_db)], timeout=min(180.0, timeout)
+    )
+    legacy_post = _migration_table_state(legacy_db, MIGRATION_HEAD_TABLES)
+    assertions.append(
+        _migration_assert(
+            "b24.legacy.upgrade",
+            legacy_migrate_code == 0
+            and legacy_post["schema_version"] == target_version
+            and legacy_post["counts"].get("jobs") == legacy_pre["counts"].get("jobs")
+            and "approval_records" in legacy_post["counts"]
+            and "idempotency_records" in legacy_post["counts"],
+            {
+                "result": legacy_migrate,
+                "before": legacy_pre,
+                "after": legacy_post,
+                "stderr": legacy_migrate_stderr[-500:],
+            },
+        )
+    )
+
+    drill_timeout = min(180.0, timeout)
+    lost_code, lost, _, lost_stderr = _migration_helper(
+        "lost-worker",
+        ["--db", str(jobs_db), "--running", "mig_lost", "--terminal", "mig_done"],
+        timeout=drill_timeout,
+    )
+    assertions.append(
+        _migration_assert(
+            "b24.drill.lost_worker.no_terminal_revival",
+            lost_code == 0
+            and lost.get("recovered", {}).get("to") == "failed"
+            and lost.get("terminal_revival_blocked") is True
+            and lost.get("terminal_selected_by_recovery_scan") is False
+            and lost.get("terminal_unchanged") is True,
+            {"result": lost, "stderr": lost_stderr[-500:]},
+        )
+    )
+
+    receipts_code, receipts, _, receipts_stderr = _migration_helper(
+        "receipts",
+        [
+            "--fixtures",
+            str(workspace / "source-copy"),
+            "--scratch",
+            str(workspace / "drills"),
+        ],
+        timeout=drill_timeout,
+    )
+    old_v1 = (receipts.get("old_v1") or {}) if isinstance(receipts, dict) else {}
+    duplicate = (receipts.get("duplicate") or {}) if isinstance(receipts, dict) else {}
+    assertions.append(
+        _migration_assert(
+            "b24.drill.old_receipt.conservative_recompute",
+            receipts_code == 0
+            and old_v1.get("default_adopted") is False
+            and old_v1.get("explicit_legacy_adopted") is True,
+            {"result": receipts, "stderr": receipts_stderr[-500:]},
+        )
+    )
+    assertions.append(
+        _migration_assert(
+            "b24.drill.duplicate_receipt.idempotent",
+            receipts_code == 0
+            and duplicate.get("publication_complete") is True
+            and duplicate.get("product_ids_unique") is True,
+            duplicate,
+        )
+    )
+
+    publication_code, publication, _, publication_stderr = _migration_helper(
+        "publication",
+        [
+            "--fixture",
+            str(workspace / "source-copy" / "v2_publish_interrupted"),
+            "--scratch",
+            str(workspace / "drills"),
+        ],
+        timeout=drill_timeout,
+    )
+    assertions.append(
+        _migration_assert(
+            "b24.drill.publication_pending.defined_state",
+            publication_code == 0
+            and publication.get("marker_before") is None
+            and publication.get("marker_after_complete") is True
+            and publication.get("qc_calls") == 0
+            and publication.get("qc_executed") is False
+            and publication.get("manifest_exists") is True,
+            {"result": publication, "stderr": publication_stderr[-500:]},
+        )
+    )
+
+    cursor_code, cursor, _, cursor_stderr = _migration_helper(
+        "cursor", ["--db", str(jobs_db)], timeout=drill_timeout
+    )
+    assertions.append(
+        _migration_assert(
+            "b24.drill.cursor_expiry.no_duplicate",
+            cursor_code == 0
+            and cursor.get("expire_ok", True) is True
+            and bool(cursor.get("expired"))
+            and cursor.get("expired_state") == "expired"
+            and cursor.get("takeover_kind") == "created"
+            and cursor.get("no_duplicate_row") is True,
+            {"result": cursor, "stderr": cursor_stderr[-500:]},
+        )
+    )
+
+    verify_code, verify, _, verify_stderr = _migration_helper(
+        "verify",
+        [
+            "--db",
+            str(jobs_db),
+            "--admission-db",
+            str(admission_db),
+            "--approval-ref",
+            str((seed.get("approvals") or {}).get("approved") or ""),
+            "--budget-id",
+            str((seed.get("budget") or {}).get("budget_id") or "mig-budget"),
+        ],
+        timeout=drill_timeout,
+    )
+    approval = (verify.get("approval") or {}) if isinstance(verify, dict) else {}
+    budget = (verify.get("budget") or {}) if isinstance(verify, dict) else {}
+    idempotency = (verify.get("idempotency") or {}) if isinstance(verify, dict) else {}
+    assertions.append(
+        _migration_assert(
+            "b24.approval_budget_idempotency_preserved",
+            verify_code == 0
+            and approval.get("state") == "approved"
+            and approval.get("revision") == 2
+            and bool(approval.get("binding"))
+            and budget.get("budget_id") == "mig-budget"
+            and bool(budget.get("limits"))
+            and idempotency.get("state") == "committed"
+            and idempotency.get("task_id") == "mig_idem_job",
+            {"result": verify, "stderr": verify_stderr[-500:]},
+        )
+    )
+
+    post_source_digests = _migration_file_digests(source)
+    assertions.insert(
+        0,
+        _migration_assert(
+            "b24.source_fixtures_read_only",
+            pre_source_digests == post_source_digests,
+            {
+                "pre_files": len(pre_source_digests),
+                "post_files": len(post_source_digests),
+                "changed": sorted(
+                    path
+                    for path in set(pre_source_digests) | set(post_source_digests)
+                    if pre_source_digests.get(path) != post_source_digests.get(path)
+                ),
+            },
+        ),
+    )
+
+    observed_schema_versions = {
+        "pre": pre_snapshot["jobs_db"]["schema_version"],
+        "post_migration": post_migration["jobs_db"]["schema_version"],
+        "post_restore": post_restore["jobs_db"]["schema_version"],
+        "legacy_pre": legacy_pre["schema_version"],
+        "interrupted": interrupted["schema_version"],
+        "legacy_post": legacy_post["schema_version"],
+    }
+    assertions.append(
+        _migration_assert(
+            "b24.schema_version_matches_fixture",
+            observed_schema_versions["pre"] == target_version
+            and observed_schema_versions["post_migration"] == target_version
+            and observed_schema_versions["post_restore"] == target_version
+            and observed_schema_versions["legacy_pre"] == legacy_version
+            and observed_schema_versions["interrupted"] == legacy_version
+            and observed_schema_versions["legacy_post"] == target_version,
+            observed_schema_versions,
+        )
+    )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    evidence = {
+        "source-digests.json": {
+            "schema": "acp2.migration.source-digests.v1",
+            "source": str(source),
+            "pre": pre_source_digests,
+            "post": post_source_digests,
+            "unchanged": pre_source_digests == post_source_digests,
+            "copy": str(workspace / "source-copy"),
+            "corrupt_artifact_injected": corrupt_relative,
+        },
+        "migration-log.json": {
+            "schema": "acp2.migration.log.v1",
+            "fixture_id": fixture["fixture_id"],
+            "candidate": {
+                "candidate_revision": os.environ.get("ACP_CANDIDATE_REVISION"),
+                "source": str(REPO_ROOT / "src"),
+            },
+            "seed": seed,
+            "migration": migrate,
+            "legacy_seed": legacy_seed,
+            "legacy_migration": legacy_migrate,
+            "interrupted": {
+                "exit": kill_code,
+                "payload": kill_payload,
+                "schema_version": interrupted["schema_version"],
+                "counts": interrupted["counts"],
+            },
+            "schema_versions": observed_schema_versions,
+        },
+        "restore-comparison.json": {
+            "schema": "acp2.migration.restore-comparison.v1",
+            "before_migration_backup_restore": pre_restore_comparison,
+            "post_migration_restore": restore_comparison,
+            "interrupted_migration_restore": legacy_restore_comparison,
+            "pre_snapshot": pre_snapshot,
+            "post_restore_snapshot": post_restore,
+        },
+        "drill-receipts.json": {
+            "schema": "acp2.migration.drills.v1",
+            "lost_worker": lost,
+            "old_duplicate_receipt": receipts,
+            "publication_pending": publication,
+            "cursor_expiry": cursor,
+            "ledger_consistency": verify,
+        },
+        "corrupt-artifacts.json": {
+            "schema": "acp2.migration.corrupt-artifacts.v1",
+            "injected": corrupt_relative,
+            "observed": restored_corrupt,
+            "reported_as_named_error": bool(injected_corrupt),
+        },
+        "verify-rows.json": verify,
+    }
+    artifact_rows: list[dict[str, Any]] = []
+    for name, payload in evidence.items():
+        path = out_dir / name
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n",
+            encoding="utf-8",
+        )
+        artifact_rows.append(
+            {"path": str(path), "size_bytes": path.stat().st_size, "sha256": sha256_file(path)}
+        )
+    extensions.update(
+        {
+            "b24.source_digests": str(out_dir / "source-digests.json"),
+            "b24.migration_log": str(out_dir / "migration-log.json"),
+            "b24.restore_comparison": str(out_dir / "restore-comparison.json"),
+            "b24.drill_receipts": str(out_dir / "drill-receipts.json"),
+            "b24.corrupt_artifacts": str(out_dir / "corrupt-artifacts.json"),
+            "b24.schema_versions": observed_schema_versions,
+            "b24.counts": pre_snapshot,
+            "b24.corrupt": restored_corrupt,
+            "b24.reason": None,
+        }
+    )
+    code = EXIT_PASS if all(row["status"] == "PASS" for row in assertions) else EXIT_FAIL
+    if code == EXIT_FAIL:
+        extensions["b24.reason"] = "assertion_failed:" + ",".join(
+            row["name"] for row in assertions if row["status"] != "PASS"
+        )
+    extensions["b24.artifacts"] = artifact_rows
+    return code, assertions, extensions
+
+
 def execute_scenario(
     spec: ScenarioSpec,
     phase_name: str,
@@ -15193,7 +15958,7 @@ def execute_scenario(
     ledger = CleanupLedger()
     command = [sys.executable, str(SCRIPT_PATH), *sys.argv[1:]]
     outcome: dict[str, Any] = {}
-    evidence_kind = _evidence_kind_for_phase(phase_name)
+    evidence_kind = _evidence_kind_for_phase(phase_name, spec.scenario)
     candidate_revision, server_revision, identity_error = resolve_candidate_identity(
         evidence_kind, args.controller, timeout
     )
@@ -15414,6 +16179,17 @@ def execute_scenario(
                 return code_value
 
             handler = multitenant
+    elif spec.scenario == "migration":
+
+        def migration(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_migration(str(args.fixture), out_dir, timeout)
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("b24.artifacts", [])
+            outcome["reason"] = extensions.get("b24.reason")
+            return code_value
+
+        handler = migration
     else:
         handler = _b01_stub_handler(spec)
 
@@ -15444,6 +16220,7 @@ def execute_scenario(
         "multitenant",
         "approval-budget",
         "infra-plugin",
+        "migration",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         result = (
             "PASS"
@@ -15478,6 +16255,7 @@ def execute_scenario(
         "multitenant",
         "approval-budget",
         "infra-plugin",
+        "migration",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -15880,7 +16658,13 @@ def main(argv: list[str] | None = None) -> int:
     if spec.scenario == "control-recovery" and args.launch and not Path(args.launch).is_file():
         print(f"usage error: --launch does not exist: {args.launch}", file=sys.stderr)
         return EXIT_USAGE
-    if "fixture" in phase.required_args and not Path(args.fixture).is_file():
+    fixture_is_file = Path(args.fixture).is_file()
+    migration_directory = (
+        spec.scenario == "migration"
+        and Path(args.fixture).is_dir()
+        and (Path(args.fixture) / "migration.json").is_file()
+    )
+    if "fixture" in phase.required_args and not (fixture_is_file or migration_directory):
         return _write_prerequisite_result(spec, phase_name, phase, args, "fixture_missing")
     if spec.scenario == "three-entry":
         try:

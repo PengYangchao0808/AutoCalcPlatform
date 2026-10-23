@@ -1,0 +1,1 @@
+python scripts/acceptance/acp2_runtime.py --scenario migration --fixture "$ACP2_MIGRATION_FIXTURE" --out "$ACP2_EVIDENCE/B/B24" --timeout 1800
