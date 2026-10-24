@@ -1,0 +1,15 @@
+{
+  "fixture": "unknown_tool_positive",
+  "description": "Positive counterpart: acp_research_proposal_create_v1 is a committed P2 research tool (P2-R1) and is allowed.",
+  "tool": "acp_research_proposal_create_v1",
+  "arguments": {
+    "project_id": "proj-acp2-da",
+    "proposal": {
+      "proposal_id": "prop-da-selectivity-001"
+    },
+    "idempotency_key": "idem-prop-da-selectivity-001"
+  },
+  "expected_result": {
+    "allowed": true
+  }
+}

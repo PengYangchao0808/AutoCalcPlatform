@@ -1,0 +1,18 @@
+{
+  "fixture": "illegal_request",
+  "description": "Negative fixture: a payload-claimed approver ('model') on the approval-decision tool. B's P2-R3 rule requires the approver identity to come from the authenticated Controller channel; a model may never approve itself. The request is rejected before any decision is recorded.",
+  "tool": "acp_research_approval_decide_v1",
+  "arguments": {
+    "approval_ref": "approval-da-selectivity-001",
+    "decision": "approve",
+    "expected_revision": 1,
+    "approver": "model"
+  },
+  "expected_error": {
+    "class": "authorization",
+    "code": "access_denied",
+    "params": {
+      "rule": "approver_identity_from_payload"
+    }
+  }
+}

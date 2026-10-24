@@ -888,9 +888,9 @@ async function submitJobModal() {
       }
     }
 
-    var body = {
+    var body = buildStructureJobBody({
       workflow: workflow,
-      molecule_name: moleculeName,
+      moleculeName: moleculeName,
       remark: remark,
       input: inputPayload,
       method: methodPayload,
@@ -901,11 +901,10 @@ async function submitJobModal() {
         batch_id: batchId,
         batch_index: i,
         batch_total: wizardStructures.length,
-      }
-    };
-    var modalProjectId = document.getElementById("modal-project-select").value;
-    if (modalProjectId) body.project_id = modalProjectId;
-    if (taskName) body.task_name = taskName;
+      },
+      projectId: document.getElementById("modal-project-select").value,
+      taskName: taskName,
+    });
     applyNodeSelectionToBody(body);
 
     batchBodies.push(body);
@@ -919,6 +918,25 @@ async function submitJobModal() {
     window.alert(t("modal.submit_failed", { message: formatSubmitError(error) }));
   }
   await refreshJobs();
+}
+
+// Frozen POST /jobs envelope, single owner (submit loop + science-question.js
+// reuse it; no second payload construction exists). Shape: workflow /
+// molecule_name / remark / input / method / resources, plus optional
+// project_id / task_name. DOM concerns (node selection) stay at the call sites.
+function buildStructureJobBody(spec) {
+  spec = spec || {};
+  var body = {
+    workflow: spec.workflow,
+    molecule_name: spec.moleculeName,
+    remark: spec.remark,
+    input: spec.input,
+    method: spec.method,
+    resources: spec.resources
+  };
+  if (spec.projectId) body.project_id = spec.projectId;
+  if (spec.taskName) body.task_name = spec.taskName;
+  return body;
 }
 
 async function initializeMethodDefaults() {
@@ -969,6 +987,7 @@ return {
   submitStageWorkflowJob: submitStageWorkflowJob,
   jobFormValidationFailed: jobFormValidationFailed,
   submitJobBatch: submitJobBatch,
+  buildStructureJobBody: buildStructureJobBody,
   buildPESProtocolFromMethod: buildPESProtocolFromMethod,
   submitPESsearchTask: submitPESsearchTask,
   handleModalSubmit: handleModalSubmit,

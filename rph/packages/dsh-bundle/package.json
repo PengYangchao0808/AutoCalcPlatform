@@ -1,0 +1,25 @@
+{
+  "name": "@rph/dsh-bundle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Public DSH plugin interface names and bundle profiles",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "profiles"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@rph/bridge": "workspace:*"
+  }
+}

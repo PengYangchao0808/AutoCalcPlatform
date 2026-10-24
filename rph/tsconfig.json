@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/research" },
+    { "path": "./packages/bridge" },
+    { "path": "./packages/dsh-bundle" },
+    { "path": "./packages/cli" },
+    { "path": "./test" }
+  ]
+}

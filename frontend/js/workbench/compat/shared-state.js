@@ -64,7 +64,10 @@ const LAYOUT_DEFAULTS = {
   left:   { width: 240, collapsed: false },
   right:  { width: 240, collapsed: false },
   panels: { file_tree: {collapsed: false}, log: {collapsed: false},
-            queue: {collapsed: false}, info: {collapsed: false} },
+            queue: {collapsed: false}, info: {collapsed: false},
+            science_question: {collapsed: false},
+            scientific_evidence: {collapsed: false},
+            research_approval: {collapsed: false} },
   heights: { left_log: 180, right_info: 220 }
 };
 let layoutState = loadLayoutState();
@@ -160,6 +163,7 @@ function applyLayout(opts) {
   const lc = document.querySelector(".left-col");
   if (lc) lc.classList.toggle("file-tree-collapsed", !!ft);
   syncSidebarButtonGlyphs();
+  updateRightColScrollCue();
   if (!(opts && opts.skipViewer) && viewer && typeof viewer.resize === "function") {
     if (mainViewerFraming.pending) return;
     viewer.resize();
@@ -171,6 +175,32 @@ function toggleSidebar(side) {
   layoutState[side].collapsed = !layoutState[side].collapsed;
   saveLayoutState();
   applyLayout();
+}
+
+// Visible scroll affordance for the right column: a sticky bottom cue that
+// shows while the column has more content below, hides at the end.
+function updateRightColScrollCue() {
+  const col = document.querySelector(".right-col");
+  if (!col) return;
+  let cue = document.getElementById("right-col-scroll-cue");
+  if (!cue) {
+    cue = document.createElement("div");
+    cue.id = "right-col-scroll-cue";
+    cue.className = "right-col-scroll-cue";
+    cue.setAttribute("data-i18n", "layout.scroll_more");
+    col.appendChild(cue);
+    col.addEventListener("scroll", function() {
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(updateRightColScrollCue);
+      } else {
+        updateRightColScrollCue();
+      }
+    }, { passive: true });
+  }
+  cue.textContent = typeof t === "function" ? t("layout.scroll_more") : "↓";
+  const overflow = col.scrollHeight - col.clientHeight;
+  const atEnd = col.scrollTop + col.clientHeight >= col.scrollHeight - 4;
+  cue.hidden = !(overflow > 8 && !atEnd);
 }
 
 function makeColResizeHandle(handle, side) {

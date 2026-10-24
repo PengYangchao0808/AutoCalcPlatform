@@ -380,10 +380,38 @@ body.resizing-v canvas {
   grid-area: right-col;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
   border-left: 1px solid var(--border-default);
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
 }
+.right-col::-webkit-scrollbar { width: 10px; }
+.right-col::-webkit-scrollbar-track { background: transparent; }
+.right-col::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.right-col::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
+.right-col-scroll-cue {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  align-self: stretch;
+  margin-top: -22px;
+  height: 22px;
+  padding: 3px 10px 4px;
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--text-tertiary);
+  text-align: center;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(11, 15, 20, 0), rgba(11, 15, 20, 0.92) 55%);
+}
+.right-col-scroll-cue[hidden] { display: none; }
 
 /* ── Detail drawer (right slide-in) ── */
 .detail-drawer-overlay,
