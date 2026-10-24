@@ -1,0 +1,185 @@
+{
+  "candidate_cap": {
+    "enforcement": "refuse to dispatch any structure/candidate beyond the frozen cap",
+    "max_candidate_paths": 1,
+    "max_conformers_per_endpoint": 1,
+    "max_ts_candidates": 1
+  },
+  "constructed": true,
+  "file_digests": {
+    "acceptance.json": "b615dd59892345f47e6b4c294b0a1707631675794d46ee356d633081f2aa2a85",
+    "product.xyz": "7260ce96792f43825bd2fc48e3141332300343445d7de1ea9897fa95ca431197",
+    "question.json": "ed129232100e5f8a6d7d39a928e111640623855e988672a19ff60e97afb62b1b",
+    "reactants.xyz": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+    "reaction.json": "aace9f06369f7b712038d406e3ae1789de385c759725a9b177d23ab17df84232"
+  },
+  "fixture_files": {
+    "acceptance": "acceptance.json",
+    "product": "product.xyz",
+    "question_set": "question.json",
+    "reactants": "reactants.xyz",
+    "reaction": "reaction.json"
+  },
+  "fixture_id": "diels_alder-butadiene-ethene-wb97xd4-def2tzvp",
+  "frozen_at": "2026-10-23T00:00:00Z",
+  "frozen_before_real_run": true,
+  "reaction": {
+    "bond_change_count": 6,
+    "broken_bonds": 0,
+    "changed_bonds": 4,
+    "formed_bonds": 2,
+    "left_endpoints": [
+      {
+        "atom_count": 10,
+        "formula": "C4H6",
+        "structure_id": "butadiene"
+      },
+      {
+        "atom_count": 6,
+        "formula": "C2H4",
+        "structure_id": "ethene"
+      }
+    ],
+    "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+    "reaction_scope": "net_reaction",
+    "reaction_scope_note": "reaction_scope is net_reaction because reaction contract v1 has no field for TS/IRC evidence and therefore cannot substantiate an elementary-step claim. The candidate is intended as one elementary (concerted) step; that claim stays unasserted until the later P2 todos deliver TS/frequency/bidirectional-IRC evidence.",
+    "right_endpoints": [
+      {
+        "atom_count": 16,
+        "formula": "C6H10",
+        "structure_id": "cyclohexene"
+      }
+    ]
+  },
+  "real_run": false,
+  "resource_budget": {
+    "budget_timing_basis": "unmeasured",
+    "constructed": true,
+    "h4_open_consequence": "No representative step timings exist, so the wall-clock ceilings are constructed and not derived from a measured chain budget. H4 remains OPEN until representative step timings are recorded and the full-chain budget is derived from them before a real run.",
+    "measured_step_timings": null,
+    "step_caps": {
+      "max_attempts_per_step": 2,
+      "max_bsub": 1,
+      "max_candidate_paths": 1,
+      "max_conformers": 1,
+      "max_qc_invocations": 10,
+      "max_task_refs": 10,
+      "max_ts_candidates": 1
+    },
+    "timing_evidence": []
+  },
+  "run_key": null,
+  "run_key_gap": "B01 has not published acceptance-result.schema.json / acp2.acceptance.v1 or the (owner, scenario, phase, run_id) registry, so no run key is issued for this fixture and the real Diels-Alder run stays NOT_VERIFIED.",
+  "run_spec": {
+    "aggregate_budget_seconds": 22200,
+    "deadline_relation": "aggregate_budget_seconds = science_deadline_seconds + export_budget_seconds",
+    "export_budget_seconds": 600,
+    "export_window_rule": {
+      "dispatching_allowed": false,
+      "reserved_seconds": 600,
+      "rule": "A reserved export window of export_budget_seconds starts after the last step reaches a terminal state (or after stop confirmation) and is available only for evidence export; it never extends the science deadline and never dispatches new science.",
+      "starts_after": "last terminal step or confirmed stop"
+    },
+    "in_flight_stop_rule": {
+      "partial_results_eligible": false,
+      "requires_stop_confirmation": true,
+      "rule": "After a stop/cancel request is accepted, no new step or retry may be dispatched. The in-flight step is stopped with confirmation, and its partial artifacts are not accepted as scientific evidence."
+    },
+    "queue_accounting": {
+      "applies_to": [
+        "science_deadline_seconds",
+        "aggregate_budget_seconds"
+      ],
+      "excluded_from": [
+        "export_budget_seconds"
+      ],
+      "policy": "Queue wait is part of total wall time: the clock starts at started_at, so waiting for a scheduler slot consumes science and aggregate budget. The export window is reserved after the last terminal step and is never consumed by queue wait.",
+      "queue_wait_counts_toward_total_wall_time": true
+    },
+    "science_deadline_seconds": 21600,
+    "started_at": "2026-10-23T00:00:00Z",
+    "started_at_basis": "shared frozen epoch for every deadline in this fixture; it is not a run timestamp because no real run is authorized"
+  },
+  "sampling_boundaries": {
+    "alternative_paths": "not enumerated and not excluded",
+    "candidate_path_source": "constructed single candidate path declared by this fixture; not discovered by an automated search",
+    "conformer_search": "none",
+    "explicit_boundaries": [
+      "one input conformation per endpoint; no conformer search or sampling",
+      "one declared candidate path; no automated transition-state search",
+      "one transition-state candidate per path",
+      "other paths may exist; their absence is not evidence"
+    ],
+    "max_candidate_paths": 1,
+    "max_conformers_per_endpoint": 1,
+    "max_ts_candidates_per_path": 1,
+    "md_sampling": "none",
+    "monte_carlo_sampling": "none",
+    "single_conformation": true,
+    "starting_structure_source": "constructed geometries in reactants.xyz and product.xyz; no experimental or computed structure"
+  },
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1,
+  "science_parameters": {
+    "activation_energy_definition": "Delta-E-double-dagger = E(TS) - [E(butadiene) + E(ethene)] using electronic energies from the frozen method/basis and electronic state. Delta-G-double-dagger (298.15 K, 1 bar) additionally uses the thermochemistry of the frozen frequency calculations. No tunneling correction is applied. Only the declared candidate path is compared; the value is not an experimental rate.",
+    "backend_selection": {
+      "explicit_backend": null,
+      "note": "TaskRequest.backend stays null; cccp capability selection is deterministic.",
+      "preferred": "orca"
+    },
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "closed_shell": true,
+    "comparison_energy_unit": "kcal_per_mol",
+    "electronic_state": {
+      "charge": 0,
+      "label": "closed-shell singlet ground state",
+      "state_id": "state.singlet.s0",
+      "target_multiplicity": 1
+    },
+    "energy_unit": "hartree",
+    "method": "wB97X-D4",
+    "method_definition": "wB97X-D4 / def2-TZVP, gas phase, restricted closed-shell singlet. No implicit solvent and no dispersion correction beyond D4 as implied by wB97X-D4.",
+    "multiplicity": 1,
+    "phase": "gas",
+    "pressure_pa": 100000.0,
+    "solvent": null,
+    "standard_state": "1_bar_ideal_gas",
+    "temperature_k": 298.15
+  },
+  "scope": {
+    "allowed_questions": [
+      "question.diels_alder.path_connectivity.v1",
+      "question.diels_alder.activation_energy.v1"
+    ],
+    "endo_exo_selectivity_supported": false,
+    "intended_candidate_kind": "single_elementary_concerted_step",
+    "intended_candidate_kind_note": "Intent only. reaction_scope is net_reaction in contract v1; the elementary-step claim requires evidence this fixture does not contain.",
+    "out_of_scope": [
+      "endo/exo selectivity",
+      "complete mechanism",
+      "exclusion of other paths",
+      "experimental rates",
+      "global minimum",
+      "general method accuracy"
+    ],
+    "question_type_allowlist": [
+      "path_connectivity",
+      "activation_energy"
+    ]
+  },
+  "source": "Constructed static fixture. Every structure, budget value and tolerance is labelled constructed; no real calculation, transition state, energy or reference value exists.",
+  "task_kind": "diels_alder",
+  "tolerances": {
+    "activation_energy_comparison_abs_kcal_per_mol": 0.5,
+    "atom_count_tolerance": 0,
+    "constructed": true,
+    "coordinate_abs_tolerance_angstrom": 0.001,
+    "energy_reparse_abs_hartree": 1e-06,
+    "imaginary_mode_threshold_cm1": 0.0,
+    "low_frequency_threshold_cm1": 50.0,
+    "note": "The first four values mirror the frozen A-11a validator constants. The two comparison ceilings are constructed and are not derived from measured data or a reference energy.",
+    "source_module": "cccp.analysis.research.validators",
+    "validator_version": "1.0.0"
+  }
+}

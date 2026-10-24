@@ -1,0 +1,19 @@
+{
+  "charge": 0,
+  "expected_failure": {
+    "detail": "singlepoint requires a structure path or inline coordinates+symbols; the request has neither.",
+    "error_type": "TaskInputError",
+    "message_contains": "requires a structure input",
+    "reason_id": "structure_required",
+    "validation_stage": "request_envelope",
+    "validator": "cccp.calculation.requests.validate_request"
+  },
+  "level": {
+    "basis": "def2-SVP",
+    "method": "wB97X-D4"
+  },
+  "multiplicity": 1,
+  "resources": {},
+  "schema_version": 1,
+  "task": "singlepoint"
+}

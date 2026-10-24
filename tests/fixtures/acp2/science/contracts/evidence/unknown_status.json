@@ -1,0 +1,36 @@
+{
+  "claims": [
+    {
+      "claim_id": "c-scf-converged",
+      "missing_checks": [],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": null,
+        "subject": "scf_convergence"
+      },
+      "source_refs": [],
+      "statement": "The SCF converged for the target electronic state.",
+      "status": "confirmed",
+      "validator": {
+        "kind": "software",
+        "validator_id": "software.orca",
+        "validator_version": "5.0.4"
+      }
+    }
+  ],
+  "execution": {
+    "argv": [
+      "orca",
+      "sp.inp"
+    ],
+    "exit_code": 0,
+    "terminal_state": "completed"
+  },
+  "limitations": [],
+  "report_id": "report-unknown-status",
+  "schema_version": 1,
+  "subject": {
+    "subject_id": "run-fixture-unknown-status",
+    "subject_kind": "calculation_result"
+  }
+}

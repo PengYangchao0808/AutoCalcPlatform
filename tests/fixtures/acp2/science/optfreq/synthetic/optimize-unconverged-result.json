@@ -1,0 +1,51 @@
+{
+  "artifacts": [],
+  "complete": false,
+  "coordinates": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.82,
+      0.585
+    ],
+    [
+      0.0,
+      -0.79,
+      0.59
+    ]
+  ],
+  "error_kind": "not_converged",
+  "errors": [
+    "geometry optimization did not converge"
+  ],
+  "frequencies": [],
+  "metadata": {},
+  "payload": {
+    "rescue_actions": [
+      "fresh_hessian_restart",
+      "calcall_opt"
+    ],
+    "rescue_attempts": 2,
+    "rescue_failure_type": "geometry_not_converged",
+    "rescue_structure_kind": "minimum",
+    "rescue_terminal": true
+  },
+  "provenance": {
+    "backend": "orca",
+    "input_signature": "initial.xyz",
+    "method": "wB97X-D4",
+    "version": "unknown"
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ],
+  "task": "optimize"
+}

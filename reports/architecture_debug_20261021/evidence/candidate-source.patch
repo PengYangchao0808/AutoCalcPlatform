@@ -1,0 +1,3288 @@
+diff --git a/frontend/js/module_tests/nmr_viewer.test.js b/frontend/js/module_tests/nmr_viewer.test.js
+index 5d740f1..3a98a58 100644
+--- a/frontend/js/module_tests/nmr_viewer.test.js
++++ b/frontend/js/module_tests/nmr_viewer.test.js
+@@ -510,6 +510,82 @@ module.exports.register = async function (h) {
+     assertEq(sandbox.nmrPanelState.viewers, {}, "registry empty even when the re-fetch finds no report");
+   });
+ 
++  await test("R11 late response never rewrites a newer refresh's canvas", async () => {
++    const { sandbox, created } = loadNmr({});
++    const panel = sandbox.document.createElement("div");
++    const body = sandbox.document.createElement("div");
++    sandbox.document.getElementById = (id) => (id === "nmr-report-panel" ? panel : id === "nmr-report-body" ? body : null);
++    const container = sandbox._containers["0"];
++    body.appendChild(container);
++    sandbox.nmrFetchCandidateGeometry = async () => "1\nx\nC 0 0 0\n";
++
++    let releaseA;
++    const gateA = new Promise((resolve) => { releaseA = resolve; });
++    let call = 0;
++    sandbox.fetchNmrReportJson = async () => {
++      call += 1;
++      if (call === 1) return gateA.then(() => null); // A: late null response
++      return { schema_version: 2, summary: {}, candidates: [{ index: 0 }] }; // B: real report
++    };
++
++    const pendingA = sandbox.refreshNmrReport({ id: "jobA", spec: { workflow: "nmr" } });
++    await new Promise((r) => setImmediate(r)); // let A reach its await
++    await sandbox.refreshNmrReport({ id: "jobB", spec: { workflow: "nmr" } }); // B completes fully
++    await new Promise((r) => setImmediate(r)); // fire-and-forget viewer loader settles
++    const childrenAfterB = body.children.length;
++    const firstChildAfterB = body.children[0];
++    assert(childrenAfterB > 0, "B rendered report content");
++    assertEq(created.length, 1, "B created its viewer");
++    const viewerAfterB = sandbox.nmrPanelState.viewers[0];
++    assert(viewerAfterB != null, "B's viewer registered");
++    const canvasAfterB = viewerAfterB.container
++      ? viewerAfterB.container.querySelectorAll("canvas").length
++      : null;
++
++    releaseA();
++    await pendingA;
++    await new Promise((r) => setImmediate(r));
++
++    assertEq(body.children.length, childrenAfterB, "A's late null rewrote nothing");
++    assert(body.children[0] === firstChildAfterB, "B's first report node is still the body's first child");
++    assert(sandbox.nmrPanelState.viewers[0] === viewerAfterB,
++      "B's viewer instance stays registered (no detached orphan replacement)");
++    assert(sandbox.nmrPanelState.viewers[0].instance.isDisposed() === false,
++      "B's viewer instance was not disposed by A");
++    if (canvasAfterB != null) {
++      assertEq(
++        viewerAfterB.container.querySelectorAll("canvas").length,
++        canvasAfterB,
++        "B's canvas was not torn down by A"
++      );
++    }
++  });
++
++  await test("R11 late error response never rewrites a newer refresh's body", async () => {
++    const { sandbox } = loadNmr({});
++    const panel = sandbox.document.createElement("div");
++    const body = sandbox.document.createElement("div");
++    sandbox.document.getElementById = (id) => (id === "nmr-report-panel" ? panel : id === "nmr-report-body" ? body : null);
++    let releaseA;
++    const gateA = new Promise((resolve) => { releaseA = resolve; });
++    let call = 0;
++    sandbox.fetchNmrReportJson = async () => {
++      call += 1;
++      if (call === 1) return gateA.then(() => { throw new Error("late transport failure"); });
++      return { schema_version: 2, summary: {}, candidates: [] };
++    };
++    const pendingA = sandbox.refreshNmrReport({ id: "jobA", spec: { workflow: "nmr" } });
++    await new Promise((r) => setImmediate(r));
++    await sandbox.refreshNmrReport({ id: "jobB", spec: { workflow: "nmr" } });
++    const childrenAfterB = body.children.length;
++    const firstChildAfterB = body.children[0];
++    assert(childrenAfterB > 0, "B rendered report content");
++    releaseA();
++    await pendingA;
++    assertEq(body.children.length, childrenAfterB, "A's late error rewrote nothing");
++    assert(body.children[0] === firstChildAfterB, "B's report nodes survived A's late error");
++  });
++
+   await test("source pin: nmr.js holds no raw viewer handles or second adapter", () => {
+     const src = fs.readFileSync(path.join(__dirname, "..", "workbench", "features", "nmr.js"), "utf8");
+     for (const banned of ["ACPVisualization.mol3d.create(", "ACPVisualization.mol3d.destroy(", "$3Dmol", "getModel(", "info.viewer"]) {
+diff --git a/frontend/js/workbench/features/nmr.js b/frontend/js/workbench/features/nmr.js
+index 15f5a1b..4104298 100644
+--- a/frontend/js/workbench/features/nmr.js
++++ b/frontend/js/workbench/features/nmr.js
+@@ -29,6 +29,10 @@ async function refreshNmrReport(job) {
+   body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.loading") || "Loading…") + '</span>';
+   try {
+     var report = await fetchNmrReportJson(job);
++    // Late-response guard (R11): a newer refresh (another job, a re-select, or
++    // a switch away from nmr) bumps nmrPanelState.token; this stale response
++    // must never rewrite the newer canvas/DOM — not on success, empty or error.
++    if (token !== nmrPanelState.token) return;
+     if (!report) {
+       body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.no_report") || "No nmr_report.json yet") + '</span>';
+       return;
+@@ -58,6 +62,7 @@ async function refreshNmrReport(job) {
+     nmrLoadStructureViewers(job, candidates, token);
+   } catch (e) {
+     console.error("NMR report render failed:", e);
++    if (token !== nmrPanelState.token) return;
+     body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.error") || "Failed to load report") + '</span>';
+   }
+ }
+diff --git a/scripts/acceptance/four_combinations.py b/scripts/acceptance/four_combinations.py
+index 5521180..63d6409 100644
+--- a/scripts/acceptance/four_combinations.py
++++ b/scripts/acceptance/four_combinations.py
+@@ -6,9 +6,23 @@ S = the service implementation from a git revision.
+ 
+ The harness prepares detached worktrees for F0 (the frozen baseline) and F1
+ (the code candidate), starts S0/S1 on different ports with temporary
+-``ACP_RUN_ROOT`` values, probes the retained old API surface, runs the seven
+-legacy workflows through their ordinary CLI entry (missing-argument form, so
+-no QC is required), and writes one JSON result per cell plus ``summary.json``.
++``ACP_RUN_ROOT`` values, and — per cell, R12 — serves the cell's F static
++bundle from a combining origin that proxies ``/api/*`` to the cell's S, then:
++
++* loads the cell's actual frontend entry HTML + referenced JS/CSS assets,
++* probes the retained old API surface,
++* drives one ordinary submission (the controlled no-op ``fake`` workflow)
++  through the cell origin and asserts the full lifecycle (create → poll →
++  detail/files/error surface → listing side effect),
++* executes the actual frontend JS and its queue refresh in Chromium,
++* keeps missing-argument CLI checks and the demo fake submission as smoke
++  checks, separately from the seven required ordinary legacy submissions.
++
++By default the seven ordinary CLI entries use complete input fixtures and a
++controlled scientific call boundary, with completed/failed cases and explicit
++scope. ``--legacy-scenarios`` instead supplies ordinary API bodies for all seven
++workflows against S. Missing prerequisites remain NOT_VERIFIED. The controlled
++CLI scope never claims real QC or scheduler publication.
+ 
+ Contracted by ``reports/architecture_remediation_20261020/harness-contract.md``.
+ """
+@@ -19,17 +33,43 @@ import argparse
+ import hashlib
+ import json
+ import os
++import re
+ import shutil
+ import socket
+ import subprocess
+ import sys
+ import tempfile
++import threading
+ import time
+ import urllib.error
+ import urllib.request
++from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+ from pathlib import Path
+ from typing import Any
+ 
++if __package__:
++    from .compatibility_checks import (
++        FAIL,
++        NOT_VERIFIED,
++        PASS,
++        aggregate_result,
++        browser_check,
++        legacy_submission_checks,
++        validate_legacy_scenarios,
++    )
++    from .ordinary_legacy_cli import run_legacy_cli_checks
++else:
++    from compatibility_checks import (
++        FAIL,
++        NOT_VERIFIED,
++        PASS,
++        aggregate_result,
++        browser_check,
++        legacy_submission_checks,
++        validate_legacy_scenarios,
++    )
++    from ordinary_legacy_cli import run_legacy_cli_checks
++
+ F0_REVISION = "878e3557b3b593a0c42adf842e80fe1408db395e"
+ CELL_NAMES = ("F0/S0", "F1/S0", "F0/S1", "F1/S1")
+ LEGACY_WORKFLOWS = (
+@@ -45,6 +85,10 @@ SCHEMA = "acp.acceptance.harness.v1"
+ SUMMARY_SCHEMA = "acp.acceptance.summary.v1"
+ REPO_ROOT = Path(__file__).resolve().parents[2]
+ 
++_FRONTEND_ENTRY = "ACP_Workbench_v2.html"
++_ASSET_PATTERN = re.compile(r"""(?:src|href)\s*=\s*["']([^"'#?]+)["']""")
++_MAX_ASSET_PROBES = 6
++
+ 
+ class HarnessError(RuntimeError):
+     """A cell fixture or execution is invalid."""
+@@ -242,6 +286,278 @@ def _probe_legacy(worktree: Path, run_root: Path) -> list[dict[str, Any]]:
+     return rows
+ 
+ 
++def _probe_demo_cli_submission(worktree: Path, run_root: Path, tag: str) -> dict[str, Any]:
++    """One ordinary demo CLI submission, separate from legacy workflow proof.
++
++    ``acp task execute --workflow fake`` runs the controlled no-op science
++    backend end-to-end through the Services task CLI; ``acp run fake`` is not
++    a registered CLI choice (fake is API/scheduler-only).
++    """
++    env = dict(os.environ)
++    env["PYTHONPATH"] = str(worktree / "src")
++    # Dedicated run root: the cell's uvicorn service owns the shared one
++    # (single-instance lock), while this leg exercises the CLI submission path.
++    dedicated_root = run_root / "demo_cli"
++    dedicated_root.mkdir(parents=True, exist_ok=True)
++    env["ACP_RUN_ROOT"] = str(dedicated_root)
++    for key in [key for key in env if key.startswith("CONFSEARCH_")]:
++        env.pop(key, None)
++    argv = [
++        sys.executable,
++        "-m",
++        "acp.cli",
++        "task",
++        "execute",
++        "--workflow",
++        "fake",
++        "--input",
++        "CCO",
++        "--name",
++        f"four-combo-{tag}",
++    ]
++    result = _run(argv, cwd=worktree, env=env, timeout=180)
++    status = ""
++    work_dir = ""
++    for line in (result.stdout or "").splitlines():
++        line = line.strip()
++        if line.startswith("{") and '"command": "execute"' in line:
++            try:
++                payload = json.loads(line)
++            except ValueError:
++                continue
++            status = str(payload.get("status") or "")
++            work_dir = str(payload.get("work_dir") or "")
++            break
++    artifacts = (
++        sorted(p.name for p in Path(work_dir).rglob("*") if p.is_file())
++        if work_dir and Path(work_dir).is_dir()
++        else []
++    )
++    return {
++        "workflow": "fake",
++        "argv": ["python", "-m", "acp.cli", "task", "execute", "--workflow", "fake", "..."],
++        "exit_code": result.returncode,
++        "status": status,
++        "work_dir": work_dir,
++        "artifacts": artifacts[:20],
++        "stderr_tail": (result.stderr or "").strip().splitlines()[-3:],
++        "ok": result.returncode == 0 and status == "completed" and bool(artifacts),
++    }
++
++
++class _CellOriginServer:
++    """Serve the cell's F static bundle; proxy ``/api/*`` to the cell's S.
++
++    Mirrors the service's own static mapping (``/`` →
++    ``ACP_Workbench_v2.html``, ``/js|/css`` from ``frontend/``) so the browser
++    contract — same-origin static + API — holds for every F/S pairing.
++    """
++
++    def __init__(self, frontend_dir: Path, api_port: int) -> None:
++        self._frontend = frontend_dir
++        self._api_base = f"http://127.0.0.1:{api_port}"
++        outer = self
++
++        class Handler(BaseHTTPRequestHandler):
++            def log_message(self, *args: object) -> None:
++                return
++
++            def _respond(
++                self, status: int, payload: bytes, content_type: str | None = None
++            ) -> None:
++                try:
++                    self.send_response(status)
++                    if content_type:
++                        self.send_header("Content-Type", content_type)
++                    self.end_headers()
++                    self.wfile.write(payload)
++                except (BrokenPipeError, ConnectionResetError):
++                    # Closing a browser cancels its outstanding reads; there
++                    # is no connected client to receive a second 502 response.
++                    return
++
++            def _proxy(self, method: str) -> None:
++                length = int(self.headers.get("Content-Length") or 0)
++                body = self.rfile.read(length) if length else None
++                request = urllib.request.Request(
++                    outer._api_base + self.path, data=body, method=method
++                )
++                for header in ("Content-Type", "Accept"):
++                    if self.headers.get(header):
++                        request.add_header(header, self.headers[header])
++                try:
++                    with urllib.request.urlopen(request, timeout=30) as response:
++                        payload = response.read()
++                        self._respond(
++                            response.status, payload, response.headers.get("Content-Type")
++                        )
++                except urllib.error.HTTPError as exc:
++                    payload = exc.read()
++                    self._respond(exc.code, payload, exc.headers.get("Content-Type"))
++                except (urllib.error.URLError, OSError) as exc:
++                    self._respond(502, str(exc).encode("utf-8", "replace"))
++
++            def _static(self) -> None:
++                path = self.path.split("?", 1)[0].split("#", 1)[0]
++                if path in ("/", "/index.html"):
++                    target = outer._frontend / _FRONTEND_ENTRY
++                else:
++                    relative = path.lstrip("/")
++                    target = (outer._frontend / relative).resolve()
++                    if not str(target).startswith(str(outer._frontend.resolve())):
++                        self.send_response(404)
++                        self.end_headers()
++                        return
++                if not target.is_file():
++                    self.send_response(404)
++                    self.end_headers()
++                    return
++                content = target.read_bytes()
++                self.send_response(200)
++                if target.suffix == ".html":
++                    self.send_header("Content-Type", "text/html; charset=utf-8")
++                elif target.suffix == ".js":
++                    self.send_header("Content-Type", "text/javascript; charset=utf-8")
++                elif target.suffix == ".css":
++                    self.send_header("Content-Type", "text/css; charset=utf-8")
++                self.end_headers()
++                self.wfile.write(content)
++
++            def do_GET(self) -> None:  # noqa: N802
++                if self.path.startswith("/api/"):
++                    self._proxy("GET")
++                else:
++                    self._static()
++
++            def do_POST(self) -> None:  # noqa: N802
++                if self.path.startswith("/api/"):
++                    self._proxy("POST")
++                else:
++                    self.send_response(405)
++                    self.end_headers()
++
++        self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
++        self.port = int(self._httpd.server_address[1])
++        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
++
++    @property
++    def base(self) -> str:
++        return f"http://127.0.0.1:{self.port}"
++
++    def start(self) -> None:
++        self._thread.start()
++
++    def stop(self) -> None:
++        self._httpd.shutdown()
++        self._httpd.server_close()
++
++
++def _probe_frontend_load(base: str) -> dict[str, Any]:
++    """Actually load the cell's frontend entry + referenced assets (R12)."""
++    index_code, html = _get(base, "/")
++    assets: list[dict[str, Any]] = []
++    index_ok = index_code == 200 and isinstance(html, str) and len(html) > 0
++    if isinstance(html, str):
++        referenced = []
++        for match in _ASSET_PATTERN.finditer(html):
++            asset = match.group(1)
++            if asset.startswith(("http://", "https://", "data:", "//")):
++                continue
++            if not asset.startswith("/"):
++                asset = "/" + asset.lstrip("/")
++            referenced.append(asset.split("?")[0])
++        for asset in list(dict.fromkeys(referenced))[:_MAX_ASSET_PROBES]:
++            code, _ = _get(base, asset)
++            assets.append({"path": asset, "status": code})
++    assets_ok = bool(assets) and all(entry["status"] == 200 for entry in assets)
++    return {
++        "index_status": index_code,
++        "html_bytes": len(html) if isinstance(html, str) else 0,
++        "assets": assets,
++        "ok": bool(index_ok and assets_ok),
++    }
++
++
++def _request_json(base: str, path: str, payload: Any, *, method: str = "POST") -> tuple[int, Any]:
++    data = json.dumps(payload).encode("utf-8") if payload is not None else None
++    request = urllib.request.Request(base + path, data=data, method=method)
++    request.add_header("Content-Type", "application/json")
++    try:
++        with urllib.request.urlopen(request, timeout=30) as response:
++            body = response.read()
++            try:
++                return response.status, json.loads(body)
++            except ValueError:
++                return response.status, body.decode("utf-8", "replace")
++    except urllib.error.HTTPError as exc:
++        return exc.code, exc.read().decode("utf-8", "replace")
++    except (urllib.error.URLError, OSError) as exc:
++        return 0, str(exc)
++
++
++def _probe_api_submission(base: str, tag: str) -> dict[str, Any]:
++    """Ordinary submission through the cell origin (controlled fake backend)."""
++    create_code, created = _request_json(
++        base,
++        "/api/jobs",
++        {"workflow": "fake", "name": f"four-combo-{tag}", "input": {"source": "CCO"}},
++    )
++    if create_code != 201 or not isinstance(created, dict):
++        return {
++            "created": False,
++            "create_status": create_code,
++            "create_response": created
++            if not isinstance(created, dict)
++            else {
++                "job_id": created.get("job_id"),
++                "status": created.get("status"),
++            },
++            "ok": False,
++        }
++    job_id = str(created.get("job_id"))
++    final_status = ""
++    for _ in range(120):
++        code, record = _get(base, f"/api/jobs/{job_id}")
++        status = str(record.get("status")) if isinstance(record, dict) else ""
++        if status in ("completed", "failed", "cancelled"):
++            final_status = status
++            break
++        time.sleep(0.5)
++    list_code, listing = _get(base, "/api/jobs")
++    listed = (
++        any(str(job.get("id")) == job_id for job in listing.get("jobs", []))
++        if isinstance(listing, dict)
++        else False
++    )
++    detail_code, _detail = _get(base, f"/api/v1/jobs/{job_id}/detail")
++    files_code, files = _get(base, f"/api/jobs/{job_id}/files")
++    file_paths = (
++        {str(entry.get("path")) for entry in files.get("files", [])}
++        if isinstance(files, dict)
++        else set()
++    )
++    error_code, _error_body = _get(base, "/api/v1/jobs/__missing__/detail")
++    return {
++        "created": True,
++        "job_id": job_id,
++        "final_status": final_status,
++        "detail_status": detail_code,
++        "files_status": files_code,
++        "has_state_json": "state.json" in file_paths,
++        "listed": listed,
++        "list_status": list_code,
++        "missing_detail_status": error_code,
++        "ok": (
++            final_status == "completed"
++            and detail_code == 200
++            and files_code == 200
++            and "state.json" in file_paths
++            and listed
++            and error_code in (400, 404)
++        ),
++    }
++
++
+ def _start_service(python: str, worktree: Path, port: int, run_root: Path) -> subprocess.Popen[str]:
+     env = dict(os.environ)
+     env["PYTHONPATH"] = str(worktree / "src")
+@@ -276,11 +592,18 @@ def execute(
+     out: Path,
+     cells: list[str] | None = None,
+     python: str = sys.executable,
++    legacy_scenarios: dict[str, dict[str, Any]] | None = None,
++    candidate_patch: Path | None = None,
+ ) -> dict[str, Any]:
+     selected = list(cells or CELL_NAMES)
+     for name in selected:
+         if name not in CELL_NAMES:
+             raise HarnessError(f"unknown cell {name!r}")
++    if legacy_scenarios is not None:
++        validate_legacy_scenarios(legacy_scenarios, LEGACY_WORKFLOWS)
++    patch_digest = (
++        hashlib.sha256(candidate_patch.read_bytes()).hexdigest() if candidate_patch else None
++    )
+     out.mkdir(parents=True, exist_ok=True)
+     root = Path(tempfile.mkdtemp(prefix="acp-four-"))
+     services: list[subprocess.Popen[str]] = []
+@@ -296,9 +619,19 @@ def execute(
+             if result.returncode != 0:
+                 raise HarnessError(f"cannot create {label} worktree: {result.stderr[-500:]}")
+             worktrees[label] = tree
++        if candidate_patch is not None:
++            result = _run(
++                ["git", "apply", str(candidate_patch.resolve())],
++                cwd=worktrees["F1"],
++                timeout=30,
++            )
++            if result.returncode != 0:
++                raise HarnessError(f"cannot apply candidate patch: {result.stderr[-500:]}")
+         ports = {"S0": _free_port(), "S1": _free_port()}
+         service_results: dict[str, dict[str, Any]] = {}
+         legacy_results: dict[str, list[dict[str, Any]]] = {}
++        legacy_real_results: dict[str, dict[str, Any]] = {}
++        legacy_submission_results: dict[str, list[dict[str, Any]]] = {}
+         for service in ("S0", "S1"):
+             tree = worktrees["F0" if service == "S0" else "F1"]
+             run_root = root / f"run_{service}"
+@@ -309,6 +642,14 @@ def execute(
+             _wait_http(base + "/api/status")
+             service_results[service] = _probe_service(base)
+             legacy_results[service] = _probe_legacy(tree, run_root / "cli")
++            legacy_real_results[service] = _probe_demo_cli_submission(tree, run_root, service)
++            legacy_submission_results[service] = (
++                legacy_submission_checks(
++                    base, LEGACY_WORKFLOWS, legacy_scenarios, get=_get, post=_request_json
++                )
++                if legacy_scenarios is not None
++                else run_legacy_cli_checks(tree, run_root / "ordinary_cli", LEGACY_WORKFLOWS)
++            )
+         summary: dict[str, Any] = {
+             "schema": SUMMARY_SCHEMA,
+             "scenarios": [],
+@@ -317,18 +658,33 @@ def execute(
+         for name in selected:
+             front, service = name.split("/")
+             tree = worktrees[front]
++            # R12: every cell exercises ITS F/S pairing — the cell's static
++            # bundle is served from a combining origin whose /api/* is proxied
++            # to the cell's service, then really loaded and driven.
++            origin = _CellOriginServer(tree / "frontend", ports[service])
++            origin.start()
++            try:
++                frontend_result = _probe_frontend_load(origin.base)
++                submission_result = _probe_api_submission(origin.base, name.replace("/", ""))
++                browser_result = browser_check(
++                    origin.base, expected_job_id=str(submission_result.get("job_id") or "")
++                )
++            finally:
++                origin.stop()
+             document = {
+                 "schema": SCHEMA,
+                 "harness": "four_combinations.py",
+-                "harness_version": "1",
++                "harness_version": "3",
+                 "scenario": name,
+                 "candidate_revision": f1,
++                "candidate_patch_sha256": patch_digest,
+                 "f0_revision": f0,
+                 "f1_revision": f1,
+                 "environment": {
+                     "python": sys.version.split()[0],
+                     "repo": str(REPO_ROOT),
+                     "service_port": ports[service],
++                    "cell_origin_port": origin.port,
+                 },
+                 "result": "PASS",
+                 "scope": "IN_SCOPE",
+@@ -350,12 +706,64 @@ def execute(
+                         "ok": service_results[service]["ok"],
+                     },
+                     {
+-                        "id": "legacy_workflows",
++                        "id": "frontend_load",
++                        "command": f"GET {name} cell-origin / + referenced js/css",
++                        "exit_code": 0 if frontend_result["ok"] else 1,
++                        "assertions": [frontend_result],
++                        "ok": frontend_result["ok"],
++                    },
++                    {
++                        "id": "api_submission",
++                        "command": f"POST {name} cell-origin /api/jobs (fake), poll, detail/files",
++                        "exit_code": 0 if submission_result["ok"] else 1,
++                        "assertions": [submission_result],
++                        "ok": submission_result["ok"],
++                    },
++                    {
++                        "id": "legacy_cli_missing_args",
+                         "command": "python -m acp.cli run <legacy> (missing-argument form)",
+                         "exit_code": 0 if all(row["ok"] for row in legacy_results[service]) else 1,
+                         "assertions": legacy_results[service],
+                         "ok": all(row["ok"] for row in legacy_results[service]),
+                     },
++                    {
++                        "id": "demo_cli_submission",
++                        "command": "python -m acp.cli task execute --workflow fake",
++                        "exit_code": 0 if legacy_real_results[service]["ok"] else 1,
++                        "assertions": [legacy_real_results[service]],
++                        "ok": legacy_real_results[service]["ok"],
++                    },
++                    {
++                        "id": "frontend_browser",
++                        "command": f"Chromium {name} cell-origin /; actual bootstrap + refreshJobs",
++                        "exit_code": 0
++                        if browser_result["result"] == PASS
++                        else 2
++                        if browser_result["result"] == NOT_VERIFIED
++                        else 1,
++                        "assertions": [browser_result],
++                        "result": browser_result["result"],
++                        "ok": browser_result["ok"],
++                    },
++                    {
++                        "id": "legacy_ordinary_submissions",
++                        "command": (
++                            "POST /api/jobs for each legacy workflow fixture; "
++                            "poll and verify dispatch events"
++                        )
++                        if legacy_scenarios is not None
++                        else f"{python} {Path(__file__).with_name('ordinary_legacy_cli.py')} "
++                        f"--worktree {worktrees['F0' if service == 'S0' else 'F1']} "
++                        f"--run-root {root / f'run_{service}' / 'ordinary_cli'}",
++                        "exit_code": 0
++                        if aggregate_result(legacy_submission_results[service]) == PASS
++                        else 2
++                        if aggregate_result(legacy_submission_results[service]) == NOT_VERIFIED
++                        else 1,
++                        "assertions": legacy_submission_results[service],
++                        "result": aggregate_result(legacy_submission_results[service]),
++                        "ok": aggregate_result(legacy_submission_results[service]) == PASS,
++                    },
+                 ],
+                 "artifacts": [
+                     {
+@@ -382,16 +790,31 @@ def execute(
+                     "frontend_revision": f0 if front == "F0" else f1,
+                     "service_revision": f0 if service == "S0" else f1,
+                     "frontend_sha256": _sha_tree(tree / "frontend"),
++                    "service_config_sha256": _sha_tree(
++                        worktrees["F0" if service == "S0" else "F1"] / "config"
++                    ),
+                     "service": service_results[service],
++                    "frontend": frontend_result,
++                    "submission": submission_result,
+                     "legacy": legacy_results[service],
++                    "demo_cli": legacy_real_results[service],
++                    "legacy_ordinary": legacy_submission_results[service],
++                    "browser": browser_result,
+                 },
+             }
+-            ok = service_results[service]["ok"] and all(
+-                row["ok"] for row in legacy_results[service]
+-            )
+-            if not ok:
+-                document["result"] = "FAIL"
+-            summary["all_pass"] = summary["all_pass"] and ok
++            document["result"] = aggregate_result(document["steps"])
++            unverified = [
++                row
++                for step in document["steps"]
++                for row in step["assertions"]
++                if row.get("result") == NOT_VERIFIED
++            ]
++            if unverified:
++                document["not_verified_reason"] = "; ".join(
++                    f"{row.get('workflow', 'browser')}: {row.get('reason', 'not executed')}"
++                    for row in unverified
++                )
++            summary["all_pass"] = summary["all_pass"] and document["result"] == PASS
+             (out / f"{name.replace('/', '_')}.json").write_text(
+                 json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+             )
+@@ -402,6 +825,7 @@ def execute(
+                     "skip_reason": None,
+                 }
+             )
++        summary["result"] = aggregate_result(summary["scenarios"])
+         (out / "summary.json").write_text(
+             json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+         )
+@@ -422,6 +846,16 @@ def main(argv: list[str] | None = None) -> int:
+     parser.add_argument("--f0-revision", default=F0_REVISION)
+     parser.add_argument("--f1-revision", default="HEAD")
+     parser.add_argument("--cells", default=",".join(CELL_NAMES))
++    parser.add_argument(
++        "--legacy-scenarios",
++        type=Path,
++        help="JSON mapping all seven legacy workflows to ordinary API body/expected_status",
++    )
++    parser.add_argument(
++        "--candidate-patch",
++        type=Path,
++        help="apply a frozen source patch only to detached F1/S1; record its SHA256",
++    )
+     args = parser.parse_args(argv)
+     cells = [part.strip() for part in str(args.cells).split(",") if part.strip()]
+     if args.check_only:
+@@ -447,11 +881,23 @@ def main(argv: list[str] | None = None) -> int:
+         print("--out is required for execution", file=sys.stderr)
+         return 3
+     try:
+-        summary = execute(f0=args.f0_revision, f1=args.f1_revision, out=Path(args.out), cells=cells)
+-    except (HarnessError, OSError, subprocess.SubprocessError) as exc:
++        scenarios = None
++        if args.legacy_scenarios is not None:
++            scenarios = validate_legacy_scenarios(
++                json.loads(args.legacy_scenarios.read_text(encoding="utf-8")), LEGACY_WORKFLOWS
++            )
++        summary = execute(
++            f0=args.f0_revision,
++            f1=args.f1_revision,
++            out=Path(args.out),
++            cells=cells,
++            legacy_scenarios=scenarios,
++            candidate_patch=args.candidate_patch,
++        )
++    except (HarnessError, OSError, ValueError, subprocess.SubprocessError) as exc:
+         print(f"HARNESS ERROR: {exc}", file=sys.stderr)
+         return 1
+-    return 0 if summary["all_pass"] else 1
++    return {PASS: 0, FAIL: 1, NOT_VERIFIED: 2}[summary["result"]]
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/src/acp/calculations/attempt_freeze.py b/src/acp/calculations/attempt_freeze.py
+index 3bd03bc..7ee1306 100644
+--- a/src/acp/calculations/attempt_freeze.py
++++ b/src/acp/calculations/attempt_freeze.py
+@@ -87,6 +87,7 @@ from acp_services.runtime.execution_chain import (
+     load_frozen_group,
+ )
+ from acp_services.runtime.worker import (
++    TASK_ENVIRONMENT_CONFIG_KEY,
+     FrozenPlan,
+     FrozenPlanIdentity,
+     FrozenStep,
+@@ -776,11 +777,21 @@ def _build_simple_request(
+         context,
+         _RequestDefinition(workflow, backend, method_kwargs),
+     )
+-    # Freeze the request paths relative to the worker CWD (the task work dir).
++    # Freeze the request paths relative to the worker CWD (the task work dir)
++    # and the resolved resources into their typed homes (R02): nproc/mem from
++    # the fully-resolved config reach TaskResources through to_task_request,
++    # so the independent worker executes with the submitted resource intent.
++    frozen_resources: dict[str, Any] = {"output_dir": "."}
++    resources_config = config.get("resources")
++    if isinstance(resources_config, Mapping):
++        for key in ("nproc", "mem"):
++            value = resources_config.get(key)
++            if value is not None and value != "":
++                frozen_resources[key] = value
+     request = replace(
+         request,
+         input_artifact=replace(context.artifact, path=Path("input.xyz")),
+-        resources={**request.resources, "output_dir": "."},
++        resources={**request.resources, **frozen_resources},
+     )
+     task_request, _legacy_binding = to_task_request(request, task_kind)
+     if task_request.structure is None or task_request.structure.path != Path("input.xyz"):
+@@ -832,6 +843,14 @@ def build_simple_freeze_spec(
+     calculation_plan = _build_plan(step_kind, [request], [step_kind])
+     scientific = compute_identity(calculation_plan, location_root=work)
+     step_payload = task_request.to_dict()
++    # R02: freeze the executable scientific configuration snapshot beside the
++    # typed request.  ``TaskRequest.from_dict`` ignores the reserved key; the
++    # worker executor pops it and restores ``TaskContext.config``, so custom
++    # config paths / executable selections / resource defaults execute exactly
++    # as resolved at submit time instead of the release-tree defaults.
++    config_snapshot = request.resources.get("config")
++    if isinstance(config_snapshot, Mapping) and config_snapshot:
++        step_payload[TASK_ENVIRONMENT_CONFIG_KEY] = dict(config_snapshot)
+     body = FrozenPlan(
+         payload=step_payload,
+         steps=(FrozenStep(kind=step_kind.value, payload=step_payload),),
+diff --git a/src/acp/calculations/attempt_publication.py b/src/acp/calculations/attempt_publication.py
+index 720742f..145b7ed 100644
+--- a/src/acp/calculations/attempt_publication.py
++++ b/src/acp/calculations/attempt_publication.py
+@@ -32,9 +32,11 @@ the ACP controller/manager side only.  It is never called from a GET.
+ 
+ from __future__ import annotations
+ 
++import math
+ import os
+ import shutil
+ import tempfile
++from collections.abc import Mapping
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Any
+@@ -73,6 +75,10 @@ __all__ = [
+ #: document stays at ``WORK/00_RUNTIME/task_result.json``.
+ PUBLICATION_TASK_RESULT_FILENAME: str = "task_result.json"
+ 
++#: Display-energy product schema reused from the executor's energy product
++#: (``acp_energy_product_v1``, plan D6/T11) so every consumer reads one shape.
++_ENERGY_PRODUCT_SCHEMA: str = "acp_energy_product_v1"
++
+ 
+ class AttemptPublicationError(RuntimeError):
+     """A publication attempt failed; the job remains publication-pending."""
+@@ -134,6 +140,57 @@ def _atomic_copy(source: Path, target: Path) -> None:
+         raise
+ 
+ 
++def _atomic_write_text(target: Path, text: str) -> None:
++    target.parent.mkdir(parents=True, exist_ok=True)
++    fd, tmp_name = tempfile.mkstemp(
++        dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
++    )
++    tmp = Path(tmp_name)
++    try:
++        with os.fdopen(fd, "w", encoding="utf-8") as handle:
++            handle.write(text)
++            handle.flush()
++            os.fsync(handle.fileno())
++        os.replace(tmp, target)
++    except BaseException:
++        tmp.unlink(missing_ok=True)
++        raise
++
++
++def _finite(value: Any) -> float | None:
++    if isinstance(value, bool) or not isinstance(value, (int, float)):
++        return None
++    number = float(value)
++    return number if math.isfinite(number) else None
++
++
++def _body_coordinates(body: Any) -> tuple[tuple[str, tuple[float, float, float]], ...] | None:
++    """Validated ``(symbol, xyz)`` rows from a persisted result body."""
++    if not isinstance(body, Mapping):
++        return None
++    symbols = body.get("symbols")
++    coordinates = body.get("coordinates")
++    if not isinstance(symbols, list) or not isinstance(coordinates, list):
++        return None
++    if not symbols or len(symbols) != len(coordinates):
++        return None
++    rows: list[tuple[str, tuple[float, float, float]]] = []
++    for symbol, xyz in zip(symbols, coordinates):
++        if not isinstance(symbol, str) or not isinstance(xyz, (list, tuple)) or len(xyz) != 3:
++            return None
++        point = tuple(_finite(component) for component in xyz)
++        if any(component is None for component in point):
++            return None
++        rows.append((symbol, (float(point[0]), float(point[1]), float(point[2]))))
++    return tuple(rows)
++
++
++def _xyz_text(rows: tuple[tuple[str, tuple[float, float, float]], ...], comment: str) -> str:
++    lines = [str(len(rows)), comment]
++    lines.extend(f"{symbol} {x:.10f} {y:.10f} {z:.10f}" for symbol, (x, y, z) in rows)
++    return "\n".join(lines) + "\n"
++
++
+ @dataclass(frozen=True)
+ class AttemptResultPublication:
+     """Publish one worker attempt's ``task_result.json`` through the named path.
+@@ -165,6 +222,7 @@ class AttemptResultPublication:
+         publish_normal = bool(qualification.publish) and not partial
+         status = self._manifest_status(qualification)
+         copy_product = publish_normal or partial
++        body = document.get("result") if isinstance(document.get("result"), Mapping) else None
+ 
+         artifacts: tuple[ArtifactReference, ...] = ()
+         metadata: dict[str, Any] = {
+@@ -188,30 +246,13 @@ class AttemptResultPublication:
+             )
+             metadata["product_role"] = "partial" if partial else "normal"
+ 
++        summary = self._scientific_summary(qualification, document, snapshot, body)
++
+         record = ScientificResultRecord(
+             result_id=result_id,
+             kind=workflow,
+             artifacts=artifacts,
+-            summary={
+-                "status": qualification.status,
+-                "task": qualification.task,
+-                "qualification": qualification.qualification,
+-                "partial_result": partial,
+-                "normal_reuse": bool(qualification.normal_reuse),
+-                "publish": bool(qualification.publish),
+-                "publish_policy": qualification.publish_policy,
+-                "receipt_state": qualification.receipt_state,
+-                "exit_code": qualification.exit_code,
+-                "result_digest": str(document.get("result_digest") or ""),
+-                "task_result_digest": qualification.content_digest,
+-                "job_id": snapshot.job_id,
+-                "attempt": snapshot.attempt,
+-                "submission_id": snapshot.submission_id,
+-                "plan_identity": (
+-                    snapshot.envelope.plan_identity if snapshot.envelope is not None else ""
+-                ),
+-                "release_id": snapshot.release_id,
+-            },
++            summary=summary,
+         )
+ 
+         manifest = ResultManifest(
+@@ -227,6 +268,7 @@ class AttemptResultPublication:
+                 ProductKind.FILE,
+                 metadata=metadata,
+             )
++            self._add_science_products(manifest, workflow, body, publish_normal)
+ 
+         def _copy_products() -> None:
+             if copy_product:
+@@ -234,6 +276,7 @@ class AttemptResultPublication:
+                     task_result_path(Path(snapshot.work_dir)),
+                     result_dir / PUBLICATION_TASK_RESULT_FILENAME,
+                 )
++                self._write_science_products(result_dir, workflow, body, publish_normal)
+ 
+         published = publish_result(
+             result_dir,
+@@ -274,6 +317,115 @@ class AttemptResultPublication:
+     def result_dir(snapshot: AttemptSnapshot) -> Path:
+         return Path(snapshot.work_dir) / "RESULT"
+ 
++    # -- scientific products (R01) ---------------------------------------- #
++
++    @staticmethod
++    def _scientific_summary(
++        qualification: Any,
++        document: dict[str, Any],
++        snapshot: AttemptSnapshot,
++        body: Any,
++    ) -> dict[str, Any]:
++        """Qualification summary plus the persisted body's scientific values."""
++        summary: dict[str, Any] = {
++            "status": qualification.status,
++            "task": qualification.task,
++            "qualification": qualification.qualification,
++            "partial_result": bool(qualification.partial_result),
++            "normal_reuse": bool(qualification.normal_reuse),
++            "publish": bool(qualification.publish),
++            "publish_policy": qualification.publish_policy,
++            "receipt_state": qualification.receipt_state,
++            "exit_code": qualification.exit_code,
++            "result_digest": str(document.get("result_digest") or ""),
++            "task_result_digest": qualification.content_digest,
++            "job_id": snapshot.job_id,
++            "attempt": snapshot.attempt,
++            "submission_id": snapshot.submission_id,
++            "plan_identity": (
++                snapshot.envelope.plan_identity if snapshot.envelope is not None else ""
++            ),
++            "release_id": snapshot.release_id,
++        }
++        if isinstance(body, Mapping):
++            energy = _finite(body.get("energy_hartree"))
++            if energy is not None:
++                summary["energy_hartree"] = energy
++            for key in ("converged", "n_imaginary"):
++                value = body.get(key)
++                if isinstance(value, (bool, int)) and not isinstance(value, bool):
++                    summary[key] = value
++                elif isinstance(value, bool):
++                    summary[key] = value
++        return summary
++
++    def _add_science_products(
++        self,
++        manifest: ResultManifest,
++        workflow: str,
++        body: Any,
++        publish_normal: bool,
++    ) -> None:
++        """Register energy/structure products derived from the result body."""
++        if not isinstance(body, Mapping) or not publish_normal:
++            return
++        energy = _finite(body.get("energy_hartree"))
++        if energy is not None:
++            manifest.add_product(
++                id=f"{workflow}_energy",
++                label=f"{workflow} — energy",
++                path=f"energy/{workflow}_energy.json",
++                kind=ProductKind.ENERGY_REPORT,
++                metadata={"energy_hartree": energy, "workflow": workflow},
++            )
++        if _body_coordinates(body) is not None:
++            manifest.add_product(
++                id=f"{workflow}_structure",
++                label=f"{workflow} — final structure",
++                path=f"structures/{workflow}_final.xyz",
++                kind=ProductKind.STRUCTURE,
++                metadata={"workflow": workflow},
++            )
++
++    def _write_science_products(
++        self,
++        result_dir: Path,
++        workflow: str,
++        body: Any,
++        publish_normal: bool,
++    ) -> None:
++        """Materialise the registered science products (idempotent)."""
++        if not isinstance(body, Mapping) or not publish_normal:
++            return
++        energy = _finite(body.get("energy_hartree"))
++        if energy is not None:
++            import json as _json
++
++            _atomic_write_text(
++                result_dir / "energy" / f"{workflow}_energy.json",
++                _json.dumps(
++                    {
++                        "schema_version": _ENERGY_PRODUCT_SCHEMA,
++                        "step_id": workflow,
++                        "step_kind": workflow,
++                        "energy": energy,
++                        "energy_hartree": energy,
++                        "unit": "hartree",
++                        "method": str(body.get("method") or ""),
++                        "source": "task_result.json",
++                    },
++                    indent=2,
++                    sort_keys=True,
++                )
++                + "\n",
++            )
++        rows = _body_coordinates(body)
++        if rows is not None:
++            _atomic_write_text(
++                result_dir / "structures" / f"{workflow}_final.xyz",
++                _xyz_text(rows, f"{workflow} final structure"),
++            )
++
+     def _assert_current_attempt(self, snapshot: AttemptSnapshot) -> None:
+         if self.snapshot_reader is None:
+             return
+diff --git a/src/acp/calculations/batch/options.py b/src/acp/calculations/batch/options.py
+index 32814fc..b597eb4 100644
+--- a/src/acp/calculations/batch/options.py
++++ b/src/acp/calculations/batch/options.py
+@@ -176,10 +176,14 @@ def _build_legacy_opts(d: dict[str, Any]) -> BatchMethodOptions:
+     from acp.chem.composition import normalize_recalc_hess
+ 
+     kwargs: dict[str, Any] = {}
+-    if d.get("functional"):
+-        kwargs["optimization_method"] = d["functional"]
+-    if d.get("basis"):
+-        kwargs["optimization_basis"] = d["basis"]
++    # CLI and typed callers use canonical field names; historical API payloads
++    # retain functional/basis aliases. Keep role-specific overrides below.
++    optimization_method = d.get("optimization_method") or d.get("functional")
++    optimization_basis = d.get("optimization_basis") or d.get("basis")
++    if optimization_method:
++        kwargs["optimization_method"] = optimization_method
++    if optimization_basis:
++        kwargs["optimization_basis"] = optimization_basis
+     if d.get("single_point_method"):
+         kwargs["single_point_method"] = d["single_point_method"]
+     if d.get("single_point_basis"):
+diff --git a/src/acp/scheduler/manager.py b/src/acp/scheduler/manager.py
+index aed240c..becca10 100644
+--- a/src/acp/scheduler/manager.py
++++ b/src/acp/scheduler/manager.py
+@@ -2022,6 +2022,17 @@ class JobManager:
+                 cache.purge_job(job_id)
+             except Exception:
+                 logger.debug("Failed to purge remote cache for job %s", job_id, exc_info=True)
++        # R08: eviction must also expire the job's prepare operations — a
++        # surviving SUCCEEDED row would keep answering READY and merge future
++        # same-identity enqueues instead of allowing a rebuild epoch.
++        operations = getattr(self, "_prepare_operations", None)
++        if operations is not None:
++            try:
++                operations.expire_for_job(job_id, reason="cache_purged")
++            except Exception:
++                logger.debug(
++                    "Failed to expire prepare operations for job %s", job_id, exc_info=True
++                )
+         # Cascade-delete structure-source org rows (index + metadata +
+         # tags + index_state) — design plan §5.3 last paragraph.
+         try:
+@@ -4951,7 +4962,7 @@ class JobManager:
+     def _queue_catalog_prefetch(self, job_id: str) -> None:
+         """Enqueue one terminal remote job as a persistent prepare operation.
+ 
+-        No-op when remote fetching is not configured.  The operation is durable
++        No-op when remote fetching is not configured. The operation is durable
+         (deduplicated by its stable scoped key); the wake signal below only
+         shortens the worker's poll latency and is never the source of truth.
+         """
+@@ -4960,6 +4971,7 @@ class JobManager:
+         record = self.store.get(job_id)
+         if record is None or not record.status.is_terminal or not self._is_remote_job(record):
+             return
++        self._expire_bodyless_succeeded_operations(record)
+         try:
+             self._prepare_operations.enqueue(self._prepare_request(record))
+         except Exception:
+@@ -4971,6 +4983,43 @@ class JobManager:
+         except Exception:  # pragma: no cover - unbounded queue never raises
+             pass
+ 
++    def _expire_bodyless_succeeded_operations(self, record: JobRecord) -> None:
++        """Expire SUCCEEDED prepare operations whose cache body is gone (R08).
++
++        Covers evictions that bypass ``_purge_job_records`` (TTL sweeps, manual
++        ``cache.purge_job``): without this the same-identity enqueue merges the
++        stale success and the catalog can never be rebuilt.
++        """
++        operations = getattr(self, "_prepare_operations", None)
++        cache = getattr(self, "_remote_structure_cache", None)
++        if operations is None or cache is None:
++            return
++        try:
++            from acp.services_data_bootstrap import _catalog_ready_for_attempt
++
++            workflow = str(record.spec.workflow or "")
++            ready = _catalog_ready_for_attempt(
++                cache, cache.job_root(record.id), record.id, workflow, int(record.attempt)
++            )
++            if ready:
++                return
++            request = self._prepare_request(record)
++            expired = operations.expire_succeeded_for_resource(
++                job_id=request.job_id,
++                attempt=request.attempt,
++                resource_id=request.resource_id,
++                permission_scope=request.permission_scope,
++                reason="cache_body_missing",
++            )
++            if expired:
++                logger.info(
++                    "Expired %d bodyless catalog preparation(s) for job %s",
++                    expired,
++                    record.id,
++                )
++        except Exception:
++            logger.debug("Prepare-operation reconcile failed for job %s", record.id, exc_info=True)
++
+     def _prefetch_remote_catalog(self, job_id: str) -> None:
+         """Pull one terminal remote job's small catalog files into the cache.
+ 
+diff --git a/src/acp/scheduler/remote/runner.py b/src/acp/scheduler/remote/runner.py
+index e41bf6c..17a9b5e 100644
+--- a/src/acp/scheduler/remote/runner.py
++++ b/src/acp/scheduler/remote/runner.py
+@@ -1571,8 +1571,18 @@ class RemoteJobRunner:
+ 
+     @staticmethod
+     def _assert_relative_task_paths(work_dir: Path, payload: Mapping[str, Any]) -> None:
+-        """Reject absolute/escaping path-bearing TaskRequest fields before bsub."""
++        """Reject absolute/escaping path-bearing TaskRequest fields before bsub.
++
++        The reserved ``environment`` key is skipped: it is the host-level
++        configuration snapshot (executable locations, resource settings), not a
++        task artifact reference, and its absolute executable paths are resolved
++        config for the worker host — exactly what must reach the worker (R02).
++        """
++        from acp_services.runtime.worker import TASK_ENVIRONMENT_CONFIG_KEY
++
+         for key, value in payload.items():
++            if key == TASK_ENVIRONMENT_CONFIG_KEY:
++                continue
+             if key == "output_dir" or key == "path" or str(key).endswith("_path"):
+                 if isinstance(value, str) and value:
+                     candidate = Path(value)
+diff --git a/src/acp/services_data_bootstrap.py b/src/acp/services_data_bootstrap.py
+index a1da0ec..f7b53e5 100644
+--- a/src/acp/services_data_bootstrap.py
++++ b/src/acp/services_data_bootstrap.py
+@@ -810,11 +810,12 @@ class _PrepareExecutorAdapter:
+         if workflow and record_workflow and workflow != record_workflow:
+             return self._refuse("identity_mismatch:workflow")
+ 
+-        # A cache-hit is accepted only for this attempt's own body, and only
+-        # after a final identity + fence check under the cache generation lock
+-        # (the same lock the cache/purge/publish paths take).
++        # A catalog hit skips its main files, but manifest-referenced auxiliary
++        # products still need checking. A previous transfer may have published
++        # the manifest before failing to download its frequency modes.
+         cache_root = cache.job_root(lease.job_id)
+         work_dir = Path(str(record.work_dir))
++        catalog_root: Path | None = None
+         with cache._get_generation_lock(lease.job_id):
+             hit_reason = guard.check()
+             if hit_reason is not None:
+@@ -823,22 +824,40 @@ class _PrepareExecutorAdapter:
+                 if _catalog_ready_for_attempt(
+                     cache, root, lease.job_id, workflow, int(lease.attempt)
+                 ):
+-                    return PrepareExecutionResult(
+-                        prepared=True,
+-                        availability=Availability.READY,
+-                        detail="already_ready",
+-                        retryable=False,
+-                    )
++                    catalog_root = root
++                    break
+ 
+         # Miss: publish every required catalog file through the unified
+         # verified transfer path (single publisher: cache fence/generation +
+         # atomic os.replace).  Missing optional files are tolerated exactly as
+         # before; identity/permission/stale rejections abort immediately.
+-        executor = build_transfer_executor(
+-            self._build_pipeline(cache, guard), self._request_factory
+-        )
++        executor: TransferPrepareExecutor | None = None
+         fetched = 0
+-        for rel_path in _catalog_fetch_paths(workflow):
++        if catalog_root is None:
++            executor = build_transfer_executor(
++                self._build_pipeline(cache, guard), self._request_factory
++            )
++            for rel_path in _catalog_fetch_paths(workflow):
++                outcome = executor.execute(self._file_lease(lease, rel_path, workflow))
++                if outcome.prepared:
++                    fetched += 1
++                    continue
++                if outcome.detail.startswith(RejectionCode.SOURCE_NOT_FOUND.value):
++                    continue
++                return self._executor_refusal(outcome)
++            catalog_root = cache_root
++
++        for rel_path in self._aux_frequency_mode_paths(cache, lease, workflow, root=catalog_root):
++            with cache._get_generation_lock(lease.job_id):
++                auxiliary_reason = guard.check()
++                if auxiliary_reason is not None:
++                    return self._refuse(auxiliary_reason)
++                if self._auxiliary_ready(cache, lease, catalog_root, rel_path):
++                    continue
++            if executor is None:
++                executor = build_transfer_executor(
++                    self._build_pipeline(cache, guard), self._request_factory
++                )
+             outcome = executor.execute(self._file_lease(lease, rel_path, workflow))
+             if outcome.prepared:
+                 fetched += 1
+@@ -852,7 +871,7 @@ class _PrepareExecutorAdapter:
+             if commit_reason is not None:
+                 return self._refuse(commit_reason)
+             ready = _catalog_ready_for_attempt(
+-                cache, cache_root, lease.job_id, workflow, int(lease.attempt)
++                cache, catalog_root, lease.job_id, workflow, int(lease.attempt)
+             )
+         if not ready:
+             return PrepareExecutionResult(
+@@ -888,6 +907,93 @@ class _PrepareExecutorAdapter:
+         )
+         return replace(lease, payload=payload)
+ 
++    @staticmethod
++    def _auxiliary_ready(
++        cache: RemoteStructureCache,
++        lease: PrepareLease,
++        catalog_root: Path,
++        relative_path: str,
++    ) -> bool:
++        """Check a pinned auxiliary body while the caller holds the cache lock."""
++        cache_root = cache.job_root(lease.job_id)
++        # Apply the same traversal guard even when the catalog lives in the
++        # local synchronized work directory.
++        cache.cache_path(lease.job_id, relative_path)
++        for root in dict.fromkeys((catalog_root, cache_root)):
++            if root == cache_root:
++                path = cache.get_cached(lease.job_id, relative_path, attempt=int(lease.attempt))
++                if path is None:
++                    continue
++            else:
++                present, attempt = cache._read_attempt_sidecar(root / relative_path)
++                if present and attempt != int(lease.attempt):
++                    continue
++            try:
++                descriptor = _open_within_root(root, relative_path)
++            except (OSError, ValueError):
++                continue
++            try:
++                if stat.S_ISREG(os.fstat(descriptor).st_mode):
++                    return True
++            finally:
++                os.close(descriptor)
++        return False
++
++    @staticmethod
++    def _aux_frequency_mode_paths(
++        cache: RemoteStructureCache,
++        lease: PrepareLease,
++        workflow: str,
++        *,
++        root: Path | None = None,
++    ) -> tuple[str, ...]:
++        """Manifest-referenced ``frequency_modes`` products for this attempt.
++
++        R09: the old ``fetch_catalog`` discovered small auxiliary products from
++        the cached result manifest; the prepare adapter must do the same under
++        its lease/publish guard or a prepared catalog reports ready while the
++        modes were never fetched.  Only this attempt's own manifest body is
++        consulted. The cache approval and descriptor open share the publish
++        lock, including when discovery is retried after the main catalog hit.
++        """
++        relative_path = "RESULT/result_manifest.json"
++        cache_root = cache.job_root(lease.job_id)
++        root = root if root is not None else cache_root
++        with cache._get_generation_lock(lease.job_id):
++            if root == cache_root:
++                try:
++                    manifest_path = cache.get_cached(
++                        lease.job_id, relative_path, attempt=int(lease.attempt)
++                    )
++                except ValueError:
++                    return ()
++                if manifest_path is None:
++                    return ()
++            else:
++                present, attempt = cache._read_attempt_sidecar(root / relative_path)
++                if present and attempt != int(lease.attempt):
++                    return ()
++            try:
++                descriptor = _open_within_root(root, relative_path)
++                with os.fdopen(descriptor, encoding="utf-8") as handle:
++                    payload = json.load(handle)
++            except (OSError, ValueError):
++                return ()
++        products = payload.get("products") if isinstance(payload, dict) else None
++        if not isinstance(products, list):
++            return ()
++        rel_paths: list[str] = []
++        for product in products:
++            if not isinstance(product, dict) or product.get("kind") != "frequency_modes":
++                continue
++            product_path = str(product.get("path") or "").replace("\\", "/")
++            if not product_path:
++                continue
++            rel_paths.append(
++                product_path if product_path.startswith("RESULT/") else f"RESULT/{product_path}"
++            )
++        return tuple(dict.fromkeys(rel_paths))
++
+     def _build_pipeline(
+         self, cache: RemoteStructureCache, guard: _LeaseIdentityGuard
+     ) -> TransferPipeline:
+@@ -899,6 +1005,7 @@ class _PrepareExecutorAdapter:
+             authorization=_LeaseAuthorizationPort(guard),
+             identity_check=guard.check,
+             before_publish=self._before_publish,
++            job_lookup=self._job_lookup,
+         )
+ 
+     @staticmethod
+@@ -1037,7 +1144,8 @@ class _TransferCacheAdapter:
+       sidecar the cache writes at ``:466-478``; the file is never left partial
+       and no second publish implementation exists.
+ 
+-    ``push_paths`` is delegated verbatim (``remote_structure_cache.py:499``).
++    ``push_paths`` is delegated verbatim (``remote_structure_cache.py:499``);
++    ``job_lookup`` supplies the full remote location (R06) for the write-back.
+     """
+ 
+     def __init__(
+@@ -1046,10 +1154,12 @@ class _TransferCacheAdapter:
+         *,
+         publish_guard: Callable[[], str | None] | None = None,
+         before_publish: Callable[[], None] | None = None,
++        job_lookup: Callable[[str], Any] | None = None,
+     ) -> None:
+         self._cache = cache
+         self._publish_guard = publish_guard
+         self._before_publish = before_publish
++        self._job_lookup = job_lookup
+ 
+     def guarded_path(self, job_id: str, relative_path: str) -> Path:
+         return self._cache.cache_path(job_id, relative_path)
+@@ -1124,7 +1234,13 @@ class _TransferCacheAdapter:
+         return tuple(found)
+ 
+     def push_paths(self, job_id: str, relative_paths: Any) -> list[str]:
+-        record = SimpleNamespace(id=job_id)
++        result: Mapping[str, Any] = {}
++        if self._job_lookup is not None:
++            record = self._job_lookup(job_id)
++            raw_result = getattr(record, "result", None) if record is not None else None
++            if isinstance(raw_result, Mapping):
++                result = raw_result
++        record = SimpleNamespace(id=job_id, result=dict(result))
+         return self._cache.push_paths(record, list(relative_paths))
+ 
+ 
+@@ -1135,10 +1251,17 @@ class _TransferSourceAdapter:
+     a missing file, a permission denial (revoked access) and everything else
+     (transient transport) are distinct — an authorization revocation is never
+     conflated with "file not there".
++
++    ``job_lookup`` (R06) supplies the authoritative job record so the fetcher
++    receives the full remote location (``record.result`` node/remote_dir);
++    without it the real ``RemoteResultFetcher.resolve`` fails before SSH.
+     """
+ 
+-    def __init__(self, cache: RemoteStructureCache) -> None:
++    def __init__(
++        self, cache: RemoteStructureCache, job_lookup: Callable[[str], Any] | None = None
++    ) -> None:
+         self._cache = cache
++        self._job_lookup = job_lookup
+ 
+     def _fetcher(self, job_id: str) -> Any:
+         factory = getattr(self._cache, "_fetcher_factory", None)
+@@ -1152,6 +1275,16 @@ class _TransferSourceAdapter:
+             logger.warning("transfer fetcher factory failed for %s", job_id, exc_info=True)
+             return None
+ 
++    def _record_for(self, job_id: str, attempt: int) -> Any:
++        """Fetch-location-bearing record for *job_id* (``result`` included)."""
++        result: Mapping[str, Any] = {}
++        if self._job_lookup is not None:
++            record = self._job_lookup(job_id)
++            raw_result = getattr(record, "result", None) if record is not None else None
++            if isinstance(raw_result, Mapping):
++                result = raw_result
++        return SimpleNamespace(id=job_id, attempt=int(attempt), result=dict(result))
++
+     def read(
+         self,
+         job_id: str,
+@@ -1163,7 +1296,7 @@ class _TransferSourceAdapter:
+         fetcher = self._fetcher(job_id)
+         if fetcher is None:
+             raise TransferSourceError(SourceFailureKind.TRANSIENT, "no remote fetcher configured")
+-        record = SimpleNamespace(id=job_id, attempt=int(attempt))
++        record = self._record_for(job_id, attempt)
+         try:
+             if byte_range is not None:
+                 data = bytes(
+@@ -1263,9 +1396,11 @@ def build_transfer_cache_port(cache: RemoteStructureCache) -> _TransferCacheAdap
+     return _TransferCacheAdapter(cache)
+ 
+ 
+-def build_transfer_source_port(cache: RemoteStructureCache) -> _TransferSourceAdapter:
++def build_transfer_source_port(
++    cache: RemoteStructureCache, job_lookup: Callable[[str], Any] | None = None
++) -> _TransferSourceAdapter:
+     """Wrap the real cache's fetcher as the transfer source port."""
+-    return _TransferSourceAdapter(cache)
++    return _TransferSourceAdapter(cache, job_lookup)
+ 
+ 
+ def build_transfer_authorization_port(
+@@ -1425,6 +1560,7 @@ def build_transfer_pipeline(
+     db_path: str | Path | None = None,
+     publications: TransferPublicationStore | None = None,
+     source: Any | None = None,
++    job_lookup: Callable[[str], Any] | None = None,
+     adoption: Any | None = None,
+     before_publish: Callable[[], None] | None = None,
+ ) -> TransferPipeline:
+@@ -1472,8 +1608,9 @@ def build_transfer_pipeline(
+             cache,
+             publish_guard=identity_check,
+             before_publish=before_publish,
++            job_lookup=job_lookup,
+         ),
+-        source=source or _TransferSourceAdapter(cache),
++        source=source or _TransferSourceAdapter(cache, job_lookup),
+         authorization=authorization,
+         publications=store,
+         adoption=adoption,
+@@ -1706,16 +1843,32 @@ class _ReadCacheIndexAdapter:
+             return CacheIndexFacts(present=False)
+         approved: Path | None = None
+         if root.is_remote:
+-            try:
+-                approved = self._cache.get_cached(root.job_id, relative_path, attempt=requested)
+-            except ValueError:
+-                return CacheIndexFacts(present=False)
+-            if approved is None and requested is not None:
+-                approved = self._legacy_cached_for_attempt(root, relative_path, requested)
+-            if approved is None:
+-                return CacheIndexFacts(present=False)
+-            root_dir = self._cache.job_root(root.job_id)
+-            generation = self._generation(root.job_id)
++            # R07: sidecar/attempt approval and the descriptor open run inside
++            # the same per-job generation mutex the publish path takes, so a
++            # concurrent attempt-2 publication can never swap the body between
++            # "approved for attempt 1" and the open — the pre-lock window let
++            # an attempt-1 read serve attempt-2 bytes.
++            with self._cache._get_generation_lock(root.job_id):
++                try:
++                    approved = self._cache.get_cached(root.job_id, relative_path, attempt=requested)
++                except ValueError:
++                    return CacheIndexFacts(present=False)
++                if approved is None and requested is not None:
++                    approved = self._legacy_cached_for_attempt(root, relative_path, requested)
++                if approved is None:
++                    return CacheIndexFacts(present=False)
++                if requested is not None:
++                    present, sidecar_attempt = self._cache._read_attempt_sidecar(approved)
++                    if present and sidecar_attempt != requested:
++                        return CacheIndexFacts(present=False)
++                root_dir = self._cache.job_root(root.job_id)
++                generation = self._generation(root.job_id)
++                try:
++                    return self._snapshot_facts(
++                        root_dir, relative_path, approved, generation, snapshot=snapshot
++                    )
++                except (OSError, ValueError):
++                    return CacheIndexFacts(present=False)
+         else:
+             root_dir = Path(root.path)
+             generation = 0
+diff --git a/src/acp_services/data/operations.py b/src/acp_services/data/operations.py
+index d9ed4cd..194a69e 100644
+--- a/src/acp_services/data/operations.py
++++ b/src/acp_services/data/operations.py
+@@ -1403,6 +1403,85 @@ class PrepareOperationService:
+             )
+             return self._record_from_row(self._get_row_locked(operation_id))
+ 
++    def expire_succeeded_for_resource(
++        self,
++        *,
++        job_id: str,
++        attempt: int,
++        resource_id: str,
++        permission_scope: str = "local-single",
++        reason: str = "",
++    ) -> int:
++        """Expire successful preparations of one resource without a list limit.
++
++        The state predicate keeps concurrent queued/running preparations intact;
++        another resource, attempt or permission scope is never invalidated by
++        reconciling this body's eviction.
++        """
++        with self._lock:
++            cursor = self._conn.execute(
++                "UPDATE data_operations SET state=?, error_code=?, error_message=?, "
++                "owner_generation=owner_generation+1, lease_token=NULL, "
++                "lease_expires_at=NULL, updated_at=? WHERE job_id=? AND job_attempt=? "
++                "AND resource_id=? AND permission_scope=? AND state=?",
++                (
++                    PrepareState.EXPIRED.value,
++                    "expired",
++                    reason,
++                    _utc_now_iso(),
++                    str(job_id),
++                    int(attempt),
++                    str(resource_id),
++                    str(permission_scope),
++                    PrepareState.SUCCEEDED.value,
++                ),
++            )
++            return int(cursor.rowcount)
++
++    def expire_for_job(self, job_id: str, *, reason: str = "") -> int:
++        """Expire every still-relevant operation of *job_id* (eviction hook).
++
++        R08: cache eviction (``purge_job`` / TTL sweep) must invalidate the
++        job's SUCCEEDED/QUEUED/RUNNING operations so a same-identity re-enqueue
++        opens a new ``dedup_epoch`` and the cache is rebuilt instead of the
++        merged old success being replayed forever.  Terminal FAILED/CANCELED
++        and already-EXPIRED rows stay untouched.  Returns the number of rows
++        expired.
++        """
++        expired = 0
++        with self._lock:
++            self._conn.execute("BEGIN IMMEDIATE")
++            try:
++                rows = self._conn.execute(
++                    "SELECT operation_id, state FROM data_operations WHERE job_id=?",
++                    (str(job_id),),
++                ).fetchall()
++                for row in rows:
++                    if row["state"] in (
++                        PrepareState.EXPIRED.value,
++                        PrepareState.FAILED.value,
++                        PrepareState.CANCELED.value,
++                    ):
++                        continue
++                    self._conn.execute(
++                        "UPDATE data_operations SET state=?, error_code=?, error_message=?, "
++                        "owner_generation=owner_generation+1, lease_token=NULL, "
++                        "lease_expires_at=NULL, updated_at=? WHERE operation_id=?",
++                        (
++                            PrepareState.EXPIRED.value,
++                            "expired",
++                            reason,
++                            _utc_now_iso(),
++                            row["operation_id"],
++                        ),
++                    )
++                    expired += 1
++                self._conn.execute("COMMIT")
++            except BaseException:
++                self._conn.execute("ROLLBACK")
++                raise
++        return expired
++
+     def recover(
+         self,
+         *,
+diff --git a/src/acp_services/data/read_root.py b/src/acp_services/data/read_root.py
+index b40ca9d..61597d3 100644
+--- a/src/acp_services/data/read_root.py
++++ b/src/acp_services/data/read_root.py
+@@ -493,6 +493,26 @@ class ReadOnlyResourceReader:
+ 
+         if op_facts is not None:
+             if op_facts.exists:
++                if op_facts.availability is Availability.READY:
++                    # R08: a SUCCEEDED operation whose body is gone (cache
++                    # eviction) must never report READY — availability without
++                    # a readable body is ABSENT/STALE so a re-prepare (new
++                    # epoch) can rebuild it; the GET stays read-only.
++                    return AvailabilitySnapshot(
++                        resource_id=request.resource_id,
++                        availability=Availability.ABSENT,
++                        freshness=Freshness.STALE,
++                        basis_revision=int(op_facts.basis_revision),
++                        expected_revision=(
++                            int(op_facts.expected_revision) or int(request.expected_revision)
++                        ),
++                        observed_at=observed_at,
++                        job_id=request.job_id,
++                        is_remote=root.is_remote,
++                        prepared_root=None,
++                        size_bytes=None,
++                        detail="operation_ready_body_missing",
++                    )
+                 expected = int(op_facts.expected_revision) or int(request.expected_revision)
+                 return AvailabilitySnapshot(
+                     resource_id=request.resource_id,
+diff --git a/src/acp_services/runtime/attempt_freeze.py b/src/acp_services/runtime/attempt_freeze.py
+index dcfe1d1..e139be4 100644
+--- a/src/acp_services/runtime/attempt_freeze.py
++++ b/src/acp_services/runtime/attempt_freeze.py
+@@ -27,10 +27,11 @@ claim.  Only the holder may write the authoritative
+ duplicate delivery, or a worker that lost the right gets a
+ ``WorkerRefusal`` and writes only the separate ``<receipt>.refused.json``
+ diagnostic — never a same-path failed receipt and never a job failure CAS.
+-A crashed or unknown claim is never stolen blindly: a steal requires the
+-recorded holder process to be verifiably dead (pid liveness + /proc start-time
+-identity against pid recycling); anything unknown is surfaced for checked
+-recovery.
++A crashed or unknown claim is never stolen blindly: the local holder must be
++verifiably dead AND an injected recovery authority must confirm that its
++execution children have stopped.  Parent pid death alone leaves possible
++orphaned QC processes, so the default is a non-authoritative refusal pending
++checked recovery.  Unknown/foreign hosts are never reclaimed locally.
+ 
+ Import direction: stdlib + the dependency-free Services contracts/runtime
+ modules only (never ``acp``); ``worker_bootstrap`` imports this module, never
+@@ -40,15 +41,17 @@ the reverse.
+ from __future__ import annotations
+ 
+ import errno
++import fcntl
+ import hashlib
+ import json
+ import os
+ import shutil
++import socket
+ from collections.abc import Mapping
+ from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from pathlib import Path
+-from typing import Any, Final
++from typing import Any, Final, Protocol
+ 
+ from acp_services.contracts.envelope import (
+     ExecutionEnvelope,
+@@ -76,6 +79,7 @@ from acp_services.runtime.worker import FrozenPlan, frozen_plan_body_digest, fro
+ 
+ __all__ = [
+     "ATTEMPT_LOCK_FILENAME",
++    "ATTEMPT_LOCK_GUARD_FILENAME",
+     "CLAIM_SCHEMA",
+     "DEFAULT_LEASE_SECONDS",
+     "STAGING_DIRNAME",
+@@ -83,6 +87,8 @@ __all__ = [
+     "AttemptFreezeSpec",
+     "AttemptLockClaim",
+     "AttemptLockExecutionRight",
++    "AttemptRecoveryProof",
++    "CheckedAttemptRecoveryPort",
+     "attempt_lock_path",
+     "read_attempt_lock",
+     "write_frozen_attempt",
+@@ -99,6 +105,13 @@ STAGING_DIRNAME: Final = ".staging"
+ #: Persistent execution-claim file (NOT a member of the frozen input group).
+ ATTEMPT_LOCK_FILENAME: Final = "attempt.lock"
+ 
++#: Recovery-mutex file (``flock``) serializing dead-claim replacement.  Every
++#: taker/recoverer follows the same protocol: the initial ``O_CREAT|O_EXCL``
++#: acquire stays lock-free; anything that must observe-and-replace an existing
++#: claim (dead-holder recovery) holds this guard so two recoverers can never
++#: unlink each other's fresh claims (R03 — one attempt, one holder).
++ATTEMPT_LOCK_GUARD_FILENAME: Final = "attempt.lock.guard"
++
+ #: Wire schema of the attempt execution claim document.
+ CLAIM_SCHEMA: Final = "attempt_execution_claim"
+ 
+@@ -324,9 +337,16 @@ def _proc_start_time(pid: int) -> str:
+ 
+ 
+ def _holder_alive(claim: AttemptLockClaim) -> bool | None:
+-    """Liveness of the recorded holder: True/False, None when unverifiable."""
++    """Liveness of the recorded holder: True/False, None when unverifiable.
++
++    A claim recorded on another host is never provably dead from this node
++    (the pid is only meaningful locally — shared LSF work dirs), so cross-host
++    claims are unverifiable and therefore never stolen.
++    """
+     if claim.pid <= 0:
+         return None
++    if not claim.host or claim.host != socket.gethostname():
++        return None
+     try:
+         os.kill(claim.pid, 0)
+     except ProcessLookupError:
+@@ -353,6 +373,7 @@ class AttemptLockClaim:
+     fencing_token: str = ""
+     pid: int = 0
+     pid_starttime: str = ""
++    host: str = ""
+     acquired_at: str = ""
+     lease_expires_at: str = ""
+ 
+@@ -367,6 +388,8 @@ class AttemptLockClaim:
+             or self.pid != os.getpid()
+         ):
+             return False
++        if not self.host or self.host != socket.gethostname():
++            return False
+         if not self.pid_starttime:
+             return True
+         return self.pid_starttime == _proc_start_time(os.getpid())
+@@ -392,10 +415,15 @@ class AttemptLockClaim:
+             "fencing_token": self.fencing_token,
+             "pid": self.pid,
+             "pid_starttime": self.pid_starttime,
++            "host": self.host,
+             "acquired_at": self.acquired_at,
+             "lease_expires_at": self.lease_expires_at,
+         }
+ 
++    def content_digest(self) -> str:
++        """Bind a recovery decision to every field of this exact claim."""
++        return _sha256_hex(_json_bytes(self.to_dict()))
++
+     @classmethod
+     def for_envelope(cls, envelope: ExecutionEnvelope, *, lease_seconds: float) -> AttemptLockClaim:
+         now = datetime.now(timezone.utc)
+@@ -408,6 +436,7 @@ class AttemptLockClaim:
+             fencing_token=envelope.fencing_token,
+             pid=os.getpid(),
+             pid_starttime=_proc_start_time(os.getpid()),
++            host=socket.gethostname(),
+             acquired_at=now.isoformat(),
+             lease_expires_at=datetime.fromtimestamp(deadline, timezone.utc).isoformat(),
+         )
+@@ -426,6 +455,7 @@ class AttemptLockClaim:
+                 fencing_token=str(payload.get("fencing_token") or ""),
+                 pid=int(payload.get("pid") or 0),
+                 pid_starttime=str(payload.get("pid_starttime") or ""),
++                host=str(payload.get("host") or ""),
+                 acquired_at=str(payload.get("acquired_at") or ""),
+                 lease_expires_at=str(payload.get("lease_expires_at") or ""),
+             )
+@@ -433,6 +463,41 @@ class AttemptLockClaim:
+             return None
+ 
+ 
++@dataclass(frozen=True)
++class AttemptRecoveryProof:
++    """A trusted controller's stopped-execution proof for one exact claim.
++
++    The controller must reconcile the old worker and ALL of its execution
++    children before issuing this proof.  A dead parent pid, an expired lease,
++    or an empty process-group observation for a non-exclusive group cannot
++    prove that fact.  The complete claim digest prevents reusing a proof for
++    another holder or for an updated claim.
++    """
++
++    claim_digest: str
++    holder_stopped: bool
++    children_stopped: bool
++    source: str
++
++    def confirms(self, claim: AttemptLockClaim) -> bool:
++        """Accept only an explicit, complete proof bound to *claim*."""
++        return (
++            self.claim_digest == claim.content_digest()
++            and self.holder_stopped is True
++            and self.children_stopped is True
++            and isinstance(self.source, str)
++            and bool(self.source.strip())
++        )
++
++
++class CheckedAttemptRecoveryPort(Protocol):
++    """Trusted process-tree reconciliation, invoked under the recovery guard."""
++
++    def confirm_stopped(self, claim: AttemptLockClaim) -> AttemptRecoveryProof | None:
++        """Return a claim-bound proof only after all execution processes stopped."""
++        ...
++
++
+ def read_attempt_lock(lock_path: Path | str) -> AttemptLockClaim | None:
+     """Read a claim document (``None`` when absent OR unreadable)."""
+     try:
+@@ -458,6 +523,32 @@ def _acquire_exclusive(path: Path, claim: AttemptLockClaim) -> bool:
+     return True
+ 
+ 
++class _RecoveryGuard:
++    """``flock``-held mutual exclusion for observe-and-replace claim recovery.
++
++    The guard file is created beside the claim; the fd is ``flock``-ed for the
++    duration.  A crashed recoverer releases nothing it took — the kernel drops
++    the ``flock`` on process death, so the protocol is crash-safe.
++    """
++
++    def __init__(self, lock_path: Path) -> None:
++        self._guard_path = lock_path.with_name(ATTEMPT_LOCK_GUARD_FILENAME)
++        self._fd: int | None = None
++
++    def __enter__(self) -> _RecoveryGuard:
++        self._fd = os.open(self._guard_path, os.O_CREAT | os.O_RDWR, 0o644)
++        fcntl.flock(self._fd, fcntl.LOCK_EX)
++        return self
++
++    def __exit__(self, *exc_info: object) -> None:
++        if self._fd is not None:
++            try:
++                fcntl.flock(self._fd, fcntl.LOCK_UN)
++            finally:
++                os.close(self._fd)
++                self._fd = None
++
++
+ @dataclass(frozen=True)
+ class AttemptLockExecutionRight:
+     """Persistent :class:`ExecutionRightPort` over ``WORK/00_RUNTIME/attempt.lock``.
+@@ -468,8 +559,9 @@ class AttemptLockExecutionRight:
+     a loser/duplicate delivery observes ``NOT_HELD`` and writes only the
+     ``<receipt>.refused.json`` diagnostic; a holder whose claim was taken over
+     observes ``LOST`` at the write seam.  Crashed holders are stolen only
+-    after the recorded process is verifiably dead; unreadable or
+-    unverifiable claims are never stolen blindly.
++    after the recorded local process is verifiably dead AND a trusted recovery
++    port confirms all execution children stopped.  Without such proof the
++    default refuses recovery; it never kills a process or a shared group.
+ 
+     Controller authorization to dispatch is a separate, earlier fact — it is
+     not this claim and can never substitute for holding it.
+@@ -477,43 +569,71 @@ class AttemptLockExecutionRight:
+ 
+     lock_path: Path
+     lease_seconds: float = DEFAULT_LEASE_SECONDS
++    recovery_check: CheckedAttemptRecoveryPort | None = None
+ 
+     def acquire(self, envelope: ExecutionEnvelope) -> ExecutionRightVerdict:
+         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+         claim = AttemptLockClaim.for_envelope(envelope, lease_seconds=self.lease_seconds)
+         if _acquire_exclusive(self.lock_path, claim):
+             return ExecutionRightVerdict(state=ExecutionRightState.HELD)
+-        existing = read_attempt_lock(self.lock_path)
+-        if existing is None:
++        # Observe-and-replace recovery is serialized through the guard mutex:
++        # a second recoverer re-reads the claim under the guard and sees the
++        # first recoverer's live pid, so it can never unlink a fresh claim
++        # (R03 — the pre-guard read/unlink race produced two HELD holders).
++        with _RecoveryGuard(self.lock_path):
++            existing = read_attempt_lock(self.lock_path)
++            if existing is None:
++                return ExecutionRightVerdict(
++                    state=ExecutionRightState.NOT_HELD,
++                    detail=(
++                        f"attempt.lock at {self.lock_path} is unreadable; refusing to steal an "
++                        "unknown claim (checked recovery required)"
++                    ),
++                )
++            if existing.held_by_current_process(envelope):
++                return ExecutionRightVerdict(state=ExecutionRightState.HELD)
++            if _holder_alive(existing) is False:
++                proof: AttemptRecoveryProof | None = None
++                if self.recovery_check is not None:
++                    try:
++                        proof = self.recovery_check.confirm_stopped(existing)
++                    except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
++                        # A failed reconciliation is not a stopped execution.
++                        proof = None
++                if not isinstance(proof, AttemptRecoveryProof) or not proof.confirms(existing):
++                    return ExecutionRightVerdict(
++                        state=ExecutionRightState.NOT_HELD,
++                        detail=(
++                            f"holder {existing.owner!r} (pid {existing.pid}) ended, but its "
++                            "execution children are not confirmed stopped; checked recovery "
++                            "required before replacing attempt.lock"
++                        ),
++                    )
++                current = read_attempt_lock(self.lock_path)
++                if current is None or current.content_digest() != existing.content_digest():
++                    return ExecutionRightVerdict(
++                        state=ExecutionRightState.NOT_HELD,
++                        detail="attempt.lock changed during checked recovery; refusing stale proof",
++                    )
++                try:
++                    self.lock_path.unlink()
++                except FileNotFoundError:
++                    pass
++                if _acquire_exclusive(self.lock_path, claim):
++                    return ExecutionRightVerdict(state=ExecutionRightState.HELD)
++                return ExecutionRightVerdict(
++                    state=ExecutionRightState.NOT_HELD,
++                    detail=f"verifiably-dead holder {existing.owner!r} (pid {existing.pid}) was "
++                    "recovered by another worker first",
++                )
+             return ExecutionRightVerdict(
+                 state=ExecutionRightState.NOT_HELD,
+                 detail=(
+-                    f"attempt.lock at {self.lock_path} is unreadable; refusing to steal an "
+-                    "unknown claim (checked recovery required)"
++                    f"attempt {envelope.attempt} of {envelope.job_id!r} is claimed by "
++                    f"{existing.owner!r} (pid {existing.pid}, host {existing.host or '?'}, "
++                    f"lease {existing.lease_state()}); this worker waits/refuses"
+                 ),
+             )
+-        if existing.held_by_current_process(envelope):
+-            return ExecutionRightVerdict(state=ExecutionRightState.HELD)
+-        if _holder_alive(existing) is False:
+-            try:
+-                self.lock_path.unlink()
+-            except FileNotFoundError:
+-                pass
+-            if _acquire_exclusive(self.lock_path, claim):
+-                return ExecutionRightVerdict(state=ExecutionRightState.HELD)
+-            return ExecutionRightVerdict(
+-                state=ExecutionRightState.NOT_HELD,
+-                detail=f"verifiably-dead holder {existing.owner!r} (pid {existing.pid}) was "
+-                "recovered by another worker first",
+-            )
+-        return ExecutionRightVerdict(
+-            state=ExecutionRightState.NOT_HELD,
+-            detail=(
+-                f"attempt {envelope.attempt} of {envelope.job_id!r} is claimed by "
+-                f"{existing.owner!r} (pid {existing.pid}, lease {existing.lease_state()}); "
+-                "this worker waits/refuses"
+-            ),
+-        )
+ 
+     def verify(self, envelope: ExecutionEnvelope) -> ExecutionRightVerdict:
+         existing = read_attempt_lock(self.lock_path)
+diff --git a/src/acp_services/runtime/worker.py b/src/acp_services/runtime/worker.py
+index b322305..11f3645 100644
+--- a/src/acp_services/runtime/worker.py
++++ b/src/acp_services/runtime/worker.py
+@@ -69,6 +69,7 @@ __all__ = [
+     "TASK_COMPLETION_AUTHORITIES",
+     "TASK_RESULT_RELATIVE_PATH",
+     "TASK_RESULT_SCHEMA",
++    "TASK_ENVIRONMENT_CONFIG_KEY",
+     "CccpTaskExecutor",
+     "CompletionAuthority",
+     "CompletionDecision",
+@@ -102,8 +103,10 @@ __all__ = [
+     "read_task_result_qualification",
+     "receipt_exit_code",
+     "task_result_path",
++    "build_task_result_document",
+     "write_receipt_atomic",
+     "write_task_result",
++    "write_task_result_document",
+ ]
+ 
+ 
+@@ -226,12 +229,20 @@ class ExecutionScope:
+ 
+ @dataclass(frozen=True)
+ class TaskExecutionOutcome:
+-    """Typed result an executor returns for one attempt."""
++    """Typed result an executor returns for one attempt.
++
++    ``pending_task_result`` (R05/D-recheck) carries the fully-built,
++    digest-bound ``task_result.json`` document when the executor produced one
++    without persisting it: the :class:`FrozenWorker` publishes it **inside the
++    execution-right write seam** (after ``before_write``), so a worker that
++    lost the right never writes the authoritative document.
++    """
+ 
+     state: str
+     result_digest: str = ""
+     errors: tuple[ExecutionError | str, ...] = ()
+     evidence_digests: Mapping[str, str] = field(default_factory=dict)
++    pending_task_result: Mapping[str, Any] | None = None
+ 
+ 
+ # ── injected ports ──────────────────────────────────────────────────────────
+@@ -288,6 +299,16 @@ class DeclaredPlanVerifier:
+ # ── default executor (cccp task core) ───────────────────────────────────────
+ 
+ 
++#: Reserved frozen-plan payload key carrying the executable scientific
++#: configuration snapshot (the fully-resolved cccp config mapping the freeze
++#: producer captured).  ``TaskRequest.from_dict`` ignores unknown keys (rule
++#: S2), so the key rides the frozen body digest without polluting the typed
++#: request; the executor pops it and restores ``TaskContext.config`` so the
++#: independent worker executes with the submitted configuration instead of
++#: whatever the release tree's defaults resolve to at call time (R02).
++TASK_ENVIRONMENT_CONFIG_KEY: str = "environment"
++
++
+ @dataclass(frozen=True)
+ class CccpTaskExecutor:
+     """Default :class:`TaskExecutorPort` backed by ``cccp.calculation.run_*``.
+@@ -296,6 +317,10 @@ class CccpTaskExecutor:
+     (``cccp.calculation.requests.TaskRequest.to_dict()``). cccp imports are lazy
+     so importing this module never pulls the scientific stack, and no ``acp``
+     module is ever imported.
++
++    The executor NEVER writes the authoritative ``task_result.json`` itself:
++    it returns the digest-bound document on the outcome and the worker
++    persists it inside the execution-right write seam (R05).
+     """
+ 
+     def execute(self, scope: ExecutionScope) -> TaskExecutionOutcome:
+@@ -304,11 +329,16 @@ class CccpTaskExecutor:
+         from cccp.calculation.requests import TaskRequest
+ 
+         request_payload = dict(scope.plan.payload)
++        environment = request_payload.pop(TASK_ENVIRONMENT_CONFIG_KEY, None)
+         request_payload.setdefault("task", scope.envelope.scientific_closure.task_kind)
+         request = TaskRequest.from_dict(request_payload)
+         runner = getattr(calculation, f"run_{request.task.value}")
+-        context = TaskContext(workdir=scope.work_dir, input_base=scope.work_dir)
+-        return outcome_from_task_result(runner(request, context=context), work_dir=scope.work_dir)
++        context = TaskContext(
++            workdir=scope.work_dir,
++            input_base=scope.work_dir,
++            config=environment if isinstance(environment, Mapping) and environment else None,
++        )
++        return outcome_from_task_result(runner(request, context=context))
+ 
+ 
+ # ── D01 completion authority: the frozen truth table ────────────────────────
+@@ -949,6 +979,26 @@ def _result_digest(result: Any) -> str:
+     return _content_digest(dict(to_dict()))
+ 
+ 
++def _result_body(result: Any | None) -> dict[str, Any] | None:
++    """Full scientific body of *result* (``TaskResult.to_dict()``), when able.
++
++    R01: the persisted document must carry the complete scientific result —
++    energy, coordinates, frequencies, payload and artifact references — not
++    only the qualification and a digest, or a completed task has no
++    recoverable/displayable science after publication or restart.
++    """
++    if result is None:
++        return None
++    to_dict = getattr(result, "to_dict", None)
++    if to_dict is None:
++        return None
++    try:
++        body = dict(to_dict())
++    except (TypeError, ValueError):
++        return None
++    return body if isinstance(body, dict) and body else None
++
++
+ def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
+     target = Path(path)
+     target.parent.mkdir(parents=True, exist_ok=True)
+@@ -968,16 +1018,17 @@ def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
+         raise
+ 
+ 
+-def write_task_result(
+-    work_dir: Path | str,
++def build_task_result_document(
+     decision: CompletionDecision,
+     result: Any | None = None,
+-) -> str:
+-    """Persist the authoritative qualification; return its content digest.
+-
+-    The document is written atomically (temp file + ``os.replace``) and carries
+-    a ``content_digest`` over every other field, so a tampered document can be
+-    rejected by :func:`read_task_result`.
++) -> dict[str, Any]:
++    """Build the digest-bound ``task_result.json`` document (pure).
++
++    The document carries the qualification matrix, the receipt/job mapping,
++    the result digest and — since R01 — the **full scientific result body**
++    under ``result``.  The ``content_digest`` covers every other field
++    including the body, so a tampered document is rejected by
++    :func:`read_task_result`.
+     """
+     authority = TASK_COMPLETION_AUTHORITIES.get(decision.task)
+     document: dict[str, Any] = {
+@@ -1000,10 +1051,37 @@ def write_task_result(
+         "result_digest": _result_digest(result) if result is not None else "",
+         "written_at": _utc_now_iso(),
+     }
+-    digest = _content_digest(document)
+-    document["content_digest"] = digest
++    body = _result_body(result)
++    if body is not None:
++        document["result"] = body
++    document["content_digest"] = _content_digest(document)
++    return document
++
++
++def write_task_result(
++    work_dir: Path | str,
++    decision: CompletionDecision,
++    result: Any | None = None,
++) -> str:
++    """Persist the authoritative qualification; return its content digest.
++
++    The document is written atomically (temp file + ``os.replace``) and carries
++    the full scientific result body plus a ``content_digest`` over every other
++    field, so a tampered document can be rejected by :func:`read_task_result`.
++    """
++    document = build_task_result_document(decision, result)
+     _write_json_atomic(task_result_path(work_dir), document)
+-    return digest
++    return str(document["content_digest"])
++
++
++def write_task_result_document(work_dir: Path | str, document: Mapping[str, Any]) -> str:
++    """Persist an already-built digest-bound document; return its digest.
++
++    The R05 write seam: executors return built documents on the outcome and
++    the worker calls this only after re-verifying the execution right.
++    """
++    _write_json_atomic(task_result_path(work_dir), dict(document))
++    return str(document.get("content_digest") or "")
+ 
+ 
+ def read_task_result(work_dir: Path | str) -> dict[str, Any] | None:
+@@ -1118,12 +1196,15 @@ def outcome_from_decision(
+     decision: CompletionDecision, *, work_dir: Path | str | None = None
+ ) -> TaskExecutionOutcome:
+     """Build the executor outcome for *decision*, persisting it when given a root."""
+-    digest = write_task_result(work_dir, decision) if work_dir is not None else ""
++    document = build_task_result_document(decision)
++    if work_dir is not None:
++        write_task_result_document(work_dir, document)
+     return TaskExecutionOutcome(
+         state=decision.receipt_state,
+         result_digest="",
+         errors=decision.errors,
+-        evidence_digests=_evidence_for(decision, digest),
++        evidence_digests=_evidence_for(decision, str(document["content_digest"])),
++        pending_task_result=document,
+     )
+ 
+ 
+@@ -1136,17 +1217,22 @@ def outcome_from_task_result(
+     ``WORK/00_RUNTIME/task_result.json``.  Persistence happens **before** the
+     receipt is written, so the digest-bound qualification always exists for a
+     receipt that references it.
++
++    R05: when ``work_dir`` is omitted the outcome still carries the built
++    document as ``pending_task_result``; the :class:`FrozenWorker` publishes
++    it after the execution-right seam, so a worker that lost the right never
++    writes the authoritative document.
+     """
+     decision = decide_task_result(result)
++    document = build_task_result_document(decision, result)
+     if work_dir is not None:
+-        digest = write_task_result(work_dir, decision, result)
+-    else:
+-        digest = ""
++        write_task_result_document(work_dir, document)
+     return TaskExecutionOutcome(
+         state=decision.receipt_state,
+         result_digest=_result_digest(result),
+         errors=decision.errors,
+-        evidence_digests=_evidence_for(decision, digest),
++        evidence_digests=_evidence_for(decision, str(document["content_digest"])),
++        pending_task_result=document,
+     )
+ 
+ 
+@@ -1303,8 +1389,10 @@ class FrozenWorker:
+ 
+         ``before_write`` is the execution-right write seam (07-A): the caller
+         re-checks that it still holds the exclusive right immediately before
+-        the authoritative receipt is published and raises otherwise.  A
+-        worker that lost the right therefore never writes this path.
++        any authoritative write is published and raises otherwise.  A worker
++        that lost the right therefore never writes this path — nor the
++        authoritative ``task_result.json`` (R05): an executor-returned
++        ``pending_task_result`` document is persisted only after the seam.
+         """
+         existing = read_receipt(receipt_path)
+         self.validate(envelope, plan, prior_steps=prior_steps, item_symbols=item_symbols)
+@@ -1320,6 +1408,8 @@ class FrozenWorker:
+         outcome = self.executor.execute(scope)
+         if before_write is not None:
+             before_write()
++        if outcome.pending_task_result is not None:
++            write_task_result_document(work_dir, outcome.pending_task_result)
+         receipt = build_receipt(envelope, outcome)
+         write_receipt_atomic(receipt_path, receipt)
+         return receipt
+diff --git a/src/acp_services/worker_bootstrap.py b/src/acp_services/worker_bootstrap.py
+index efd4ce3..6946e01 100644
+--- a/src/acp_services/worker_bootstrap.py
++++ b/src/acp_services/worker_bootstrap.py
+@@ -431,7 +431,7 @@ class _ProbeExecutor:
+         )
+ 
+     def execute(self, scope: Any) -> TaskExecutionOutcome:
+-        return outcome_from_task_result(self._result(), work_dir=scope.work_dir)
++        return outcome_from_task_result(self._result())
+ 
+ 
+ # ── frozen-data loaders ─────────────────────────────────────────────────────
+@@ -859,15 +859,30 @@ def _write_assembly_failure(
+     return receipt
+ 
+ 
+-def _write_unbound_failure(receipt_path: Path, code: str, message: str) -> None:
+-    """Structured failure document when the envelope itself cannot be decoded."""
++def _unbound_diagnostic_path(receipt_path: Path) -> Path:
++    return receipt_path.with_name(receipt_path.name + ".unbound.json")
++
++
++def _write_unbound_failure(receipt_path: Path, code: str, message: str) -> Path:
++    """Structured failure document when the envelope itself cannot be decoded.
++
++    R04: an assembly error raised before any identity can be bound (and before
++    the execution right could possibly be acquired) must never touch the
++    canonical receipt path — a pre-existing authoritative receipt (including a
++    completed one) stays byte-identical.  The diagnostic lands beside it as
++    ``<receipt>.unbound.json`` and on stderr.
++    """
+     document = {
+         "schema": "worker_assembly_error",
+         "state": "failed",
+         "errors": [{"code": code, "message": message, "retryable": False}],
++        "receipt_path": str(receipt_path),
+     }
+-    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+-    receipt_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
++    diagnostic = _unbound_diagnostic_path(receipt_path)
++    diagnostic.parent.mkdir(parents=True, exist_ok=True)
++    _write_json_document_atomic(diagnostic, document)
++    print(json.dumps({"state": "failed", "code": code, "message": message}))
++    return diagnostic
+ 
+ 
+ def _result_exit_code(result: WorkerExecutionResult) -> int:
+@@ -944,7 +959,6 @@ def main(
+         )
+     except AssemblyError as exc:
+         _write_unbound_failure(receipt_path, "frozen_group_invalid", str(exc))
+-        print(json.dumps({"state": "failed", "code": "frozen_group_invalid", "message": str(exc)}))
+         return 2
+ 
+     lock_path = Path(args.attempt_lock) if args.attempt_lock else attempt_lock_path(work_dir)
+@@ -962,7 +976,6 @@ def main(
+         envelope = load_frozen_envelope(args.envelope)
+     except AssemblyError as exc:
+         _write_unbound_failure(receipt_path, "envelope_unreadable", str(exc))
+-        print(json.dumps({"state": "failed", "code": "envelope_unreadable", "message": str(exc)}))
+         return 2
+ 
+     try:
+diff --git a/src/cccp/analysis/bounded/identity.py b/src/cccp/analysis/bounded/identity.py
+index 6e6e226..35f3200 100644
+--- a/src/cccp/analysis/bounded/identity.py
++++ b/src/cccp/analysis/bounded/identity.py
+@@ -46,8 +46,11 @@ __all__ = [
+     "METHOD_CHUNK",
+     "METHOD_MULTIRESOLUTION",
+     "METHOD_STRIDE",
++    "MULTIRESOLUTION_ALGORITHM_VERSION",
+     "BoundedSpec",
+     "bounded_identity",
++    "expected_block_params_digests",
++    "multiresolution_block_spec",
+     "source_identity_digest",
+ ]
+ 
+@@ -72,6 +75,11 @@ METHOD_CHUNK = "chunk"
+ METHOD_STRIDE = "stride"
+ METHOD_MULTIRESOLUTION = "multiresolution"
+ 
++# Version 2 omitted the key-point policy from each level's identity. Those
++# manifests remain readable, but their blocks cannot be adopted as current.
++MULTIRESOLUTION_ALGORITHM_VERSION = "3"
++_LEGACY_MULTIRESOLUTION_ALGORITHM_VERSION = "2"
++
+ #: Fully-qualified names of the real bounded generating functions.
+ GENERATOR_CHUNK = "cccp.analysis.bounded.chunking.chunk_curve_product"
+ GENERATOR_TRAJECTORY_CHUNK = "cccp.analysis.bounded.chunking.chunk_trajectory_product"
+@@ -320,3 +328,102 @@ def bounded_identity(
+         algorithm_version=spec.algorithm_version,
+         params_digest=effective.params_digest(),
+     )
++
++
++def multiresolution_block_spec(spec: BoundedSpec, *, level_index: int) -> BoundedSpec:
++    """Derive one level's identity parameters for both generation and reading.
++
++    Current levels inherit every manifest parameter, including key-point
++    selectors and retention policy, so any option that changes point selection
++    also changes the block identity. Version 2 reproduces the historical digest
++    only for reading; it must not be reused as a current cache identity.
++    """
++    if spec.method != METHOD_MULTIRESOLUTION:
++        raise BoundedSchemaError("multiresolution block requires a multiresolution spec")
++    params = dict(spec.params)
++    if not isinstance(params.get("series_id"), str) or not params["series_id"]:
++        raise BoundedSchemaError("multiresolution spec requires a series_id")
++    resolutions = params.get("resolutions")
++    if not isinstance(resolutions, (list, tuple)) or any(
++        isinstance(value, bool) or not isinstance(value, int) or value < 1 for value in resolutions
++    ):
++        raise BoundedSchemaError("multiresolution resolutions must be positive integers")
++    if isinstance(level_index, bool) or not isinstance(level_index, int):
++        raise BoundedSchemaError("multiresolution level_index must be an integer")
++    if not 0 <= level_index < len(resolutions):
++        raise BoundedSchemaError("multiresolution level_index is outside resolutions")
++    if spec.algorithm_version == _LEGACY_MULTIRESOLUTION_ALGORITHM_VERSION:
++        params = {
++            "series_id": params["series_id"],
++            "level_index": level_index,
++            "resolutions": list(resolutions),
++        }
++    elif spec.algorithm_version == MULTIRESOLUTION_ALGORITHM_VERSION:
++        if "key_points" not in params or "retain_key_points" not in params:
++            raise BoundedSchemaError("multiresolution spec requires its key-point policy")
++        params["level_index"] = level_index
++    else:
++        raise BoundedSchemaError("unsupported multiresolution algorithm version")
++    return replace(
++        spec,
++        resolution=resolutions[level_index],
++        params=tuple(sorted(params.items())),
++    )
++
++
++def expected_block_params_digests(spec: BoundedSpec, block: object | None = None) -> list[str]:
++    """Recompute the admissible ``params_digest`` values for one block.
++
++    Shared by the generators' read gate (R10/D-recheck): a block spliced from a
++    different source (same raw input, different algorithm/version) carries a
++    ``params_digest`` derived from the OLD source identity, so verifying the
++    block shell alone cannot catch it — the digest itself must be re-derived
++    from the manifest's verified source identity and the block's own facts.
++
++    The candidates mirror the real generator block shapes exactly:
++
++    * ``stride``: the single block reuses the manifest spec digest verbatim;
++    * ``chunk``: manifest params (minus ``product_kind`` for curve chunks /
++      minus ``series_id`` for trajectory chunks) plus ``block_index``;
++    * ``multiresolution``: the shared level-spec derivation, including all
++      selection-policy parameters under the current algorithm version.
++
++    An empty list means "no known derivation can produce this block" — the
++    caller fails closed.
++    """
++    if not isinstance(spec, BoundedSpec):
++        raise BoundedSchemaError("spec must be a BoundedSpec")
++    if spec.identity_rule_version != BOUNDED_IDENTITY_RULE_VERSION:
++        return []
++    base = {str(name): value for name, value in spec.params}
++    method = spec.method
++    digests: list[str] = []
++    if method == METHOD_STRIDE:
++        digests.append(spec.params_digest())
++        return digests
++    block_index = int(getattr(block, "block_index", -1))
++    block_start = int(getattr(block, "start", -1))
++    block_end = int(getattr(block, "end", -1))
++    block_resolution = int(getattr(block, "resolution", -1))
++    if block_index < 0 or block_start < 0 or block_end < block_start or block_resolution < 1:
++        return []
++    if method == METHOD_CHUNK:
++        for drop in ("product_kind", "series_id"):
++            params = {name: value for name, value in base.items() if name != drop}
++            params["block_index"] = block_index
++            digests.append(
++                replace(
++                    spec,
++                    resolution=block_resolution,
++                    start=block_start,
++                    end=block_end,
++                    params=tuple(sorted(params.items())),
++                ).params_digest()
++            )
++        return digests
++    if method == METHOD_MULTIRESOLUTION:
++        if block_start != spec.start or block_end != spec.end:
++            return []
++        level_spec = multiresolution_block_spec(spec, level_index=block_index)
++        return [level_spec.params_digest()] if level_spec.resolution == block_resolution else []
++    return []
+diff --git a/src/cccp/analysis/bounded/manifest.py b/src/cccp/analysis/bounded/manifest.py
+index dcf4dcd..9c6516b 100644
+--- a/src/cccp/analysis/bounded/manifest.py
++++ b/src/cccp/analysis/bounded/manifest.py
+@@ -32,7 +32,10 @@ from cccp.analysis.bounded.identity import (
+     BOUNDED_SCHEMA_VERSION,
+     LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
+     LEGACY_BOUNDED_SCHEMA_VERSION,
++    METHOD_MULTIRESOLUTION,
++    MULTIRESOLUTION_ALGORITHM_VERSION,
+     BoundedSpec,
++    expected_block_params_digests,
+     source_identity_digest,
+ )
+ from cccp.calculation.contracts import (
+@@ -399,6 +402,32 @@ class BoundedProduct:
+             if block_identity.input_digest != self.base_identity.input_digest:
+                 message = f"block {block.block_index} input_digest must be the source input digest"
+                 raise BoundedSchemaError(message)
++            if self.schema_version == BOUNDED_SCHEMA_VERSION:
++                # R10: the block shell matching is not enough — the block's
++                # own derived identity must be reproducible from the
++                # manifest's verified source identity + the block facts, or a
++                # block spliced from a different source (same raw input,
++                # different algorithm/version) passes as adoptable.
++                if block_identity.algorithm != self.spec.method:
++                    message = (
++                        f"block {block.block_index} algorithm {block_identity.algorithm!r} "
++                        f"!= manifest method {self.spec.method!r}"
++                    )
++                    raise BoundedSchemaError(message)
++                if block_identity.algorithm_version != self.spec.algorithm_version:
++                    message = (
++                        f"block {block.block_index} algorithm_version "
++                        f"{block_identity.algorithm_version!r} != manifest "
++                        f"{self.spec.algorithm_version!r}"
++                    )
++                    raise BoundedSchemaError(message)
++                candidates = expected_block_params_digests(self.spec, block)
++                if block_identity.params_digest not in candidates:
++                    message = (
++                        f"block {block.block_index} params_digest is not derivable from the "
++                        "manifest source identity and block parameters (spliced or foreign block)"
++                    )
++                    raise BoundedSchemaError(message)
+ 
+     def is_cache_adoptable(self) -> bool:
+         """Whether this manifest may be reused as a *current* derived identity.
+@@ -406,16 +435,28 @@ class BoundedProduct:
+         Historical (schema version 1) manifests lack the full source-identity
+         basis, so they read/round-trip but must never be adopted as a new
+         cache/recovery result; rebuild rebuildable products under version 2
+-        instead of deleting the scientific original.
++        instead of deleting the scientific original. Multi-resolution algorithm
++        version 2 also stays read-only because its level identities omitted
++        the point-selection policy; rebuild those projections under version 3.
+         """
+         if self.schema_version != BOUNDED_SCHEMA_VERSION:
+             return False
+         if self.spec.identity_rule_version != BOUNDED_IDENTITY_RULE_VERSION:
+             return False
++        if (
++            self.spec.method == METHOD_MULTIRESOLUTION
++            and self.spec.algorithm_version != MULTIRESOLUTION_ALGORITHM_VERSION
++        ):
++            return False
+         expected = source_identity_digest(self.base_identity)
+         if self.spec.source_identity_digest != expected:
+             return False
+-        return all(block.source_identity_digest == expected for block in self.blocks)
++        return all(
++            block.source_identity_digest == expected
++            and block.product.identity.params_digest
++            in expected_block_params_digests(self.spec, block)
++            for block in self.blocks
++        )
+ 
+     def max_block_size(self) -> int:
+         """Maximum number of items (points/frames) carried by any block."""
+diff --git a/src/cccp/analysis/bounded/multiresolution.py b/src/cccp/analysis/bounded/multiresolution.py
+index 7d9e7b9..c5a945a 100644
+--- a/src/cccp/analysis/bounded/multiresolution.py
++++ b/src/cccp/analysis/bounded/multiresolution.py
+@@ -20,8 +20,10 @@ from cccp.analysis.bounded.errors import BoundedSchemaError
+ from cccp.analysis.bounded.identity import (
+     GENERATOR_MULTIRESOLUTION,
+     METHOD_MULTIRESOLUTION,
++    MULTIRESOLUTION_ALGORITHM_VERSION,
+     BoundedSpec,
+     bounded_identity,
++    multiresolution_block_spec,
+     source_identity_digest,
+ )
+ from cccp.analysis.bounded.manifest import (
+@@ -50,7 +52,7 @@ __all__ = [
+     "build_multiresolution_product",
+ ]
+ 
+-_ALGORITHM_VERSION = "2"
++_ALGORITHM_VERSION = MULTIRESOLUTION_ALGORITHM_VERSION
+ _OMISSION_REASON = "display_subsampling_excluded_key_point"
+ 
+ 
+@@ -147,19 +149,7 @@ def build_multiresolution_product(  # noqa: PLR0913 - explicit scientific option
+             source=series.source,
+             parameters=series.parameters,
+         )
+-        block_spec = BoundedSpec(
+-            method=METHOD_MULTIRESOLUTION,
+-            resolution=resolution,
+-            start=0,
+-            end=count,
+-            algorithm_version=_ALGORITHM_VERSION,
+-            params=(
+-                ("series_id", series.ref.series_id),
+-                ("level_index", level_index),
+-                ("resolutions", list(levels)),
+-            ),
+-            source_identity_digest=source_digest,
+-        )
++        block_spec = multiresolution_block_spec(spec, level_index=level_index)
+         level_product = build_curve_scatter_product(
+             series=[level_series],
+             reference_frame=payload.reference_frame,
+--- /dev/null
++++ b/scripts/acceptance/compatibility_checks.py
+@@ -0,0 +1,220 @@
++"""Behavior checks and three-state results for the isolated F/S harness."""
++
++from __future__ import annotations
++
++import json
++import shlex
++import time
++from collections.abc import Callable
++from typing import Any
++from urllib.parse import urlsplit
++
++PASS = "PASS"
++FAIL = "FAIL"
++NOT_VERIFIED = "NOT_VERIFIED"
++
++
++def aggregate_result(checks: list[dict[str, Any]]) -> str:
++    """A missing required check cannot become a compatibility PASS."""
++    states = [check.get("result", PASS if check.get("ok") else FAIL) for check in checks]
++    if any(state == PASS and check.get("ok") is False for check, state in zip(checks, states)):
++        return FAIL
++    if FAIL in states or any(state not in (PASS, FAIL, NOT_VERIFIED) for state in states):
++        return FAIL
++    return NOT_VERIFIED if not states or NOT_VERIFIED in states else PASS
++
++
++def queue_refresh_verified(responses: list[dict[str, Any]], failed_urls: list[str]) -> bool:
++    """Cached rows cannot hide a failed or missing queue refresh request."""
++    queue_path = "/api/v2/task-view"
++    queue = [item for item in responses if urlsplit(item["url"]).path == queue_path]
++    return (
++        bool(queue)
++        and all(200 <= item["status"] < 300 for item in queue)
++        and not any(urlsplit(url).path == queue_path for url in failed_urls)
++    )
++
++
++def browser_check(base: str, *, expected_job_id: str = "") -> dict[str, Any]:
++    """Execute the actual bundle and its queue refresh against this cell's S."""
++    try:
++        from playwright.sync_api import Error, sync_playwright
++    except ImportError as exc:
++        return {"result": NOT_VERIFIED, "ok": False, "reason": f"Playwright unavailable: {exc}"}
++    with sync_playwright() as playwright:
++        try:
++            browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
++        except (Error, OSError) as exc:
++            return {"result": NOT_VERIFIED, "ok": False, "reason": f"Chromium unavailable: {exc}"}
++        errors: list[str] = []
++        requests: list[dict[str, Any]] = []
++        failed_urls: list[str] = []
++        try:
++            context = browser.new_context(viewport={"width": 1280, "height": 800})
++            page = context.new_page()
++            page.on("pageerror", lambda error: errors.append(str(error)))
++            page.on("requestfailed", lambda request: failed_urls.append(request.url))
++            page.on(
++                "response",
++                lambda response: (
++                    requests.append(
++                        {
++                            "url": response.url,
++                            "status": response.status,
++                        }
++                    )
++                    if "/api/" in response.url
++                    else None
++                ),
++            )
++            response = page.goto(base + "/", wait_until="load", timeout=45000)
++            if errors:
++                return {
++                    "result": FAIL,
++                    "ok": False,
++                    "page_errors": errors,
++                    "api_responses": requests,
++                    "chromium": browser.version,
++                }
++            page.wait_for_function(
++                "() => typeof refreshJobs === 'function' && "
++                "typeof workflowCatalogCache !== 'undefined' && workflowCatalogCache.length > 0",
++                timeout=20000,
++            )
++            refresh_start = len(requests)
++            failed_start = len(failed_urls)
++            facts = page.evaluate(
++                """async (jobId) => {
++                await refreshJobs();
++                return {
++                    workflows: workflowCatalogCache.length,
++                    jobsArray: Array.isArray(jobsCache),
++                    jobVisible: !jobId || jobsCache.some(j => String(j.id || j.job_id) === jobId)
++                };
++            }""",
++                expected_job_id,
++            )
++            ok = bool(
++                response
++                and response.status == 200
++                and not errors
++                and facts["jobsArray"]
++                and facts["jobVisible"]
++                and queue_refresh_verified(requests[refresh_start:], failed_urls[failed_start:])
++            )
++            return {
++                "result": PASS if ok else FAIL,
++                "ok": ok,
++                "facts": facts,
++                "page_errors": errors,
++                "api_responses": requests,
++                "failed_requests": failed_urls,
++                "chromium": browser.version,
++            }
++        except Error as exc:
++            return {
++                "result": FAIL,
++                "ok": False,
++                "reason": str(exc),
++                "page_errors": errors,
++                "api_responses": requests,
++                "chromium": browser.version,
++            }
++        finally:
++            browser.close()
++
++
++def validate_legacy_scenarios(raw: Any, workflows: tuple[str, ...]) -> dict[str, dict[str, Any]]:
++    """Require one ordinary API request fixture for every contracted workflow."""
++    if not isinstance(raw, dict) or set(raw) != set(workflows):
++        raise ValueError(f"legacy scenarios must contain exactly {workflows}")
++    for workflow, scenario in raw.items():
++        if not isinstance(scenario, dict) or not isinstance(scenario.get("body"), dict):
++            raise ValueError(f"{workflow}: an ordinary submission body is required")
++        if scenario["body"].get("workflow") != workflow:
++            raise ValueError(f"{workflow}: body.workflow must match; fake is not a substitute")
++        if not isinstance(scenario["body"].get("input"), dict) or not scenario["body"]["input"]:
++            raise ValueError(f"{workflow}: non-empty input is required")
++        if scenario.get("expected_status", "completed") not in ("completed", "waiting_review"):
++            raise ValueError(f"{workflow}: expected_status must be completed or waiting_review")
++    return raw
++
++
++def legacy_submission_checks(
++    base: str,
++    workflows: tuple[str, ...],
++    scenarios: dict[str, dict[str, Any]] | None,
++    *,
++    get: Callable[[str, str], tuple[int, Any]],
++    post: Callable[..., tuple[int, Any]],
++    timeout: float = 120,
++) -> list[dict[str, Any]]:
++    """Submit each real workflow; missing fixtures remain explicitly unverified.
++
++    The service under test owns validation, materialization, dispatch and
++    execution. Fixtures may target a controlled scientific backend, but may
++    never replace the workflow by the demo ``fake`` workflow.
++    """
++    if scenarios is None:
++        return [
++            {
++                "workflow": workflow,
++                "result": NOT_VERIFIED,
++                "ok": False,
++                "reason": (
++                    "ordinary submission input/backend fixture missing; "
++                    "CLI argument smoke is insufficient"
++                ),
++            }
++            for workflow in workflows
++        ]
++    validate_legacy_scenarios(scenarios, workflows)
++    rows: list[dict[str, Any]] = []
++    for workflow in workflows:
++        scenario = scenarios[workflow]
++        body = scenario["body"]
++        code, created = post(base, "/api/jobs", body)
++        row: dict[str, Any] = {
++            "workflow": workflow,
++            "request": body,
++            "create_status": code,
++            "result": FAIL,
++            "ok": False,
++        }
++        rows.append(row)
++        if code != 201 or not isinstance(created, dict) or not created.get("job_id"):
++            row["response"] = created
++            continue
++        job_id = str(created["job_id"])
++        row["job_id"] = job_id
++        deadline = time.monotonic() + timeout
++        status = ""
++        while time.monotonic() < deadline:
++            status_code, record = get(base, f"/api/jobs/{job_id}")
++            if status_code != 200 or not isinstance(record, dict):
++                break
++            status = str(record.get("status") or "").lower()
++            if status in ("completed", "failed", "cancelled", "waiting_review"):
++                break
++            time.sleep(0.25)
++        row["terminal_status"] = status
++        events_code, events = get(base, f"/api/jobs/{job_id}/files/WORK/00_RUNTIME/events.jsonl")
++        commands: list[list[str]] = []
++        if events_code == 200 and isinstance(events, str):
++            for line in events.splitlines():
++                try:
++                    event = json.loads(line)
++                except ValueError:
++                    continue
++                if event.get("type") == "process.starting":
++                    command = str(event.get("cmd") or "")
++                    try:
++                        commands.append(shlex.split(command))
++                    except ValueError:
++                        pass
++        legacy = len(commands) == 1 and commands[0][1:5] == ["-m", "acp.cli", "run", workflow]
++        row["commands"] = commands
++        row["legacy_entry_selected"] = legacy
++        row["ok"] = status == scenario.get("expected_status", "completed") and legacy
++        row["result"] = PASS if row["ok"] else FAIL
++    return rows
+--- /dev/null
++++ b/scripts/acceptance/ordinary_legacy_cli.py
+@@ -0,0 +1,546 @@
++#!/usr/bin/env python3
++"""Exercise seven ordinary CLI dispatches at a controlled scientific boundary.
++
++This driver is loaded from the harness revision, while every product import
++comes from ``--worktree`` in a fresh interpreter. It calls the real
++``acp.cli.main(['run', workflow, ...])`` twice, with complete legal inputs and
++controlled completed/failed scientific results. It does not verify real QC,
++the scheduler subprocess lifecycle, or scheduler publication.
++"""
++
++from __future__ import annotations
++
++import argparse
++import dataclasses
++import hashlib
++import importlib
++import io
++import json
++import os
++import shutil
++import subprocess
++import sys
++from collections.abc import Mapping, Sequence
++from contextlib import redirect_stderr, redirect_stdout
++from pathlib import Path
++from types import SimpleNamespace
++from typing import Any
++from unittest.mock import patch
++
++LEGACY_WORKFLOWS = (
++    "Confsearch",
++    "PESsearch",
++    "BatchOptimize",
++    "XtbPathSearch",
++    "XtbConstrainedOpt",
++    "tsmode",
++    "nmr",
++)
++SCOPE = (
++    "ordinary CLI parser/handler/request dispatch + controlled science boundary; "
++    "no real QC or scheduler background publication"
++)
++WATER_XYZ = "3\nwater minimum\nO 0 0 0\nH 0.7586 0 0.5043\nH -0.7586 0 0.5043\n"
++SPECTRUM = "H: 4.8(H2), 4.9(H3)\n"
++
++
++class PrerequisiteMissingError(RuntimeError):
++    """The target revision cannot supply a legal fixture/boundary for this check."""
++
++
++def _safe(value: Any) -> Any:
++    if value is None or isinstance(value, (str, int, float, bool)):
++        return value
++    if isinstance(value, Path):
++        return str(value)
++    if dataclasses.is_dataclass(value):
++        return _safe(
++            {field.name: getattr(value, field.name) for field in dataclasses.fields(value)}
++        )
++    if isinstance(value, Mapping):
++        result = {}
++        for key, item in value.items():
++            if key == "progress_reporter":
++                continue
++            if key == "config" and isinstance(item, Mapping):
++                # Preserve the effective requested resources without copying
++                # unrelated machine/user executable configuration into evidence.
++                result[key] = {"resources": _safe(item.get("resources", {}))}
++            else:
++                result[str(key)] = _safe(item)
++        return result
++    if isinstance(value, (list, tuple)):
++        return [_safe(item) for item in value]
++    return {"type": type(value).__name__}
++
++
++def _write(path: Path, body: str) -> Path:
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(body, encoding="utf-8")
++    return path
++
++
++def _fixtures(worktree: Path, root: Path, workflow: str) -> dict[str, Any]:
++    source = _write(root / "inputs" / "water.xyz", WATER_XYZ)
++    fixtures: dict[str, Any] = {"xyz": source}
++    if workflow == "nmr":
++        fixtures["spectrum"] = _write(root / "inputs" / "spectrum.txt", SPECTRUM)
++    if workflow == "XtbPathSearch":
++        fixtures["payload"] = {
++            "schema_version": "pes2ts_xtb_path_request_v1",
++            "reaction_id": "acceptance-path",
++            "source": {
++                "source_type": "xyz_text_pair",
++                "start_xyz": WATER_XYZ,
++                "end_xyz": WATER_XYZ.replace("0.7586", "0.8586"),
++                "charge": 0,
++                "multiplicity": 1,
++            },
++            "recipe": {
++                "path_inp_text": "$path\n nrun=1\n npoint=5\n anopt=3\n$end\n",
++                "gfn_level": 2,
++                "uhf": 0,
++                "threads": 2,
++                "timeout_seconds": 60,
++                "seed": 7,
++                "extra_args": [],
++            },
++            "provenance": {"adapter_version": "ordinary-cli-acceptance"},
++        }
++    if workflow == "XtbConstrainedOpt":
++        fixtures["payload"] = {
++            "schema_version": "pes2ts_xtb_constrained_opt_request_v1",
++            "reaction_id": "acceptance-constraint",
++            "source": {
++                "geometry": [[0, 0, 0], [0.7586, 0, 0.5043], [-0.7586, 0, 0.5043]],
++                "elements": ["O", "H", "H"],
++                "charge": 0,
++                "multiplicity": 1,
++            },
++            "recipe": {
++                "gfn_level": 2,
++                "constraints": [
++                    {"kind": "distance", "atoms": [0, 1], "target": 1.0, "unit": "angstrom"}
++                ],
++                "force_constant": 10.0,
++                "opt_level": "normal",
++                "max_cycle": 20,
++                "physical_sp": False,
++                "threads": 2,
++                "timeout_seconds": 60,
++            },
++            "provenance": {"point_id": "acceptance-point"},
++        }
++    if "payload" in fixtures:
++        fixtures["request_file"] = _write(
++            root / "inputs" / "request.json", json.dumps(fixtures["payload"], indent=2)
++        )
++    if workflow == "tsmode":
++        source_dir = worktree / "tests" / "fixtures" / "qc" / "orca61"
++        for suffix in ("out", "hess", "xyz"):
++            original = source_dir / f"ts_opt.{suffix}"
++            if not original.is_file():
++                raise PrerequisiteMissingError(f"frequency-source fixture missing: {original}")
++            shutil.copyfile(original, root / "inputs" / original.name)
++        fixtures["bundle"] = _write(
++            root / "inputs" / "bundle.json",
++            json.dumps(
++                {
++                    "schema_version": "tsmode_bundle_v1",
++                    "files": {
++                        "output": "ts_opt.out",
++                        "hessian": "ts_opt.hess",
++                        "geometry": "ts_opt.xyz",
++                    },
++                    "charge": 0,
++                    "multiplicity": 1,
++                    "origin": {"kind": "files"},
++                }
++            ),
++        )
++    return fixtures
++
++
++def _argv(workflow: str, fixture: dict[str, Any], output: Path) -> list[str]:
++    common = ["--output", str(output), "--nproc", "2", "--mem", "2GB"]
++    specifics = {
++        "Confsearch": [
++            "--input",
++            str(fixture["xyz"]),
++            "--protocol",
++            "xtb-crest",
++            "--profile",
++            "light",
++            "--refinement-policy",
++            "screen",
++            "--charge",
++            "0",
++            "--multiplicity",
++            "1",
++            "--temperature",
++            "310",
++        ],
++        "PESsearch": [
++            "--input",
++            str(fixture["xyz"]),
++            "--coordinate",
++            "0,1,0.8,1.2",
++            "--points",
++            "5",
++            "--charge",
++            "0",
++            "--multiplicity",
++            "1",
++        ],
++        "BatchOptimize": [
++            "--items-file",
++            str(fixture["xyz"]),
++            "--profile",
++            "opt_only",
++            "--method",
++            "r2SCAN-3c",
++            "--opt-max-iter",
++            "9",
++            "--charge",
++            "0",
++            "--multiplicity",
++            "1",
++        ],
++        "XtbPathSearch": ["--path-config", str(fixture.get("request_file", ""))],
++        "XtbConstrainedOpt": ["--opt-config", str(fixture.get("request_file", ""))],
++        "tsmode": [
++            "--source-bundle",
++            str(fixture.get("bundle", "")),
++            "--source-mode-index",
++            "6",
++            "--max-steps",
++            "9",
++            "--recalc-hess",
++            "0",
++            "--trust-radius",
++            "0.2",
++            "--allow-unverified-mapping",
++        ],
++        "nmr": [
++            "--input",
++            str(fixture["xyz"]),
++            "--spectrum",
++            str(fixture.get("spectrum", "")),
++            "--nuclei",
++            "1H",
++            "--nmr-method",
++            "mPW1PW91",
++            "--nmr-basis",
++            "6-311G(d)",
++            "--max-conformers",
++            "2",
++            "--boltzmann-temp",
++            "310",
++            "--charge",
++            "0",
++            "--multiplicity",
++            "1",
++        ],
++    }
++    return ["run", workflow, *specifics[workflow], *common]
++
++
++def _result(status: str) -> SimpleNamespace:
++    return SimpleNamespace(
++        status=status,
++        error="controlled scientific failure" if status == "failed" else None,
++        metadata={},
++        conformers=[],
++        manifest_path=None,
++        quality_gates={},
++        protocol="xtb-crest",
++        refinement_policy="screen",
++    )
++
++
++def _boundary(workflow: str, fixture: dict[str, Any], status: str, received: list[Any]) -> Any:
++    """Patch only the science workflow call, preserving parser and handler code."""
++    if workflow == "Confsearch":
++        module = importlib.import_module("acp.confsearch")
++
++        def run(engine: Any, request: Any, **kwargs: Any) -> Any:
++            received.append({"workflow": workflow, "request": _safe(request)})
++            assert Path(request.input_source).read_text() == WATER_XYZ
++            assert (request.protocol, request.profile, request.refinement_policy) == (
++                "xtb-crest",
++                "light",
++                "screen",
++            )
++            assert request.nproc == 2 and request.charge == 0 and request.multiplicity == 1
++            assert request.temperature == 310
++            return _result(status)
++
++        return patch.object(module.ConfsearchEngine, "run", run)
++    if workflow == "tsmode":
++        module = importlib.import_module("acp.workflows.tsmode")
++
++        def run(engine: Any, request: Any, bundle: Any, task_root: Any, **kwargs: Any) -> Any:
++            received.append(
++                {
++                    "workflow": workflow,
++                    "request": _safe(request),
++                    "bundle": {
++                        "n_atoms": bundle.n_atoms,
++                        "elements": bundle.elements,
++                        "hessian_sha256": bundle.hessian_sha256,
++                    },
++                    "task_root": str(task_root),
++                }
++            )
++            assert request.source_mode_index == 6
++            assert request.optimization.max_iterations == 9
++            assert request.optimization.recalc_hess == 0
++            assert request.resources == {"nproc": 2, "mem": "2GB"}
++            assert bundle.mode_by_index(6).is_imaginary
++            assert (
++                bundle.hessian_sha256
++                == hashlib.sha256(
++                    (fixture["bundle"].parent / "ts_opt.hess").read_bytes()
++                ).hexdigest()
++            )
++            return SimpleNamespace(workflow_result=_result(status))
++
++        return patch.object(module.TsmodeEngine, "run", run)
++    module_name, function = {
++        "PESsearch": ("acp.workflows.pes_search", "run_pes_search"),
++        "BatchOptimize": ("acp.workflows.batch_optimize", "run_batch_optimize"),
++        "XtbPathSearch": ("acp.workflows.xtb_path", "run_xtb_path_search"),
++        "XtbConstrainedOpt": ("acp.workflows.xtb_constrained_opt", "run_xtb_constrained_opt"),
++        "nmr": ("acp.workflows.nmr", "run_nmr_analysis"),
++    }[workflow]
++    module = importlib.import_module(module_name)
++
++    def run(*args: Any, **kwargs: Any) -> Any:
++        received.append({"workflow": workflow, "args": _safe(args), "kwargs": _safe(kwargs)})
++        if workflow == "PESsearch":
++            assert Path(kwargs["input_xyz"]).read_text() == WATER_XYZ
++            coordinate = kwargs["coordinate"]
++            assert coordinate.atoms == (0, 1) and coordinate.n_points == 5
++            assert coordinate.start == 0.8 and coordinate.end == 1.2
++        elif workflow == "BatchOptimize":
++            assert Path(args[0]).read_text() == WATER_XYZ
++            assert kwargs["profile"] == "opt_only"
++            assert kwargs["methods"].optimization_method == "r2SCAN-3c", (
++                "ordinary --method was not forwarded into typed BatchMethodOptions"
++            )
++            assert kwargs["methods"].opt_max_iter == 9
++            models = importlib.import_module("acp.calculations.batch.models")
++            assert len(models.load_items_from_xyz_file(args[0])) == 1
++        elif workflow == "XtbPathSearch":
++            assert args[0] == fixture["payload"]
++            assert module._validate_path_request(args[0]).threads == 2
++        elif workflow == "XtbConstrainedOpt":
++            assert args[0] == fixture["payload"]
++            assert module.validate_request(args[0]).physical_sp is False
++        elif workflow == "nmr":
++            assert kwargs["input_sources"] == [str(fixture["xyz"])]
++            assert Path(kwargs["input_sources"][0]).read_text() == WATER_XYZ
++            assert Path(kwargs["spectrum"]).read_text() == SPECTRUM
++            assert kwargs["nuclei"] == ["1H"] and kwargs["max_conformers"] == 2
++            assert kwargs["boltzmann_temp"] == 310
++            assert kwargs["nmr_method"].lower() == "mpw1pw91"
++            assert kwargs["nmr_basis"] == "6-311G(d)"
++        assert kwargs["config"]["resources"]["nproc"] == 2
++        return _result(status)
++
++    return patch.object(module, function, run)
++
++
++def _import_failure(exc: ImportError) -> str:
++    """Only an identified missing third-party dependency is unverified."""
++    name = getattr(exc, "name", None)
++    if name and name.split(".")[0] not in {"acp", "cccp", "acp_services"}:
++        return "NOT_VERIFIED"
++    return "FAIL"
++
++
++def _child(worktree: Path, root: Path, workflow: str) -> dict[str, Any]:
++    sys.path.insert(0, str(worktree / "src"))
++    os.environ["ACP_RUN_ROOT"] = str(root)
++    row: dict[str, Any] = {
++        "workflow": workflow,
++        "scope": SCOPE,
++        "ok": False,
++        "result": "FAIL",
++        "cases": [],
++    }
++    try:
++        cli = importlib.import_module("acp.cli")
++        if not Path(cli.__file__).resolve().is_relative_to(worktree / "src"):
++            raise AssertionError("CLI was imported from outside the target worktree")
++        row["product_cli"] = str(Path(cli.__file__).resolve())
++        row["product_cli_sha256"] = hashlib.sha256(Path(cli.__file__).read_bytes()).hexdigest()
++        fixture = _fixtures(worktree, root, workflow)
++        for status in ("completed", "failed"):
++            received: list[Any] = []
++            stdout, stderr = io.StringIO(), io.StringIO()
++            argv = _argv(workflow, fixture, root / status)
++            call_error = None
++            with redirect_stdout(stdout), redirect_stderr(stderr):
++                try:
++                    with _boundary(workflow, fixture, status, received):
++                        exit_code = cli.main(argv)
++                except SystemExit as exc:
++                    exit_code = int(exc.code or 0)
++                except (
++                    AssertionError,
++                    AttributeError,
++                    KeyError,
++                    OSError,
++                    RuntimeError,
++                    TypeError,
++                    ValueError,
++                ) as exc:
++                    exit_code = None
++                    call_error = f"{type(exc).__name__}: {exc}"
++            expected_exit = 0 if status == "completed" else 1
++            row["cases"].append(
++                {
++                    "command": [sys.executable, "-m", "acp.cli", *argv],
++                    "execution_entry": (
++                        "acp.cli.main(argv), with the documented science-boundary patch"
++                    ),
++                    "controlled_scientific_status": status,
++                    "exit_code": exit_code,
++                    "received": received,
++                    "stdout": stdout.getvalue(),
++                    "stderr": stderr.getvalue(),
++                    "error": call_error,
++                    "ok": len(received) == 1 and exit_code == expected_exit and call_error is None,
++                }
++            )
++        foreign = [
++            name
++            for name, module in sys.modules.items()
++            if name.split(".")[0] in {"acp", "cccp", "acp_services"}
++            and getattr(module, "__file__", None)
++            and not Path(module.__file__).resolve().is_relative_to(worktree / "src")
++        ]
++        assert not foreign, f"product modules outside target worktree: {foreign}"
++        row["ok"] = len(row["cases"]) == 2 and all(case["ok"] for case in row["cases"])
++        row["result"] = "PASS" if row["ok"] else "FAIL"
++        row["real_qc"] = "NOT_VERIFIED"
++        row["scheduler_background_publication"] = "NOT_VERIFIED"
++    except ImportError as exc:
++        row.update(result=_import_failure(exc), reason=f"target import failed: {exc}")
++    except PrerequisiteMissingError as exc:
++        row.update(result="NOT_VERIFIED", reason=f"target fixture unavailable: {exc}")
++    except (
++        AssertionError,
++        AttributeError,
++        KeyError,
++        OSError,
++        RuntimeError,
++        TypeError,
++        ValueError,
++    ) as exc:
++        row.update(result="FAIL", reason=f"{type(exc).__name__}: {exc}")
++    return row
++
++
++def run_legacy_cli_checks(
++    worktree: Path,
++    run_root: Path,
++    workflows: Sequence[str] = LEGACY_WORKFLOWS,
++    *,
++    timeout: float = 90,
++) -> list[dict[str, Any]]:
++    """Run this harness helper against the supplied S0/S1 product tree."""
++    worktree, run_root = worktree.resolve(), run_root.resolve()
++    rows = []
++    for workflow in workflows:
++        if workflow not in LEGACY_WORKFLOWS:
++            raise ValueError(f"not a contracted legacy workflow: {workflow}")
++        command = [
++            sys.executable,
++            str(Path(__file__).resolve()),
++            "--child",
++            "--worktree",
++            str(worktree),
++            "--workflow",
++            workflow,
++            "--run-root",
++            str(run_root / workflow),
++        ]
++        env = dict(os.environ)
++        env.update(PYTHONPATH=str(worktree / "src"), PYTHONDONTWRITEBYTECODE="1")
++        try:
++            result = subprocess.run(
++                command,
++                cwd=worktree,
++                env=env,
++                capture_output=True,
++                text=True,
++                timeout=timeout,
++                check=False,
++            )
++            row = json.loads(result.stdout)
++            row["driver_command"] = command
++            row["driver_exit_code"] = result.returncode
++            if result.returncode != 0:
++                row.update(result="FAIL", ok=False, reason="ordinary CLI helper failed")
++        except OSError as exc:
++            row = {
++                "workflow": workflow,
++                "scope": SCOPE,
++                "result": "NOT_VERIFIED",
++                "ok": False,
++                "reason": f"driver could not complete: {exc}",
++                "driver_command": command,
++            }
++        except subprocess.TimeoutExpired as exc:
++            row = {
++                "workflow": workflow,
++                "scope": SCOPE,
++                "result": "FAIL",
++                "ok": False,
++                "reason": f"executed CLI dispatch timed out: {exc}",
++                "driver_command": command,
++            }
++        except json.JSONDecodeError as exc:
++            row = {
++                "workflow": workflow,
++                "scope": SCOPE,
++                "result": "FAIL",
++                "ok": False,
++                "reason": f"executed CLI driver returned invalid evidence: {exc}",
++                "driver_command": command,
++                "driver_exit_code": result.returncode,
++                "driver_stdout": result.stdout,
++                "driver_stderr": result.stderr,
++            }
++        rows.append(row)
++    return rows
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--worktree", type=Path, required=True)
++    parser.add_argument("--run-root", type=Path, required=True)
++    parser.add_argument("--workflow", choices=LEGACY_WORKFLOWS)
++    parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
++    args = parser.parse_args(argv)
++    if args.child:
++        if args.workflow is None:
++            parser.error("--child requires --workflow")
++        print(json.dumps(_child(args.worktree.resolve(), args.run_root.resolve(), args.workflow)))
++        return 0
++    rows = run_legacy_cli_checks(
++        args.worktree, args.run_root, [args.workflow] if args.workflow else LEGACY_WORKFLOWS
++    )
++    state = (
++        "FAIL"
++        if any(row["result"] == "FAIL" for row in rows)
++        else ("NOT_VERIFIED" if any(row["result"] == "NOT_VERIFIED" for row in rows) else "PASS")
++    )
++    print(json.dumps({"scope": SCOPE, "result": state, "checks": rows}, indent=2))
++    return {"PASS": 0, "FAIL": 1, "NOT_VERIFIED": 2}[state]
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

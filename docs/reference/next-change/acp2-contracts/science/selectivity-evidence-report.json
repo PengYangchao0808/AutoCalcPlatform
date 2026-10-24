@@ -1,0 +1,375 @@
+{
+  "audit": {
+    "absent_producer": {
+      "b23b_artifact_present": false,
+      "budget_table_present": false,
+      "note": "Missing producer inputs: reference, b23b_artifact, budget_table, path_records, run_key. This report records the absent-producer state and is never upgraded by this file's presence.",
+      "path_records_present": false,
+      "reference_present": false,
+      "run_key_present": false
+    },
+    "b23b_artifact_id": null,
+    "b23b_readiness": null,
+    "both_paths_qualified": false,
+    "budget": {},
+    "constructed": true,
+    "coverage": {
+      "b23b_edge_artifact_id": "B23b:selectivity-authorized-artifacts",
+      "both_paths_qualified": false,
+      "budget_domains": [
+        "nmr",
+        "thermo",
+        "selectivity"
+      ],
+      "budget_requirement": {
+        "aggregate_budget_seconds": 3600,
+        "budget_timing_basis": "unmeasured",
+        "constructed": true,
+        "export_budget_seconds": 600,
+        "max_candidate_paths": 2,
+        "max_conformers_per_endpoint": 1,
+        "max_qc_invocations": 14,
+        "max_regioisomers": 1,
+        "max_task_refs": 1,
+        "max_ts_candidates_per_path": 1,
+        "required_subrow_domains": [
+          "nmr",
+          "thermo",
+          "selectivity"
+        ],
+        "science_deadline_seconds": 3000,
+        "source": "A-25a fixture-manifest budget envelope (constructed proposal; the B/C cross-domain budget table is authoritative)"
+      },
+      "budget_table_present": false,
+      "free_energy_required": false,
+      "path_records_present": false,
+      "paths": {
+        "path.endo": {
+          "claim_statuses": {},
+          "gaps": [
+            "path.endo path record was not supplied"
+          ],
+          "qualified": false,
+          "status": "not_evaluated"
+        },
+        "path.exo": {
+          "claim_statuses": {},
+          "gaps": [
+            "path.exo path record was not supplied"
+          ],
+          "qualified": false,
+          "status": "not_evaluated"
+        }
+      },
+      "required_path_claim_ids": [
+        "c-electronic-activation-barrier-comparable",
+        "c-optimization-converged",
+        "c-ts-connects-intended-endpoints",
+        "c-ts-first-order-saddle-candidate"
+      ],
+      "reused_artifacts": []
+    },
+    "gaps": [
+      "selectivity.public_key.missing: no registered reference owner=C, scenario=experience:cross-domain-live, subcase=selectivity, phase=experience:selectivity was supplied; the public (owner, scenario, phase, run_id) key is incomplete because the run_id is missing (B/C-issued, never invented)",
+      "selectivity.b23b.missing: the B23b artifact id is unavailable because no machine id was published for the declared edge B23b:selectivity-authorized-artifacts and no authorized artifacts were exported",
+      "selectivity.budget.absent: the B/C cross-domain budget table is absent",
+      "path.endo path record was not supplied",
+      "path.exo path record was not supplied"
+    ],
+    "h6_open": true,
+    "limitations": [
+      "lim-budget-unmeasured",
+      "lim-constructed",
+      "lim-h6-open",
+      "lim-no-experimental",
+      "lim-platform-not-verified",
+      "lim-relative-only",
+      "lim-single-conformer",
+      "lim-single-regioisomer"
+    ],
+    "path_statuses": {
+      "path.endo": "not_evaluated",
+      "path.exo": "not_evaluated"
+    },
+    "platform_evidence_gaps": [
+      "selectivity.platform.constructed: constructed demonstration; no platform execution",
+      "selectivity.public_key.missing: no registered reference owner=C, scenario=experience:cross-domain-live, subcase=selectivity, phase=experience:selectivity was supplied; the public (owner, scenario, phase, run_id) key is incomplete because the run_id is missing (B/C-issued, never invented)",
+      "selectivity.b23b.missing: the B23b artifact id is unavailable because no machine id was published for the declared edge B23b:selectivity-authorized-artifacts and no authorized artifacts were exported",
+      "selectivity.budget.absent: the B/C cross-domain budget table is absent",
+      "path.endo path record was not supplied",
+      "path.exo path record was not supplied"
+    ],
+    "platform_evidence_state": "NOT_VERIFIED",
+    "preference": null,
+    "preference_delta_kcal_per_mol": null,
+    "preference_status": "not_evaluated",
+    "public_key": null,
+    "real_run": false
+  },
+  "report": {
+    "claims": [
+      {
+        "claim_id": "selectivity.reference.registered",
+        "limitations": [
+          "lim-platform-not-verified",
+          "lim-h6-open",
+          "lim-constructed"
+        ],
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "run_key_unavailable",
+            "reason": "the registered public run key is absent"
+          },
+          {
+            "blocking": true,
+            "check_id": "external_artifact_unavailable",
+            "reason": "the B23b artifact set is absent"
+          },
+          {
+            "blocking": true,
+            "check_id": "external_artifact_unavailable",
+            "reason": "selectivity.public_key.missing: no registered reference owner=C, scenario=experience:cross-domain-live, subcase=selectivity, phase=experience:selectivity was supplied; the public (owner, scenario, phase, run_id) key is incomplete because the run_id is missing (B/C-issued, never invented); selectivity.b23b.missing: the B23b artifact id is unavailable because no machine id was published for the declared edge B23b:selectivity-authorized-artifacts and no authorized artifacts were exported"
+          }
+        ],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "registered experience:selectivity phase",
+          "not_in_scope": [
+            "other subcases",
+            "other scenarios"
+          ],
+          "subject": "selectivity_reference"
+        },
+        "source_refs": [],
+        "statement": "The registered public reference and B23b integration_ready artifacts are required before a real selectivity result can be audited.",
+        "status": "not_evaluated"
+      },
+      {
+        "claim_id": "selectivity.path.endo.qualified",
+        "limitations": [
+          "lim-single-conformer",
+          "lim-single-regioisomer",
+          "lim-constructed"
+        ],
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "external_artifact_unavailable",
+            "reason": "path.endo path evidence was not supplied or is invalid"
+          }
+        ],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "frozen A-25a comparison conditions",
+          "not_in_scope": [
+            "other regioisomers",
+            "other conformers",
+            "experimental selectivity"
+          ],
+          "subject": "path.endo_qualified"
+        },
+        "source_refs": [],
+        "statement": "The path.endo path carries qualified convergence, saddle-candidate, bidirectional-connectivity and comparable-energy evidence under the frozen conditions.",
+        "status": "not_evaluated"
+      },
+      {
+        "claim_id": "selectivity.path.exo.qualified",
+        "limitations": [
+          "lim-single-conformer",
+          "lim-single-regioisomer",
+          "lim-constructed"
+        ],
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "external_artifact_unavailable",
+            "reason": "path.exo path evidence was not supplied or is invalid"
+          }
+        ],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "frozen A-25a comparison conditions",
+          "not_in_scope": [
+            "other regioisomers",
+            "other conformers",
+            "experimental selectivity"
+          ],
+          "subject": "path.exo_qualified"
+        },
+        "source_refs": [],
+        "statement": "The path.exo path carries qualified convergence, saddle-candidate, bidirectional-connectivity and comparable-energy evidence under the frozen conditions.",
+        "status": "not_evaluated"
+      },
+      {
+        "claim_id": "selectivity.preference",
+        "limitations": [
+          "lim-platform-not-verified",
+          "lim-h6-open",
+          "lim-relative-only",
+          "lim-no-experimental",
+          "lim-constructed"
+        ],
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "external_artifact_unavailable",
+            "reason": "selectivity.preference.platform_unverified: the registered reference, B23b artifact set or cross-domain budget is absent: selectivity.public_key.missing: no registered reference owner=C, scenario=experience:cross-domain-live, subcase=selectivity, phase=experience:selectivity was supplied; the public (owner, scenario, phase, run_id) key is incomplete because the run_id is missing (B/C-issued, never invented); selectivity.b23b.missing: the B23b artifact id is unavailable because no machine id was published for the declared edge B23b:selectivity-authorized-artifacts and no authorized artifacts were exported; selectivity.budget.absent: the B/C cross-domain budget table is absent"
+          }
+        ],
+        "scope": {
+          "applicability": "condition_specific",
+          "conditions": "same method, electronic state, temperature, pressure, standard state, reference state and energy unit",
+          "not_in_scope": [
+            "experimental selectivity",
+            "other regioisomers"
+          ],
+          "subject": "relative_activation_energy"
+        },
+        "source_refs": [],
+        "statement": "A relative endo/exo preference requires the registered reference, both B23b-qualified paths and a valid cross-domain budget under the frozen conditions; no preference is stated.",
+        "status": "not_evaluated"
+      },
+      {
+        "claim_id": "selectivity.budget",
+        "limitations": [
+          "lim-budget-unmeasured",
+          "lim-platform-not-verified",
+          "lim-constructed"
+        ],
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "external_artifact_unavailable",
+            "reason": "the B/C cross-domain budget table is absent"
+          }
+        ],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "B/C cross-domain cumulative budget",
+          "not_in_scope": [
+            "new budget allocation"
+          ],
+          "subject": "cross_domain_budget"
+        },
+        "source_refs": [],
+        "statement": "The cross-domain budget must record the nmr, thermo and selectivity subrows, per-subrow TaskRef/step/QC counts, the cumulative total and reused artifacts without a run_id reset.",
+        "status": "not_evaluated"
+      },
+      {
+        "claim_id": "selectivity.experimental_prediction",
+        "limitations": [
+          "lim-no-experimental",
+          "lim-constructed"
+        ],
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "not_executed",
+            "reason": "no experimental measurement or rate data exists in this report"
+          }
+        ],
+        "scope": {
+          "applicability": "condition_specific",
+          "conditions": "no experimental data",
+          "not_in_scope": [
+            "experimental rates",
+            "experimental selectivity"
+          ],
+          "subject": "experimental_selectivity"
+        },
+        "source_refs": [],
+        "statement": "No experimental quantitative selectivity claim is made from this bounded computational report.",
+        "status": "not_evaluated"
+      }
+    ],
+    "execution": {
+      "argv": [
+        "constructed-selectivity-audit"
+      ],
+      "exit_code": 0,
+      "finished_at": null,
+      "started_at": null,
+      "stderr_path": null,
+      "stdout_path": null,
+      "terminal_state": "completed"
+    },
+    "limitations": [
+      {
+        "affected_claim_ids": [
+          "selectivity.budget"
+        ],
+        "description": "The A-25a budget timing basis is unmeasured; the B/C cross-domain budget table is authoritative and the cumulative total is never reset by changing run_id.",
+        "limitation_id": "lim-budget-unmeasured"
+      },
+      {
+        "affected_claim_ids": [
+          "selectivity.reference.registered",
+          "selectivity.path.endo.qualified",
+          "selectivity.path.exo.qualified",
+          "selectivity.preference",
+          "selectivity.budget",
+          "selectivity.experimental_prediction"
+        ],
+        "description": "The report is a constructed demonstration; no platform job, QC process or experimental measurement exists.",
+        "limitation_id": "lim-constructed"
+      },
+      {
+        "affected_claim_ids": [
+          "selectivity.reference.registered",
+          "selectivity.preference"
+        ],
+        "description": "H6 remains open until C T-40b signs the presentation after a real A-25b audit with real evidence.",
+        "limitation_id": "lim-h6-open"
+      },
+      {
+        "affected_claim_ids": [
+          "selectivity.preference",
+          "selectivity.experimental_prediction"
+        ],
+        "description": "No experimental quantitative claim is made; the preference is a relative computational result under the frozen conditions.",
+        "limitation_id": "lim-no-experimental"
+      },
+      {
+        "affected_claim_ids": [
+          "selectivity.reference.registered",
+          "selectivity.preference",
+          "selectivity.budget"
+        ],
+        "description": "The registered reference, B23b integration_ready artifact set or cross-domain budget table is absent or invalid; the real row is NOT_VERIFIED.",
+        "limitation_id": "lim-platform-not-verified"
+      },
+      {
+        "affected_claim_ids": [
+          "selectivity.preference"
+        ],
+        "description": "The stated preference is relative to the declared exo path under the frozen method, state and conditions; it is not an experimental or global selectivity prediction.",
+        "limitation_id": "lim-relative-only"
+      },
+      {
+        "affected_claim_ids": [
+          "selectivity.path.endo.qualified",
+          "selectivity.path.exo.qualified"
+        ],
+        "description": "One frozen s-cis methyl acrylate conformer and one conformation per endpoint are in scope; no conformer search or MD sampling was used.",
+        "limitation_id": "lim-single-conformer"
+      },
+      {
+        "affected_claim_ids": [
+          "selectivity.path.endo.qualified",
+          "selectivity.path.exo.qualified"
+        ],
+        "description": "Only the declared 2-substituted regioisomer is in scope; other regioisomers are not enumerated.",
+        "limitation_id": "lim-single-regioisomer"
+      }
+    ],
+    "report_id": "selectivity-a25b-absent-producer-report",
+    "schema_version": 1,
+    "subject": {
+      "description": "Bounded selectivity audit over the A-25a frozen endo/exo case; constructed demonstration",
+      "science_identity": null,
+      "subject_id": "selectivity.cp_methyl_acrylate.endo_exo.v1",
+      "subject_kind": "artifact_set"
+    }
+  }
+}

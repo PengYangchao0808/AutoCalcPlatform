@@ -1,0 +1,42 @@
+{
+  "claims": [
+    {
+      "claim_id": "c-ts-connects-reactant",
+      "missing_checks": [
+        {
+          "blocking": true,
+          "check_id": "missing_irc",
+          "reason": "reverse IRC output is absent"
+        }
+      ],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": null,
+        "subject": "irc_connectivity"
+      },
+      "source_refs": [],
+      "statement": "The transition state connects the intended reactant and product.",
+      "status": "inconclusive",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "llm:consensus",
+        "validator_version": "1"
+      }
+    }
+  ],
+  "execution": {
+    "argv": [
+      "orca",
+      "irc.inp"
+    ],
+    "exit_code": 0,
+    "terminal_state": "completed"
+  },
+  "limitations": [],
+  "report_id": "report-model-text-validator",
+  "schema_version": 1,
+  "subject": {
+    "subject_id": "run-fixture-model-text",
+    "subject_kind": "calculation_result"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "acp2.native.singlepoint.v1",
+  "charge": 0,
+  "multiplicity": 1,
+  "atoms": [
+    {"symbol": "O", "xyz": [0.0, 0.0, 0.1173]},
+    {"symbol": "H", "xyz": [0.0, 0.7572, -0.4692]},
+    {"symbol": "H", "xyz": [0.0, -0.7572, -0.4692]}
+  ],
+  "energy_hartree": -76.026632
+}

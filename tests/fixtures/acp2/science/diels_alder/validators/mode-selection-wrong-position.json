@@ -1,0 +1,13 @@
+{
+  "schema": "acp2.science.mode-selection",
+  "schema_version": 1,
+  "constructed": true,
+  "description": "Constructed NEGATIVE fixture: the selection uses array position 0 instead of ORCA's native printed mode index 6. It must be rejected.",
+  "selection": {
+    "mapping_status": "resolved",
+    "native_printed_index": 0,
+    "source_artifact_digest": "0000000000000000000000000000000000000000000000000000000000000016",
+    "source_step": "candidate_frequency",
+    "target_mode_id": "tm_constructed_a16a_wrong_position"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "allowed_question_ids": [
+    "question.diels_alder.path_connectivity.v1",
+    "question.diels_alder.activation_energy.v1"
+  ],
+  "assembly_note": "Fixture assembly only: question.schema.json describes ONE v1 question, so this file carries the two allowed v1 questions as a list plus the explicit scope refusal. Each object is independently validated by Question.from_dict; this wrapper is not a second question contract and adds no scientific vocabulary.",
+  "constructed": true,
+  "fixture_id": "diels_alder-butadiene-ethene-wb97xd4-def2tzvp",
+  "out_of_scope": [
+    {
+      "question": "endo_exo_selectivity",
+      "reason": "The symmetric butadiene + ethene example has no endo/exo distinction. No endo/exo request exists anywhere in this fixture, and no selectivity claim may be derived from it.",
+      "requested": false,
+      "supported_by_fixture": false
+    },
+    {
+      "question": "complete_mechanism",
+      "reason": "Only one candidate path is declared; no complete mechanism is claimed.",
+      "requested": false,
+      "supported_by_fixture": false
+    },
+    {
+      "question": "alternative_path_exclusion",
+      "reason": "Other paths are neither enumerated nor excluded by this fixture.",
+      "requested": false,
+      "supported_by_fixture": false
+    },
+    {
+      "question": "experimental_rate",
+      "reason": "No experimental rate or kinetic measurement is predicted.",
+      "requested": false,
+      "supported_by_fixture": false
+    },
+    {
+      "question": "global_minimum",
+      "reason": "No global minimum or exhaustive conformer search is established.",
+      "requested": false,
+      "supported_by_fixture": false
+    },
+    {
+      "question": "general_accuracy",
+      "reason": "No general method accuracy or benchmark claim is made.",
+      "requested": false,
+      "supported_by_fixture": false
+    }
+  ],
+  "questions": [
+    {
+      "claim_status_vocabulary": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "comparison_conditions": {
+        "compatibility_requirements": [
+          "same_method",
+          "same_electronic_state",
+          "same_temperature",
+          "same_pressure",
+          "same_standard_state",
+          "same_reference_state",
+          "same_energy_unit"
+        ],
+        "electronic_state": {
+          "charge": 0,
+          "multiplicity": 1,
+          "state_id": "state.singlet.s0"
+        },
+        "energy_unit": "kcal_per_mol",
+        "method": "wB97X-D4",
+        "pressure_pa": 100000.0,
+        "reference_state": "specified endpoints: separated butadiene + ethene in the gas phase at infinite separation, and cyclohexene product, all at the frozen conditions",
+        "standard_state": "1_bar_ideal_gas",
+        "temperature_k": 298.15,
+        "unknown_fields": []
+      },
+      "hypothesis_refs": [
+        "hypothesis.diels_alder.candidate_path_connects_specified_endpoints"
+      ],
+      "question_id": "question.diels_alder.path_connectivity.v1",
+      "question_type": "path_connectivity",
+      "required_evidence_types": [
+        "transition_state_geometry",
+        "imaginary_frequency",
+        "irc_forward",
+        "irc_reverse",
+        "path_endpoints"
+      ],
+      "schema_version": 1
+    },
+    {
+      "claim_status_vocabulary": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "comparison_conditions": {
+        "compatibility_requirements": [
+          "same_method",
+          "same_electronic_state",
+          "same_temperature",
+          "same_pressure",
+          "same_standard_state",
+          "same_reference_state",
+          "same_energy_unit"
+        ],
+        "electronic_state": {
+          "charge": 0,
+          "multiplicity": 1,
+          "state_id": "state.singlet.s0"
+        },
+        "energy_unit": "kcal_per_mol",
+        "method": "wB97X-D4",
+        "pressure_pa": 100000.0,
+        "reference_state": "specified endpoints: separated butadiene + ethene in the gas phase at infinite separation, and cyclohexene product, all at the frozen conditions",
+        "standard_state": "1_bar_ideal_gas",
+        "temperature_k": 298.15,
+        "unknown_fields": []
+      },
+      "hypothesis_refs": [
+        "hypothesis.diels_alder.activation_energy_frozen_conditions"
+      ],
+      "question_id": "question.diels_alder.activation_energy.v1",
+      "question_type": "activation_energy",
+      "required_evidence_types": [
+        "transition_state_geometry",
+        "imaginary_frequency",
+        "irc_forward",
+        "irc_reverse",
+        "energy_difference",
+        "thermochemistry"
+      ],
+      "schema_version": 1
+    }
+  ],
+  "schema": "acp2.science.question-set",
+  "schema_version": 1,
+  "scope_statement": "Only two questions are in scope for this fixture: (1) does the declared candidate path connect the specified endpoints (butadiene + ethene to cyclohexene), and (2) what is the activation energy under the frozen method and conditions. This symmetric example CANNOT support endo/exo selectivity; no endo/exo question, field, recipe option or claim is part of this fixture."
+}

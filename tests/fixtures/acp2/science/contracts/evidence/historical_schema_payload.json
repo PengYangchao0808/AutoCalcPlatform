@@ -1,0 +1,39 @@
+{
+  "claims": [
+    {
+      "claim_id": "c-ts-connects-reactant",
+      "legacy_confidence": 0.9,
+      "missing_checks": [
+        {
+          "blocking": true,
+          "check_id": "missing_irc",
+          "reason": "reverse IRC output is absent"
+        }
+      ],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": null,
+        "subject": "irc_connectivity"
+      },
+      "source_refs": [],
+      "statement": "The transition state connects the intended reactant and product.",
+      "status": "inconclusive"
+    }
+  ],
+  "execution": {
+    "argv": [
+      "orca",
+      "irc.inp"
+    ],
+    "exit_code": 0,
+    "terminal_state": "completed"
+  },
+  "legacy_review_note": "Imported from the pre-v1 evidence reader; read-only.",
+  "limitations": [],
+  "report_id": "report-historical-v0",
+  "schema_version": 0,
+  "subject": {
+    "subject_id": "run-fixture-historical",
+    "subject_kind": "calculation_result"
+  }
+}

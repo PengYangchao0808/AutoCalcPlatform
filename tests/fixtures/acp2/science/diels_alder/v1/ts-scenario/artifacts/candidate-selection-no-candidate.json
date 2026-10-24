@@ -1,0 +1,35 @@
+{
+  "attempt": 1,
+  "candidate_id": null,
+  "candidates": [
+    {
+      "candidate_id": "cand-nc-001",
+      "reason": "rejected: the transition-state optimization did not converge",
+      "source": "generated_candidate",
+      "status": "rejected"
+    },
+    {
+      "candidate_id": "cand-nc-002",
+      "reason": "rejected: the frequency result did not reproduce a single imaginary mode",
+      "source": "user_input",
+      "status": "rejected"
+    }
+  ],
+  "constructed": true,
+  "mapped_mode": null,
+  "note": "No qualified candidate was found. The harness records the honest inconclusive claim and never substitutes an example transition state.",
+  "producer": "B20a-exec",
+  "schema": "acp2.science.da-candidate-selection",
+  "schema_version": 1,
+  "search_capability_claim": "not_claimed",
+  "search_range": {
+    "bounds_basis": "frozen A-14a candidate caps; no broader search was authorized",
+    "max_candidate_paths": 1,
+    "max_conformers_per_endpoint": 1,
+    "max_ts_candidates": 1
+  },
+  "selected_candidate_id": null,
+  "selection_reason": "the bounded one-path/one-TS evaluation produced no qualified transition-state candidate",
+  "selection_status": "no_candidate",
+  "starting_structure_source": "generated_candidate"
+}

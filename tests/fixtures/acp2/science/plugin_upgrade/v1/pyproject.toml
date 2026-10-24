@@ -1,0 +1,19 @@
+[build-system]
+requires = []
+build-backend = "build_backend"
+backend-path = ["."]
+
+[project]
+name = "acp2-upgrade-science-validator"
+version = "1.0.0"
+description = "Constructed ACP2 plugin upgrade pair: read-only native single-point validator"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "ACP2 Plan A fixture"}]
+dependencies = []
+
+[tool.acp2-science-plugin]
+entry-point-group = "cccp.science_plugins"
+entry-point-group-version = 1
+manifest = "cccp_science_plugin.json"

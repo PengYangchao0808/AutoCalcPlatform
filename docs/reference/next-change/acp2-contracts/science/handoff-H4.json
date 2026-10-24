@@ -1,0 +1,1208 @@
+{
+  "b08_crash_windows": {
+    "artifact_id": "B08:four-crash-window-evidence",
+    "constructed_reconciliation": {
+      "constructed": true,
+      "does_not_close_h4": true,
+      "helper": "scripts/acceptance/acp2_science.py::reconcile_b08_windows",
+      "result": "PASS",
+      "summary": "Constructed records for all four windows reconcile without violation, and each tampered record raises the matching violation.",
+      "tests": [
+        "tests/test_acp2_science_h4_gate.py::test_constructed_b08_four_windows_reconcile_without_violation",
+        "tests/test_acp2_science_h4_gate.py::test_duplicate_reservation_is_reported",
+        "tests/test_acp2_science_h4_gate.py::test_duplicate_directory_is_reported",
+        "tests/test_acp2_science_h4_gate.py::test_duplicate_bsub_and_qc_are_reported",
+        "tests/test_acp2_science_h4_gate.py::test_permanently_undispatched_accepted_task_is_reported",
+        "tests/test_acp2_science_h4_gate.py::test_identity_changed_reuse_is_reported",
+        "tests/test_acp2_science_h4_gate.py::test_publication_retry_that_relaunches_qc_is_reported"
+      ]
+    },
+    "digest": null,
+    "producer": "B08",
+    "published": false,
+    "readiness": "contract_ready",
+    "real_evidence": {
+      "gap": "B08 has not published the four-window platform evidence: no work directory, reservation, QC process, bsub or dispatch records exist to reconcile. A-20 therefore cannot assert the real no-duplicate outcome.",
+      "result": "NOT_VERIFIED"
+    },
+    "required_invariants": [
+      "no_duplicate_directory",
+      "no_duplicate_reservation",
+      "no_duplicate_qc_process",
+      "no_duplicate_bsub",
+      "no_permanently_undispatched_accepted_task",
+      "only_identity_valid_complete_results_reused",
+      "publication_retry_does_not_relaunch_qc"
+    ],
+    "row_ids": [
+      "H4-B08-reservation-before-persist",
+      "H4-B08-persisted-before-submission-start",
+      "H4-B08-submitted-lost-response",
+      "H4-B08-restart-replay"
+    ],
+    "window_ids": [
+      "reservation-before-persist",
+      "persisted-before-submission-start",
+      "submitted-lost-response",
+      "restart-replay"
+    ]
+  },
+  "claim_status_summary": {
+    "constructed": {
+      "c-electronic-activation-barrier-comparable": "inconclusive",
+      "c-free-energy-activation-barrier-comparable": "not_evaluated",
+      "c-ts-connects-intended-endpoints": "supported",
+      "c-ts-first-order-saddle-candidate": "supported",
+      "label": "constructed A-19b report fixture only; never H4 evidence"
+    },
+    "real": {
+      "c-electronic-activation-barrier-comparable": {
+        "gap": "No real B20a-exec energy artifact.",
+        "status": "not_evaluated"
+      },
+      "c-free-energy-activation-barrier-comparable": {
+        "gap": "No real B20a-exec thermochemistry artifact.",
+        "status": "not_evaluated"
+      },
+      "c-ts-connects-intended-endpoints": {
+        "gap": "No real B20a-exec bidirectional IRC artifact.",
+        "status": "not_evaluated"
+      },
+      "c-ts-first-order-saddle-candidate": {
+        "gap": "No real B20a-exec TS frequency artifact.",
+        "status": "not_evaluated"
+      }
+    },
+    "rule": "A constructed claim status is displayed with its label, never aggregated into the real claim status, and never upgrades a required H4 row."
+  },
+  "compatibility_notes": [
+    "H4 consumes the exact H3 bytes and keeps the H3 same-task/P1 closure unchanged; it is the science signoff B20b aggregates and never waits for B20b, B20c or C25.",
+    "Every required positive row is NOT_VERIFIED because no B20a-exec authorized artifact exists. A negative-honesty PASS, a constructed checker PASS and the known-candidate chain never replace the positive.",
+    "Search is a separate row from the known-candidate execution chain: producer B20a-search, artifact id B20a-search:search-run-evidence, readiness contract_ready, digest null. search_scope is IN_SCOPE, not DEFERRED, and no owner ratification exists.",
+    "The B08 four-window block is NOT_VERIFIED with exact gaps; the constructed reconciliation only proves the no-duplicate checker logic (directory/reservation/QC/bsub, undispatched task, identity-valid reuse, publish-only retry).",
+    "No B20a-exec, B20a-search, B08, registry, revision, run key, attempt, release_id, submission_id or digest is invented; every absent value is null with a gap.",
+    "The receipt protocol stays B01's single schema; this handoff records only the A-internal provisional shape and receipt_protocol_gap=NOT_VERIFIED."
+  ],
+  "contract_set": "acp2.science",
+  "contract_set_frozen": true,
+  "contract_set_version": 1,
+  "contract_version_basis": {
+    "handoff_h3": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
+    "handoff_h3_sha256": "1fed3a5a4ae32390e9f59a06ecc1b7ca4a64a0ba68a6750211065fe54d050ddd",
+    "handoff_h3_version": 1,
+    "rule": "H4 is built on the exact H3 bytes. It adds no contract field, rewrites no H3 row and never upgrades a row because a producer name exists."
+  },
+  "external_evidence": {
+    "b01_receipt_protocol": {
+      "missing_artifact": "acceptance-result.schema.json",
+      "missing_contract": "acp2.acceptance.v1",
+      "reason": "B01 has not published the receipt schema; no receipt is claimed.",
+      "result": "NOT_VERIFIED"
+    },
+    "b07_frozen_deadlines": {
+      "missing_artifact": "science_deadline_seconds, export_budget_seconds, aggregate_budget_seconds, shared started_at, queue-accounting policy",
+      "reason": "B07 has not published the frozen DA deadlines; plan prose is not a spec.",
+      "result": "NOT_VERIFIED"
+    },
+    "b08_four_crash_windows": {
+      "digest": null,
+      "missing_artifact": "B08:four-crash-window-evidence",
+      "reason": "B08 has not published the four-window platform evidence: no work directory, reservation, QC process, bsub or dispatch records exist to reconcile. A-20 therefore cannot assert the real no-duplicate outcome.",
+      "result": "NOT_VERIFIED"
+    },
+    "b13_publication_recovery": {
+      "digest": null,
+      "missing_artifact": "real publication-failure and late-receipt injection records",
+      "reason": "B13 has not published real injection evidence for the DA chain.",
+      "result": "NOT_VERIFIED"
+    },
+    "b20a_exec": {
+      "digest": null,
+      "missing_artifact": "B20a-exec:da-execution-artifacts",
+      "reason": "B20a-exec runs only after C T-34's approved single submission and has not run; no step receipt, authorized artifact, snapshot digest or run identity exists.",
+      "result": "NOT_VERIFIED"
+    },
+    "b20a_search": {
+      "digest": null,
+      "missing_artifact": "B20a-search:search-run-evidence",
+      "reason": "B20a-search has not published its separate search evidence row: no input category, candidate source/count, generation steps, rejection reasons, validators or success criteria exist. A control-loop or known-candidate PASS is explicitly not search evidence.",
+      "result": "NOT_VERIFIED"
+    },
+    "client_revision": null,
+    "client_revision_gap": "No client revision is published for this gate.",
+    "harness_revision": null,
+    "harness_revision_gap": "A's own harness source digest is recorded per record; no platform harness revision is published.",
+    "server_revision": null,
+    "server_revision_gap": "No real MCP/server revision exists for this gate."
+  },
+  "frozen_at": "2026-10-23T00:11:03Z",
+  "gate_command": [
+    "<acp2-dev>/envs/a-python/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_acp2_science_da_validators.py",
+    "tests/test_acp2_science_energy_comparability.py",
+    "tests/test_acp2_science_recipe.py",
+    "tests/test_recovery_fixtures_smoke.py",
+    "tests/test_acp2_science_h4_gate.py",
+    "-q"
+  ],
+  "generated_by": "A-20",
+  "h4_closure": {
+    "closed": false,
+    "constructed_negative_rows_are_not_positive_evidence": true,
+    "gate_blocking_row_ids": [
+      "H4-B08-reservation-before-persist",
+      "H4-B08-persisted-before-submission-start",
+      "H4-B08-submitted-lost-response",
+      "H4-B08-restart-replay",
+      "H4-GATE-publication-retry-no-relaunch"
+    ],
+    "open_required_row_ids": [
+      "H4-01-valid-ts",
+      "H4-02-bidirectional-irc",
+      "H4-03-endpoint-connectivity",
+      "H4-04-comparable-energy",
+      "H4-search"
+    ],
+    "positive_evidence_present": false,
+    "real_run": false,
+    "reason": "H4 closes only when a real valid TS (one imaginary mode with a mapped mode), a real bidirectional IRC with both endpoints, a real comparable energy and the separate B20a-search row are all PASS with real evidence. No B20a-exec/B20a-search artifact exists, so every required row is NOT_VERIFIED and H4 stays open; negative-case PASSes, constructed checkers and a control/known-candidate chain never substitute.",
+    "required_row_ids": [
+      "H4-01-valid-ts",
+      "H4-02-bidirectional-irc",
+      "H4-03-endpoint-connectivity",
+      "H4-04-comparable-energy",
+      "H4-search"
+    ],
+    "search_scope": "IN_SCOPE",
+    "status": "open"
+  },
+  "handoff_id": "H4",
+  "handoff_version": 1,
+  "known_candidate_chain": {
+    "artifact_id": "B20a-exec:da-execution-artifacts",
+    "producer": "B20a-exec",
+    "row_ids": [
+      "H4-01-valid-ts",
+      "H4-02-bidirectional-irc",
+      "H4-03-endpoint-connectivity",
+      "H4-04-comparable-energy"
+    ],
+    "rule": "The known/frozen candidate execution chain proves execution and validation only. It is never search evidence and never turns the search row into a PASS."
+  },
+  "negative_checks": [
+    {
+      "case_id": "missing-frequency",
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/ts-missing-frequency-result.json",
+            "sha256": "c3f506d0dc0e1c2e81b38b492abe06e5ff7a01809b94ddb2f75de256eb811f66"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_validators.py::test_ts_missing_frequency_is_inconclusive_never_refuted -q"
+        ],
+        "summary": "The frozen missing-frequency TaskResult yields one blocking frequency_not_computed check; the validator never promotes absence to refutation.",
+        "tests": [
+          "tests/test_acp2_science_da_validators.py::test_ts_missing_frequency_is_inconclusive_never_refuted"
+        ]
+      },
+      "expected": "inconclusive",
+      "observed_outcome": "inconclusive",
+      "rejection_rule": "A TS artifact with no frequency evidence is reported inconclusive (frequency_not_computed), never supported and never refuted.",
+      "replaces_positive_requirement": false,
+      "reported_status": "inconclusive",
+      "row_id": "H4-NEG-missing-frequency"
+    },
+    {
+      "case_id": "wrong-endpoint",
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/irc-wrong-endpoint.json",
+            "sha256": "a54315151c1ff17753499221ce040a91a1ba886b595842f189be7115861584dd"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_validators.py::test_wrong_endpoint_is_refuted -q"
+        ],
+        "summary": "The frozen wrong-endpoint IRC result resolves to a different element/degree/adjacency topology and is refuted.",
+        "tests": [
+          "tests/test_acp2_science_da_validators.py::test_wrong_endpoint_is_refuted"
+        ]
+      },
+      "expected": "refuted",
+      "observed_outcome": "refuted",
+      "rejection_rule": "An IRC result that reaches a different topology is refuted, never treated as connectivity.",
+      "replaces_positive_requirement": false,
+      "reported_status": "refuted",
+      "row_id": "H4-NEG-wrong-endpoint"
+    },
+    {
+      "case_id": "corrupt-digest",
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/contracts/evidence/digest_mismatch.json",
+            "sha256": "e0c074df029192b03f2f6b347382abf70ddc97bde01b29c6848e7031294743ec"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/v1/report-scenario/constructed-evidence-report-digest-mismatch.json",
+            "sha256": "2bfb68330a718a707ad9e0c6903dd24e638a5f291980439f6ba910f4218b01a3"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_artifact_validation.py::test_bad_digest_is_rejected_with_typed_error tests/test_acp2_science_da_report.py::test_source_digest_mismatch_is_fail_not_inconclusive -q"
+        ],
+        "summary": "An all-zero digest is rejected as ArtifactDigestMismatchError, and the constructed report with a mismatched source digest is refused (FAIL), not reported inconclusive or supported.",
+        "tests": [
+          "tests/test_acp2_science_artifact_validation.py::test_bad_digest_is_rejected_with_typed_error",
+          "tests/test_acp2_science_da_report.py::test_source_digest_mismatch_is_fail_not_inconclusive"
+        ]
+      },
+      "expected": "reject",
+      "observed_outcome": "rejected",
+      "rejection_rule": "A corrupt artifact or report source digest is refused with a typed digest error, never downgraded to a supported claim.",
+      "replaces_positive_requirement": false,
+      "reported_status": "not_evaluated",
+      "row_id": "H4-NEG-corrupt-digest"
+    },
+    {
+      "case_id": "old-provider-version",
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/v1/recipe-digests.json",
+            "sha256": "09a5d5fdac6613fd058a1dadc4ee726c041118ca5c41c711c8157f31f21434a1"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_recipe.py::test_changed_dispatch_provider_version_changes_step_identity tests/test_acp2_science_recipe.py::test_changed_upstream_byte_changes_step_execution_identity -q"
+        ],
+        "summary": "Changing the dispatch provider version from 6.0.1 to 6.0.2 changes the step execution identity, so an old-provider artifact cannot be adopted as the current identity; a changed upstream byte does the same.",
+        "tests": [
+          "tests/test_acp2_science_recipe.py::test_changed_dispatch_provider_version_changes_step_identity",
+          "tests/test_acp2_science_recipe.py::test_changed_upstream_byte_changes_step_execution_identity"
+        ]
+      },
+      "expected": "reject",
+      "observed_outcome": "identity_changed_refused",
+      "rejection_rule": "A result produced under an older provider version is not reused when the dispatch provider version changed; the execution identity differs.",
+      "replaces_positive_requirement": false,
+      "reported_status": "not_evaluated",
+      "row_id": "H4-NEG-old-provider-version"
+    },
+    {
+      "case_id": "mismatched-standard-state",
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/energy-comparability-cases.json",
+            "sha256": "b8d69d6fd6b5fe24b98b023e3c48297340261933a4e3bca3e354e21d08e00524"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_energy_comparability.py::test_different_standard_states_are_refused -q"
+        ],
+        "summary": "The frozen different_standard_state case is refuted with the differing standard-state field named; no numeric barrier is emitted.",
+        "tests": [
+          "tests/test_acp2_science_energy_comparability.py::test_different_standard_states_are_refused"
+        ]
+      },
+      "expected": "refuted",
+      "observed_outcome": "refuted",
+      "rejection_rule": "Energies declared under different standard states are refused for subtraction; no activation energy is emitted across mismatched states.",
+      "replaces_positive_requirement": false,
+      "reported_status": "refuted",
+      "row_id": "H4-NEG-mismatched-standard-state"
+    }
+  ],
+  "platform_failure_injections": [
+    {
+      "case_id": "worker-interruption",
+      "evidence": {
+        "summary": "Fixture-level recovery branch only; no injected worker interruption record.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_crash_window_step_result_without_checkpoint_update"
+        ]
+      },
+      "gap": "B08/B13 have not published a real worker-interruption injection for the DA chain.",
+      "requirement": "A worker interruption after dispatch resumes exactly one dispatch and reuses only identity-valid complete results.",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "case_id": "publication-failure",
+      "evidence": {
+        "summary": "Fixture-level publish-only retry only; no real injection record.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_publish_lost_retries_publish_only"
+        ]
+      },
+      "gap": "B13 has not published a real publication-failure injection or retry receipt.",
+      "requirement": "A publication failure with a complete scientific result retries only publication and does not relaunch QC.",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "case_id": "recovery",
+      "evidence": {
+        "summary": "Existing recovery fixtures prove the branches; no real DA recovery record.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_v2_mixed_fixture_resumes_without_recompute",
+          "tests/test_recovery_fixtures_smoke.py::test_crash_window_published_not_marked_complete"
+        ]
+      },
+      "gap": "B08/B13 have not published a real recovery record for the DA chain.",
+      "requirement": "Recovery reuses only results whose identity and completion facts are still valid for the current attempt.",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "case_id": "late-receipt",
+      "evidence": {
+        "summary": "Stale-response rejection is proven on constructed records only.",
+        "tests": [
+          "tests/test_acp2_science_provenance.py::test_stale_out_of_order_response_is_rejected"
+        ]
+      },
+      "gap": "B13/B08 have not published a real late-receipt injection record.",
+      "requirement": "A late receipt is reconciled against the original observation sequence and never overwrites a newer state or duplicates a dispatch.",
+      "result": "NOT_VERIFIED"
+    }
+  ],
+  "real_computation": {
+    "command": [],
+    "not_run": [
+      "real B20a-exec DA TS/frequency/IRC/energy execution",
+      "real B20a-search candidate search",
+      "real B08 four-window crash injection",
+      "real B13 publication-failure / late-receipt injection"
+    ],
+    "reason": "No QC binary, controller, scheduler, job, SSH session, bsub, production run root or database was touched. Every real row is NOT_VERIFIED with its exact producer gap.",
+    "result": "NOT_RUN",
+    "run_spec": null
+  },
+  "receipt_protocol_gap": {
+    "deferred_samples": [
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-valid.json",
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-invalid.json"
+    ],
+    "delivery_trigger": "Deliver one valid and one invalid A sample immediately when B01 publishes the draft schema.",
+    "missing_artifact": "acceptance-result.schema.json",
+    "missing_contract": "acp2.acceptance.v1",
+    "reason": "B01 has not published the draft receipt schema. A adds only extensions.science when B01 exists and never invents a second receipt schema or sample set.",
+    "samples_delivered": false,
+    "status": "NOT_VERIFIED"
+  },
+  "records_separated": {
+    "h4_closure": "open/closed ledger. Closed only when every required real positive row is PASS with supported real evidence and the search row is PASS or an owner-ratified DEFERRED.",
+    "rule": "The three records are never collapsed: a scenario PASS does not imply a supported claim, a claim PASS does not close H4, and a negative-honesty PASS never replaces a required positive.",
+    "scenario_result": "Did the required operation, assertions and evidence delivery complete? PASS/FAIL/NOT_VERIFIED per scenario row, including constructed runs.",
+    "scientific_claim_status": "supported/refuted/inconclusive/not_evaluated per claim, bound to its deterministic validator and inputs. Constructed statuses carry a label."
+  },
+  "rows": [
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/ts-one-imaginary-result.json",
+            "sha256": "1a6edf2888a5f15eaa12d7cafdd323b2700a87054017dcbda68945c74ba31736"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/mode-selection.json",
+            "sha256": "f6e7dffb377c4752be356a9b8f07d39a3877ed0fe83bb4a0d256cc9d49ea23e6"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_validators.py::test_ts_one_imaginary_with_mapped_native_mode_is_supported -q"
+        ],
+        "summary": "The deterministic TS validator path is exercised only on constructed A-16a fixtures: one imaginary mode with a mapped native printed mode is supported; no B20a-exec authorized optimize/frequency artifact exists.",
+        "tests": [
+          "tests/test_acp2_science_da_validators.py::test_ts_one_imaginary_with_mapped_native_mode_is_supported"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B20a-exec has not published the authorized TS optimize/frequency step receipts and artifacts: no real magnitude/mode record, snapshot digest, attempt or release exists. A constructed validator PASS is not real evidence.",
+      "producer": {
+        "artifact_id": "B20a-exec:da-execution-artifacts",
+        "digest": null,
+        "producer": "B20a-exec",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_evidence": null,
+      "real_run": false,
+      "reason": "The required positive is blocked on the platform execution producer; the row stays NOT_VERIFIED and never borrows the constructed checker result.",
+      "required_for_h4_closure": true,
+      "requirement": "A real B20a-exec transition-state candidate has exactly one significant imaginary frequency with a mapped mode.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-01-valid-ts",
+      "row_kind": "required-positive",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/irc-two-direction.json",
+            "sha256": "ca4f521afb979c5e05955564c873b8ec1dad96e8e68db8276312dfe99dea3091"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/irc-endpoint-reference.json",
+            "sha256": "118a9d8324e2a801d785e25cead3d2f7ff4758bef693b1fd43ded5224611cce7"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_validators.py::test_two_direction_irc_supports_connectivity_with_endpoint_mapping -q"
+        ],
+        "summary": "The deterministic IRC completion/connectivity path is exercised only on constructed A-16b fixtures; no real forward/reverse IRC result, direction label or native step count exists.",
+        "tests": [
+          "tests/test_acp2_science_da_validators.py::test_two_direction_irc_supports_connectivity_with_endpoint_mapping"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B20a-exec has not published the authorized forward/reverse IRC step receipts and artifacts: no real direction results, native step counts, terminal states or snapshot digest exist.",
+      "producer": {
+        "artifact_id": "B20a-exec:da-execution-artifacts",
+        "digest": null,
+        "producer": "B20a-exec",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_evidence": null,
+      "real_run": false,
+      "reason": "One constructed direction pair cannot stand in for a real bidirectional IRC run; the row stays NOT_VERIFIED.",
+      "required_for_h4_closure": true,
+      "requirement": "A real B20a-exec forward and reverse IRC both complete and reach an endpoint for the same TS identity.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-02-bidirectional-irc",
+      "row_kind": "required-positive",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/irc-endpoint-reference.json",
+            "sha256": "118a9d8324e2a801d785e25cead3d2f7ff4758bef693b1fd43ded5224611cce7"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_validators.py::test_two_direction_irc_supports_connectivity_with_endpoint_mapping -q"
+        ],
+        "summary": "Endpoint resolution is proven only against the constructed reference and constructed IRC results; no authorized B20a-exec endpoint geometry or mapped product structure exists.",
+        "tests": [
+          "tests/test_acp2_science_da_validators.py::test_two_direction_irc_supports_connectivity_with_endpoint_mapping",
+          "tests/test_acp2_science_da_validators.py::test_atom_order_permutation_does_not_create_a_false_connection"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B20a-exec has not published the authorized endpoint geometries or the mapped product structure; no real atom-order-stable endpoint mapping exists.",
+      "producer": {
+        "artifact_id": "B20a-exec:da-execution-artifacts",
+        "digest": null,
+        "producer": "B20a-exec",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_evidence": null,
+      "real_run": false,
+      "reason": "Connectivity requires real endpoint artifacts from the same execution identity; the row stays NOT_VERIFIED.",
+      "required_for_h4_closure": true,
+      "requirement": "The real IRC endpoint geometries and bond-topology mapping prove the declared reactant-to-product path under stable atom order.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-03-endpoint-connectivity",
+      "row_kind": "required-positive",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/energy/barrier-cases.json",
+            "sha256": "d8cbc35e8f1ea3364f99378e8daa1494b9a6e55c4f293dc750ad23f5aa48f476"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_energy_comparability.py -q"
+        ],
+        "summary": "Energy comparability is proven only on constructed barrier cases; no authorized B20a-exec energy or thermochemistry artifact exists, and the frozen 1_bar_ideal_gas standard state is not admitted by the ThermochemistryOptions lexicon (1atm/1M).",
+        "tests": [
+          "tests/test_acp2_science_energy_comparability.py::test_valid_electronic_barrier_is_supported_without_a_free_energy_claim",
+          "tests/test_acp2_science_energy_comparability.py::test_valid_free_energy_barrier_is_a_separate_supported_claim"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B20a-exec has not published authorized energy/thermochemistry artifacts; additionally B18 must reconcile the frozen 1_bar_ideal_gas standard state with the ThermochemistryOptions 1atm/1M lexicon before a real run.",
+      "producer": {
+        "artifact_id": "B20a-exec:da-execution-artifacts",
+        "digest": null,
+        "producer": "B20a-exec",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_evidence": null,
+      "real_run": false,
+      "reason": "Constructed barrier cases prove the checker, not the science; the row stays NOT_VERIFIED.",
+      "required_for_h4_closure": true,
+      "requirement": "A real activation energy is comparable under the frozen method, basis, electronic state, temperature, pressure and standard state with an explicit unit.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-04-comparable-energy",
+      "row_kind": "required-positive",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "case_id": "missing-frequency",
+      "constructed": true,
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/ts-missing-frequency-result.json",
+            "sha256": "c3f506d0dc0e1c2e81b38b492abe06e5ff7a01809b94ddb2f75de256eb811f66"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_validators.py::test_ts_missing_frequency_is_inconclusive_never_refuted -q"
+        ],
+        "summary": "The frozen missing-frequency TaskResult yields one blocking frequency_not_computed check; the validator never promotes absence to refutation.",
+        "tests": [
+          "tests/test_acp2_science_da_validators.py::test_ts_missing_frequency_is_inconclusive_never_refuted"
+        ]
+      },
+      "evidence_kind": "constructed-fixture",
+      "gap": null,
+      "observed_outcome": "inconclusive",
+      "real_run": false,
+      "reason": "Correct negative reporting is a PASS for honesty only; it does not supply the missing real frequency evidence.",
+      "replaces_positive_requirement": false,
+      "required_for_h4_closure": false,
+      "requirement": "A TS artifact with no frequency evidence is reported inconclusive (frequency_not_computed), never supported and never refuted.",
+      "result": "PASS",
+      "row_id": "H4-NEG-missing-frequency",
+      "row_kind": "negative-honesty",
+      "scientific_claim_status": "inconclusive"
+    },
+    {
+      "case_id": "wrong-endpoint",
+      "constructed": true,
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/irc-wrong-endpoint.json",
+            "sha256": "a54315151c1ff17753499221ce040a91a1ba886b595842f189be7115861584dd"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_validators.py::test_wrong_endpoint_is_refuted -q"
+        ],
+        "summary": "The frozen wrong-endpoint IRC result resolves to a different element/degree/adjacency topology and is refuted.",
+        "tests": [
+          "tests/test_acp2_science_da_validators.py::test_wrong_endpoint_is_refuted"
+        ]
+      },
+      "evidence_kind": "constructed-fixture",
+      "gap": null,
+      "observed_outcome": "refuted",
+      "real_run": false,
+      "reason": "A refuted wrong endpoint proves discrimination, not the required real bidirectional path.",
+      "replaces_positive_requirement": false,
+      "required_for_h4_closure": false,
+      "requirement": "An IRC result that reaches a different topology is refuted, never treated as connectivity.",
+      "result": "PASS",
+      "row_id": "H4-NEG-wrong-endpoint",
+      "row_kind": "negative-honesty",
+      "scientific_claim_status": "refuted"
+    },
+    {
+      "case_id": "corrupt-digest",
+      "constructed": true,
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/contracts/evidence/digest_mismatch.json",
+            "sha256": "e0c074df029192b03f2f6b347382abf70ddc97bde01b29c6848e7031294743ec"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/v1/report-scenario/constructed-evidence-report-digest-mismatch.json",
+            "sha256": "2bfb68330a718a707ad9e0c6903dd24e638a5f291980439f6ba910f4218b01a3"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_artifact_validation.py::test_bad_digest_is_rejected_with_typed_error tests/test_acp2_science_da_report.py::test_source_digest_mismatch_is_fail_not_inconclusive -q"
+        ],
+        "summary": "An all-zero digest is rejected as ArtifactDigestMismatchError, and the constructed report with a mismatched source digest is refused (FAIL), not reported inconclusive or supported.",
+        "tests": [
+          "tests/test_acp2_science_artifact_validation.py::test_bad_digest_is_rejected_with_typed_error",
+          "tests/test_acp2_science_da_report.py::test_source_digest_mismatch_is_fail_not_inconclusive"
+        ]
+      },
+      "evidence_kind": "constructed-fixture",
+      "gap": null,
+      "observed_outcome": "rejected",
+      "real_run": false,
+      "reason": "A refused corrupt digest is honest rejection; it supplies no positive TS/IRC/energy evidence.",
+      "replaces_positive_requirement": false,
+      "required_for_h4_closure": false,
+      "requirement": "A corrupt artifact or report source digest is refused with a typed digest error, never downgraded to a supported claim.",
+      "result": "PASS",
+      "row_id": "H4-NEG-corrupt-digest",
+      "row_kind": "negative-honesty",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "case_id": "old-provider-version",
+      "constructed": true,
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/v1/recipe-digests.json",
+            "sha256": "09a5d5fdac6613fd058a1dadc4ee726c041118ca5c41c711c8157f31f21434a1"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_recipe.py::test_changed_dispatch_provider_version_changes_step_identity tests/test_acp2_science_recipe.py::test_changed_upstream_byte_changes_step_execution_identity -q"
+        ],
+        "summary": "Changing the dispatch provider version from 6.0.1 to 6.0.2 changes the step execution identity, so an old-provider artifact cannot be adopted as the current identity; a changed upstream byte does the same.",
+        "tests": [
+          "tests/test_acp2_science_recipe.py::test_changed_dispatch_provider_version_changes_step_identity",
+          "tests/test_acp2_science_recipe.py::test_changed_upstream_byte_changes_step_execution_identity"
+        ]
+      },
+      "evidence_kind": "static-test",
+      "gap": null,
+      "observed_outcome": "identity_changed_refused",
+      "real_run": false,
+      "reason": "Identity refusal is honest; it does not create a current-provider real result.",
+      "replaces_positive_requirement": false,
+      "required_for_h4_closure": false,
+      "requirement": "A result produced under an older provider version is not reused when the dispatch provider version changed; the execution identity differs.",
+      "result": "PASS",
+      "row_id": "H4-NEG-old-provider-version",
+      "row_kind": "negative-honesty",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "case_id": "mismatched-standard-state",
+      "constructed": true,
+      "correctly_reported": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/validators/energy-comparability-cases.json",
+            "sha256": "b8d69d6fd6b5fe24b98b023e3c48297340261933a4e3bca3e354e21d08e00524"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_energy_comparability.py::test_different_standard_states_are_refused -q"
+        ],
+        "summary": "The frozen different_standard_state case is refuted with the differing standard-state field named; no numeric barrier is emitted.",
+        "tests": [
+          "tests/test_acp2_science_energy_comparability.py::test_different_standard_states_are_refused"
+        ]
+      },
+      "evidence_kind": "constructed-fixture",
+      "gap": null,
+      "observed_outcome": "refuted",
+      "real_run": false,
+      "reason": "Refusing a mismatched standard state is honest; the required comparable real energy remains unverified.",
+      "replaces_positive_requirement": false,
+      "required_for_h4_closure": false,
+      "requirement": "Energies declared under different standard states are refused for subtraction; no activation energy is emitted across mismatched states.",
+      "result": "PASS",
+      "row_id": "H4-NEG-mismatched-standard-state",
+      "row_kind": "negative-honesty",
+      "scientific_claim_status": "refuted"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/v1/recipe.json",
+            "sha256": "9b5ee1d831a02f72c5eff50a15350e7ec5ff9494c7a4997583e92c1d9c70465d"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_da_recipe.py -q"
+        ],
+        "summary": "blocked_steps reports the transitive block set; a required upstream cannot be made optional and irc cannot be diagnostic-only while connectivity is claimed.",
+        "tests": [
+          "tests/test_acp2_science_da_recipe.py::test_failed_required_upstream_blocks_dependents_transitively",
+          "tests/test_acp2_science_da_recipe.py::test_irc_cannot_be_diagnostic_only_while_connectivity_is_claimed"
+        ]
+      },
+      "evidence_kind": "static-test",
+      "gap": null,
+      "real_run": false,
+      "reason": "The deterministic DAG semantics are proven; the real platform-side blocked-step injection remains B-owned and is not claimed.",
+      "required_for_h4_closure": false,
+      "requirement": "A failed required step transitively blocks its dependents and a required step cannot be removed or downgraded while connectivity is claimed.",
+      "result": "PASS",
+      "row_id": "H4-GATE-blocked-required-step",
+      "row_kind": "static-gate",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "scripts/acceptance/acp2_science.py",
+            "sha256": "fc777b9adf7a5995a7556f0d349ef0029add5672a07f3397a7f5812c03186530"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_singlepoint.py::test_missing_binary_is_not_verified_and_records_gaps -q"
+        ],
+        "summary": "The harness preflight records run_key_approval.approved=false and returns NOT_VERIFIED before any native work root or subprocess exists.",
+        "tests": [
+          "tests/test_acp2_science_singlepoint.py::test_missing_binary_is_not_verified_and_records_gaps"
+        ]
+      },
+      "evidence_kind": "static-test",
+      "gap": null,
+      "real_run": false,
+      "reason": "Harness-level refusal is proven; the real B16 approval rejection record is not published and is not claimed.",
+      "required_for_h4_closure": false,
+      "requirement": "A missing or false run-key approval is refused before any execution, so a rejected approval cannot produce a completed science chain.",
+      "result": "PASS",
+      "row_id": "H4-GATE-rejected-approval",
+      "row_kind": "static-gate",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "scripts/acceptance/acp2_science.py",
+            "sha256": "fc777b9adf7a5995a7556f0d349ef0029add5672a07f3397a7f5812c03186530"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_singlepoint.py::test_exhausted_budget_is_refused_before_submission -q"
+        ],
+        "summary": "An exhausted total cap is refused with 'budget refused before submission' and no native work root is created.",
+        "tests": [
+          "tests/test_acp2_science_singlepoint.py::test_exhausted_budget_is_refused_before_submission"
+        ]
+      },
+      "evidence_kind": "static-test",
+      "gap": null,
+      "real_run": false,
+      "reason": "Harness-level budget refusal is proven; the real B17 budget denial is not published and is not claimed.",
+      "required_for_h4_closure": false,
+      "requirement": "An exhausted or rejected budget is refused before submission, so it cannot produce a completed science chain.",
+      "result": "PASS",
+      "row_id": "H4-GATE-rejected-budget",
+      "row_kind": "static-gate",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [],
+        "commands": [
+          "pytest tests/test_recovery_fixtures_smoke.py::test_publish_lost_retries_publish_only -q"
+        ],
+        "summary": "The existing recovery fixture proves the publish-only retry branch, but no real B13 publication-failure injection or receipt exists for the DA chain.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_publish_lost_retries_publish_only"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B13 has not published a real publication-failure injection, retry receipt or QC-invocation counter for the same task; fixture-level proof is not platform evidence.",
+      "producer": {
+        "artifact_id": null,
+        "digest": null,
+        "producer": "B13",
+        "published": false,
+        "readiness": null
+      },
+      "real_run": false,
+      "reason": "The row stays NOT_VERIFIED and blocks the A-20 platform gate without closing or opening H4 by itself.",
+      "required_for_h4_closure": false,
+      "required_for_platform_gate": true,
+      "requirement": "A publication failure with a complete scientific result retries only the publication and never relaunches the expensive QC step.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-GATE-publication-retry-no-relaunch",
+      "row_kind": "platform-recovery",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [],
+        "commands": [
+          "pytest tests/test_recovery_fixtures_smoke.py tests/test_acp2_science_h4_gate.py -q"
+        ],
+        "summary": "The fixture-level crash-window branches and the A-20 reconciliation helper are exercised on constructed records; no real B08 platform record exists for this window.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_crash_window_step_result_without_checkpoint_update",
+          "tests/test_acp2_science_h4_gate.py::test_constructed_b08_four_windows_reconcile_without_violation"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B08 has not published real platform evidence for window 'reservation-before-persist': no work-directory, reservation, QC-process, bsub or dispatch record exists to reconcile.",
+      "producer": {
+        "artifact_id": "B08:four-crash-window-evidence",
+        "digest": null,
+        "producer": "B08",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_run": false,
+      "reason": "Constructed reconciliation proves the checker logic only; the real window stays NOT_VERIFIED.",
+      "required_for_h4_closure": false,
+      "required_for_platform_gate": true,
+      "required_invariants": [
+        "no_duplicate_directory",
+        "no_duplicate_reservation",
+        "no_duplicate_qc_process",
+        "no_duplicate_bsub",
+        "no_permanently_undispatched_accepted_task",
+        "only_identity_valid_complete_results_reused",
+        "publication_retry_does_not_relaunch_qc"
+      ],
+      "requirement": "Crash after the reservation but before the job row is persisted: the claim-keyed sweep releases the reservation exactly once, removes the staging directory, and the retry creates one new reservation/directory and exactly one job row.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-B08-reservation-before-persist",
+      "row_kind": "b08-crash-window",
+      "scientific_claim_status": null,
+      "window_id": "reservation-before-persist"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [],
+        "commands": [
+          "pytest tests/test_recovery_fixtures_smoke.py tests/test_acp2_science_h4_gate.py -q"
+        ],
+        "summary": "The fixture-level crash-window branches and the A-20 reconciliation helper are exercised on constructed records; no real B08 platform record exists for this window.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_crash_window_checkpoint_without_manifest",
+          "tests/test_acp2_science_h4_gate.py::test_constructed_b08_four_windows_reconcile_without_violation"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B08 has not published real platform evidence for window 'persisted-before-submission-start': no work-directory, reservation, QC-process, bsub or dispatch record exists to reconcile.",
+      "producer": {
+        "artifact_id": "B08:four-crash-window-evidence",
+        "digest": null,
+        "producer": "B08",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_run": false,
+      "reason": "Constructed reconciliation proves the checker logic only; the real window stays NOT_VERIFIED.",
+      "required_for_h4_closure": false,
+      "required_for_platform_gate": true,
+      "required_invariants": [
+        "no_duplicate_directory",
+        "no_duplicate_reservation",
+        "no_duplicate_qc_process",
+        "no_duplicate_bsub",
+        "no_permanently_undispatched_accepted_task",
+        "only_identity_valid_complete_results_reused",
+        "publication_retry_does_not_relaunch_qc"
+      ],
+      "requirement": "Crash after the committed QUEUED job row but before the dispatch thread starts: the poller/replay path resumes exactly one dispatch and the accepted task is never left permanently undispatched.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-B08-persisted-before-submission-start",
+      "row_kind": "b08-crash-window",
+      "scientific_claim_status": null,
+      "window_id": "persisted-before-submission-start"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [],
+        "commands": [
+          "pytest tests/test_recovery_fixtures_smoke.py tests/test_acp2_science_h4_gate.py -q"
+        ],
+        "summary": "The fixture-level crash-window branches and the A-20 reconciliation helper are exercised on constructed records; no real B08 platform record exists for this window.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_crash_window_published_not_marked_complete",
+          "tests/test_acp2_science_h4_gate.py::test_constructed_b08_four_windows_reconcile_without_violation"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B08 has not published real platform evidence for window 'submitted-lost-response': no work-directory, reservation, QC-process, bsub or dispatch record exists to reconcile.",
+      "producer": {
+        "artifact_id": "B08:four-crash-window-evidence",
+        "digest": null,
+        "producer": "B08",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_run": false,
+      "reason": "Constructed reconciliation proves the checker logic only; the real window stays NOT_VERIFIED.",
+      "required_for_h4_closure": false,
+      "required_for_platform_gate": true,
+      "required_invariants": [
+        "no_duplicate_directory",
+        "no_duplicate_reservation",
+        "no_duplicate_qc_process",
+        "no_duplicate_bsub",
+        "no_permanently_undispatched_accepted_task",
+        "only_identity_valid_complete_results_reused",
+        "publication_retry_does_not_relaunch_qc"
+      ],
+      "requirement": "Local start or bsub already happened but the response was lost: the original submission identity is reconciled and never resubmitted; no second QC process or bsub is created.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-B08-submitted-lost-response",
+      "row_kind": "b08-crash-window",
+      "scientific_claim_status": null,
+      "window_id": "submitted-lost-response"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [],
+        "commands": [
+          "pytest tests/test_recovery_fixtures_smoke.py tests/test_acp2_science_h4_gate.py -q"
+        ],
+        "summary": "The fixture-level crash-window branches and the A-20 reconciliation helper are exercised on constructed records; no real B08 platform record exists for this window.",
+        "tests": [
+          "tests/test_recovery_fixtures_smoke.py::test_publish_lost_retries_publish_only",
+          "tests/test_acp2_science_h4_gate.py::test_constructed_b08_four_windows_reconcile_without_violation"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B08 has not published real platform evidence for window 'restart-replay': no work-directory, reservation, QC-process, bsub or dispatch record exists to reconcile.",
+      "producer": {
+        "artifact_id": "B08:four-crash-window-evidence",
+        "digest": null,
+        "producer": "B08",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_run": false,
+      "reason": "Constructed reconciliation proves the checker logic only; the real window stays NOT_VERIFIED.",
+      "required_for_h4_closure": false,
+      "required_for_platform_gate": true,
+      "required_invariants": [
+        "no_duplicate_directory",
+        "no_duplicate_reservation",
+        "no_duplicate_qc_process",
+        "no_duplicate_bsub",
+        "no_permanently_undispatched_accepted_task",
+        "only_identity_valid_complete_results_reused",
+        "publication_retry_does_not_relaunch_qc"
+      ],
+      "requirement": "Controller restart followed by the same-key replay returns the stored TaskRef, reuses only identity-valid complete results, and creates no extra work directory, reservation, QC process or bsub.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-B08-restart-replay",
+      "row_kind": "b08-crash-window",
+      "scientific_claim_status": null,
+      "window_id": "restart-replay"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/requests/search-contract.md",
+            "sha256": "def2c540cb0809588273e847bde7ac38f007e993652c46b3bf730db26627bf88"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_fixtures.py -k diels_alder -q"
+        ],
+        "summary": "The search contract and the bounded A-14b fixture are frozen and tested, but B20a-search has not run: no input class, candidate counts, generation steps, rejection reasons, validators or success criteria record exists. The known-candidate chain is not search evidence.",
+        "tests": [
+          "tests/test_acp2_science_fixtures.py::test_diels_alder_fixture_mapping_is_unique_one_to_one_and_exact"
+        ]
+      },
+      "evidence_kind": "constructed-checker",
+      "gap": "B20a-search has not published its separate search evidence row: no input category, candidate source/count, generation steps, rejection reasons, validators or success criteria exist. A control-loop or known-candidate PASS is explicitly not search evidence.",
+      "producer": {
+        "artifact_id": "B20a-search:search-run-evidence",
+        "digest": null,
+        "producer": "B20a-search",
+        "published": false,
+        "readiness": "contract_ready"
+      },
+      "real_evidence": null,
+      "real_run": false,
+      "reason": "Search is a separate H4 row; NOT_VERIFIED keeps H4 open and no deferral is available without owner ratification.",
+      "required_for_h4_closure": true,
+      "requirement": "A B20a-search run satisfies every success criterion in science/requests/search-contract.md, including at least one accepted generated_candidate and its generator/seed identity.",
+      "result": "NOT_VERIFIED",
+      "row_id": "H4-search",
+      "row_kind": "search",
+      "scientific_claim_status": "not_evaluated",
+      "search_scope": {
+        "deferral_requested": false,
+        "deferred": false,
+        "owner_ratified": false,
+        "ratification_ref": null,
+        "reason": "Search remains in P2/H4 scope by default. No deferral was requested and no owner-ratified search_scope=DEFERRED exists, so a missing B20a-search keeps H4 open.",
+        "status": "IN_SCOPE",
+        "synchronized_records": false
+      }
+    }
+  ],
+  "scenario_results": [
+    {
+      "constructed": true,
+      "evidence": {
+        "summary": "A-17 harness scenario on constructed artifacts; H4 stays open because the run is not real.",
+        "tests": [
+          "tests/test_acp2_science_da_ts_scenario.py::test_constructed_qualified_candidate_separates_scenario_claim_and_h4"
+        ]
+      },
+      "evidence_kind": "constructed-fixture",
+      "gap": null,
+      "h4_closure": "open",
+      "real_run": false,
+      "result": "PASS",
+      "runs": [
+        "constructed success snapshot -> supported",
+        "constructed no-candidate snapshot -> inconclusive",
+        "constructed old-attempt snapshot -> FAIL"
+      ],
+      "scenario": "science:validate-da-ts",
+      "scientific_claim_status": "supported"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "summary": "A-18 harness scenario on constructed artifacts; H4 stays open because the run is not real.",
+        "tests": [
+          "tests/test_acp2_science_da_irc_scenario.py::test_two_direction_irc_is_supported_and_prints_both_endpoint_mappings"
+        ]
+      },
+      "evidence_kind": "constructed-fixture",
+      "gap": null,
+      "h4_closure": "open",
+      "real_run": false,
+      "result": "PASS",
+      "runs": [
+        "constructed two-direction IRC -> supported",
+        "constructed one-sided IRC -> inconclusive",
+        "constructed old-attempt IRC -> FAIL"
+      ],
+      "scenario": "science:validate-da-irc",
+      "scientific_claim_status": "supported"
+    },
+    {
+      "constructed": true,
+      "evidence": {
+        "summary": "A-19b report scenario on constructed artifacts; the incomplete energy claim stays inconclusive and H4 stays open.",
+        "tests": [
+          "tests/test_acp2_science_da_report.py::test_constructed_valid_report_is_scenario_pass_with_separate_claim_and_h4"
+        ]
+      },
+      "evidence_kind": "constructed-fixture",
+      "gap": null,
+      "h4_closure": "open",
+      "real_run": false,
+      "result": "PASS",
+      "runs": [
+        "constructed valid report -> scenario PASS / claims 2 supported + 1 inconclusive",
+        "constructed digest mismatch -> FAIL",
+        "missing input manifest -> NOT_VERIFIED"
+      ],
+      "scenario": "science:validate-da-report",
+      "scientific_claim_status": "inconclusive"
+    },
+    {
+      "constructed": false,
+      "evidence": {
+        "summary": "No authorized B20a-exec TS snapshot exists.",
+        "tests": []
+      },
+      "evidence_kind": "real-b20a-exec",
+      "gap": "B20a-exec has not published authorized TS optimize/frequency artifacts; the real scenario cannot run.",
+      "h4_closure": "open",
+      "real_run": false,
+      "result": "NOT_VERIFIED",
+      "runs": [],
+      "scenario": "science:validate-da-ts",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": false,
+      "evidence": {
+        "summary": "No authorized B20a-exec IRC snapshot exists.",
+        "tests": []
+      },
+      "evidence_kind": "real-b20a-exec",
+      "gap": "B20a-exec has not published authorized forward/reverse IRC artifacts; the real scenario cannot run.",
+      "h4_closure": "open",
+      "real_run": false,
+      "result": "NOT_VERIFIED",
+      "runs": [],
+      "scenario": "science:validate-da-irc",
+      "scientific_claim_status": "not_evaluated"
+    },
+    {
+      "constructed": false,
+      "evidence": {
+        "summary": "No authorized B20a-exec report inputs exist.",
+        "tests": []
+      },
+      "evidence_kind": "real-b20a-exec",
+      "gap": "B20a-exec has not published authorized step receipts and artifacts; the real report cannot be assembled or validated.",
+      "h4_closure": "open",
+      "real_run": false,
+      "result": "NOT_VERIFIED",
+      "runs": [],
+      "scenario": "science:validate-da-report",
+      "scientific_claim_status": "not_evaluated"
+    }
+  ],
+  "search": {
+    "artifact_id": "B20a-search:search-run-evidence",
+    "contract": "docs/reference/next-change/acp2-contracts/science/requests/search-contract.md",
+    "contract_sha256": "def2c540cb0809588273e847bde7ac38f007e993652c46b3bf730db26627bf88",
+    "digest": null,
+    "gap": "B20a-search has not published its separate search evidence row: no input category, candidate source/count, generation steps, rejection reasons, validators or success criteria exist. A control-loop or known-candidate PASS is explicitly not search evidence.",
+    "producer": "B20a-search",
+    "published": false,
+    "readiness": "contract_ready",
+    "result": "NOT_VERIFIED",
+    "row_id": "H4-search",
+    "scientific_claim_status": "not_evaluated",
+    "search_scope": {
+      "deferral_requested": false,
+      "deferred": false,
+      "owner_ratified": false,
+      "ratification_ref": null,
+      "reason": "Search remains in P2/H4 scope by default. No deferral was requested and no owner-ratified search_scope=DEFERRED exists, so a missing B20a-search keeps H4 open.",
+      "status": "IN_SCOPE",
+      "synchronized_records": false
+    },
+    "separate_from_known_candidate_chain": true,
+    "success_criteria_satisfied": {
+      "at_least_one_accepted_generated_candidate": false,
+      "counts_and_rejection_reasons": false,
+      "generation_steps_with_generator_seed": false,
+      "input_category_and_identities": false,
+      "known_candidate_not_counted_as_generated": true,
+      "machine_distinct_from_control_row": true,
+      "outcome_supported_refuted_or_inconclusive": false,
+      "validators_and_missing_checks": false
+    }
+  },
+  "source": {
+    "branch": "acp2/a-science",
+    "pre_delivery_commit": "243d2b7",
+    "python": "<acp2-dev>/envs/a-python/bin/python",
+    "worktree": "<acp2-dev>/A"
+  }
+}

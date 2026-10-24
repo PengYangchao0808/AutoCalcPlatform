@@ -1,0 +1,42 @@
+[
+  {
+    "name": "integration-tests",
+    "exit_code": 1,
+    "tests": 328,
+    "failures": 4,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 324,
+    "failed_cases": [
+      "tests.test_acp_frontend_browser.test_nmr_canvas_survives_success",
+      "tests.test_acp_frontend_browser.test_vibration_cold_start_arrows_in_real_browser",
+      "tests.test_acp_frontend_browser.test_vibration_animation_frames_combo_hide_remount_teardown",
+      "tests.test_acp_frontend_browser.test_vibration_two_instances_do_not_share_state"
+    ]
+  },
+  {
+    "name": "contracts-tests",
+    "exit_code": 0,
+    "tests": 309,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 309,
+    "failed_cases": []
+  },
+  {
+    "name": "browser-explicit",
+    "exit_code": 1,
+    "tests": 4,
+    "failures": 4,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 0,
+    "failed_cases": [
+      "tests.test_acp_frontend_browser.test_nmr_canvas_survives_success",
+      "tests.test_acp_frontend_browser.test_vibration_cold_start_arrows_in_real_browser",
+      "tests.test_acp_frontend_browser.test_vibration_animation_frames_combo_hide_remount_teardown",
+      "tests.test_acp_frontend_browser.test_vibration_two_instances_do_not_share_state"
+    ]
+  }
+]

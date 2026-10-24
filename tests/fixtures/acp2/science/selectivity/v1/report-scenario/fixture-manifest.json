@@ -1,0 +1,18 @@
+{
+  "constructed": true,
+  "description": "Constructed A-25b selectivity report scenario: two path evidence reports, B23b export records, cross-domain budget tables and reference records. No QC job, TS search, IRC, energy or experimental measurement ran.",
+  "file_digests": {
+    "b23b-export-absent.json": "81ea051d02cf9ec7957c5c9fccc83891a4b570969b4a6a95586c0ae4254bf634",
+    "b23b-export-one-path.json": "2534e71659ff86a8249b2f6a26df8fe19f9cdfed5e30c98913af31922e7c0fdc",
+    "b23b-export-qualified.json": "0b4fcfc9a58b74623acfe6db1051454ff782cbc30dc78443f24c1653e41260a3",
+    "cross-domain-budget-mismatch.json": "5f5d147c74c538ecf1c231dc86c129620624121785dd3e329598338a7536260e",
+    "cross-domain-budget.json": "a65375a60d7dbd95e9cec712d6f048962a3d15cb7699c9dfeaae7fb495a4ac2e",
+    "path-endo-evidence.json": "3ea06bfc680d9b7278db182bb2a634ce4989f1d2f412081a8d997df65fbd6638",
+    "path-exo-evidence.json": "73bda8863ae0ced9a155d460ce00634b9862855b3c1614d80d75c6a43ea08f88",
+    "reference-records-duplicate-key.json": "46b36c93985b9397e7ed297ee76cd9afad06e9160eff1b19afa0280c8e4aa34a",
+    "reference-records.json": "002d406702926f9e30e375fba09f2b189750a759a115b03e09fc85f4715e7b22"
+  },
+  "real_run": false,
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1
+}

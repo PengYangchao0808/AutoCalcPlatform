@@ -1,0 +1,1182 @@
+{
+  "alternatives": [
+    {
+      "alternative_id": "alt_candidate_path_declared",
+      "max_uses": 1,
+      "replaces_step_id": "candidate_path",
+      "steps": [
+        {
+          "alternatives": [],
+          "capability_ref": "electronic.energy",
+          "consumes": [],
+          "diagnostic_only": false,
+          "intent": "Bounded alternative: evaluate the single declared frozen candidate-path TS guess at the frozen level and carry its geometry as the path candidate. It is a frozen_known_candidate control structure, never a generated or discovered candidate and never a research-search success.",
+          "parameters": {
+            "stability_check": false
+          },
+          "produces": [
+            {
+              "from_step": "candidate_path_declared",
+              "product_kind": "path_geometry",
+              "selector": {
+                "selector_kind": "whole_product"
+              }
+            }
+          ],
+          "required": true,
+          "step_id": "candidate_path_declared",
+          "task_kind": null,
+          "validators": []
+        }
+      ],
+      "when": "the single candidate path is frozen and declared and no automated path search is permitted"
+    },
+    {
+      "alternative_id": "alt_endpoint_prep_single_conformation",
+      "max_uses": 1,
+      "replaces_step_id": "endpoint_prep",
+      "steps": [
+        {
+          "alternatives": [],
+          "capability_ref": null,
+          "consumes": [],
+          "diagnostic_only": false,
+          "intent": "Bounded alternative: relax the single declared input conformation for each endpoint with one unconstrained optimization. No conformer sampling, no global-minimum claim.",
+          "parameters": {
+            "mode": "unconstrained"
+          },
+          "produces": [
+            {
+              "from_step": "endpoint_prep_single_conformation",
+              "product_kind": "endpoint_structures",
+              "selector": {
+                "selector_kind": "whole_product"
+              }
+            }
+          ],
+          "required": true,
+          "step_id": "endpoint_prep_single_conformation",
+          "task_kind": "optimize",
+          "validators": []
+        }
+      ],
+      "when": "the frozen single-conformation boundary forbids a conformer search or the search would exceed max_conformers_per_endpoint"
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "edge.candidate_frequency__ts_optimize",
+      "from_step": "candidate_frequency",
+      "to_step": "ts_optimize"
+    },
+    {
+      "edge_id": "edge.candidate_path__candidate_frequency",
+      "from_step": "candidate_path",
+      "to_step": "candidate_frequency"
+    },
+    {
+      "edge_id": "edge.candidate_path__ts_optimize",
+      "from_step": "candidate_path",
+      "to_step": "ts_optimize"
+    },
+    {
+      "edge_id": "edge.endpoint_prep__candidate_path",
+      "from_step": "endpoint_prep",
+      "to_step": "candidate_path"
+    },
+    {
+      "edge_id": "edge.endpoint_product__energy_thermochemistry",
+      "from_step": "endpoint_product",
+      "to_step": "energy_thermochemistry"
+    },
+    {
+      "edge_id": "edge.endpoint_reactants__energy_thermochemistry",
+      "from_step": "endpoint_reactants",
+      "to_step": "energy_thermochemistry"
+    },
+    {
+      "edge_id": "edge.irc__endpoint_product",
+      "from_step": "irc",
+      "to_step": "endpoint_product"
+    },
+    {
+      "edge_id": "edge.irc__endpoint_reactants",
+      "from_step": "irc",
+      "to_step": "endpoint_reactants"
+    },
+    {
+      "edge_id": "edge.ts_frequency__energy_thermochemistry",
+      "from_step": "ts_frequency",
+      "to_step": "energy_thermochemistry"
+    },
+    {
+      "edge_id": "edge.ts_frequency__irc",
+      "from_step": "ts_frequency",
+      "to_step": "irc"
+    },
+    {
+      "edge_id": "edge.ts_optimize__energy_thermochemistry",
+      "from_step": "ts_optimize",
+      "to_step": "energy_thermochemistry"
+    },
+    {
+      "edge_id": "edge.ts_optimize__irc",
+      "from_step": "ts_optimize",
+      "to_step": "irc"
+    },
+    {
+      "edge_id": "edge.ts_optimize__ts_frequency",
+      "from_step": "ts_optimize",
+      "to_step": "ts_frequency"
+    }
+  ],
+  "inputs": {
+    "atom_mapping": [
+      0,
+      1,
+      2,
+      3,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      4,
+      5,
+      12,
+      13,
+      14,
+      15
+    ],
+    "charge": 0,
+    "comparison_conditions": {
+      "basis": "def2-TZVP",
+      "energy_unit": "kcal_per_mol",
+      "method": "wB97X-D4",
+      "pressure_pa": 100000.0,
+      "reference_state": "specified endpoints: separated butadiene + ethene in the gas phase at infinite separation, and cyclohexene product, all at the frozen conditions",
+      "standard_state": "1_bar_ideal_gas",
+      "temperature_k": 298.15
+    },
+    "electronic_state": {
+      "label": "closed-shell singlet ground state",
+      "reference_state_id": "",
+      "spatial_symmetry": "auto",
+      "spin_mode": "auto",
+      "state_id": "state.singlet.s0",
+      "target_multiplicity": 1
+    },
+    "method": {
+      "basis": "def2-TZVP",
+      "method": "wB97X-D4"
+    },
+    "multiplicity": 1,
+    "provider_versions": {},
+    "structure": {
+      "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+      "elements": [
+        "C",
+        "C",
+        "C",
+        "C",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "C",
+        "C",
+        "H",
+        "H",
+        "H",
+        "H"
+      ],
+      "kind": "file",
+      "role": "minimum"
+    }
+  },
+  "plan_definition_digest": "v2:e87c94d15a195aa08ba1c145d0fd0c19",
+  "recipe": {
+    "applicability": {
+      "preconditions": [
+        "frozen constructed endpoints: buta-1,3-diene + ethene and cyclohexene, gas phase, neutral closed-shell singlet",
+        "one declared candidate path, one conformer per endpoint and one TS candidate (bounded cap)",
+        "starting structures carry the frozen_known_candidate label; no generated_candidate or research-search claim",
+        "same method, basis, electronic state, temperature, pressure, standard state, reference state and energy unit for every comparison",
+        "execution-chain validation only: a control-loop PASS does not prove search capability"
+      ],
+      "supported_reaction_classes": [
+        "net_reaction"
+      ],
+      "unsupported_when": [
+        "an endo/exo selectivity question is requested (the symmetric example has no such distinction)",
+        "a complete mechanism or exclusion of alternative paths is claimed",
+        "a generated_candidate or research-search success is expected",
+        "one IRC direction alone or one imaginary frequency is treated as connectivity proof",
+        "the frozen method, basis, electronic state or comparison conditions are not matched",
+        "an experimental rate, global minimum or general method accuracy is claimed"
+      ]
+    },
+    "limits": {
+      "max_alternatives": 4,
+      "max_edges": 24,
+      "max_steps": 16
+    },
+    "recipe_id": "recipe.diels_alder.limited.v1",
+    "schema_version": 1,
+    "validators": [
+      {
+        "required": true,
+        "validator_id": "check.electronic_state_consistency",
+        "validator_version": "1.0.0"
+      },
+      {
+        "required": true,
+        "validator_id": "check.method_consistency",
+        "validator_version": "1.0.0"
+      }
+    ]
+  },
+  "schema": "acp2.science.compiled_recipe",
+  "schema_digest": "sha256:1f04fe9c9fa1075102724924150e0b664e23937f631816d7d4a673b084c81a00",
+  "schema_version": 1,
+  "steps": [
+    {
+      "alternatives": [],
+      "binding_id": "science.vibration.compute",
+      "consumes": [
+        {
+          "from_step": "candidate_path",
+          "product_kind": "path_geometry",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "delegation_target": "cccp.calculation.run_frequency",
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "implementation_id": "cccp.calculation.tasks.frequency",
+      "intent": "Frequency calculation on the declared candidate-path TS guess. The imaginary mode is identified by the native printed mode index recorded in the frequency output (the upstream step is its provenance), never by an array position. Mapping to the optimizer mode index is deferred to cccp.analysis.tsmode.mode_mapping.resolve_target_mode at dispatch.",
+      "parameters": {},
+      "produces": [
+        {
+          "from_step": "candidate_frequency",
+          "product_kind": "frequency_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "candidate_frequency",
+          "product_kind": "native_printed_mode",
+          "selector": {
+            "field": "native_printed_index",
+            "selector_kind": "mode"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {},
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "frequency"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": "vibration.compute",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "candidate_frequency",
+      "task_kind": "frequency",
+      "validators": [
+        {
+          "required": true,
+          "validator_id": "check.frequency_membership",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.frequency_evidence",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.ts_mode_native_provenance",
+          "validator_version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.task.xtb_path_search",
+      "consumes": [
+        {
+          "from_step": "endpoint_prep",
+          "product_kind": "endpoint_structures",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "delegation_target": null,
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "implementation_id": "cccp.calculation.tasks.xtb_path_search",
+      "intent": "Determine at most one candidate path between the two frozen endpoints with GFN2-xTB PATH. The fixture candidate cap is one path; this is an execution-chain path determination between known endpoints, not a research candidate search and never an endo/exo or selectivity claim.",
+      "parameters": {
+        "gfn_level": 2
+      },
+      "produces": [
+        {
+          "from_step": "candidate_path",
+          "product_kind": "path_geometry",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {
+          "backend_inputs": [],
+          "gfn_level": 2
+        },
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "xtb_path_search"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "xtb_path_search"
+      },
+      "step_id": "candidate_path",
+      "task_kind": "xtb_path_search",
+      "validators": []
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.task.conformer_search",
+      "consumes": [],
+      "delegation_target": null,
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "implementation_id": "cccp.calculation.tasks.conformer_search",
+      "intent": "Bounded structure preparation for the two frozen endpoints: at most one input conformation per endpoint (max_conformers_per_endpoint = 1). The CREST energy window 6.0 kcal/mol and GFN2 level are constructed search bounds, not measured data and not a global-conformer-minimum claim. The declared single conformation is used when the bounded search is not permitted.",
+      "parameters": {
+        "energy_window": 6.0,
+        "gfn_level": 2
+      },
+      "produces": [
+        {
+          "from_step": "endpoint_prep",
+          "product_kind": "endpoint_structures",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {
+          "energy_window": 6.0,
+          "gfn_level": 2
+        },
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "conformer_search"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "conformer_search"
+      },
+      "step_id": "endpoint_prep",
+      "task_kind": "conformer_search",
+      "validators": []
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.electronic.energy",
+      "consumes": [
+        {
+          "from_step": "irc",
+          "product_kind": "irc_forward",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "irc",
+          "product_kind": "irc_reverse",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "delegation_target": "cccp.calculation.run_singlepoint",
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "implementation_id": "cccp.calculation.tasks.singlepoint",
+      "intent": "Check the IRC endpoint that maps to the frozen cyclohexene product: bond-topology mapping and stable atom order, then re-evaluate that endpoint at the frozen level. The direction label is not trusted; both IRC directions are consumed and the mapping decides which endpoint this is.",
+      "parameters": {
+        "stability_check": false
+      },
+      "produces": [
+        {
+          "from_step": "endpoint_product",
+          "product_kind": "endpoint_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {
+          "stability_check": false
+        },
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "singlepoint"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": "electronic.energy",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "endpoint_product",
+      "task_kind": "singlepoint",
+      "validators": [
+        {
+          "required": true,
+          "validator_id": "check.irc_endpoint_mapping",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.atom_order_stability",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.method_consistency",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.electronic_state_consistency",
+          "validator_version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.electronic.energy",
+      "consumes": [
+        {
+          "from_step": "irc",
+          "product_kind": "irc_forward",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "irc",
+          "product_kind": "irc_reverse",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "delegation_target": "cccp.calculation.run_singlepoint",
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "implementation_id": "cccp.calculation.tasks.singlepoint",
+      "intent": "Check the IRC endpoint that maps to the frozen separated butadiene + ethene reactants: bond-topology mapping and stable atom order, then re-evaluate that endpoint at the frozen level. The direction label is not trusted; both IRC directions are consumed and the mapping decides which endpoint this is.",
+      "parameters": {
+        "stability_check": false
+      },
+      "produces": [
+        {
+          "from_step": "endpoint_reactants",
+          "product_kind": "endpoint_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {
+          "stability_check": false
+        },
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "singlepoint"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": "electronic.energy",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "endpoint_reactants",
+      "task_kind": "singlepoint",
+      "validators": [
+        {
+          "required": true,
+          "validator_id": "check.irc_endpoint_mapping",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.atom_order_stability",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.method_consistency",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.electronic_state_consistency",
+          "validator_version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.task.thermochemistry",
+      "consumes": [
+        {
+          "from_step": "ts_frequency",
+          "product_kind": "frequency_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "ts_optimize",
+          "product_kind": "optimize_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "endpoint_reactants",
+          "product_kind": "endpoint_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "endpoint_product",
+          "product_kind": "endpoint_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "delegation_target": null,
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "implementation_id": "cccp.calculation.tasks.thermochemistry",
+      "intent": "Compare Delta-E-double-dagger and Delta-G-double-dagger for the single declared candidate path under the frozen method, basis, electronic state, temperature, pressure, standard state, reference state and energy unit. No tunneling correction, no experimental-rate claim and no comparison across differing methods or electronic states.",
+      "parameters": {
+        "pressure_atm": 0.9869232667160128,
+        "temperature_k": 298.15
+      },
+      "produces": [
+        {
+          "from_step": "energy_thermochemistry",
+          "product_kind": "activation_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "energy_thermochemistry",
+          "product_kind": "activation_free_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {
+          "pressure_atm": 0.9869232667160128,
+          "temperature_k": 298.15
+        },
+        "schema_version": 1,
+        "task": "thermochemistry"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "thermochemistry"
+      },
+      "step_id": "energy_thermochemistry",
+      "task_kind": "thermochemistry",
+      "validators": [
+        {
+          "required": true,
+          "validator_id": "check.method_consistency",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.electronic_state_consistency",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.energy_comparability",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.thermochemistry_comparability",
+          "validator_version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.task.irc",
+      "consumes": [
+        {
+          "from_step": "ts_optimize",
+          "product_kind": "optimize_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "ts_frequency",
+          "product_kind": "frequency_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "delegation_target": null,
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "implementation_id": "cccp.calculation.tasks.irc",
+      "intent": "Bidirectional intrinsic-reaction-coordinate integration from the optimized TS candidate in both directions. One direction alone is insufficient for a connectivity claim; the direction-to-endpoint assignment is resolved by mapped bond topology, not by the direction label.",
+      "parameters": {
+        "directions": [
+          "forward",
+          "reverse"
+        ]
+      },
+      "produces": [
+        {
+          "from_step": "irc",
+          "product_kind": "irc_forward",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "irc",
+          "product_kind": "irc_reverse",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {
+          "directions": [
+            "forward",
+            "reverse"
+          ]
+        },
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "irc"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "irc"
+      },
+      "step_id": "irc",
+      "task_kind": "irc",
+      "validators": [
+        {
+          "required": true,
+          "validator_id": "check.irc_bidirectional_completion",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.irc_endpoint_mapping",
+          "validator_version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.vibration.compute",
+      "consumes": [
+        {
+          "from_step": "ts_optimize",
+          "product_kind": "optimize_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "delegation_target": "cccp.calculation.run_frequency",
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "implementation_id": "cccp.calculation.tasks.frequency",
+      "intent": "Frequency calculation on the optimized TS candidate. Exactly one significant imaginary frequency supports only a local first-order saddle candidate, never connectivity by itself.",
+      "parameters": {},
+      "produces": [
+        {
+          "from_step": "ts_frequency",
+          "product_kind": "frequency_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "ts_frequency",
+          "product_kind": "imaginary_mode",
+          "selector": {
+            "field": "native_printed_index",
+            "selector_kind": "mode"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {},
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "frequency"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": "vibration.compute",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "ts_frequency",
+      "task_kind": "frequency",
+      "validators": [
+        {
+          "required": true,
+          "validator_id": "check.frequency_membership",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.frequency_evidence",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.stationary_point",
+          "validator_version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "alternatives": [],
+      "binding_id": "science.geometry.optimize",
+      "consumes": [
+        {
+          "from_step": "candidate_path",
+          "product_kind": "path_geometry",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        },
+        {
+          "from_step": "candidate_frequency",
+          "product_kind": "native_printed_mode",
+          "selector": {
+            "field": "native_printed_index",
+            "selector_kind": "mode"
+          }
+        }
+      ],
+      "delegation_target": "cccp.calculation.run_optimize",
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "implementation_id": "cccp.calculation.tasks.optimize",
+      "intent": "Transition-state optimization with the existing optimize task in transition_state mode. The mode is taken from candidate_frequency by its native printed index and upstream provenance (typed mode selector); it is never guessed from array position. The optimizer mode index is resolved from the source mode vector at dispatch.",
+      "parameters": {
+        "mode": "transition_state"
+      },
+      "produces": [
+        {
+          "from_step": "ts_optimize",
+          "product_kind": "optimize_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          }
+        }
+      ],
+      "request": {
+        "charge": 0,
+        "electronic_state": {
+          "label": "closed-shell singlet ground state",
+          "reference_state_id": "",
+          "spatial_symmetry": "auto",
+          "spin_mode": "auto",
+          "state_id": "state.singlet.s0",
+          "target_multiplicity": 1
+        },
+        "level": {
+          "basis": "def2-TZVP",
+          "method": "wB97X-D4"
+        },
+        "multiplicity": 1,
+        "options": {
+          "mode": "transition_state",
+          "rescue": {
+            "policy": "adaptive"
+          }
+        },
+        "schema_version": 1,
+        "structure": {
+          "content_sha256": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+          "elements": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "kind": "file",
+          "role": "minimum"
+        },
+        "task": "optimize"
+      },
+      "required": true,
+      "selection": {
+        "capability_id": "geometry.optimize",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "ts_optimize",
+      "task_kind": "optimize",
+      "validators": [
+        {
+          "required": true,
+          "validator_id": "check.optimization_convergence",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.stationary_point",
+          "validator_version": "1.0.0"
+        },
+        {
+          "required": true,
+          "validator_id": "check.ts_mode_native_provenance",
+          "validator_version": "1.0.0"
+        }
+      ]
+    }
+  ],
+  "topological_order": [
+    "endpoint_prep",
+    "candidate_path",
+    "candidate_frequency",
+    "ts_optimize",
+    "ts_frequency",
+    "irc",
+    "endpoint_reactants",
+    "endpoint_product",
+    "energy_thermochemistry"
+  ]
+}

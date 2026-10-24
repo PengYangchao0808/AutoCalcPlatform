@@ -1,0 +1,445 @@
+{
+  "plan_definition_digest": "v2:e87c94d15a195aa08ba1c145d0fd0c19",
+  "recipe_id": "recipe.diels_alder.limited.v1",
+  "required_step_ids": [
+    "endpoint_prep",
+    "candidate_path",
+    "candidate_frequency",
+    "ts_optimize",
+    "ts_frequency",
+    "irc",
+    "endpoint_reactants",
+    "endpoint_product",
+    "energy_thermochemistry"
+  ],
+  "schema": "acp2.science.recipe-compile-record",
+  "schema_digest": "sha256:1f04fe9c9fa1075102724924150e0b664e23937f631816d7d4a673b084c81a00",
+  "schema_version": 1,
+  "steps": [
+    {
+      "binding_id": "science.task.conformer_search",
+      "capability_ref": null,
+      "declared_parameters": {
+        "energy_window": 6.0,
+        "gfn_level": 2
+      },
+      "declared_parameters_digest": "sha256:282accc0dc6125eec6b00faebe8476f40f3854d0bef46a7a25443fb5937822e6",
+      "delegation_target": null,
+      "dependencies": [],
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "effective_options": {
+        "energy_window": 6.0,
+        "gfn_level": 2
+      },
+      "effective_options_digest": "sha256:282accc0dc6125eec6b00faebe8476f40f3854d0bef46a7a25443fb5937822e6",
+      "implementation_id": "cccp.calculation.tasks.conformer_search",
+      "intent": "Bounded structure preparation for the two frozen endpoints: at most one input conformation per endpoint (max_conformers_per_endpoint = 1). The CREST energy window 6.0 kcal/mol and GFN2 level are constructed search bounds, not measured data and not a global-conformer-minimum claim. The declared single conformation is used when the bounded search is not permitted.",
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "conformer_search"
+      },
+      "step_id": "endpoint_prep",
+      "task_kind": "conformer_search"
+    },
+    {
+      "binding_id": "science.task.xtb_path_search",
+      "capability_ref": null,
+      "declared_parameters": {
+        "gfn_level": 2
+      },
+      "declared_parameters_digest": "sha256:0ee2228ef34625111522358c9062a1f60c72d69468b64c8f8c10e43415e770d1",
+      "delegation_target": null,
+      "dependencies": [
+        {
+          "address": "endpoint_prep::endpoint_structures::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:c87ffbe2a85e83b4f33f8cbaad4cffe29102274ee82e8fb57ec6356c642863c8",
+          "from_step": "endpoint_prep",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "endpoint_structures",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "effective_options": {
+        "backend_inputs": [],
+        "gfn_level": 2
+      },
+      "effective_options_digest": "sha256:453e1d74cbc7a5371cc352b60b823c05ff6d338e0fcb54833991d82334a6a2bc",
+      "implementation_id": "cccp.calculation.tasks.xtb_path_search",
+      "intent": "Determine at most one candidate path between the two frozen endpoints with GFN2-xTB PATH. The fixture candidate cap is one path; this is an execution-chain path determination between known endpoints, not a research candidate search and never an endo/exo or selectivity claim.",
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "xtb_path_search"
+      },
+      "step_id": "candidate_path",
+      "task_kind": "xtb_path_search"
+    },
+    {
+      "binding_id": "science.vibration.compute",
+      "capability_ref": "vibration.compute",
+      "declared_parameters": null,
+      "declared_parameters_digest": null,
+      "delegation_target": "cccp.calculation.run_frequency",
+      "dependencies": [
+        {
+          "address": "candidate_path::path_geometry::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:7b52ea49adb2eb7e93ad345a89b63400a9cacc76ecb32ee04f46cf72365a4fe7",
+          "from_step": "candidate_path",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "path_geometry",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "effective_options": {},
+      "effective_options_digest": "sha256:ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "implementation_id": "cccp.calculation.tasks.frequency",
+      "intent": "Frequency calculation on the declared candidate-path TS guess. The imaginary mode is identified by the native printed mode index recorded in the frequency output (the upstream step is its provenance), never by an array position. Mapping to the optimizer mode index is deferred to cccp.analysis.tsmode.mode_mapping.resolve_target_mode at dispatch.",
+      "required": true,
+      "selection": {
+        "capability_id": "vibration.compute",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "candidate_frequency",
+      "task_kind": "frequency"
+    },
+    {
+      "binding_id": "science.geometry.optimize",
+      "capability_ref": "geometry.optimize",
+      "declared_parameters": {
+        "mode": "transition_state"
+      },
+      "declared_parameters_digest": "sha256:2c397893363e4f2288dd9f6cfbe50360ec768e122da241435a7151fb7c9fbf30",
+      "delegation_target": "cccp.calculation.run_optimize",
+      "dependencies": [
+        {
+          "address": "candidate_frequency::native_printed_mode::{\"field\":\"native_printed_index\",\"selector_kind\":\"mode\"}",
+          "address_digest": "sha256:76c918edfc6eac6218564d9390cf3866e608fceaf2ae8f6356102a9e92485009",
+          "from_step": "candidate_frequency",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "native_printed_mode",
+          "selector": {
+            "field": "native_printed_index",
+            "selector_kind": "mode"
+          },
+          "upstream_content_digest": null
+        },
+        {
+          "address": "candidate_path::path_geometry::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:7b52ea49adb2eb7e93ad345a89b63400a9cacc76ecb32ee04f46cf72365a4fe7",
+          "from_step": "candidate_path",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "path_geometry",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "effective_options": {
+        "mode": "transition_state",
+        "rescue": {
+          "policy": "adaptive"
+        }
+      },
+      "effective_options_digest": "sha256:0f58ab6a1bfe225b3444be8f3a0541b023241db5d884102b8e893de1bbbcf1fa",
+      "implementation_id": "cccp.calculation.tasks.optimize",
+      "intent": "Transition-state optimization with the existing optimize task in transition_state mode. The mode is taken from candidate_frequency by its native printed index and upstream provenance (typed mode selector); it is never guessed from array position. The optimizer mode index is resolved from the source mode vector at dispatch.",
+      "required": true,
+      "selection": {
+        "capability_id": "geometry.optimize",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "ts_optimize",
+      "task_kind": "optimize"
+    },
+    {
+      "binding_id": "science.vibration.compute",
+      "capability_ref": "vibration.compute",
+      "declared_parameters": null,
+      "declared_parameters_digest": null,
+      "delegation_target": "cccp.calculation.run_frequency",
+      "dependencies": [
+        {
+          "address": "ts_optimize::optimize_result::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:701eac19729f3972912c4b2c5f59cf35f86703c4c9e2856ec473d01408e8395f",
+          "from_step": "ts_optimize",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "optimize_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "effective_options": {},
+      "effective_options_digest": "sha256:ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "implementation_id": "cccp.calculation.tasks.frequency",
+      "intent": "Frequency calculation on the optimized TS candidate. Exactly one significant imaginary frequency supports only a local first-order saddle candidate, never connectivity by itself.",
+      "required": true,
+      "selection": {
+        "capability_id": "vibration.compute",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "ts_frequency",
+      "task_kind": "frequency"
+    },
+    {
+      "binding_id": "science.task.irc",
+      "capability_ref": null,
+      "declared_parameters": {
+        "directions": [
+          "forward",
+          "reverse"
+        ]
+      },
+      "declared_parameters_digest": "sha256:0022acd5e44f81f491fbc792063166d352f7d616ebf8f1e9e675bac51f37d191",
+      "delegation_target": null,
+      "dependencies": [
+        {
+          "address": "ts_frequency::frequency_result::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:a39fb38d587d8abffde8294440f46dd34b4f16792e67e9562e6811a3ef5b360d",
+          "from_step": "ts_frequency",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "frequency_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        },
+        {
+          "address": "ts_optimize::optimize_result::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:701eac19729f3972912c4b2c5f59cf35f86703c4c9e2856ec473d01408e8395f",
+          "from_step": "ts_optimize",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "optimize_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "effective_options": {
+        "directions": [
+          "forward",
+          "reverse"
+        ]
+      },
+      "effective_options_digest": "sha256:0022acd5e44f81f491fbc792063166d352f7d616ebf8f1e9e675bac51f37d191",
+      "implementation_id": "cccp.calculation.tasks.irc",
+      "intent": "Bidirectional intrinsic-reaction-coordinate integration from the optimized TS candidate in both directions. One direction alone is insufficient for a connectivity claim; the direction-to-endpoint assignment is resolved by mapped bond topology, not by the direction label.",
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "irc"
+      },
+      "step_id": "irc",
+      "task_kind": "irc"
+    },
+    {
+      "binding_id": "science.electronic.energy",
+      "capability_ref": "electronic.energy",
+      "declared_parameters": {
+        "stability_check": false
+      },
+      "declared_parameters_digest": "sha256:8d3e341b179b841cb836f5664b8df62504b9f63ede99e8281b74d3319b591fa4",
+      "delegation_target": "cccp.calculation.run_singlepoint",
+      "dependencies": [
+        {
+          "address": "irc::irc_forward::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:e0a89c630c665a90056c2d92f8960ee74ddee4597031eb2b2fbaa7a66d150b4d",
+          "from_step": "irc",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "irc_forward",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        },
+        {
+          "address": "irc::irc_reverse::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:ee8f1d70fbb5c5fbd93d6c6c416853fc099d7576ff9030e6f5335b7c78965813",
+          "from_step": "irc",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "irc_reverse",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "effective_options": {
+        "stability_check": false
+      },
+      "effective_options_digest": "sha256:8d3e341b179b841cb836f5664b8df62504b9f63ede99e8281b74d3319b591fa4",
+      "implementation_id": "cccp.calculation.tasks.singlepoint",
+      "intent": "Check the IRC endpoint that maps to the frozen separated butadiene + ethene reactants: bond-topology mapping and stable atom order, then re-evaluate that endpoint at the frozen level. The direction label is not trusted; both IRC directions are consumed and the mapping decides which endpoint this is.",
+      "required": true,
+      "selection": {
+        "capability_id": "electronic.energy",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "endpoint_reactants",
+      "task_kind": "singlepoint"
+    },
+    {
+      "binding_id": "science.electronic.energy",
+      "capability_ref": "electronic.energy",
+      "declared_parameters": {
+        "stability_check": false
+      },
+      "declared_parameters_digest": "sha256:8d3e341b179b841cb836f5664b8df62504b9f63ede99e8281b74d3319b591fa4",
+      "delegation_target": "cccp.calculation.run_singlepoint",
+      "dependencies": [
+        {
+          "address": "irc::irc_forward::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:e0a89c630c665a90056c2d92f8960ee74ddee4597031eb2b2fbaa7a66d150b4d",
+          "from_step": "irc",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "irc_forward",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        },
+        {
+          "address": "irc::irc_reverse::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:ee8f1d70fbb5c5fbd93d6c6c416853fc099d7576ff9030e6f5335b7c78965813",
+          "from_step": "irc",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "irc_reverse",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": true,
+      "effective_options": {
+        "stability_check": false
+      },
+      "effective_options_digest": "sha256:8d3e341b179b841cb836f5664b8df62504b9f63ede99e8281b74d3319b591fa4",
+      "implementation_id": "cccp.calculation.tasks.singlepoint",
+      "intent": "Check the IRC endpoint that maps to the frozen cyclohexene product: bond-topology mapping and stable atom order, then re-evaluate that endpoint at the frozen level. The direction label is not trusted; both IRC directions are consumed and the mapping decides which endpoint this is.",
+      "required": true,
+      "selection": {
+        "capability_id": "electronic.energy",
+        "mode": "capability",
+        "task_kind": null
+      },
+      "step_id": "endpoint_product",
+      "task_kind": "singlepoint"
+    },
+    {
+      "binding_id": "science.task.thermochemistry",
+      "capability_ref": null,
+      "declared_parameters": {
+        "pressure_atm": 0.9869232667160128,
+        "temperature_k": 298.15
+      },
+      "declared_parameters_digest": "sha256:aea5171530e6d3f8e7bf849814871fa3a8b905fc0c199a305c675476ff136883",
+      "delegation_target": null,
+      "dependencies": [
+        {
+          "address": "endpoint_product::endpoint_energy::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:eace7652cbf3109d4f057c181c1efae62395b8cd69867c2e644f6346cfed8ff1",
+          "from_step": "endpoint_product",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "endpoint_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        },
+        {
+          "address": "endpoint_reactants::endpoint_energy::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:cfd55d41bba191c240bf114b724f86e2362e9e275a8973f9cae6d62780d3c8bb",
+          "from_step": "endpoint_reactants",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "endpoint_energy",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        },
+        {
+          "address": "ts_frequency::frequency_result::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:a39fb38d587d8abffde8294440f46dd34b4f16792e67e9562e6811a3ef5b360d",
+          "from_step": "ts_frequency",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "frequency_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        },
+        {
+          "address": "ts_optimize::optimize_result::{\"selector_kind\":\"whole_product\"}",
+          "address_digest": "sha256:701eac19729f3972912c4b2c5f59cf35f86703c4c9e2856ec473d01408e8395f",
+          "from_step": "ts_optimize",
+          "note": "compile-only: no step was executed, so no upstream content digest exists",
+          "product_kind": "optimize_result",
+          "selector": {
+            "selector_kind": "whole_product"
+          },
+          "upstream_content_digest": null
+        }
+      ],
+      "diagnostic_only": false,
+      "dispatchable": false,
+      "effective_options": {
+        "pressure_atm": 0.9869232667160128,
+        "temperature_k": 298.15
+      },
+      "effective_options_digest": "sha256:aea5171530e6d3f8e7bf849814871fa3a8b905fc0c199a305c675476ff136883",
+      "implementation_id": "cccp.calculation.tasks.thermochemistry",
+      "intent": "Compare Delta-E-double-dagger and Delta-G-double-dagger for the single declared candidate path under the frozen method, basis, electronic state, temperature, pressure, standard state, reference state and energy unit. No tunneling correction, no experimental-rate claim and no comparison across differing methods or electronic states.",
+      "required": true,
+      "selection": {
+        "capability_id": null,
+        "mode": "existing_task_kind",
+        "task_kind": "thermochemistry"
+      },
+      "step_id": "energy_thermochemistry",
+      "task_kind": "thermochemistry"
+    }
+  ],
+  "topological_order": [
+    "endpoint_prep",
+    "candidate_path",
+    "candidate_frequency",
+    "ts_optimize",
+    "ts_frequency",
+    "irc",
+    "endpoint_reactants",
+    "endpoint_product",
+    "energy_thermochemistry"
+  ]
+}

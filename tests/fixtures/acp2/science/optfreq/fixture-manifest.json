@@ -1,0 +1,112 @@
+{
+  "constructed": true,
+  "expected_outcomes": {
+    "absent_hessian": "inconclusive",
+    "converged_synthetic_minimum": "supported",
+    "no_optimize_result": "not_evaluated",
+    "unconverged_optimization": "refuted",
+    "wrong_electronic_state": "refuted",
+    "wrong_method": "refuted",
+    "wrong_structure_frequency": "refuted"
+  },
+  "file_digests": {
+    "frequency-request.json": "06a10f77445318637eb1e4e96c4f3f936e3b6bc78730e4efb07b98380be18383",
+    "initial.xyz": "1a21db8d08a35e5dcc961cf47ac2b688a5014dbcf8e35e7db34303ea81d376c7",
+    "optimize-request.json": "ab6bffc93a15a9da94d5282a63ca54b24bb50563028f49dc87a870559a4bbf2e",
+    "optimized.xyz": "d6c40b0505e559882ef4bf81f50953b5c205f851613ac5cfa99a54852016e7db",
+    "scientific-checks.json": "ce20bf9bd4e001c75dae2e9796a1a898328dab5f53a804e379f5acef0cebe2ab",
+    "source-references.json": "84d0e2c9e45589028afc0db6a676c2085cd27f6df508483a7557d9c6455b3986",
+    "synthetic/frequency-absent-hessian-result.json": "a3f2c432aec06cc3e7ed44651e332aabb0ad2d7537f1582742dc785d4368437d",
+    "synthetic/frequency-absent-hessian.out": "912fc3ba149ec14b9a65dabe9c7cb94c8842b4b5ce8b20a64e8aed3ef3ad6ef0",
+    "synthetic/frequency-minimum-result.json": "a71980fba259861c340323993ff4a9e9f26462eea6c912b36459fb812eafcdde",
+    "synthetic/frequency-minimum.out": "18242c85912c14168a85fd30bdf5c4a83b650541158d12bb80d58a3413e6c0ae",
+    "synthetic/frequency-wrong-method-result.json": "3a7d90ede0ce4858282a07d8d791fbc254e6ed183886f79b705b71858f699bae",
+    "synthetic/frequency-wrong-state-result.json": "a015c143cc34d326f207203b924a26469e7088a64c492be4c435f8748e55d096",
+    "synthetic/frequency-wrong-structure-result.json": "4bb08eff4ace19885fa49cc8bddc57313779f61c44d51b437f2038aec8907cbf",
+    "synthetic/optimize-converged-result.json": "1a55cf19ce224f70831d231eb75e8b31d286c239b3c908124a1852f8fb372d0d",
+    "synthetic/optimize-minimum.out": "e2631d27d2a70778160734ce94012df4f7608603ca12db8b1fc69cd474ef5a84",
+    "synthetic/optimize-unconverged-result.json": "f725c072f83f6e666e5d21669e5b36c076f2092b15b512534532c15aaed0edff",
+    "synthetic/wrong-structure.xyz": "6a2c0c9919cc12d4602331ab36b6320ead56b8e0f1ce8879e0121764dba1060a"
+  },
+  "fixture_id": "optfreq-water-wb97xd4-def2svp",
+  "fixtures": {
+    "frequency_request": "frequency-request.json",
+    "initial_structure": "initial.xyz",
+    "optimize_request": "optimize-request.json",
+    "optimized_structure": "optimized.xyz",
+    "scientific_checks": "scientific-checks.json",
+    "source_references": "source-references.json",
+    "synthetic_outputs": {
+      "frequency_absent_hessian": "synthetic/frequency-absent-hessian.out",
+      "frequency_minimum": "synthetic/frequency-minimum.out",
+      "optimize_minimum": "synthetic/optimize-minimum.out"
+    },
+    "synthetic_results": {
+      "converged_optimize": "synthetic/optimize-converged-result.json",
+      "minimum_frequency": "synthetic/frequency-minimum-result.json"
+    }
+  },
+  "live_validation_gap": "No usable QC executable is installed on this host. This fixture freezes what will be checked; A-11b validates the real authorized snapshot and native outputs. No real artifact is claimed here.",
+  "molecule": {
+    "atom_count": 3,
+    "atom_order": [
+      "O",
+      "H",
+      "H"
+    ],
+    "charge": 0,
+    "closed_shell": true,
+    "coordinate_unit": "angstrom",
+    "electron_count": 10,
+    "multiplicity": 1,
+    "name": "water"
+  },
+  "negative_cases": {
+    "absent_hessian": "synthetic/frequency-absent-hessian-result.json",
+    "unconverged_optimization": "synthetic/optimize-unconverged-result.json",
+    "wrong_electronic_state": "synthetic/frequency-wrong-state-result.json",
+    "wrong_method": "synthetic/frequency-wrong-method-result.json",
+    "wrong_structure_frequency": "synthetic/frequency-wrong-structure-result.json",
+    "wrong_structure_geometry": "synthetic/wrong-structure.xyz"
+  },
+  "run_key": null,
+  "run_key_gap": "B01 has not published acceptance-result.schema.json / acp2.acceptance.v1 or the (owner, scenario, phase, run_id) registry, so no run key is issued for this fixture and the real run stays NOT_VERIFIED.",
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1,
+  "scientific_parameters": {
+    "backend_selection": {
+      "explicit_backend": null,
+      "note": "TaskRequest.backend stays null; cccp capability selection is deterministic.",
+      "preferred": "orca"
+    },
+    "basis": "def2-SVP",
+    "charge": 0,
+    "electronic_state": {
+      "label": "closed-shell singlet ground state",
+      "state_id": "s0",
+      "target_multiplicity": 1
+    },
+    "energy_unit": "hartree",
+    "frequency_task": "frequency",
+    "frequency_unit": "cm-1",
+    "method": "wB97X-D4",
+    "multiplicity": 1,
+    "optimize_task": "optimize"
+  },
+  "source": "Constructed static fixture derived from a water geometry. No optimization or frequency calculation has been executed; every synthetic output is labelled constructed. Real artifacts are validated only in A-11b (todo 23).",
+  "task_kind": "optfreq",
+  "thresholds": {
+    "atom_count_tolerance": 0,
+    "claim_statuses": [
+      "supported",
+      "refuted",
+      "inconclusive",
+      "not_evaluated"
+    ],
+    "coordinate_abs_tolerance_angstrom": 0.001,
+    "imaginary_mode_threshold_cm1": 0.0,
+    "low_frequency_threshold_cm1": 50.0,
+    "source_module": "cccp.analysis.research.validators",
+    "validator_version": "1.0.0"
+  }
+}

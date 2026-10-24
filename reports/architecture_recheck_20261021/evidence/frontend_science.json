@@ -1,0 +1,22 @@
+{
+  "bounded": {
+    "old_source_digest": "sha256:1a78315664607aa03affa59135fd867ef123e8080101f529ed927443d99a0bcb",
+    "new_source_digest": "sha256:22fd029c2410c2010d6c5f4111172a0054f769cfca7275168f1a5e2068fc349d",
+    "spliced_old_identity": true,
+    "differs_expected_new_identity": true,
+    "is_cache_adoptable": true
+  },
+  "nmr": {
+    "before": {
+      "canvasConnected": true,
+      "disposed": false,
+      "atoms": 3
+    },
+    "after": {
+      "canvasConnected": false,
+      "disposed": false,
+      "registryContainsDetachedViewer": true,
+      "body": "nmr.no_report"
+    }
+  }
+}

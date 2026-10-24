@@ -374,6 +374,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "NmrShieldingOptions": "requests",
     "OrcaGradientOptions": "requests",
     "TaskContractMapping": "requests",
+    "XtbConstrainedOptOptions": "requests",
     "XtbPathSearchOptions": "requests",
     "P2_TASK_CONTRACTS": "requests",
     "fragment_structured_conflicts": "requests",
@@ -388,6 +389,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "NmrShielding": "results",
     "NmrShieldingPayload": "results",
     "OrcaGradientPayload": "results",
+    "XtbConstrainedOptPayload": "results",
     "XtbPathFrame": "results",
     "XtbPathSearchPayload": "results",
     "TASK_PAYLOAD_TYPES": "results",
@@ -449,6 +451,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "run_scan": "tasks.scan",
     "run_singlepoint": "tasks.singlepoint",
     "run_thermochemistry": "tasks.thermochemistry",
+    "run_xtb_constrained_opt": "tasks.xtb_constrained_opt",
     "run_xtb_path_search": "tasks.xtb_path_search",
 }
 

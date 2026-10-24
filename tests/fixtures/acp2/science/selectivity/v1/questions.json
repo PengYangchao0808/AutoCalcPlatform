@@ -1,0 +1,124 @@
+{
+  "case_id": "selectivity.cp_methyl_acrylate.endo_exo.v1",
+  "constructed": true,
+  "hypotheses": [
+    {
+      "hypothesis_id": "hypothesis.endo",
+      "path_id": "path.endo",
+      "statement": "The endo product is the lower-barrier path under the frozen conditions."
+    },
+    {
+      "hypothesis_id": "hypothesis.exo",
+      "path_id": "path.exo",
+      "statement": "The exo product is the lower-barrier path under the frozen conditions."
+    }
+  ],
+  "questions": [
+    {
+      "claim_status_vocabulary": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "comparison_conditions": {
+        "compatibility_requirements": [
+          "same_method",
+          "same_electronic_state",
+          "same_temperature",
+          "same_pressure",
+          "same_standard_state",
+          "same_reference_state",
+          "same_energy_unit"
+        ],
+        "electronic_state": {
+          "charge": 0,
+          "multiplicity": 1,
+          "state_id": "state.singlet.s0"
+        },
+        "energy_unit": "kcal_per_mol",
+        "method": "wB97X-D4/def2-SVP",
+        "pressure_pa": 100000.0,
+        "reference_state": "separated cyclopentadiene + methyl acrylate at infinite separation, and the declared product at the same conditions",
+        "standard_state": "1_bar_ideal_gas",
+        "temperature_k": 298.15,
+        "unknown_fields": []
+      },
+      "hypothesis_refs": [
+        "hypothesis.endo"
+      ],
+      "question_id": "question.selectivity.endo.activation_energy.v1",
+      "question_type": "activation_energy",
+      "required_evidence_types": [
+        "transition_state_geometry",
+        "imaginary_frequency",
+        "irc_forward",
+        "irc_reverse",
+        "stationary_point_gradient",
+        "path_endpoints",
+        "energy_difference",
+        "thermochemistry"
+      ],
+      "schema_version": 1
+    },
+    {
+      "claim_status_vocabulary": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "comparison_conditions": {
+        "compatibility_requirements": [
+          "same_method",
+          "same_electronic_state",
+          "same_temperature",
+          "same_pressure",
+          "same_standard_state",
+          "same_reference_state",
+          "same_energy_unit"
+        ],
+        "electronic_state": {
+          "charge": 0,
+          "multiplicity": 1,
+          "state_id": "state.singlet.s0"
+        },
+        "energy_unit": "kcal_per_mol",
+        "method": "wB97X-D4/def2-SVP",
+        "pressure_pa": 100000.0,
+        "reference_state": "separated cyclopentadiene + methyl acrylate at infinite separation, and the declared product at the same conditions",
+        "standard_state": "1_bar_ideal_gas",
+        "temperature_k": 298.15,
+        "unknown_fields": []
+      },
+      "hypothesis_refs": [
+        "hypothesis.exo"
+      ],
+      "question_id": "question.selectivity.exo.activation_energy.v1",
+      "question_type": "activation_energy",
+      "required_evidence_types": [
+        "transition_state_geometry",
+        "imaginary_frequency",
+        "irc_forward",
+        "irc_reverse",
+        "stationary_point_gradient",
+        "path_endpoints",
+        "energy_difference",
+        "thermochemistry"
+      ],
+      "schema_version": 1
+    }
+  ],
+  "real_run": false,
+  "schema": "acp2.science.selectivity-question-set",
+  "schema_version": 1,
+  "selectivity_comparison": {
+    "both_paths_required": true,
+    "comparison_kind": "relative activation energy between the two declared paths",
+    "free_energy_observable": "Delta-Delta-G-double-dagger(endo/exo) only when both paths carry complete thermochemistry",
+    "no_experimental_claim": true,
+    "preference_rule": "endo preference if Delta-Delta-E <= -0.5 kcal_per_mol; exo preference if Delta-Delta-E >= +0.5 kcal_per_mol; otherwise no preference (inconclusive within tolerance)",
+    "primary_observable": "Delta-Delta-E-double-dagger = Delta-E-double-dagger(endo) - Delta-E-double-dagger(exo) in kcal_per_mol",
+    "tolerance_kcal_per_mol": 0.5
+  }
+}
