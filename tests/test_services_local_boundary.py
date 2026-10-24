@@ -459,7 +459,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     monkeypatch.delenv("ACP_DEPLOYMENT_TIER", raising=False)
     monkeypatch.delenv("ACP_HOST", raising=False)
-    monkeypatch.delenv("ACP_PUBLIC_ORIGIN", raising=False)
+    # Explicit empty value = direct-access mode, and it short-circuits init
+    # config lookup so a developer's ~/.cccp.yaml public_origin cannot leak in.
+    monkeypatch.setenv("ACP_PUBLIC_ORIGIN", "")
     from acp.api.server import create_app
 
     with TestClient(create_app(run_root=tmp_path, max_running=1)) as test_client:

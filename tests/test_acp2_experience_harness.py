@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -315,20 +316,95 @@ def test_live_with_fake_transport_fails(harness, scenarios, runtime_env, tmp_pat
     assert any(item["name"] == "live.no_fake_transport" for item in document["assertions"])
 
 
-def test_clean_live_environment_is_accepted(harness, scenarios, runtime_env, tmp_path, monkeypatch):
-    def handler(context):
-        return 0 if scenarios.assert_live_environment(context) else 1
+def _run_live_selfcheck(scenarios_module) -> subprocess.CompletedProcess[str]:
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in scenarios_module._FAKE_ENV_KEYS
+    }
+    return subprocess.run(
+        [sys.executable, str(SCENARIOS_PATH), "--selfcheck-live-env"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+    )
 
-    monkeypatch.setattr(harness, "load_scenario_impls", lambda: {"mcp-live": handler})
+
+def test_clean_live_environment_is_accepted(scenarios, monkeypatch):
     for key in scenarios._FAKE_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
-    out = _out(tmp_path, "mcp-live", "clean-live", suffix="main/live")
-    code = harness.main(
-        ["--scenario", "mcp-live", "--out", str(out), "--timeout", "60", "--mode", "live"]
+    completed = _run_live_selfcheck(scenarios)
+    assert completed.returncode == 0, completed.stderr
+    assert "live.no_fake_transport: PASS" in completed.stdout
+
+
+def test_clean_live_environment_survives_parent_sys_modules_residue(scenarios, monkeypatch):
+    pytest.importorskip("httpx")
+    residue = importlib.import_module("httpx._transports.mock")
+    assert residue.__name__ in sys.modules
+    for key in scenarios._FAKE_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    completed = _run_live_selfcheck(scenarios)
+    assert completed.returncode == 0, completed.stderr
+    assert "live.no_fake_transport: PASS" in completed.stdout
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    [
+        "fake_backend",
+        "tests.fake_transport",
+        "stub_model",
+        "acp.mock_client",
+        "backend_fake",
+        "transport.mock_stub",
+        "mock_backend_client",
+    ],
+)
+def test_fake_module_regex_hits_test_double_token_pairs(scenarios, module_name):
+    assert scenarios._FAKE_MODULE_RE.search(module_name) is not None
+    assert scenarios._is_fake_module(module_name) is True
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    [
+        "httpx._transports.mock",
+        "unittest.mock",
+        "acp.nmr.dp5q_stub",
+        "my.transport_module",
+        "mockingbird_client_helpers",
+    ],
+)
+def test_fake_module_regex_ignores_loose_substring_traps(scenarios, module_name):
+    assert scenarios._FAKE_MODULE_RE.search(module_name) is None
+    assert scenarios._is_fake_module(module_name) is False
+
+
+def test_allowlist_wins_even_if_regex_is_widened(scenarios, monkeypatch):
+    monkeypatch.setattr(scenarios, "_FAKE_MODULE_RE", re.compile(r".*"))
+    assert scenarios._is_fake_module("httpx._transports.mock") is False
+    assert scenarios._is_fake_module("fake_backend") is True
+
+
+def test_injected_fake_module_fails_live_assertion(scenarios, monkeypatch):
+    for key in scenarios._FAKE_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    sys.modules["tests.fake_transport"] = SimpleNamespace(__name__="tests.fake_transport")
+    try:
+        context = SimpleNamespace(
+            identity=SimpleNamespace(evidence_kind="live"),
+            assertions=[],
+            reason=None,
+        )
+        assert scenarios.assert_live_environment(context) is False
+    finally:
+        sys.modules.pop("tests.fake_transport", None)
+    assert any(
+        item["status"] == "FAIL" and "tests.fake_transport" in (item["detail"] or "")
+        for item in context.assertions
     )
-    assert code == 0
-    _, document = _one_receipt(out)
-    assert document["result"] == "PASS"
 
 
 def test_redaction_masks_keys_and_bearer_tokens(harness):

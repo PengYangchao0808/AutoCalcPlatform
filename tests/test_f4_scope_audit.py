@@ -2511,6 +2511,13 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/backends/",
     "src/acp/chem/composition.py",
     "src/acp/core/registry.py",
+    # Plan B1/M3: "init 任务保存目录生效" (tests/baseline/services-evidence/
+    # migration_ledger.md, row dated 2026-10-22) reads the persisted
+    # ``deployment.params.run_root`` through
+    # ``normalize_configured_run_root()``/``resolve_run_root()``.  1222c97
+    # canonicalized run_root resolution; 7ec3973 preserved the workspace fix.
+    # Exact file only — never widen this to ``src/acp/core/``.
+    "src/acp/core/paths.py",
     "src/acp/catalog.py",
     # Four-site version lockstep (ANTI-PATTERN #2): every release commit bumps
     # this file, so the audit must not flag it as unaudited.

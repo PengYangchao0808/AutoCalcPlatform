@@ -15,7 +15,7 @@
  *   7. no second payload: the submit adapter receives exactly the wizard
  *      envelope builder's output (the wizard payload shape);
  *   8. no fetch() in the feature;
- *   9. discover runs before preflight; the preflight plan is not a job body;
+ *   9. discover runs before preflight; preflight sends the normalized request;
  *  10. structure preview goes through the wizard parse endpoint.
  */
 "use strict";
@@ -112,7 +112,12 @@ function setup(harness, routes, options) {
   const W = sandbox.window;
   const log = [];
   const v2 = (url, opts) => {
-    log.push({ adapter: "v2", url: String(url), method: (opts && opts.method) || "GET" });
+    log.push({
+      adapter: "v2",
+      url: String(url),
+      method: (opts && opts.method) || "GET",
+      body: opts && opts.body,
+    });
     const path = String(url);
     if (path.indexOf("/science/capabilities") === 0) return call(routes.capabilities);
     if (path.indexOf("/science/preflight") === 0) return call(routes.preflight);
@@ -146,9 +151,12 @@ function setup(harness, routes, options) {
   };
   const catalog = options.catalog ? () => options.catalog : undefined;
   const Q = W.ACPScienceQuestion;
-  Q.init(Object.assign({ science: W.ACPClient.science, wizardEndpoints: W.ACPClient.wizardEndpoints, submit, buildJobBody }, catalog ? { catalog } : {}));
+  const initOptions = { science: W.ACPClient.science, wizardEndpoints: W.ACPClient.wizardEndpoints, submit, buildJobBody };
+  if (catalog) initOptions.catalog = catalog;
+  if (options.fixtureMode !== undefined) initOptions.fixtureMode = options.fixtureMode;
+  Q.init(initOptions);
   const dom = sandbox.document;
-  Q.mount(dom, { autoDiscover: false });
+  Q.mount(dom, { autoDiscover: false, fixtureMode: options.fixtureMode });
   return {
     sandbox, W, Q, dom, log, fetchCalls, submitCalls,
     getBuiltSpec: () => builtSpec,
@@ -192,7 +200,7 @@ module.exports.register = async function (h) {
       capabilities: { reject: new Error("platform absent") },
       preflight: { body: QFIX.preflight },
       view: { body: QFIX.view },
-    }));
+    }), { fixtureMode: true });
     assert(Object.keys(h0.sandbox).indexOf("modelConfig") === -1, "sandbox must carry no model config");
     await h0.Q.loadDemoStructure();
     const discovered = await h0.Q.discover();
@@ -204,6 +212,23 @@ module.exports.register = async function (h) {
     assert(detail, "submit resolves the read-only detail");
     assertEq(h0.fetchCalls.length, 0, "no global fetch during the whole flow");
     assertEq(h0.Q.getState().taskRef.job_id, QFIX.submit.job_id);
+  });
+
+  await test("production mode: a capabilities failure sets state.error and never adopts fixtures", async () => {
+    const h0 = setup(h, routeSet({
+      capabilities: { reject: new Error("HTTP 404") },
+      preflight: { body: QFIX.preflight },
+    }));
+    const state = await h0.Q.discover();
+    assertEq(state.demo, false, "production failure is not demo mode");
+    assertEq(state.fixtureMode, false);
+    assertEq(state.discovered, false, "discovery did not succeed");
+    assert(state.error && /HTTP 404/.test(state.error.message), "top-level error carries the failure");
+    assertEq(state.error.retry, true, "error exposes a retry action flag");
+    assertEq(state.question, null, "no fixture question adopted");
+    assertEq(h0.Q.demoBadgeVisible(), false, "no demo badge in production failure");
+    assertEq(h0.badge().hidden, true, "badge stays hidden");
+    assertEq(h0.Q.getState().submitEnabled, false, "nothing becomes submittable");
   });
 
   await test("preflight failure: submit disabled, zero submit adapter calls", async () => {
@@ -300,7 +325,7 @@ module.exports.register = async function (h) {
     const offline = setup(h, routeSet({
       capabilities: { reject: new Error("platform absent") },
       preflight: { body: QFIX.preflight },
-    }));
+    }), { fixtureMode: true });
     await offline.Q.discover();
     assertEq(offline.Q.getState().demo, true);
     assertEq(offline.Q.demoBadgeVisible(), true);
@@ -364,10 +389,10 @@ module.exports.register = async function (h) {
     assertEq(body.workflow, "singlepoint");
     assertEq(typeof body.molecule_name, "string");
     const featureSource = fs.readFileSync(path.join(FRONTEND, FEATURE_REL), "utf8");
-    assert(featureSource.indexOf("molecule_name") === -1,
-      "the feature must never construct the job envelope itself");
     assert(featureSource.indexOf("buildStructureJobBody") !== -1,
       "the feature reuses the wizard envelope builder");
+    assert(!/function\s+buildStructureJobBody\s*\(/.test(featureSource),
+      "the feature defines no second envelope builder");
     const spec = h0.getBuiltSpec();
     assert(spec && spec.workflow === "singlepoint" && spec.input && spec.method && spec.resources,
       "the builder spec carries values only");
@@ -389,7 +414,7 @@ module.exports.register = async function (h) {
       "every platform call goes through the injected Client adapters");
   });
 
-  await test("discover runs before preflight and the preflight plan is not a job body", async () => {
+  await test("discover runs before preflight and preflight sends the normalized request", async () => {
     const h0 = setup(h, routeSet({
       capabilities: { body: QFIX.capabilities },
       preflight: { body: QFIX.preflight },
@@ -404,8 +429,14 @@ module.exports.register = async function (h) {
     assert(order.indexOf("preflight") > order.indexOf("discover"), "preflight follows discover");
     const plan = h0.Q.preflightPlan();
     assertEq(plan.workflow, "singlepoint");
-    assert(plan.resources === undefined && plan.molecule_name === undefined && plan.moleculeName === undefined,
-      "the preflight plan is not a job payload");
+    assert(plan.input && plan.input.source_type === "xyz_text" && plan.input.source.indexOf("O  0.000000") !== -1,
+      "the normalized request carries the real XYZ source");
+    assert(plan.method && plan.method.levels && plan.method.schema_id === "dft_singlepoint",
+      "the normalized request carries method schema/levels");
+    assert(plan.resources && plan.resources.nproc === 4 && plan.resources.mem === "4GB",
+      "the normalized request carries resources");
+    const sent = h0.log.filter((entry) => entry.url.indexOf("/science/preflight") === 0).pop();
+    assertEq(JSON.parse(sent.body), plan, "the preflight adapter received exactly the normalized request");
     assertEq(h0.submitCalls.length, 0, "preflight makes no submit call");
   });
 

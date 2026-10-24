@@ -295,6 +295,16 @@ _REFERENCE_SCHEMA: dict[str, Any] = {
 }
 _SUBMIT_SCHEMA: dict[str, Any] = {
     "type": "object",
+    "description": (
+        "Submit descriptor. Legacies and research launches share this schema; the field "
+        "relations below are documented for callers, never enforced here — the Controller "
+        "remains the gate. plan_digest is the research-launch switch: supplying it (or any "
+        "of proposal_ref/proposal_digest/budget) makes the submit a research launch, which "
+        "additionally requires proposal_ref bound to a server-side approval and optionally "
+        "proposal_digest/budget. Omitting all four keeps the legacy path. A research submit "
+        "without proposal_ref is refused by the Controller with access_denied "
+        "(rule=approval_required) before idempotency or admission."
+    ),
     "properties": {
         "workflow": {"type": "string", "description": "Active workflow id (server-validated)."},
         "input": {"type": "object", "description": "Workflow input descriptor."},
@@ -307,6 +317,36 @@ _SUBMIT_SCHEMA: dict[str, Any] = {
         "idempotency_key": {
             "type": "string",
             "description": "Client retry key; same key yields exactly one operation.",
+        },
+        "plan_digest": {
+            "type": "string",
+            "description": (
+                "Research-launch switch (sha256:<64 hex>). Its presence makes this a research "
+                "submit, which requires proposal_ref plus a matching server approval; a bare "
+                "plan_digest without proposal_ref is denied with 403 approval_required. Omit "
+                "it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+            ),
+        },
+        "proposal_ref": {
+            "type": "string",
+            "description": (
+                "Approval-bound proposal reference required for a research launch; must have "
+                "an approved record for this plan_digest and project (server-verified)."
+            ),
+        },
+        "proposal_digest": {
+            "type": "string",
+            "description": (
+                "Optional research binding (sha256:<64 hex>); when supplied it must equal the "
+                "approved proposal projection digest."
+            ),
+        },
+        "budget": {
+            "type": "object",
+            "description": (
+                "Optional research budget request; when supplied it must equal the approved "
+                "budget binding (the effective limits come from the approval, never the client)."
+            ),
         },
     },
     "required": ["workflow"],

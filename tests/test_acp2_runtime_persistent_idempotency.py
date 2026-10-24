@@ -21,6 +21,7 @@ import json
 import os
 import queue
 import socket
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -40,6 +41,8 @@ from acp_services.runtime.admission import (
     ReservationLedger,
     ReserveLimits,
 )
+from acp_services.runtime.approvals import ApprovalService
+from acp_services.runtime.canonical_digest import frozen_plan_definition, plan_digest
 from acp_services.runtime.idempotency import (
     ClaimState,
     IdempotencyContext,
@@ -215,6 +218,31 @@ def _claim_for(store: JobStore, key: str) -> Any:
     return store.find_idempotency_claim(SCOPE, "submit", key)
 
 
+def _lapse_claim_lease(store: JobStore, claim_id: str) -> None:
+    """Persist the claim's lease in the past to model controller downtime.
+
+    The restart sweep is the behaviour under test, not the wall clock. Leaving
+    expiry to the child's short lease races the parent's restart path: a warm
+    process can reach the sweep within the lease window (observed ~19 ms for a
+    50 ms lease), so the claim is still live and the test flips with test order
+    and cache state. Ageing the durable row states the fixture fact — the lease
+    lapsed while the controller was down — while the sweep, staging cleanup and
+    reservation release stay real. Mirrors the direct-SQLite fixture seeding
+    already used for time-dependent rows (``test_local_cleanup``).
+    """
+    lapsed = "2020-01-01T00:00:00+00:00"
+    conn = sqlite3.connect(store.db_path)
+    try:
+        cursor = conn.execute(
+            "UPDATE idempotency_records SET lease_expires_at=? WHERE claim_id=? AND state=?",
+            (lapsed, claim_id, ClaimState.CLAIMED.value),
+        )
+        assert cursor.rowcount == 1
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def test_claim_replay_conflict_and_epoch_takeover(tmp_path: Path) -> None:
     store = JobStore(tmp_path / "jobs.db")
     digest = canonical_request_digest(PAYLOAD)
@@ -310,6 +338,7 @@ def test_crash_after_reservation_before_job_row(tmp_path: Path) -> None:
     ledger = ReservationLedger(str(run_root / "admission.db"))
     reservation_id = ledger.reservation_id_for_claim(claim.claim_id)
     assert reservation_id is not None
+    _lapse_claim_lease(store, claim.claim_id)
 
     port = _reservation_port(ledger)
     manager = JobManager(run_root=run_root, poll_interval=30, idempotency_reservations=port)
@@ -645,7 +674,9 @@ def test_two_real_mcp_processes_replay_one_task_and_restart(tmp_path: Path) -> N
         "workflow": "singlepoint",
         "input": {"source_type": "xyz_text", "source": xyz_text},
         "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1},
-        "plan_digest": "sha256:" + "0" * 64,
+        # Deliberately a legacy (non-research) launch: a bare one-off plan digest
+        # would make every submit a research launch and the Controller refuses it
+        # (403 approval_required) before the idempotency claim is ever reached.
         "idempotency_key": key,
     }
     launch = _launch_descriptor(run_root, base)
@@ -745,3 +776,83 @@ def _wait_port_free(port: int, timeout: float = 20) -> None:
                 return
         time.sleep(0.1)
     raise RuntimeError(f"port {port} did not become free")
+
+
+def test_bare_plan_digest_is_denied_before_idempotency(tmp_path: Path) -> None:
+    run_root = tmp_path / "run-root"
+    run_root.mkdir(parents=True, exist_ok=True)
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    arguments = {
+        "workflow": "fake",
+        "input": {"source": "C"},
+        "plan_digest": "sha256:" + "0" * 64,
+        "idempotency_key": "m1-bare-" + uuid.uuid4().hex[:24],
+    }
+    launch = _launch_descriptor(run_root, base)
+    controller = _start_controller(run_root, port)
+    probe = None
+    try:
+        _wait_health(base)
+        before = len(_http_json(base + "/api/v1/jobs?limit=1000")["jobs"])
+        probe = _McpProcess(launch)
+        probe.initialize()
+        result = probe.submit(arguments)
+        assert result.get("isError") is True, result
+        structured = result.get("structuredContent") or {}
+        assert structured.get("exit_code") == 5, result
+        assert "approval_required" in json.dumps(result).lower(), result
+        assert len(_http_json(base + "/api/v1/jobs?limit=1000")["jobs"]) == before
+    finally:
+        if probe is not None:
+            probe.close()
+        _stop_controller(controller)
+
+
+def test_approved_research_launch_submits_one_task(tmp_path: Path) -> None:
+    run_root = tmp_path / "run-root"
+    run_root.mkdir(parents=True, exist_ok=True)
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    workflow = "fake"
+    workflow_input = {"source": "C"}
+    arguments = {
+        "workflow": workflow,
+        "input": workflow_input,
+        "plan_digest": plan_digest(
+            frozen_plan_definition(workflow=workflow, input=workflow_input)
+        ).digest,
+        "proposal_ref": "prop-" + uuid.uuid4().hex[:16],
+        "idempotency_key": "m1-approved-" + uuid.uuid4().hex[:24],
+    }
+    launch = _launch_descriptor(run_root, base)
+    controller = _start_controller(run_root, port)
+    probe = None
+    try:
+        _wait_health(base)
+        approvals = ApprovalService(run_root / "acp_jobs.db")
+        pending, _ = approvals.request(
+            proposal_ref=arguments["proposal_ref"],
+            proposal_digest="sha256:" + "a" * 64,
+            plan_digest=arguments["plan_digest"],
+            project_id="uncategorized",
+            requester_principal="principal_local",
+        )
+        approvals.approve(
+            pending.approval_id,
+            approver_principal="principal_local",
+            expected_revision=pending.revision,
+        )
+        before = len(_http_json(base + "/api/v1/jobs?limit=1000")["jobs"])
+        probe = _McpProcess(launch)
+        probe.initialize()
+        result = probe.submit(arguments)
+        assert result.get("isError") is not True, result
+        data = (result.get("structuredContent") or {}).get("data") or {}
+        ref = data.get("task_ref") or {}
+        assert ref.get("task_id") or data.get("reference", {}).get("id"), result
+        assert len(_http_json(base + "/api/v1/jobs?limit=1000")["jobs"]) == before + 1
+    finally:
+        if probe is not None:
+            probe.close()
+        _stop_controller(controller)

@@ -65,14 +65,24 @@ from acp_services.runtime.workflow_enablement import (
     require_envelope_entry,
 )
 
-_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "acp2" / "science" / "b18"
+#: ``proposal.valid.json``/``research-record.valid.json`` are experience-domain
+#: documents, so the B18 fixtures now live in two roots.  Search both instead of
+#: hard-coding one path per document.
+_FIXTURE_ROOTS = tuple(
+    Path(__file__).resolve().parent / "fixtures" / "acp2" / domain / "b18"
+    for domain in ("science", "experience")
+)
 _A_SCIENCE = Path("<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science")
 _PLAN = "v2:0123456789abcdef0123456789abcdef"
 _RELEASE = "release-b18-static"
 
 
 def _load(name: str) -> dict[str, Any]:
-    return json.loads((_FIXTURES / name).read_text(encoding="utf-8"))
+    for root in _FIXTURE_ROOTS:
+        path = root / name
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    raise FileNotFoundError(f"{name} not found in {_FIXTURE_ROOTS}")
 
 
 def _discovery():

@@ -118,11 +118,24 @@ ACPClient.eventInvalidation = (function () {
       encodeURIComponent(projectId);
   }
 
-  function artifactReadPath(projectId, task, artifactId, generation) {
-    return "/science/tasks/" + encodeURIComponent(task.jobId) +
+  function artifactReadPath(projectId, task, artifactId, generation, digest) {
+    var path = "/science/tasks/" + encodeURIComponent(task.jobId) +
       "/attempts/" + task.attempt + "/artifacts/" +
       encodeURIComponent(String(artifactId)) + "/read?project_id=" +
       encodeURIComponent(projectId) + "&generation=" + encodeURIComponent(generation);
+    if (digest != null) path += "&digest=" + encodeURIComponent(digest);
+    return path;
+  }
+
+  // Artifact reads are only addressable by content: a view artifact without a
+  // bare 64-hex sha256 cannot be read, and no digest-less request is ever sent.
+  function artifactDigest(artifact) {
+    var raw = artifact && artifact.sha256;
+    if (typeof raw !== "string") return null;
+    var value = raw.trim().toLowerCase();
+    if (value.indexOf("sha256:") === 0) value = value.slice(7);
+    if (!/^[0-9a-f]{64}$/.test(value)) return null;
+    return "sha256:" + value;
   }
 
   /** A read path can never become a side-effecting call. */
@@ -359,11 +372,18 @@ ACPClient.eventInvalidation = (function () {
         new Error("ACPClient.eventInvalidation.init({v2}) not configured")
       );
     }
+    var digest = artifactDigest(artifact);
+    if (!digest) {
+      var digestError = new Error("artifact sha256 missing");
+      digestError.name = "ArtifactNotReadable";
+      return Promise.reject(digestError);
+    }
     var generation = opts.generation != null ? opts.generation
       : (artifact.generation != null ? artifact.generation : 0);
     var path = assertReadOnlyPath(
       artifactReadPath(scope.projectId, task,
-        artifact.artifact_id != null ? artifact.artifact_id : artifact.artifactId, generation)
+        artifact.artifact_id != null ? artifact.artifact_id : artifact.artifactId,
+        generation, digest)
     );
     var request = { method: "GET", signal: opts.signal || null };
     if (opts.timeoutMs != null) request.timeoutMs = opts.timeoutMs;

@@ -52,6 +52,7 @@ __all__ = [
     "ResearchResourceStore",
     "ResearchResourceValidationError",
     "research_resource_digest",
+    "research_resource_key",
     "resource_id_for",
 ]
 
@@ -64,6 +65,16 @@ SUPPORTED_RESEARCH_SCHEMAS: frozenset[str] = frozenset({PROPOSAL_SCHEMA, RESEARC
 
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ID_PREFIX = "rr_"
+_RESOURCE_KEY_PREFIX = "rrk_"
+_RESEARCH_RESOURCE_KINDS: frozenset[str] = frozenset({"proposal", "record"})
+_SCHEMA_TO_KIND: dict[str, str] = {
+    PROPOSAL_SCHEMA: "proposal",
+    RESEARCH_RECORD_SCHEMA: "record",
+}
+_DOCUMENT_ID_FIELD: dict[str, str] = {
+    "proposal": "proposal_id",
+    "record": "research_id",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +244,53 @@ def resource_id_for(*, project_id: str, schema: str, document: Mapping[str, Any]
     return _ID_PREFIX + hashlib.sha256(seed).hexdigest()[:24]
 
 
+def research_resource_key(project_id: str, kind: str, document_id: str) -> str:
+    """Stable, unambiguous project-scoped key for one research document.
+
+    ``kind`` is ``"proposal"`` or ``"record"``.  The identity is a JSON array so
+    a colon inside ``project_id`` or ``document_id`` can never collide with the
+    field separators; the key is ``"rrk_"`` plus 48 hex characters (52 total).
+    """
+    kind_value = str(kind)
+    if kind_value not in _RESEARCH_RESOURCE_KINDS:
+        raise ResearchResourceValidationError(
+            f"unsupported research resource kind {kind!r}; "
+            f"supported={sorted(_RESEARCH_RESOURCE_KINDS)}"
+        )
+    project_value = str(project_id)
+    document_value = str(document_id)
+    if not project_value.strip():
+        raise ResearchResourceValidationError("project_id is required")
+    if not document_value.strip():
+        raise ResearchResourceValidationError("document_id is required")
+    identity = json.dumps(
+        [project_value, kind_value, document_value],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return _RESOURCE_KEY_PREFIX + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:48]
+
+
+def _kind_for_schema(schema: str) -> str:
+    kind = _SCHEMA_TO_KIND.get(schema)
+    if kind is None:
+        raise ResearchResourceValidationError(
+            f"unsupported research schema {schema!r}; "
+            f"supported={sorted(SUPPORTED_RESEARCH_SCHEMAS)}"
+        )
+    return kind
+
+
+def _default_resource_key(request: ResearchResourceRequest) -> str:
+    kind = _kind_for_schema(request.schema)
+    document_id = request.document.get(_DOCUMENT_ID_FIELD[kind])
+    if document_id is None or not str(document_id).strip():
+        raise ResearchResourceValidationError(
+            f"document.{_DOCUMENT_ID_FIELD[kind]} is required to derive a resource id"
+        )
+    return research_resource_key(request.project_id, kind, str(document_id))
+
+
 def _validate_request(request: ResearchResourceRequest) -> ResearchResourceAuthorization:
     if not isinstance(request.document, Mapping):
         raise ResearchResourceValidationError("document must be a JSON object")
@@ -388,11 +446,7 @@ class ResearchResourceStore:
     def create(self, request: ResearchResourceRequest) -> ResearchResourceRecord:
         """Create revision 1 exactly once for a ``resource_id``."""
         _validate_request(request)
-        resource_id = request.resource_id or resource_id_for(
-            project_id=request.project_id,
-            schema=request.schema,
-            document=request.document,
-        )
+        resource_id = request.resource_id or _default_resource_key(request)
         with self._lock:
             self._conn.execute("BEGIN IMMEDIATE")
             try:

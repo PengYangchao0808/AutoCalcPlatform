@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.metadata
 import json
 import os
 import platform
@@ -49,6 +50,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
+
+import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_ROOT = REPO_ROOT / "docs/reference/next-change/acp2-contracts"
@@ -130,6 +133,57 @@ def contract_version() -> str:
     if isinstance(value, str) and SEMVER.match(value):
         return value
     return CONTRACT_VERSION_FALLBACK
+
+
+METADATA_VERSION_SOURCES = (
+    "src/acp/__init__.py",
+    "src/cccp/__init__.py",
+    "src/cccp/version.py",
+    "pyproject.toml",
+)
+_VERSION_LITERAL_RE = re.compile(
+    r'^[ \t]*__version__\s*=\s*["\']([^"\']+)["\']', re.MULTILINE
+)
+
+
+def source_version_locations(repo_root: Path) -> dict[str, str]:
+    """Read the four frozen version sources (literal assignment + TOML parse)."""
+    versions: dict[str, str] = {}
+    for relpath in METADATA_VERSION_SOURCES[:3]:
+        text = (repo_root / relpath).read_text(encoding="utf-8")
+        matches = _VERSION_LITERAL_RE.findall(text)
+        if not matches:
+            raise ValueError(f"{relpath} has no literal __version__")
+        versions[relpath] = matches[-1]
+    project = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    versions["pyproject.toml"] = str(project["project"]["version"])
+    return versions
+
+
+def editable_metadata_version_check(
+    repo_root: Path,
+) -> tuple[bool, str, dict[str, str]]:
+    """m5: installed ``acp`` metadata version must equal all four sources."""
+    try:
+        sources = source_version_locations(repo_root)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return False, f"version_source_read_failed: {type(exc).__name__}: {exc}", {}
+    try:
+        installed = importlib.metadata.version("acp")
+    except importlib.metadata.PackageNotFoundError:
+        return (
+            False,
+            "acp distribution metadata is not installed (run pip install -e .)",
+            {"installed": "<missing>", **sources},
+        )
+    mismatched = [name for name, value in sources.items() if value != installed]
+    detail = "installed=" + installed + " " + " ".join(
+        f"{name}={value}" for name, value in sources.items()
+    )
+    return (not mismatched and len(set(sources.values()) | {installed}) == 1), detail, {
+        "installed": installed,
+        **sources,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2079,11 +2133,23 @@ def _run_entry_readonly(
         "input": {"xyz_text": "2\nH2\nH 0 0 0\nH 0 0 0.74\n"},
         "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1},
     }
+    project_id = os.environ.get("ACP_PROJECT_ID") or "uncategorized"
+    project_query = quote(project_id, safe="")
+    science_capabilities_url = (
+        base + "/api/v2/science/capabilities?project_id=" + project_query
+    )
+    science_preflight_url = base + "/api/v2/science/preflight?project_id=" + project_query
     try:
         before = _controller_task_count(base, timeout)
         health = _http_json(base + "/api/health", timeout)
         capabilities = _http_json(base + "/api/capabilities", timeout)
         preflight = _http_json_post(base + "/api/v1/preflight", preflight_request, timeout)
+        science_capabilities_status, science_capabilities = _http_json_status(
+            science_capabilities_url, timeout
+        )
+        science_preflight_status, science_preflight = _http_post_json_status(
+            science_preflight_url, preflight_request, timeout
+        )
         missing_status, missing_body = _http_error_body(
             base + "/api/v1/operations/op_b06_missing", timeout
         )
@@ -2092,6 +2158,7 @@ def _run_entry_readonly(
         extensions["b04a.entry_readonly"] = f"request_failed: {exc}"
         assertions.append({"name": "controller_commands", "status": "FAIL", "detail": str(exc)})
         return EXIT_FAIL, assertions, extensions
+    m5_ok, m5_detail, m5_versions = editable_metadata_version_check(REPO_ROOT)
 
     tools = capabilities.get("tools") if isinstance(capabilities, dict) else None
     health_ok = (
@@ -2132,6 +2199,14 @@ def _run_entry_readonly(
         and missing_detail.get("code") == "resource_not_ready"
         and "not_prepared" in str(missing_detail.get("message", ""))
     )
+    science_capabilities_ok = science_capabilities_status == 200 and isinstance(
+        science_capabilities, dict
+    )
+    science_preflight_ok = (
+        science_preflight_status == 200
+        and isinstance(science_preflight, dict)
+        and before == after
+    )
     assertions.extend(
         [
             {
@@ -2157,6 +2232,27 @@ def _run_entry_readonly(
                 ),
             },
             {
+                "name": "science_capabilities_v2_zero_side_effects",
+                "status": "PASS" if science_capabilities_ok and before == after else "FAIL",
+                "detail": (
+                    f"status={science_capabilities_status} "
+                    f"tasks_before={before} tasks_after={after}"
+                ),
+            },
+            {
+                "name": "science_preflight_v2_zero_side_effects",
+                "status": "PASS" if science_preflight_ok else "FAIL",
+                "detail": (
+                    f"status={science_preflight_status} "
+                    f"tasks_before={before} tasks_after={after}"
+                ),
+            },
+            {
+                "name": "editable_metadata_version_matches_four_sources",
+                "status": "PASS" if m5_ok else "FAIL",
+                "detail": m5_detail,
+            },
+            {
                 "name": "task_count_unchanged",
                 "status": "PASS" if before == after else "FAIL",
                 "detail": f"before={before} after={after}",
@@ -2172,11 +2268,31 @@ def _run_entry_readonly(
             "b04a.candidate_revision": health.get("candidate_revision"),
             "b04a.contract_version": health.get("contract_version"),
             "b04a.contract_digest": health.get("contract_digest"),
+            "b04a.science_capabilities_v2_status": science_capabilities_status,
+            "b04a.science_preflight_v2_status": science_preflight_status,
+            "b04a.science_preflight_v2_keys": (
+                sorted(science_preflight) if isinstance(science_preflight, dict) else []
+            ),
             "b06.preflight_digest": preflight.get("plan_digest"),
             "b06.missing_operation_status": missing_status,
+            "m5.installed_version": m5_versions.get("installed"),
+            "m5.source_versions": {
+                name: value
+                for name, value in m5_versions.items()
+                if name != "installed"
+            },
         }
     )
-    passed = health_ok and capabilities_ok and preflight_ok and missing_ok and before == after
+    passed = (
+        health_ok
+        and capabilities_ok
+        and preflight_ok
+        and missing_ok
+        and science_capabilities_ok
+        and science_preflight_ok
+        and m5_ok
+        and before == after
+    )
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
 
 
