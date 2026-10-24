@@ -14,7 +14,9 @@ Example (local, Standalone)::
     resources:
       software: {orca: /opt/orca/orca}
       cluster: {type: local}
-    params: {run_root: /data/acp/runs}
+    params:
+      run_root: /data/acp/runs
+      public_origin: https://acp.example.org  # empty string for direct access
     secrets:
       - name: db_password
         ref: env:ACP_DB_PASSWORD

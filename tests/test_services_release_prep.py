@@ -169,7 +169,7 @@ def test_unit_script_contains_generation_template() -> None:
     for marker in (
         "[Unit]",
         "Description=ACP",
-        "Environment=ACP_RUN_ROOT=/var/lib/acp/runs",
+        "Environment=ACP_RUN_ROOT=",
         "ExecStart=$PROJECT_ROOT/scripts/start_acp.sh",
         "WantedBy=multi-user.target",
         "sudo tee",
@@ -177,6 +177,7 @@ def test_unit_script_contains_generation_template() -> None:
         "/etc/systemd/system/acp.service",
     ):
         assert marker in script, f"install_systemd.sh missing template marker: {marker!r}"
+    assert "Environment=ACP_RUN_ROOT=/var/lib/acp/runs" not in script
     start = START_SCRIPT.read_text(encoding="utf-8")
     assert "uvicorn acp.api.server:app" in start
 

@@ -493,6 +493,26 @@ class ReadOnlyResourceReader:
 
         if op_facts is not None:
             if op_facts.exists:
+                if op_facts.availability is Availability.READY:
+                    # R08: a SUCCEEDED operation whose body is gone (cache
+                    # eviction) must never report READY — availability without
+                    # a readable body is ABSENT/STALE so a re-prepare (new
+                    # epoch) can rebuild it; the GET stays read-only.
+                    return AvailabilitySnapshot(
+                        resource_id=request.resource_id,
+                        availability=Availability.ABSENT,
+                        freshness=Freshness.STALE,
+                        basis_revision=int(op_facts.basis_revision),
+                        expected_revision=(
+                            int(op_facts.expected_revision) or int(request.expected_revision)
+                        ),
+                        observed_at=observed_at,
+                        job_id=request.job_id,
+                        is_remote=root.is_remote,
+                        prepared_root=None,
+                        size_bytes=None,
+                        detail="operation_ready_body_missing",
+                    )
                 expected = int(op_facts.expected_revision) or int(request.expected_revision)
                 return AvailabilitySnapshot(
                     resource_id=request.resource_id,
