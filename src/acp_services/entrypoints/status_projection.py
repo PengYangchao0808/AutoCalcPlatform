@@ -24,6 +24,7 @@ __all__ = [
     "attempt_release_facts",
     "project_operation_status",
     "project_task_status",
+    "verified_release_facts",
 ]
 
 #: Immutable execution facts an attempt writes beside its result.  The frozen
@@ -47,6 +48,22 @@ def _as_int(value: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value
+
+
+def _coerce_attempt(value: Any) -> int | None:
+    """Best-effort attempt coercion (int/float/numeric str); ``None`` on failure."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
 
 
 def _task_id(payload: Mapping[str, Any], fallback: str = "") -> str:
@@ -75,6 +92,53 @@ def attempt_release_facts(work_dir: str | Path | None) -> dict[str, str]:
         except (OSError, ValueError):
             continue
         if not isinstance(payload, Mapping):
+            continue
+        for key in _RELEASE_FACT_KEYS:
+            if key in facts:
+                continue
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                facts[key] = value
+    return facts
+
+
+def verified_release_facts(read_root: str | Path | None, attempt: int) -> dict[str, str]:
+    """Read release facts whose *own file* attests the requested attempt.
+
+    Unlike :func:`attempt_release_facts` (which merges every file it can
+    parse), this reader gates **each file individually**: a file whose
+    ``attempt`` field is absent, not int-coercible or different from the
+    requested ``attempt`` is discarded whole and contributes nothing.  That
+    keeps a stale attempt-1 envelope from leaking ``release_digest`` into the
+    science view of attempt 2 (plan B1-1/B1-5 "逐文件 facts").
+
+    Read-only and stdlib-only: no network, no fetch, no writes.  Missing
+    files, ``OSError`` and ``ValueError`` are skipped silently; an invalid
+    ``read_root`` or ``attempt < 1`` yields ``{}``.
+
+    Args:
+        read_root: Root holding the two fact files (controlled resolver root,
+            never ``record.work_dir``).
+        attempt: Attempt whose facts are wanted.
+
+    Returns:
+        First non-empty string per :data:`_RELEASE_FACT_KEYS`, envelope
+        before receipt.
+    """
+    wanted = _coerce_attempt(attempt)
+    if read_root is None or wanted is None or wanted < 1:
+        return {}
+    root = Path(read_root)
+    facts: dict[str, str] = {}
+    for relative in _ATTEMPT_FACT_FILES:
+        try:
+            payload = json.loads((root / relative).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(payload, Mapping):
+            continue
+        file_attempt = _coerce_attempt(payload.get("attempt"))
+        if file_attempt is None or file_attempt != wanted:
             continue
         for key in _RELEASE_FACT_KEYS:
             if key in facts:

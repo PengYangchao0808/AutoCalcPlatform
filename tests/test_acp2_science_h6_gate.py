@@ -142,7 +142,15 @@ FORBIDDEN_SCIENCE_KEYS: Final[frozenset[str]] = frozenset(
     {"account", "tier", "permission", "quota", "role"}
 )
 ROLE_CONTAINERS: Final[frozenset[str]] = frozenset(
-    {"source_refs", "artifacts", "authorized_artifacts", "sources", "structure", "input"}
+    {
+        "source_refs",
+        "artifacts",
+        "authorized_artifacts",
+        "sources",
+        "structure",
+        "input",
+        "initial_inputs",
+    }
 )
 JOB_KEY_PREFIX: Final = "job_"
 
@@ -1090,8 +1098,10 @@ def test_scientific_bytes_and_claim_statuses_ignore_account_and_permission() -> 
 
 
 def test_no_science_artifact_carries_a_platform_key() -> None:
+    scanned = _iter_science_docs()
+    assert len(scanned) > 0, "the H6 science scan must never become vacuous"
     violations: dict[str, list[str]] = {}
-    for path in _iter_science_docs():
+    for path in scanned:
         found = scan_forbidden_keys(_load_any(path))
         if found:
             violations[str(path.relative_to(REPO))] = found
@@ -1100,8 +1110,16 @@ def test_no_science_artifact_carries_a_platform_key() -> None:
     # The allow-list is narrow and documented: `role` is legal only as a
     # provenance/evidence artifact role or a request structure role.
     assert scan_forbidden_keys({"source_refs": [{"role": "native_output"}]}) == []
+    assert scan_forbidden_keys({"initial_inputs": [{"role": "transition_state_guess"}]}) == []
+    assert (
+        scan_forbidden_keys({"science": {"initial_inputs": [{"role": "transition_state_guess"}]}})
+        == []
+    )
     assert scan_forbidden_keys({"role": "admin"}) != []
     assert scan_forbidden_keys({"snapshot": {"job_id": "j-1"}}) != []
+    assert scan_forbidden_keys({"initial_inputs": [{"job_id": "j-1"}]}) != []
+    assert scan_forbidden_keys({"task_refs": [{"job_id": "j-1"}]}) != []
+    assert scan_forbidden_keys({"results": [{"role": "reviewer"}]}) != []
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -163,11 +163,20 @@ def config_digest(config: Mapping[str, Any] | None) -> str | None:
 
 
 def current_config_digest() -> str | None:
-    """Digest of the currently resolved platform config (``None`` if unreadable)."""
-    from cccp.config import load_config
+    """Digest of the currently resolved SCIENCE config (``None`` if unreadable).
+
+    Attempt metadata only, so it must describe the science an attempt ran —
+    never the platform domain (``cluster``: remote nodes, credentials, queue,
+    execution mode).  ``cluster`` is passively merged, owned by the Services
+    layer and orthogonal to a calculation's science (see
+    ``cccp.config.split_config_domains``); hashing it made adoption flap on a
+    credential rotation or a local platform overlay (same science, different
+    digest) and forced a needless conservative recompute.
+    """
+    from cccp.config import load_science_config
 
     try:
-        return config_digest(load_config())
+        return config_digest(load_science_config())
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         logger.warning("identity: config digest unavailable; treating as unknown", exc_info=True)
         return None

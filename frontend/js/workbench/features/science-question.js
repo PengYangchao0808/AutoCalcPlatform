@@ -113,11 +113,46 @@ window.ACPScienceQuestion = (function () {
       structures: [{ name: "demo_water", atom_count: 3, charge: 0, multiplicity: 1 }],
     },
     submit: { job_id: "manual_demo_0001", attempt: 1 },
+    // Fixture preflight mirrors the real v2 response: `plan` is the SAME
+    // normalized submission request the submit path serializes (real XYZ
+    // source, method levels, resources), not a flat question/method summary.
     preflight: {
       executed: false,
       metering_consumed: false,
       transfers_attempted: false,
-      plan: { question_id: "single_point_energy", workflow: "singlepoint" },
+      plan: {
+        workflow: "singlepoint",
+        molecule_name: "demo_water",
+        remark: "manual-research",
+        input: {
+          source_type: "xyz_text",
+          source: "3\nwater demo\nO  0.000000  0.000000  0.117300\nH  0.000000  0.757200 -0.469200\nH  0.000000 -0.757200 -0.469200\n",
+          charge: 0,
+          multiplicity: 1,
+        },
+        method: {
+          schema_id: "dft_singlepoint",
+          profile_id: "manual-research",
+          levels: {
+            single_point: {
+              engine: "orca",
+              functional: "wB97M-V",
+              basis: "def2-TZVPP",
+              solvent_model: "none",
+              solvent: "",
+            },
+          },
+        },
+        resources: {
+          nproc: 4,
+          mem: "4GB",
+          parallelism: 1,
+          batch_id: "manual_batch",
+          batch_index: 0,
+          batch_total: 1,
+        },
+        project_id: DEMO_PROJECT_ID,
+      },
       estimate: { feasible: true, queue_seconds: 60 },
     },
     view: {
@@ -152,6 +187,10 @@ window.ACPScienceQuestion = (function () {
 
   var state = {
     demo: false,
+    // Explicit, never inferred from a rejection: fixtures are adopted only
+    // when the caller opted in (or the platform itself served a fixture body).
+    fixtureMode: false,
+    error: null,
     discovered: false,
     phase: "idle",
     projectId: DEMO_PROJECT_ID,
@@ -160,7 +199,7 @@ window.ACPScienceQuestion = (function () {
     defaults: { values: {}, sources: {} },
     structure: { name: "", xyz: "" },
     preview: null,
-    preflight: { ran: false, ok: false, error: null, body: null },
+    preflight: { ran: false, ok: false, error: null, body: null, fingerprint: null },
     taskRef: null,
     detail: null,
     detailError: null,
@@ -182,6 +221,11 @@ window.ACPScienceQuestion = (function () {
   };
 
   var domDoc = null;
+  // In-flight preflight ownership: every run owns an AbortController and a
+  // monotonic run id; only the newest run at the current inputRevision may
+  // write state.
+  var preflightController = null;
+  var preflightRunSeq = 0;
 
   function init(next) {
     next = next || {};
@@ -191,6 +235,7 @@ window.ACPScienceQuestion = (function () {
     if (typeof next.buildJobBody === "function") deps.buildJobBody = next.buildJobBody;
     if (typeof next.catalog === "function") deps.catalog = next.catalog;
     if (next.projectId) state.projectId = String(next.projectId);
+    if (next.fixtureMode != null) state.fixtureMode = next.fixtureMode === true;
     return getState();
   }
 
@@ -247,6 +292,10 @@ window.ACPScienceQuestion = (function () {
     return match || (entries.length ? entries[0] : null);
   }
 
+  function fixtureDataActive() {
+    return state.fixtureMode === true || state.demo === true;
+  }
+
   function workflowCatalog() {
     if (typeof deps.catalog === "function") {
       var injected = deps.catalog();
@@ -255,7 +304,9 @@ window.ACPScienceQuestion = (function () {
     if (typeof workflowCatalogCache !== "undefined" && Array.isArray(workflowCatalogCache) && workflowCatalogCache.length) {
       return workflowCatalogCache;
     }
-    return FIXTURES.workflowCatalog;
+    // Production never silently substitutes fixture catalog entries; a missing
+    // catalog stays empty so the caller surfaces state.error instead.
+    return fixtureDataActive() ? FIXTURES.workflowCatalog : [];
   }
 
   function defaultsFor(question) {
@@ -349,6 +400,7 @@ window.ACPScienceQuestion = (function () {
 
   function discover() {
     state.phase = "discovering";
+    state.error = null;
     state.status = tr("manual.discover_running", "能力发现中…");
     render();
     var attempt;
@@ -360,12 +412,38 @@ window.ACPScienceQuestion = (function () {
     return attempt.then(
       function (body) {
         var fixture = !!(body && body.capabilities && body.capabilities.fixture === true);
+        state.error = null;
         return adoptCapabilities(body, fixture);
       },
-      function () {
-        return adoptCapabilities(FIXTURES.capabilities, true);
+      function (error) {
+        if (state.fixtureMode === true) {
+          return adoptCapabilities(FIXTURES.capabilities, true);
+        }
+        var message = String((error && error.message) || error);
+        state.error = { message: message, retry: true };
+        state.discovered = false;
+        state.phase = "error";
+        state.demo = false;
+        state.status = tr("manual.discover_failed", "能力发现失败：{message}", { message: message });
+        render();
+        return getState();
       }
     );
+  }
+
+  // Any edit that can change the normalized request invalidates the preflight
+  // result AND cancels the in-flight run so a late response can never restore
+  // submit eligibility.
+  function invalidatePreflight() {
+    preflightRunSeq += 1;
+    if (preflightController) {
+      var controller = preflightController;
+      preflightController = null;
+      try {
+        controller.abort();
+      } catch (_error) { /* abort is best-effort */ }
+    }
+    state.preflight = { ran: false, ok: false, error: null, body: null, fingerprint: null };
   }
 
   function selectQuestion(questionId) {
@@ -374,7 +452,8 @@ window.ACPScienceQuestion = (function () {
     state.defaults = question
       ? defaultsFor(question)
       : { values: {}, sources: {}, originSources: {} };
-    state.preflight = { ran: false, ok: false, error: null, body: null };
+    state.spec.inputRevision += 1;
+    invalidatePreflight();
     render();
     return getState();
   }
@@ -396,7 +475,7 @@ window.ACPScienceQuestion = (function () {
     if (field === "temperature") state.spec.conditions.temperature = value;
     if (field === "standardState") state.spec.conditions.standardState = value;
     state.spec.inputRevision += 1;
-    state.preflight = { ran: false, ok: false, error: null, body: null };
+    invalidatePreflight();
     var submitEl = domDoc ? domDoc.getElementById("sq-submit") : null;
     if (submitEl) submitEl.disabled = true;
     return getState();
@@ -410,7 +489,8 @@ window.ACPScienceQuestion = (function () {
     };
     state.preview = null;
     state.spec.parseError = null;
-    state.preflight = { ran: false, ok: false, error: null, body: null };
+    state.spec.inputRevision += 1;
+    invalidatePreflight();
     render();
     return getState();
   }
@@ -441,7 +521,7 @@ window.ACPScienceQuestion = (function () {
     state.spec.inputFormatStatus = classification.status;
     if (classification.status === "DEFERRED") state.preview = null;
     state.spec.inputRevision += 1;
-    state.preflight = { ran: false, ok: false, error: null, body: null };
+    invalidatePreflight();
     render();
     return getState();
   }
@@ -456,6 +536,7 @@ window.ACPScienceQuestion = (function () {
     };
     state.spec.humanConfirmations.push(record);
     state.spec.inputRevision += 1;
+    invalidatePreflight();
     render();
     return record;
   }
@@ -470,6 +551,7 @@ window.ACPScienceQuestion = (function () {
     };
     state.spec.approximations.push(record);
     state.spec.inputRevision += 1;
+    invalidatePreflight();
     render();
     return record;
   }
@@ -570,64 +652,88 @@ window.ACPScienceQuestion = (function () {
     });
   }
 
-  // Preflight plan: the discovery/preflight request document, NOT a job
-  // payload. The only job payload in this feature is built by the wizard
-  // envelope builder at submit time.
+  // Preflight and submit share ONE normalized submission request. It is
+  // derived from jobBodySpec through the wizard envelope builder, so the two
+  // payloads can never drift apart (preflight plan_digest == submit digest).
   function preflightPlan() {
     var entry = state.question
       ? resolveQuestionWorkflow(state.question.question_id, workflowCatalog())
       : null;
-    return {
-      question_id: state.question ? state.question.question_id : null,
-      workflow: entry ? entry.id : null,
-      input: {
-        source_type: "xyz_text",
-        charge: Number(state.defaults.values.charge),
-        multiplicity: Number(state.defaults.values.multiplicity),
-      },
-      method: {
-        method: state.defaults.values.method,
-        solvent: state.defaults.values.solvent,
-      },
-    };
+    return buildNormalizedSubmissionRequest(entry);
+  }
+
+  function buildNormalizedSubmissionRequest(entry) {
+    if (!entry || !state.question) return null;
+    var builder = deps.buildJobBody;
+    if (typeof builder !== "function" && window.ACPWizardSubmitEdit &&
+        typeof window.ACPWizardSubmitEdit.buildStructureJobBody === "function") {
+      builder = window.ACPWizardSubmitEdit.buildStructureJobBody;
+    }
+    if (typeof builder !== "function") return null;
+    return builder(jobBodySpec(entry));
   }
 
   function runPreflight() {
-    state.preflight = { ran: true, ok: false, error: null, body: null };
+    var revisionAtStart = state.spec.inputRevision;
+    var plan = preflightPlan();
+    var runId = ++preflightRunSeq;
+    if (preflightController) {
+      var previous = preflightController;
+      preflightController = null;
+      try {
+        previous.abort();
+      } catch (_error) { /* abort is best-effort */ }
+    }
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    preflightController = controller;
+    state.preflight = { ran: true, ok: false, error: null, body: null, fingerprint: null };
     state.status = tr("manual.preflight_running", "预检中…");
     render();
+    function current() {
+      return runId === preflightRunSeq && state.spec.inputRevision === revisionAtStart;
+    }
     return Promise.resolve()
       .then(function () {
         if (!deps.science || typeof deps.science.preflight !== "function") {
           throw new Error("science-question: init({science}) required");
         }
-        return deps.science.preflight(preflightPlan(), scope(), {
+        if (!plan) throw new Error("science-question: init({buildJobBody}) required");
+        return deps.science.preflight(plan, scope(), {
           identity: "manual-" + (state.question ? state.question.question_id : "plan"),
+          generation: revisionAtStart,
+          signal: controller ? controller.signal : null,
         });
       })
       .then(function (body) {
+        if (!current()) return state.preflight;
+        if (preflightController === controller) preflightController = null;
         var feasible = !(body && body.estimate && body.estimate.feasible === false);
         var cause = feasible
           ? null
           : String((body && body.estimate && body.estimate.reason) || "estimate.feasible=false");
+        var fingerprint = (body && body.preflight_fingerprint) ||
+          (body && body.plan && body.plan.plan_digest) || null;
         state.preflight = {
           ran: true,
           ok: feasible,
           error: cause,
           body: body || null,
+          fingerprint: feasible ? fingerprint : null,
         };
         state.status = feasible
           ? tr("manual.preflight_ok", "预检通过，可以提交")
           : tr("manual.preflight_failed", "预检失败，提交已禁用");
         render();
         return state.preflight;
-      })
-      .catch(function (error) {
+      }, function (error) {
+        if (!current()) return state.preflight;
+        if (preflightController === controller) preflightController = null;
         state.preflight = {
           ran: true,
           ok: false,
           error: String((error && error.message) || error),
           body: null,
+          fingerprint: null,
         };
         state.status = tr("manual.preflight_failed", "预检失败，提交已禁用");
         render();
@@ -684,7 +790,13 @@ window.ACPScienceQuestion = (function () {
       return Promise.reject(new Error("science-question: init({buildJobBody, submit}) required"));
     }
     var entry = resolveQuestionWorkflow(state.question.question_id, workflowCatalog());
-    var body = deps.buildJobBody(jobBodySpec(entry));
+    var body = buildNormalizedSubmissionRequest(entry);
+    if (!body) {
+      return Promise.reject(new Error("science-question: normalized submission request unavailable"));
+    }
+    if (state.preflight.fingerprint) {
+      body.preflight_fingerprint = state.preflight.fingerprint;
+    }
     state.submitCalls += 1;
     return Promise.resolve(deps.submit(body)).then(function (response) {
       state.taskRef = {
@@ -751,6 +863,8 @@ window.ACPScienceQuestion = (function () {
   function getState() {
     return {
       demo: state.demo,
+      fixtureMode: state.fixtureMode === true,
+      error: state.error ? Object.assign({}, state.error) : null,
       discovered: state.discovered,
       phase: state.phase,
       projectId: state.projectId,
@@ -768,6 +882,7 @@ window.ACPScienceQuestion = (function () {
         ran: state.preflight.ran,
         ok: state.preflight.ok,
         error: state.preflight.error,
+        fingerprint: state.preflight.fingerprint,
       },
       submitEnabled: canSubmit(),
       submitCalls: state.submitCalls,
@@ -1018,7 +1133,8 @@ window.ACPScienceQuestion = (function () {
     });
     on("sq-structure", "input", function (event) {
       state.structure.xyz = String(event.target.value || "");
-      state.preflight = { ran: false, ok: false, error: null, body: null };
+      state.spec.inputRevision += 1;
+      invalidatePreflight();
       var submitEl = domDoc.getElementById("sq-submit");
       if (submitEl) submitEl.disabled = true;
     });
@@ -1056,6 +1172,7 @@ window.ACPScienceQuestion = (function () {
 
   function mount(doc, options) {
     options = options || {};
+    if (options.fixtureMode != null) state.fixtureMode = options.fixtureMode === true;
     domDoc = doc || (typeof document !== "undefined" ? document : null);
     if (!domDoc) return getState();
     if (typeof deps.buildJobBody !== "function" &&
@@ -1119,6 +1236,7 @@ window.ACPScienceQuestion = (function () {
     openTaskDetail: openTaskDetail,
     resolveQuestionWorkflow: resolveQuestionWorkflow,
     preflightPlan: preflightPlan,
+    buildNormalizedSubmissionRequest: buildNormalizedSubmissionRequest,
     jobBodySpec: jobBodySpec,
     getState: getState,
     demoBadgeVisible: demoBadgeVisible,

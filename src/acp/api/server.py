@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
 from acp import __version__
+from acp.api import v1_science, v2_research, v2_science
 from acp.api.batch_preview import router as batch_preview_router
 from acp.api.drafts import router as drafts_router
 from acp.api.mechanism_readonly import router as mechanism_readonly_router
@@ -30,6 +31,7 @@ from acp.api.v2_budgets import router as v2_budgets_router
 from acp.api.v2_routes import router as v2_router
 from acp.api.v2_structure_sources import router as v2_struct_router
 from acp_services.contracts.access import DeploymentTier, is_loopback_host
+from acp_services.data.research_resources import ResearchResourceStore
 from acp_services.workspace.boundary import (
     API_KEY_HEADER,
     AUTHORIZATION_HEADER,
@@ -350,9 +352,17 @@ def create_app(
             app.state.host = eff_host
             app.state.port = eff_port
             app.state.run_root = str(run_root_path)
+            # Dedicated DB file: never the jobs DB.
+            app.state.research_resources = ResearchResourceStore(run_root_path / "acp_research.db")
             yield
         finally:
-            manager.shutdown()
+            # A store-close failure must never skip the manager shutdown.
+            research_store = getattr(app.state, "research_resources", None)
+            try:
+                if research_store is not None:
+                    research_store.close()
+            finally:
+                manager.shutdown()
 
     app = FastAPI(
         title="ACP — Auto-Calc Platform",
@@ -425,6 +435,9 @@ def create_app(
     app.include_router(v2_approvals_router, prefix="/api/v2")
     app.include_router(v2_budgets_router, prefix="/api/v2")
     app.include_router(v2_struct_router, prefix="/api/v2")
+    app.include_router(v2_science.router, prefix="/api/v2")
+    app.include_router(v1_science.router, prefix="/api/v1")
+    app.include_router(v2_research.router, prefix="/api/v2")
     app.include_router(api_router, prefix="/api")
 
     # Without these mounts /js|/css 404 and the viewer tabs render blank (46a5626 regression).

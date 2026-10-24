@@ -190,7 +190,12 @@ module.exports.register = async function (h) {
     const result = await E.readArtifact({
       scope: SCOPE_A,
       taskRef: REF,
-      artifact: { artifact_id: "art-1", availability: "readable", generation: 2 },
+      artifact: {
+        artifact_id: "art-1",
+        availability: "readable",
+        generation: 2,
+        sha256: "ab".repeat(32),
+      },
     });
     assertEq(result.ok, true);
     assertEq(readCalls.length, 1);

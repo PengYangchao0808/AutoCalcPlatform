@@ -83,6 +83,46 @@ ACPClient.science = (function () {
     return value == null ? "0" : String(value);
   }
 
+  // LOCAL CACHE KEY ONLY — never a security value and never sent to the
+  // server. WebCrypto is async and absent from the vm test sandbox, so this is
+  // a synchronous FNV-1a 32-bit digest over canonical JSON (sorted keys) of
+  // the normalized request, computable before any response exists.
+  function canonicalize(value) {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === "object") {
+      var out = {};
+      Object.keys(value).sort().forEach(function (key) {
+        if (value[key] !== undefined) out[key] = canonicalize(value[key]);
+      });
+      return out;
+    }
+    return value;
+  }
+
+  function clientRequestDigest(plan) {
+    var text = JSON.stringify(canonicalize(plan || {}));
+    var hash = 0x811c9dc5;
+    for (var i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return ("00000000" + hash.toString(16)).slice(-8);
+  }
+
+  /** Exact cache key of one preflight run (identity + inputRevision + local
+   * request digest + generation), public for tests/consumers. */
+  function preflightKeyFor(scope, plan, opts) {
+    opts = opts || {};
+    var s = normalizeScope(scope);
+    var identity = opts.identity ||
+      (plan && plan.plan_definition_digest) || "plan";
+    var inputRevision = opts.inputRevision != null ? opts.inputRevision
+      : (opts.generation != null ? opts.generation : "0");
+    var requestDigest = opts.clientRequestDigest || clientRequestDigest(plan);
+    var keyIdentity = identity + ":" + inputRevision + ":" + requestDigest;
+    return keyFor(s, "preflight", keyIdentity, versionOf(opts));
+  }
+
   /** Reuses ACPClient.transport semantics: the store's signal owns
    * cancellation and the caller's timeoutMs/fetchImpl pass through untouched. */
   function requestOptions(opts, signal, extra) {
@@ -206,7 +246,10 @@ ACPClient.science = (function () {
   }
 
   /** Preflight/estimate. Never a submit: the validated projection must prove
-   * executed=false / metering_consumed=false / transfers_attempted=false. */
+   * executed=false / metering_consumed=false / transfers_attempted=false.
+   * The cache key carries the input revision and the local request digest so
+   * two in-flight requests for different content never share a slot, while the
+   * group (identity only) still lets a newer run retire an older one. */
   function preflight(plan, scope, opts) {
     opts = opts || {};
     var s = normalizeScope(scope);
@@ -215,7 +258,11 @@ ACPClient.science = (function () {
     );
     var identity = opts.identity ||
       (plan && plan.plan_definition_digest) || "plan";
-    var key = keyFor(s, "preflight", identity, versionOf(opts));
+    var inputRevision = opts.inputRevision != null ? opts.inputRevision
+      : (opts.generation != null ? opts.generation : "0");
+    var requestDigest = opts.clientRequestDigest || clientRequestDigest(plan);
+    var keyIdentity = identity + ":" + inputRevision + ":" + requestDigest;
+    var key = keyFor(s, "preflight", keyIdentity, versionOf(opts));
     var headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     return store.query(key, {
       group: groupFor(s, "preflight", identity),
@@ -341,6 +388,8 @@ ACPClient.science = (function () {
     init: init,
     keyFor: keyFor,
     groupFor: groupFor,
+    clientRequestDigest: clientRequestDigest,
+    preflightKeyFor: preflightKeyFor,
     fetchCapabilities: fetchCapabilities,
     preflight: preflight,
     fetchTaskStatus: fetchTaskStatus,

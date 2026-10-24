@@ -156,11 +156,16 @@
     },
     {
       "command": "recover",
-      "method": "POST",
-      "path": "/api/v1/recover",
+      "client_method": "ControllerClient.recover",
+      "status": "not_delivered",
+      "transport_binding": "none",
+      "method": null,
+      "path": null,
       "authorization": "scope write",
       "side_effects": "reuse/recompute; never a second executor",
-      "bound_by": "B06"
+      "bound_by": "none (no Controller route is registered; the client raises unsupported_capability)",
+      "local_entry": "cli:acp task recover -> acp.services_bootstrap.build_runtime_recovery -> acp_services.runtime.recovery",
+      "note": "HTTP recovery is not delivered in this contract version; the local CLI path above is the only recovery entry."
     }
   ],
   "ports": {

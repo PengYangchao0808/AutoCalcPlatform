@@ -530,6 +530,20 @@ def _require_project_scope(request: Request, project_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
 
+def _require_verified_project(request: Request, project_id: str | None) -> None:
+    """Reject a project that contradicts the verified server identity.
+
+    ``_scoped_read_project`` reads ``request.state.request_identity``, which the
+    local-single middleware never sets.  Project-scoped routes therefore need an
+    explicit comparison against ``_server_identity(request).verified_project``.
+    """
+    if project_id is None:
+        return
+    verified = getattr(_server_identity(request), "verified_project", None)
+    if verified is not None and str(project_id) != str(verified):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+
 def _admission_http_error(decision: Any) -> HTTPException:
     """Map an admission refusal to the stable structured error contract."""
     reason = str(getattr(decision, "reason_code", "") or "admission_denied")
@@ -2521,9 +2535,29 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     )
 
     try:
-        normalize_submit(req.model_dump(exclude_none=True))
+        normalized_submit = normalize_submit(req.model_dump(exclude_none=True))
     except ApplicationParamError as exc:
         raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+    fingerprint = normalized_submit.get("preflight_fingerprint")
+    if fingerprint:
+        from acp_services.runtime.canonical_digest import CanonicalDigestError
+
+        try:
+            current = _plan_digest(normalized_submit)
+        except CanonicalDigestError as exc:
+            raise _command_error(
+                400,
+                "input_invalid",
+                str(exc),
+                params={"field": "plan", **exc.params()},
+            ) from exc
+        if fingerprint != current:
+            raise _command_error(
+                400,
+                "preflight_stale",
+                "preflight fingerprint does not match the submitted plan",
+                params={"field": "preflight_fingerprint", "expected": current},
+            )
     if _is_research_launch(req):
         req.project_id = _research_project(manager, req.project_id)
     # B16: an approval bound to the frozen plan_digest is checked BEFORE any
@@ -8408,25 +8442,18 @@ def _is_research_launch(req: Any) -> bool:
     )
 
 
-@router.post("/preflight")
-def preflight_request(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
-    """Zero-side-effect feasibility preflight for a would-be submit.
+def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
+    """Build the zero-side-effect preflight projection.
 
-    Runs only the existing synchronous task/method validation.  It creates no
-    task, no attempt, no prepare operation and no reservation, and it never
-    starts science.
+    Entry access is authorized by the thin :func:`preflight_request` wrapper;
+    everything after that check lives here unchanged so the B1-3 science
+    preflight can reuse the single implementation.
     """
     from acp_services.entrypoints.application_params import (
         ApplicationParamError,
         normalize_preflight,
     )
 
-    _require_entry_access(
-        request,
-        _EntryClass.CACHE_READ,
-        action="read",
-        resource_id="preflight",
-    )
     if req.workflow not in ALL_WORKFLOWS:
         raise _command_error(
             400,
@@ -8496,6 +8523,23 @@ def preflight_request(req: V1PreflightRequest, request: Request) -> dict[str, An
         "would_create_task": False,
         "would_reserve": False,
     }
+
+
+@router.post("/preflight")
+def preflight_request(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
+    """Zero-side-effect feasibility preflight for a would-be submit.
+
+    Runs only the existing synchronous task/method validation.  It creates no
+    task, no attempt, no prepare operation and no reservation, and it never
+    starts science.
+    """
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        action="read",
+        resource_id="preflight",
+    )
+    return _preflight_projection(req, request)
 
 
 def _artifact_authorization_projection(

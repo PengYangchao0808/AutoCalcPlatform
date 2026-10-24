@@ -357,6 +357,10 @@ class V1JobCreateRequest(BaseModel):
     proposal_digest: str | None = None
     budget: dict[str, Any] | None = None
     idempotency_key: str | None = None
+    # B1-3 optional preflight binding: the plan digest a caller got from
+    # ``POST /preflight``.  Deliberately NOT ``plan_digest`` so
+    # ``_is_research_launch`` never treats it as a research trigger.
+    preflight_fingerprint: str | None = None
 
     @field_validator("node_tags")
     @classmethod

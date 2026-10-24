@@ -782,9 +782,9 @@ window.ACPScientificEvidence = (function () {
 
   function registerTick(fn) {
     if (state.disposed || typeof fn !== "function") return null;
-    var token = { fn: fn, alive: true };
-    state.tickCallbacks.push(token);
-    return token;
+    var tickToken = { fn: fn, alive: true };
+    state.tickCallbacks.push(tickToken);
+    return tickToken;
   }
 
   /** One animation frame. Runs at most the registered callbacks, and only
@@ -795,9 +795,9 @@ window.ACPScientificEvidence = (function () {
     var pending = state.tickCallbacks.slice();
     for (var i = 0; i < pending.length; i += 1) {
       if (state.disposed) break;
-      var token = pending[i];
-      if (!token.alive) continue;
-      token.fn();
+      var tickToken = pending[i];
+      if (!tickToken.alive) continue;
+      tickToken.fn();
       state.callbacksFired += 1;
       ran += 1;
     }

@@ -33,7 +33,7 @@ import sys
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 # scenario ID -> handler(context) -> exit code
@@ -256,10 +256,28 @@ _FAKE_ENV_KEYS = (
     "ACP2_MOCK_BACKEND",
     "ACP2_MOCK_MODEL",
 )
+# Match a test-double TOKEN PAIR, not loose substrings: ``fake_transport`` and
+# ``transport.fake`` hit, while ``httpx._transports.mock`` (a real httpx module
+# left behind in ``sys.modules`` by a full-suite run), ``unittest.mock``,
+# ``acp.nmr.dp5q_stub`` and ``my.transport_module`` do not.
 _FAKE_MODULE_RE = re.compile(
-    r"(?i)(?:fake|mock|stub).*(?:backend|transport|model|client)"
-    r"|(?:backend|transport|model|client).*(?:fake|mock|stub)"
+    r"(?:^|[._])(?:fake|mock|stub)[._](?:backend|transport|model|client)(?:[._]|$)"
+    r"|(?:^|[._])(?:backend|transport|model|client)[._](?:fake|mock|stub)(?:[._]|$)",
+    re.IGNORECASE,
 )
+
+# Real modules whose names coincidentally contain a token pair.  The allowlist
+# wins over the regex (checked first) so a legitimate import can never fail a
+# clean live run; it is deliberately tiny and name-exact.
+_FAKE_MODULE_ALLOWLIST: frozenset[str] = frozenset({"httpx._transports.mock"})
+
+
+def _is_fake_module(module_name: str) -> bool:
+    """Return True when ``module_name`` is a test double we must reject."""
+
+    if module_name in _FAKE_MODULE_ALLOWLIST:
+        return False
+    return _FAKE_MODULE_RE.search(module_name) is not None
 
 
 def assert_live_environment(context: Any) -> bool:
@@ -279,7 +297,7 @@ def assert_live_environment(context: Any) -> bool:
         if os.environ.get(key):
             problems.append(f"env:{key}")
     for module_name in list(sys.modules):
-        if _FAKE_MODULE_RE.search(module_name):
+        if _is_fake_module(module_name):
             problems.append(f"module:{module_name}")
     return _assertion(
         context,
@@ -287,6 +305,28 @@ def assert_live_environment(context: Any) -> bool:
         not problems,
         ",".join(problems) or "no fake transport/backend/model detected",
     )
+
+
+def selfcheck_live_environment() -> int:
+    """Run ONLY the clean live environment assertion (fresh-process entry).
+
+    A full-suite pytest run can leave legitimate modules such as
+    ``httpx._transports.mock`` in ``sys.modules``.  Checking in the same
+    process therefore inherits whatever an earlier test imported; this entry
+    point exists so the check can run in a pristine interpreter.
+    """
+
+    context = SimpleNamespace(
+        identity=SimpleNamespace(evidence_kind="live"),
+        assertions=[],
+        reason=None,
+    )
+    ok = assert_live_environment(context)
+    failed = [item for item in context.assertions if item.get("status") == "FAIL"]
+    detail = ",".join(str(item.get("detail") or "") for item in failed) or "clean"
+    stream = sys.stdout if ok else sys.stderr
+    print(f"live.no_fake_transport: {'PASS' if ok else 'FAIL'}: {detail}", file=stream)
+    return EXIT_PASS if ok else EXIT_FAIL
 
 
 # ---------------------------------------------------------------------------
@@ -1137,4 +1177,14 @@ def _discover_sibling_scenarios() -> tuple[str, ...]:
     return DISCOVERY_MODULES
 
 
-_discover_sibling_scenarios()
+# Sibling discovery is import-time behaviour for the harness (which loads this
+# file under a synthetic module name).  A direct ``--selfcheck-live-env`` run
+# must stay import-light, so it is skipped only for that entry point.
+if __name__ != "__main__":
+    _discover_sibling_scenarios()
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--selfcheck-live-env"]:
+        raise SystemExit(selfcheck_live_environment())
+    raise SystemExit(EXIT_USAGE)

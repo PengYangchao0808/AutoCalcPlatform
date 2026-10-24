@@ -146,6 +146,7 @@ __all__ = [
     "build_artifact_prepare_executor",
     "build_composite_prepare_executor",
     "build_read_only_reader",
+    "build_read_root_resolver",
     "build_cache_only_resource_reader",
     "build_storage_allocation_port",
     "build_prepare_executor",
@@ -2288,6 +2289,15 @@ def build_read_only_reader(
         max_read_bytes=max_read_bytes,
         before_read=before_read,
     )
+
+
+def build_read_root_resolver(
+    *,
+    job_lookup: Callable[[str], Any],
+    cache: RemoteStructureCache,
+) -> ReadRootResolver:
+    """Return the controlled read-only root resolver without exposing the adapter."""
+    return ReadRootResolver(_ReadRootAdapter(job_lookup=job_lookup, cache=cache))
 
 
 # --------------------------------------------------------------------------- #

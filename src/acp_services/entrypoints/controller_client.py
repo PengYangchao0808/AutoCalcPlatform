@@ -678,9 +678,28 @@ class ControllerClient:
         return _as_mapping(data, "analyze")
 
     def recover(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Reuse identity-valid results for an existing plan (single recovery owner)."""
-        data = self._request_json("POST", "/api/v1/recover", dict(request))
-        return _as_mapping(data, "recover")
+        """Refuse HTTP recovery explicitly: it is not delivered in this contract.
+
+        ``recover`` stays on the public surface for SDK compatibility, but no
+        Controller route is registered for it (``application-api.v1`` marks the
+        operation ``not_delivered`` and ``controller-topology.v1`` carries no
+        transport binding).  The single recovery owner is the local path —
+        ``acp task recover`` (``build_runtime_recovery`` ->
+        ``acp_services.runtime.recovery``).  Raising before any session use
+        keeps the call free of a guaranteed network 404.
+        """
+        del request  # the command is unsupported regardless of the payload
+        raise UnsupportedError(
+            "recover is not delivered over HTTP in this contract version; "
+            "use the local recovery path `acp task recover` (build_runtime_recovery)",
+            code="unsupported_capability",
+            params={
+                "command": "recover",
+                "delivery_status": "not_delivered",
+                "local_entry": "acp task recover",
+                "transport_binding": "none",
+            },
+        )
 
 
 def _as_mapping(data: Any, command: str) -> Mapping[str, Any]:

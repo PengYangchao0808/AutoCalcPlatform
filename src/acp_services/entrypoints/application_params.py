@@ -217,6 +217,9 @@ def normalize_submit(payload: Mapping[str, Any]) -> dict[str, Any]:
     idempotency = _optional_idempotency(payload)
     if idempotency is not None:
         data["idempotency_key"] = idempotency
+    preflight_fingerprint = _string(payload, "preflight_fingerprint")
+    if preflight_fingerprint is not None:
+        data["preflight_fingerprint"] = preflight_fingerprint
     if proposal_ref is not None and plan_digest is None:
         raise ApplicationParamError(
             "a research launch requires plan_digest",

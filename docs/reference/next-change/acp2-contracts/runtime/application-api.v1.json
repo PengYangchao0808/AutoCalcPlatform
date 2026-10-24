@@ -2076,6 +2076,17 @@
       "use_case": "acp.services_bootstrap.build_runtime_recovery -> acp_services.runtime.recovery (single planning/recovery owner)",
       "authorization": "scope write on the resolved project",
       "side_effects": "may publish/repair results; never silently adopts a partial or diagnostics-only result as a normal result",
+      "status": "not_delivered",
+      "http_delivery": {
+        "status": "not_delivered",
+        "transport_binding": "none",
+        "reason": "no ACP Controller route is registered for this command in this contract version; the operation is served only by the local recovery owner",
+        "local_use_case": "cli:acp task recover -> acp.services_bootstrap.build_runtime_recovery -> acp_services.runtime.recovery",
+        "client_method": "ControllerClient.recover (signature retained)",
+        "client_behaviour": "raises UnsupportedError without issuing any HTTP request",
+        "error_class": "unsupported",
+        "error_code": "unsupported_capability"
+      },
       "request": {
         "additional_properties": false,
         "required": [

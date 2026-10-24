@@ -837,6 +837,33 @@ class PrepareOperationService:
                 ).fetchall()
             return tuple(self._record_from_row(row) for row in rows)
 
+    def list_for_job(
+        self,
+        *,
+        job_id: str,
+        attempt: int,
+        resource_kind: ResourceKind | str = ResourceKind.ARTIFACT,
+        limit: int = 1000,
+    ) -> tuple[PrepareOperationRecord, ...]:
+        """Read-only, attempt-scoped listing for one job and resource kind."""
+        attempt_value = int(attempt)
+        if attempt_value < 1:
+            raise ValueError("attempt must be >= 1")
+        if isinstance(resource_kind, ResourceKind):
+            kind_value = resource_kind.value
+        else:
+            try:
+                kind_value = ResourceKind(str(resource_kind)).value
+            except ValueError as exc:
+                raise ValueError(f"unknown resource_kind {resource_kind!r}") from exc
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM data_operations WHERE job_id = ? AND job_attempt = ? "
+                "AND resource_kind = ? ORDER BY created_at ASC, operation_id ASC LIMIT ?",
+                (str(job_id), attempt_value, kind_value, int(limit)),
+            ).fetchall()
+        return tuple(self._record_from_row(row) for row in rows)
+
     def pending_count(self) -> int:
         """Number of undecided (``queued`` + ``running``) operations."""
         with self._lock:
