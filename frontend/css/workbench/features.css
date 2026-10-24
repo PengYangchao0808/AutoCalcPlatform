@@ -140,7 +140,7 @@ textarea[data-sr-comment] { width: 100%; min-height: 54px; margin-top: 4px; font
 }
 .backend-path {
   font-family: "SFMono-Regular", Consolas, monospace;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 .backend-multi { display: inline-block; margin-left: 6px; }
 .backend-multi > summary {
@@ -162,7 +162,7 @@ textarea[data-sr-comment] { width: 100%; min-height: 54px; margin-top: 4px; font
 }
 .backend-candidate {
   font-family: "SFMono-Regular", Consolas, monospace;
-  word-break: break-all;
+  overflow-wrap: anywhere;
   padding: 1px 0;
 }
 .backend-candidate.active { color: var(--text-primary); font-weight: 600; }
@@ -745,3 +745,144 @@ option, optgroup {
   }
   #job-modal .source-section-nav .input-mode-tabs { width: 100%; }
 }
+
+/* Manual Research entry (T-17): science-question panel.
+   overflow: visible overrides .panel-section{overflow:hidden} so the sticky
+   approval header works against the right-column scroller. */
+.panel-section.science-question-panel,
+.panel-section.scientific-evidence-panel,
+.panel-section.research-approval-panel { overflow: visible; }
+.science-question-panel { flex: 0 0 auto; max-height: none; }
+.science-question-panel .panel-body { flex: 1 1 auto; min-height: 0; overflow: visible; padding: 10px 12px 14px; }
+.science-question-demo-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: var(--editor-weight-medium);
+}
+.science-question-demo-badge[hidden] { display: none; }
+.science-question-note { font-size: 11px; color: var(--text-soft); margin: 2px 0 8px; word-break: keep-all; overflow-wrap: break-word; }
+.science-question-section { font-size: 12px; font-weight: var(--editor-weight-strong); color: var(--text-secondary); margin: 12px 0 4px; word-break: keep-all; overflow-wrap: break-word; }
+.science-question-row { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.science-question-label { font-size: 12px; color: var(--text-secondary); word-break: keep-all; overflow-wrap: break-word; }
+.science-question-required { color: var(--red); }
+.science-question-hint { font-size: 11px; color: var(--text-soft); word-break: keep-all; overflow-wrap: break-word; }
+.science-question-row #sq-structure {
+  min-height: 11rem;
+  resize: vertical;
+  overflow-y: auto;
+  font-family: var(--mono);
+  line-height: 1.6;
+}
+.science-question-source { font-size: 10px; line-height: 1.35; color: var(--text-soft); font-family: var(--mono); word-break: normal; overflow-wrap: normal; }
+.science-question-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.science-question-status { font-size: 12px; color: var(--text-secondary); margin: 6px 0; min-height: 16px; word-break: keep-all; overflow-wrap: break-word; }
+.science-question-detail { border-top: 1px solid var(--border-subtle); margin-top: 10px; padding-top: 8px; font-size: 12px; color: var(--text-secondary); word-break: keep-all; overflow-wrap: break-word; }
+.science-question-detail h3 { font-size: 12px; margin: 0 0 6px; }
+.science-question-block h4 { font-size: 11px; margin: 8px 0 2px; color: var(--text-soft); font-weight: var(--editor-weight-medium); word-break: keep-all; overflow-wrap: break-word; }
+.science-question-block ul { margin: 0; padding-left: 16px; }
+.science-question-block li { font-family: var(--mono); font-size: 11px; word-break: keep-all; overflow-wrap: break-word; }
+.science-question-err { color: var(--red); font-size: 11px; margin-top: 6px; }
+
+/* Scientific evidence view (T-31): claim states vs execution status, expandable
+   provenance rows. inconclusive uses --amber + the "live not verified" marker
+   and is NEVER styled with the success color (--green). */
+.scientific-evidence-panel { flex: 0 0 auto; max-height: none; }
+.scientific-evidence-panel .panel-body { flex: 1 1 auto; min-height: 0; overflow: visible; padding: 10px 12px 14px; }
+.se-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.se-task-ref { font-family: var(--mono); font-size: 11px; color: var(--text-secondary); }
+.se-demo-badge, .se-kind-badge {
+  display: inline-block; padding: 1px 8px; border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: var(--editor-weight-medium);
+}
+.se-demo-badge { background: var(--accent-soft); color: var(--accent); }
+.se-demo-badge[hidden] { display: none; }
+.se-kind-badge { background: var(--bg-elevated); color: var(--text-tertiary); }
+.se-legend { font-size: 11px; color: var(--text-tertiary); margin: 2px 0 8px; word-break: keep-all; overflow-wrap: break-word; }
+.se-claims { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.se-claim { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-elevated); }
+.se-claim-toggle {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%;
+  padding: 8px 10px; background: none; border: 0; color: inherit;
+  text-align: left; cursor: pointer; font-size: 12px;
+}
+.se-claim-statement { flex: 1 1 220px; color: var(--text-primary); word-break: keep-all; overflow-wrap: break-word; }
+.se-badge {
+  display: inline-block; padding: 1px 8px; border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: var(--editor-weight-medium); white-space: nowrap;
+}
+.se-exec { background: var(--bg-canvas); color: var(--text-secondary); border: 1px solid var(--border-default); }
+.se-state-supported { background: var(--green); color: var(--bg-base); }
+.se-state-refuted { background: var(--red); color: var(--bg-base); }
+.se-state-inconclusive { background: var(--amber); color: var(--bg-base); }
+.se-state-not_evaluated { background: var(--bg-canvas); color: var(--text-tertiary); border: 1px solid var(--border-default); }
+.se-live-unverified {
+  display: inline-block; padding: 1px 8px; border-radius: var(--radius-sm);
+  border: 1px dashed var(--amber); color: var(--amber);
+  font-size: 11px; font-weight: var(--editor-weight-medium); white-space: nowrap;
+}
+.se-claim-detail { padding: 4px 10px 10px; border-top: 1px solid var(--border-subtle); }
+.se-detail-block h4 { font-size: 11px; margin: 8px 0 2px; color: var(--text-tertiary); font-weight: var(--editor-weight-medium); }
+.se-artifact-list, .se-missing-list, .se-limitation-list { margin: 0; padding-left: 16px; }
+.se-artifact-row, .se-missing-row { font-family: var(--mono); font-size: 11px; word-break: keep-all; overflow-wrap: break-word; color: var(--text-secondary); }
+.se-artifact-row > *, .se-missing-row > * { margin-right: 8px; }
+.se-missing-row[data-se-check-blocking="1"] .se-missing-blocking { color: var(--amber); }
+.se-method-list, .se-decision-list { margin: 0; font-size: 11px; }
+.se-method-row, .se-decision-row { display: flex; gap: 8px; }
+.se-method-row dt, .se-decision-row dt { width: 110px; color: var(--text-tertiary); }
+.se-method-row dd, .se-decision-row dd { margin: 0; font-family: var(--mono); color: var(--text-secondary); word-break: keep-all; overflow-wrap: break-word; }
+.se-method-row dt, .se-decision-row dt { word-break: keep-all; overflow-wrap: break-word; }
+.se-empty { font-size: 11px; color: var(--text-tertiary); font-style: italic; margin: 2px 0; word-break: keep-all; overflow-wrap: break-word; }
+.se-claim-reason { font-size: 11px; color: var(--text-secondary); margin: 6px 0 0; word-break: keep-all; overflow-wrap: break-word; }
+.se-note { font-size: 11px; color: var(--amber); margin: 4px 0 0; word-break: keep-all; overflow-wrap: break-word; }
+.se-projections { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.se-projection { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--bg-canvas); }
+.se-projection h4 { font-size: 11px; margin: 0 0 6px; color: var(--text-secondary); font-weight: var(--editor-weight-medium); }
+.se-energy-chart { min-height: 60px; }
+.se-energy-actions { display: flex; gap: 8px; margin-top: 6px; }
+.se-save-candidate-btn {
+  height: var(--small-button-height); padding: 0 12px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border-default);
+  background: var(--bg-elevated); color: var(--accent); cursor: pointer;
+  font-size: 12px; transition: background var(--transition);
+}
+.se-save-candidate-btn:hover { background: var(--accent-soft); }
+.se-scene-host { min-height: 120px; }
+
+.research-approval-panel { flex: 0 0 auto; max-height: none; }
+.research-approval-panel .panel-body { flex: 1 1 auto; min-height: 0; overflow: visible; padding: 10px 12px 14px; }
+.ra-card { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--bg-canvas); }
+.ra-card-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: -8px -10px 6px;
+  padding: 8px 10px 6px;
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ra-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ra-title { font-size: 12px; font-weight: var(--editor-weight-strong); color: var(--text-secondary); word-break: keep-all; overflow-wrap: break-word; }
+.ra-status { font-size: 11px; border-radius: var(--radius-sm); padding: 1px 8px; border: 1px solid var(--border-default); color: var(--text-secondary); white-space: nowrap; }
+.ra-status-approved { color: var(--green, var(--accent)); border-color: var(--green, var(--accent)); }
+.ra-status-rejected, .ra-status-revoked, .ra-status-invalidated { color: var(--red); border-color: var(--red); }
+.ra-status-pending { color: var(--amber); border-color: var(--amber); }
+.ra-status-not_requested { color: var(--text-tertiary); }
+.ra-card dl { margin: 0; }
+.ra-row { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; padding: 2px 0; font-size: 11px; }
+.ra-row dt { flex: 1 1 120px; min-width: 0; color: var(--text-soft); font-family: var(--mono); word-break: keep-all; overflow-wrap: break-word; }
+.ra-row dd { margin: 0; flex: 1 1 110px; min-width: 0; color: var(--text-secondary); font-family: var(--mono); overflow-wrap: break-word; }
+.ra-digest { font-family: var(--mono); overflow-wrap: anywhere; }
+.ra-expired { margin-left: 6px; font-size: 10px; color: var(--text-soft); white-space: nowrap; }
+.ra-expired[data-ra-expired="true"] { color: var(--red); }
+.ra-validity { font-size: 11px; line-height: 1.45; color: var(--text-soft); word-break: keep-all; overflow-wrap: break-word; }
+.ra-card[data-ra-validity="ok"] .ra-validity { color: var(--green, var(--accent)); }
+.ra-card[data-ra-validity="approval_binding_mismatch"] .ra-validity,
+.ra-card[data-ra-validity="approval_revoked"] .ra-validity,
+.ra-card[data-ra-validity="approval_rejected"] .ra-validity,
+.ra-card[data-ra-validity="approval_expired"] .ra-validity,
+.ra-card[data-ra-validity="approval_expiry_invalid"] .ra-validity,
+.ra-card[data-ra-validity="approval_card_invalid"] .ra-validity { color: var(--red); }
