@@ -1,0 +1,10 @@
+{
+  "artifact_id": "constructed-b23b-selectivity-artifacts-absent",
+  "authorized_artifacts": [],
+  "path_records": [],
+  "paths": [],
+  "readiness": "contract_ready",
+  "real_qc_binary_ran": false,
+  "record_path": "b23b-export-absent.json",
+  "run_id": "constructed-run-0001"
+}

@@ -1,0 +1,148 @@
+{
+  "atom_index_base": 0,
+  "atom_labels": [
+    "C1",
+    "C2",
+    "O1",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6"
+  ],
+  "constructed": true,
+  "description": "Constructed ethanol shielding table and experimental peak list used to exercise the NMR comparison contract. No QC program ran and no experimental spectrum was acquired; all values are chosen so the TMS conversion and calibration are testable.",
+  "domain": "nmr",
+  "equivalence_groups": [
+    [
+      3,
+      4,
+      5
+    ],
+    [
+      6,
+      7
+    ],
+    [
+      8
+    ]
+  ],
+  "experiment": {
+    "equivalence_groups": [
+      [
+        3,
+        4,
+        5
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        8
+      ]
+    ],
+    "omit_atoms": [],
+    "peaks": [
+      {
+        "element": "C",
+        "multiplicity": 1,
+        "shift_ppm": 60.0
+      },
+      {
+        "element": "C",
+        "multiplicity": 1,
+        "shift_ppm": 20.0
+      },
+      {
+        "element": "H",
+        "multiplicity": 3,
+        "shift_ppm": 1.2
+      },
+      {
+        "element": "H",
+        "multiplicity": 2,
+        "shift_ppm": 3.6
+      },
+      {
+        "element": "H",
+        "multiplicity": 1,
+        "shift_ppm": 2.5
+      }
+    ],
+    "source_ref": "experimental_spectrum.json"
+  },
+  "fixture_id": "nmr-shielding-constructed-ethanol",
+  "molecule_id": "constructed-ethanol",
+  "real_run": false,
+  "reference": {
+    "basis": "6-311G(d)",
+    "error_model": "goodman-legacy",
+    "method": "mPW1PW91",
+    "reference_source": "goodman-tmsdata",
+    "required_nuclei": [
+      "1H",
+      "13C"
+    ],
+    "scaling_mode": "goodman",
+    "solvent": "chloroform",
+    "solvent_model": "cpcm",
+    "temperature_kelvin": 298.15,
+    "tms_shieldings": {
+      "13C": 188.452125,
+      "1H": 32.1243166667
+    }
+  },
+  "schema": "acp2.science.domain-fixture",
+  "schema_version": 1,
+  "shieldings": {
+    "0": {
+      "isotropic": 128.4634321275,
+      "symbol": "C"
+    },
+    "1": {
+      "isotropic": 168.4558940425,
+      "symbol": "C"
+    },
+    "2": {
+      "isotropic": 200.0,
+      "symbol": "O"
+    },
+    "3": {
+      "isotropic": 30.92435521588,
+      "symbol": "H"
+    },
+    "4": {
+      "isotropic": 30.92435521588,
+      "symbol": "H"
+    },
+    "5": {
+      "isotropic": 30.92435521588,
+      "symbol": "H"
+    },
+    "6": {
+      "isotropic": 28.524432314239995,
+      "symbol": "H"
+    },
+    "7": {
+      "isotropic": 28.524432314239995,
+      "symbol": "H"
+    },
+    "8": {
+      "isotropic": 29.624396977491664,
+      "symbol": "H"
+    }
+  },
+  "symbols": [
+    "C",
+    "C",
+    "O",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H"
+  ]
+}

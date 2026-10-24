@@ -1,0 +1,699 @@
+{
+  "handoff_id": "H7",
+  "handoff_version": 1,
+  "generated_by": "A-29",
+  "generated_at": "2026-10-23T05:39:50Z",
+  "contract_set": "acp2.science",
+  "contract_set_version": 1,
+  "contract_set_frozen": true,
+  "source": {
+    "branch": "acp2/a-science",
+    "pre_delivery_commit": "98fdc2eec026f6a181648c9d2a0c7e4a1b41f4c9",
+    "worktree": "/ACPServer/acp2-development/A",
+    "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "python_version": "3.11.13",
+    "delivery_commit": null,
+    "delivery_commit_note": "The delivery commit exists only in the A-29 evidence record, never in the handoff."
+  },
+  "handoff_digests": {
+    "H1": {
+      "path": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+      "sha256": "da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902",
+      "handoff_version": 1,
+      "generated_by": "A-01b",
+      "contract_set_version": null,
+      "contract_set_frozen": null,
+      "source_pre_delivery_commit": null,
+      "revision_check": "NO_SOURCE_COMMIT (H1 predates the source block; own recorded digest used)"
+    },
+    "H2": {
+      "path": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
+      "sha256": "bb13f112326475887a65c3012b9222ba1f350ff2d7c6499a87c3bd8489eece71",
+      "handoff_version": 1,
+      "generated_by": "A-08",
+      "contract_set_version": 1,
+      "contract_set_frozen": true,
+      "source_pre_delivery_commit": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+      "revision_check": "PASS"
+    },
+    "H3": {
+      "path": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
+      "sha256": "1fed3a5a4ae32390e9f59a06ecc1b7ca4a64a0ba68a6750211065fe54d050ddd",
+      "handoff_version": 1,
+      "generated_by": "A-13",
+      "contract_set_version": 1,
+      "contract_set_frozen": true,
+      "source_pre_delivery_commit": "fa5e5a173964188e7bf25e621a1bf37c7110d669",
+      "revision_check": "PASS"
+    },
+    "H4": {
+      "path": "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+      "handoff_version": 1,
+      "generated_by": "A-20",
+      "contract_set_version": 1,
+      "contract_set_frozen": true,
+      "source_pre_delivery_commit": "243d2b7",
+      "revision_check": "PASS"
+    },
+    "H5": {
+      "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
+      "sha256": "fd8573b5c71c35be07e20bcbf54506803705e0ab5c9bf01c5d278ed1a3f7caa9",
+      "handoff_version": 1,
+      "generated_by": "A-23",
+      "contract_set_version": 1,
+      "contract_set_frozen": true,
+      "source_pre_delivery_commit": "436be8e",
+      "revision_check": "PASS"
+    },
+    "H6": {
+      "path": "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+      "sha256": "f690e7e993125b509e4f5a55ce9465323292346dddfdabc0beacb4e4533b0bd0",
+      "handoff_version": 1,
+      "generated_by": "A-26",
+      "contract_set_version": 1,
+      "contract_set_frozen": true,
+      "source_pre_delivery_commit": "a1319b9",
+      "revision_check": "PASS"
+    }
+  },
+  "contract_digests": {
+    "verified_by": "/ACPServer/acp2-development/envs/a-python/bin/python /ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/verify_revisions.py (exit 0)",
+    "contract_files": {
+      "docs/reference/next-change/acp2-contracts/science/capability.schema.json": "39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
+      "docs/reference/next-change/acp2-contracts/science/task-binding.schema.json": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+      "docs/reference/next-change/acp2-contracts/science/errors.schema.json": "ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
+      "docs/reference/next-change/acp2-contracts/science/reaction.schema.json": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+      "docs/reference/next-change/acp2-contracts/science/question.schema.json": "513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
+      "docs/reference/next-change/acp2-contracts/science/evidence.schema.json": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+      "docs/reference/next-change/acp2-contracts/science/provenance.schema.json": "20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
+      "docs/reference/next-change/acp2-contracts/science/recipe.schema.json": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+      "docs/reference/next-change/acp2-contracts/science/semantic-rules.md": "53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
+      "docs/reference/next-change/acp2-contracts/science/evidence-semantics.md": "1cc0aace3580b8ddce196f719d5c88a434b24203a11bf73cb9e7c5afa414806f",
+      "docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json": "8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+      "docs/reference/next-change/acp2-contracts/science/examples/task-binding-singlepoint.json": "de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+      "docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
+      "docs/reference/next-change/acp2-contracts/science/examples/question-activation.json": "c806d87bbd57bae2c00b3e4cdf915fdf79f53c55da30377d5482115ff1f98a62"
+    },
+    "fixture_digests": {
+      "a_25a_selectivity_fixture_manifest": "197473c530d9ae926a656b398c1fe4577f3c976a507f3a22183fd801fce36b45",
+      "diels_alder_v1_fixture_manifest": "642eca859305b4e38f87b07f8f3b873c62044978e00a984fcadb7137cfb46941",
+      "nmr_cross_domain_fixture": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78",
+      "optfreq_fixture_manifest": "ead146e40c57b5d953b4c96318140cd0c46034754061c2f1b9f808d41860108a",
+      "plugin_v1_manifest": "b1d0a4f69efb44e22a0199d226405eb0e022b0b075ea294c1ea359ed6871b429",
+      "plugin_v2_manifest": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5",
+      "singlepoint_fixture_manifest": "18655285de3f22ca934a2bd0a099389e689156fd424a37b89d5ef2bfe86ac186",
+      "thermochemistry_cross_domain_fixture": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3"
+    },
+    "fixture_paths": {
+      "a_25a_selectivity_fixture_manifest": "tests/fixtures/acp2/science/selectivity/v1/fixture-manifest.json",
+      "diels_alder_v1_fixture_manifest": "tests/fixtures/acp2/science/diels_alder/v1/fixture-manifest.json",
+      "nmr_cross_domain_fixture": "tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+      "optfreq_fixture_manifest": "tests/fixtures/acp2/science/optfreq/fixture-manifest.json",
+      "plugin_v1_manifest": "tests/fixtures/acp2/science/plugin_upgrade/v1/cccp_science_plugin.json",
+      "plugin_v2_manifest": "tests/fixtures/acp2/science/plugin_upgrade/v2/cccp_science_plugin.json",
+      "singlepoint_fixture_manifest": "tests/fixtures/acp2/science/singlepoint/fixture-manifest.json",
+      "thermochemistry_cross_domain_fixture": "tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json"
+    },
+    "plugin_manifests": {
+      "tests/fixtures/acp2/science/plugin_upgrade/v1/cccp_science_plugin.json": "b1d0a4f69efb44e22a0199d226405eb0e022b0b075ea294c1ea359ed6871b429",
+      "tests/fixtures/acp2/science/plugin_upgrade/v2/cccp_science_plugin.json": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5"
+    },
+    "schema_versions": {
+      "capability_contract_version": 1,
+      "domain_extension_version": 1,
+      "accepted_schema_versions": [
+        1
+      ],
+      "historical_read_only_versions": [
+        0
+      ],
+      "acceptance_result_schema": null,
+      "acceptance_result_schema_gap": "B01 has not published acp2.acceptance.v1."
+    }
+  },
+  "rows": [
+    {
+      "row_id": "H0",
+      "item": "H0 baseline record (A-00/B00)",
+      "result": "PASS",
+      "scope": "static/constructed",
+      "scope_detail": "static baseline record; no computation",
+      "revision": "2e0ce9c202f5a65180aa97ca2787f82dc0054e6b",
+      "revision_kind": "commit",
+      "revision_source": null,
+      "recorded_revision": null,
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": false,
+      "evidence": {
+        "kind": "executed-static",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python /ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/verify_revisions.py",
+          "git cat-file -e 2e0ce9c^{commit}"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/baseline.md",
+            "sha256": "15800905ee66da6007e84134cdbb861e2d6aa59a20f218d36e68e6c117609dc1"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/verify-revisions.stdout.log"
+        ],
+        "real_artifact": false,
+        "summary": "The A-00 baseline record is present and its delivery commit resolves in this repository; the worktree is the recorded /ACPServer/acp2-development/A on acp2/a-science."
+      },
+      "gap": null
+    },
+    {
+      "row_id": "H1",
+      "item": "H1 capability and task-binding contracts (8 schemas + 2 prose docs + 4 examples)",
+      "result": "PASS",
+      "scope": "static/constructed",
+      "scope_detail": "static contract digests and contract tests",
+      "revision": "sha256:da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902",
+      "revision_kind": "digest",
+      "revision_source": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+      "recorded_revision": null,
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": false,
+      "evidence": {
+        "kind": "executed-static",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
+            "sha256": "da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902"
+          },
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+            "sha256": "39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h1.stdout.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h1.exit-code"
+        ],
+        "real_artifact": false,
+        "summary": "H1 predates source.pre_delivery_commit; its own recorded digest is verified against the file on disk. 14 contract artifacts match their recorded sha256."
+      },
+      "gap": null
+    },
+    {
+      "row_id": "H2",
+      "item": "H2 capability registry, recipe/identity and static platform contracts",
+      "result": "PASS",
+      "scope": "static/constructed",
+      "scope_detail": "static contract implementation and registry; no real MCP/stdin session",
+      "revision": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+      "revision_kind": "commit",
+      "revision_source": null,
+      "recorded_revision": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": false,
+      "evidence": {
+        "kind": "executed-static",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py tests/test_acp2_science_registry.py tests/test_acp2_science_task_binding.py tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_acp2_science_handoff.py -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
+            "sha256": "bb13f112326475887a65c3012b9222ba1f350ff2d7c6499a87c3bd8489eece71"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h2.stdout.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h2.exit-code"
+        ],
+        "real_artifact": false,
+        "summary": "The H2 gate command passed on this host; recorded revision 'b20c28614638a47b9f74be15db9226ae62d1aadd' resolves. The handoff remains closed/verified."
+      },
+      "gap": null
+    },
+    {
+      "row_id": "H3",
+      "item": "H3 P1 same-task science gate (CLI/HTTP/MCP x Local/LSF)",
+      "result": "NOT_VERIFIED",
+      "scope": "static/constructed",
+      "scope_detail": "static P1 ledger only; six real Local/LSF cells NOT_VERIFIED",
+      "revision": "fa5e5a173964188e7bf25e621a1bf37c7110d669",
+      "revision_kind": "commit",
+      "revision_source": null,
+      "recorded_revision": "fa5e5a173964188e7bf25e621a1bf37c7110d669",
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": true,
+      "evidence": {
+        "kind": "static-observation",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_artifact_validation.py tests/test_acp2_science_task_binding.py tests/test_architecture_invariants.py tests/test_acp2_science_p1_gate.py -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
+            "sha256": "1fed3a5a4ae32390e9f59a06ecc1b7ca4a64a0ba68a6750211065fe54d050ddd"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h3.stdout.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h3.exit-code"
+        ],
+        "real_artifact": false,
+        "summary": "The H3 gate command passed on this host; recorded revision 'fa5e5a173964188e7bf25e621a1bf37c7110d669' resolves. The handoff remains open."
+      },
+      "gap": "Real Local/LSF same-task rows are NOT_VERIFIED: B10 three-entry task, B07 deadlines, B05 stdio launch, C15 browser record and LSF receipts are unpublished."
+    },
+    {
+      "row_id": "H4",
+      "item": "H4 Diels-Alder TS/IRC/energy science gate",
+      "result": "NOT_VERIFIED",
+      "scope": "static/constructed",
+      "scope_detail": "constructed validators/checkers only; real DA rows and search NOT_VERIFIED",
+      "revision": "243d2b7c1f2d115b1fa67d8af35e4020fe7be2d8",
+      "revision_kind": "commit",
+      "revision_source": null,
+      "recorded_revision": "243d2b7",
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": true,
+      "evidence": {
+        "kind": "static-observation",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_da_validators.py tests/test_acp2_science_energy_comparability.py tests/test_acp2_science_recipe.py tests/test_recovery_fixtures_smoke.py tests/test_acp2_science_h4_gate.py -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+            "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h4.stdout.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h4.exit-code"
+        ],
+        "real_artifact": false,
+        "summary": "The H4 gate command passed on this host; recorded revision '243d2b7' resolves. The handoff remains open."
+      },
+      "gap": "Required real DA rows (valid TS, bidirectional IRC, endpoint connectivity, comparable energy) and the separate B20a-search row are NOT_VERIFIED; no B20a-exec/B20a-search artifact."
+    },
+    {
+      "row_id": "H5",
+      "item": "H5 plugin conflicts and v1->v2 upgrade/rollback gate",
+      "result": "PASS",
+      "scope": "static/constructed",
+      "scope_detail": "constructed plugin conflicts and v1->v2 upgrade; no production plugin",
+      "revision": "436be8e",
+      "revision_kind": "commit",
+      "revision_source": null,
+      "recorded_revision": "436be8e",
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": false,
+      "evidence": {
+        "kind": "executed-static",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_plugin_registry.py tests/test_cccp_plugin_pilot.py tests/test_cccp_plugin_sdk.py tests/test_packaging_assets.py -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
+            "sha256": "fd8573b5c71c35be07e20bcbf54506803705e0ab5c9bf01c5d278ed1a3f7caa9"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h5.stdout.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h5.exit-code"
+        ],
+        "real_artifact": false,
+        "summary": "The H5 gate command passed on this host; recorded revision '436be8e' resolves. The handoff remains closed/verified."
+      },
+      "gap": null
+    },
+    {
+      "row_id": "H6",
+      "item": "H6 cross-domain (NMR/thermochemistry/selectivity) and version regression gate",
+      "result": "NOT_VERIFIED",
+      "scope": "static/constructed",
+      "scope_detail": "constructed NMR/thermochemistry contracts; selectivity and C T-40b NOT_VERIFIED",
+      "revision": "a1319b9",
+      "revision_kind": "commit",
+      "revision_source": null,
+      "recorded_revision": "a1319b9",
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": true,
+      "evidence": {
+        "kind": "static-observation",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_cross_domain.py tests/test_acp2_science_selectivity.py tests/test_acp2_science_evidence_contract.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_isolation.py tests/test_acp2_science_h6_gate.py -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+            "sha256": "f690e7e993125b509e4f5a55ce9465323292346dddfdabc0beacb4e4533b0bd0"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h6.stdout.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h6.exit-code"
+        ],
+        "real_artifact": false,
+        "summary": "The H6 gate command passed on this host; recorded revision 'a1319b9' resolves. The handoff remains open."
+      },
+      "gap": "Selectivity subcase and C T-40b signoff are NOT_VERIFIED: no C T-40a submission, B23b artifact, real A-25b audit or C T-40b signoff."
+    },
+    {
+      "row_id": "A-27b-installed-package",
+      "item": "A-27b clean-environment installed-package probe over the packaged science corpus",
+      "result": "PASS",
+      "scope": "static/constructed",
+      "scope_detail": "reproducible local-candidate wheel in a clean venv; not a B25a platform candidate",
+      "revision": "sha256:78d0e622014d9ab478b870c01ebbb26f07358d419514d78a795a8109193796f1",
+      "revision_kind": "digest",
+      "revision_source": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/wheel/cccp-0.2.0-py3-none-any.whl",
+      "recorded_revision": null,
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": false,
+      "evidence": {
+        "kind": "executed-static",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_installed_package.py -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_installed_package.py",
+            "sha256": "921d2cea8ad30d6a01454767f91ea1f9dfb8dc3c6b50977b95bf26d96934a5dd"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z/result.json",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stdout.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stderr.log",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.exit-code"
+        ],
+        "real_artifact": false,
+        "summary": "18 passed. The probe imports cccp from the wheel extract, rejects acp/acp_services imports and reads the packaged 14-file contract corpus. The wheel is a local candidate, never B25a."
+      },
+      "gap": null
+    },
+    {
+      "row_id": "A-28-sdk-examples",
+      "item": "A-28 SDK examples and installed-example harness (software-free)",
+      "result": "PASS",
+      "scope": "static/constructed",
+      "scope_detail": "four software-free examples plus harness absent-wheel exit 2 / present-wheel PASS; no real QC",
+      "revision": "6608f83380d15cbe396601870fe49b9c61d54cb5",
+      "revision_kind": "commit",
+      "revision_source": null,
+      "recorded_revision": "6608f83",
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": false,
+      "evidence": {
+        "kind": "executed-static",
+        "commands": [
+          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_installed_package.py -k documented_examples -q"
+        ],
+        "executed": true,
+        "exit_code": 0,
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/examples/singlepoint_public_api.py",
+            "sha256": "dcbaed623ddaed093ba9f40f79869decc686d72d5c9615a91ca3168da3ccbf62"
+          },
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/examples/compile_recipe.py",
+            "sha256": "42760f40daf2e170c62d76c7b7723de968269e57ea155cba552f7425b80d6794"
+          },
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/examples/read_report.py",
+            "sha256": "b4845ebc2253f1e03860a8bd398df55053f1f70963ae512de1eed519b495c067"
+          },
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/examples/external_plugin.py",
+            "sha256": "bb3f849273511c464d39e3960477c83b588e8a3727fd275cd0720940313d8304"
+          }
+        ],
+        "records": [
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z/result.json",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/harness-absent/result.json",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/harness-present/result.json",
+          "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/wheel/cccp-0.2.0-py3-none-any.whl"
+        ],
+        "real_artifact": false,
+        "summary": "Four documented examples run in a clean venv with no source-tree leak. The harness returns exit 2 NOT_VERIFIED without a wheel and PASS with 7 pinned artifacts when given the local candidate."
+      },
+      "gap": null
+    },
+    {
+      "row_id": "B25a-release-candidate",
+      "item": "B25a platform release-candidate wheel",
+      "result": "NOT_VERIFIED",
+      "scope": "real",
+      "scope_detail": "real platform release candidate required",
+      "revision": null,
+      "revision_kind": "absent",
+      "revision_source": null,
+      "recorded_revision": null,
+      "real_run": false,
+      "required_for_release": true,
+      "requires_real_run": true,
+      "evidence": {
+        "kind": "absent-producer",
+        "commands": [],
+        "executed": false,
+        "exit_code": null,
+        "artifacts": [],
+        "records": [],
+        "real_artifact": false,
+        "summary": "No B25a release candidate exists. A-27b/A-28 used a reproducible local-candidate wheel only."
+      },
+      "gap": "B25a has not published a release-candidate wheel built after the contract corpus and the B-owned package-data declaration. No candidate revision, digest or run key is invented."
+    }
+  ],
+  "release_readiness": {
+    "ready": false,
+    "rule": "ready is true only when every required_for_release row is PASS with executed=True, a non-empty command, exit_code 0, and real_run=true plus a real artifact wherever the row is a real-run row (scope == 'real' or requires_real_run).",
+    "required_row_ids": [
+      "H0",
+      "H1",
+      "H2",
+      "H3",
+      "H4",
+      "H5",
+      "H6",
+      "A-27b-installed-package",
+      "A-28-sdk-examples",
+      "B25a-release-candidate"
+    ],
+    "open_required_row_ids": [
+      "H3",
+      "H4",
+      "H6",
+      "B25a-release-candidate"
+    ],
+    "reason": "B25a has no release candidate; H3 real Local/LSF rows, H4 real DA/search rows and H6 selectivity/C T-40b remain NOT_VERIFIED.",
+    "blocking_requirements": {
+      "B25a-release-candidate": "No B25a release-candidate wheel or candidate revision.",
+      "H3": "Real Local/LSF same-task rows and receipts are absent.",
+      "H4": "Real DA TS/IRC/energy and the separate search row are absent.",
+      "H6": "Selectivity audit and C T-40b signoff are absent."
+    }
+  },
+  "h7_signature": {
+    "signed_by": "A",
+    "signed_at": "2026-10-23T05:39:50Z",
+    "signed_from": {
+      "b25a_candidate": "NOT_VERIFIED",
+      "a27b_verification": "PASS",
+      "a28_verification": "PASS"
+    },
+    "candidate_b25a": "NOT_VERIFIED",
+    "candidate_b25a_revision": null,
+    "platform_release": false,
+    "scope": "A signs its own science H7. This is not a platform release signature.",
+    "note": "No B25a candidate exists; A signs from its own A-27b/A-28 verification and records the missing platform candidate instead of inventing a revision."
+  },
+  "prerequisites": [
+    {
+      "artifact_id": "H0",
+      "kind": "baseline-record",
+      "availability": "present",
+      "state": "PASS"
+    },
+    {
+      "artifact_id": "H1",
+      "kind": "handoff",
+      "availability": "present",
+      "state": "PASS"
+    },
+    {
+      "artifact_id": "H2",
+      "kind": "handoff",
+      "availability": "present",
+      "state": "PASS"
+    },
+    {
+      "artifact_id": "H3",
+      "kind": "handoff",
+      "availability": "present",
+      "state": "NOT_VERIFIED"
+    },
+    {
+      "artifact_id": "H4",
+      "kind": "handoff",
+      "availability": "present",
+      "state": "NOT_VERIFIED"
+    },
+    {
+      "artifact_id": "H5",
+      "kind": "handoff",
+      "availability": "present",
+      "state": "PASS"
+    },
+    {
+      "artifact_id": "H6",
+      "kind": "handoff",
+      "availability": "present",
+      "state": "NOT_VERIFIED"
+    },
+    {
+      "artifact_id": "A-27b",
+      "kind": "verification",
+      "availability": "present",
+      "state": "PASS"
+    },
+    {
+      "artifact_id": "A-28",
+      "kind": "verification",
+      "availability": "present",
+      "state": "PASS"
+    }
+  ],
+  "release_checks": {
+    "reverse_import_scan": {
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python /ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/scan_reverse_imports.py",
+      "exit_code": 0,
+      "result": "PASS",
+      "summary": "202 src/cccp modules AST-scanned; no import of acp or acp_services.",
+      "records": [
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/reverse-imports.stdout.log",
+        "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/reverse-imports.exit-code"
+      ]
+    },
+    "one_execution_station": {
+      "test": "tests/test_architecture_invariants.py::test_unique_primitive_definitions",
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_architecture_invariants.py::test_unique_primitive_definitions -q",
+      "exit_code": 0,
+      "result": "PASS",
+      "summary": "Exactly one implementation body per primitive; 15 run_* task cores under src/cccp/calculation/tasks/."
+    },
+    "active_workflows": {
+      "ids": [
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "tsmode",
+        "casscf",
+        "xtb_optimize",
+        "nmr",
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
+        "XtbPathSearch",
+        "OrcaGradient",
+        "XtbConstrainedOpt"
+      ],
+      "count": 15,
+      "expected_source": "tests/test_acp2_science_p1_gate.py::ACTIVE_WORKFLOW_IDS",
+      "tests": [
+        "tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered",
+        "tests/test_acp2_science_p1_gate.py::test_active_workflow_contract_is_exact"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_architecture_invariants.py tests/test_acp2_science_p1_gate.py -q",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    "compatibility_surfaces": {
+      "tests": [
+        "tests/test_packaging_assets.py",
+        "tests/test_recovery_fixtures_smoke.py",
+        "tests/test_cccp_isolation.py"
+      ],
+      "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_packaging_assets.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_isolation.py -q",
+      "exit_code": 0,
+      "result": "PASS",
+      "summary": "Compatibility shims, historical readers, recovery fixtures and model assets are still present and packaged."
+    }
+  },
+  "support_matrix": {
+    "path": "docs/reference/next-change/acp2-contracts/science/capability-support-matrix.md",
+    "capabilities": {
+      "electronic.energy": "verified-static",
+      "geometry.optimize": "verified-static",
+      "vibration.compute": "verified-static",
+      "vibration.analyze": "verified-static",
+      "nmr.shielding": "constructed",
+      "nmr.compare": "constructed",
+      "thermochemistry.ensemble": "constructed"
+    },
+    "task_kind_count": 15,
+    "unsupported_families": [
+      "casscf",
+      "clustering",
+      "censo_refine",
+      "conformer_search",
+      "constrained_optimization",
+      "gradient",
+      "md_sampling",
+      "reaction_path"
+    ]
+  },
+  "replay_index": {
+    "path": "docs/reference/next-change/acp2-contracts/science/replay-index.json",
+    "entry_count": 10
+  },
+  "limitations": [
+    "No real QC binary, scheduler, LSF submission, platform job or production service was used.",
+    "B25a has not published a release candidate; the A-27b/A-28 wheel is a local candidate only.",
+    "H3 real Local/LSF rows, H4 real DA/search rows and H6 selectivity/C T-40b remain NOT_VERIFIED.",
+    "No B01 acceptance-result.schema.json or phase registry exists; no receipt or run key is claimed.",
+    "B owns the platform aggregate release after A-29 and C's final handoff; A does not wait for it."
+  ],
+  "aggregation": {
+    "owner": "B",
+    "note": "The platform aggregate release index is published by B after A-29 and after track C's final handoff. It is not an H7 prerequisite and A does not wait for it.",
+    "a_waits_for_aggregation": false
+  },
+  "evidence_record": {
+    "root": "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z",
+    "result": "/ACPServer/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/result.json",
+    "delivery_commit": null,
+    "delivery_commit_note": "Filled only in the A-29 evidence result after the single commit."
+  }
+}

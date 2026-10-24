@@ -1,0 +1,707 @@
+{
+  "chain_frozen": {
+    "frozen": true,
+    "links": {
+      "capability": {
+        "frozen_fields": [
+          "name",
+          "kind",
+          "implementation_id",
+          "schema",
+          "schema_version"
+        ],
+        "instance": {
+          "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+          "kind": "pure_analysis",
+          "name": "acp2_upgrade_native_singlepoint",
+          "schema": "acp2.science.external.upgrade_singlepoint",
+          "schema_version": 2
+        },
+        "source": "cccp.plugin.metadata.PluginCapability"
+      },
+      "metadata": {
+        "frozen_fields": [
+          "name",
+          "distribution",
+          "version",
+          "api.compatible_range",
+          "science_version_range",
+          "license",
+          "trust_level",
+          "distribution_digest",
+          "default_enabled"
+        ],
+        "instance": {
+          "api_compatible_range": ">=1,<2",
+          "default_enabled": true,
+          "distribution": "acp2-upgrade-science-validator",
+          "distribution_digest": "sha256:19d3f7bcd5c64ea37e419a8b616a9f04b7ba119a45d69b914785597f9f7c57c8",
+          "license": "MIT",
+          "name": "acp2_upgrade.native_singlepoint",
+          "science_version_range": ">=1,<2",
+          "trust_level": "untrusted",
+          "version": "2.0.0"
+        },
+        "source": "cccp.plugin.metadata.PluginMetadata"
+      },
+      "provenance": {
+        "frozen_fields": [
+          "plugin_version",
+          "plugin_digest",
+          "capability",
+          "capability_schema",
+          "capability_schema_version",
+          "backend",
+          "method",
+          "input_signature"
+        ],
+        "instance": {
+          "backend": "acp2_upgrade_fixture",
+          "capability": "acp2_upgrade_native_singlepoint",
+          "capability_schema": "acp2.science.external.upgrade_singlepoint",
+          "capability_schema_version": 2,
+          "input_signature": "bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+          "method": "native_singlepoint_json_v1",
+          "plugin_digest": "2b5cfe8371c747524fe5f7a5742bcfce17ad38f476fd64ced0becedacf4dbdfc",
+          "plugin_version": "2.0.0"
+        },
+        "source": "cccp.plugin.sdk.lock_plugin + cccp.calculation.contracts.Provenance",
+        "v1_instance": {
+          "capability_schema_version": 1,
+          "note": "Read-only historical artifact identity; it is never substituted into a v2 task.",
+          "plugin_digest": "7820646bf5780e89754e0371f625d0231368d055e26347248227d6a5dc09d95c",
+          "plugin_distribution_digest": "sha256:30ae47306814dea5ce8aa3f3608740fd1b75528c43dac39569482e3341aeb748",
+          "plugin_version": "1.0.0"
+        }
+      },
+      "recipe": {
+        "frozen_fields": [
+          "recipe_id",
+          "schema_version",
+          "digest"
+        ],
+        "instance": {
+          "digest": null,
+          "recipe_id": "acp2.upgrade.recipe",
+          "schema_version": 2
+        },
+        "source": "cccp.plugin.metadata.PluginRecipeRef"
+      },
+      "validator": {
+        "frozen_fields": [
+          "validator_id",
+          "validator_version",
+          "required"
+        ],
+        "instance": {
+          "required": true,
+          "validator_id": "check.acp2_upgrade_schema",
+          "validator_version": "2.0.0"
+        },
+        "source": "cccp.plugin.metadata.PluginValidatorRef"
+      }
+    },
+    "order": [
+      "metadata",
+      "capability",
+      "recipe",
+      "validator",
+      "provenance"
+    ],
+    "rule": "Every link is declarative and versioned. A recipe or validator reference grants no execution authority; a provenance digest is derived from the manifest and the built-in result envelope, never from a job id, queue, account or display name."
+  },
+  "compatibility_rows": [
+    {
+      "constructed": true,
+      "distinct_typed_error": true,
+      "error_type": "PluginCapabilityConflictError",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/external_plugin/cccp_science_plugin.json",
+            "sha256": "1eeccacd3d8840007cd2f85a8d4b4f53de8c8eff52e2c83662e231175a352c5f"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::test_duplicate_capability_name_is_a_typed_conflict -q",
+          "pytest tests/test_cccp_plugin_sdk.py::TestDuplicateCapabilityBoundary::test_duplicate_capability_across_plugins_is_rejected -q"
+        ],
+        "summary": "Discovery tracks capability names across candidates and raises the typed conflict naming the first declaring plugin; the built-in reserved namespace is rejected the same way.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::test_duplicate_capability_name_is_a_typed_conflict",
+          "tests/test_cccp_plugin_sdk.py::TestDuplicateCapabilityBoundary::test_duplicate_capability_across_plugins_is_rejected"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": true,
+      "requirement": "Two plugins that declare the same capability name are rejected before any loader.",
+      "result": "PASS",
+      "row_id": "H5-01-duplicate-capability-name"
+    },
+    {
+      "constructed": true,
+      "distinct_typed_error": true,
+      "error_type": "PluginImplementationConflictError",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          },
+          {
+            "path": "tests/_acp2_upgrade_plugin_probe.py",
+            "sha256": "2a32372f8d92d2d5a4ee66740c30fd5d493c4030448e36b702693ff0df66290d"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::test_duplicate_implementation_id_is_a_distinct_typed_conflict -q",
+          "pytest tests/test_acp2_science_plugin_gate.py::test_duplicate_implementation_id_within_one_plugin_is_rejected -q"
+        ],
+        "summary": "Implementation ids are a separate namespace: discovery rejects cross-plugin collisions and metadata rejects two capabilities inside one manifest.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::test_duplicate_implementation_id_is_a_distinct_typed_conflict",
+          "tests/test_acp2_science_plugin_gate.py::test_duplicate_implementation_id_within_one_plugin_is_rejected"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": true,
+      "requirement": "Two capabilities that declare the same implementation identity are rejected.",
+      "result": "PASS",
+      "row_id": "H5-02-duplicate-implementation-id"
+    },
+    {
+      "constructed": true,
+      "distinct_typed_error": true,
+      "error_type": "PluginVersionMismatchError",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/v2/cccp_science_plugin.json",
+            "sha256": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::test_incompatible_api_and_science_ranges_are_typed -q",
+          "pytest tests/test_cccp_plugin_pilot.py::test_incompatible_api_range_is_rejected -q",
+          "pytest tests/test_cccp_plugin_pilot.py::test_science_version_range_must_include_the_host -q"
+        ],
+        "summary": "The API range and the science-contract range are both checked by discovery and by lock_plugin; failure records the declared range and host version.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::test_incompatible_api_and_science_ranges_are_typed",
+          "tests/test_cccp_plugin_pilot.py::test_incompatible_api_range_is_rejected",
+          "tests/test_cccp_plugin_pilot.py::test_science_version_range_must_include_the_host"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": true,
+      "requirement": "A declared plugin API or ACP2 science range that excludes the host is rejected.",
+      "result": "PASS",
+      "row_id": "H5-03-incompatible-api-range"
+    },
+    {
+      "constructed": true,
+      "distinct_typed_error": true,
+      "error_type": "PluginDependencyUnavailableError",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::test_missing_dependency_is_typed_before_the_loader -q",
+          "pytest tests/test_cccp_plugin_sdk.py::TestMissingDependencyBoundary::test_missing_dependency_is_typed_before_loader_runs -q"
+        ],
+        "summary": "resolve_dependency_versions runs before PluginHost.load, reports every missing dependency and never installs anything; the loader spy stays untouched.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::test_missing_dependency_is_typed_before_the_loader",
+          "tests/test_cccp_plugin_sdk.py::TestMissingDependencyBoundary::test_missing_dependency_is_typed_before_loader_runs"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": true,
+      "requirement": "A declared runtime dependency absent from the environment is rejected before loading.",
+      "result": "PASS",
+      "row_id": "H5-04-missing-dependency"
+    },
+    {
+      "constructed": true,
+      "distinct_typed_error": true,
+      "error_type": "PluginLicenseError",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/v1/cccp_science_plugin.json",
+            "sha256": "b1d0a4f69efb44e22a0199d226405eb0e022b0b075ea294c1ea359ed6871b429"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::test_unknown_and_empty_licenses_are_typed -q",
+          "pytest tests/test_cccp_plugin_pilot.py::test_legacy_metadata_unknown_license_raises_typed_license_error -q",
+          "pytest tests/test_cccp_plugin_pilot.py::test_empty_license_raises_typed_license_error -q"
+        ],
+        "summary": "The closed licence policy is applied while the metadata record is constructed, so no loader exists when the rejection is raised; the owner can only narrow the accepted set.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::test_unknown_and_empty_licenses_are_typed",
+          "tests/test_cccp_plugin_pilot.py::test_legacy_metadata_unknown_license_raises_typed_license_error",
+          "tests/test_cccp_plugin_pilot.py::test_empty_license_raises_typed_license_error"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": true,
+      "requirement": "An unknown or empty declared licence fails closed.",
+      "result": "PASS",
+      "row_id": "H5-05-unknown-or-empty-license"
+    },
+    {
+      "constructed": true,
+      "distinct_typed_error": true,
+      "error_type": "PluginFixtureIntegrityError",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
+            "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::test_corrupt_fixture_digest_is_typed -q",
+          "pytest tests/test_acp2_science_plugin_gate.py::test_corrupt_entry_point_manifest_is_typed_before_import -q"
+        ],
+        "summary": "verify_fixture_evidence compares a caller-recomputed digest with the declared evidence and raises the typed integrity error on mismatch, missing record or unverified record; a malformed entry-point manifest remains a typed PluginMetadataError before import.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::test_corrupt_fixture_digest_is_typed",
+          "tests/test_acp2_science_plugin_gate.py::test_corrupt_entry_point_manifest_is_typed_before_import"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": true,
+      "requirement": "A fixture digest that does not match the declared evidence, or a corrupt manifest, is rejected.",
+      "result": "PASS",
+      "row_id": "H5-06-corrupt-fixture-data"
+    },
+    {
+      "constructed": true,
+      "distinct_typed_error": true,
+      "error_type": "PluginDisabledError",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/v2/cccp_science_plugin.json",
+            "sha256": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::test_untrusted_plugin_is_never_auto_enabled_even_with_default_enabled -q",
+          "pytest tests/test_acp2_science_plugin_gate.py::test_discovery_never_calls_a_loader_for_any_source -q",
+          "pytest tests/test_cccp_plugin_pilot.py::test_trust_defaults_to_lowest_and_is_never_inferred -q"
+        ],
+        "summary": "The v2 manifest deliberately declares default_enabled=true and trust_level=untrusted; discovery and host construction keep it disabled, the verified projection stays not_verified, and load/invoke raises the typed disabled error before the loader. Failure guidance keeps silent_substitution_allowed=false.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::test_untrusted_plugin_is_never_auto_enabled_even_with_default_enabled",
+          "tests/test_acp2_science_plugin_gate.py::test_discovery_never_calls_a_loader_for_any_source",
+          "tests/test_cccp_plugin_pilot.py::test_trust_defaults_to_lowest_and_is_never_inferred"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": true,
+      "requirement": "An untrusted or unverified plugin cannot be auto-enabled or silently substituted.",
+      "result": "PASS",
+      "row_id": "H5-07-untrusted-unverified"
+    },
+    {
+      "constructed": true,
+      "distinct_typed_error": false,
+      "error_type": null,
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/test_acp2_science_plugin_gate.py",
+            "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
+            "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/constructed.json",
+            "sha256": "8db341bb08c31da9e11bc0c4e1eff51a7d5364f701b66276b6ae1ce3429d48fc"
+          },
+          {
+            "path": "tests/_acp2_upgrade_plugin_probe.py",
+            "sha256": "2a32372f8d92d2d5a4ee66740c30fd5d493c4030448e36b702693ff0df66290d"
+          }
+        ],
+        "commands": [
+          "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_is_produced_by_the_v1_distribution -q",
+          "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_survives_v2_upgrade_without_rerun -q",
+          "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_new_tasks_use_v2_explicitly_and_never_auto_enable -q",
+          "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_reads_after_v2_uninstall -q"
+        ],
+        "summary": "The constructed v1/v2 pair is built and installed in an isolated venv: v1 produces a labelled artifact, v2 is installed over it, the v1 artifact round-trips byte-for-value without importing the plugin, v2 is explicitly enabled/invoked, and the same artifact remains readable after v2 is uninstalled.",
+        "tests": [
+          "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_is_produced_by_the_v1_distribution",
+          "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_survives_v2_upgrade_without_rerun",
+          "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_new_tasks_use_v2_explicitly_and_never_auto_enable",
+          "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_reads_after_v2_uninstall"
+        ]
+      },
+      "gap": null,
+      "raised_before_loader": false,
+      "requirement": "A v1 artifact stays readable after v2 is installed, and new work uses v2 explicitly without a rerun.",
+      "result": "PASS",
+      "row_id": "H5-08-v1-artifact-after-v2-upgrade"
+    }
+  ],
+  "conflict_taxonomy": [
+    {
+      "code_path": "cccp.plugin.discovery.discover_plugins",
+      "conflict": "duplicate capability name",
+      "error_type": "PluginCapabilityConflictError",
+      "raised_before_loader": true
+    },
+    {
+      "code_path": "cccp.plugin.discovery.discover_plugins; cccp.plugin.metadata.PluginMetadata.__post_init__",
+      "conflict": "duplicate implementation id",
+      "error_type": "PluginImplementationConflictError",
+      "raised_before_loader": true
+    },
+    {
+      "code_path": "cccp.plugin.discovery.discover_plugins; cccp.plugin.sdk.require_compatible_plugin",
+      "conflict": "incompatible API or science range",
+      "error_type": "PluginVersionMismatchError",
+      "raised_before_loader": true
+    },
+    {
+      "code_path": "cccp.plugin.sdk.resolve_dependency_versions (invoked before PluginHost.load)",
+      "conflict": "missing dependency",
+      "error_type": "PluginDependencyUnavailableError",
+      "raised_before_loader": true
+    },
+    {
+      "code_path": "cccp.plugin.metadata.PluginLicensePolicy.validate",
+      "conflict": "unknown or empty licence",
+      "error_type": "PluginLicenseError",
+      "raised_before_loader": true
+    },
+    {
+      "code_path": "cccp.plugin.metadata.verify_fixture_evidence; cccp.plugin.discovery.scan_science_plugin_entry_points",
+      "conflict": "corrupt fixture data",
+      "error_type": "PluginFixtureIntegrityError",
+      "raised_before_loader": true
+    },
+    {
+      "code_path": "cccp.plugin.host.PluginHost.load; cccp.plugin.sdk.invoke_capability",
+      "conflict": "untrusted or unverified trust level",
+      "error_type": "PluginDisabledError",
+      "raised_before_loader": true
+    }
+  ],
+  "contract_set": "acp2.science",
+  "contract_set_frozen": true,
+  "contract_set_version": 1,
+  "contract_version_basis": {
+    "handoff_h4_sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+    "handoff_h4_version": 1,
+    "rule": "H5 consumes the exact H4 bytes for the science contract baseline and adds only the plugin-ecosystem gate; no H4 row is rewritten or upgraded."
+  },
+  "discovery_loader_proof": {
+    "auto_enable_sources_checked": [
+      "default_enabled manifest metadata",
+      "installation from the entry-point group",
+      "trust_level untrusted or unverified fixture evidence",
+      "valid API and science compatibility ranges",
+      "declared recipe and validator references"
+    ],
+    "auto_enables_unverified_plugin": false,
+    "discovery_calls_loader": false,
+    "enablement_policy": "disabled-by-default",
+    "observations": [
+      "PluginHost construction calls discover_plugins only; the candidate loader is stored and never invoked.",
+      "scan_science_plugin_entry_points reads cccp_science_plugin.json through Distribution.read_text and wraps the entry point in a lazy EntryPointPluginLoader; load() is not called.",
+      "PluginHost.load is the only call site of a loader and raises PluginDisabledError unless the operator explicitly enabled the plugin.",
+      "failure_report keeps silent_substitution_allowed=false for every typed plugin failure; the built-in capability remains available only through an explicit operator decision."
+    ],
+    "silently_substitutes_plugin_result": false,
+    "tests": [
+      "tests/test_acp2_science_plugin_gate.py::test_discovery_never_calls_a_loader_for_any_source",
+      "tests/test_acp2_science_plugin_gate.py::test_untrusted_plugin_is_never_auto_enabled_even_with_default_enabled",
+      "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_new_tasks_use_v2_explicitly_and_never_auto_enable",
+      "tests/test_acp2_science_plugin_registry.py::test_metadata_only_catalog_does_not_call_a_loader",
+      "tests/test_acp2_science_plugin_registry.py::test_installed_fixture_is_discovered_without_importing_its_module"
+    ]
+  },
+  "external_evidence": {
+    "adr_007_platform_decision": {
+      "owner": "platform owner (B)",
+      "reason": "ADR-007 trust, licence and rollback policy is input only; the owner decision is not recorded.",
+      "result": "NOT_VERIFIED"
+    },
+    "b01_receipt_protocol": {
+      "missing_artifact": "acceptance-result.schema.json",
+      "missing_contract": "acp2.acceptance.v1",
+      "reason": "B01 has not published the receipt schema; this handoff records only the A-internal provisional shape.",
+      "result": "NOT_VERIFIED"
+    },
+    "real_production_plugin": {
+      "reason": "The v1/v2 pair and the A-22 fixture are constructed distributions installed only in isolated venvs; no production plugin is certified.",
+      "result": "NOT_VERIFIED"
+    }
+  },
+  "frozen_at": "2026-10-23T01:53:05Z",
+  "gate_command": [
+    "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_acp2_science_plugin_registry.py",
+    "tests/test_cccp_plugin_pilot.py",
+    "tests/test_cccp_plugin_sdk.py",
+    "tests/test_packaging_assets.py",
+    "-q"
+  ],
+  "generated_by": "A-23",
+  "h5_closure": {
+    "all_required_pass": true,
+    "closed": true,
+    "gate_scope": "plugin conflicts, constructed v1/v2 upgrade, rollback and historical read-only access",
+    "not_claimed": [
+      "production plugin certification",
+      "real QC execution",
+      "process-level sandboxing",
+      "platform ADR-007 decision"
+    ],
+    "open_required_row_ids": [],
+    "required_row_ids": [
+      "H5-01-duplicate-capability-name",
+      "H5-02-duplicate-implementation-id",
+      "H5-03-incompatible-api-range",
+      "H5-04-missing-dependency",
+      "H5-05-unknown-or-empty-license",
+      "H5-06-corrupt-fixture-data",
+      "H5-07-untrusted-unverified",
+      "H5-08-v1-artifact-after-v2-upgrade"
+    ],
+    "status": "PASS"
+  },
+  "handoff_id": "H5",
+  "handoff_version": 1,
+  "limitations": [
+    "The v1/v2 pair is a constructed fixture; no real QC job, energy or production plugin is claimed.",
+    "The in-process host is not a sandbox; process, permission, queue and network limits belong to the platform owner.",
+    "Fixture digest verification is a caller-supplied comparison; the manifest only carries the claim and cannot verify itself.",
+    "A v1 artifact is read with TaskResult.from_dict as historical evidence; it is never reused as a v2 task result.",
+    "ADR-007 remains a platform-owner decision and is not closed by H5."
+  ],
+  "no_process_sandbox_claim": true,
+  "sandbox_boundary": {
+    "in_process_host": true,
+    "note": "The plugin host is a metadata, enablement and invocation boundary. It does not create a sandbox and cannot grant or enforce process-level limits; those belong to the platform owner.",
+    "platform_owned_limits": [
+      "process isolation",
+      "filesystem permissions",
+      "queue and account policy",
+      "resource limits",
+      "network policy"
+    ],
+    "process_level_sandbox_claimed": false,
+    "sandbox_owner": "platform owner (B)"
+  },
+  "source": {
+    "branch": "acp2/a-science",
+    "pre_delivery_commit": "436be8e",
+    "python": "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "worktree": "/ACPServer/acp2-development/A"
+  },
+  "upgrade_matrix": {
+    "capability_name": "acp2_upgrade_native_singlepoint",
+    "constructed": true,
+    "distribution_name": "acp2-upgrade-science-validator",
+    "rollback_commands": [
+      "pip uninstall -y acp2-upgrade-science-validator",
+      "pytest tests/test_acp2_science_plugin_registry.py tests/test_cccp_plugin_pilot.py tests/test_cccp_plugin_sdk.py tests/test_packaging_assets.py -q"
+    ],
+    "step_ids": [
+      "H5-UP-1-keep-v1-artifact",
+      "H5-UP-2-install-v2",
+      "H5-UP-3-new-task-uses-v2",
+      "H5-UP-4-v1-artifact-readable-after-v2",
+      "H5-UP-5-uninstall-v2",
+      "H5-UP-6-v1-artifact-readable-after-rollback"
+    ],
+    "steps": [
+      {
+        "evidence": {
+          "artifacts": [
+            {
+              "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
+              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+            }
+          ],
+          "commands": [
+            "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_is_produced_by_the_v1_distribution -q"
+          ],
+          "summary": "The constructed v1 distribution produces the checked-in labelled artifact in the isolated venv; no artifact is edited during upgrade.",
+          "tests": [
+            "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_is_produced_by_the_v1_distribution"
+          ]
+        },
+        "result": "PASS",
+        "step_id": "H5-UP-1-keep-v1-artifact",
+        "v1_artifact_path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
+        "v1_artifact_sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee",
+        "v1_capability_schema_version": 1,
+        "v1_plugin_lock_digest": "7820646bf5780e89754e0371f625d0231368d055e26347248227d6a5dc09d95c",
+        "v1_plugin_version": "1.0.0"
+      },
+      {
+        "evidence": {
+          "artifacts": [
+            {
+              "path": "tests/fixtures/acp2/science/plugin_upgrade/v2/cccp_science_plugin.json",
+              "sha256": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5"
+            },
+            {
+              "path": "tests/fixtures/acp2/science/plugin_upgrade/constructed.json",
+              "sha256": "8db341bb08c31da9e11bc0c4e1eff51a7d5364f701b66276b6ae1ce3429d48fc"
+            }
+          ],
+          "commands": [
+            "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_new_tasks_use_v2_explicitly_and_never_auto_enable -q"
+          ],
+          "summary": "The v2 wheel is built offline and installed with pip --no-deps --no-index into the same isolated venv, replacing v1 by distribution name and version.",
+          "tests": [
+            "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_new_tasks_use_v2_explicitly_and_never_auto_enable"
+          ]
+        },
+        "result": "PASS",
+        "step_id": "H5-UP-2-install-v2",
+        "v2_distribution_digest": "sha256:19d3f7bcd5c64ea37e419a8b616a9f04b7ba119a45d69b914785597f9f7c57c8",
+        "v2_plugin_lock_digest": "2b5cfe8371c747524fe5f7a5742bcfce17ad38f476fd64ced0becedacf4dbdfc",
+        "v2_plugin_version": "2.0.0",
+        "v2_wheel_filename": "acp2_upgrade_science_validator-2.0.0-py3-none-any.whl"
+      },
+      {
+        "auto_enabled_from_default_enabled": false,
+        "evidence": {
+          "artifacts": [
+            {
+              "path": "tests/fixtures/acp2/science/plugin_upgrade/v2/cccp_science_plugin.json",
+              "sha256": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5"
+            },
+            {
+              "path": "tests/test_acp2_science_plugin_gate.py",
+              "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+            }
+          ],
+          "commands": [
+            "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_new_tasks_use_v2_explicitly_and_never_auto_enable -q"
+          ],
+          "summary": "The v2 manifest declares default_enabled=true and remains disabled; after explicit enable the invocation returns capability schema version 2 and provenance version 2.0.0 with the v2 lock digest.",
+          "tests": [
+            "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_new_tasks_use_v2_explicitly_and_never_auto_enable"
+          ]
+        },
+        "new_task_requires_explicit_enable": true,
+        "result": "PASS",
+        "result_plugin_version": "2.0.0",
+        "step_id": "H5-UP-3-new-task-uses-v2",
+        "v2_capability_schema_version": 2
+      },
+      {
+        "evidence": {
+          "artifacts": [
+            {
+              "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
+              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+            },
+            {
+              "path": "tests/_acp2_upgrade_plugin_probe.py",
+              "sha256": "2a32372f8d92d2d5a4ee66740c30fd5d493c4030448e36b702693ff0df66290d"
+            }
+          ],
+          "commands": [
+            "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_survives_v2_upgrade_without_rerun -q"
+          ],
+          "summary": "TaskResult.from_dict reads the v1 artifact under the installed v2 distribution, round-trips byte-for-value and does not import the plugin module; the artifact bytes are unchanged.",
+          "tests": [
+            "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_survives_v2_upgrade_without_rerun"
+          ]
+        },
+        "module_imported_during_read": false,
+        "no_rerun": true,
+        "result": "PASS",
+        "roundtrip_byte_for_value": true,
+        "step_id": "H5-UP-4-v1-artifact-readable-after-v2",
+        "v1_artifact_readable": true,
+        "v1_artifact_sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+      },
+      {
+        "evidence": {
+          "artifacts": [
+            {
+              "path": "tests/test_acp2_science_plugin_gate.py",
+              "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+            }
+          ],
+          "commands": [
+            "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_reads_after_v2_uninstall -q"
+          ],
+          "summary": "The v2 distribution is uninstalled from the isolated venv with pip uninstall -y; the rollback command is explicit and removes only the fixture distribution.",
+          "tests": [
+            "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_reads_after_v2_uninstall"
+          ]
+        },
+        "result": "PASS",
+        "step_id": "H5-UP-5-uninstall-v2",
+        "uninstall_command": "pip uninstall -y acp2-upgrade-science-validator"
+      },
+      {
+        "discovered_names": [],
+        "evidence": {
+          "artifacts": [
+            {
+              "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
+              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+            },
+            {
+              "path": "tests/test_acp2_science_plugin_gate.py",
+              "sha256": "9e8861bd8e681a600226081f22c3d08200866d7274ac5b7e2cf9231199275172"
+            }
+          ],
+          "commands": [
+            "pytest tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_reads_after_v2_uninstall -q"
+          ],
+          "summary": "After v2 is uninstalled, discovery reports no installed plugin and the same v1 artifact still reads byte-for-value without a plugin import or a rerun.",
+          "tests": [
+            "tests/test_acp2_science_plugin_gate.py::TestConstructedUpgradePair::test_v1_artifact_reads_after_v2_uninstall"
+          ]
+        },
+        "module_imported": false,
+        "result": "PASS",
+        "step_id": "H5-UP-6-v1-artifact-readable-after-rollback",
+        "v1_artifact_readable": true
+      }
+    ]
+  }
+}

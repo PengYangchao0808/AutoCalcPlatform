@@ -1,0 +1,82 @@
+{
+  "checks": [
+    {
+      "assertions": [
+        "input.xyz has exactly 3 atoms",
+        "parsed symbols are ['O', 'H', 'H'] in this order",
+        "parsed charge is 0 and parsed multiplicity is 1",
+        "parsed coordinates equal request.structure.coordinates within coordinate_angstrom_abs"
+      ],
+      "check_id": "parse_correctness",
+      "description": "input.xyz parses as a 3-atom XYZ file and reproduces the declared atom order, charge, multiplicity and inline geometry.",
+      "failure_reason": "structure_parse_mismatch",
+      "required": true
+    },
+    {
+      "assertions": [
+        "TaskResult.status == 'completed'",
+        "TaskResult.error_kind is null",
+        "native output contains 'ORCA TERMINATED NORMALLY'"
+      ],
+      "check_id": "normal_termination",
+      "description": "The singlepoint task completed normally and the native output carries the normal-termination marker.",
+      "failure_reason": "convergence_not_met",
+      "required": true
+    },
+    {
+      "assertions": [
+        "TaskResult.energy_hartree is not None",
+        "math.isfinite(TaskResult.energy_hartree)"
+      ],
+      "check_id": "energy_presence",
+      "description": "A finite single-point energy is present in the typed result.",
+      "failure_reason": "energy_missing",
+      "required": true
+    },
+    {
+      "assertions": [
+        "TaskResult.energy_hartree is a Hartree value (field name is energy_hartree)",
+        "independent native parser declares units 'hartree'",
+        "abs(TaskResult.energy_hartree - parsed_native_energy_hartree) <= reparse_energy_hartree_abs"
+      ],
+      "check_id": "unit_correctness",
+      "description": "The normalized energy is in Hartree and agrees with an independent parse of the native 'FINAL SINGLE POINT ENERGY'.",
+      "failure_reason": "energy_unit_mismatch",
+      "required": true
+    }
+  ],
+  "evidence_kind": "fixture",
+  "fixture_id": "singlepoint-water-wb97xd4-def2svp",
+  "reference_energy": null,
+  "reference_energy_gap": {
+    "reason": "No real singlepoint calculation has been run for this fixture. cccp.software resolves only /usr/bin/orca on this host, which is the GNOME Orca screen reader (Python script), not ORCA quantum chemistry; xtb/crest/censo are absent. There is therefore no native output from which to measure an energy, and reference_energy stays null.",
+    "receipt_protocol_gap": "B01 acceptance-result.schema.json / acp2.acceptance.v1 is unpublished, so this fixture carries no receipt and no reference energy.",
+    "run_key": null,
+    "run_key_gap": "B01 has not published acceptance-result.schema.json / acp2.acceptance.v1 or the (owner, scenario, phase, run_id) registry, so no run key has been issued for a Local or LSF execution of this fixture. A does not invent a run key; the real run stays NOT_VERIFIED.",
+    "state": "NOT_MEASURED",
+    "unblock_requirements": [
+      "a real ORCA (or xTB) executable visible to cccp.software",
+      "a B01-issued run key and acceptance-result.schema.json",
+      "platform-authorized native work root and budget"
+    ]
+  },
+  "result_expectations": {
+    "energy_field": "energy_hartree",
+    "energy_unit": "hartree",
+    "error_kind": null,
+    "native_energy_marker": "FINAL SINGLE POINT ENERGY",
+    "native_termination_marker": "ORCA TERMINATED NORMALLY",
+    "status": "completed",
+    "task": "singlepoint"
+  },
+  "run_key": null,
+  "schema": "acp2.science.expected-science",
+  "schema_version": 1,
+  "source": "Constructed static fixture; no calculation has been executed, so the energy is not measured and reference_energy is null.",
+  "task_kind": "singlepoint",
+  "tolerances": {
+    "coordinate_angstrom_abs": 1e-06,
+    "reference_energy_hartree_abs": null,
+    "reparse_energy_hartree_abs": 1e-06
+  }
+}

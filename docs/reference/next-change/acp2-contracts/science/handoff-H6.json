@@ -1,0 +1,589 @@
+{
+  "budget_allocation": {
+    "budget_timing_basis": "unmeasured",
+    "constructed": true,
+    "cumulative": {
+      "qc_calls": 14,
+      "steps": 8,
+      "task_refs": 1,
+      "wall_seconds": null
+    },
+    "cumulative_rule": "the nmr/thermo/selectivity subrows share the B/C cross-domain cumulative budget; it is never reset by changing run_id",
+    "note": "Constructed allocation only. nmr and thermo are reused (no new TaskRef, step or QC call); selectivity carries the full constructed 1 TaskRef / 8 steps / 14 QC calls. wall_seconds is null because no timing was measured.",
+    "reused_artifacts": [
+      "A-24a:nmr-comparison:constructed",
+      "A-24b:ensemble-thermo:constructed"
+    ],
+    "source": "tests/fixtures/acp2/science/selectivity/v1/report-scenario/cross-domain-budget.json (A-25b constructed report-scenario fixture; the B/C cross-domain budget table is authoritative and absent)",
+    "subrows": [
+      {
+        "domain": "nmr",
+        "phase": "experience:nmr",
+        "qc_count": 0,
+        "reused": true,
+        "reused_artifacts": [
+          "A-24a:nmr-comparison:constructed"
+        ],
+        "step_count": 0,
+        "task_ref": "task.nmr.reused",
+        "task_ref_count": 0
+      },
+      {
+        "domain": "thermo",
+        "phase": "experience:thermo",
+        "qc_count": 0,
+        "reused": true,
+        "reused_artifacts": [
+          "A-24b:ensemble-thermo:constructed"
+        ],
+        "step_count": 0,
+        "task_ref": "task.thermo.reused",
+        "task_ref_count": 0
+      },
+      {
+        "domain": "selectivity",
+        "phase": "experience:selectivity",
+        "qc_count": 14,
+        "reused": false,
+        "reused_artifacts": [],
+        "step_count": 8,
+        "task_ref": "task.selectivity.constructed",
+        "task_ref_count": 1
+      }
+    ]
+  },
+  "c_t40b_signoff": {
+    "audit_dependency": "A-25b:selectivity-audit-report",
+    "audit_digest": "sha256:c192657fd6e5a1012939e63d30e0a906309785ad2b735934836c68575df78c83",
+    "gap": "No C T-40b selectivity presentation/signature record exists. The published A-25b audit is NOT_VERIFIED (absent producer), so C T-40b has nothing signed to consume and H6 stays open.",
+    "present": false,
+    "required": true,
+    "signed": false,
+    "signed_at": null,
+    "signoff_id": "C T-40b",
+    "status": "NOT_VERIFIED"
+  },
+  "contract_set": "acp2.science",
+  "contract_set_frozen": true,
+  "contract_set_version": 1,
+  "contract_version_basis": {
+    "handoff_h4_sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+    "handoff_h5_sha256": "fd8573b5c71c35be07e20bcbf54506803705e0ab5c9bf01c5d278ed1a3f7caa9",
+    "handoff_h5_version": 1,
+    "rule": "H6 consumes the exact H4/H5 bytes and the published A-25b selectivity report. It adds no contract field, rewrites no earlier handoff row and never upgrades a producer because a file exists."
+  },
+  "fixture_digests": {
+    "a_25a_selectivity_fixture_manifest": "197473c530d9ae926a656b398c1fe4577f3c976a507f3a22183fd801fce36b45",
+    "diels_alder_v1_fixture_manifest": "642eca859305b4e38f87b07f8f3b873c62044978e00a984fcadb7137cfb46941",
+    "nmr_cross_domain_fixture": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78",
+    "optfreq_fixture_manifest": "ead146e40c57b5d953b4c96318140cd0c46034754061c2f1b9f808d41860108a",
+    "plugin_v1_manifest": "b1d0a4f69efb44e22a0199d226405eb0e022b0b075ea294c1ea359ed6871b429",
+    "plugin_v2_manifest": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5",
+    "singlepoint_fixture_manifest": "18655285de3f22ca934a2bd0a099389e689156fd424a37b89d5ef2bfe86ac186",
+    "thermochemistry_cross_domain_fixture": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3"
+  },
+  "frozen_at": "2026-10-23T03:47:07Z",
+  "gate_command": [
+    "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_acp2_science_cross_domain.py",
+    "tests/test_acp2_science_selectivity.py",
+    "tests/test_acp2_science_evidence_contract.py",
+    "tests/test_recovery_fixtures_smoke.py",
+    "tests/test_cccp_isolation.py",
+    "tests/test_acp2_science_h6_gate.py",
+    "-q"
+  ],
+  "generated_by": "A-26",
+  "h6_closure": {
+    "closed": false,
+    "nmr_thermo_scope": "static/constructed contract verification only; real_run=false",
+    "open_required_row_ids": [
+      "H6-R6-c-t40b-signoff",
+      "H6-selectivity-not-verified"
+    ],
+    "platform_evidence_state": "NOT_VERIFIED",
+    "positive_evidence_present": false,
+    "real_run": false,
+    "reason": "H6 closes only when C T-40b has signed a real A-25b selectivity audit and every required subcase row is verified. No C T-40a submission, B23b authorized artifact, real A-25b audit or C T-40b signoff exists, so the selectivity subcase and the signoff row stay NOT_VERIFIED. The nmr/thermo PASS rows are static/constructed contract verification only (real_run=false) and never substitute for a live cross-domain run.",
+    "required_row_ids": [
+      "H6-R1-version-regression",
+      "H6-R2-derived-identity",
+      "H6-R3-conservative-recovery",
+      "H6-R4-platform-independence",
+      "H6-R5-per-subcase-rows",
+      "H6-R6-c-t40b-signoff",
+      "H6-R7-no-false-verified",
+      "H6-nmr-static-contract",
+      "H6-selectivity-not-verified",
+      "H6-thermo-static-contract"
+    ],
+    "selectivity_scope": "bounded A-25b audit only; NOT_VERIFIED",
+    "status": "open"
+  },
+  "handoff_id": "H6",
+  "handoff_version": 1,
+  "limitations": [
+    {
+      "limitation": "No real cross-domain NMR/thermochemistry run exists: both domain fixtures are constructed and real_run=false, so the nmr/thermo PASS rows verify contracts only.",
+      "missing_producer": "C:experience:cross-domain-live (B01 phase registry/run_id unpublished)"
+    },
+    {
+      "limitation": "The selectivity subcase has no real result: no C T-40a submission, no B23b authorized artifact and no public run key.",
+      "missing_producer": "C T-40a -> B23b"
+    },
+    {
+      "limitation": "No C T-40b selectivity signoff exists; absent/unsigned/stale signoff keeps H6 open.",
+      "missing_producer": "C T-40b"
+    },
+    {
+      "limitation": "The nmr/thermo/selectivity budget is a constructed allocation; no B/C cross-domain budget table or measured step timing exists.",
+      "missing_producer": "B/C cross-domain budget table owner (unpublished)"
+    },
+    {
+      "limitation": "B01 has not published acceptance-result.schema.json, so every receipt row stays provisional and NOT_VERIFIED.",
+      "missing_producer": "B01"
+    },
+    {
+      "limitation": "No B25a release candidate exists; H6 does not sign a release.",
+      "missing_producer": "B25a"
+    }
+  ],
+  "producer_states": {
+    "A-25a": {
+      "artifact_id": "A-25a:selectivity-fixture-v1",
+      "digest": "sha256:197473c530d9ae926a656b398c1fe4577f3c976a507f3a22183fd801fce36b45",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "The frozen constructed selectivity fixture exists, but C T-40a has not submitted a real selectivity research run and no public run_id exists.",
+      "readiness": "implementation_ready"
+    },
+    "B23b": {
+      "artifact_id": "B23b:selectivity-authorized-artifacts",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B23b has not executed or exported the authorized two-path artifacts; its machine artifact id is unpublished and the edge stays contract_ready.",
+      "readiness": "contract_ready"
+    },
+    "B25a": {
+      "artifact_id": "B25a:release-candidate",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B25a has not published a release candidate; B25b/B26 are out of H6 scope.",
+      "readiness": "contract_ready"
+    },
+    "C T-40a": {
+      "artifact_id": "C T-40a:selectivity-single-submission",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "C T-40a has not submitted the single selectivity research run; no run_id or submission record exists.",
+      "readiness": "contract_ready"
+    },
+    "C T-40b": {
+      "artifact_id": "C T-40b:selectivity-signoff",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "No signed C T-40b presentation/signature record exists because there is no real A-25b audit to sign.",
+      "readiness": "contract_ready"
+    }
+  },
+  "rows": [
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/contracts/evidence/historical_schema_payload.json",
+            "sha256": "c51381ff773c034242452fbe897a56a1cbe04cf6dd7335e70d592038b15129ca"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/contracts/evidence/supported_valid.json",
+            "sha256": "e86d0784b22815629df3f994d962ba7c6e041a39877f29203edc6ab0d9e83add"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h6_gate.py -k 'historical or strict_v1 or unknown_major' -q",
+          "exit_code": 0
+        },
+        "kind": "executed-contract",
+        "summary": "Historical v0 evidence is preserved verbatim with execution_eligible=false; the strict v1 reader rejects an unknown execution field; unknown majors 99 raise the typed unsupported-version errors and are never executable.",
+        "tests": [
+          "tests/test_acp2_science_h6_gate.py::test_historical_evidence_payload_is_readable_but_never_eligible",
+          "tests/test_acp2_science_h6_gate.py::test_strict_v1_reader_rejects_an_unknown_execution_field",
+          "tests/test_acp2_science_h6_gate.py::test_unknown_major_is_never_executed"
+        ]
+      },
+      "gap": null,
+      "phase": "main",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "Old payloads stay readable read-only, an unsupported execution field is rejected and an unknown major never executes across evidence, provenance, reaction and question.",
+      "row_id": "H6-R1-version-regression",
+      "row_kind": "required-item",
+      "scope": "static/constructed contract verification; real_run=false",
+      "status": "PASS",
+      "verified": true
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+            "sha256": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+            "sha256": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h6_gate.py -k 'identity or scientific_input or execution_and_display' -q",
+          "exit_code": 0
+        },
+        "kind": "executed-contract",
+        "summary": "Eleven independent scientific mutations all change the v2 identity; execution-domain keys, display name, account, tier and permission do not. ScientificIdentity plan/step layers round-trip.",
+        "tests": [
+          "tests/test_acp2_science_h6_gate.py::test_every_scientific_input_changes_the_identity",
+          "tests/test_acp2_science_h6_gate.py::test_execution_and_display_metadata_do_not_change_the_identity",
+          "tests/test_acp2_science_h6_gate.py::test_scientific_identity_round_trips_the_plan_and_step_layers"
+        ]
+      },
+      "gap": null,
+      "phase": "main",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "The single identity_fingerprint algorithm changes for method, structure digest, atom mapping, charge/multiplicity/electronic state, units/reference state and provider/plugin version, and not for display/account/tier/permission.",
+      "row_id": "H6-R2-derived-identity",
+      "row_kind": "required-item",
+      "scope": "static/constructed contract verification; real_run=false",
+      "status": "PASS",
+      "verified": true
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/diels_alder/v1/fixture-manifest.json",
+            "sha256": "642eca859305b4e38f87b07f8f3b873c62044978e00a984fcadb7137cfb46941"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/v1/cccp_science_plugin.json",
+            "sha256": "b1d0a4f69efb44e22a0199d226405eb0e022b0b075ea294c1ea359ed6871b429"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/plugin_upgrade/v2/cccp_science_plugin.json",
+            "sha256": "60d28343d6769974aca992c24974c4522c4de801d9f7941e7fe3addfd1cde8e5"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h6_gate.py -k 'digest_change or invalidated' -q",
+          "exit_code": 0
+        },
+        "kind": "executed-contract",
+        "summary": "The model-asset digest change invalidates only nmr-compare; the plugin digest change invalidates only plugin-singlepoint; the other steps keep their identity and are reused.",
+        "tests": [
+          "tests/test_acp2_science_h6_gate.py::test_model_digest_change_invalidates_exactly_the_dependent_step",
+          "tests/test_acp2_science_h6_gate.py::test_plugin_digest_change_invalidates_only_the_plugin_step",
+          "tests/test_acp2_science_h6_gate.py::test_both_digest_changes_invalidate_two_of_four_steps"
+        ]
+      },
+      "gap": null,
+      "phase": "main",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "A changed model-asset or plugin digest invalidates exactly the dependent frozen-recipe steps and the unchanged sibling paths are reused.",
+      "row_id": "H6-R3-conservative-recovery",
+      "row_kind": "required-item",
+      "scope": "static/constructed contract verification; real_run=false",
+      "status": "PASS",
+      "verified": true
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/contracts/evidence/supported_valid.json",
+            "sha256": "e86d0784b22815629df3f994d962ba7c6e041a39877f29203edc6ab0d9e83add"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+            "sha256": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h6_gate.py -k 'account_and_permission or platform_key' -q",
+          "exit_code": 0
+        },
+        "kind": "executed-contract",
+        "summary": "Three account/tier/permission wrappers leave the science projection and the evidence bytes identical; the recursive key scan finds no account/tier/permission/quota/job_* key in the scanned science fixtures and reports.",
+        "tests": [
+          "tests/test_acp2_science_h6_gate.py::test_scientific_bytes_and_claim_statuses_ignore_account_and_permission",
+          "tests/test_acp2_science_h6_gate.py::test_no_science_artifact_carries_a_platform_key"
+        ]
+      },
+      "gap": null,
+      "phase": "main",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "Scientific output bytes and claim statuses are identical under varied account-tier/project-permission wrappers and no science artifact carries a platform key.",
+      "row_id": "H6-R4-platform-independence",
+      "row_kind": "required-item",
+      "scope": "static/constructed contract verification; real_run=false",
+      "status": "PASS",
+      "verified": true
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/selectivity/v1/fixture-manifest.json",
+            "sha256": "197473c530d9ae926a656b398c1fe4577f3c976a507f3a22183fd801fce36b45"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+            "sha256": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h6_gate.py -k 'subcase or parent_only' -q",
+          "exit_code": 0
+        },
+        "kind": "executed-contract",
+        "summary": "Exactly one subcase row exists per unique phase; a parent aggregate, a parent/ambiguous phase, a missing phase and a duplicated phase are each rejected with H6PhaseKeyError.",
+        "tests": [
+          "tests/test_acp2_science_h6_gate.py::test_h6_uses_one_row_per_unique_subcase_phase",
+          "tests/test_acp2_science_h6_gate.py::test_parent_only_aggregate_row_is_rejected",
+          "tests/test_acp2_science_h6_gate.py::test_missing_duplicated_or_ambiguous_subcase_phase_fails"
+        ]
+      },
+      "gap": null,
+      "phase": "main",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "H6 rows are keyed by experience:nmr, experience:thermo and experience:selectivity; a parent-only aggregate or a missing/duplicated/ambiguous phase fails.",
+      "row_id": "H6-R5-per-subcase-rows",
+      "row_kind": "required-item",
+      "scope": "static contract validation of the H6 phase keying; real_run=false",
+      "status": "PASS",
+      "verified": true
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/selectivity-evidence-report.json",
+            "sha256": "c192657fd6e5a1012939e63d30e0a906309785ad2b735934836c68575df78c83"
+          }
+        ],
+        "executed_reference": null,
+        "kind": "absent-producer",
+        "summary": "The published A-25b audit is NOT_VERIFIED; a signed C T-40b record cannot exist over it and none is claimed.",
+        "tests": []
+      },
+      "gap": "C T-40b has not signed. The signoff is structurally absent (present=false), so the absent/unsigned/stale gate keeps H6 open; a present signature is still insufficient while the selectivity row is NOT_VERIFIED.",
+      "phase": "main",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "C T-40b must sign a real A-25b selectivity audit before H6 can close; absent, unsigned or stale signoff keeps H6 open.",
+      "row_id": "H6-R6-c-t40b-signoff",
+      "row_kind": "required-item",
+      "scope": "C T-40b signoff required; no signoff record exists",
+      "status": "NOT_VERIFIED",
+      "verified": false
+    },
+    {
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/selectivity-evidence-report.json",
+            "sha256": "c192657fd6e5a1012939e63d30e0a906309785ad2b735934836c68575df78c83"
+          },
+          {
+            "path": "tests/fixtures/acp2/science/contracts/evidence/supported_valid.json",
+            "sha256": "e86d0784b22815629df3f994d962ba7c6e041a39877f29203edc6ab0d9e83add"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_h6_gate.py -k 'verified or pass_' -q",
+          "exit_code": 0
+        },
+        "kind": "executed-contract",
+        "summary": "The validator rejects verified=true on NOT_VERIFIED, a PASS without an executed reference/test, a PASS with real_run=true and a PASS with a gap.",
+        "tests": [
+          "tests/test_acp2_science_h6_gate.py::test_not_verified_row_cannot_be_labelled_verified",
+          "tests/test_acp2_science_h6_gate.py::test_pass_requires_an_executed_reference",
+          "tests/test_acp2_science_h6_gate.py::test_pass_cannot_claim_a_real_run_or_a_gap"
+        ]
+      },
+      "gap": null,
+      "phase": "main",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "No row is labelled verified while NOT_VERIFIED, and a PASS needs an executed reference and no gap.",
+      "row_id": "H6-R7-no-false-verified",
+      "row_kind": "required-item",
+      "scope": "static contract validation of every H6 row; real_run=false",
+      "status": "PASS",
+      "verified": true
+    },
+    {
+      "capability_ids": [
+        "nmr.shielding",
+        "nmr.compare"
+      ],
+      "domain": "nmr",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+            "sha256": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_cross_domain.py tests/test_acp2_science_h6_gate.py -q",
+          "exit_code": 0
+        },
+        "kind": "constructed-contract",
+        "summary": "Constructed NMR shielding/reference fixture is readable and contract-valid; no real shielding computation or spectrum is claimed.",
+        "tests": [
+          "tests/test_acp2_science_cross_domain.py",
+          "tests/test_acp2_science_h6_gate.py::test_h6_uses_one_row_per_unique_subcase_phase"
+        ]
+      },
+      "gap": null,
+      "phase": "experience:nmr",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "The nmr subcase keeps its shared contract, mapping and reference-state semantics across the version upgrade.",
+      "row_id": "H6-nmr-static-contract",
+      "row_kind": "subcase",
+      "scope": "static/constructed contract verification only; real_run=false; no QC job or experimental spectrum",
+      "status": "PASS",
+      "subcase": "nmr",
+      "verified": true
+    },
+    {
+      "capability_ids": [
+        "cccp.analysis.research.selectivity"
+      ],
+      "domain": "selectivity",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "docs/reference/next-change/acp2-contracts/science/selectivity-evidence-report.json",
+            "sha256": "c192657fd6e5a1012939e63d30e0a906309785ad2b735934836c68575df78c83"
+          }
+        ],
+        "executed_reference": null,
+        "kind": "absent-producer",
+        "summary": "The bounded A-25b audit records absent_producer=true, platform_evidence_state=NOT_VERIFIED, preference=null, both path statuses not_evaluated and h6_open=true.",
+        "tests": []
+      },
+      "gap": "No C T-40a submission, B23b authorized artifact, real A-25b audit or C T-40b signoff exists; no preference may be derived from a constructed fixture.",
+      "phase": "experience:selectivity",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "The selectivity subcase needs a real C T-40a submission, B23b authorized artifacts, a real A-25b audit and a C T-40b signoff.",
+      "row_id": "H6-selectivity-not-verified",
+      "row_kind": "subcase",
+      "scope": "bounded A-25b audit only; NOT_VERIFIED",
+      "status": "NOT_VERIFIED",
+      "subcase": "selectivity",
+      "verified": false
+    },
+    {
+      "capability_ids": [
+        "thermochemistry.ensemble"
+      ],
+      "domain": "thermo",
+      "evidence": {
+        "artifacts": [
+          {
+            "path": "tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+            "sha256": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3"
+          }
+        ],
+        "executed_reference": {
+          "command": "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_cross_domain.py tests/test_acp2_science_h6_gate.py -q",
+          "exit_code": 0
+        },
+        "kind": "constructed-contract",
+        "summary": "Constructed ensemble thermochemistry fixture is readable and contract-valid; no real Gibbs measurement is claimed.",
+        "tests": [
+          "tests/test_acp2_science_cross_domain.py",
+          "tests/test_acp2_science_h6_gate.py::test_h6_uses_one_row_per_unique_subcase_phase"
+        ]
+      },
+      "gap": null,
+      "phase": "experience:thermo",
+      "real_run": false,
+      "required_for_h6_closure": true,
+      "requirement": "The thermo subcase keeps its weight policy, standard-state and temperature semantics across the version upgrade.",
+      "row_id": "H6-thermo-static-contract",
+      "row_kind": "subcase",
+      "scope": "static/constructed contract verification only; real_run=false; no Gibbs measurement",
+      "status": "PASS",
+      "subcase": "thermo",
+      "verified": true
+    }
+  ],
+  "schema_versions": {
+    "acceptance_result_schema": null,
+    "acceptance_result_schema_gap": "B01 has not published acp2.acceptance.v1; every H6 record is provisional.",
+    "capability_contract_version": 1,
+    "domain_extension_version": 1,
+    "evidence_schema_version": 1,
+    "provenance_schema_version": 1,
+    "question_schema_version": 1,
+    "reaction_schema_version": 1
+  },
+  "source": {
+    "branch": "acp2/a-science",
+    "pre_delivery_commit": "a1319b9",
+    "python": "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "worktree": "/ACPServer/acp2-development/A"
+  },
+  "version_matrix": [
+    {
+      "domain": "singlepoint",
+      "fixture": "tests/fixtures/acp2/science/singlepoint/request.json",
+      "note": "Strict v1 request schema; unknown execution fields are rejected by the evidence reader probe.",
+      "result": "PASS",
+      "schema_version": 1
+    },
+    {
+      "domain": "optfreq",
+      "fixture": "tests/fixtures/acp2/science/optfreq/optimize-request.json",
+      "note": "Strict v1 request schema; synthetic results stay labelled constructed.",
+      "result": "PASS",
+      "schema_version": 1
+    },
+    {
+      "domain": "diels_alder",
+      "fixture": "tests/fixtures/acp2/science/diels_alder/v1/reaction.json",
+      "note": "Reaction v1 is readable read-only; an unknown major never executes.",
+      "result": "PASS",
+      "schema_version": 1
+    },
+    {
+      "domain": "nmr",
+      "fixture": "tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+      "note": "Constructed domain fixture; static contract validation only, no QC or spectrum.",
+      "result": "PASS",
+      "schema_version": 1
+    },
+    {
+      "domain": "thermochemistry",
+      "fixture": "tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+      "note": "Constructed domain fixture; static contract validation only, no Gibbs measurement.",
+      "result": "PASS",
+      "schema_version": 1
+    },
+    {
+      "domain": "selectivity",
+      "fixture": "tests/fixtures/acp2/science/selectivity/v1/fixture-manifest.json",
+      "note": "Frozen selectivity fixture is readable; the selectivity science row remains NOT_VERIFIED.",
+      "result": "PASS",
+      "schema_version": 1
+    }
+  ]
+}

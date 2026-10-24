@@ -1,0 +1,35 @@
+{
+  "revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "reported_code_candidate": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "code_files_changed_after_reported_candidate": [
+    "scripts/acceptance/four_combinations.py"
+  ],
+  "python": "3.11.13 (main, Jun  1 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]",
+  "scope": "independent review; no business-code edits",
+  "dirty_status": [
+    " M docs/ACP_Architecture_Adjustment_Plan_20261016.md",
+    " M tests/baseline/refactor-evidence/e2e-task-root.txt",
+    "?? docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md",
+    "?? docs/reference/next-change/examples/",
+    "?? reports/architecture_acceptance_20261019/",
+    "?? reports/architecture_recheck_20261021/"
+  ]
+}

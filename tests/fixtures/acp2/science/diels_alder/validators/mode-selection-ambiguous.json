@@ -1,0 +1,13 @@
+{
+  "schema": "acp2.science.mode-selection",
+  "schema_version": 1,
+  "constructed": true,
+  "description": "Constructed NEGATIVE fixture: the mapping between the source mode and the native printed mode is ambiguous, so no specific imaginary mode is identified.",
+  "selection": {
+    "mapping_status": "ambiguous",
+    "native_printed_index": 6,
+    "source_artifact_digest": "0000000000000000000000000000000000000000000000000000000000000016",
+    "source_step": "candidate_frequency",
+    "target_mode_id": "tm_constructed_a16a_ambiguous"
+  }
+}

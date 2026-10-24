@@ -1,0 +1,34 @@
+{
+  "outcome": "failed",
+  "page_errors": [],
+  "console_errors": [
+    "",
+    "could not initialize shader",
+    "",
+    "could not initialize shader",
+    "Could not initialize shader",
+    "",
+    "could not initialize shader",
+    "",
+    "could not initialize shader",
+    "Could not initialize shader",
+    "",
+    "could not initialize shader",
+    "",
+    "could not initialize shader",
+    "Could not initialize shader"
+  ],
+  "facts": {
+    "creationErrors": [],
+    "webgl": false,
+    "scripts": [
+      "http://acp.test/js/vendor/3Dmol-2.5.5.min.js",
+      "http://acp.test/js/visualization/framing.js",
+      "http://acp.test/js/visualization/mol3d_adapter.js",
+      "http://acp.test/js/visualization/scene_instance.js",
+      "http://acp.test/js/structure_viewer.js",
+      "http://acp.test/js/workbench/features/nmr.js",
+      "http://acp.test/js/vibration_viewer.js"
+    ]
+  }
+}

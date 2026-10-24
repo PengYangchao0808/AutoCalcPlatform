@@ -1,0 +1,16 @@
+{
+  "case": "R12_frontend_load_does_not_execute_js",
+  "boundary": "controlled HTTP responses; no browser execution",
+  "javascript": "this is deliberately invalid JavaScript {",
+  "probe_result": {
+    "index_status": 200,
+    "html_bytes": 47,
+    "assets": [
+      {
+        "path": "/broken.js",
+        "status": 200
+      }
+    ],
+    "ok": true
+  }
+}

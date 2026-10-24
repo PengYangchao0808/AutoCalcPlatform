@@ -1,0 +1,18 @@
+# CONSTRUCTED SYNTHETIC OUTPUT — not a real ORCA run.
+# ACP2 A-11a optfreq fixture: ORCA-shaped optimization termination for the
+# water minimum. The energy is illustrative and is never compared as a
+# reference value.
+
+-------------------------------------------------------------------------------
+                          ORCA 5.0.4  -  geometry optimization
+-------------------------------------------------------------------------------
+
+HURRAY
+The optimization has converged!
+
+*** THE OPTIMIZATION HAS CONVERGED ***
+
+FINAL SINGLE POINT ENERGY       -76.419737
+
+                             ****ORCA TERMINATED NORMALLY****
+****ORCA-CHEMISTRY JOB DONE****

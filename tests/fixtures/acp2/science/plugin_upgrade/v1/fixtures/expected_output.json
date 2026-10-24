@@ -1,0 +1,26 @@
+{
+  "atom_order": ["O", "H", "H"],
+  "capability": "acp2_upgrade_native_singlepoint",
+  "capability_schema": "acp2.science.external.upgrade_singlepoint",
+  "capability_schema_version": 1,
+  "charge": 0,
+  "complete": true,
+  "coordinates": [
+    [0.0, 0.0, 0.1173],
+    [0.0, 0.7572, -0.4692],
+    [0.0, -0.7572, -0.4692]
+  ],
+  "declared_atom_count": 3,
+  "energy_hartree": -76.026632,
+  "input_sha256": "bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+  "multiplicity": 1,
+  "native_schema": "acp2.native.singlepoint.v1",
+  "plugin_version": "1.0.0",
+  "status": "completed",
+  "symbols": ["O", "H", "H"],
+  "task": "singlepoint",
+  "units": {
+    "coordinates": "angstrom",
+    "energy": "hartree"
+  }
+}

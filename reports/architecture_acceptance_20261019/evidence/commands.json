@@ -1,0 +1,68 @@
+[
+  {
+    "name": "non_slow_regression",
+    "command": "pytest -m 'not slow' -q --disable-warnings -o faulthandler_timeout=90 --junitxml=/tmp/acp-acceptance-878e355/nonslow-unrestricted.xml",
+    "exit_code": 1,
+    "log": "nonslow-unrestricted.log",
+    "status": "FAIL"
+  },
+  {
+    "name": "selected_guards",
+    "command": "pytest -m 'not slow' tests/test_architecture_invariants.py tests/test_acp_services_isolation.py tests/test_f4_scope_audit.py tests/test_scheduler_markers_audit.py tests/test_recovery_fixtures_smoke.py tests/test_services_worker_contract.py tests/test_services_worker_bootstrap.py tests/test_services_doc_sync.py tests/test_packaging_assets.py tests/test_services_migration_equivalence.py -q --disable-warnings",
+    "exit_code": 0,
+    "log": "guards.log",
+    "status": "PASS"
+  },
+  {
+    "name": "node_modules",
+    "command": "node frontend/js/module_tests/run_all.js",
+    "exit_code": 0,
+    "log": "node-all.log",
+    "status": "PASS"
+  },
+  {
+    "name": "compileall",
+    "command": "python3.11 -m compileall -q src",
+    "exit_code": 0,
+    "log": "compileall.log",
+    "status": "PASS"
+  },
+  {
+    "name": "defect_and_delivery_probes",
+    "command": "python3.11 -m pytest reports/architecture_acceptance_20261019/reproduce_defects.py -q --tb=short",
+    "exit_code": 1,
+    "log": "defects.log",
+    "status": "FAIL",
+    "note": "12 expected-behavior counterexamples fail on the reviewed implementation; not part of the default project regression count"
+  },
+  {
+    "name": "nmr_browser_component",
+    "command": "python3.11 reports/architecture_acceptance_20261019/browser_probe.py",
+    "exit_code": 0,
+    "log": "browser-probe.log",
+    "status": "FAIL",
+    "note": "probe runner exits normally and records incorrect DOM behavior: canvas removed after successful geometry load; actual bundled vendor and Chromium, injected geometry/app glue"
+  },
+  {
+    "name": "ruff_selected_roots",
+    "command": "python3.11 -m ruff check src/acp_services src/cccp/analysis src/cccp/calculation/products --output-format json",
+    "exit_code": 1,
+    "log": "ruff.json",
+    "status": "FAIL"
+  },
+  {
+    "name": "format_selected_roots",
+    "command": "python3.11 -m ruff format --check src/acp_services src/cccp/analysis src/cccp/calculation/products",
+    "exit_code": 1,
+    "log": "format.log",
+    "status": "FAIL"
+  },
+  {
+    "name": "single_wheel_build",
+    "command": "PYTHONPATH=/tmp/opencode/builddeps python3.11 -m build --wheel --no-isolation --outdir /tmp/acp-acceptance-878e355/wheels /tmp/acp-acceptance-878e355/build-stage",
+    "exit_code": 0,
+    "log": "wheel-build-with-local-tools.log",
+    "status": "PASS",
+    "note": "pre-existing local build tools; no network install; current root M1 single wheel only; all 8 NMR asset digests match; frontend absent"
+  }
+]

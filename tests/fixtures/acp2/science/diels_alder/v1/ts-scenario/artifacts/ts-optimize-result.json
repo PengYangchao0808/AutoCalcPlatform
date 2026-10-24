@@ -1,0 +1,129 @@
+{
+  "artifacts": [],
+  "complete": true,
+  "converged": true,
+  "coordinates": [
+    [
+      1.25,
+      0.72,
+      0.2
+    ],
+    [
+      0.0,
+      1.4,
+      -0.2
+    ],
+    [
+      -1.25,
+      0.72,
+      0.2
+    ],
+    [
+      -1.25,
+      -0.72,
+      -0.2
+    ],
+    [
+      0.0,
+      -1.4,
+      0.2
+    ],
+    [
+      1.25,
+      -0.72,
+      -0.2
+    ],
+    [
+      2.2,
+      1.2,
+      0.55
+    ],
+    [
+      1.7,
+      1.15,
+      -0.65
+    ],
+    [
+      0.0,
+      2.4,
+      -0.2
+    ],
+    [
+      -2.2,
+      1.3,
+      0.2
+    ],
+    [
+      -2.2,
+      -1.2,
+      -0.55
+    ],
+    [
+      -1.7,
+      -1.15,
+      0.65
+    ],
+    [
+      0.0,
+      -2.45,
+      0.55
+    ],
+    [
+      -0.3,
+      -2.05,
+      -0.65
+    ],
+    [
+      2.2,
+      -1.2,
+      -0.65
+    ],
+    [
+      1.75,
+      -1.1,
+      0.6
+    ]
+  ],
+  "energy_hartree": -234.123456,
+  "errors": [],
+  "frequencies": [],
+  "metadata": {
+    "constructed": true
+  },
+  "payload": {
+    "electronic_state": {
+      "spin_mode": "auto",
+      "state_id": "state.singlet.s0",
+      "state_status": "not_verified",
+      "target_multiplicity": 1
+    },
+    "optimization_status": "converged"
+  },
+  "provenance": {
+    "backend": "orca",
+    "input_signature": "constructed-a17",
+    "method": "wB97X-D4",
+    "version": "constructed-a17"
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "symbols": [
+    "C",
+    "C",
+    "C",
+    "C",
+    "C",
+    "C",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H",
+    "H"
+  ],
+  "task": "optimize"
+}

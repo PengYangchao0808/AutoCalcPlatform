@@ -16,6 +16,9 @@ __all__ = [
     "PluginDependencyUnavailableError",
     "PluginDisabledError",
     "PluginError",
+    "PluginFixtureIntegrityError",
+    "PluginImplementationConflictError",
+    "PluginLicenseError",
     "PluginLoadError",
     "PluginMetadataError",
     "PluginNameConflictError",
@@ -31,6 +34,23 @@ class PluginError(Exception):
 
 class PluginMetadataError(PluginError, ValueError):
     """A plugin metadata record is missing a required field or is malformed."""
+
+
+class PluginLicenseError(PluginMetadataError):
+    """A plugin declares an empty or unknown licence.
+
+    The licence policy is closed: this is a metadata rejection raised before
+    any loader exists, so an unlicensed plugin can never be discovered as
+    usable.  It subclasses :class:`PluginMetadataError` so existing callers
+    that catch the broader metadata error keep working.
+    """
+
+    def __init__(self, licence: str, *, reason: str, plugin: str | None = None) -> None:
+        self.licence = licence
+        self.plugin = plugin
+        self.reason = reason
+        prefix = f"plugin {plugin!r} " if plugin else "plugin "
+        super().__init__(f"{prefix}license {licence!r} rejected: {reason}")
 
 
 class PluginNameConflictError(PluginError, ValueError):
@@ -100,6 +120,38 @@ class PluginCapabilityConflictError(PluginError, ValueError):
         self.capability = capability
         self.reason = reason
         super().__init__(f"plugin {name!r} capability {capability!r} rejected: {reason}")
+
+
+class PluginImplementationConflictError(PluginCapabilityConflictError):
+    """Two capabilities declare the same implementation identity.
+
+    A capability name and its implementation identity are separate namespaces:
+    two plugins may not claim one implementation id even when their capability
+    labels differ, because downstream provenance and recovery reuse key on the
+    implementation identity.  The class subclasses
+    :class:`PluginCapabilityConflictError` so existing conflict handling maps it
+    to ``resolve_capability_conflict`` while callers can still distinguish the
+    exact rejection.
+    """
+
+    def __init__(self, name: str, *, implementation_id: str, reason: str) -> None:
+        self.implementation_id = implementation_id
+        super().__init__(name, capability=implementation_id, reason=reason)
+
+
+class PluginFixtureIntegrityError(PluginMetadataError):
+    """Declared fixture evidence does not match the recomputed fixture bytes.
+
+    Corrupt or stale fixture data fails closed before the evidence can back a
+    ``trusted`` manifest.  The error is a metadata rejection: it never loads a
+    plugin and never promotes or demotes trust implicitly.
+    """
+
+    def __init__(self, name: str, *, fixture_id: str, reason: str) -> None:
+        self.name = name
+        self.fixture_id = fixture_id
+        self.reason = reason
+        super().__init__(f"plugin {name!r} fixture evidence {fixture_id!r} rejected: {reason}")
 
 
 class PluginDependencyUnavailableError(PluginError, ImportError):

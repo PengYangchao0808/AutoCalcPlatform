@@ -1,0 +1,104 @@
+{
+  "availability_probe": {
+    "executables": {
+      "censo": null,
+      "crest": null,
+      "orca": {
+        "identity": "Python script (shebang #!/usr/bin/python3); text names the Orca Team screen reader, not ORCA QC",
+        "is_qc_binary": false,
+        "resolved": true,
+        "resolved_path": "/usr/bin/orca"
+      },
+      "shermo": null,
+      "xtb": null
+    },
+    "gap": "No usable QC executable is installed on this host. cccp.software.resolve_executable('orca') returns /usr/bin/orca, but file inspection shows a Python script implementing the GNOME Orca screen reader (shebang /usr/bin/python3; copyright Orca Team 2010-2012), not ORCA quantum chemistry. xtb, crest, censo and shermo resolve to {'xtb': None, 'crest': None, 'censo': None, 'shermo': None}. The wB97X-D4/def2-SVP pair resolves in the cccp method registry but cannot be verified as executable, and no calculation was launched.",
+    "method_registry": {
+      "accepted": true,
+      "basis": "def2-SVP",
+      "effective": {
+        "aux_c_basis": "",
+        "aux_j_basis": "def2/J",
+        "basis": "def2-SVP",
+        "dispersion": "none",
+        "grid": null,
+        "ri_approximation": null,
+        "scf_convergence": null,
+        "scf_strategy": null,
+        "solvent": null,
+        "solvent_model": null
+      },
+      "method": "wB97X-D4",
+      "resolver": "cccp.qc.resolved_spec.resolve_calculation_spec"
+    },
+    "probe_method": "cccp.software.resolve_executable plus file inspection and cccp.calculation._common.resolve_spec; no executable was run",
+    "probed_on": "2026-10-22",
+    "verified_available": false
+  },
+  "energy_state": "not_measured",
+  "file_digests": {
+    "expected-science.json": "3286884e0c6d4d824a8f39528603715f3a716b4e70d363c0964655ee1d8b9fc6",
+    "input.xyz": "8745d09f651973bc3acbf2d638baf1d46e28b1f0892a1b8c30becbd6de04ed1a",
+    "invalid_electrons.json": "a310564a9af91a9c693de3b19e6350cca3321d52aaf3e585f983214e5d05aad8",
+    "missing_structure.json": "5d5ea6a3fd44b9a8c43016adbb1ae0e4a2490ffbcde2fa5b8b8028199e7504dc",
+    "request.json": "8023003a2cde5183a5a6c3797de6cc4d60d89499f5c2a470234ff87173186518"
+  },
+  "fixture_id": "singlepoint-water-wb97xd4-def2svp",
+  "fixtures": {
+    "expected_science": "expected-science.json",
+    "negative_cases": {
+      "invalid_electrons": "invalid_electrons.json",
+      "missing_structure": "missing_structure.json"
+    },
+    "request": "request.json"
+  },
+  "input": {
+    "atom_count": 3,
+    "atom_index_base": 1,
+    "atom_order": [
+      "O",
+      "H",
+      "H"
+    ],
+    "charge": 0,
+    "closed_shell": true,
+    "coordinates_unit": "angstrom",
+    "electron_count": 10,
+    "format": "xyz",
+    "multiplicity": 1,
+    "path": "input.xyz",
+    "sha256": "8745d09f651973bc3acbf2d638baf1d46e28b1f0892a1b8c30becbd6de04ed1a"
+  },
+  "method_basis_verified": false,
+  "reference_energy": null,
+  "run_key": null,
+  "run_key_gap": "B01 has not published acceptance-result.schema.json / acp2.acceptance.v1 or the (owner, scenario, phase, run_id) registry, so no run key has been issued for a Local or LSF execution of this fixture. A does not invent a run key; the real run stays NOT_VERIFIED.",
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1,
+  "scientific_parameters": {
+    "backend_selection": {
+      "explicit_backend": null,
+      "fallbacks": [
+        "xtb"
+      ],
+      "note": "TaskRequest.backend stays null so cccp capability selection is deterministic (single_point: orca -> xtb).",
+      "preferred": "orca"
+    },
+    "basis": "def2-SVP",
+    "charge": 0,
+    "electronic_state": null,
+    "energy_unit": "hartree",
+    "method": "wB97X-D4",
+    "multiplicity": 1,
+    "task": "singlepoint"
+  },
+  "source": "Constructed static fixture from an original water geometry. No calculation has been executed, so the energy is not yet measured; reference_energy is null.",
+  "task_kind": "singlepoint",
+  "tolerances": {
+    "basis": "absolute; no numeric reference energy exists before a real run",
+    "coordinate_angstrom_abs": 1e-06,
+    "reference_comparison_available": false,
+    "reference_energy_hartree_abs": null,
+    "reparse_energy_hartree_abs": 1e-06
+  }
+}

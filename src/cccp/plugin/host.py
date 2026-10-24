@@ -16,14 +16,23 @@ so re-enabling re-runs the explicit loader.
 
 from __future__ import annotations
 
-from cccp.plugin.discovery import PluginCandidate, PluginCatalog, discover_plugins
+from collections.abc import Callable
+
+from cccp.plugin.discovery import (
+    ENTRY_POINT_DISCOVERY_MODE,
+    PluginCandidate,
+    PluginCatalog,
+    PluginStatus,
+    discover_plugins,
+    scan_science_plugin_entry_points,
+)
 from cccp.plugin.errors import (
     PluginDisabledError,
     PluginError,
     PluginLoadError,
     PluginUnavailableError,
 )
-from cccp.plugin.metadata import BuiltinIdentity, PluginMetadata
+from cccp.plugin.metadata import BuiltinIdentity, PluginLicensePolicy, PluginMetadata
 
 
 class PluginHost:
@@ -38,9 +47,12 @@ class PluginHost:
         *,
         builtin: BuiltinIdentity | None = None,
         candidates: tuple[PluginCandidate, ...] = (),
+        catalog: PluginCatalog | None = None,
     ) -> None:
         self._candidates = tuple(candidates)
-        self._catalog = discover_plugins(self._candidates, builtin=builtin)
+        self._catalog = (
+            discover_plugins(self._candidates, builtin=builtin) if catalog is None else catalog
+        )
         self._loaders = {
             candidate.metadata.name: candidate.loader for candidate in self._candidates
         }
@@ -59,6 +71,37 @@ class PluginHost:
 
         return cls(candidates=(PILOT_CANDIDATE,))
 
+    @classmethod
+    def from_science_entry_points(
+        cls,
+        *,
+        entry_points: object = None,
+        manifest_reader: Callable[[object], str | None] | None = None,
+        builtin: BuiltinIdentity | None = None,
+        license_policy: PluginLicensePolicy | None = None,
+    ) -> PluginHost:
+        """Discover installed ``cccp.science_plugins`` entry points, unloaded.
+
+        The scan is metadata-only.  Every candidate stays disabled until an
+        explicit :meth:`enable` and its entry-point loader is not called
+        until :meth:`load`.
+        """
+        scan = scan_science_plugin_entry_points(
+            entry_points=entry_points,
+            manifest_reader=manifest_reader,
+            license_policy=license_policy,
+        )
+        discovered = discover_plugins(scan.candidates, builtin=builtin)
+        catalog = PluginCatalog(
+            builtin=discovered.builtin,
+            plugins=discovered.plugins,
+            enablement_policy=discovered.enablement_policy,
+            discovery_mode=ENTRY_POINT_DISCOVERY_MODE,
+            entry_points_scanned=scan.entry_points_scanned,
+            origins=discovered.origins,
+        )
+        return cls(candidates=scan.candidates, catalog=catalog)
+
     @property
     def catalog(self) -> PluginCatalog:
         """The metadata-only discovery result."""
@@ -67,6 +110,18 @@ class PluginHost:
     def enabled_names(self) -> tuple[str, ...]:
         """Return explicitly enabled plugin names in catalog order."""
         return tuple(name for name in self._catalog.names() if name in self._enabled)
+
+    def catalog_status(self) -> tuple[PluginStatus, ...]:
+        """Return the four separate projections for every catalog entry.
+
+        ``described``/``installed``/``verified`` come from the metadata-only
+        catalog; ``enabled`` is this host's explicit enablement state.
+        """
+        return self._catalog.statuses(enabled_names=self._enabled)
+
+    def status(self, name: str) -> PluginStatus | None:
+        """Return the four-projection status for *name* or ``None``."""
+        return self._catalog.status(name, enabled=name in self._enabled)
 
     def is_enabled(self, name: str) -> bool:
         """Return whether *name* was explicitly enabled."""
