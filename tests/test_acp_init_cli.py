@@ -89,9 +89,10 @@ def _local_standalone_input(resource_answers: list[str]) -> list[str]:
     """Full unified-flow input for one local Standalone resource pass.
 
     usage(local) → tier(Standalone) → resource answers → q (finish resources)
-    → components(default) → run_root(default) → secrets(skip) → apply → quit.
+    → components(default) → run_root(default) → public_origin(direct)
+    → secrets(skip) → apply → quit.
     """
-    return ["1", "1", *resource_answers, "q", "", "", "", "1", "q"]
+    return ["1", "1", *resource_answers, "q", "", "", "", "", "1", "q"]
 
 
 def _write_target(tmp_path: Path, nodes: list[dict[str, Any]]) -> Path:
@@ -102,6 +103,35 @@ def _write_target(tmp_path: Path, nodes: list[dict[str, Any]]) -> Path:
         encoding="utf-8",
     )
     return target
+
+
+def test_public_origin_reprompts_then_saves(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = tmp_path / "cfg.yaml"
+    _script_input(
+        monkeypatch,
+        [
+            "1",
+            "1",
+            "q",
+            "",
+            "",
+            "https://acp.example/path",
+            "https://new.example:9443",
+            "",
+            "1",
+            "q",
+        ],
+    )
+    assert run_init(target) == 0
+    assert (
+        yaml.safe_load(target.read_text())["deployment"]["params"]["public_origin"]
+        == "https://new.example:9443"
+    )
+    assert "不含路径" in capsys.readouterr().out
 
 
 def _node_entry(**overrides: Any) -> dict[str, Any]:

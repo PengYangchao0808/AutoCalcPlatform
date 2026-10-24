@@ -164,6 +164,216 @@ def test_origin_policy_binds_config() -> None:
     assert allowed.allowed is True
 
 
+@pytest.mark.parametrize(
+    "public_origin",
+    [
+        "https://acp.example",
+        "https://new.example:9443/",
+        "http://192.0.2.10:8765",
+        "https://[::1]:9443",
+    ],
+)
+def test_public_origin_supports_migrated_proxy_deployments(public_origin: str) -> None:
+    policy = boundary.OriginPolicy(public_origin=public_origin)
+    request = {"method": "POST", "host": "internal:8765", "server_scheme": "http"}
+    assert policy.evaluate(origin=public_origin.rstrip("/"), **request).allowed
+    assert not policy.evaluate(origin="https://attacker.example", **request).allowed
+    assert not policy.evaluate(origin="http://internal:8765", **request).allowed
+    assert not policy.evaluate(origin="null", **request).allowed
+    assert policy.evaluate(origin=None, client_host="127.0.0.1", **request).allowed
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "null",
+        "acp.example",
+        "ftp://acp.example",
+        "https://user@acp.example",
+        "https://acp.example/path",
+        "https://acp.example?q=1",
+        "https://acp.example/#frag",
+        "https://acp.example:bad",
+        "https://acp.example:99999",
+        "https://acp.example\n",
+    ],
+)
+def test_invalid_public_origin_refuses_to_start(origin: str) -> None:
+    with pytest.raises(ValueError, match="ACP_PUBLIC_ORIGIN"):
+        boundary.OriginPolicy(public_origin=origin)
+
+
+def test_public_origin_remains_scheme_and_port_aware() -> None:
+    policy = boundary.OriginPolicy(public_origin="https://acp.example")
+    assert policy.evaluate(method="POST", host="internal", origin="https://acp.example:443").allowed
+    for origin in ("http://acp.example", "https://acp.example:9443", "https://old.example"):
+        assert not policy.evaluate(method="POST", host="internal", origin=origin).allowed
+
+
+def test_proxy_draft_save_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
+    monkeypatch.setenv("ACP_PUBLIC_ORIGIN", "https://new-acp.example:9443/")
+    monkeypatch.delenv("ACP_DEPLOYMENT_TIER", raising=False)
+    from acp.api.server import create_app
+
+    app = create_app(run_root=tmp_path)
+    app.state.db_path = str(tmp_path / "drafts.db")
+    # Drafts require only the DB, so do not start real scheduler threads.
+    client = TestClient(app, base_url="http://internal:8765")
+    headers = {"Origin": "https://new-acp.example:9443"}
+    snapshot = {"structures": [], "step": 1}
+    try:
+        created = client.post("/api/v1/drafts", headers=headers, json={"snapshot": snapshot})
+        assert created.status_code == 201
+        draft = created.json()
+        path = f"/api/v1/drafts/{draft['draft_id']}"
+        assert client.get(path).json()["snapshot"] == snapshot
+        updated = client.put(
+            path,
+            headers=headers,
+            json={"snapshot": {**snapshot, "step": 2}, "expected_revision": draft["revision"]},
+        )
+        assert updated.status_code == 200
+        assert client.get(path).json()["snapshot"]["step"] == 2
+        denied = client.post(
+            "/api/v1/drafts",
+            json={"snapshot": snapshot},
+            headers={
+                "Origin": "https://evil.example",
+                "X-Forwarded-Host": "evil.example",
+                "X-Forwarded-Proto": "https",
+                "Sec-Fetch-Site": "same-origin",
+            },
+        )
+        assert denied.status_code == 403
+        assert denied.json()["detail"]["code"] == boundary.BoundaryReason.CROSS_ORIGIN
+        assert len(client.get("/api/v1/drafts").json()["items"]) == 1
+        assert client.delete(path, headers=headers).status_code == 200
+    finally:
+        client.close()
+
+
+def test_unconfigured_proxy_headers_cannot_override_origin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
+    monkeypatch.delenv("ACP_PUBLIC_ORIGIN", raising=False)
+    monkeypatch.delenv("ACP_DEPLOYMENT_TIER", raising=False)
+    from acp.api.server import create_app
+
+    client = TestClient(create_app(run_root=tmp_path), base_url="http://internal:8765")
+    try:
+        response = client.post(
+            "/api/v1/drafts",
+            json={"snapshot": {}},
+            headers={
+                "Origin": "https://evil.example",
+                "X-Forwarded-Host": "evil.example",
+                "X-Forwarded-Proto": "https",
+                "Sec-Fetch-Site": "same-origin",
+            },
+        )
+        assert response.status_code == 403
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize(
+    ("override", "expected_origin"),
+    [
+        (None, "https://init.example:9443"),
+        ("https://env.example", "https://env.example"),
+        ("", "http://internal:8765"),
+    ],
+)
+def test_init_answer_config_controls_draft_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    override: str | None,
+    expected_origin: str,
+) -> None:
+    import yaml
+
+    from acp.init_wizard.flows import run_init
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path / "runs"))
+    monkeypatch.delenv("ACP_PUBLIC_ORIGIN", raising=False)
+    monkeypatch.delenv("ACP_DEPLOYMENT_TIER", raising=False)
+    answers = tmp_path / "answers.yaml"
+    answers.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "usage": "local",
+                "tier": "standalone",
+                "params": {"public_origin": "https://init.example:9443"},
+            }
+        )
+    )
+    assert run_init(tmp_path / ".cccp.yaml", answers_path=answers) == 0
+    if override is not None:
+        monkeypatch.setenv("ACP_PUBLIC_ORIGIN", override)
+    from acp.api.server import create_app
+
+    app = create_app(run_root=tmp_path / "runs")
+    app.state.db_path = str(tmp_path / "drafts.db")
+    client = TestClient(app, base_url="http://internal:8765")
+    try:
+        created = client.post(
+            "/api/v1/drafts",
+            json={"snapshot": {"structures": []}},
+            headers={"Origin": expected_origin},
+        )
+        assert created.status_code == 201
+        assert client.get(f"/api/v1/drafts/{created.json()['draft_id']}").status_code == 200
+        denied = client.post(
+            "/api/v1/drafts",
+            json={"snapshot": {}},
+            headers={"Origin": "https://attacker.example"},
+        )
+        assert denied.status_code == 403
+        if override is not None:
+            assert (
+                client.post(
+                    "/api/v1/drafts",
+                    json={"snapshot": {}},
+                    headers={"Origin": "https://init.example:9443"},
+                ).status_code
+                == 403
+            )
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("origin", ["https://acp.example/path", 42])
+def test_invalid_saved_origin_refuses_server_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    origin: object,
+) -> None:
+    import yaml
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path / "runs"))
+    monkeypatch.delenv("ACP_PUBLIC_ORIGIN", raising=False)
+    monkeypatch.delenv("ACP_DEPLOYMENT_TIER", raising=False)
+    from acp.api.server import create_app
+
+    (tmp_path / ".cccp.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "deployment": {"params": {"public_origin": origin}},
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="public_origin|PUBLIC_ORIGIN"):
+        create_app(run_root=tmp_path / "runs")
+
+
 # ---------------------------------------------------------------------------
 # Tier capability gate
 # ---------------------------------------------------------------------------
@@ -249,6 +459,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     monkeypatch.delenv("ACP_DEPLOYMENT_TIER", raising=False)
     monkeypatch.delenv("ACP_HOST", raising=False)
+    monkeypatch.delenv("ACP_PUBLIC_ORIGIN", raising=False)
     from acp.api.server import create_app
 
     with TestClient(create_app(run_root=tmp_path, max_running=1)) as test_client:

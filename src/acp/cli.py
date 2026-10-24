@@ -4106,7 +4106,8 @@ Examples:
         default=None,
         help=(
             "Root directory for job work directories and the SQLite index. "
-            "Falls back to $ACP_RUN_ROOT, then the platform default "
+            "Falls back to $ACP_RUN_ROOT, then deployment.params.run_root "
+            "saved by acp init, then the platform default "
             "(~/.local/share/acp/runs, or /var/lib/acp/runs for root). "
             "Must be on a native filesystem."
         ),

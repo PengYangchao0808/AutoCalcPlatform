@@ -85,6 +85,8 @@ pytest.importorskip(
 )
 from playwright.sync_api import Browser, Page, sync_playwright
 
+from scripts.acceptance.browser_runtime import chromium_launch_options
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = REPO_ROOT / "frontend"
 
@@ -209,7 +211,7 @@ def browser() -> Generator[Browser, None, None]:
         launch_errors: list[str] = []
         for args in ([], ["--no-sandbox"]):
             try:
-                instance = pw.chromium.launch(headless=True, args=args)
+                instance = pw.chromium.launch(**chromium_launch_options(no_sandbox=bool(args)))
                 break
             except Exception as exc:  # noqa: BLE001 — record, then NOT_VERIFIED
                 launch_errors.append(f"{type(exc).__name__}: {exc}")

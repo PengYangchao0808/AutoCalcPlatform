@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from acp.core.paths import normalize_configured_run_root
 from acp.init_wizard.options import (
     COMPONENT_BY_NAME,
     TIER_BY_TIER,
@@ -46,6 +47,7 @@ from acp.init_wizard.persist import (
     set_software_path,
     upsert_node,
 )
+from acp_services.workspace.boundary import OriginPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +282,10 @@ def build_planned_data(
     if isinstance(external, Mapping) and external:
         deployment["resources"] = copy.deepcopy(dict(external))
     if params:
-        deployment["params"] = copy.deepcopy(dict(params))
+        existing_params = deployment.get("params")
+        merged_params = dict(existing_params) if isinstance(existing_params, Mapping) else {}
+        merged_params.update(copy.deepcopy(dict(params)))
+        deployment["params"] = merged_params
     secret_list = list(secrets)
     if secret_list:
         deployment["secrets"] = {secret.name: secret.as_config() for secret in secret_list}
@@ -338,6 +343,22 @@ def build_plan(
     """
     usage_value = str(usage)
     resources_map: dict[str, Any] = dict(resources or {})
+    params_map = dict(params or {})
+    if "run_root" in params_map:
+        try:
+            params_map["run_root"] = str(normalize_configured_run_root(params_map["run_root"]))
+        except ValueError as exc:
+            raise InitAbort(str(exc)) from exc
+    if "public_origin" in params_map:
+        public_origin = params_map["public_origin"]
+        if not isinstance(public_origin, str):
+            raise InitAbort("params.public_origin 必须是字符串；直接访问时使用空字符串")
+        public_origin = public_origin.strip()
+        try:
+            OriginPolicy(public_origin=public_origin or None)
+        except ValueError as exc:
+            raise InitAbort(f"params.public_origin 无效：{exc}") from exc
+        params_map["public_origin"] = public_origin
     selected = component_closure(components)
     unknown = unknown_components(components)
     if unknown:
@@ -370,7 +391,7 @@ def build_plan(
         tier=tier_value,
         components=selected,
         resources=resources_map,
-        params=params or {},
+        params=params_map,
         secrets=secrets,
     )
     external_actions = tuple(
@@ -390,7 +411,7 @@ def build_plan(
         tier=tier_value,
         components=selected,
         resources=resources_map,
-        params=dict(params or {}),
+        params=params_map,
         secrets=tuple(secrets),
         changes=diff_data(base, planned),
         external_actions=external_actions,

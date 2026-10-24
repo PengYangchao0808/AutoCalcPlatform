@@ -29,6 +29,10 @@ async function refreshNmrReport(job) {
   body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.loading") || "Loading…") + '</span>';
   try {
     var report = await fetchNmrReportJson(job);
+    // Late-response guard (R11): a newer refresh (another job, a re-select, or
+    // a switch away from nmr) bumps nmrPanelState.token; this stale response
+    // must never rewrite the newer canvas/DOM — not on success, empty or error.
+    if (token !== nmrPanelState.token) return;
     if (!report) {
       body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.no_report") || "No nmr_report.json yet") + '</span>';
       return;
@@ -58,6 +62,7 @@ async function refreshNmrReport(job) {
     nmrLoadStructureViewers(job, candidates, token);
   } catch (e) {
     console.error("NMR report render failed:", e);
+    if (token !== nmrPanelState.token) return;
     body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.error") || "Failed to load report") + '</span>';
   }
 }

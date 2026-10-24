@@ -416,6 +416,104 @@ def test_interactive_local_standalone_applies_and_reports(
     assert "doctor 能力报告" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("origin", ["https://new.example:9443", "http://192.0.2.10:8765", "-"])
+def test_interactive_public_origin_saved(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    origin: str,
+) -> None:
+    target = tmp_path / "cfg.yaml"
+    prompts = FakePrompts(
+        menus=[1, 1, 0, 1, 0],
+        asks=["", str(tmp_path / "runs"), origin, ""],
+    )
+    assert run_init(target, prompts=prompts) == 0
+    assert _load(target)["deployment"]["params"]["public_origin"] == (
+        "" if origin == "-" else origin
+    )
+    assert any("外部访问地址" in prompt for prompt in prompts.ask_calls)
+    assert "需重启后生效" in capsys.readouterr().out
+
+
+def test_interactive_public_origin_preserved_on_reentry(tmp_path: Path) -> None:
+    target = tmp_path / "cfg.yaml"
+    target.write_text(
+        yaml.safe_dump(
+            {
+                "deployment": {
+                    "params": {
+                        "public_origin": "https://existing.example",
+                        "custom_setting": 42,
+                    }
+                }
+            }
+        )
+    )
+    prompts = FakePrompts(menus=[1, 1, 0, 1, 1, 1, 0, 1, 0])
+    assert run_init(target, prompts=prompts) == 0
+    params = _load(target)["deployment"]["params"]
+    assert params["public_origin"] == "https://existing.example"
+    assert params["custom_setting"] == 42
+
+
+@pytest.mark.parametrize("origin", ["https://acp.example/path", "null", 123, None])
+def test_answer_file_invalid_public_origin_does_not_write(
+    tmp_path: Path,
+    origin: object,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = tmp_path / "cfg.yaml"
+    original = "unrelated: keep\n"
+    target.write_text(original)
+    answers = _write_answers(
+        tmp_path,
+        {
+            "version": ANSWER_SCHEMA_VERSION,
+            "usage": "local",
+            "tier": "standalone",
+            "params": {"public_origin": origin},
+        },
+    )
+    assert run_init(target, answers_path=answers) == 1
+    assert target.read_text() == original
+    assert not list(tmp_path.glob("cfg.yaml.bak-*"))
+    assert "public_origin" in capsys.readouterr().out
+
+
+def test_answer_file_preview_public_origin_does_not_write(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = tmp_path / "cfg.yaml"
+    answers = _write_answers(
+        tmp_path,
+        {
+            "version": ANSWER_SCHEMA_VERSION,
+            "usage": "local",
+            "tier": "standalone",
+            "params": {"public_origin": "https://preview.example"},
+        },
+    )
+    assert run_init(target, answers_path=answers, plan_only=True) == 0
+    assert not target.exists()
+    assert "https://preview.example" in capsys.readouterr().out
+
+
+def test_answer_file_partial_params_preserve_public_origin(tmp_path: Path) -> None:
+    target = tmp_path / "cfg.yaml"
+    base = {"deployment": {"params": {"public_origin": "https://existing.example"}}}
+    plan = plan_from_answers(
+        target,
+        base,
+        {
+            "usage": "local",
+            "tier": "standalone",
+            "params": {"run_root": str(tmp_path / "runs")},
+        },
+    )
+    assert plan.planned_data["deployment"]["params"]["public_origin"] == "https://existing.example"
+
+
 def test_interactive_hosted_selection_is_refused_then_standalone(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -22,7 +22,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from acp.core.paths import check_run_root_safety, resolve_run_root
+from acp.core.paths import (
+    RUN_ROOT_ENV_VAR,
+    check_run_root_safety,
+    normalize_configured_run_root,
+    resolve_run_root,
+)
 from acp.init_wizard.answers import load_answers, plan_from_answers
 from acp.init_wizard.capabilities import (
     collect_capability_report,
@@ -72,6 +77,7 @@ from acp.init_wizard.sniff_remote import (
 )
 from acp_services.contracts.access import DeploymentTier
 from acp_services.contracts.config_validation import node_entry_error
+from acp_services.workspace.boundary import OriginPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -370,7 +376,7 @@ def run_init(
         print(f"错误：{exc}")
         return 1
     if answers_path is not None:
-        return _run_answer_file(config_path, target_data, Path(answers_path))
+        return _run_answer_file(config_path, target_data, Path(answers_path), plan_only=plan_only)
     print(f"ACP 初始化向导 — 配置文件：{config_path}")
     try:
         return _run_unified_loop(config_path, target_data, prompt_bundle, plan_only=plan_only)
@@ -497,20 +503,82 @@ def _parse_secret_refs(text: str) -> list[SecretRef]:
     return refs
 
 
-def _params_secrets_step(prompts: PromptBundle) -> tuple[dict[str, Any], tuple[SecretRef, ...]]:
+def _public_origin_error(value: str) -> str | None:
+    try:
+        OriginPolicy(public_origin=None if value in {"", "-"} else value)
+    except ValueError:
+        return "请输入完整的 http:// 或 https:// 地址（可含端口，不含路径），直接访问填 -"
+    return None
+
+
+def _params_secrets_step(
+    prompts: PromptBundle,
+    target_data: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[SecretRef, ...]]:
     """Step 5: parameters (run_root authority) and secret *references* only."""
     print("\n== 参数与秘密 ==")
     resolved = resolve_run_root()
     print(f"当前解析的 run_root（原生文件系统，安装目录与数据目录分离）：{resolved}")
     for warning in check_run_root_safety(resolved):
         print(f"  [警告] {warning}")
-    raw_root = prompts.ask("原生数据根 run_root", default=str(resolved))
+    deployment = target_data.get("deployment") or {}
+    existing_params = deployment.get("params", {}) if isinstance(deployment, dict) else {}
+    saved_root = existing_params.get("run_root") if isinstance(existing_params, dict) else None
+    default_root = (
+        saved_root if isinstance(saved_root, str) and saved_root.strip() else str(resolved)
+    )
+    raw_root = prompts.ask(
+        "任务数据保存目录 run_root（绝对路径或 ~/ 开头）",
+        default=default_root,
+        validate=_run_root_error,
+    )
     params: dict[str, Any] = {"run_root": raw_root}
+    existing_origin = (
+        existing_params.get("public_origin", "") if isinstance(existing_params, dict) else ""
+    )
+    print("HTTPS 反向代理请填写浏览器访问的地址；迁移时可修改此项。")
+    public_origin = prompts.ask(
+        "外部访问地址（如 https://acp.example；直接访问填 -）",
+        default=existing_origin if isinstance(existing_origin, str) else "",
+        validate=_public_origin_error,
+        allow_empty=True,
+    )
+    params["public_origin"] = "" if public_origin == "-" else public_origin
+    if "ACP_PUBLIC_ORIGIN" in os.environ:
+        print("注意：服务启动环境中的 ACP_PUBLIC_ORIGIN 会优先于这里保存的地址。")
     raw_secret = prompts.ask(
         "如需凭据，输入 secret 引用（如 db_password=env:ACP_DB_PASSWORD；直接回车跳过）",
         allow_empty=True,
     )
     return params, tuple(_parse_secret_refs(raw_secret))
+
+
+def _run_root_error(value: str) -> str | None:
+    try:
+        normalize_configured_run_root(value)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _print_run_root_notice(plan: InitPlan) -> None:
+    """Explain activation and migration after either init application path."""
+    if plan.usage != UsageMode.LOCAL.value:
+        return
+    deployment = plan.planned_data.get("deployment") or {}
+    params = deployment.get("params") or {}
+    raw_root = params.get("run_root")
+    if raw_root:
+        configured = normalize_configured_run_root(raw_root)
+        print(f"任务数据保存目录已配置：{configured}；正在运行的 ACP 服务需重启后生效。")
+        if os.environ.get(RUN_ROOT_ENV_VAR):
+            effective = resolve_run_root()
+            if effective != configured:
+                print(f"注意：ACP_RUN_ROOT 环境变量当前覆盖此配置，实际目录为 {effective}。")
+                print("命令行启动前请 unset ACP_RUN_ROOT；systemd 请使用：")
+                print("  bash scripts/install_systemd.sh --run-root '' --run-root-only")
+        print("修改保存目录不会自动迁移已有任务；切换前请停止服务并迁移历史数据。")
+        print("迁移工具：python scripts/migrate_run_root.py <旧目录> <新目录>")
 
 
 def _preview_and_apply(prompts: PromptBundle, plan: InitPlan, *, plan_only: bool) -> bool:
@@ -528,6 +596,7 @@ def _preview_and_apply(prompts: PromptBundle, plan: InitPlan, *, plan_only: bool
         return False
     result = apply_plan(plan)
     print(result.detail)
+    _print_run_root_notice(plan)
     return True
 
 
@@ -563,7 +632,7 @@ def _run_local_unified(
         return
     resources = _run_resources_step(config_path, target_data, prompts, tier_spec)
     components = _components_step(prompts)
-    params, secrets = _params_secrets_step(prompts)
+    params, secrets = _params_secrets_step(prompts, target_data)
     plan = build_plan(
         config_path,
         target_data,
@@ -576,6 +645,7 @@ def _run_local_unified(
     )
     if not _preview_and_apply(prompts, plan, plan_only=plan_only):
         return
+    print("外部访问地址已保存；正在运行的 ACP 服务需重启后生效。")
     _print_doctor(plan)
 
 
@@ -623,10 +693,17 @@ def _run_unified_loop(
             _run_connect_flow(config_path, target_data, prompts, plan_only=plan_only)
         else:
             _run_local_unified(config_path, target_data, prompts, plan_only=plan_only)
+        target_data = load_target(config_path)
         print("\n（返回使用方式菜单）")
 
 
-def _run_answer_file(config_path: Path, target_data: dict[str, Any], answers_path: Path) -> int:
+def _run_answer_file(
+    config_path: Path,
+    target_data: dict[str, Any],
+    answers_path: Path,
+    *,
+    plan_only: bool = False,
+) -> int:
     """Non-interactive path: answer file → same plan builder → apply → doctor."""
     try:
         answers = load_answers(answers_path)
@@ -639,10 +716,14 @@ def _run_answer_file(config_path: Path, target_data: dict[str, Any], answers_pat
     if not plan.enabled:
         print(f"\n档位启用被拒绝：{plan.enablement.detail}")
         return 1
+    if plan_only:
+        print("\n（--plan：仅预览，未写入配置）")
+        return 0
     try:
         result = apply_plan(plan)
     except InitAbort as exc:
         print(f"错误：{exc}")
         return 1
     print(result.detail)
+    _print_run_root_notice(plan)
     return 0 if _print_doctor(plan) else 1
