@@ -27,7 +27,7 @@ git -C "$WORKTREE" apply --whitespace=nowarn /absolute/path/to/final-debug-patch
 
 ## Stage 2 — New files (144 files)
 
-Rationale: the overlay's `new-files/` set contains only paths absent from `096cdff`, so it cannot overwrite a tracked base file. Copy in a deterministic lexicographic order (the shell `cp -a source/. dest/` and the verification script both walk sorted paths); the order is recorded so a failed partial copy can be resumed by re-running the same command.
+Rationale: the overlay's `new-files/` set contains only paths absent from `3670790`, so it cannot overwrite a tracked base file. Copy in a deterministic lexicographic order (the shell `cp -a source/. dest/` and the verification script both walk sorted paths); the order is recorded so a failed partial copy can be resumed by re-running the same command.
 
 ```bash
 cp -a /absolute/path/to/final-debug-patch/new-files/. "$WORKTREE/"

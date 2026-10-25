@@ -1,7 +1,7 @@
 # ACP2 Plan A — Packaging Preview (A-00b, plan decision R3-14)
 
 Recorded 2026-10-22 (UTC run `a00b-20261022T121442Z`) by task **A-00b** on `acp2/a-science`
-(delivery `2e0ce9c` + docs `7f4944e`/`94c8ea9`). Purpose: freeze **what already exists** —
+(delivery `3bf5127` + docs `7766c65`/`d7f21ea`). Purpose: freeze **what already exists** —
 distribution shape, top-level ownership, dependency closure, the three role configs and the build /
 acceptance tooling — plus one minimal wheel-smoke argv. This is a preview, **not** a packaging plan
 redesign: the full independent package remains P5 (A-27a/A-27b/A-28, todos 48-50), and per review

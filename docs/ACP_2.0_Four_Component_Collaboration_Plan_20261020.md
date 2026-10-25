@@ -309,7 +309,7 @@ B 提供格式门、未知格式负向 fixture 与 typed unavailable；C 提供�
 - `final_debug_candidate = sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`
   是 overlay 摘要而非 commit；B00/B02 必须应用
   `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/`，并由 B02 在
-  `runtime/baseline-lock.json` 记录落成后的完整 commit。`096cdff…` 与 `ab492cc…` 仅为历史参考。
+  `runtime/baseline-lock.json` 记录落成后的完整 commit。`3670790…` 与 `bb30913…` 仅为历史参考。
 - 角色源码变量：`ACP2_A_SOURCE`（A 科学）、`ACP2_B_SOURCE`（B 平台）、`ACP2_C_SOURCE`
   （C 体验）、`ACP2_INTEGRATION_SOURCE`（集成候选）；`ACP2_SOURCE` 只作当前单轨目录的兼容
   别名，不得同时赋两种含义。`ACP2_EVIDENCE` 是证据根。

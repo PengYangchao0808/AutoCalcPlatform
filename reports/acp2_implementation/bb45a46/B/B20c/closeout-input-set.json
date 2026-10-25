@@ -1,6 +1,6 @@
 {
   "candidate_sha": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
-  "closeout_input_digest": "9a75addbf025c789c2fd25778fabdc5a39cdece7e327d3ba20ef99c34a99dfb2",
+  "closeout_input_digest": "7c5227e03daf3e36321a7a21936d217e064698b1cfc5073f653aab510915f544",
   "closeout_input_digest_rule": "sha256 over sorted lines '<repo-relative path> <file sha256>\\n' for these input entries only; the closeout's own result file is not an input",
   "entries": [
     {
@@ -9,7 +9,7 @@
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20/b20a-ready.json",
       "result": "PASS",
       "schema": "acp2.b20a.ready.v1",
-      "sha256": "c67bcaf0e55944ceb13d9f35556f5855b9557cba1030172aa509692eaa47ff62",
+      "sha256": "036b5afff235f7b40c5bb5618c1d63dc6f2efbfb3339dcda107ce17a6887a3d1",
       "size_bytes": 12811
     },
     {
@@ -18,8 +18,8 @@
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
       "result": "NOT_VERIFIED",
       "schema": "acp2.acceptance.v1",
-      "sha256": "a0ea0cf7743069b4e59f43595e3e443472e1360b2ef9169fb675eeb3d12117c5",
-      "size_bytes": 10643
+      "sha256": "9f148482c6f29b5a85938e452fad8b5f14b368404d4020fd15d601f5e0dc8b18",
+      "size_bytes": 10598
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
@@ -36,8 +36,8 @@
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
       "result": "PASS",
       "schema": "acp2.b20b.science-handoff.v1",
-      "sha256": "7d9e55073b8a5a56d8b92bc651cbe098a9a94f86f66fe3c82d030ed7cdc36024",
-      "size_bytes": 18744
+      "sha256": "29dd99a4dc0d806ae20216d4acbe33d5d3fa8721f9435e46f034915f99db1803",
+      "size_bytes": 18728
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B19/summary.json",
@@ -45,7 +45,7 @@
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B19/summary.json",
       "result": "PASS",
       "schema": "acp2.b19.summary.v1",
-      "sha256": "0556efc5483247ae4d672f172cbeede7ce5269a06fa55423f60b7515491704f8",
+      "sha256": "95a2c6fa2a4ef90b0ecb332279908b1e2fae4a4d993f95e7f35b093739fd88cc",
       "size_bytes": 3496
     },
     {

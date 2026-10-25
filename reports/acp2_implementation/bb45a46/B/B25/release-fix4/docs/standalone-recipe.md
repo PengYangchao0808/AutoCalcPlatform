@@ -1,7 +1,7 @@
 # ACP Services Standalone Recipe — 可复现安装配方与 capability 报告（B41a+B41b，todo 41）
 
 > **Status**: B41a（配方设计与首批复现）与 B41b（真实安装与完整 CLI 复现，todo 74 之后）均已执行。B41b 在本机干净 venv + 隔离 HOME/CWD/run_root 完成（见 §2.1）；**不是异机复现**。
-> **Reproduced at**: B41a — 2026-10-19，repo `main` @ `e447783`；B41b — 2026-10-19，repo `main` @ `48b1660`（含 todo 74 CLI task 面），host python3.11.13（用户 redacted-user）。两批记录分列保留（§2 / §2.1），回填不覆盖原始记录。
+> **Reproduced at**: B41a — 2026-10-19，repo `main` @ `8a66765`；B41b — 2026-10-19，repo `main` @ `2ecc517`（含 todo 74 CLI task 面），host python3.11.13（用户 redacted-user）。两批记录分列保留（§2 / §2.1），回填不覆盖原始记录。
 > **依据**: 主方案 §35-M1（退出门）/§36.2 step7（PASS/FAIL/NOT_VERIFIED 分列）/§36.5 IN-03；并行计划二 B07-7；`docs/reference/current/ACP_Function_Test_Manual.md` §1/§3.0；`scripts/install_systemd.sh`；`scripts/start_acp.sh`。
 > 两批任务均未重启 `acp.service`、未修改真实 run_root（`/var/lib/acp/runs`）、未修改真实 `~/.cccp.yaml`；干净环境复现全部落在 `/tmp/acp_recipe_*`（B41a）与 `/tmp/b41b_*`（B41b）。
 
@@ -182,8 +182,8 @@
 
 ## 6. B41a / B41b 顺序拆分
 
-- **B41a（已完成，2026-10-19 @ `e447783`）**：配方设计、四态 capability 报告、两级退出门定义、首批复现记录（§2，含 NOT_VERIFIED 标注）。**不依赖完整发行**（评审 P1-3 顺序修正：B41a 配方设计可先做）。
-- **B41b（已完成本机复现，2026-10-19 @ `48b1660`，todo 74 之后）**：真实安装与完整 CLI 复现——**在本机干净 venv + 隔离 HOME/CWD/run_root**（`/tmp/b41b-*`）按配方执行全部步骤，含 S3a 交互向导、S4/S4c doctor 语义复核、todo 74 全部 `acp task` 控制/恢复腿。记录见 §2.1。**范围限制（如实声明）**：① 非异机/异账户复现（同一台 host，仅 venv/HOME/run_root 隔离）；② S7b systemd unit 重建仍受"禁止重启服务"约束未执行；③ 15 工作流仅真实验收 4 项（其余 11 项未跑）；④ 发现 3 个新缺陷（D1 孤儿收尾 / D2 recover 配置丢失 / D3 起步期 SIGKILL 孤儿），已登记 §2.1，修复不在本任务范围。
+- **B41a（已完成，2026-10-19 @ `8a66765`）**：配方设计、四态 capability 报告、两级退出门定义、首批复现记录（§2，含 NOT_VERIFIED 标注）。**不依赖完整发行**（评审 P1-3 顺序修正：B41a 配方设计可先做）。
+- **B41b（已完成本机复现，2026-10-19 @ `2ecc517`，todo 74 之后）**：真实安装与完整 CLI 复现——**在本机干净 venv + 隔离 HOME/CWD/run_root**（`/tmp/b41b-*`）按配方执行全部步骤，含 S3a 交互向导、S4/S4c doctor 语义复核、todo 74 全部 `acp task` 控制/恢复腿。记录见 §2.1。**范围限制（如实声明）**：① 非异机/异账户复现（同一台 host，仅 venv/HOME/run_root 隔离）；② S7b systemd unit 重建仍受"禁止重启服务"约束未执行；③ 15 工作流仅真实验收 4 项（其余 11 项未跑）；④ 发现 3 个新缺陷（D1 孤儿收尾 / D2 recover 配置丢失 / D3 起步期 SIGKILL 孤儿），已登记 §2.1，修复不在本任务范围。
 - 回填规则（已执行）：§2 各行以"**B41b 回填/复核"标注附加在原记录之后，原始 NOT_VERIFIED/FAIL 记录保留（审计痕迹）；B41b 全量新记录集中在 §2.1，不覆盖 §2。
 - 依赖关系：B41a blocked by todos 35—38（已完成）；B41b blocked by todos 74、40、32—34（按 T34a 声明范围）；本任务 blocks todo 69（分层验收）。
 - **T74 不等待本任务**：B41a 的配方设计与首批复现可先做，不反向阻塞 todo 74；B41b 的真实安装与完整 CLI 复现必须在 **todo 74 交付后**执行（本文件 §2.1 即按该顺序执行）。B41b 不阻塞任何其他任务，也不因 D1/D2/D3 关闭任何门。

@@ -1,7 +1,7 @@
 # ACP2 Plan A — Recipe Compilation and the Science Identity Boundary
 
 Status: design note for A-07b (`src/cccp/calculation/recipes/compile.py`).
-Baseline: `acp2/a-science`, after A-07a (`7f148ad`). Author: QCcalc Team.
+Baseline: `acp2/a-science`, after A-07a (`3a65e1b`). Author: QCcalc Team.
 Scope: pure definition compilation and identity materialization. A never
 executes the DAG; Runtime (B18) owns the execution loop, persistence,
 cancellation and retries.

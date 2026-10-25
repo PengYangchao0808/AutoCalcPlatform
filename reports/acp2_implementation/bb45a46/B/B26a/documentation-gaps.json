@@ -27,7 +27,7 @@
         {
           "observed_raw_run": "reports/acp2_implementation/bb45a46/B/B26a/workbench-submit-failure.json",
           "row_result": "FAIL",
-          "stage": "B26a original at dc72de2"
+          "stage": "B26a original at aaf2c4b"
         },
         {
           "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4/b26a-rerun/http-row.json",
@@ -66,7 +66,7 @@
         {
           "observed_raw_run": "reports/acp2_implementation/bb45a46/B/B26a/b15/ and reports/acp2_implementation/bb45a46/B/B26a/b17/",
           "row_result": "authorization FAIL / budget PASS",
-          "stage": "B26a original at dc72de2"
+          "stage": "B26a original at aaf2c4b"
         },
         {
           "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4/b15/",
@@ -117,7 +117,7 @@
         "lsf": "NOT_VERIFIED(lsf_prerequisite_missing)",
         "third_party_plugin_install": "NOT_VERIFIED(undocumented_step)"
       },
-      "stage": "Original self-reproduction, as published at dc72de2"
+      "stage": "Original self-reproduction, as published at aaf2c4b"
     },
     {
       "evidence": "reports/acp2_implementation/bb45a46/B/Bfix4",
@@ -133,7 +133,7 @@
       "commit": "69deded634fae075024597549e2990e8e7de51d4",
       "note": "Both original FAIL rows PASS after B-fix-4; four rows stay NOT_VERIFIED (plugin procedure, DSH/browser, LSF, disconnect running-task recovery) plus the self-reproduction independence limitation.",
       "overall_result": "NOT_VERIFIED",
-      "stage": "Reconciled roll-up at HEAD 8349f21"
+      "stage": "Reconciled roll-up at HEAD 69deded"
     }
   ],
   "schema": "acp2.b26a.documentation-gaps.v1",

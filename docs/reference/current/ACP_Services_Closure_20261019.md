@@ -60,26 +60,26 @@
 `sha256(relpath_bytes + file_bytes)` 流式累加，取前 16 位十六进制。上表 4 项在 §8 的
 `binding.verified_digests` 中由 checker **重新计算并断言**。
 
-**移动目标披露（并发车道）**：`cadf5b6..71c36da` 只改 `src/cccp/analysis/**`、`src/cccp/backends/orca.py`、
+**移动目标披露（并发车道）**：`99b5ee2..f5a9c9b` 只改 `src/cccp/analysis/**`、`src/cccp/backends/orca.py`、
 `src/cccp/calculation/xtbmd_adapters.py`（lane C 的 Boltzmann 常量单源化）；
-`git diff --stat cadf5b6..71c36da -- src/acp src/acp_services tests/ docs/reference/current/ACP_Services_Four_Combination_Acceptance.md`
-为空 → 本记录引用的 Services 表面在 `cadf5b6` 与 `71c36da` 之间**零差异**。
+`git diff --stat 99b5ee2..f5a9c9b -- src/acp src/acp_services tests/ docs/reference/current/ACP_Services_Four_Combination_Acceptance.md`
+为空 → 本记录引用的 Services 表面在 `99b5ee2` 与 `f5a9c9b` 之间**零差异**。
 
-**S0/S1 分界（硬性）**：t75 的四组合在 `d048950` 执行；本记录在 `71c36da` 复验 Services 表面。
-`7327259c…`（todo 1 基线）等历史记录只作对照引用，**不拼接为本候选的通过证据**。
-S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录（由 t75 checker 守护）。
+**S0/S1 分界（硬性）**：t75 的四组合在 `fded116` 执行；本记录在 `f5a9c9b` 复验 Services 表面。
+`24ffca5c…`（todo 1 基线）等历史记录只作对照引用，**不拼接为本候选的通过证据**。
+S1 组合（F0＋S1 / F1＋S1）各自在 `fded116` 有独立 `executed` 记录（由 t75 checker 守护）。
 
 ---
 
 ## 3. L1 — 模块验证
 
-所有命令均在 `71c36da`（或零 Services 差异的 `cadf5b6`）以 `python3.11 -m pytest … -q` 执行，退出码真实。
+所有命令均在 `f5a9c9b`（或零 Services 差异的 `99b5ee2`）以 `python3.11 -m pytest … -q` 执行，退出码真实。
 
 | ID | 项 | 状态 | 证据（路径） | 说明 |
 |---|---|---|---|---|
 | L1-01 | Data 端口 / 只读根 / 持久 prepare / 传输校验 | PASS | `tests/test_services_data_port.py`(11) `tests/test_services_read_root.py`(17) `tests/test_services_prepare_operations.py`(15) `tests/test_services_transfer_verify.py`(20) | 63 passed；claim=in_repo（本地临时 run_root，无远端） |
 | L1-02 | 持久事件协议 / 授权流 / 顺序 / freshness | PASS | `tests/test_services_events.py`(24) `tests/test_services_events_authz.py`(19) `tests/test_services_event_ordering.py`(12) `tests/test_services_freshness.py`(21) | 76 passed |
-| L1-03 | ExecutionEnvelope / worker 契约 / 整链切换 / 逐工作流启用 | **PASS（F-3 已修复）** | `tests/test_services_envelope.py`(28) `tests/test_services_worker_contract.py`(49 passed) `tests/test_services_chain_switch.py`(22) `tests/test_services_workflow_enablement.py`(26) | `d9dcb25` 将 `test_runtime_package_has_no_acp_or_db_access` 的守卫收窄到 worker 边界（`python3.11 -m pytest tests/test_services_worker_contract.py -q` → 49 passed，exit 0；`pytest tests/test_services_*.py -q` → 全绿）；负例注入（禁 `import acp` / `attempt += 1`）保留。**原 FAIL 作为被取代审计注记保留在 §6 F-3。** |
+| L1-03 | ExecutionEnvelope / worker 契约 / 整链切换 / 逐工作流启用 | **PASS（F-3 已修复）** | `tests/test_services_envelope.py`(28) `tests/test_services_worker_contract.py`(49 passed) `tests/test_services_chain_switch.py`(22) `tests/test_services_workflow_enablement.py`(26) | `3922f07` 将 `test_runtime_package_has_no_acp_or_db_access` 的守卫收窄到 worker 边界（`python3.11 -m pytest tests/test_services_worker_contract.py -q` → 49 passed，exit 0；`pytest tests/test_services_*.py -q` → 全绿）；负例注入（禁 `import acp` / `attempt += 1`）保留。**原 FAIL 作为被取代审计注记保留在 §6 F-3。** |
 | L1-04 | store / schema 迁移等价 | PASS | `tests/test_services_migration_equivalence.py`(22) | 隔离 DB 持久化/CAS + 参数转换 parity + identity + AST 隔离 |
 | L1-05 | 执行隔离能力矩阵 | PASS | `tests/test_services_isolation.py`(25) `tests/baseline/services-evidence/isolation_matrix.md` | 矩阵与代码同源；pseudo-isolation 拒绝 |
 | L1-06 | 访问边界 / 身份 / API Key / 管理面 | PASS | `tests/test_services_api_keys.py`(32) `tests/test_services_local_boundary.py`(39) `tests/test_services_identity_model.py`(33) `tests/test_services_identity_mapping.py`(19) `tests/test_services_identity_lifecycle.py`(23) `tests/test_services_entry_authz.py`(63) `tests/test_services_admin.py`(52) | 261 passed；OIDC 恒 `OIDC_SUPPORTED=False` |
@@ -93,11 +93,11 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
 | L1-14 | helper 归并 / 注入契约 / worker 装配 / 存储绑定 / 投影 / 查询预算 / 发布端口 | PASS | `tests/test_services_helper_merge.py`(37) `tests/test_services_injection_contracts.py`(24) `tests/test_services_worker_bootstrap.py`(17) `tests/test_services_storage_binding.py`(14) `tests/test_services_task_projection.py`(9) `tests/test_services_query_budget.py`(10) `tests/test_services_publication_data_port.py`(20) | 131 passed |
 | L1-15 | 首片契约 / cache-only 切换 / 四组合记录 checker | PASS | `tests/test_services_first_slice_contracts.py`(14) `tests/test_services_cache_only_switch.py`(32) `tests/test_services_four_combination_records.py`(16) `tests/baseline/services-evidence/cache_only_switch_matrix.md` | 62 passed；cache-only 含 F0 对拍与负例 |
 | L1-16 | 共享护栏（架构/隔离/frames/markers/发布/执行完整性/恢复） | PASS | `tests/test_architecture_invariants.py`(20) `tests/test_acp_services_isolation.py`(23) `tests/test_cccp_isolation.py`(8) `tests/test_acp_frames.py`(10) `tests/test_scheduler_markers_audit.py`(3) `tests/test_result_publication.py`(11) `tests/test_execution_integrity_e2e.py`(7) `tests/test_checkpoint_resume_semantics.py`(18) `tests/test_recovery_fixtures_smoke.py`(19) `tests/test_recovery_cross_version.py`(8) | 127 passed；四项执行不变量与依赖方向门全绿 |
-| L1-17 | grep 门四 pin + F4 共享门 + 打包 | PASS | `scripts/check_grep_gates.py`（`--suite architecture-remediation`）`tests/test_f4_scope_audit.py`(35) `tests/test_packaging_assets.py`(7) `tests/test_services_packaging_roles.py`(9) `tests/baseline/services-evidence/f4_scope_amendment_services.md` | grep gates run 10 / blocking 0 / stale allowlist 0（exit 0）；F4 由 todo 66 的 1 RED 变为 **35 passed**（amendment `cadf5b6`，等效门加强非放宽） |
+| L1-17 | grep 门四 pin + F4 共享门 + 打包 | PASS | `scripts/check_grep_gates.py`（`--suite architecture-remediation`）`tests/test_f4_scope_audit.py`(35) `tests/test_packaging_assets.py`(7) `tests/test_services_packaging_roles.py`(9) `tests/baseline/services-evidence/f4_scope_amendment_services.md` | grep gates run 10 / blocking 0 / stale allowlist 0（exit 0）；F4 由 todo 66 的 1 RED 变为 **35 passed**（amendment `99b5ee2`，等效门加强非放宽） |
 | L1-18 | 每片验证纪律 / 计划一致性 | PASS | `tests/test_services_plan_consistency.py`(6) `tests/baseline/services-evidence/verification_discipline_report.md` | 83 todos 依赖图无环；Final-wave 排除仅 76 |
 
 **L1 汇总（真实执行）**：`python3.11 -m pytest tests/test_services_*.py -q` → **全绿**（59 文件）。
-L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留），摘要记录已刷新；
+L1-03 的 F-3 已在 `3922f07` 修复（worker 边界收窄，负例注入保留），摘要记录已刷新；
 原始 FAIL 文本作为被取代审计注记保留在 §6，**未删除历史**。
 
 ---
@@ -119,7 +119,7 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 | L2-09 | `acp init` Lab doctor 分支 | CLI `acp init` | PASS | `src/acp/init_wizard/flows.py:549`（`render_lab_capability_report`）；`tests/test_services_lab_init.py`(27) | 仅 `tier == LAB` 分支；本机按能力拒绝，不静默降级 |
 | L2-10 | 研究证据投影（lineage） | HTTP `/api/v2` | PASS | `src/acp/api/v2_routes.py:84`、`:1722`；`tests/test_services_evidence_projection.py`(14) | 路由 `/api/v2/tasks/{task_id}/lineage/projection` 在 OpenAPI |
 | L2-11 | **前端消费 cache-only 新读取面** | 前端调用点 | **NOT_VERIFIED** | `frontend/js/workbench/contracts/task_view_contract.js:125`（`prepareAvailability: false, // NOT in S0`）；前端对 `/availability`、`/prepared/` 的调用点 **0 命中** | 原因：后端字段/端点已交付，但前端仍声明 S0 能力位为 false 且无调用点 → **「已交字段」≠「前端已接入」**；渠道 A05/B |
-| L2-12 | 准入/配额/身份生命周期接入派发与 UI | Runtime submit / HTTP / UI | **NOT_VERIFIED** | `src/acp_services/runtime/admission.py`、`quota.py`、`workspace/identity_lifecycle.py`（`src/acp` 侧**零**消费者，grep 命中 0） | 原因：组件已交付（`38ed349`/`ac57a9a`/`ca55bdb`），但未接入 HTTP/UI 或 submit 前置；渠道 B（与 t75 §5 一致） |
+| L2-12 | 准入/配额/身份生命周期接入派发与 UI | Runtime submit / HTTP / UI | **NOT_VERIFIED** | `src/acp_services/runtime/admission.py`、`quota.py`、`workspace/identity_lifecycle.py`（`src/acp` 侧**零**消费者，grep 命中 0） | 原因：组件已交付（`f00625b`/`9e0185b`/`014234c`），但未接入 HTTP/UI 或 submit 前置；渠道 B（与 t75 §5 一致） |
 | L2-13 | 归档导出/导入入口 | CLI / HTTP | **NOT_VERIFIED** | `src/acp/services_data_bootstrap.py:1103/1151/1181`（仅 builder 导出，`src/acp` 无消费者） | 原因：Data 侧构造器已交付，未绑 CLI/API 入口；渠道 B |
 | L2-14 | MCP stdio 入口 | `acp` 默认入口 | **NOT_VERIFIED** | `src/acp_services/entrypoints/mcp.py`（`MCP_SERVER_NAME`）；`src/acp` 无 `entrypoints.mcp` 消费者 | 原因：协议实现与 39 项测试已交付，未绑默认入口（todo 43 只要求薄入口契约）；渠道 B |
 | L2-15 | 计量解耦（用量采集与科学完成解耦） | 生产路径 | **NOT_VERIFIED** | `src/acp_services/runtime/metering_decoupling.py`（`src/acp` 零消费者） | 原因：模块 + 26 项测试已交付，未接入 Runtime 完成/读取路径；渠道 B |
@@ -138,7 +138,7 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 
 | 门 | 渠道 | 状态 | 依据 | 原因（逐项） |
 |---|---|---|---|---|
-| **浏览器** | A05 | **NOT_VERIFIED** | `.omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md`、`task-32-…md`、`task-33-…md`；`docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md` | A05 的 13+2 浏览器矩阵绑定**其自身提交**（`5518aa6`/`c579c66`），不是本候选 `71c36da`；B 只执行 A 提供的黑盒用例、**不取得 A 源码写权**，本轮未收到候选级黑盒用例；A05 退出门按计划保持 OPEN |
+| **浏览器** | A05 | **NOT_VERIFIED** | `.omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md`、`task-32-…md`、`task-33-…md`；`docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md` | A05 的 13+2 浏览器矩阵绑定**其自身提交**（`899c7c0`/`29efba8`），不是本候选 `f5a9c9b`；B 只执行 A 提供的黑盒用例、**不取得 A 源码写权**，本轮未收到候选级黑盒用例；A05 退出门按计划保持 OPEN |
 | **科学软件** | C10 | **NOT_VERIFIED** | `tests/baseline/cccp-evidence/c10-final-evidence-index.md`；`tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md` | 真实 ORCA/xTB/CREST/CENSO 未在本候选运行；`xtb`/`crest`/`censo`/`isostat`/`molclus` 不在 PATH；`/home/redacted-user/orca611/orca` 仅回应参数提示，未经 ACP 执行；C10 未在本候选出判定 |
 | **LSF / 远端** | C10 / B | **NOT_VERIFIED** | `tests/baseline/services-evidence/isolation_matrix.md`（lsf-identity `configured`，live cluster NOT_VERIFIED）；`tests/test_remote_phase1.py` 系列（夹具） | `/opt/openlava-2.0/bin/{bjobs,bhosts}` 存在但 `lsb_init: Failed … Unable to open file lsf.conf` → 无可用集群；SSH 无节点凭据 |
 | **生产** | B | **NOT_VERIFIED** | 计划 todo 76 门（F1–F4 全 APPROVE 后才发布） | 本 todo **未发布、未重启服务、未改 unit**；发布后冒烟归 todo 76 + F5 |
@@ -154,8 +154,8 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 | L3-05 | 真实 ORCA/xTB/CREST/CENSO 科学执行 | **NOT_VERIFIED** | 同 §5.1 科学软件行 | 缺二进制/预算；不得以夹具或前端模拟替代 |
 | L3-06 | LSF 提交/监控/停止范围实机 | **NOT_VERIFIED** | 同 §5.1 LSF 行 | 无 `lsf.conf`/无节点凭据 |
 | L3-07 | 真实浏览器场景（A05 矩阵） | **NOT_VERIFIED** | 同 §5.1 浏览器行 | 候选级黑盒用例未交付；B 无 A 源码写权 |
-| L3-08 | 科学等价（同输入新旧输出对照） | **NOT_VERIFIED** | `tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md`（provider `4d2c6f8d…`，状态 B **pending**）；`tests/baseline/cccp-evidence/c10-final-evidence-index.md` | C10 未在本候选出判定；**禁前端模拟替代** |
-| L3-09 | Lab 账户/会话 UI | **NOT_VERIFIED** | `src/acp_services/workspace/identity_lifecycle.py`（`OIDC_SUPPORTED=False`）；`docs/reference/next-change/ACP_Services_Identity_Support_Scope.md` | 组件已交付（`ca55bdb`）未接线；OIDC 恒不可用 |
+| L3-08 | 科学等价（同输入新旧输出对照） | **NOT_VERIFIED** | `tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md`（provider `06ce045d…`，状态 B **pending**）；`tests/baseline/cccp-evidence/c10-final-evidence-index.md` | C10 未在本候选出判定；**禁前端模拟替代** |
+| L3-09 | Lab 账户/会话 UI | **NOT_VERIFIED** | `src/acp_services/workspace/identity_lifecycle.py`（`OIDC_SUPPORTED=False`）；`docs/reference/next-change/ACP_Services_Identity_Support_Scope.md` | 组件已交付（`014234c`）未接线；OIDC 恒不可用 |
 | L3-10 | 生产发布/静态缓存/旧标签页窗口 | **NOT_VERIFIED** | 计划 todo 76/71 门 | 未发布；兼容窗口归 todo 71 文档 + todo 76 执行 |
 
 ---
@@ -164,10 +164,10 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 
 | # | 项 | 状态 | 归属 / 影响 | 证据 |
 |---|---|---|---|---|
-| **F-3** | `tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access` | **RESOLVED（真实执行，`d9dcb25`；原始 FAIL 作为被取代注记保留）** | **已修复**：`d9dcb25`（todo 80，F-wave remediation A）把守卫收窄到 worker 边界；`python3.11 -m pytest tests/test_services_worker_contract.py -q` → **49 passed，exit 0**，`pytest tests/test_services_*.py -q` → **全绿**。负例注入（禁 `import acp` / `attempt += 1`）保留，未放宽/未删除/未跳过。———— **原始 FAIL（已不重现，保留为审计历史）**：`runtime/admission.py`（`38ed349`）与 `runtime/quota.py`（`ac57a9a`）按设计导入 `sqlite3`；`runtime/isolation.py` 含 `acp_jobs.db` 字符串；守卫禁止 `src/acp_services/runtime/**` 出现 sqlite3/DB 写入。 | `tests/test_services_worker_contract.py:552`；`.omo/evidence/acp-parallel-plan-2-services/task-67-…md` §F-3 |
+| **F-3** | `tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access` | **RESOLVED（真实执行，`3922f07`；原始 FAIL 作为被取代注记保留）** | **已修复**：`3922f07`（todo 80，F-wave remediation A）把守卫收窄到 worker 边界；`python3.11 -m pytest tests/test_services_worker_contract.py -q` → **49 passed，exit 0**，`pytest tests/test_services_*.py -q` → **全绿**。负例注入（禁 `import acp` / `attempt += 1`）保留，未放宽/未删除/未跳过。———— **原始 FAIL（已不重现，保留为审计历史）**：`runtime/admission.py`（`f00625b`）与 `runtime/quota.py`（`9e0185b`）按设计导入 `sqlite3`；`runtime/isolation.py` 含 `acp_jobs.db` 字符串；守卫禁止 `src/acp_services/runtime/**` 出现 sqlite3/DB 写入。 | `tests/test_services_worker_contract.py:552`；`.omo/evidence/acp-parallel-plan-2-services/task-67-…md` §F-3 |
 | **F-1** | `TransferPipeline.prepare` 在 `OSError(ENOSPC)` 时上抛而非 typed rejection | 已记录（安全性成立） | 无部分发布/无 `.tmp` 残留/永不 READY；worker 记可重试失败。产品行为决策未在本 todo 变更 | `tests/baseline/services-evidence/fault_matrix_report.md` §F-1 |
 | **F-2** | schema 迁移台账 forward-only，收缩不自动修复 | 已记录（设计限制） | 收缩/回退 DB 必须走一致备份恢复路径（L3-04），不重跑迁移 | `tests/baseline/services-evidence/fault_matrix_report.md` §F-2 |
-| — | todo 66 遗留的 F4 1 RED | **已关闭** | `cadf5b6` 登记 Services migration stations + 6 项等效/更强检查；现 `35 passed`（非放宽） | `tests/test_f4_scope_audit.py`(35)；`tests/baseline/services-evidence/f4_scope_amendment_services.md` |
+| — | todo 66 遗留的 F4 1 RED | **已关闭** | `99b5ee2` 登记 Services migration stations + 6 项等效/更强检查；现 `35 passed`（非放宽） | `tests/test_f4_scope_audit.py`(35)；`tests/baseline/services-evidence/f4_scope_amendment_services.md` |
 
 ---
 
@@ -192,15 +192,15 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 ### 7.2 科学一致性（固定输入对照，禁前端模拟）
 
 - 判定位置（唯一权威）：C 路 `tests/baseline/cccp-evidence/c10-final-evidence-index.md`（todo 49：NMR×4 / PES×1 / simple×2 / CLI×1 = PASS，失败 0；真实 QC/LSF/Web/MCP 明确 NOT_VERIFIED）+ `tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md`。
-- **本候选状态 = NOT_VERIFIED（channel C10）**：C10 判定记录未在 `71c36da` 交付；HN-02 状态 B（跨路端到端）仍 `pending`（provider `06ce0452a714ff1e389e7ed1aedc022e8640cef9`）。
+- **本候选状态 = NOT_VERIFIED（channel C10）**：C10 判定记录未在 `f5a9c9b` 交付；HN-02 状态 B（跨路端到端）仍 `pending`（provider `06ce0452a714ff1e389e7ed1aedc022e8640cef9`）。
 - **禁前端模拟**：本记录**不使用**任何 DOM/浏览器截图/前端断言作为科学等价证据；前端证据只用于前端任务面（§5.1 浏览器行，且为 NOT_VERIFIED）。
-- **不拼接**：C 的 `c10-compare-*` 是其候选上的记录，不拼作 `71c36da` 的通过证据。
+- **不拼接**：C 的 `c10-compare-*` 是其候选上的记录，不拼作 `f5a9c9b` 的通过证据。
 
 ### 7.3 A/C 接收任务与延期范围（B 交付物）
 
 | 路 | 接收任务 | B 交付物 | 延期范围 | 状态 |
 |---|---|---|---|---|
-| A | **A05** | 同一集成候选上的浏览器场景 + 供 B 执行的黑盒用例 | 仅浏览器真机；B **不取得 A 源码写权**；A05 现有证据绑定其自身提交，不得借为 `71c36da` 的通过记录 | **REGISTERED**（本记录浏览器门 NOT_VERIFIED） |
+| A | **A05** | 同一集成候选上的浏览器场景 + 供 B 执行的黑盒用例 | 仅浏览器真机；B **不取得 A 源码写权**；A05 现有证据绑定其自身提交，不得借为 `f5a9c9b` 的通过记录 | **REGISTERED**（本记录浏览器门 NOT_VERIFIED） |
 | C | **C10** | 同一集成候选上的科学等价判定（固定输入 + 黄金容差 + 恢复 fixtures） | 科学等价与真实软件（ORCA/xTB/CREST/LSF）执行；夹具/纯输入生成不得冒充真实运行 | **REGISTERED**（科学等价 NOT_VERIFIED；HN-02 状态 B pending） |
 
 ### 7.4 未接入项延期清单（且旧功能保持可用）
@@ -237,7 +237,7 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
 补充边界：
 
 - **F-3 已修复**（`tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access`）：
-  `d9dcb25`（todo 80，F-wave remediation A）把守卫收窄到 worker 边界，负例注入保留；
+  `3922f07`（todo 80，F-wave remediation A）把守卫收窄到 worker 边界，负例注入保留；
   `python3.11 -m pytest tests/test_services_worker_contract.py -q` → **49 passed，exit 0**。
   §6 原 FAIL 文本作为**被取代审计注记**保留，未删除历史；本记录不据 F-wave 文档任务改写其他 FAIL/NOT_VERIFIED 行。
 - 本 §7.5 是**追加复核**，不删除 §3—§6 的原始 PASS/FAIL/NOT_VERIFIED 与 F-1/F-2/F-3 证据链。
@@ -247,7 +247,7 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
 ## 8. 结论（三分层 + 三门状态）
 
 1. **L1 模块验证**：`tests/test_services_*.py` 59 文件 → **全绿**；共享护栏 127 passed；
-   grep gates 0 blocking；F4 35 passed。L1-03 的 F-3 已由 `d9dcb25` 修复（负例注入保留），
+   grep gates 0 blocking；F4 35 passed。L1-03 的 F-3 已由 `3922f07` 修复（负例注入保留），
    原始 FAIL 作为被取代审计注记保留在 §6，未放宽/未删除。
 2. **L2 默认入口接入**：后端 10 项入口全部 PASS（CLI `acp task`、`/availability`、`/prepared/{resource}`、
    manager 装配、发布端口、执行链、逐工作流 8/15、控制用例、`acp init` Lab、lineage 路由）；
@@ -313,7 +313,7 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
       "rows": [
         {"id": "L1-01", "item": "Data port / read-only root / persistent prepare / transfer verify", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_data_port.py", "tests/test_services_read_root.py", "tests/test_services_prepare_operations.py", "tests/test_services_transfer_verify.py"]},
         {"id": "L1-02", "item": "persistent events / authz stream / ordering / freshness", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_events.py", "tests/test_services_events_authz.py", "tests/test_services_event_ordering.py", "tests/test_services_freshness.py"]},
-        {"id": "L1-03", "item": "envelope / worker contract / chain switch / workflow enablement", "status": "PASS", "claim": "in_repo", "note": "F-3 resolved at d9dcb25: worker-boundary guard scoped; negative injections retained; pytest tests/test_services_worker_contract.py -q -> 49 passed, exit 0; original FAIL retained as superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", "tests/test_services_envelope.py", "tests/test_services_chain_switch.py", "tests/test_services_workflow_enablement.py"]},
+        {"id": "L1-03", "item": "envelope / worker contract / chain switch / workflow enablement", "status": "PASS", "claim": "in_repo", "note": "F-3 resolved at 3922f07: worker-boundary guard scoped; negative injections retained; pytest tests/test_services_worker_contract.py -q -> 49 passed, exit 0; original FAIL retained as superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", "tests/test_services_envelope.py", "tests/test_services_chain_switch.py", "tests/test_services_workflow_enablement.py"]},
         {"id": "L1-04", "item": "store/schema migration equivalence", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_migration_equivalence.py", "tests/baseline/services-evidence/migration_ledger.md"]},
         {"id": "L1-05", "item": "execution isolation capability matrix", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_isolation.py", "tests/baseline/services-evidence/isolation_matrix.md"]},
         {"id": "L1-06", "item": "access boundary / identity / api keys / admin", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_api_keys.py", "tests/test_services_local_boundary.py", "tests/test_services_identity_model.py", "tests/test_services_identity_mapping.py", "tests/test_services_identity_lifecycle.py", "tests/test_services_entry_authz.py", "tests/test_services_admin.py"]},
@@ -345,7 +345,7 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
         {"id": "L2-09", "item": "acp init Lab doctor branch", "entry": "CLI acp init", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/init_wizard/flows.py", "tests/test_services_lab_init.py"]},
         {"id": "L2-10", "item": "research evidence projection route", "entry": "HTTP /api/v2", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/api/v2_routes.py", "tests/test_services_evidence_projection.py"]},
         {"id": "L2-11", "item": "frontend consumption of cache-only read surface", "entry": "frontend call sites", "status": "NOT_VERIFIED", "claim": "none", "channel": "A05", "reason": "backend endpoints delivered but frontend declares prepareAvailability=false and has zero call sites for /availability or /prepared/; field delivered is not frontend integrated", "evidence": ["frontend/js/workbench/contracts/task_view_contract.js"]},
-        {"id": "L2-12", "item": "admission/quota/identity-lifecycle wired into dispatch and UI", "entry": "runtime submit / HTTP / UI", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "components delivered (38ed349 / ac57a9a / ca55bdb) but zero consumers in src/acp; not wired to HTTP/UI or submit pre-check", "evidence": ["src/acp_services/runtime/admission.py", "src/acp_services/runtime/quota.py", "src/acp_services/workspace/identity_lifecycle.py"]},
+        {"id": "L2-12", "item": "admission/quota/identity-lifecycle wired into dispatch and UI", "entry": "runtime submit / HTTP / UI", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "components delivered (f00625b / 9e0185b / 014234c) but zero consumers in src/acp; not wired to HTTP/UI or submit pre-check", "evidence": ["src/acp_services/runtime/admission.py", "src/acp_services/runtime/quota.py", "src/acp_services/workspace/identity_lifecycle.py"]},
         {"id": "L2-13", "item": "archive export/import bound to CLI or HTTP", "entry": "CLI / HTTP", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "Data-side builders exist but no src/acp consumer binds them to an entry point", "evidence": ["src/acp/services_data_bootstrap.py"]},
         {"id": "L2-14", "item": "MCP stdio entry bound to a default entry", "entry": "acp default entry", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "protocol implementation and 39 tests delivered; no src/acp consumer of entrypoints.mcp", "evidence": ["src/acp_services/entrypoints/mcp.py", "tests/test_services_mcp.py"]},
         {"id": "L2-15", "item": "metering decoupling wired into production path", "entry": "runtime completion/read path", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "module and 26 tests delivered; zero src/acp consumers", "evidence": ["src/acp_services/runtime/metering_decoupling.py", "tests/test_services_metering_decoupling.py"]},
@@ -364,13 +364,13 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
         {"id": "L3-06", "item": "LSF submit/monitor/stop-scope on a live cluster", "status": "NOT_VERIFIED", "claim": "none", "channel": "C10", "reason": "openlava binaries present but lsb_init fails: Unable to open file lsf.conf; no cluster and no node credentials", "evidence": ["tests/baseline/services-evidence/isolation_matrix.md"]},
         {"id": "L3-07", "item": "real browser scenarios on this candidate", "status": "NOT_VERIFIED", "claim": "none", "channel": "A05", "reason": "A05 browser matrix is bound to its own commit; no candidate-level black-box suite delivered; B has no A source write access", "evidence": [".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md", "docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md"]},
         {"id": "L3-08", "item": "scientific equivalence (same input, old vs new output)", "status": "NOT_VERIFIED", "claim": "none", "channel": "C10", "reason": "C10 judgement not delivered on this candidate; HN-02 cross-lane state B pending; frontend simulation is not accepted as proof", "evidence": ["tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md", "tests/baseline/cccp-evidence/c10-final-evidence-index.md"]},
-        {"id": "L3-09", "item": "Lab account/session UI", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "identity components delivered (ca55bdb) but not wired into HTTP/UI; OIDC_SUPPORTED is False", "evidence": ["src/acp_services/workspace/identity_lifecycle.py", "docs/reference/next-change/ACP_Services_Identity_Support_Scope.md"]},
+        {"id": "L3-09", "item": "Lab account/session UI", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "identity components delivered (014234c) but not wired into HTTP/UI; OIDC_SUPPORTED is False", "evidence": ["src/acp_services/workspace/identity_lifecycle.py", "docs/reference/next-change/ACP_Services_Identity_Support_Scope.md"]},
         {"id": "L3-10", "item": "production release / static cache / old-tab window", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "no release performed; todo 76 is gated on F1-F4 approval; no service restart", "evidence": ["tests/baseline/services-evidence/packaging_rollout_receipts.md"]}
       ]
     }
   },
   "environment_gates": {
-    "browser": {"channel": "A05", "status": "NOT_VERIFIED", "reason": "A05 browser matrix bound to its own commit (5518aa6 / c579c66); no candidate-level black-box suite delivered; B never gains A source write access", "evidence": [".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md"]},
+    "browser": {"channel": "A05", "status": "NOT_VERIFIED", "reason": "A05 browser matrix bound to its own commit (899c7c0 / 29efba8); no candidate-level black-box suite delivered; B never gains A source write access", "evidence": [".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md"]},
     "scientific_software": {"channel": "C10", "status": "NOT_VERIFIED", "reason": "real QC binaries unavailable/not executed on this candidate; C10 judgement absent", "evidence": ["tests/baseline/cccp-evidence/c10-final-evidence-index.md"]},
     "lsf": {"channel": "C10", "status": "NOT_VERIFIED", "reason": "no lsf.conf and no node credentials; live cluster enforcement not exercised", "evidence": ["tests/baseline/services-evidence/isolation_matrix.md"]},
     "production": {"channel": "B", "status": "NOT_VERIFIED", "reason": "release is todo 76, gated on F1-F4 approval; nothing was published or restarted", "evidence": ["tests/baseline/services-evidence/packaging_rollout_receipts.md"]}
@@ -392,7 +392,7 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
   ],
   "deferrals": [
     {"item": "A04 refresh protocol", "status": "DEFERRED", "old_functionality_kept": "per-task SSE and polling retained; no fabricated cursors", "owner": "A04-lane (A frontend + B Services events)", "blocker": "A04 refresh protocol is DEFERRED; frontend eventCursor:false; no real persistent event protocol/cursor", "entry_condition": "real service protocol and persistent facts; deliver Client cursor/reset/reconnect and refresh switching independently", "next_gate": "L2-16 real service protocol cursor/reset/reconnect; old service and terminal refresh preserved"},
-    {"item": "Lab identity HTTP/UI (todo 73)", "status": "NOT_VERIFIED", "old_functionality_kept": "local-single path unchanged", "owner": "B - Runtime/Workspace (L3-09)", "blocker": "identity components delivered (ca55bdb) but not wired into HTTP/UI; OIDC_SUPPORTED=False", "entry_condition": "after local-single, wire identity into HTTP/UI per deployment profile", "next_gate": "L3-09 Lab account/session UI on real HTTP/UI; cross-user/revocation checks"},
+    {"item": "Lab identity HTTP/UI (todo 73)", "status": "NOT_VERIFIED", "old_functionality_kept": "local-single path unchanged", "owner": "B - Runtime/Workspace (L3-09)", "blocker": "identity components delivered (014234c) but not wired into HTTP/UI; OIDC_SUPPORTED=False", "entry_condition": "after local-single, wire identity into HTTP/UI per deployment profile", "next_gate": "L3-09 Lab account/session UI on real HTTP/UI; cross-user/revocation checks"},
     {"item": "admission/quota pre-dispatch wiring", "status": "NOT_VERIFIED", "old_functionality_kept": "legacy JobManager dispatch retained", "owner": "B - Runtime/Workspace (L2-12)", "blocker": "AdmissionController/Admin/Usage/Quota have zero consumers in src/acp; not wired to submit/dispatch", "entry_condition": "after local-single, wire admission/quota into submit and dispatch preconditions", "next_gate": "L2-12 cross-user deny/revoke/duplicate-request/quota-race/isolation"},
     {"item": "archive export/import CLI-API binding", "status": "NOT_VERIFIED", "old_functionality_kept": "existing archive read path unchanged", "owner": "B - Data archive/import (L2-13)", "blocker": "Data-side archive/import builders exist but no CLI/HTTP consumer; command/permission/integrity semantics unbound", "entry_condition": "after M1 stable, deliver as M2 with explicit command/permission/receipt/integrity/idempotent import", "next_gate": "L2-13 local export -> new-environment import -> read/evidence complete; import does not auto-run tasks"},
     {"item": "MCP default-entry binding", "status": "NOT_VERIFIED", "old_functionality_kept": "acp run and acp task unaffected", "owner": "B - Services entrypoints (L2-14)", "blocker": "protocol implementation and tests delivered, but no src/acp default entry consumer and no real-client interop", "entry_condition": "Runtime/Data/Workspace use cases stable and an explicit default entry defined", "next_gate": "L2-14 at least one real client; identity/failure/cancel/idempotency parity with GUI/CLI"},
@@ -402,7 +402,7 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
     {"item": "metering production wiring", "status": "NOT_VERIFIED", "old_functionality_kept": "existing runtime completion/read path unchanged; no usage fact required for job completion", "owner": "B - Runtime metering (L2-15)", "blocker": "metering_decoupling module and 26 tests delivered but zero consumers on Runtime completion/recovery/read paths", "entry_condition": "wire the delivered decoupling module into real Runtime completion/recovery/read paths and record usage facts separately", "next_gate": "L2-15 duplicate/out-of-order receipts do not double-meter; metering failure never changes science completion or result readability; pricing is a separate gate"}
   ],
   "findings": [
-    {"id": "F-3", "status": "RESOLVED", "owner": "todo 80 F-wave remediation A (worker-boundary guard scope)", "summary": "runtime package sqlite3/DB guard is green at d9dcb25 (guard scoped to the worker boundary, negative injections retained); the original FAIL is retained as a superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md"]},
+    {"id": "F-3", "status": "RESOLVED", "owner": "todo 80 F-wave remediation A (worker-boundary guard scope)", "summary": "runtime package sqlite3/DB guard is green at 3922f07 (guard scoped to the worker boundary, negative injections retained); the original FAIL is retained as a superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md"]},
     {"id": "F-1", "status": "RECORDED", "owner": "Data transfer", "summary": "ENOSPC surfaces as OSError instead of a typed rejection; safety holds (no partial publish, no tmp residue)", "evidence": ["tests/baseline/services-evidence/fault_matrix_report.md"]},
     {"id": "F-2", "status": "RECORDED", "owner": "store migrations", "summary": "migration ledger is forward-only; contracted DB must be recovered from backup, not by re-running migrations", "evidence": ["tests/baseline/services-evidence/fault_matrix_report.md"]}
   ],

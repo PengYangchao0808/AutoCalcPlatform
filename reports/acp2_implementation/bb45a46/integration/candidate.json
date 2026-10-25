@@ -13,7 +13,7 @@
   "source_heads_observed_after_freeze": {
     "a_head": "8f4d9b98a584575cf74c0ff1ba7eb693468f288b",
     "c_head": "6905477c51c34fa1f8d53421553805ecbf88d897",
-    "note": "Observed while the re-freeze ran, after the merges. The candidate deliberately keeps the recorded changesets a=1cfb197 and c=052962e; these later heads are not part of the candidate and no evidence was assembled from them."
+    "note": "Observed while the re-freeze ran, after the merges. The candidate deliberately keeps the recorded changesets a=aa5e193 and c=49ddfad; these later heads are not part of the candidate and no evidence was assembled from them."
   },
   "candidate_parents": [
     "bd94a7b54c278040af284ee76d7657fcaedb71fe",
@@ -57,13 +57,13 @@
         "tests/fixtures/acp2/science/cross_domain/",
         "tests/test_acp2_science_nmr_binding.py"
       ],
-      "note": "Only the committed A head 1cfb197 is part of the candidate. The A session was still running during the re-freeze."
+      "note": "Only the committed A head aa5e193 is part of the candidate. The A session was still running during the re-freeze."
     },
     "c_owned_frontend_defect": {
       "status": "OPEN",
       "path": "frontend/js/workbench/features/scientific-evidence.js",
       "test": "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
-      "detail": "A local callback variable named `token` is called as `token.fn()`, which the addModel restricted-token guard flags. C 052962e modified this file as C-owned content but did not remove the token.fn() call. B did not edit frontend/**.",
+      "detail": "A local callback variable named `token` is called as `token.fn()`, which the addModel restricted-token guard flags. C 49ddfad modified this file as C-owned content but did not remove the token.fn() call. B did not edit frontend/**.",
       "request": "C must fix scientific-evidence.js; recorded in runtime/cross-track-requests.v1.json (added by B-fix-35)."
     },
     "c_owned_harness_order_dependence": {
@@ -131,7 +131,7 @@
   "harness_revision": "sha256:9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
   "harness_source_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "loaded_paths": "reports/acp2_implementation/bb45a46/B/B14/loaded-paths-refreeze.json",
-  "revision_note": "Explicit combination: the Controller and served frontend load from the integration worktree (server_revision=client_revision=candidate_sha), the harness identity is its own script sha256 with harness_source_revision=candidate_sha, and /api/health reports candidate_revision=10eb71e... because the B02 acceptance-env overrides the frozen baseline-lock code_candidate_revision=ab492cc.... The four-location version/contract-lock bump is B25a's, so B14a records the mismatch instead of rewriting it.",
+  "revision_note": "Explicit combination: the Controller and served frontend load from the integration worktree (server_revision=client_revision=candidate_sha), the harness identity is its own script sha256 with harness_source_revision=candidate_sha, and /api/health reports candidate_revision=10eb71e... because the B02 acceptance-env overrides the frozen baseline-lock code_candidate_revision=bb30913.... The four-location version/contract-lock bump is B25a's, so B14a records the mismatch instead of rewriting it.",
   "shared_file_requests": {
     "four_versions": {
       "bump_performed": false,

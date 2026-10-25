@@ -422,7 +422,7 @@
   "contract_set_frozen": true,
   "contract_set_version": 1,
   "contract_version_basis": {
-    "handoff_h4_sha256": "96ffbdba096ba81b570509153bde1c2dc99a620bef5e993f14ea49a2d1eb536d",
+    "handoff_h4_sha256": "652d521164369d3a22dbef04d6597f5fd47cc78337713462a2cefc316b3adf73",
     "handoff_h4_version": 1,
     "rule": "H5 consumes the exact H4 bytes for the science contract baseline and adds only the plugin-ecosystem gate; no H4 row is rewritten or upgraded."
   },
@@ -529,7 +529,7 @@
   },
   "source": {
     "branch": "acp2/a-science",
-    "pre_delivery_commit": "436be8e",
+    "pre_delivery_commit": "da75e29",
     "python": "/opt/acp2-dev/envs/a-python/bin/python",
     "worktree": "/opt/acp2-dev/A"
   },

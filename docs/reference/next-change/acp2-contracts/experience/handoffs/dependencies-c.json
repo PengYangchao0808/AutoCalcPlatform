@@ -9,8 +9,8 @@
   "source_plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
   "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
   "candidate_revision": "68653bbcb3f613231c9c800521d88184eeb41a66",
-  "b00_commit": "ac43c16",
-  "b02a_commit": "0dee16f",
+  "b00_commit": "31e60cb",
+  "b02a_commit": "15767b9",
   "readiness_vocabulary": [
     "contract_ready",
     "implementation_ready",
@@ -21,7 +21,7 @@
     "planned",
     "blocked"
   ],
-  "readiness_ladder": "B00 baseline-lock/manifest are promoted to verified on the committed B00 blobs (commit ac43c16). B02a environment rows are promoted to integration_ready on the B02a env and role-interpreter evidence (commit 0dee16f; Chromium launch excluded). No row is promoted without producer evidence.",
+  "readiness_ladder": "B00 baseline-lock/manifest are promoted to verified on the committed B00 blobs (commit 31e60cb). B02a environment rows are promoted to integration_ready on the B02a env and role-interpreter evidence (commit 15767b9; Chromium launch excluded). No row is promoted without producer evidence.",
   "not_verified": [
     "NOT_VERIFIED(harness_not_delivered): scripts/acceptance/acp2_experience.py is C T-06/T-07 scope and is absent at adoption time",
     "NOT_VERIFIED(chromium_not_installed): Chromium install/launch is C T-08 scope; B02a only verified the browser venv can import playwright"
@@ -51,7 +51,7 @@
       "readiness_ladder": "producer_evidence_verified",
       "delivery_status": "planned",
       "delivered": true,
-      "commit": "ac43c16",
+      "commit": "31e60cb",
       "sha256": "fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
       "evidence": "reports/acp2_implementation/bb45a46/B/B00/baseline-lock.json",
       "requires": [
@@ -81,7 +81,7 @@
       "readiness_ladder": "producer_evidence_verified",
       "delivery_status": "planned",
       "delivered": true,
-      "commit": "ac43c16",
+      "commit": "31e60cb",
       "sha256": "b83919a71f55c4131b4daa7e82b13369863aa495e951665178f9be63c1b78769",
       "evidence": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
       "requires": [
@@ -106,7 +106,7 @@
       "readiness_ladder": "producer_evidence_verified",
       "delivery_status": "planned",
       "delivered": true,
-      "commit": "0dee16f",
+      "commit": "15767b9",
       "sha256": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7",
       "evidence": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
       "requires": [
@@ -133,7 +133,7 @@
       "readiness_ladder": "producer_evidence_verified",
       "delivery_status": "planned",
       "delivered": true,
-      "commit": "0dee16f",
+      "commit": "15767b9",
       "sha256": "f5cc67f7203bf1cc675757be01ded7fa3837ab90d3a0c92a41e6f2b49ffca940",
       "evidence": "reports/acp2_implementation/bb45a46/B/B02/role-interpreters.json",
       "requires": [
@@ -168,7 +168,7 @@
       "readiness_ladder": "producer_evidence_verified",
       "delivery_status": "planned",
       "delivered": true,
-      "commit": "0dee16f",
+      "commit": "15767b9",
       "sha256": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7",
       "evidence": "reports/acp2_implementation/bb45a46/B/B02/browser-env.json",
       "requires": [

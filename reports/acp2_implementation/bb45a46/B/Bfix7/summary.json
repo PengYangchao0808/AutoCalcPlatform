@@ -22,7 +22,7 @@
     "H6 and H7 remain OPEN.",
     "No production deployment, production restart, LSF, DSH or real DA claim.",
     "The B24 raw S0 FAIL is preserved; the B24b run log and H6 receipt use FAIL with NOT_APPLICABLE scope.",
-    "The B24b migration evidence remains at f32c670 and is not re-attributed to the new candidate.",
+    "The B24b migration evidence remains at 31dc79a and is not re-attributed to the new candidate.",
     "Integration receipts h0-h7 keep their historical candidate revision; only live artifact digests for the changed h6 evidence were refreshed so validate_summary resolves, and the documented evidence_revision was recomputed."
   ],
   "plan_rows": {

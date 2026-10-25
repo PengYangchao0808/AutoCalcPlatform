@@ -1798,7 +1798,7 @@ Antigravity 提交行数分布、原符号→新文件/依赖地图、测试迁�
 ### 45.3 护栏与验证（真实执行）
 
 - 模块：`python3.11 -m pytest tests/test_services_*.py -q` → **1348 passed, 1 failed**；唯一失败 `F-3`（`tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access`，DB-backed runtime 模块导入 `sqlite3`）**如实保留，未放宽/删除护栏**。
-- 共享护栏：架构/隔离/frames/markers/发布/执行完整性/恢复 **127 passed**；F4 `35 passed`（`cadf5b6` amendment，等效门加强）。
+- 共享护栏：架构/隔离/frames/markers/发布/执行完整性/恢复 **127 passed**；F4 `35 passed`（`99b5ee2` amendment，等效门加强）。
 - 文档一致性：本记录新增 `tests/test_services_doc_sync.py`（路径/符号存在、ledger 6 列与状态、closure 三态不矛盾、shim 清单、recipe/closure 未被注入）。
 - **三分层状态**：L1 模块验证除 F-3 外 PASS；L2 后端入口 10 项 PASS；L3 本地闭环/恢复/备份为 `in_repo` PASS（FakeBackend，不声明真实科学）。浏览器（A05）、真实科学软件（C10）、LSF（C10/B）、生产（B）、科学等价（C10）**逐项 `NOT_VERIFIED`**。
 

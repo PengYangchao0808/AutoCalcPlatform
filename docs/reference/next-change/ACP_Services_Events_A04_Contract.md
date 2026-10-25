@@ -1,6 +1,6 @@
 # ACP Services Event Stream — A04 Consumption Contract
 
-日期：2026-10-18 · 基线 HEAD：`fd005b0` · 所有者：B lane（todo 24 / B04-3）
+日期：2026-10-18 · 基线 HEAD：`650c782` · 所有者：B lane（todo 24 / B04-3）
 实现驻点：`src/acp_services/runtime/events.py`（授权复用流 + 覆盖矩阵）；HTTP 表面 `src/acp/api/routes.py::stream_scope_events`（`GET /api/events/stream`）；守护测试 `tests/test_services_events_authz.py`。
 
 本文件是给 **A04 刷新策略**（并行计划一消费方）的冻结消费契约：它声明事件覆盖范围、样例序列、快照重置语义，并记录与 A 侧现行取样的对齐/差异。**是否触发轮询降级由 A 侧决定**；本契约不命令消费方停轮询。

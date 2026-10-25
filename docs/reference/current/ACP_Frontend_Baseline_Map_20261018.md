@@ -214,9 +214,9 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 | `nmrPanelState.viewers`（nmr.js:332-341，上限 8） | **已迁移·单实现** | 保持（T15） | T12 完成；per-candidate dispose；`selectedAtoms` 等效 |
 | vibration_viewer 动画帧/箭头 + `_viewerImpl` seam | **已迁移·单实现** | 保持（T15） | T13 完成；单 interval 断言；播放/隐藏走实例 |
 | structure_viewer `_canvasViewer`/`_mainViewerImpl`/IRC 播放/overlay + structure_editor 桥 | **已迁移·单实现** | 保持（T15） | T14 完成；overlay 经 token；编辑推送不回归 |
-| `s2scanState.viewer/resultViewer`（scan-s2.js:16-17/65-66） | **已清理（T25 `b7f95de` REMOVED-1，2026-10-19 复核 0 命中）** | 关闭 | 死字段删除；pin 改 post-cleanup 极性（字段/守卫清场不得复现）；活体 `s2scanDist/Angle/Dihedral/s2scanResetState` 保留 |
+| `s2scanState.viewer/resultViewer`（scan-s2.js:16-17/65-66） | **已清理（T25 `6376137` REMOVED-1，2026-10-19 复核 0 命中）** | 关闭 | 死字段删除；pin 改 post-cleanup 极性（字段/守卫清场不得复现）；活体 `s2scanDist/Angle/Dihedral/s2scanResetState` 保留 |
 | `$3Dmol` 注释级出现（energy_chart_renderer.js:11 / candidate_review_controller.js:19，GAP-2-a/b） | **已迁移·单实现（可执行面单驻点，T27 已复核）** | 关闭 | T15 pin `test_dollar3dmol_single_station_pin` 落地（容许注释级）；T27 验证 PASS |
-| 生命周期矩阵（复挂载/A→B→A/隐藏/销毁迟到回调/多实例/PNG/降级）+ pin | **已建（T15 `10afe61`）** | 关闭 | `scene_lifecycle_matrix.test.js`（8 行）+ 场景扩展；pin：`$3Dmol` 单驻点、`addModel(` 受限 token；red-ability 已证 |
+| 生命周期矩阵（复挂载/A→B→A/隐藏/销毁迟到回调/多实例/PNG/降级）+ pin | **已建（T15 `4d7d371`）** | 关闭 | `scene_lifecycle_matrix.test.js`（8 行）+ 场景扩展；pin：`$3Dmol` 单驻点、`addModel(` 受限 token；red-ability 已证 |
 | FE-09 六创建入口单 adapter | **已迁移·单实现（T27 复核 PASS：features/*.js 创建点 = 0；全部经 `scene_instance.js`→adapter；唯一 raw 驻点 mol3d_adapter.js:34）** | 关闭 | T8/T10/T11/T12 收敛完成；不新建 adapter |
 | `framePlayTimer`（reaction-builder.js:2045/2369 区） | **已迁移**（动画归实例 interval） | 关闭 | T8/T11 收敛；`stopFramePlayback` 调用点已适配 |
 | structure_viewer IRC `_ircSetInterval`:1252 | **已迁移**（经实例 `play/pausePlayback`） | 关闭 | T13/T14 收敛；清理点 9 处（T2 §⑤） |
@@ -226,14 +226,14 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 | 符号/文件 | 现状（终态） | 交付 | 备注 |
 |---|---|---|---|
 | `js/workbench/features/wizard.js`（原 8304 行整体） | **已迁移·单实现**（四片外置 + 保留壳，HTML:1255 装载） | T16 冻结（零提交）+ T17–T20 提取 + T21 跨片验证 | 串行链 T16→T17→T18→T10→T19→T20 已走完 |
-| 上传/解析片 → `wizard/upload-parse.js`（HTML:1251） | **已迁移·单实现** | **T17 `345ab67`** | FormData/`timeoutMs:0`/错误文本保持（T21 pin） |
-| 预览/校验片 → `wizard/preview-validate.js`（HTML:1252） | **已迁移·单实现** | **T18 `5408146`** | `js/task_input_workspace.js:115,200` 消费 pin 保持 |
-| 草稿/表单片 → `wizard/draft-form.js`（HTML:1253） | **已迁移·单实现** | **T19 `b5196a3`** | `batch_role_defaults.js` 消费保持；显式 0/false/null（T21 pin）；catalog cache 终 owner（下行） |
-| 提交/编辑重算片 → `wizard/submit-edit.js`（HTML:1254） | **已迁移·单实现** | **T20 `94ccfff`** | 编辑 POST `/jobs` 拦截（compat/api.js:14-18）、409/422 保持（T21 pin + T32 A6/A8 真实测） |
+| 上传/解析片 → `wizard/upload-parse.js`（HTML:1251） | **已迁移·单实现** | **T17 `e564c30`** | FormData/`timeoutMs:0`/错误文本保持（T21 pin） |
+| 预览/校验片 → `wizard/preview-validate.js`（HTML:1252） | **已迁移·单实现** | **T18 `ec3779b`** | `js/task_input_workspace.js:115,200` 消费 pin 保持 |
+| 草稿/表单片 → `wizard/draft-form.js`（HTML:1253） | **已迁移·单实现** | **T19 `7ce58a6`** | `batch_role_defaults.js` 消费保持；显式 0/false/null（T21 pin）；catalog cache 终 owner（下行） |
+| 提交/编辑重算片 → `wizard/submit-edit.js`（HTML:1254） | **已迁移·单实现** | **T20 `a35ccfd`** | 编辑 POST `/jobs` 拦截（compat/api.js:14-18）、409/422 保持（T21 pin + T32 A6/A8 真实测） |
 | `js/job_editor.js`（编辑重算链） | **已迁移·单实现**（链接口归片，文件保留页根） | **T20**（T10 迁 1912-1914 用法） | ACPJobEditor IIFE 保持 |
-| `loadNodes/loadBackends/backendsCache/softwareDiscoveryCache` 及 nodes 匹配 | **已迁移·单实现**（`js/client/system-endpoints.js` + `controllers/system_resources_controller.js`，HTML:1231/1236 装载；reaction-builder :1345/:1813 仅薄委托） | **T22 `ebfc772`** | bootstrap.js:225-226、compat/api.js、job-detail.js 调用者同迁；`/nodes` 503 错误保持（T32-B1 + T30） |
-| `workflowCatalogCache/methodCatalogCache`（F-④-1：原声明 reaction-builder:2365-2366、写入 wizard） | **已裁定终 owner：`wizard/draft-form.js:59-60` 唯一声明 + 唯一写者**（`Object.defineProperty` live global view 供 job_editor/reaction-builder/bootstrap 只读） | **T22 `ebfc772`** | 2026-10-19 审计 grep 复核：无第二写者 |
-| taskSession 会话核对（files/logs/候选/结果身份、revision、dirty/锁定、迟到） | **缺口已补**（`task_session_identity.test.js` 4 项 + `files_session` +2） | **T23 `783435a`** | 只补缺口，未重写第二份 controller |
+| `loadNodes/loadBackends/backendsCache/softwareDiscoveryCache` 及 nodes 匹配 | **已迁移·单实现**（`js/client/system-endpoints.js` + `controllers/system_resources_controller.js`，HTML:1231/1236 装载；reaction-builder :1345/:1813 仅薄委托） | **T22 `3f2b031`** | bootstrap.js:225-226、compat/api.js、job-detail.js 调用者同迁；`/nodes` 503 错误保持（T32-B1 + T30） |
+| `workflowCatalogCache/methodCatalogCache`（F-④-1：原声明 reaction-builder:2365-2366、写入 wizard） | **已裁定终 owner：`wizard/draft-form.js:59-60` 唯一声明 + 唯一写者**（`Object.defineProperty` live global view 供 job_editor/reaction-builder/bootstrap 只读） | **T22 `3f2b031`** | 2026-10-19 审计 grep 复核：无第二写者 |
+| taskSession 会话核对（files/logs/候选/结果身份、revision、dirty/锁定、迟到） | **缺口已补**（`task_session_identity.test.js` 4 项 + `files_session` +2） | **T23 `c3375ba`** | 只补缺口，未重写第二份 controller |
 | `js/candidate_details.js`/`candidate_review_controller.js` 候选面 | 已迁移·单实现 | 保持（T23 复核） | IIFE 导出，无 init |
 | `js/structure_source_picker.js`（含 :96 直连 `/api/v2`） | 未迁移（页根遗留） | 保持（迁移范围外；直连点登记） | ACPSourcePicker 唯一入口 |
 
@@ -241,11 +241,11 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 
 | 符号/文件 | 现状（终态） | 交付 | 备注 |
 |---|---|---|---|
-| `js/visualization/energy_chart_renderer.js` 22 窄委托 + 其他二维视图 | **已复核·纯度 PASS**（renderer 不联网/不读全局任务；修复 `3503d4e`） | **T24 `3503d4e`** | NMR 2D 谱图 N/A→REGISTERED、FE-08 inspector markup 留页为设计内例外（登记 T24 §1.8） |
+| `js/visualization/energy_chart_renderer.js` 22 窄委托 + 其他二维视图 | **已复核·纯度 PASS**（renderer 不联网/不读全局任务；修复 `ee0d849`） | **T24 `ee0d849`** | NMR 2D 谱图 N/A→REGISTERED、FE-08 inspector markup 留页为设计内例外（登记 T24 §1.8） |
 | `apiV2Remote`（compat/api.js:80，0 产品调用点，F-④-2） | **未删除——登记开放项**（T25 范围为 FE-04/05 五项，未含此候选；2026-10-19 审计 grep：仅 module_tests 注释提及，无产品调用者） | **开放**（后续清理切片） | 删除前零调用者 grep 面=frontend/**+HTML+module_tests+tests+/legacy/；见验收记录 §8-OPEN-3 |
-| FE-04 scan-s2 残留闭包 + S2 样式 | **已关闭**（死 viewer 字段 REMOVED-1；旧 S2 模态/闭包零残留，2026-10-19 审计 0 命中） | **T25 `b7f95de`** | `s2scanDist/Angle/Dihedral` 现用调用者保留；pin 改 post-cleanup 极性 |
-| FE-05 退役机理写交互/空钩子（reaction-builder/energy） | **已关闭**（5 项 REMOVED：updateSrPickButtons/allowZeroChanges/buildManualBondChangesPayload/mech-* 提交链等；历史机理只读与 410 保持） | **T25 `b7f95de`** | 删除前逐项零调用者 grep 取证（task-25 §1） |
-| FE-11 CSS 候选（6 个 workbench CSS） | **已归并**（安全重复收敛；computed style + 1280 截图等价，评审 A6） | **T26 `6421ffe`** | 非选择器文本比较 |
+| FE-04 scan-s2 残留闭包 + S2 样式 | **已关闭**（死 viewer 字段 REMOVED-1；旧 S2 模态/闭包零残留，2026-10-19 审计 0 命中） | **T25 `6376137`** | `s2scanDist/Angle/Dihedral` 现用调用者保留；pin 改 post-cleanup 极性 |
+| FE-05 退役机理写交互/空钩子（reaction-builder/energy） | **已关闭**（5 项 REMOVED：updateSrPickButtons/allowZeroChanges/buildManualBondChangesPayload/mech-* 提交链等；历史机理只读与 410 保持） | **T25 `6376137`** | 删除前逐项零调用者 grep 取证（task-25 §1） |
+| FE-11 CSS 候选（6 个 workbench CSS） | **已归并**（安全重复收敛；computed style + 1280 截图等价，评审 A6） | **T26 `233b096`** | 非选择器文本比较 |
 | FE-10 二面角双实现差异（scan-s2.js:89-102 vs geometry_store.js:326） | **已核验·黄金样例保持**（fe10_dihedral_golden 9 项 T30 不变；差异说明落档） | **T28**（验证型，零提交） | 统一需 C02/C07 确认科学约定；不当等价去重 |
 | `js/geometry_store.js` | 页根遗留（单命名空间） | 保持（FE-10 黄金样例锚点） | 差异方 |
 | `js/tsmode_editor.js` | 页根遗留 | 保持 | 无迁移 todo；tsmode 创建后 selectJob 调用点已登记 |
@@ -303,7 +303,7 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 
 ## 7. §43/"42.7" 校正补丁（可应用格式；**已交付 DELIVERED——交付≠应用**）
 
-> **T34 状态记录（2026-10-19）**：本补丁 = **DELIVERED**（随 T6 `f07b2a1` 入库）；主方案文档**仍未编辑**（架构规划工作，本路禁改）。注意 C3 前提已随后续切片变化：`scene_instance.js` 已于 T8 装载默认页（HTML:1239），主方案维护者应用时须将「尚未装载默认页」表述更新为当前事实。交付事实与证据链见验收记录 §5。
+> **T34 状态记录（2026-10-19）**：本补丁 = **DELIVERED**（随 T6 `db0fcc8` 入库）；主方案文档**仍未编辑**（架构规划工作，本路禁改）。注意 C3 前提已随后续切片变化：`scene_instance.js` 已于 T8 装载默认页（HTML:1239），主方案维护者应用时须将「尚未装载默认页」表述更新为当前事实。交付事实与证据链见验收记录 §5。
 
 **对象**：`docs/ACP_Architecture_Adjustment_Plan_20261016.md` §43（行 1717 起）与 §42.7（行 1721 起）；§44（行 1756 起）已含正确核查结论，本补丁不重复改写 §44。**本节为交付文本，主方案维护者自行应用；本轮不编辑主方案文档**（该文件有未提交改动，属架构规划工作）。
 
@@ -342,24 +342,24 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 | A00-2 §43/42.7 校正 | T3、T6 | ✅ 已交付（T3 §5 + 本文档 §7 补丁 **DELIVERED**） |
 | A00-3 H/R1–R4 复验 + F0/S0 固定 | T1、T3、T4 | ✅ 已交付（本文档 §2/§3） |
 | A00-4 请求/并发/占用测量 | T5 | ✅ 已交付（本文档 §4；N1/N2 NOT_VERIFIED 显式） |
-| A01-1 scene_instance 审计扩展 | T7 | ✅ 已交付（`7327259`；HTML:1239 T8 装载） |
-| A01-2 opts.viewer/addModel 边界 | T7 | ✅ 已交付（`7327259`；TEST-ONLY seam + token 白名单 pin） |
+| A01-1 scene_instance 审计扩展 | T7 | ✅ 已交付（`24ffca5`；HTML:1239 T8 装载） |
+| A01-2 opts.viewer/addModel 边界 | T7 | ✅ 已交付（`24ffca5`；TEST-ONLY seam + token 白名单 pin） |
 | A01-3 逐场景迁移 | T8–T14 | ✅ 已交付（7 个切片提交；§5.1 终态） |
 | A01-4 身份/framing/多实例/PNG/降级 | T8–T15 | ✅ 已交付（T15 矩阵 + pin；T31 S7/S8/S9 浏览器复证） |
-| A01-5 生命周期验证 | T15 | ✅ 已交付（`10afe61`；red-ability 已证） |
+| A01-5 生命周期验证 | T15 | ✅ 已交付（`4d7d371`；red-ability 已证） |
 | A02-1 四片提取 | T16–T20 | ✅ 已交付（T16 冻结 + 4 提交 + T21 pin） |
-| A02-2 defaults/校验/保留行为 | T19、T21 | ✅ 已交付（`b5196a3` + `5dfa994`） |
-| A02-3 loadNodes/loadBackends 归位 | T22 | ✅ 已交付（`ebfc772`；F-④-1 终 owner） |
-| A02-4 taskSession 核对 | T23 | ✅ 已交付（`783435a`） |
-| A03-1 能量 22 委托复核 | T24 | ✅ 已交付（`3503d4e`；纯度 PASS） |
-| A03-2 FE-04/05/11 闭包 | T25、T26 | ✅ 已交付（`b7f95de` 5 项 REMOVED / `6421ffe` 归并等价） |
+| A02-2 defaults/校验/保留行为 | T19、T21 | ✅ 已交付（`7ce58a6` + `ea5dd26`） |
+| A02-3 loadNodes/loadBackends 归位 | T22 | ✅ 已交付（`3f2b031`；F-④-1 终 owner） |
+| A02-4 taskSession 核对 | T23 | ✅ 已交付（`c3375ba`） |
+| A03-1 能量 22 委托复核 | T24 | ✅ 已交付（`ee0d849`；纯度 PASS） |
+| A03-2 FE-04/05/11 闭包 | T25、T26 | ✅ 已交付（`6376137` 5 项 REMOVED / `233b096` 归并等价） |
 | A03-3 FE-09 | T27 | ✅ 已验证（零提交验证型 PASS） |
 | A03-4 FE-10 | T28 | ✅ 已验证（黄金样例保持，零提交验证型） |
-| A03-5 测试拆分 | T29 | ✅ 已交付（`5518aa6`；525 passed 等效） |
+| A03-5 测试拆分 | T29 | ✅ 已交付（`899c7c0`；525 passed 等效） |
 | A05-1 Node/pytest 回归 | T30 | ✅ 已交付（306/525/303/202/80 全绿） |
 | A05-2 走查矩阵 | T31 | ✅ 已交付（13+2 全 PASS + 独立复验） |
 | A05-3 故障/真实标记 | T32 | ✅ 已交付（表 A/B/C；表 C 全 NOT_VERIFIED） |
-| A05-4 发布包 | T33 | ✅ 已交付（`e0acc29` + 发布包文档） |
+| A05-4 发布包 | T33 | ✅ 已交付（`3cfd439` + 发布包文档） |
 | A05-5 状态分列/收尾关闭 | T34 | ✅ 已交付（验收记录 2026-10-19 + 本接管表终态 + Plan_1 勾选） |
 
 计数核对：A00×4 + A01×5 + A02×4 + A03×5 + A05×5 = **23** 行，无缺漏。A04（6 条）/A06（4 条）= **DEFERRED / 未接入**（评审 P1-2，不关闭；入场门见 §6）。**A05 退出门保持 OPEN**（T31 §8；终验波 F1–F4 待执行）。

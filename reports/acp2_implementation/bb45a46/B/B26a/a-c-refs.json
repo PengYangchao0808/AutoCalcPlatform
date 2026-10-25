@@ -11,7 +11,7 @@
       "raw_facts": {
         "acceptance_focus_exit_code": 0,
         "acceptance_focus_result": "20 passed in 4.21s",
-        "base_commit": "1a1b595",
+        "base_commit": "59eec88",
         "branch": "acp2/a-science",
         "science_suite_exit_code": 0,
         "science_suite_result": "617 passed in 22.75s"

@@ -23,7 +23,7 @@ Digests observed when this document was written:
 | Artifact | SHA-256 |
 | --- | --- |
 | `acceptance-result.schema.json` | `9c14f1f50bbbba5733a493b8d018e15d6ee137d49c29b3a9121fda1f6a9108ea` |
-| `acp2_runtime.py` at main `HEAD` (`21610bc`) | `7a344c0a9bce5adfb8a34e0d829f1c3995029a7f8ad4313842d9895215b051f2` |
+| `acp2_runtime.py` at main `HEAD` (`46d5fe3`) | `7a344c0a9bce5adfb8a34e0d829f1c3995029a7f8ad4313842d9895215b051f2` |
 | `acp2_runtime.py` in the working tree during T-06 verification | `906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e` |
 
 The authoritative digest for any single run is **not** this table: the harness

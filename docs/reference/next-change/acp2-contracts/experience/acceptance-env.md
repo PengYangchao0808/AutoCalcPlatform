@@ -7,8 +7,8 @@ This document is the human-readable companion to that file and to
 `dsh-compatibility.json` in this directory.
 
 > This is **C acceptance**, not a re-signing of B acceptance. B00's committed
-> `runtime/baseline-lock.json` / `manifest.json` (commit `ac43c16`) and B02a's
-> environment (commit `0dee16f`) are adopted by digest. See
+> `runtime/baseline-lock.json` / `manifest.json` (commit `31e60cb`) and B02a's
+> environment (commit `15767b9`) are adopted by digest. See
 > "Evidence-root resolution" below.
 
 ## 1. Installed toolchain (isolated, no system replacement)
@@ -78,7 +78,7 @@ PLAYWRIGHT_BROWSERS_PATH $ACP2_TOOLS/playwright-browsers
 T-04 Node/pnpm/DSH/browser toolchain. The roots are not unified; the three role
 interpreters still point into B02a's venv root.
 
-Role interpreters are B02a handoff (commit `0dee16f`, readiness
+Role interpreters are B02a handoff (commit `15767b9`, readiness
 `integration_ready`): B02a's `role-interpreters.json` declares these exact paths
 and asserts every module resolves inside the matching source
 (`venvs/c` → `$ACP2_C_SOURCE`, `venvs/integration` → `$ACP2_INTEGRATION_SOURCE`,
@@ -244,10 +244,10 @@ Smoke evidence: `dsh_acceptance headless --help` exits 0 (21 stdout lines);
 
 ## 9. Not verified / open
 
-* B00 handoff adopted (commit `ac43c16`): `baseline-lock.json`,
+* B00 handoff adopted (commit `31e60cb`): `baseline-lock.json`,
   `manifest.json` and the absolute evidence root are verified; no stale B00
   handoff gate remains.
-* B02a environment adopted (commit `0dee16f`): tools root, data root, role
+* B02a environment adopted (commit `15767b9`): tools root, data root, role
   interpreters and browser venv are `integration_ready`. `ACP2_TOOLS`
   intentionally diverges from B02a's venv root (section 2).
 * `NOT_VERIFIED(harness_not_delivered)` — `scripts/acceptance/acp2_experience.py`

@@ -1,4 +1,4 @@
-"""Acceptance probes for 878e355; failures express the required behavior.
+"""Acceptance probes for d5d85e7; failures express the required behavior.
 
 Run from the repository root:
     python3.11 -m pytest reports/architecture_acceptance_20261019/reproduce_defects.py -q

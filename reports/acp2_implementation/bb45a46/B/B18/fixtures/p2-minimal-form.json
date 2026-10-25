@@ -1,7 +1,7 @@
 {
   "schema": "acp2.experience.p2-minimal-form.v1",
   "source": "C/frontend/js/workbench/features/science-question.js",
-  "source_commit": "39d4aeb",
+  "source_commit": "6905477",
   "source_note": "C T-17 model-free manual research form values; not the T-38 dynamic schema form (H5).",
   "form": {
     "question_id": "single_point_energy",

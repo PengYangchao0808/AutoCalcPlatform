@@ -500,7 +500,7 @@
           "kind": "post_freeze_worktree_edit"
         }
       ],
-      "handling": "Do not commit these files as baseline; B02 applies runtime/final-debug-patch to a clean 096cdff worktree."
+      "handling": "Do not commit these files as baseline; B02 applies runtime/final-debug-patch to a clean 3670790 worktree."
     },
     {
       "id": "D-B00-02",

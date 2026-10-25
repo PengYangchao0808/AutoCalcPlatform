@@ -10,7 +10,7 @@ are absent, H4/H6 remain open, and the external reproduction is not independent.
 | Release source candidate | `5e2898acc386335ee1cb11ac9170650bb23d501d` (tree `e2b23771a47e7553738ef902cc4c1b62528fe508`) |
 | Release directory | `B/B25/release-fix5` (manifest sha256 `380b4915…`) |
 | Landed code-fix HEAD | `c134109c696e9bcb941e176bf681d45a569370b8` (tree `f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a`) |
-| Landed HEAD delta | `6ec01ec..4937907 -- src`: 10 files, +823/-161 (B-fix-4/B-fix-5 runtime/cgroup/attempt recovery plus the B-fix-7 `batch/options.py` overlay). Release-fix5 remains built from `6ec01ec`; digests unchanged. |
+| Landed HEAD delta | `5e2898a..c134109 -- src`: 10 files, +823/-161 (B-fix-4/B-fix-5 runtime/cgroup/attempt recovery plus the B-fix-7 `batch/options.py` overlay). Release-fix5 remains built from `5e2898a`; digests unchanged. |
 | Client revision | `6905477c51c34fa1f8d53421553805ecbf88d897` (C HEAD; C24a/C25/C35 absent) |
 | A revision | `dcf7084999e00ecc8b6a5154ca02c4684785ee5d` (A HEAD; A-20/A-29 absent) |
 | Harness revision | `dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b` |
@@ -50,13 +50,13 @@ root is absent on this host, so H7 stays open and B does not sign C experience s
 ## Release candidate
 
 - Directory: `reports/acp2_implementation/bb45a46/B/B25/release-fix5/`
-- Manifest: `release-manifest.json` (sha256 `380b4915…`); source `6ec01ec`, base `abec2bc`.
+- Manifest: `release-manifest.json` (sha256 `380b4915…`); source `5e2898a`, base `abec2bc`.
 - All eight artifact digests recomputed and verified (`release-candidate.json`).
 - Installed validation (`B/Bfix5/summary.json`): installed release manifest PASS (510 files,
   `release_id=1c79785a657c6614`), real LSF normal singlepoint PASS (bsub job `1765`,
   `submission_id=sub_0fea781820a81666`, −1.116759307204 Ha), bare-root `acp run singlepoint`
   PASS (exit 0, −1.116773191779 Ha), package-install candidate identity PASS
-  (`candidate_revision=6ec01ec…`), cross-entry release projection PASS (HTTP/CLI/MCP equal).
+  (`candidate_revision=5e2898a…`), cross-entry release projection PASS (HTTP/CLI/MCP equal).
 - Changelog records B26A-D1, B26A-D2, the B-fix-4 release rebuild and the B-fix-5 F2/F3
   remediation; no defect is hidden.
 

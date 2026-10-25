@@ -2,7 +2,7 @@
   "artifacts": [
     {
       "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-final-index.json",
-      "sha256": "18d7dfd64fd89a1d1c8d60aee10b48205e437ac28840e3acbd86e846f4becf3b",
+      "sha256": "95c76b0037cf267be5442445547f26bc7020e970adb5c538402d25774f320c78",
       "size_bytes": 3332
     },
     {
@@ -12,7 +12,7 @@
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
-      "sha256": "aea6ab66f4fc60d40c0210b9a5aebd020739211af02229708d33194e7269f5a1",
+      "sha256": "16177b89677be1adbb6d1c82bb02f1f3856fee0411840c94409cceb9969fa529",
       "size_bytes": 13367
     },
     {

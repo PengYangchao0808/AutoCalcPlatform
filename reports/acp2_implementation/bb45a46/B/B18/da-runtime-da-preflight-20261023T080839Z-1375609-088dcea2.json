@@ -7,7 +7,7 @@
     },
     {
       "path": "a-roundtrip.json",
-      "sha256": "313daa1c73421ce2ba94f5eace03244390ccf6d14d7bc9d7d1bc847a941cac9e",
+      "sha256": "c6332172824b605c3795909d21e26c439a22ee8216497b66af851942ea074695",
       "size_bytes": 2408
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "path": "da-preflight.json",
-      "sha256": "f14ef92452fae723d47d7a2ef8d9c466da9269ead74c1894d623fb138839c234",
+      "sha256": "24912cff5bfd087d51a08b020768c65f4ca14acb185ac78f076c349af5d04e43",
       "size_bytes": 14933
     }
   ],
@@ -156,7 +156,7 @@
       },
       {
         "path": "a-roundtrip.json",
-        "sha256": "313daa1c73421ce2ba94f5eace03244390ccf6d14d7bc9d7d1bc847a941cac9e",
+        "sha256": "c6332172824b605c3795909d21e26c439a22ee8216497b66af851942ea074695",
         "size_bytes": 2408
       },
       {

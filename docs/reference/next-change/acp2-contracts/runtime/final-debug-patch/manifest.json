@@ -27,7 +27,7 @@
     "per_file_matched": 1906,
     "per_file_mismatched": 0,
     "per_file_missing": 0,
-    "reconstruction_method": "git worktree add --detach 096cdff; git apply tracked-changes.patch; cp -a new-files/. worktree/; compare every candidate-snapshot.json path.",
+    "reconstruction_method": "git worktree add --detach 3670790; git apply tracked-changes.patch; cp -a new-files/. worktree/; compare every candidate-snapshot.json path.",
     "excluded_path_verified_absent_from_bundle": true
   },
   "apply_order": [
@@ -970,7 +970,7 @@
     },
     {
       "path": "docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md",
-      "sha256": "a56ba848488a6049b466f1156c5d92b67e8c2a55d512f9b104c09ac263bdf47e",
+      "sha256": "02a343d075ee876c7d2bc10e5c3ed06125823fb5cde27b237a4b1cdddef7278c",
       "size_bytes": 22231,
       "change_type": "tracked_patch"
     },
@@ -1252,7 +1252,7 @@
     },
     {
       "path": "docs/reference/next-change/ACP_Parallel_Plan_1_Frontend_20261018.md",
-      "sha256": "8d55cb3b0fb8208c2c9617d971959a09d99b1769764460642ef50e819642d532",
+      "sha256": "c05c018111500579c34ee08e2315a44998711486105283eaf11434fedb38bbb1",
       "size_bytes": 15755,
       "change_type": "tracked_patch"
     },
@@ -1318,7 +1318,7 @@
     },
     {
       "path": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md",
-      "sha256": "140148c325dd7f42e3c0bd57d6c7e7ce93c7b9e9130bc883b8576f6401b05475",
+      "sha256": "82eee4066b5b8ccb4077dcf6260eed6a5ec3ccfd478650e3e030fc35fee43cb3",
       "size_bytes": 7752,
       "change_type": "tracked_patch"
     },
@@ -2014,7 +2014,7 @@
     },
     {
       "path": "reports/architecture_acceptance_20261019/evidence/commands.json",
-      "sha256": "b272d20af1a3b44ce01ef1c6f999bbd9a3bf0db515adede93099f3d233e08ffa",
+      "sha256": "24a08012e06611f29cfe8d151c6087b9c3f07b44d9cebcfefa3c7e439983423b",
       "size_bytes": 2825,
       "change_type": "new_file"
     },
@@ -2068,7 +2068,7 @@
     },
     {
       "path": "reports/architecture_acceptance_20261019/reproduce_defects.py",
-      "sha256": "7ddd2cc3de714d3f14c8818bf26fc0d1367b099bf6bbf61860ac082e455b27d0",
+      "sha256": "85d22f07c55768330dda653f528aad2ef8ec0b42f5da8a641409a25125141ecd",
       "size_bytes": 10042,
       "change_type": "new_file"
     },
@@ -2476,7 +2476,7 @@
     },
     {
       "path": "reports/architecture_remediation_20261020/evidence/baseline-20261019/commands.json",
-      "sha256": "b272d20af1a3b44ce01ef1c6f999bbd9a3bf0db515adede93099f3d233e08ffa",
+      "sha256": "24a08012e06611f29cfe8d151c6087b9c3f07b44d9cebcfefa3c7e439983423b",
       "size_bytes": 2825,
       "change_type": "tracked_patch"
     },

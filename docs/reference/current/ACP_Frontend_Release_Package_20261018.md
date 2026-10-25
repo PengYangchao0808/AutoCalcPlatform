@@ -48,7 +48,7 @@ find frontend -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256su
 
 ## 3. 回退步骤（恢复资源集；具体路径）
 
-前提：目标修订可引用（`5518aa6f` 为本次发布集；更深回退到计划前基线用 `f410ac9d`）。**只恢复 `frontend/**`；不碰 DB/attempt/工件；不重发任何任务命令**（§4）。
+前提：目标修订可引用（`899c7c0f` 为本次发布集；更深回退到计划前基线用 `f410ac9d`）。**只恢复 `frontend/**`；不碰 DB/attempt/工件；不重发任何任务命令**（§4）。
 
 ```bash
 # 0) （可选）先停服，避免半还原状态被访问；允许短暂半态可跳过
@@ -58,7 +58,7 @@ sudo systemctl stop acp
 cd repo-root
 git checkout 899c7c028e4ec378550b1bef235043878cc359df -- frontend/
 
-# 2) 校验：清单重生成 + 聚合摘要（期望 5518aa6f 对应值 f15381ea...）
+# 2) 校验：清单重生成 + 聚合摘要（期望 899c7c0f 对应值 f15381ea...）
 /home/redacted-user/.venvs/acp-frontend/bin/python \
     .omo/evidence/acp-parallel-plan-1-frontend/t33/collect_manifest.py
 find frontend -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum
@@ -67,7 +67,7 @@ find frontend -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256su
 sudo systemctl restart acp
 
 # 备选（无 git 环境）：用发布包内 frontend tarball 覆盖
-#   tar -xzf <release>/frontend-5518aa6f.tar.gz -C repo-root
+#   tar -xzf <release>/frontend-899c7c0f.tar.gz -C repo-root
 #   然后仍执行步骤 2–3（聚合校验不可省略）
 # 更深回退到计划前基线：同上把修订换成 f410ac9d（聚合期望 fe9da69f...）
 ```

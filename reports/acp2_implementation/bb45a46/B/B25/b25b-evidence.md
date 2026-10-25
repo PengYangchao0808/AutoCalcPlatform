@@ -1,6 +1,6 @@
 # B25b standalone/Lab install evidence (2026-10-23)
 
-- Branch/HEAD at start: `feat/frontend-plan1-closure` @ `672b651`
+- Branch/HEAD at start: `feat/frontend-plan1-closure` @ `67f1789`
 - Scenario receipt: `package-install-main-20261023T131008Z-1633496-80a5221a.json` — result `PASS`, exit `0`
 - Summary: `summary.json` (validated by `--check-only`)
 - Clean venvs/data root: `/tmp/opencode/b25b` (outside the repository); harness venvs were removed after the run.

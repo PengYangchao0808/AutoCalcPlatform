@@ -25,7 +25,7 @@
     {
       "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
       "owner": "B",
-      "reason": "Release-fix5 artifacts, source 6ec01ec and all eight digests verified on disk.",
+      "reason": "Release-fix5 artifacts, source 5e2898a and all eight digests verified on disk.",
       "row_id": "H7-release-candidate",
       "status": "PASS"
     },

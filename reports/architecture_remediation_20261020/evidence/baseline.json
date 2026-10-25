@@ -196,7 +196,7 @@
     "direct_entrypoint": "none — module has no __main__/argparse; direct execution imports and exits 0 with no output; pytest is the only entrypoint",
     "path": "reports/architecture_acceptance_20261019/reproduce_defects.py",
     "role": "historical audit artifact, not a gate",
-    "sha256": "7ddd2cc3de714d3f14c8818bf26fc0d1367b099bf6bbf61860ac082e455b27d0"
+    "sha256": "85d22f07c55768330dda653f528aad2ef8ec0b42f5da8a641409a25125141ecd"
   },
   "parsers": {
     "module": "acp.intake.parsers",

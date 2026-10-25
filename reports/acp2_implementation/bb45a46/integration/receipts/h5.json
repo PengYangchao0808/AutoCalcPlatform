@@ -58,7 +58,7 @@
     ],
     "integration.reuse_mapping": [
       {
-        "rationale": "B-fix-4 changes only src/acp/calculations/attempt_freeze.py and tests/test_acp_attempt_freeze.py. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call local_release_identity. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and abec2bc.",
+        "rationale": "B-fix-4 changes only src/acp/calculations/attempt_freeze.py and tests/test_acp_attempt_freeze.py. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call local_release_identity. The plugin code, fixtures, inputs and validator are unchanged between 9457e02 and abec2bc.",
         "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
         "receipt_sha256": "6f0063d68d1d174e4acaf5fd41f885a05717c6b1eb2d40684306dfb79f6d78fe",
         "unchanged": [

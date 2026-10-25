@@ -28,7 +28,7 @@
     },
     "H2": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
-      "sha256": "eb8ec28094290637889c3a323e935a4e0990e67c09ed4648d84aafafdabcccbe",
+      "sha256": "5096c24aec4216695842f5ab660806977e9b2c75e78fef9da832e2589f1b0d31",
       "handoff_version": 1,
       "generated_by": "A-08",
       "contract_set_version": 1,
@@ -38,7 +38,7 @@
     },
     "H3": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
-      "sha256": "4d7194fbfbc535d039bdb6e505e4b7882b2321f7549338785a213c695e836e35",
+      "sha256": "7a9251a4c54d38ddc73bafb2b6dab423709897ee168a35fdd32aaa3fe0e0ffd8",
       "handoff_version": 1,
       "generated_by": "A-13",
       "contract_set_version": 1,
@@ -48,32 +48,32 @@
     },
     "H4": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
-      "sha256": "96ffbdba096ba81b570509153bde1c2dc99a620bef5e993f14ea49a2d1eb536d",
+      "sha256": "652d521164369d3a22dbef04d6597f5fd47cc78337713462a2cefc316b3adf73",
       "handoff_version": 1,
       "generated_by": "A-20",
       "contract_set_version": 1,
       "contract_set_frozen": true,
-      "source_pre_delivery_commit": "243d2b7",
+      "source_pre_delivery_commit": "9977a10",
       "revision_check": "PASS"
     },
     "H5": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
-      "sha256": "e3e153978a616f9fbc4789daa843a33265cdf21bbed5361c738875ecec60fa44",
+      "sha256": "82df503d5f222adc8e76434d810fc730fd8c0aea12babafb84370ffde6615192",
       "handoff_version": 1,
       "generated_by": "A-23",
       "contract_set_version": 1,
       "contract_set_frozen": true,
-      "source_pre_delivery_commit": "436be8e",
+      "source_pre_delivery_commit": "da75e29",
       "revision_check": "PASS"
     },
     "H6": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
-      "sha256": "23140d80ec281eb4b7363c8b923d82016d23ef14d3ff5693026d1cb9d7323b3f",
+      "sha256": "770223e49d440633735460842d4ec4e3013755d4a1e77ea9ae54851b98498f7a",
       "handoff_version": 1,
       "generated_by": "A-26",
       "contract_set_version": 1,
       "contract_set_frozen": true,
-      "source_pre_delivery_commit": "a1319b9",
+      "source_pre_delivery_commit": "effc258",
       "revision_check": "PASS"
     }
   },
@@ -150,14 +150,14 @@
         "kind": "executed-static",
         "commands": [
           "/opt/acp2-dev/envs/a-python/bin/python /opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/verify_revisions.py",
-          "git cat-file -e 2e0ce9c^{commit}"
+          "git cat-file -e 3bf5127^{commit}"
         ],
         "executed": true,
         "exit_code": 0,
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/baseline.md",
-            "sha256": "3523fbca0bc5b89beb273318a07aad86d42a37ed2619f55ce19bfe0799d5becf"
+            "sha256": "419a19f20c9590c7a6bdc1644c0739bde1a88b6f259d801c5b680d4eb68d77c5"
           }
         ],
         "records": [
@@ -230,7 +230,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
-            "sha256": "eb8ec28094290637889c3a323e935a4e0990e67c09ed4648d84aafafdabcccbe"
+            "sha256": "5096c24aec4216695842f5ab660806977e9b2c75e78fef9da832e2589f1b0d31"
           }
         ],
         "records": [
@@ -265,7 +265,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
-            "sha256": "4d7194fbfbc535d039bdb6e505e4b7882b2321f7549338785a213c695e836e35"
+            "sha256": "7a9251a4c54d38ddc73bafb2b6dab423709897ee168a35fdd32aaa3fe0e0ffd8"
           }
         ],
         "records": [
@@ -286,7 +286,7 @@
       "revision": "9977a106445177708e929557f9460e86914787ad",
       "revision_kind": "commit",
       "revision_source": null,
-      "recorded_revision": "243d2b7",
+      "recorded_revision": "9977a10",
       "real_run": false,
       "required_for_release": true,
       "requires_real_run": true,
@@ -300,7 +300,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
-            "sha256": "96ffbdba096ba81b570509153bde1c2dc99a620bef5e993f14ea49a2d1eb536d"
+            "sha256": "652d521164369d3a22dbef04d6597f5fd47cc78337713462a2cefc316b3adf73"
           }
         ],
         "records": [
@@ -308,7 +308,7 @@
           "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h4.exit-code"
         ],
         "real_artifact": false,
-        "summary": "The H4 gate command passed on this host; recorded revision '243d2b7' resolves. The handoff remains open."
+        "summary": "The H4 gate command passed on this host; recorded revision '9977a10' resolves. The handoff remains open."
       },
       "gap": "Required real DA rows (valid TS, bidirectional IRC, endpoint connectivity, comparable energy) and the separate B20a-search row are NOT_VERIFIED; no B20a-exec/B20a-search artifact."
     },
@@ -318,10 +318,10 @@
       "result": "PASS",
       "scope": "static/constructed",
       "scope_detail": "constructed plugin conflicts and v1->v2 upgrade; no production plugin",
-      "revision": "436be8e",
+      "revision": "da75e29",
       "revision_kind": "commit",
       "revision_source": null,
-      "recorded_revision": "436be8e",
+      "recorded_revision": "da75e29",
       "real_run": false,
       "required_for_release": true,
       "requires_real_run": false,
@@ -335,7 +335,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
-            "sha256": "e3e153978a616f9fbc4789daa843a33265cdf21bbed5361c738875ecec60fa44"
+            "sha256": "82df503d5f222adc8e76434d810fc730fd8c0aea12babafb84370ffde6615192"
           }
         ],
         "records": [
@@ -343,7 +343,7 @@
           "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h5.exit-code"
         ],
         "real_artifact": false,
-        "summary": "The H5 gate command passed on this host; recorded revision '436be8e' resolves. The handoff remains closed/verified."
+        "summary": "The H5 gate command passed on this host; recorded revision 'da75e29' resolves. The handoff remains closed/verified."
       },
       "gap": null
     },
@@ -353,10 +353,10 @@
       "result": "NOT_VERIFIED",
       "scope": "static/constructed",
       "scope_detail": "constructed NMR/thermochemistry contracts; selectivity and C T-40b NOT_VERIFIED",
-      "revision": "a1319b9",
+      "revision": "effc258",
       "revision_kind": "commit",
       "revision_source": null,
-      "recorded_revision": "a1319b9",
+      "recorded_revision": "effc258",
       "real_run": false,
       "required_for_release": true,
       "requires_real_run": true,
@@ -370,7 +370,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
-            "sha256": "23140d80ec281eb4b7363c8b923d82016d23ef14d3ff5693026d1cb9d7323b3f"
+            "sha256": "770223e49d440633735460842d4ec4e3013755d4a1e77ea9ae54851b98498f7a"
           }
         ],
         "records": [
@@ -378,7 +378,7 @@
           "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h6.exit-code"
         ],
         "real_artifact": false,
-        "summary": "The H6 gate command passed on this host; recorded revision 'a1319b9' resolves. The handoff remains open."
+        "summary": "The H6 gate command passed on this host; recorded revision 'effc258' resolves. The handoff remains open."
       },
       "gap": "Selectivity subcase and C T-40b signoff are NOT_VERIFIED: no C T-40a submission, B23b artifact, real A-25b audit or C T-40b signoff."
     },
@@ -428,7 +428,7 @@
       "revision": "e7ff0a5a2fcc13079c96690fa5b85c4299de9b4f",
       "revision_kind": "commit",
       "revision_source": null,
-      "recorded_revision": "6608f83",
+      "recorded_revision": "e7ff0a5",
       "real_run": false,
       "required_for_release": true,
       "requires_real_run": false,

@@ -24,9 +24,9 @@ Merge bases actually used by git:
 
 | Merge | Merge base |
 |---|---|
-| integration HEAD + B `12bf105` | `a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4` |
-| integration HEAD + A `1cfb197` | `9977a106445177708e929557f9460e86914787ad` |
-| integration HEAD + C `052962e` | `35614fd83f616005a0546af35631c477151e7dde` |
+| integration HEAD + B `308ef76` | `a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4` |
+| integration HEAD + A `aa5e193` | `9977a106445177708e929557f9460e86914787ad` |
+| integration HEAD + C `49ddfad` | `35614fd83f616005a0546af35631c477151e7dde` |
 
 A's worktree was dirty during the re-freeze (6 tracked modifications + 3 untracked
 paths). Only the committed A head was merged; the dirty state is recorded as
@@ -34,8 +34,8 @@ paths). Only the committed A head was merged; the dirty state is recorded as
 
 ## 2. Commit sequence (all in the integration worktree)
 
-1. `5b365e14d5f8fea52083446c2abe8ee6e591bdac` — **merge B `12bf105` by domain ownership**
-   (parents `fbac5ab` + `12bf105`; 68 staged paths).
+1. `5b365e14d5f8fea52083446c2abe8ee6e591bdac` — **merge B `308ef76` by domain ownership**
+   (parents `fbac5ab` + `308ef76`; 68 staged paths).
    * Applies B-fix-34 (`_CompositePrepareExecutor.prefetch` forwarding), B-fix-35
      (`.omo` untracking, `services_mcp_bootstrap` station registration, bounded
      SQLite busy timeout) and B-fix-36's `paths.py` gate correction.
@@ -47,13 +47,13 @@ paths). Only the committed A head was merged; the dirty state is recorded as
      SHA, and B's copy named the superseded `fbac5ab`.
    * `git rm -r --cached .omo` removes all 27 previously tracked `.omo` paths from
      the index (files remain on disk; `.omo/` is gitignored), matching B-fix-36.
-2. `bd94a7b54c278040af284ee76d7657fcaedb71fe` — **merge A `1cfb197` by domain ownership**
-   (parents `5b365e1` + `1cfb197`; 52 paths).
+2. `bd94a7b54c278040af284ee76d7657fcaedb71fe` — **merge A `aa5e193` by domain ownership**
+   (parents `5b365e1` + `aa5e193`; 52 paths).
    * All 52 are A-owned: `src/cccp/plugin/**`, science handoff H4/H5 and ADR-007,
      `scripts/acceptance/acp2_science.py`, A plugin tests/fixtures and
      `tests/test_cccp_plugin_pilot.py`.
-3. `77ac1de1af6a5db6b57f4f904a859305ff73042c` — **merge C `052962e` by domain ownership**
-   (parents `bd94a7b` + `052962e`; 21 paths).
+3. `77ac1de1af6a5db6b57f4f904a859305ff73042c` — **merge C `49ddfad` by domain ownership**
+   (parents `bd94a7b` + `49ddfad`; 21 paths).
    * All 21 are C-owned: `frontend/**` (including `scientific-evidence.js`),
      experience contracts, C acceptance probes and
      `tests/test_acp2_experience_harness.py`.
@@ -61,7 +61,7 @@ paths). Only the committed A head was merged; the dirty state is recorded as
 Each merge was clean: the integration branch matched each track's merge base on
 that track's owned paths, so no file needed an unreviewed shared-file edit.
 
-Candidate delta over the B base `2a57d6b` (all three merges): 565 files,
+Candidate delta over the B base `a72e8db` (all three merges): 565 files,
 +158934/-1108.
 
 ## 3. Overlay preservation check at the candidate
@@ -103,9 +103,9 @@ consistent with the delivered contract set and passes the validator.
 
 Full record: `ownership-decisions-refreeze.json`.
 
-* B: accepted `12bf105` (runtime fixes, contract refresh, Bfix3 evidence).
-* A: accepted `1cfb197` (52 A-owned paths); A's dirty worktree excluded.
-* C: accepted `052962e` (21 C-owned paths); no B edit to `frontend/**`.
+* B: accepted `308ef76` (runtime fixes, contract refresh, Bfix3 evidence).
+* A: accepted `aa5e193` (52 A-owned paths); A's dirty worktree excluded.
+* C: accepted `49ddfad` (21 C-owned paths); no B edit to `frontend/**`.
 * `.omo/**`: untracked in the candidate (B-fix-36 carry-over).
 * Stale B-track `integration/candidate.json`: removed from the candidate tree.
 * Sharedfile requests: no new four-version bump (B25a owns it), no config-default
@@ -117,7 +117,7 @@ Full record: `ownership-decisions-refreeze.json`.
 A advanced to `8f4d9b98a584575cf74c0ff1ba7eb693468f288b` and C advanced to
 `6905477c51c34fa1f8d53421553805ecbf88d897` while the re-freeze ran (the A session
 was still working). The candidate intentionally keeps the recorded changesets
-`1cfb197` and `052962e`; neither later head was merged and no evidence was assembled
+`aa5e193` and `49ddfad`; neither later head was merged and no evidence was assembled
 from them.
 
 ## 7. Cleanliness

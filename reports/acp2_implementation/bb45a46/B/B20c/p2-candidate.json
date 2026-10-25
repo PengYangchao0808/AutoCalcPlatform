@@ -39,7 +39,7 @@
   ],
   "a_head": "dcf7084999e00ecc8b6a5154ca02c4684785ee5d",
   "base_revision": "c3040007cd360af2373b6d1710c763634377761f",
-  "base_revision_role": "P2 wave base (B19 commit); the frozen candidate is the later committed state B00-B20b at 460b0db",
+  "base_revision_role": "P2 wave base (B19 commit); the frozen candidate is the later committed state B00-B20b at 1ffb76d",
   "c_contracts": [
     {
       "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
@@ -73,7 +73,7 @@
     "rule": "sha256 of every file in the immutable overlay, sorted by path",
     "sha256": "662356063b9506d21476d5d0e554ea603db4ccae55aa6df756dba3d78752d569"
   },
-  "candidate_label": "b20c-460b0db",
+  "candidate_label": "b20c-1ffb76d",
   "candidate_revision": "sha256:c415d71598e43ac5de1046616b5fbc4c1b808881eebe56c0731642027788932e",
   "candidate_revision_rule": "sha256 over sorted git ls-tree -r lines '<mode> <type> <blob>\\t<path>'",
   "candidate_sha": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
@@ -91,7 +91,7 @@
   "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
   "integration_worktree_touched": false,
   "moving_worktree_claimed": false,
-  "overlay_method": "git archive 460b0db extracted into a fresh directory; no working-tree file was copied",
+  "overlay_method": "git archive 1ffb76d extracted into a fresh directory; no working-tree file was copied",
   "overlay_root": "/opt/acp2-dev/data/b/b20-candidate",
   "overlay_verification": {
     "committed_files": 2907,

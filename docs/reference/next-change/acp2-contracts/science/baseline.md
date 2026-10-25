@@ -15,7 +15,7 @@ Owner: A (science track). This file is the single baseline record consumed by ta
 | **Delivery revision** (baseline commit created by A-00) | **`3bf5127365e63012eb0a9915467883433e7ad0cd`** |
 | Commit subject | `chore(cccp): lock ACP2 science baseline and ownership boundary` |
 
-`096cdff` is the Git starting point only. The executed code is the overlay-restored candidate; `2e0ce9c` is the commit that materializes it on `acp2/a-science`.
+`3670790` is the Git starting point only. The executed code is the overlay-restored candidate; `3bf5127` is the commit that materializes it on `acp2/a-science`.
 
 ## 2. B00 overlay (authoritative source of truth)
 
@@ -26,7 +26,7 @@ Owner: A (science track). This file is the single baseline record consumed by ta
 | `tracked-changes.patch` SHA-256 | `4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242` |
 | Snapshot-declared `tracked_patch_sha256` | `4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242` (**match**) |
 | `candidate-snapshot.json` SHA-256 | `37dd2320cc5d97ea7eb866a2275641c0d0518801202137f08e8f84046cea1194` |
-| Patch content | 28 tracked files (`git apply` to `096cdff`) |
+| Patch content | 28 tracked files (`git apply` to `3670790`) |
 | New files | 144 files (`new-files/` copied over the worktree) |
 | Excluded path | `tests/baseline/refactor-evidence/e2e-task-root.txt` — pre-existing local test-run marker; **not** committed, **not** modified |
 
@@ -206,7 +206,7 @@ is explicitly excluded and stays untouched in both the primary checkout and the 
 ## 8. A-00b frozen inventory — workflows, task kinds, contracts, compatibility surface
 
 Recorded by task **A-00b** on 2026-10-22 (UTC run `a00b-20261022T121442Z`) from the A worktree at
-`acp2/a-science` (delivery `2e0ce9c`, docs `7f4944e` / `94c8ea9`). Every count below was read from
+`acp2/a-science` (delivery `3bf5127`, docs `7766c65` / `d7f21ea`). Every count below was read from
 code and re-executed under `$ACP2_A_PYTHON` (import-level introspection + the in-process API
 response builder); no QC executable was launched by this task.
 

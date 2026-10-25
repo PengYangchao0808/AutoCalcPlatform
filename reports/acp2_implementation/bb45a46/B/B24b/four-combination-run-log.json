@@ -91,7 +91,7 @@
   "historical_candidate_overlay": {
     "applied_to": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
     "path": "reports/acp2_implementation/bb45a46/B/B24b/candidate-runnable-overlay.patch",
-    "reason": "Original B24b run applied this working-tree patch to f32c670. B-fix-7 commits the options.py hunk at X and the boundary.py hunk was already landed on the branch, so the clean B-fix-7 rerun applies no patch. The file is retained as history, not active attribution.",
+    "reason": "Original B24b run applied this working-tree patch to 31dc79a. B-fix-7 commits the options.py hunk at X and the boundary.py hunk was already landed on the branch, so the clean B-fix-7 rerun applies no patch. The file is retained as history, not active attribution.",
     "sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
     "superseded_by": "c134109c696e9bcb941e176bf681d45a569370b8"
   },

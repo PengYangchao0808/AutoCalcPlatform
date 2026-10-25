@@ -51,7 +51,7 @@
     },
     {
       "path": "tests/fixtures/acp2/science/b18/p2-minimal-form.json",
-      "sha256": "7e87af0f4f65c6c1a8224fdaee868dd65c1ddf2eb824674f56da46f82562846c"
+      "sha256": "92d70e7b061baf7596905bd27561683bb900554aa4edcda819a4dff7a5dba062"
     },
     {
       "path": "tests/fixtures/acp2/science/b18/evidence-report.json",

@@ -45,20 +45,20 @@ failure artifact, not prose.
 
 | Variable | Absolute value | State |
 | --- | --- | --- |
-| `ACP2_CHECKOUT_ROOT` | `/opt/acp2-dev` | delivered — B00 manifest `ac43c16` records the C track materialization; the checkout root is unchanged |
+| `ACP2_CHECKOUT_ROOT` | `/opt/acp2-dev` | delivered — B00 manifest `31e60cb` records the C track materialization; the checkout root is unchanged |
 | `ACP2_PROJECT_ROOT` | `repo-root` | adopted 2026-10-22 — resolves B00 project-relative `evidence_root` values |
 | `ACP2_C_SOURCE` | `/opt/acp2-dev/C` | delivered by C/T-01 (branch `acp2/c-experience`) |
-| `ACP2_A_SOURCE` | `/opt/acp2-dev/A` | A-owned, read-only for C; **C never reads it**. The task brief expected it absent, but an A worktree (`acp2/a-science`, base `096cdffe…`) was observed present during execution. It is not a C dependency and was not consumed. |
-| `ACP2_INTEGRATION_SOURCE` | `/opt/acp2-dev/integration` | delivered by B02a (`0dee16f`); detached checkout at the C baseline commit `75a8f08…`, tree-equal to B `a0185b15…` |
+| `ACP2_A_SOURCE` | `/opt/acp2-dev/A` | A-owned, read-only for C; **C never reads it**. The task brief expected it absent, but an A worktree (`acp2/a-science`, base `3670790e…`) was observed present during execution. It is not a C dependency and was not consumed. |
+| `ACP2_INTEGRATION_SOURCE` | `/opt/acp2-dev/integration` | delivered by B02a (`15767b9`); detached checkout at the C baseline commit `68653bb…`, tree-equal to B `a0185b15…` |
 | `ACP2_SOURCE` | `/opt/acp2-dev/integration` | alias of `ACP2_INTEGRATION_SOURCE` (B/C single meaning; never A) |
 | `ACP2_TOOLS` | `/opt/acp2-tools` | delivered by C/T-04 — C's Node/pnpm/DSH/browser toolchain root. Intentionally **diverges** from B02a's `ACP2_TOOLS=/opt/acp2-dev/venvs`; see the adoption addendum |
 | `ACP2_DATA_ROOT` | `/opt/acp2-dev/data` | C's shared acceptance-env root. B02a's own data root is `/opt/acp2-dev/data/b`; both are delivered and neither replaces the other |
 | `ACP2_CONTRACTS` | `/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts` | delivered by C/T-01 (C-owned `experience/**`; B keeps `runtime/**`) |
-| `ACP2_BASELINE_LOCK` | `docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json` | delivered by B00 (`ac43c16`), committed-blob sha256 `fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5`; `readiness: verified` |
-| `ACP2_EVIDENCE` | `reports/acp2_implementation/bb45a46` | adopted B00 absolute root (`ac43c16`); equals B02a's `ACP2_EVIDENCE` value; `readiness: verified` |
-| `ACP2_C_PYTHON` | `/opt/acp2-dev/venvs/c/bin/python` | delivered by B02a (`0dee16f`), `readiness: integration_ready`; C created the venv during T-01 bootstrap and B02a verified its import prefix |
-| `ACP2_INTEGRATION_PYTHON` | `/opt/acp2-dev/venvs/integration/bin/python` | delivered by B02a (`0dee16f`), `readiness: integration_ready`; imports `$ACP2_INTEGRATION_SOURCE` |
-| `ACP2_BROWSER_PYTHON` | `/opt/acp2-dev/venvs/browser/bin/python` | delivered by B02a (`0dee16f`), `readiness: integration_ready`; `playwright==1.63.0` importable, Chromium launch is C/T-08 and not claimed |
+| `ACP2_BASELINE_LOCK` | `docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json` | delivered by B00 (`31e60cb`), committed-blob sha256 `fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5`; `readiness: verified` |
+| `ACP2_EVIDENCE` | `reports/acp2_implementation/bb45a46` | adopted B00 absolute root (`31e60cb`); equals B02a's `ACP2_EVIDENCE` value; `readiness: verified` |
+| `ACP2_C_PYTHON` | `/opt/acp2-dev/venvs/c/bin/python` | delivered by B02a (`15767b9`), `readiness: integration_ready`; C created the venv during T-01 bootstrap and B02a verified its import prefix |
+| `ACP2_INTEGRATION_PYTHON` | `/opt/acp2-dev/venvs/integration/bin/python` | delivered by B02a (`15767b9`), `readiness: integration_ready`; imports `$ACP2_INTEGRATION_SOURCE` |
+| `ACP2_BROWSER_PYTHON` | `/opt/acp2-dev/venvs/browser/bin/python` | delivered by B02a (`15767b9`), `readiness: integration_ready`; `playwright==1.63.0` importable, Chromium launch is C/T-08 and not claimed |
 | `ACP2_PYTHON` | `/opt/acp2-dev/venvs/c/bin/python` | alias of `$ACP2_C_PYTHON` (fixture/dry-run default) |
 
 Invariant: `ACP2_SOURCE` == `ACP2_INTEGRATION_SOURCE` == `/opt/acp2-dev/integration`.
@@ -74,11 +74,11 @@ Invariant: `ACP2_SOURCE` == `ACP2_INTEGRATION_SOURCE` == `/opt/acp2-dev/integrat
 - `historical_debug_revision`: `3670790363c7a1959ad1dbe4b4297adec518952a`
 - `materialized_commit`: `a0185b15c546fbd07919326d581fab13e05000fa` (B02, `/opt/acp2-dev/B`)
 - `c_baseline_commit`: `68653bbcb3f613231c9c800521d88184eeb41a66` (tree `1a1b4b23c554acaf2818db1dcee336b69494a887`)
-- `tree_equality`: C `75a8f08^{tree}` == B `a0185b15^{tree}` == `1a1b4b23c554acaf2818db1dcee336b69494a887`
+- `tree_equality`: C `68653bb^{tree}` == B `a0185b15^{tree}` == `1a1b4b23c554acaf2818db1dcee336b69494a887`
 - `verification`: `1906/1906` per-file matches in B02's clean reconstruction (`materialization.verification`)
-- `b00_commit`: `ac43c16` (`manifest.json`, `runtime/baseline-lock.json`, `runtime/dependencies.json`)
+- `b00_commit`: `31e60cb` (`manifest.json`, `runtime/baseline-lock.json`, `runtime/dependencies.json`)
 - `b00_committed_blob_sha256`: manifest `b83919a71f55c4131b4daa7e82b13369863aa495e951665178f9be63c1b78769`; baseline-lock `fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5`; dependencies `96862edd6534614bfa64620f170161c7cbad6c2117d941dd215e49ab9131c4ac`
-- `b02a_commit`: `0dee16f`; B02a env committed-blob/on-disk sha256 `d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7`
+- `b02a_commit`: `15767b9`; B02a env committed-blob/on-disk sha256 `d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7`
 - `readiness`: B00 baseline-lock/manifest `verified`; B02a environment `integration_ready`
 
 Frozen baseline construction (reproducible):
@@ -94,13 +94,13 @@ Frozen baseline construction (reproducible):
 ## 5. External handoffs
 
 - B00 (`baseline-lock` / `manifest` / `evidence_root`): **delivered** in commit
-  `ac43c16`. Adopted values: `candidate_id`
+  `31e60cb`. Adopted values: `candidate_id`
   `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`,
   project-relative `evidence_root=reports/acp2_implementation/bb45a46`,
   `materialization.materialized_commit=a0185b15c546fbd07919326d581fab13e05000fa`,
   `verification=1906/1906`. Readiness `verified`.
 - B02a (tools root / data root / role interpreters / browser venv, **excluding**
-  Chromium launch): **delivered** in commit `0dee16f` (`data/b/acceptance-env.sh`,
+  Chromium launch): **delivered** in commit `15767b9` (`data/b/acceptance-env.sh`,
   sha256 `d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7`).
   The C/integration/browser role interpreters and their import prefixes are
   verified in `reports/acp2_implementation/bb45a46/B/B02/role-interpreters.json`.
@@ -125,7 +125,7 @@ T-04a replaced the T-01/T-04 provisional environment with the already-committed
 B00/B02a handoff. Only committed blobs were read; B did not need to re-deliver.
 
 - **Tree equality (proven).** `git -C /opt/acp2-dev/C rev-parse
-  75a8f08^{tree}` and `git -C /opt/acp2-dev/B rev-parse
+  68653bb^{tree}` and `git -C /opt/acp2-dev/B rev-parse
   a0185b15^{tree}` both return `1a1b4b23c554acaf2818db1dcee336b69494a887`.
 - **Real evidence root.** `ACP2_EVIDENCE=reports/acp2_implementation/bb45a46`,
   identical to B02a's value. The old `/opt/acp2-dev/evidence` root

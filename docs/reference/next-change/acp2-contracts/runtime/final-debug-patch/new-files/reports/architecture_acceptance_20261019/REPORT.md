@@ -84,7 +84,7 @@ D01—D06、D10、D11 由本目录的 [reproduce_defects.py](reproduce_defects.p
 
 ### D01 — 科学失败、取消或阻断被改写为成功（P1）
 
-**位置：** [runtime/worker.py:235](../../src/acp_services/runtime/worker.py#L235)，特别是 238—239 行。引入提交 `c5000430`。
+**位置：** [runtime/worker.py:235](../../src/acp_services/runtime/worker.py#L235)，特别是 238—239 行。引入提交 `a113d670`。
 
 **触发条件：** CCCP 返回 `TaskResult(status="failed", complete=False)`，或取消/阻断且不完整的结果。这不是只存在于手造对象中的状态：`cccp/calculation/tasks/singlepoint.py:165`、`:186`、`:200` 的后端异常、失败和缺少能量分支均产生 failed + complete=False。
 
@@ -100,7 +100,7 @@ D01—D06、D10、D11 由本目录的 [reproduce_defects.py](reproduce_defects.p
 
 ### D02 — 回执冲突在组合根被吞掉，或未验证 release 就复用（P1）
 
-**位置：** [worker_bootstrap.py:447](../../src/acp_services/worker_bootstrap.py#L447)、[worker_bootstrap.py:472](../../src/acp_services/worker_bootstrap.py#L472)、[runtime/worker.py:419](../../src/acp_services/runtime/worker.py#L419)。组合根相关代码由 `71cefe52` 引入。
+**位置：** [worker_bootstrap.py:447](../../src/acp_services/worker_bootstrap.py#L447)、[worker_bootstrap.py:472](../../src/acp_services/worker_bootstrap.py#L472)、[runtime/worker.py:419](../../src/acp_services/runtime/worker.py#L419)。组合根相关代码由 `745ee2b2` 引入。
 
 **触发 A：** 当前 envelope 属于 attempt 2，默认 receipt 路径仍有 attempt 1 的 completed 回执。
 

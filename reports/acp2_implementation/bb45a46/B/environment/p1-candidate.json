@@ -1,6 +1,6 @@
 {
   "b_fix_overlay": {
-    "applied_with": "git apply --3way --whitespace=nowarn (no conflicts; 9646183+overlay state)",
+    "applied_with": "git apply --3way --whitespace=nowarn (no conflicts; 400f4a7+overlay state)",
     "base_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
     "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
     "files_changed": 150,
@@ -42,13 +42,13 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "server_base_revision": "400f4a7060daef336f33570b0c14c3a0662c000a",
   "server_base_tree": "0982ff03355a5a82b6624116a75f38a82d4dcb85",
-  "server_base_tree_equals_main_head_9646183_tree": true,
+  "server_base_tree_equals_main_head_400f4a7_tree": true,
   "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "server_revision_kind": "git-commit",
   "server_source": "/opt/acp2-dev/B",
   "server_tree": "316687f434b0a584614becdd7ef3f1032c5b1899",
-  "server_tree_equals_main_head_9646183_tree": false,
-  "server_tree_rule": "P1 = main HEAD 9646183 (B00-B09) + the frozen final-debug B-fix overlay. 9646183 alone has no R01/R02/R05 publication of the scientific body, so B10a cannot read energy/geometry after restart from it (proved by the pre-P1 run recorded under B10/m1-baseline-pre-p1-112f93d and B10/local-singlepoint-aborted-harness-bug). Q04 requires recording the actual candidate and its patch, not treating a SHA that lacks the final fixes as the candidate.",
+  "server_tree_equals_main_head_400f4a7_tree": false,
+  "server_tree_rule": "P1 = main HEAD 400f4a7 (B00-B09) + the frozen final-debug B-fix overlay. 400f4a7 alone has no R01/R02/R05 publication of the scientific body, so B10a cannot read energy/geometry after restart from it (proved by the pre-P1 run recorded under B10/m1-baseline-pre-p1-112f93d and B10/local-singlepoint-aborted-harness-bug). Q04 requires recording the actual candidate and its patch, not treating a SHA that lacks the final fixes as the candidate.",
   "server_worktree_status_porcelain_empty": true,
   "tested_matrix": {
     "b10a_local_singlepoint": {

@@ -140,7 +140,7 @@
   "contract_set_version": 1,
   "contract_version_basis": {
     "handoff_h2": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
-    "handoff_h2_sha256": "eb8ec28094290637889c3a323e935a4e0990e67c09ed4648d84aafafdabcccbe",
+    "handoff_h2_sha256": "5096c24aec4216695842f5ab660806977e9b2c75e78fef9da832e2589f1b0d31",
     "handoff_h2_version": 1,
     "rule": "H3 closes P1 on the exact H2 bytes it was built from. It adds no contract field and widens no enum; a new semantic requires the next contract version."
   },

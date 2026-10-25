@@ -1,6 +1,6 @@
 {
   "candidate_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
-  "candidate_revision_note": "candidate_revision is the clean release source recorded by release-manifest.json; the B15/B17 receipts carry the controller env label f60fda8, and package-install defaults to the harness baseline 096cdff. These labels are not code claims.",
+  "candidate_revision_note": "candidate_revision is the clean release source recorded by release-manifest.json; the B15/B17 receipts carry the controller env label d5b4a8a, and package-install defaults to the harness baseline 3670790. These labels are not code claims.",
   "controller_candidate_revision_label": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
   "defects": [
     {
@@ -128,7 +128,7 @@
       "overall_result": "FAIL",
       "release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
       "repo_head_at_reproduction": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
-      "stage": "Original self-reproduction, as published at dc72de2"
+      "stage": "Original self-reproduction, as published at aaf2c4b"
     },
     {
       "candidate_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
@@ -152,10 +152,10 @@
         "lsf",
         "disconnect_recovery"
       ],
-      "note": "Overall remains NOT_VERIFIED, not PASS. The original FAIL is recoverable from the first history entry and from commit dc72de2.",
+      "note": "Overall remains NOT_VERIFIED, not PASS. The original FAIL is recoverable from the first history entry and from commit aaf2c4b.",
       "overall_result": "NOT_VERIFIED",
       "reason": "Both original FAIL rows PASS after B-fix-4. The remaining rows stay NOT_VERIFIED: third_party_plugin_install (no published operator procedure), agent_research_entry (C DSH/browser driver absent), lsf (no LSF client), disconnect_recovery (running-task recovery not re-run), plus the self-reproduction independence limitation.",
-      "stage": "Reconciled roll-up at HEAD 8349f21",
+      "stage": "Reconciled roll-up at HEAD 69deded",
       "superseded_by": "B/Bfix4/b26a-rerun"
     }
   ],

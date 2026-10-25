@@ -26,7 +26,7 @@ C25, and does **not** claim that the Diels–Alder reaction mechanism is proven.
 | Frozen P1 candidate | `77ac1de1af6a5db6b57f4f904a859305ff73042c` — not reused, not modified |
 
 The source checkout is intentionally dirty with unrelated changes, so the freeze is **not** claimed
-as a clean worktree. Instead the freeze is an immutable overlay produced by `git archive 460b0db`
+as a clean worktree. Instead the freeze is an immutable overlay produced by `git archive 1ffb76d`
 into a fresh directory. Verification compared all **2907** tracked files by `git hash-object`
 against the committed blob: **2907 verified, 0 mismatches, 0 missing, 0 extra**. Per-file SHA-256
 values are recorded in `candidate-files.sha256`; the aggregate digest of that manifest is recorded
