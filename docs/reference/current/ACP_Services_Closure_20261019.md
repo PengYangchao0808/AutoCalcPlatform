@@ -277,29 +277,59 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
     "contract_versions": {
       "first_slice_contract_version": 1,
       "first_slice_contract_doc": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md",
-      "first_slice_contract_doc_sha256_16": "e4e7dc4a0f020e38",
+      "first_slice_contract_doc_sha256_16": "92b83a5c5f05e619",
       "a04_events_contract_doc": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md",
       "a04_events_contract_sha256_16": "140148c325dd7f42",
       "a04_status": "DEFERRED"
     },
     "verified_digests": {
-      "first_slice_contract_doc": {"kind": "file", "path": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md", "sha256_16": "e4e7dc4a0f020e38"},
-      "a04_events_contract_doc": {"kind": "file", "path": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md", "sha256_16": "140148c325dd7f42"},
-      "contract_samples": {"kind": "dir", "path": "tests/baseline/services-evidence/contract_samples", "files": 31, "sha256_16": "367815d7cb7291bc"},
-      "frames_mapping": {"kind": "dir", "path": "tests/fixtures/science_products/frames_mapping", "files": 12, "sha256_16": "79d229e24101a430"}
+      "first_slice_contract_doc": {
+        "kind": "file",
+        "path": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md",
+        "sha256_16": "92b83a5c5f05e619"
+      },
+      "a04_events_contract_doc": {
+        "kind": "file",
+        "path": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md",
+        "sha256_16": "82eee4066b5b8ccb"
+      },
+      "contract_samples": {
+        "kind": "dir",
+        "path": "tests/baseline/services-evidence/contract_samples",
+        "files": 31,
+        "sha256_16": "b31c5571e3cd7ac6"
+      },
+      "frames_mapping": {
+        "kind": "dir",
+        "path": "tests/fixtures/science_products/frames_mapping",
+        "files": 12,
+        "sha256_16": "79d229e24101a430"
+      }
     },
     "recorded_digests": {
-      "four_combination_record": {"path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md", "sha256_16": "8b3e6bb407a0c51b", "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a"},
-      "cache_only_switch_matrix": {"path": "tests/baseline/services-evidence/cache_only_switch_matrix.md", "sha256_16": "6f97e465929bb7c1"}
+      "four_combination_record": {
+        "path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md",
+        "sha256_16": "2a96835d4d287f6a",
+        "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a"
+      },
+      "cache_only_switch_matrix": {
+        "path": "tests/baseline/services-evidence/cache_only_switch_matrix.md",
+        "sha256_16": "6f97e465929bb7c1"
+      }
     }
   },
   "consumes": {
     "path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md",
     "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a",
-    "sha256_16": "8b3e6bb407a0c51b",
+    "sha256_16": "2a96835d4d287f6a",
     "combination_execution_owner": "plan todo 75",
     "re_executed_here": false,
-    "combinations": ["F0+S0", "F1+S0", "F0+S1", "F1+S1"],
+    "combinations": [
+      "F0+S0",
+      "F1+S0",
+      "F0+S1",
+      "F1+S1"
+    ],
     "combination_status": {
       "F0+S0": "PASS_IN_REPO",
       "F1+S0": "PASS_IN_REPO",
@@ -311,69 +341,588 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
     "module_verification": {
       "id": "L1",
       "rows": [
-        {"id": "L1-01", "item": "Data port / read-only root / persistent prepare / transfer verify", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_data_port.py", "tests/test_services_read_root.py", "tests/test_services_prepare_operations.py", "tests/test_services_transfer_verify.py"]},
-        {"id": "L1-02", "item": "persistent events / authz stream / ordering / freshness", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_events.py", "tests/test_services_events_authz.py", "tests/test_services_event_ordering.py", "tests/test_services_freshness.py"]},
-        {"id": "L1-03", "item": "envelope / worker contract / chain switch / workflow enablement", "status": "PASS", "claim": "in_repo", "note": "F-3 resolved at 3922f07: worker-boundary guard scoped; negative injections retained; pytest tests/test_services_worker_contract.py -q -> 49 passed, exit 0; original FAIL retained as superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", "tests/test_services_envelope.py", "tests/test_services_chain_switch.py", "tests/test_services_workflow_enablement.py"]},
-        {"id": "L1-04", "item": "store/schema migration equivalence", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_migration_equivalence.py", "tests/baseline/services-evidence/migration_ledger.md"]},
-        {"id": "L1-05", "item": "execution isolation capability matrix", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_isolation.py", "tests/baseline/services-evidence/isolation_matrix.md"]},
-        {"id": "L1-06", "item": "access boundary / identity / api keys / admin", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_api_keys.py", "tests/test_services_local_boundary.py", "tests/test_services_identity_model.py", "tests/test_services_identity_mapping.py", "tests/test_services_identity_lifecycle.py", "tests/test_services_entry_authz.py", "tests/test_services_admin.py"]},
-        {"id": "L1-07", "item": "admission / quota / usage / metering policy", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_admission.py", "tests/test_services_quota.py", "tests/test_services_usage.py", "tests/test_services_metering_policy.py", "tests/test_services_metering_decoupling.py"]},
-        {"id": "L1-08", "item": "archive export / import", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_archive_export.py", "tests/test_services_archive_import.py"]},
-        {"id": "L1-09", "item": "MCP / machine output / structured logging", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_mcp.py", "tests/test_services_machine_output.py", "tests/test_services_logging.py"]},
-        {"id": "L1-10", "item": "init unified / config apply / lab doctor / standalone / provisioning", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_init_unified.py", "tests/test_services_config_apply.py", "tests/test_services_config_validation.py", "tests/test_services_action_gating.py", "tests/test_services_lab_init.py", "tests/test_services_standalone_recipe.py", "tests/test_services_provisioning.py"]},
-        {"id": "L1-11", "item": "fault-injection matrix", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_fault_matrix.py", "tests/baseline/services-evidence/fault_matrix_report.md"]},
-        {"id": "L1-12", "item": "consistent backup/restore drill", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_backup_restore.py", "tests/baseline/services-evidence/backup_restore_drill.md"]},
-        {"id": "L1-13", "item": "CAS / submission receipt / recovery semantics / runtime use cases", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_cas_fidelity.py", "tests/test_services_submission_fidelity.py", "tests/test_services_recovery_semantics.py", "tests/test_services_runtime_usecases.py"]},
-        {"id": "L1-14", "item": "helper merge / injection contracts / worker bootstrap / storage binding / projections / query budget / publication port", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_helper_merge.py", "tests/test_services_injection_contracts.py", "tests/test_services_worker_bootstrap.py", "tests/test_services_storage_binding.py", "tests/test_services_task_projection.py", "tests/test_services_query_budget.py", "tests/test_services_publication_data_port.py"]},
-        {"id": "L1-15", "item": "first-slice contracts / cache-only switch / four-combination checker", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_first_slice_contracts.py", "tests/test_services_cache_only_switch.py", "tests/test_services_four_combination_records.py", "tests/baseline/services-evidence/cache_only_switch_matrix.md"]},
-        {"id": "L1-16", "item": "shared guard suites (architecture/isolation/frames/markers/publication/integrity/recovery)", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_architecture_invariants.py", "tests/test_acp_services_isolation.py", "tests/test_cccp_isolation.py", "tests/test_acp_frames.py", "tests/test_scheduler_markers_audit.py", "tests/test_result_publication.py", "tests/test_execution_integrity_e2e.py", "tests/test_checkpoint_resume_semantics.py", "tests/test_recovery_fixtures_smoke.py", "tests/test_recovery_cross_version.py"]},
-        {"id": "L1-17", "item": "grep gates / F4 shared gate / packaging", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_f4_scope_audit.py", "tests/test_packaging_assets.py", "tests/test_services_packaging_roles.py", "tests/baseline/services-evidence/f4_scope_amendment_services.md"]},
-        {"id": "L1-18", "item": "per-slice verification discipline / plan consistency", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_plan_consistency.py", "tests/baseline/services-evidence/verification_discipline_report.md"]}
+        {
+          "id": "L1-01",
+          "item": "Data port / read-only root / persistent prepare / transfer verify",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_data_port.py",
+            "tests/test_services_read_root.py",
+            "tests/test_services_prepare_operations.py",
+            "tests/test_services_transfer_verify.py"
+          ]
+        },
+        {
+          "id": "L1-02",
+          "item": "persistent events / authz stream / ordering / freshness",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_events.py",
+            "tests/test_services_events_authz.py",
+            "tests/test_services_event_ordering.py",
+            "tests/test_services_freshness.py"
+          ]
+        },
+        {
+          "id": "L1-03",
+          "item": "envelope / worker contract / chain switch / workflow enablement",
+          "status": "PASS",
+          "claim": "in_repo",
+          "note": "F-3 resolved at 3922f07: worker-boundary guard scoped; negative injections retained; pytest tests/test_services_worker_contract.py -q -> 49 passed, exit 0; original FAIL retained as superseded audit note in section 6",
+          "evidence": [
+            "tests/test_services_worker_contract.py",
+            "tests/test_services_envelope.py",
+            "tests/test_services_chain_switch.py",
+            "tests/test_services_workflow_enablement.py"
+          ]
+        },
+        {
+          "id": "L1-04",
+          "item": "store/schema migration equivalence",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_migration_equivalence.py",
+            "tests/baseline/services-evidence/migration_ledger.md"
+          ]
+        },
+        {
+          "id": "L1-05",
+          "item": "execution isolation capability matrix",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_isolation.py",
+            "tests/baseline/services-evidence/isolation_matrix.md"
+          ]
+        },
+        {
+          "id": "L1-06",
+          "item": "access boundary / identity / api keys / admin",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_api_keys.py",
+            "tests/test_services_local_boundary.py",
+            "tests/test_services_identity_model.py",
+            "tests/test_services_identity_mapping.py",
+            "tests/test_services_identity_lifecycle.py",
+            "tests/test_services_entry_authz.py",
+            "tests/test_services_admin.py"
+          ]
+        },
+        {
+          "id": "L1-07",
+          "item": "admission / quota / usage / metering policy",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_admission.py",
+            "tests/test_services_quota.py",
+            "tests/test_services_usage.py",
+            "tests/test_services_metering_policy.py",
+            "tests/test_services_metering_decoupling.py"
+          ]
+        },
+        {
+          "id": "L1-08",
+          "item": "archive export / import",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_archive_export.py",
+            "tests/test_services_archive_import.py"
+          ]
+        },
+        {
+          "id": "L1-09",
+          "item": "MCP / machine output / structured logging",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_mcp.py",
+            "tests/test_services_machine_output.py",
+            "tests/test_services_logging.py"
+          ]
+        },
+        {
+          "id": "L1-10",
+          "item": "init unified / config apply / lab doctor / standalone / provisioning",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_init_unified.py",
+            "tests/test_services_config_apply.py",
+            "tests/test_services_config_validation.py",
+            "tests/test_services_action_gating.py",
+            "tests/test_services_lab_init.py",
+            "tests/test_services_standalone_recipe.py",
+            "tests/test_services_provisioning.py"
+          ]
+        },
+        {
+          "id": "L1-11",
+          "item": "fault-injection matrix",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_fault_matrix.py",
+            "tests/baseline/services-evidence/fault_matrix_report.md"
+          ]
+        },
+        {
+          "id": "L1-12",
+          "item": "consistent backup/restore drill",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_backup_restore.py",
+            "tests/baseline/services-evidence/backup_restore_drill.md"
+          ]
+        },
+        {
+          "id": "L1-13",
+          "item": "CAS / submission receipt / recovery semantics / runtime use cases",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_cas_fidelity.py",
+            "tests/test_services_submission_fidelity.py",
+            "tests/test_services_recovery_semantics.py",
+            "tests/test_services_runtime_usecases.py"
+          ]
+        },
+        {
+          "id": "L1-14",
+          "item": "helper merge / injection contracts / worker bootstrap / storage binding / projections / query budget / publication port",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_helper_merge.py",
+            "tests/test_services_injection_contracts.py",
+            "tests/test_services_worker_bootstrap.py",
+            "tests/test_services_storage_binding.py",
+            "tests/test_services_task_projection.py",
+            "tests/test_services_query_budget.py",
+            "tests/test_services_publication_data_port.py"
+          ]
+        },
+        {
+          "id": "L1-15",
+          "item": "first-slice contracts / cache-only switch / four-combination checker",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_first_slice_contracts.py",
+            "tests/test_services_cache_only_switch.py",
+            "tests/test_services_four_combination_records.py",
+            "tests/baseline/services-evidence/cache_only_switch_matrix.md"
+          ]
+        },
+        {
+          "id": "L1-16",
+          "item": "shared guard suites (architecture/isolation/frames/markers/publication/integrity/recovery)",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_architecture_invariants.py",
+            "tests/test_acp_services_isolation.py",
+            "tests/test_cccp_isolation.py",
+            "tests/test_acp_frames.py",
+            "tests/test_scheduler_markers_audit.py",
+            "tests/test_result_publication.py",
+            "tests/test_execution_integrity_e2e.py",
+            "tests/test_checkpoint_resume_semantics.py",
+            "tests/test_recovery_fixtures_smoke.py",
+            "tests/test_recovery_cross_version.py"
+          ]
+        },
+        {
+          "id": "L1-17",
+          "item": "grep gates / F4 shared gate / packaging",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_f4_scope_audit.py",
+            "tests/test_packaging_assets.py",
+            "tests/test_services_packaging_roles.py",
+            "tests/baseline/services-evidence/f4_scope_amendment_services.md"
+          ]
+        },
+        {
+          "id": "L1-18",
+          "item": "per-slice verification discipline / plan consistency",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_plan_consistency.py",
+            "tests/baseline/services-evidence/verification_discipline_report.md"
+          ]
+        }
       ]
     },
     "default_entry_integration": {
       "id": "L2",
       "rows": [
-        {"id": "L2-01", "item": "acp task local task-management verbs", "entry": "CLI acp task", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/cli.py", "tests/test_services_cli_full_loop.py"]},
-        {"id": "L2-02", "item": "read-only availability and prepared endpoints", "entry": "HTTP /api/v1", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/api/v1_routes.py", "tests/test_services_cache_only_switch.py", "tests/test_services_entry_authz.py"]},
-        {"id": "L2-03", "item": "legacy GET read surfaces retained for F0", "entry": "HTTP /api/v1", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/api/v1_routes.py", "tests/baseline/services-evidence/migration_ledger.md"]},
-        {"id": "L2-04", "item": "persistent prepare executor and outbox delivery wired in JobManager", "entry": "JobManager assembly", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/scheduler/manager.py", "tests/test_services_prepare_operations.py", "tests/test_services_event_ordering.py"]},
-        {"id": "L2-05", "item": "publication port wired into executor and remote runner", "entry": "executor + remote runner", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/calculations/executor.py", "src/acp/scheduler/remote/runner.py", "tests/test_services_publication_data_port.py", "tests/test_result_publication.py"]},
-        {"id": "L2-06", "item": "single execution-entry dispatcher wired locally and remotely", "entry": "local runner + script_gen", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/scheduler/runner.py", "src/acp/scheduler/remote/runner.py", "src/acp/scheduler/remote/script_gen.py", "tests/test_services_chain_switch.py"]},
-        {"id": "L2-07", "item": "per-workflow enablement (8/15 first batch, 7 legacy)", "entry": "execution_chain capability table", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_workflow_enablement.py", "tests/baseline/services-evidence/workflow_enablement_matrix.md"]},
-        {"id": "L2-08", "item": "runtime control use cases shared by HTTP and CLI", "entry": "HTTP + CLI", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/api/v1_routes.py", "src/acp/cli.py", "tests/test_services_runtime_usecases.py"]},
-        {"id": "L2-09", "item": "acp init Lab doctor branch", "entry": "CLI acp init", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/init_wizard/flows.py", "tests/test_services_lab_init.py"]},
-        {"id": "L2-10", "item": "research evidence projection route", "entry": "HTTP /api/v2", "status": "PASS", "claim": "in_repo", "evidence": ["src/acp/api/v2_routes.py", "tests/test_services_evidence_projection.py"]},
-        {"id": "L2-11", "item": "frontend consumption of cache-only read surface", "entry": "frontend call sites", "status": "NOT_VERIFIED", "claim": "none", "channel": "A05", "reason": "backend endpoints delivered but frontend declares prepareAvailability=false and has zero call sites for /availability or /prepared/; field delivered is not frontend integrated", "evidence": ["frontend/js/workbench/contracts/task_view_contract.js"]},
-        {"id": "L2-12", "item": "admission/quota/identity-lifecycle wired into dispatch and UI", "entry": "runtime submit / HTTP / UI", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "components delivered (f00625b / 9e0185b / 014234c) but zero consumers in src/acp; not wired to HTTP/UI or submit pre-check", "evidence": ["src/acp_services/runtime/admission.py", "src/acp_services/runtime/quota.py", "src/acp_services/workspace/identity_lifecycle.py"]},
-        {"id": "L2-13", "item": "archive export/import bound to CLI or HTTP", "entry": "CLI / HTTP", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "Data-side builders exist but no src/acp consumer binds them to an entry point", "evidence": ["src/acp/services_data_bootstrap.py"]},
-        {"id": "L2-14", "item": "MCP stdio entry bound to a default entry", "entry": "acp default entry", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "protocol implementation and 39 tests delivered; no src/acp consumer of entrypoints.mcp", "evidence": ["src/acp_services/entrypoints/mcp.py", "tests/test_services_mcp.py"]},
-        {"id": "L2-15", "item": "metering decoupling wired into production path", "entry": "runtime completion/read path", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "module and 26 tests delivered; zero src/acp consumers", "evidence": ["src/acp_services/runtime/metering_decoupling.py", "tests/test_services_metering_decoupling.py"]},
-        {"id": "L2-16", "item": "A04 refresh protocol consumption", "entry": "frontend event consumption", "status": "NOT_VERIFIED", "claim": "none", "channel": "A04-lane", "reason": "A04 is DEFERRED / not integrated; delivered artifact is the frontend-compatibility refactor", "evidence": ["docs/reference/next-change/ACP_Services_Events_A04_Contract.md"]},
-        {"id": "L2-17", "item": "full 15/15 envelope coverage", "entry": "execution_chain capability table", "status": "NOT_VERIFIED", "claim": "none", "channel": "C10", "reason": "7 workflows remain legacy pending C01 closure T20-T30; full-coverage gate OPEN", "evidence": ["tests/baseline/services-evidence/workflow_enablement_matrix.md"]}
+        {
+          "id": "L2-01",
+          "item": "acp task local task-management verbs",
+          "entry": "CLI acp task",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/cli.py",
+            "tests/test_services_cli_full_loop.py"
+          ]
+        },
+        {
+          "id": "L2-02",
+          "item": "read-only availability and prepared endpoints",
+          "entry": "HTTP /api/v1",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/api/v1_routes.py",
+            "tests/test_services_cache_only_switch.py",
+            "tests/test_services_entry_authz.py"
+          ]
+        },
+        {
+          "id": "L2-03",
+          "item": "legacy GET read surfaces retained for F0",
+          "entry": "HTTP /api/v1",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/api/v1_routes.py",
+            "tests/baseline/services-evidence/migration_ledger.md"
+          ]
+        },
+        {
+          "id": "L2-04",
+          "item": "persistent prepare executor and outbox delivery wired in JobManager",
+          "entry": "JobManager assembly",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/scheduler/manager.py",
+            "tests/test_services_prepare_operations.py",
+            "tests/test_services_event_ordering.py"
+          ]
+        },
+        {
+          "id": "L2-05",
+          "item": "publication port wired into executor and remote runner",
+          "entry": "executor + remote runner",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/calculations/executor.py",
+            "src/acp/scheduler/remote/runner.py",
+            "tests/test_services_publication_data_port.py",
+            "tests/test_result_publication.py"
+          ]
+        },
+        {
+          "id": "L2-06",
+          "item": "single execution-entry dispatcher wired locally and remotely",
+          "entry": "local runner + script_gen",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/scheduler/runner.py",
+            "src/acp/scheduler/remote/runner.py",
+            "src/acp/scheduler/remote/script_gen.py",
+            "tests/test_services_chain_switch.py"
+          ]
+        },
+        {
+          "id": "L2-07",
+          "item": "per-workflow enablement (8/15 first batch, 7 legacy)",
+          "entry": "execution_chain capability table",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_workflow_enablement.py",
+            "tests/baseline/services-evidence/workflow_enablement_matrix.md"
+          ]
+        },
+        {
+          "id": "L2-08",
+          "item": "runtime control use cases shared by HTTP and CLI",
+          "entry": "HTTP + CLI",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/api/v1_routes.py",
+            "src/acp/cli.py",
+            "tests/test_services_runtime_usecases.py"
+          ]
+        },
+        {
+          "id": "L2-09",
+          "item": "acp init Lab doctor branch",
+          "entry": "CLI acp init",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/init_wizard/flows.py",
+            "tests/test_services_lab_init.py"
+          ]
+        },
+        {
+          "id": "L2-10",
+          "item": "research evidence projection route",
+          "entry": "HTTP /api/v2",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "src/acp/api/v2_routes.py",
+            "tests/test_services_evidence_projection.py"
+          ]
+        },
+        {
+          "id": "L2-11",
+          "item": "frontend consumption of cache-only read surface",
+          "entry": "frontend call sites",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "A05",
+          "reason": "backend endpoints delivered but frontend declares prepareAvailability=false and has zero call sites for /availability or /prepared/; field delivered is not frontend integrated",
+          "evidence": [
+            "frontend/js/workbench/contracts/task_view_contract.js"
+          ]
+        },
+        {
+          "id": "L2-12",
+          "item": "admission/quota/identity-lifecycle wired into dispatch and UI",
+          "entry": "runtime submit / HTTP / UI",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "B",
+          "reason": "components delivered (f00625b / 9e0185b / 014234c) but zero consumers in src/acp; not wired to HTTP/UI or submit pre-check",
+          "evidence": [
+            "src/acp_services/runtime/admission.py",
+            "src/acp_services/runtime/quota.py",
+            "src/acp_services/workspace/identity_lifecycle.py"
+          ]
+        },
+        {
+          "id": "L2-13",
+          "item": "archive export/import bound to CLI or HTTP",
+          "entry": "CLI / HTTP",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "B",
+          "reason": "Data-side builders exist but no src/acp consumer binds them to an entry point",
+          "evidence": [
+            "src/acp/services_data_bootstrap.py"
+          ]
+        },
+        {
+          "id": "L2-14",
+          "item": "MCP stdio entry bound to a default entry",
+          "entry": "acp default entry",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "B",
+          "reason": "protocol implementation and 39 tests delivered; no src/acp consumer of entrypoints.mcp",
+          "evidence": [
+            "src/acp_services/entrypoints/mcp.py",
+            "tests/test_services_mcp.py"
+          ]
+        },
+        {
+          "id": "L2-15",
+          "item": "metering decoupling wired into production path",
+          "entry": "runtime completion/read path",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "B",
+          "reason": "module and 26 tests delivered; zero src/acp consumers",
+          "evidence": [
+            "src/acp_services/runtime/metering_decoupling.py",
+            "tests/test_services_metering_decoupling.py"
+          ]
+        },
+        {
+          "id": "L2-16",
+          "item": "A04 refresh protocol consumption",
+          "entry": "frontend event consumption",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "A04-lane",
+          "reason": "A04 is DEFERRED / not integrated; delivered artifact is the frontend-compatibility refactor",
+          "evidence": [
+            "docs/reference/next-change/ACP_Services_Events_A04_Contract.md"
+          ]
+        },
+        {
+          "id": "L2-17",
+          "item": "full 15/15 envelope coverage",
+          "entry": "execution_chain capability table",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "C10",
+          "reason": "7 workflows remain legacy pending C01 closure T20-T30; full-coverage gate OPEN",
+          "evidence": [
+            "tests/baseline/services-evidence/workflow_enablement_matrix.md"
+          ]
+        }
       ]
     },
     "real_function_acceptance": {
       "id": "L3",
       "rows": [
-        {"id": "L3-01", "item": "local closed loop through real acp processes", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_cli_full_loop.py", "tests/test_services_cli_offline_loop.py", ".omo/evidence/acp-parallel-plan-2-services/task-74-acp-parallel-plan-2-services.md"], "note": "science backend is tests.conftest.FakeBackend; no real-science claim"},
-        {"id": "L3-02", "item": "offline loop with network and paramiko refused", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_cli_offline_loop.py"]},
-        {"id": "L3-03", "item": "cross-version recovery with real fixtures", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_recovery_fixtures_smoke.py", "tests/test_recovery_cross_version.py", "tests/test_checkpoint_resume_semantics.py"]},
-        {"id": "L3-04", "item": "consistent backup/restore with real DB/artifacts/keys", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_backup_restore.py", "tests/baseline/services-evidence/backup_restore_drill.md"]},
-        {"id": "L3-05", "item": "real ORCA/xTB/CREST/CENSO execution", "status": "NOT_VERIFIED", "claim": "none", "channel": "C10", "reason": "xtb/crest/censo/isostat/molclus absent from PATH; ORCA binary present but not executed through ACP on this candidate; no compute budget", "evidence": ["tests/baseline/cccp-evidence/c10-final-evidence-index.md"]},
-        {"id": "L3-06", "item": "LSF submit/monitor/stop-scope on a live cluster", "status": "NOT_VERIFIED", "claim": "none", "channel": "C10", "reason": "openlava binaries present but lsb_init fails: Unable to open file lsf.conf; no cluster and no node credentials", "evidence": ["tests/baseline/services-evidence/isolation_matrix.md"]},
-        {"id": "L3-07", "item": "real browser scenarios on this candidate", "status": "NOT_VERIFIED", "claim": "none", "channel": "A05", "reason": "A05 browser matrix is bound to its own commit; no candidate-level black-box suite delivered; B has no A source write access", "evidence": [".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md", "docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md"]},
-        {"id": "L3-08", "item": "scientific equivalence (same input, old vs new output)", "status": "NOT_VERIFIED", "claim": "none", "channel": "C10", "reason": "C10 judgement not delivered on this candidate; HN-02 cross-lane state B pending; frontend simulation is not accepted as proof", "evidence": ["tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md", "tests/baseline/cccp-evidence/c10-final-evidence-index.md"]},
-        {"id": "L3-09", "item": "Lab account/session UI", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "identity components delivered (014234c) but not wired into HTTP/UI; OIDC_SUPPORTED is False", "evidence": ["src/acp_services/workspace/identity_lifecycle.py", "docs/reference/next-change/ACP_Services_Identity_Support_Scope.md"]},
-        {"id": "L3-10", "item": "production release / static cache / old-tab window", "status": "NOT_VERIFIED", "claim": "none", "channel": "B", "reason": "no release performed; todo 76 is gated on F1-F4 approval; no service restart", "evidence": ["tests/baseline/services-evidence/packaging_rollout_receipts.md"]}
+        {
+          "id": "L3-01",
+          "item": "local closed loop through real acp processes",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_cli_full_loop.py",
+            "tests/test_services_cli_offline_loop.py",
+            ".omo/evidence/acp-parallel-plan-2-services/task-74-acp-parallel-plan-2-services.md"
+          ],
+          "note": "science backend is tests.conftest.FakeBackend; no real-science claim"
+        },
+        {
+          "id": "L3-02",
+          "item": "offline loop with network and paramiko refused",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_cli_offline_loop.py"
+          ]
+        },
+        {
+          "id": "L3-03",
+          "item": "cross-version recovery with real fixtures",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_recovery_fixtures_smoke.py",
+            "tests/test_recovery_cross_version.py",
+            "tests/test_checkpoint_resume_semantics.py"
+          ]
+        },
+        {
+          "id": "L3-04",
+          "item": "consistent backup/restore with real DB/artifacts/keys",
+          "status": "PASS",
+          "claim": "in_repo",
+          "evidence": [
+            "tests/test_services_backup_restore.py",
+            "tests/baseline/services-evidence/backup_restore_drill.md"
+          ]
+        },
+        {
+          "id": "L3-05",
+          "item": "real ORCA/xTB/CREST/CENSO execution",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "C10",
+          "reason": "xtb/crest/censo/isostat/molclus absent from PATH; ORCA binary present but not executed through ACP on this candidate; no compute budget",
+          "evidence": [
+            "tests/baseline/cccp-evidence/c10-final-evidence-index.md"
+          ]
+        },
+        {
+          "id": "L3-06",
+          "item": "LSF submit/monitor/stop-scope on a live cluster",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "C10",
+          "reason": "openlava binaries present but lsb_init fails: Unable to open file lsf.conf; no cluster and no node credentials",
+          "evidence": [
+            "tests/baseline/services-evidence/isolation_matrix.md"
+          ]
+        },
+        {
+          "id": "L3-07",
+          "item": "real browser scenarios on this candidate",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "A05",
+          "reason": "A05 browser matrix is bound to its own commit; no candidate-level black-box suite delivered; B has no A source write access",
+          "evidence": [
+            ".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md",
+            "docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md"
+          ]
+        },
+        {
+          "id": "L3-08",
+          "item": "scientific equivalence (same input, old vs new output)",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "C10",
+          "reason": "C10 judgement not delivered on this candidate; HN-02 cross-lane state B pending; frontend simulation is not accepted as proof",
+          "evidence": [
+            "tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md",
+            "tests/baseline/cccp-evidence/c10-final-evidence-index.md"
+          ]
+        },
+        {
+          "id": "L3-09",
+          "item": "Lab account/session UI",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "B",
+          "reason": "identity components delivered (014234c) but not wired into HTTP/UI; OIDC_SUPPORTED is False",
+          "evidence": [
+            "src/acp_services/workspace/identity_lifecycle.py",
+            "docs/reference/next-change/ACP_Services_Identity_Support_Scope.md"
+          ]
+        },
+        {
+          "id": "L3-10",
+          "item": "production release / static cache / old-tab window",
+          "status": "NOT_VERIFIED",
+          "claim": "none",
+          "channel": "B",
+          "reason": "no release performed; todo 76 is gated on F1-F4 approval; no service restart",
+          "evidence": [
+            "tests/baseline/services-evidence/packaging_rollout_receipts.md"
+          ]
+        }
       ]
     }
   },
   "environment_gates": {
-    "browser": {"channel": "A05", "status": "NOT_VERIFIED", "reason": "A05 browser matrix bound to its own commit (899c7c0 / 29efba8); no candidate-level black-box suite delivered; B never gains A source write access", "evidence": [".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md"]},
-    "scientific_software": {"channel": "C10", "status": "NOT_VERIFIED", "reason": "real QC binaries unavailable/not executed on this candidate; C10 judgement absent", "evidence": ["tests/baseline/cccp-evidence/c10-final-evidence-index.md"]},
-    "lsf": {"channel": "C10", "status": "NOT_VERIFIED", "reason": "no lsf.conf and no node credentials; live cluster enforcement not exercised", "evidence": ["tests/baseline/services-evidence/isolation_matrix.md"]},
-    "production": {"channel": "B", "status": "NOT_VERIFIED", "reason": "release is todo 76, gated on F1-F4 approval; nothing was published or restarted", "evidence": ["tests/baseline/services-evidence/packaging_rollout_receipts.md"]}
+    "browser": {
+      "channel": "A05",
+      "status": "NOT_VERIFIED",
+      "reason": "A05 browser matrix bound to its own commit (899c7c0 / 29efba8); no candidate-level black-box suite delivered; B never gains A source write access",
+      "evidence": [
+        ".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md"
+      ]
+    },
+    "scientific_software": {
+      "channel": "C10",
+      "status": "NOT_VERIFIED",
+      "reason": "real QC binaries unavailable/not executed on this candidate; C10 judgement absent",
+      "evidence": [
+        "tests/baseline/cccp-evidence/c10-final-evidence-index.md"
+      ]
+    },
+    "lsf": {
+      "channel": "C10",
+      "status": "NOT_VERIFIED",
+      "reason": "no lsf.conf and no node credentials; live cluster enforcement not exercised",
+      "evidence": [
+        "tests/baseline/services-evidence/isolation_matrix.md"
+      ]
+    },
+    "production": {
+      "channel": "B",
+      "status": "NOT_VERIFIED",
+      "reason": "release is todo 76, gated on F1-F4 approval; nothing was published or restarted",
+      "evidence": [
+        "tests/baseline/services-evidence/packaging_rollout_receipts.md"
+      ]
+    }
   },
   "scientific_equivalence": {
     "status": "NOT_VERIFIED",
@@ -387,53 +936,243 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
     "frontend_simulation_used": false
   },
   "lane_receipts": [
-    {"lane": "A", "task": "A05", "deliverable": "browser scenarios on the same integrated candidate plus black-box tests for B to execute", "deferral_scope": "browser-only; B executes black-box tests and never gains A source write access; existing A05 evidence stays bound to its own commit", "status": "REGISTERED"},
-    {"lane": "C", "task": "C10", "deliverable": "scientific equivalence judgement on the same integrated candidate with fixed input and golden evidence", "deferral_scope": "scientific equivalence and real software execution; fixture-only or frontend simulation is not accepted", "status": "REGISTERED"}
+    {
+      "lane": "A",
+      "task": "A05",
+      "deliverable": "browser scenarios on the same integrated candidate plus black-box tests for B to execute",
+      "deferral_scope": "browser-only; B executes black-box tests and never gains A source write access; existing A05 evidence stays bound to its own commit",
+      "status": "REGISTERED"
+    },
+    {
+      "lane": "C",
+      "task": "C10",
+      "deliverable": "scientific equivalence judgement on the same integrated candidate with fixed input and golden evidence",
+      "deferral_scope": "scientific equivalence and real software execution; fixture-only or frontend simulation is not accepted",
+      "status": "REGISTERED"
+    }
   ],
   "deferrals": [
-    {"item": "A04 refresh protocol", "status": "DEFERRED", "old_functionality_kept": "per-task SSE and polling retained; no fabricated cursors", "owner": "A04-lane (A frontend + B Services events)", "blocker": "A04 refresh protocol is DEFERRED; frontend eventCursor:false; no real persistent event protocol/cursor", "entry_condition": "real service protocol and persistent facts; deliver Client cursor/reset/reconnect and refresh switching independently", "next_gate": "L2-16 real service protocol cursor/reset/reconnect; old service and terminal refresh preserved"},
-    {"item": "Lab identity HTTP/UI (todo 73)", "status": "NOT_VERIFIED", "old_functionality_kept": "local-single path unchanged", "owner": "B - Runtime/Workspace (L3-09)", "blocker": "identity components delivered (014234c) but not wired into HTTP/UI; OIDC_SUPPORTED=False", "entry_condition": "after local-single, wire identity into HTTP/UI per deployment profile", "next_gate": "L3-09 Lab account/session UI on real HTTP/UI; cross-user/revocation checks"},
-    {"item": "admission/quota pre-dispatch wiring", "status": "NOT_VERIFIED", "old_functionality_kept": "legacy JobManager dispatch retained", "owner": "B - Runtime/Workspace (L2-12)", "blocker": "AdmissionController/Admin/Usage/Quota have zero consumers in src/acp; not wired to submit/dispatch", "entry_condition": "after local-single, wire admission/quota into submit and dispatch preconditions", "next_gate": "L2-12 cross-user deny/revoke/duplicate-request/quota-race/isolation"},
-    {"item": "archive export/import CLI-API binding", "status": "NOT_VERIFIED", "old_functionality_kept": "existing archive read path unchanged", "owner": "B - Data archive/import (L2-13)", "blocker": "Data-side archive/import builders exist but no CLI/HTTP consumer; command/permission/integrity semantics unbound", "entry_condition": "after M1 stable, deliver as M2 with explicit command/permission/receipt/integrity/idempotent import", "next_gate": "L2-13 local export -> new-environment import -> read/evidence complete; import does not auto-run tasks"},
-    {"item": "MCP default-entry binding", "status": "NOT_VERIFIED", "old_functionality_kept": "acp run and acp task unaffected", "owner": "B - Services entrypoints (L2-14)", "blocker": "protocol implementation and tests delivered, but no src/acp default entry consumer and no real-client interop", "entry_condition": "Runtime/Data/Workspace use cases stable and an explicit default entry defined", "next_gate": "L2-14 at least one real client; identity/failure/cancel/idempotency parity with GUI/CLI"},
-    {"item": "frontend cache-only consumption", "status": "NOT_VERIFIED", "old_functionality_kept": "legacy GET fallback retained", "owner": "A05 frontend (L2-11)", "blocker": "backend availability/prepared endpoints delivered but prepareAvailability=false and zero call sites", "entry_condition": "after D04-D06/D11, wire explicit prepare and read-only queries per real capability/deployment config; keep S0 adapter", "next_gate": "L2-11 default page queued/running/failed/ready, restart retry, terminal background prefetch; old service receives no new protocol; no GET implicit prepare"},
-    {"item": "full 15/15 envelope coverage", "status": "NOT_VERIFIED", "old_functionality_kept": "7 legacy workflows run on the old path without independence claims", "owner": "B/C - closure and activation (L2-17)", "blocker": "7 workflows remain legacy pending C01 closure; default set is only singlepoint", "entry_condition": "per-workflow request builder + publication/recovery evidence; add to default set one at a time", "next_gate": "15/15 gate after T29/T30/T31/T39 per-workflow evidence"},
-    {"item": "B11 price/ledger", "status": "DEFERRED", "old_functionality_kept": "usage-only and quota-only deliverable; no billing claims", "owner": "B - Runtime metering/quota (B11)", "blocker": "price policy gate; usage-only/quota-only deliverable, no billing semantics", "entry_condition": "independent price/ledger policy approval", "next_gate": "B11 price/ledger gate; no billing claim before closure"},
-    {"item": "metering production wiring", "status": "NOT_VERIFIED", "old_functionality_kept": "existing runtime completion/read path unchanged; no usage fact required for job completion", "owner": "B - Runtime metering (L2-15)", "blocker": "metering_decoupling module and 26 tests delivered but zero consumers on Runtime completion/recovery/read paths", "entry_condition": "wire the delivered decoupling module into real Runtime completion/recovery/read paths and record usage facts separately", "next_gate": "L2-15 duplicate/out-of-order receipts do not double-meter; metering failure never changes science completion or result readability; pricing is a separate gate"}
+    {
+      "item": "A04 refresh protocol",
+      "status": "DEFERRED",
+      "old_functionality_kept": "per-task SSE and polling retained; no fabricated cursors",
+      "owner": "A04-lane (A frontend + B Services events)",
+      "blocker": "A04 refresh protocol is DEFERRED; frontend eventCursor:false; no real persistent event protocol/cursor",
+      "entry_condition": "real service protocol and persistent facts; deliver Client cursor/reset/reconnect and refresh switching independently",
+      "next_gate": "L2-16 real service protocol cursor/reset/reconnect; old service and terminal refresh preserved"
+    },
+    {
+      "item": "Lab identity HTTP/UI (todo 73)",
+      "status": "NOT_VERIFIED",
+      "old_functionality_kept": "local-single path unchanged",
+      "owner": "B - Runtime/Workspace (L3-09)",
+      "blocker": "identity components delivered (014234c) but not wired into HTTP/UI; OIDC_SUPPORTED=False",
+      "entry_condition": "after local-single, wire identity into HTTP/UI per deployment profile",
+      "next_gate": "L3-09 Lab account/session UI on real HTTP/UI; cross-user/revocation checks"
+    },
+    {
+      "item": "admission/quota pre-dispatch wiring",
+      "status": "NOT_VERIFIED",
+      "old_functionality_kept": "legacy JobManager dispatch retained",
+      "owner": "B - Runtime/Workspace (L2-12)",
+      "blocker": "AdmissionController/Admin/Usage/Quota have zero consumers in src/acp; not wired to submit/dispatch",
+      "entry_condition": "after local-single, wire admission/quota into submit and dispatch preconditions",
+      "next_gate": "L2-12 cross-user deny/revoke/duplicate-request/quota-race/isolation"
+    },
+    {
+      "item": "archive export/import CLI-API binding",
+      "status": "NOT_VERIFIED",
+      "old_functionality_kept": "existing archive read path unchanged",
+      "owner": "B - Data archive/import (L2-13)",
+      "blocker": "Data-side archive/import builders exist but no CLI/HTTP consumer; command/permission/integrity semantics unbound",
+      "entry_condition": "after M1 stable, deliver as M2 with explicit command/permission/receipt/integrity/idempotent import",
+      "next_gate": "L2-13 local export -> new-environment import -> read/evidence complete; import does not auto-run tasks"
+    },
+    {
+      "item": "MCP default-entry binding",
+      "status": "NOT_VERIFIED",
+      "old_functionality_kept": "acp run and acp task unaffected",
+      "owner": "B - Services entrypoints (L2-14)",
+      "blocker": "protocol implementation and tests delivered, but no src/acp default entry consumer and no real-client interop",
+      "entry_condition": "Runtime/Data/Workspace use cases stable and an explicit default entry defined",
+      "next_gate": "L2-14 at least one real client; identity/failure/cancel/idempotency parity with GUI/CLI"
+    },
+    {
+      "item": "frontend cache-only consumption",
+      "status": "NOT_VERIFIED",
+      "old_functionality_kept": "legacy GET fallback retained",
+      "owner": "A05 frontend (L2-11)",
+      "blocker": "backend availability/prepared endpoints delivered but prepareAvailability=false and zero call sites",
+      "entry_condition": "after D04-D06/D11, wire explicit prepare and read-only queries per real capability/deployment config; keep S0 adapter",
+      "next_gate": "L2-11 default page queued/running/failed/ready, restart retry, terminal background prefetch; old service receives no new protocol; no GET implicit prepare"
+    },
+    {
+      "item": "full 15/15 envelope coverage",
+      "status": "NOT_VERIFIED",
+      "old_functionality_kept": "7 legacy workflows run on the old path without independence claims",
+      "owner": "B/C - closure and activation (L2-17)",
+      "blocker": "7 workflows remain legacy pending C01 closure; default set is only singlepoint",
+      "entry_condition": "per-workflow request builder + publication/recovery evidence; add to default set one at a time",
+      "next_gate": "15/15 gate after T29/T30/T31/T39 per-workflow evidence"
+    },
+    {
+      "item": "B11 price/ledger",
+      "status": "DEFERRED",
+      "old_functionality_kept": "usage-only and quota-only deliverable; no billing claims",
+      "owner": "B - Runtime metering/quota (B11)",
+      "blocker": "price policy gate; usage-only/quota-only deliverable, no billing semantics",
+      "entry_condition": "independent price/ledger policy approval",
+      "next_gate": "B11 price/ledger gate; no billing claim before closure"
+    },
+    {
+      "item": "metering production wiring",
+      "status": "NOT_VERIFIED",
+      "old_functionality_kept": "existing runtime completion/read path unchanged; no usage fact required for job completion",
+      "owner": "B - Runtime metering (L2-15)",
+      "blocker": "metering_decoupling module and 26 tests delivered but zero consumers on Runtime completion/recovery/read paths",
+      "entry_condition": "wire the delivered decoupling module into real Runtime completion/recovery/read paths and record usage facts separately",
+      "next_gate": "L2-15 duplicate/out-of-order receipts do not double-meter; metering failure never changes science completion or result readability; pricing is a separate gate"
+    }
   ],
   "findings": [
-    {"id": "F-3", "status": "RESOLVED", "owner": "todo 80 F-wave remediation A (worker-boundary guard scope)", "summary": "runtime package sqlite3/DB guard is green at 3922f07 (guard scoped to the worker boundary, negative injections retained); the original FAIL is retained as a superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md"]},
-    {"id": "F-1", "status": "RECORDED", "owner": "Data transfer", "summary": "ENOSPC surfaces as OSError instead of a typed rejection; safety holds (no partial publish, no tmp residue)", "evidence": ["tests/baseline/services-evidence/fault_matrix_report.md"]},
-    {"id": "F-2", "status": "RECORDED", "owner": "store migrations", "summary": "migration ledger is forward-only; contracted DB must be recovered from backup, not by re-running migrations", "evidence": ["tests/baseline/services-evidence/fault_matrix_report.md"]}
+    {
+      "id": "F-3",
+      "status": "RESOLVED",
+      "owner": "todo 80 F-wave remediation A (worker-boundary guard scope)",
+      "summary": "runtime package sqlite3/DB guard is green at 3922f07 (guard scoped to the worker boundary, negative injections retained); the original FAIL is retained as a superseded audit note in section 6",
+      "evidence": [
+        "tests/test_services_worker_contract.py",
+        ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md"
+      ]
+    },
+    {
+      "id": "F-1",
+      "status": "RECORDED",
+      "owner": "Data transfer",
+      "summary": "ENOSPC surfaces as OSError instead of a typed rejection; safety holds (no partial publish, no tmp residue)",
+      "evidence": [
+        "tests/baseline/services-evidence/fault_matrix_report.md"
+      ]
+    },
+    {
+      "id": "F-2",
+      "status": "RECORDED",
+      "owner": "store migrations",
+      "summary": "migration ledger is forward-only; contracted DB must be recovered from backup, not by re-running migrations",
+      "evidence": [
+        "tests/baseline/services-evidence/fault_matrix_report.md"
+      ]
+    }
   ],
   "evidence_index": [
-    {"path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md", "kind": "tracked"},
-    {"path": "docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md", "kind": "tracked"},
-    {"path": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md", "kind": "tracked"},
-    {"path": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md", "kind": "tracked"},
-    {"path": "docs/reference/next-change/ACP_Services_Identity_Support_Scope.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/verification_discipline_report.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/fault_matrix_report.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/backup_restore_drill.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/f4_scope_amendment_services.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/migration_ledger.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/handoff_registry.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/packaging_rollout_receipts.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/workflow_enablement_matrix.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/isolation_matrix.md", "kind": "tracked"},
-    {"path": "tests/baseline/services-evidence/cache_only_switch_matrix.md", "kind": "tracked"},
-    {"path": "tests/baseline/cccp-evidence/c10-final-evidence-index.md", "kind": "tracked"},
-    {"path": "tests/baseline/cccp-evidence/handoff_registry.md", "kind": "tracked"},
-    {"path": "tests/baseline/cccp-evidence/handoffs/HN-01-b06-closure.md", "kind": "tracked"},
-    {"path": "tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md", "kind": "tracked"},
-    {"path": ".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md", "kind": "local"},
-    {"path": ".omo/evidence/acp-parallel-plan-2-services/task-66-acp-parallel-plan-2-services.md", "kind": "local"},
-    {"path": ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md", "kind": "local"},
-    {"path": ".omo/evidence/acp-parallel-plan-2-services/task-68-acp-parallel-plan-2-services.md", "kind": "local"},
-    {"path": ".omo/evidence/acp-parallel-plan-2-services/task-74-acp-parallel-plan-2-services.md", "kind": "local"},
-    {"path": ".omo/evidence/acp-parallel-plan-2-services/task-75-acp-parallel-plan-2-services.md", "kind": "local"},
-    {"path": ".omo/evidence/acp-parallel-plan-3-cccp/c10-old-new-comparison.md", "kind": "local"},
-    {"path": ".omo/evidence/acp-parallel-plan-2-services/task-69-acp-parallel-plan-2-services.md", "kind": "local"}
+    {
+      "path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "docs/reference/next-change/ACP_Services_Identity_Support_Scope.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/verification_discipline_report.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/fault_matrix_report.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/backup_restore_drill.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/f4_scope_amendment_services.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/migration_ledger.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/handoff_registry.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/packaging_rollout_receipts.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/workflow_enablement_matrix.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/isolation_matrix.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/services-evidence/cache_only_switch_matrix.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/cccp-evidence/c10-final-evidence-index.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/cccp-evidence/handoff_registry.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/cccp-evidence/handoffs/HN-01-b06-closure.md",
+      "kind": "tracked"
+    },
+    {
+      "path": "tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md",
+      "kind": "tracked"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md",
+      "kind": "local"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-2-services/task-66-acp-parallel-plan-2-services.md",
+      "kind": "local"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md",
+      "kind": "local"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-2-services/task-68-acp-parallel-plan-2-services.md",
+      "kind": "local"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-2-services/task-74-acp-parallel-plan-2-services.md",
+      "kind": "local"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-2-services/task-75-acp-parallel-plan-2-services.md",
+      "kind": "local"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-3-cccp/c10-old-new-comparison.md",
+      "kind": "local"
+    },
+    {
+      "path": ".omo/evidence/acp-parallel-plan-2-services/task-69-acp-parallel-plan-2-services.md",
+      "kind": "local"
+    }
   ]
 }
 ```
