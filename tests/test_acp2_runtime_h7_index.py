@@ -182,7 +182,7 @@ def test_release_fix5_digests_resolve() -> None:
     assert manifest["version"] == "0.3.0"
     assert manifest["source"]["revision"] == source["source_revision"]
     assert index["source_candidate"]["release_source_revision"] == source["source_revision"]
-    assert source["source_revision"] == "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2"
+    assert source["source_revision"] == "5e2898acc386335ee1cb11ac9170650bb23d501d"
     assert len(manifest["artifacts"]) == 6
     for name, digest in manifest["artifacts"].items():
         artifact = RELEASE_DIR / name
@@ -210,7 +210,7 @@ def test_source_and_client_revisions_are_distinguished() -> None:
     source = index["source_candidate"]
     assert source["landed_head"] != source["release_source_revision"]
     assert source["raw_receipt_shas_need_not_match"] is True
-    assert index["client_revision"]["value"] == "39d4aeb20451c984e20d27e12270a15070adce12"
+    assert index["client_revision"]["value"] == "6905477c51c34fa1f8d53421553805ecbf88d897"
     assert "absent" in index["client_revision"]["status"]
     assert index["harness_revision"]["value"] == _sha256(
         REPO_ROOT / "scripts/acceptance/acp2_runtime.py"

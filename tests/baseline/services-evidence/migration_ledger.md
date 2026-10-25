@@ -1,6 +1,6 @@
 # Services migration ledger — 逐符号迁移台账（B00-3 / todo 3）
 
-**Created:** 2026-10-18，基线 HEAD `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9`（工作区含 lane A 前端改动）。
+**Created:** 2026-10-18，基线 HEAD `5184f1452de1fdad73e2a78b5739daa6e671eb61`（工作区含 lane A 前端改动）。
 **Scope:** ACP Services 计划（`acp-parallel-plan-2-services`）中将被 `src/acp_services/` 接管的平台服务符号/能力。
 **含义:** 本表只登记 **Services 侧平台能力**（Workspace/Runtime/Data/事件/入口/部署）。cccp 科学与任务基元的逐符号台账仍由
 `tests/baseline/refactor-evidence/migration_ledger.md` 维护（本文件不改动它，也不与之混列数）。两表结构相同以便同一解析器复用，但内容域不同。

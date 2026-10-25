@@ -22,7 +22,7 @@
 |---|---|---|---|---|---|
 | 1 | C39a / T56 首批 package-data（`build_spec_first_batch.md` §1b） | `0059eb6b20d0ea05b231fdf3e8d0b854718b166789d59e6f2dd1ff23621f3450` | `git apply tests/baseline/cccp-evidence/patches/c39a-pyproject-first-batch.patch`（基线 blob `25404ebd…` 与 C 记录一致，**无漂移、无需重写 hunk**） | `APPLY_C39A=0`（前置 `git apply --check` = `CHECK_EXIT=0`） | §1.1 wheel 构建 + §1.2 namelist |
 | 2 | T55 打包测试跟随（`build_spec_first_batch.md` §1d companion；资产迁移本身已在 lane-C 提交落地） | `t55-c39a-packaging-test.patch`（C 侧文件） | `git apply tests/baseline/cccp-evidence/patches/t55-c39a-packaging-test.patch`（同批） | `APPLY_T55=0`（前置 check = 0） | §1.3 pytest |
-| 3 | HN-05 / T42 节点依赖同步（`node_dependency_sync_request.md` §3.1+§3.2 diff；C 侧只交文档未动 live 文件） | provider 交付 `87ab288157cf8ffe8a58ca17248efc34d8a42ef6`（C-side docs 提交，本仓无 patch 文件——按 §3 diff 文本应用） | `pyproject.toml` core `"typing-extensions>=4.1"` + `requirements-node.txt` 末行同 pin（**两端同一提交**，S1 要求） | 应用脚本 exit 0（锚点唯一断言通过） | §1.5 |
+| 3 | HN-05 / T42 节点依赖同步（`node_dependency_sync_request.md` §3.1+§3.2 diff；C 侧只交文档未动 live 文件） | provider 交付 `633a9c2fa1bb7f20121776fd29b79ef0f7d28ad9`（C-side docs 提交，本仓无 patch 文件——按 §3 diff 文本应用） | `pyproject.toml` core `"typing-extensions>=4.1"` + `requirements-node.txt` 末行同 pin（**两端同一提交**，S1 要求） | 应用脚本 exit 0（锚点唯一断言通过） | §1.5 |
 
 **T55 状态核对（应用时实测）:** `src/acp/nmr/models/` 已空（HEAD 中不存在条目）、`src/cccp/analysis/nmr/model_assets/` 8 文件在 HEAD、`src/cccp/analysis/nmr/__init__.py` 在场 → C39a 新 glob **非 inert**（资产已迁移，规则即时生效）；无“源码可跑而安装包漏资产”窗口。`tests/test_packaging_assets.py` 仍指旧路径的 2 个 RED 测试随本批一并改指 → 绿。
 

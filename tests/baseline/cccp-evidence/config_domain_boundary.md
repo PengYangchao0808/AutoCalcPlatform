@@ -133,10 +133,10 @@ checked at task start: **all `[x]` (landed)**.
 
 | B todo | Commit (SHA) | Test record (from B evidence) |
 |---|---|---|
-| B36 (B07-2 unified init) | `f6e499cc1e871df1d3b6369670265b8f71751b38` | `python3.11 -m pytest tests/test_services_init_unified.py -q` (see `.omo/evidence/acp-parallel-plan-2-services/task-36-*.md`) |
-| B37 (B07-3 Paramiko-free node validation) | `56890d3f959ce1220514b12f6b91e9dbe4b37746` | `python3.11 -m pytest tests/test_config.py tests/test_acp_init_config_model.py tests/test_services_config_validation.py -q` → 120 passed (`task-37-*.md`) |
-| B38 (B07-4 config plan/apply) | `566c5bb2dd5921fc233869286ba367e41bd2390d` | `python3.11 -m pytest tests/test_services_config_apply.py -q` → 23 passed (`task-38-*.md`) |
-| B39 (B07-5 action gating) | `b0e44165e70c66f5e38c8e68204ceb069d98c998` | `python3.11 -m pytest tests/test_services_action_gating.py -q` → 26 passed (`task-39-*.md`) |
+| B36 (B07-2 unified init) | `edf65791b3eed4fc0eab2b4fa3fc95bd24376a08` | `python3.11 -m pytest tests/test_services_init_unified.py -q` (see `.omo/evidence/acp-parallel-plan-2-services/task-36-*.md`) |
+| B37 (B07-3 Paramiko-free node validation) | `5534b354dbce8f7c0bd289c946271a887c18c1c9` | `python3.11 -m pytest tests/test_config.py tests/test_acp_init_config_model.py tests/test_services_config_validation.py -q` → 120 passed (`task-37-*.md`) |
+| B38 (B07-4 config plan/apply) | `2d6646d06409ffe8155963da2f7fb371de06d907` | `python3.11 -m pytest tests/test_services_config_apply.py -q` → 23 passed (`task-38-*.md`) |
+| B39 (B07-5 action gating) | `9e4d21abc79cc2e4b60813c1cd97c9daad75c191` | `python3.11 -m pytest tests/test_services_action_gating.py -q` → 26 passed (`task-39-*.md`) |
 
 C-side joint-batch verification on the bound batch:
 

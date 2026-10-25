@@ -3,7 +3,7 @@
 - **registry_version:** `workflow-task-map v1`
 - **tracked_path:** `tests/baseline/cccp-evidence/workflow_task_map.md`（受版本控制；C 路 `C直写`）
 - **created:** 2026-10-18
-- **base_commit:** `0394393b33f1c4900c8eb17da343f7dbdc2098bb`
+- **base_commit:** `02949631eb3fbae3ac48960d824ae7147707d19e`
 - **plan_source:** `.omo/plans/acp-parallel-plan-3-cccp.md` todo 48（C10-s1）
 - **sources:** `.omo/evidence/acp-parallel-plan-3-cccp/c00-closure-ledger.md`（T2，15 工作流）+ `c00-closure-classification.md`（T3，类 1/2/3）+ `tests/baseline/cccp-evidence/write_registry.md`（T5 写权）
 - **harness:** `scripts/verify_cccp_slice_guard.py`（解析本表；每切片复跑并扩展）

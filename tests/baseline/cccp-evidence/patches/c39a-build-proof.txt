@@ -5,7 +5,7 @@
 ########################################################################
 
 == [1] repo snapshot ==
-0394393b33f1c4900c8eb17da343f7dbdc2098bb
+02949631eb3fbae3ac48960d824ae7147707d19e
  M docs/ACP_Architecture_Adjustment_Plan_20261016.md
  M scripts/verify_cccp_isolation.py
  M src/acp/calculations/identity.py
@@ -53,7 +53,7 @@ sum_file_bytes= 65509254 count= 8
 
 == [5] patch applicability: git apply --check ==
 # base blob HEAD:pyproject.toml = 25404ebd884066268a428948de8eb7d4cab23d22
-# last commit touching pyproject.toml = f5f70642890fabf62663a268d1bbe6548a32a114 feat(services): dependency-injection contracts for transitional assembly (no direct old-impl imports)
+# last commit touching pyproject.toml = af54329c6424989f940f26a246219e372484a447 feat(services): dependency-injection contracts for transitional assembly (no direct old-impl imports)
 # worktree pyproject.toml sha256 = 0c24617eb1a6ef5970e159fccf89a211e42183ddbbf356d105be4097ff274829
 正在检查补丁 pyproject.toml...
 CHECK_EXIT=0

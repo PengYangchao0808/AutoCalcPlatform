@@ -8,7 +8,7 @@
 | 计划来源 | `.omo/plans/acp-parallel-plan-3-cccp.md` todo 10（C01-s4）；交付内容=索引 §5 十要素 + 评审 C4 四状态表 + 评审 R2-P0-4 注入/装配列 |
 | B 侧消费入口 | `docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md:88-98`（B06：按 C01 闭包逐工作流启用；未满足切片保持旧兼容路径且不声称 worker 已独立） |
 | status | `delivered`（provider 侧；**未 integrated** — B 应用并验收前不得置 `integrated`） |
-| applied_commit（provider 交付提交） | `ffcf1b821c89100ac0a5166a8cbc3cbe3b751a66`（HN-01 入库提交）；`handoff_registry.md` HN-01 行回填（`delivered` + 该 sha）随本交付第二提交入库 |
+| applied_commit（provider 交付提交） | `36d4aa4dceaf63de71f9721454a89b40cd6508c9`（HN-01 入库提交）；`handoff_registry.md` HN-01 行回填（`delivered` + 该 sha）随本交付第二提交入库 |
 | 范围 | **T10a 最小交付**（8 个已判独立工作流闭包记录，立即交付，不等 T8/T9）+ **T10b 滚动汇总**（阻塞工作流与阻塞任务；后续 HN 包增量更新） |
 
 ---
@@ -24,11 +24,11 @@
 
 ## 1. 要素① 基线 revision（base_revision）
 
-- `provider_base = c1b34154296b4af24deaf1a73471b00bae9ef6c1`（本任务开工 fresh 快照，2026-10-18T21:14:28+08:00，`branch=feat/frontend-plan1-closure`）
+- `provider_base = d55ffa8ae1c21aed419471b901f7d1aa871646aa`（本任务开工 fresh 快照，2026-10-18T21:14:28+08:00，`branch=feat/frontend-plan1-closure`）
 - `consumer_applied = pending（B 未应用；无 B 侧应用提交 —— 本包全部补丁状态=已交付 delivered，零 integrated）`
 - `repo_state = dirty_worktree`（`git status --short` = 16 条，全部归属 Plan-1 前端在途 / Plan-2 Services 在途 / joint 规划评审文档；**无一条属本 C 路**；本任务只写 `tests/baseline/cccp-evidence/{handoffs/HN-01-b06-closure.md, handoff_registry.md}`）
 - `contract_freeze = T2 台账（c00-closure-ledger）+ T3 三分类 + T4 数值基线 + T5 写权登记 + T7 首片规格 + T48 隔离能力（2026-10-18）`
-- 先前 C 路登记基线（对照）：write/handoff registry = `dfad6b30e4aa01fa3e0249ac3eb00e313263f10d`；workflow_task_map = `0394393b33f1c4900c8eb17da343f7dbdc2098bb`。
+- 先前 C 路登记基线（对照）：write/handoff registry = `c4e6feb3af45390cada84447f2401a801716ed1b`；workflow_task_map = `02949631eb3fbae3ac48960d824ae7147707d19e`。
 
 ## 2. 要素② 调用方 / 旧 writer（callers & legacy writer）
 

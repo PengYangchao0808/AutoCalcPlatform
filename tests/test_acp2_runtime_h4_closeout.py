@@ -259,7 +259,7 @@ def test_candidate_freeze_is_verified_and_immutable() -> None:
     assert HEX40.match(candidate["candidate_sha"])
     assert HEX40.match(candidate["candidate_tree"])
     assert candidate["candidate_sha"] == candidate["server_revision"]
-    assert candidate["client_revision"] == "39d4aeb20451c984e20d27e12270a15070adce12"
+    assert candidate["client_revision"] == "6905477c51c34fa1f8d53421553805ecbf88d897"
     assert HEX64.match(candidate["contract_digest"])
     assert HEX64.match(candidate["env_digest"])
     assert HEX64.match(candidate["harness_revision"])

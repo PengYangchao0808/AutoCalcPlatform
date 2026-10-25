@@ -1,7 +1,7 @@
 {
   "sample_version": 1,
   "contract_version": 1,
-  "base_commit": "26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9",
+  "base_commit": "5184f1452de1fdad73e2a78b5739daa6e671eb61",
   "groups": {
     "access": [
       "normal",

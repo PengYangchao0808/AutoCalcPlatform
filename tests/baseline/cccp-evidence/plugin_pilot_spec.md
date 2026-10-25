@@ -3,7 +3,7 @@
 - **Owner:** C 路科学负责人 · **Plan:** `.omo/plans/acp-parallel-plan-3-cccp.md` todo 44
 - **Main plan:** `docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md` §C09 (关联 §31.1, OS-09, M1/M4)
 - **Write authority:** `C直写` — `src/cccp/plugin/**` (registered in `write_registry.md` §4.8); this spec + tests are C-owned tracked evidence.
-- **Base snapshot HEAD at spec time:** `c874676b73295dd097437cc7142df1d764af4fc3` (shared dirty worktree; only this slice's files are staged in the T44 commit).
+- **Base snapshot HEAD at spec time:** `a5bc60a6aee934670e94966475e6d92b7d9052ce` (shared dirty worktree; only this slice's files are staged in the T44 commit).
 - **Status:** 样板规格 + 最小骨架 + 定向测试已交付；外部 entry-point 发现/安装管线 **不在本片**（T45 SDK 面）。
 
 ## 1. Capability template choice (recorded decision)

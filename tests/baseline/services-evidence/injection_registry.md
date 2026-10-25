@@ -1,6 +1,6 @@
 # Injection registry — 过渡装配注入登记表（B01-0 / todo 72）
 
-**Created:** 2026-10-18，基线 HEAD `8a9f1b8fb37160a3e08d7734d3417ea5899c78c8`（工作区含 lane A 前端改动）。
+**Created:** 2026-10-18，基线 HEAD `289ffe659cb61bca266e1d721182c7d65d51cb4a`（工作区含 lane A 前端改动）。
 **Owner:** B 路（`src/acp_services/**` 单写者）。
 **Source of truth for the seam:** `src/acp_services/contracts/injection.py`（Protocol）+
 `src/acp/services_bootstrap.py`（旧 acp 装配入口）+ `src/acp_services/bootstrap.py`（`ServicesPorts`）。

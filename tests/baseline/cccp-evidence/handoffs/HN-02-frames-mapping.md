@@ -11,7 +11,7 @@
 | 契约锚点（只读） | `src/acp/results/frames.py`（`TrajectoryFrame.to_node():64`、`TrajectoryAnnotation.to_annotation():125`、`_ANNOTATION_METADATA_KEYS:90`、`VIEW_REGISTRY:175`）— **本任务零修改**（ANTI #21） |
 | 产品契约 | `src/cccp/calculation/products/*`（T11/T12，`PRODUCT_SCHEMA_VERSION=1`） |
 | status | `delivered`（provider 侧；**未 integrated** — B 应用并验收前不得置 `integrated`） |
-| applied_commit（provider 交付提交） | `4d2c6f8d10370faf84138678e9e10eba26c5f13a`（HN-02 文档 + 五态 fixture 入库提交）；`handoff_registry.md` HN-02 行回填同 sha（第二提交） |
+| applied_commit（provider 交付提交） | `06ce0452a714ff1e389e7ed1aedc022e8640cef9`（HN-02 文档 + 五态 fixture 入库提交）；`handoff_registry.md` HN-02 行回填同 sha（第二提交） |
 | 范围 | 本次声明支持的产品：`structure_trajectory` / `curve_scatter` / `vibration` / `derived`（`ProductKind` 全 4 类） |
 
 ---
@@ -29,7 +29,7 @@
 
 ## 1. 基线 revision（base_revision）
 
-- `provider_base = b5196a3d8f1f6197fc5184d6bfbf31f275b4c2b8`（本任务开工 fresh 快照，2026-10-18T22:44:58+08:00，`branch=feat/frontend-plan1-closure`）
+- `provider_base = 7ce58a6f8066e934baff4a61a53daa03ee201e73`（本任务开工 fresh 快照，2026-10-18T22:44:58+08:00，`branch=feat/frontend-plan1-closure`）
 - `consumer_applied = pending（B 未应用；无 B 侧应用提交）`
 - `repo_state = dirty_worktree`（Plan-1 前端 / Plan-2 Services 在途改动；**无一条属本 C 路**；本任务只写 `tests/baseline/cccp-evidence/{handoffs/HN-02-frames-mapping.md, handoff_registry.md}` + `tests/fixtures/science_products/frames_mapping/**`）
 - 先前 C 路登记基线：write/handoff registry = `dfad6b30…`；T11 契约 = `0394393…`；T12 契约 = `962c192`（提交 `d7b71f0`）。

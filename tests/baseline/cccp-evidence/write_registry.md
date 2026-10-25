@@ -4,7 +4,7 @@
 - **tracked_path:** `tests/baseline/cccp-evidence/write_registry.md`（受版本控制；本表本身为 C 路 C直写）
 - **created:** 2026-10-18
 - **owner:** C 路科学负责人（渠道 `docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md`）
-- **base_commit:** `dfad6b30e4aa01fa3e0249ac3eb00e313263f10d`
+- **base_commit:** `c4e6feb3af45390cada84447f2401a801716ed1b`
 - **计划来源:** `.omo/plans/acp-parallel-plan-3-cccp.md` todo 5（C00-s5）；消费方 T7–T10、T16–T47（登记门）
 - **覆盖底座:** `.omo/evidence/acp-parallel-plan-3-cccp/c00-closure-ledger.md`（T2 闭包台账，15 工作流）
 
@@ -14,10 +14,10 @@
 
 | 权威表 | 路径 | 归属 | 本表引用提交 |
 |---|---|---|---|
-| 单写者表 | `tests/baseline/services-evidence/single_writer_map.md` | B 路集成写者（镜像索引 §5） | `c50004304577ec88f36fb650014605d2b9b95c0f` |
-| 跨路交接登记表 | `tests/baseline/services-evidence/handoff_registry.md` | B 路集成写者，**C 共同维护、引用同一版本、不复制** | `c50004304577ec88f36fb650014605d2b9b95c0f` |
+| 单写者表 | `tests/baseline/services-evidence/single_writer_map.md` | B 路集成写者（镜像索引 §5） | `a113d679e38bea5d02c7def45592d52f2ddf105c` |
+| 跨路交接登记表 | `tests/baseline/services-evidence/handoff_registry.md` | B 路集成写者，**C 共同维护、引用同一版本、不复制** | `a113d679e38bea5d02c7def45592d52f2ddf105c` |
 
-> 两表由 B 路在 `8a9f1b8` 首次入库；`c50004304577ec88f36fb650014605d2b9b95c0f` 为最近一次触碰 `tests/baseline/services-evidence/` 的提交（`git log -1 -- tests/baseline/services-evidence/`）。C 侧 `tests/baseline/cccp-evidence/handoff_registry.md` 仅为 **HN 序号索引 + C 侧明细**，状态语义与本表一致，跨路事实以 B 的权威表为准。
+> 两表由 B 路在 `8a9f1b8` 首次入库；`a113d679e38bea5d02c7def45592d52f2ddf105c` 为最近一次触碰 `tests/baseline/services-evidence/` 的提交（`git log -1 -- tests/baseline/services-evidence/`）。C 侧 `tests/baseline/cccp-evidence/handoff_registry.md` 仅为 **HN 序号索引 + C 侧明细**，状态语义与本表一致，跨路事实以 B 的权威表为准。
 
 **粗粒度映射（照抄 B 表，不改写）：**
 

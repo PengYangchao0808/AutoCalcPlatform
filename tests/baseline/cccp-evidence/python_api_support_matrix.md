@@ -3,7 +3,7 @@
 - **Owner:** C 路（科学） · **Plan:** `.omo/plans/acp-parallel-plan-3-cccp.md` todo 43 (Wave 4a)
 - **Main plan refs:** `docs/ACP_Architecture_Adjustment_Plan_20261016.md` §18（CCCP Open Science 独立形态）、§27.4（适配接口与故障语义：缺字段/不支持版本不得默默换路径）
 - **Write authority:** `C直写` — `tests/baseline/cccp-evidence/**`（write_registry.md §4.9 科学证据）
-- **Base snapshot HEAD:** `29ed7969f699ab6d1832829d3432bd09283749e1`（`src/cccp` 与 `tests/fixtures` 在该提交下 clean；共享工作区另有他人未提交改动，见 §5）
+- **Base snapshot HEAD:** `f159db67dfb267b3283148fa1dfe4cc2072ce5de`（`src/cccp` 与 `tests/fixtures` 在该提交下 clean；共享工作区另有他人未提交改动，见 §5）
 - **Interpreter:** `/usr/bin/python3.11`（3.11.13）· Linux 5.14.0 el9 x86_64 · numpy 2.4.6 / rdkit 2026.03.6 / scipy 1.17.1 / matplotlib 3.11.1 / openpyxl 3.1.5 / PyYAML 6.0.3
 - **Raw evidence:** `.omo/evidence/acp-parallel-plan-3-cccp/task-43-inventory.txt`、`task-43-examples.txt`（命令原文 + 原始输出）
 - **Deliverables:** 本文件 + `tests/baseline/cccp-evidence/examples/`（1 个 inventory 生成器 + 3 个离线科学示例）

@@ -2,8 +2,8 @@
 
 - **Owner:** C 路科学负责人 · **Plan:** `.omo/plans/acp-parallel-plan-3-cccp.md` todo 56
 - **Base:** worktree `pyproject.toml` blob `25404ebd884066268a428948de8eb7d4cab23d22`
-  (last commit touching it `f5f70642890fabf62663a268d1bbe6548a32a114`); snapshot HEAD at
-  spec time `0394393b33f1c4900c8eb17da343f7dbdc2098bb` (shared dirty worktree — other lanes active).
+  (last commit touching it `af54329c6424989f940f26a246219e372484a447`); snapshot HEAD at
+  spec time `02949631eb3fbae3ac48960d824ae7147707d19e` (shared dirty worktree — other lanes active).
 - **Patch file:** `tests/baseline/cccp-evidence/patches/c39a-pyproject-first-batch.patch`
   (sha256 `0059eb6b20d0ea05b231fdf3e8d0b854718b166789d59e6f2dd1ff23621f3450`)
 - **Raw evidence log:** `tests/baseline/cccp-evidence/patches/c39a-build-proof.txt`
