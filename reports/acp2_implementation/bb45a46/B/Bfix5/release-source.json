@@ -53,7 +53,7 @@
   ],
   "label": "B-fix-5",
   "schema": "acp2.release.fix5.v1",
-  "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+  "source_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
   "source_revision_note": "Clean worktree at the F2/F3 remediation commit; release-fix5 adds installed-wheel remote sync/release keys, lazy remote import, receipt candidate identity and cross-entry release projection to release-fix4.",
   "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
   "version": "0.3.0"

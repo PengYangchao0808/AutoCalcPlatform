@@ -3,7 +3,7 @@
   "task": "B05 real stdio MCP process and protocol compatibility",
   "status": "PASS",
   "revisions": {
-    "server_revision": "0d7f6c9f01007c6dde83c7a4a944c279101aa3a3",
+    "server_revision": "0e9a0651ddb5bfafac687eb7ec897a761943fb4b",
     "probe_source_revision": "a0185b15c546fbd07919326d581fab13e05000fa",
     "server_module_root": "src",
     "probe_source_root": "/opt/acp2-dev/B",

@@ -1,6 +1,6 @@
 # ACP 架构整改验收 — 支持矩阵（D07 分格证据）
 
-**Candidate revision:** `878e3557b3b593a0c42adf842e80fe1408db395e`（基线冻结）+ T24–T32 交付
+**Candidate revision:** `d5d85e7c804878edd0cedb6bce1d32af2d92ad83`（基线冻结）+ T24–T32 交付
 **Published:** 2026-10-20（task 31）
 **矩阵性质:** 一行一个 active 工作流；每个**已执行**格子必须带命令/工件路径；没有执行证据的格子只能是 `OPEN` 或 `NOT_VERIFIED`，不得写 `PASS`。
 

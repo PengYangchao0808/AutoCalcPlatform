@@ -1,9 +1,9 @@
 {
-  "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+  "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
   "command_block_count": 23,
   "commands": [
     {
-      "command": "# label: REVERSIBLE\nexport ACP2_REPO=repo-root\nsource /opt/acp2-dev/data/b/acceptance-env.sh\nexport PYTHONPATH=\"$ACP2_REPO/src:$ACP2_REPO\"\nexport B24B_WORKSPACE=/opt/acp2-dev/data/b/b24b-migration\nexport B24B_EVIDENCE=\"$ACP2_EVIDENCE/B/B24b\"\nexport B24B_FIXTURE=/opt/acp2-dev/data/b/fixtures/migration/b24b-migration.json\nexport B24B_CANDIDATE=493790709830eac4ce347b5fb81414050f7a1e21\nexport ACP_CANDIDATE_REVISION=\"$B24B_CANDIDATE\"",
+      "command": "# label: REVERSIBLE\nexport ACP2_REPO=repo-root\nsource /opt/acp2-dev/data/b/acceptance-env.sh\nexport PYTHONPATH=\"$ACP2_REPO/src:$ACP2_REPO\"\nexport B24B_WORKSPACE=/opt/acp2-dev/data/b/b24b-migration\nexport B24B_EVIDENCE=\"$ACP2_EVIDENCE/B/B24b\"\nexport B24B_FIXTURE=/opt/acp2-dev/data/b/fixtures/migration/b24b-migration.json\nexport B24B_CANDIDATE=c134109c696e9bcb941e176bf681d45a569370b8\nexport ACP_CANDIDATE_REVISION=\"$B24B_CANDIDATE\"",
       "has_literal_ellipsis": false,
       "has_production_restart": false,
       "index": 1,
@@ -188,7 +188,7 @@
     }
   ],
   "generated_at": "2026-10-23T19:58:00Z",
-  "historical_migration_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "historical_migration_revision": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
   "labelled_count": 23,
   "literal_ellipsis_indices": [],
   "oldest_supported_schema": 21,
@@ -196,7 +196,7 @@
   "production_restart_indices": [],
   "result": "PASS",
   "runbook": "docs/reference/next-change/acp2-contracts/runtime/recovery-rollback-runbook.md",
-  "runbook_sha256": "4a2b01222891a8a85bccbd6d45b63c6785a3e9e671658e7dca8f9f76fef0c189",
+  "runbook_sha256": "097046714a38a4eaa509d9a04bd54898301b2323751a5447bbb9f94b22a2f767",
   "schema": "acp2.b24b.runbook_command_validation.v1",
   "target_schema": 23,
   "unlabelled_indices": [],

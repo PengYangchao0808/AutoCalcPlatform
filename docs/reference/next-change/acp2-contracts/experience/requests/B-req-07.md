@@ -8,7 +8,7 @@
 - **Consumer track:** C (`acp2-plan-c-rph-workbench`)
 - **Current schema revision:** no versioned `docs/reference/next-change/acp2-contracts/runtime/dependencies.json`
   is visible in the C baseline (`/opt/acp2-dev/C`, HEAD
-  `c54823109010b651de3f0cca28da5af54a10fdfb`); `runtime/**` is absent there.
+  `e7fa3283d040fedd7926ec50df06ae56e283c7ee`); `runtime/**` is absent there.
   C keeps its own rows in `experience/handoffs/dependencies-c.json`
   (`acp2.experience.dependencies-c.v1`, 6 rows, all `delivered:false`) and never
   edits the B file. Status: `NOT_VERIFIED(b00_handoff)`.
@@ -121,7 +121,7 @@ prerequisite set; an id in `after` that is not a prerequisite is
   "request": "B-req-07",
   "consumer": "C/T-02",
   "observed": {
-    "c_baseline_head": "c54823109010b651de3f0cca28da5af54a10fdfb",
+    "c_baseline_head": "e7fa3283d040fedd7926ec50df06ae56e283c7ee",
     "runtime_dir_present": false,
     "c_rows_file": "docs/reference/next-change/acp2-contracts/experience/handoffs/dependencies-c.json"
   },

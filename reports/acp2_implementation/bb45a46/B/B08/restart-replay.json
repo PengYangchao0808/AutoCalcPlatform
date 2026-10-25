@@ -7,7 +7,7 @@
   "health_before_restart": {
     "schema_version": 1,
     "status": "ok",
-    "candidate_revision": "ede698bb96fd51cb2a5f347185a15afcd03f8823",
+    "candidate_revision": "b061b50f8aecf130b3e597aad41f0f18270c586d",
     "contract_version": "1.1.0",
     "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
     "contract_digest_scope": "delivered-contract-set",
@@ -20,7 +20,7 @@
   "health_after_restart": {
     "schema_version": 1,
     "status": "ok",
-    "candidate_revision": "ede698bb96fd51cb2a5f347185a15afcd03f8823",
+    "candidate_revision": "b061b50f8aecf130b3e597aad41f0f18270c586d",
     "contract_version": "1.1.0",
     "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
     "contract_digest_scope": "delivered-contract-set",

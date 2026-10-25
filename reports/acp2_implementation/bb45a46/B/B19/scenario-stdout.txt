@@ -21,7 +21,7 @@
     "status": "NOT_VERIFIED"
   },
   "health_after_restart": {
-    "candidate_revision": "938e894342d643f75740289a0e7aa84ef071115f",
+    "candidate_revision": "3fa7e7b5329df7b6b825c895bc2924ad4ea17df3",
     "contract_digest": "aeecba1e9c21de16ed5c1c3a659ee88f0828225b1142bcf93a1ffbc897c9e55b",
     "contract_digest_scope": "delivered-contract-set",
     "contract_version": "1.3.0",
@@ -31,7 +31,7 @@
     "status": "ok"
   },
   "health_before": {
-    "candidate_revision": "938e894342d643f75740289a0e7aa84ef071115f",
+    "candidate_revision": "3fa7e7b5329df7b6b825c895bc2924ad4ea17df3",
     "contract_digest": "aeecba1e9c21de16ed5c1c3a659ee88f0828225b1142bcf93a1ffbc897c9e55b",
     "contract_digest_scope": "delivered-contract-set",
     "contract_version": "1.3.0",

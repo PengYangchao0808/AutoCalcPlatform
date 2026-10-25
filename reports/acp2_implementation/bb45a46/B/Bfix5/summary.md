@@ -1,6 +1,6 @@
 # B-fix-5 — F2/F3 blocking remediation
 
-Candidate: `0.3.0`, source revision `6ec01ec96fa81b89bec8ff321c38e3db2dc154d2`
+Candidate: `0.3.0`, source revision `5e2898acc386335ee1cb11ac9170650bb23d501d`
 (tree `e2b23771a47e7553738ef902cc4c1b62528fe508`). Release artifacts are in
 `../B25/release-fix5/` (digests: `../B25/release-fix5/source.json`,
 `release-digests.json` here). Historical `B25/release*/` artifacts were not

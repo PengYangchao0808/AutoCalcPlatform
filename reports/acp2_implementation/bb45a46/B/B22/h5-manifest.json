@@ -195,7 +195,7 @@
     "version_bump_performed": false
   },
   "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
-  "candidate_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
+  "candidate_revision": "9457e0247caf52de3949de00bad8d006a6d68424",
   "capability_contracts": {
     "a_example": {
       "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json",
@@ -494,7 +494,7 @@
       ],
       "schema": "acp2.b22.wheel-check.v1",
       "scope": "minimal local wheel build/install/uninstall; not the B25a release candidate",
-      "source_tree": "repo-root (working tree @ ded5cfd804675f7b341726990b925e08bc27794c, intentionally dirty)",
+      "source_tree": "repo-root (working tree @ 9457e0247caf52de3949de00bad8d006a6d68424, intentionally dirty)",
       "status": "PASS",
       "uninstall": {
         "cccp_still_importable": true,

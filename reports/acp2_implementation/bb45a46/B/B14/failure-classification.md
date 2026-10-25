@@ -15,7 +15,7 @@ Candidate under test: `fbac5abb50ba7f86603b786fc98d857df52f5f2a`
 Result: **9 failed, 10539 passed, 119 skipped, 95 deselected, 29 warnings in 1782.73s**.
 This is **not** a clean PASS and is not recorded as one.
 
-The unmerged B candidate `2a57d6b6d91427093c6a10e710e5a52446ed801e` was run with the
+The unmerged B candidate `a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4` was run with the
 same interpreter and an isolated run root for the six B-owned failing tests; the raw
 log is `base-b-candidate-failures.log`.
 
@@ -29,7 +29,7 @@ log is `base-b-candidate-failures.log`.
 | 6 | `tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner` | Pre-existing B race/flake; the two lifespans serialized and produced `['ok']` with no refusal, and the captured thread warning shows `sqlite3.OperationalError: database is locked`. | Fails on `2a57d6b` in `base-b-candidate-failures.log`. |
 | 7 | `tests/test_f4_scope_audit.py::test_omo_no_new_files` | Pre-existing B rule violation: `2a57d6b` already tracks five `.omo/evidence/task-*.md` files, so the guard fails before this integration. The candidate tracks 27 `.omo/` paths after the B00 overlay restoration (22 planning files added); the status is still the same pre-existing FAIL. | Fails on `2a57d6b` in `base-b-candidate-failures.log`. |
 | 8 | `tests/test_f4_scope_audit.py::test_migration_scope_audit_reaches_migration_files` | Pre-existing B audit gap: `src/acp/services_mcp_bootstrap.py` is changed outside the registered migration stations. The file is byte-identical between `2a57d6b` and the candidate. | Fails on `2a57d6b` in `base-b-candidate-failures.log`. |
-| 9 | `tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin` | Pre-existing C defect, inherited by inclusion. `frontend/js/workbench/features/scientific-evidence.js:751` names a local callback variable `token` and calls `token.fn()`; the B guard's addModel-token regex flags the name collision. The file is C-owned and B did not edit it. | Fails on C HEAD `e03a9dd9f6897ca0a8d43e69a10b22a20097f05d` with the same message; passes on unmerged B `2a57d6b`. |
+| 9 | `tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin` | Pre-existing C defect, inherited by inclusion. `frontend/js/workbench/features/scientific-evidence.js:751` names a local callback variable `token` and calls `token.fn()`; the B guard's addModel-token regex flags the name collision. The file is C-owned and B did not edit it. | Fails on C HEAD `35614fd83f616005a0546af35631c477151e7dde` with the same message; passes on unmerged B `2a57d6b`. |
 
 ## Net
 

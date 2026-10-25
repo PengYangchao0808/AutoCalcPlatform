@@ -4,7 +4,7 @@ B14a records what each track published on its own branch/worktree. B does not si
 A's or C's scope; the rows below are the other tracks' receipts and artifacts as
 found, and they are not promoted to B's PASS.
 
-## A — `acp2/a-science` @ `243d2b7c1f2d115b1fa67d8af35e4020fe7be2d8`
+## A — `acp2/a-science` @ `9977a106445177708e929557f9460e86914787ad`
 
 * No `reports/acp2_implementation/bb45a46/A/` evidence root exists on A's branch.
 * A published its science contracts under
@@ -18,7 +18,7 @@ found, and they are not promoted to B's PASS.
 * A's `cross-track-dependencies.json` marks every B- or C-produced edge
   `NOT_VERIFIED` with an explicit gap; B does not upgrade any of them here.
 
-## C — `acp2/c-experience` @ `e03a9dd9f6897ca0a8d43e69a10b22a20097f05d`
+## C — `acp2/c-experience` @ `35614fd83f616005a0546af35631c477151e7dde`
 
 C's worktree evidence root (outside git) contains these receipts:
 

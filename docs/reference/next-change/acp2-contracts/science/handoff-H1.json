@@ -1846,7 +1846,7 @@
       "contract": "docs/reference/next-change/acp2-contracts/science/errors.schema.json",
       "expected_result": "the six error_catalog examples and the three named error records are accepted",
       "path": "docs/reference/next-change/acp2-contracts/science/errors.schema.json",
-      "sha256": null,
+      "sha256": "ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
       "test": "test_error_records_validate_against_errors_schema"
     },
     {

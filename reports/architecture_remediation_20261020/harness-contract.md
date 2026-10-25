@@ -1,7 +1,7 @@
 # 验收 Harness 契约（Acceptance Harness Contract）
 
 **Frozen:** 2026-10-20 (task 1) — **在代码冻结之前**交付给任务 44/45 实现。
-**Candidate revision:** `878e3557b3b593a0c42adf842e80fe1408db395e`
+**Candidate revision:** `d5d85e7c804878edd0cedb6bce1d32af2d92ad83`
 **Implementers:** 任务 44 `scripts/acceptance/four_combinations.py`、任务 45 `scripts/acceptance/real_environment.py`（+ 各自 `tests/test_acceptance_*.py`）。
 **Executors:** 任务 41（四组合）、任务 42（真实环境）只**运行**本契约定义的场景，不改 harness。
 
@@ -32,7 +32,7 @@
 
 | cell | F（静态 bundle/前端） | S（服务） | 定义 |
 |---|---|---|---|
-| `F0/S0` | 冻结的真实**旧**静态文件集（worktree @ `878e3557b3b593a0c42adf842e80fe1408db395e`） | 旧服务实现 @ F0 | 本次整改前真实基线 |
+| `F0/S0` | 冻结的真实**旧**静态文件集（worktree @ `d5d85e7c804878edd0cedb6bce1d32af2d92ad83`） | 旧服务实现 @ F0 | 本次整改前真实基线 |
 | `F1/S0` | 修复候选静态文件集（worktree @ 代码候选 revision） | 旧服务实现 | 新前端 + 旧服务 |
 | `F0/S1` | 冻结旧静态文件集 | 新服务实现 | 旧前端 + 新服务 |
 | `F1/S1` | 修复候选静态文件集 | 新服务实现 | 修复候选 |
@@ -63,8 +63,8 @@
   "scenario": "m1-singlepoint | lsf-singlepoint | m1-failure-cancel-restart | browser-default-page | F0/S0 | F1/S0 | F0/S1 | F1/S1",
   "started_on": "2026-10-20T17:00:00+08:00",
   "finished_on": "2026-10-20T17:05:00+08:00",
-  "candidate_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
-  "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+  "candidate_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+  "f0_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
   "f1_revision": "<code candidate sha>",
   "environment": {
     "machine": "<uname -a>",
@@ -127,7 +127,7 @@
 | `--check-only <fixture.json>` | – | 只校验给定 fixture 的 schema/格合法性，**不起服务** |
 | `--cells F0/S0,F1/S0,F0/S1,F1/S1` | 否（默认四格） | 选择要执行的格 |
 | `--out <dir>` | 是（执行时） | 输出目录（`<out>/<cell>/...json`） |
-| `--f0-revision <sha>` | 否（默认 `878e3557b3b593a0c42adf842e80fe1408db395e`） | F0 worktree revision |
+| `--f0-revision <sha>` | 否（默认 `d5d85e7c804878edd0cedb6bce1d32af2d92ad83`） | F0 worktree revision |
 | `--f1-revision <sha>` | 否（默认 `HEAD`） | F1 worktree revision |
 | `--dry-run` | – | 打印将执行的命令，不执行，退出码 0 |
 

@@ -2,7 +2,7 @@
 
 日期：2026-10-21。**结论：FAIL，确认 4 项功能缺陷和 1 项验收证据缺口，共 1 项 P1、4 项 P2。** 本报告保存此次检查的结果；后续 debug 不回写这些原始结果。
 
-审查对象为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2` 加本次尚未提交的源码/测试修改，不能仅以 HEAD 代表候选。[baseline.json](evidence/baseline.json) 记录 18 个相关文件摘要；[candidate.patch](evidence/candidate.patch) 保存相关 tracked diff，SHA256 为 `44079de7ab200dfe92461a8ecc3b01e4fddb718183cf0ba79af09e4155aefe7c`。新增测试文件另列于 baseline 的摘要表，未包含在 tracked diff 中。检查结束时这些文件没有漂移。
+审查对象为 `3670790363c7a1959ad1dbe4b4297adec518952a` 加本次尚未提交的源码/测试修改，不能仅以 HEAD 代表候选。[baseline.json](evidence/baseline.json) 记录 18 个相关文件摘要；[candidate.patch](evidence/candidate.patch) 保存相关 tracked diff，SHA256 为 `44079de7ab200dfe92461a8ecc3b01e4fddb718183cf0ba79af09e4155aefe7c`。新增测试文件另列于 baseline 的摘要表，未包含在 tracked diff 中。检查结束时这些文件没有漂移。
 
 本阶段未修改用户实现、测试、计划及旧报告，没有重启生产服务。未打包 `tests/baseline/refactor-evidence/e2e-task-root.txt` 内容。
 

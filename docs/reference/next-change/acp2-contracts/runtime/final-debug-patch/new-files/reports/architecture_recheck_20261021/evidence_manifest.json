@@ -1,6 +1,6 @@
 {
   "schema": "acp.architecture_recheck_evidence.v1",
-  "revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
   "verdict": "FAIL",
   "findings": {
     "P1": 7,
@@ -12,12 +12,12 @@
   "files": [
     {
       "path": "REPORT.md",
-      "sha256": "917ff2448ab9ad6d58eab9c4cf2486b848eae2d4aeb9f0997e0d7980fad3c653",
+      "sha256": "1797c6a48035a98e13c4adf82670488f41538209f76894493fac205635a6f143",
       "bytes": 18053
     },
     {
       "path": "evidence/baseline.json",
-      "sha256": "b8fa572f42b00236d5c7ff2325904fef9b17be0fabfff2cae1ed20755cba5546",
+      "sha256": "50faa507bf047869510ccd274bd339cf8090cc36c146bfdaf58dabc02a78e5d4",
       "bytes": 2289
     },
     {

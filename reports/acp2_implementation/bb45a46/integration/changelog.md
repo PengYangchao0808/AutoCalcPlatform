@@ -1,12 +1,12 @@
 # ACP 2.0 Plan B — H7 release candidate changelog
 
 **Candidate:** `acp2.plan-b.h7.release-fix5` · version `0.3.0`
-**Release source:** `6ec01ec96fa81b89bec8ff321c38e3db2dc154d2` (tree `e2b23771a47e7553738ef902cc4c1b62528fe508`)
-**Landed code-fix HEAD at index time:** `493790709830eac4ce347b5fb81414050f7a1e21` (tree `f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a`)
+**Release source:** `5e2898acc386335ee1cb11ac9170650bb23d501d` (tree `e2b23771a47e7553738ef902cc4c1b62528fe508`)
+**Landed code-fix HEAD at index time:** `c134109c696e9bcb941e176bf681d45a569370b8` (tree `f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a`)
 **Release directory:** `reports/acp2_implementation/bb45a46/B/B25/release-fix5/`
 **Manifest:** `release-manifest.json` (sha256 `9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec`)
 
-**6ec01ec..493790709830eac4ce347b5fb81414050f7a1e21 -- src delta:** 10 files, +823/-161 (B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes plus the B-fix-7 `batch/options.py` overlay); release-fix5 artifacts remain built from `6ec01ec` with unchanged digests.
+**6ec01ec..c134109c696e9bcb941e176bf681d45a569370b8 -- src delta:** 10 files, +823/-161 (B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes plus the B-fix-7 `batch/options.py` overlay); release-fix5 artifacts remain built from `6ec01ec` with unchanged digests.
 
 This is a reviewable release candidate, **not a production deployment**. `acp.service`
 was not restarted and `/var/lib/acp/runs` was not touched.
@@ -91,7 +91,7 @@ not overwritten.
   `20261024_015940_001_fix5-lsf-sp4`.
 - **Candidate identity.** The package-install harness derives `candidate_revision` from
   `release_manifest.source.revision` (or `source.json`) and pins installed Lab health to
-  it: `6ec01ec96fa81b89bec8ff321c38e3db2dc154d2`.
+  it: `5e2898acc386335ee1cb11ac9170650bb23d501d`.
 - **Real LSF normal PASS.** `bsub` job `1765` on `node-157` ran ORCA 6.1.1, terminal
   state `completed`, exit 0, −1.116759307204 Ha, `release_id=1c79785a657c6614`,
   `release_digest=c5ccfcd1…`, `submission_id=sub_0fea781820a81666`. The remote ORCA

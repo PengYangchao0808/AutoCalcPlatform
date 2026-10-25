@@ -14,7 +14,7 @@
     "--no-browser"
   ],
   "bind_host": "127.0.0.1",
-  "candidate_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
+  "candidate_revision": "9457e0247caf52de3949de00bad8d006a6d68424",
   "config": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
   "cwd": "/opt/acp2-dev/data/b/controller-config",
   "health": "controller-health.json",

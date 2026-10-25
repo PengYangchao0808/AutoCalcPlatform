@@ -10,7 +10,7 @@
 
 按 `.omo/plans/acp-architecture-acceptance-remediation.md` 本批 debug 已完成规划；执行本手册时填写实际冻结 revision。该计划 task 36 明确只交接 MCP 默认入口、身份/配额生产接线等延期项；task 44/45 提供四组合与真实环境 Harness。这里接续其工作，不重做整个架构整改。
 
-2026-10-21 用户已确认 debug 完成；代码候选 `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`、完整交付 `096cdffe9a3817d8ee443d824830d87ec6e07bc2` 与剩余范围已在[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)登记。开工基线使用完整交付，真实科学/LSF、MCP 默认入口和独立发行仍按各自证据验收。
+2026-10-21 用户已确认 debug 完成；代码候选 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`、完整交付 `3670790363c7a1959ad1dbe4b4297adec518952a` 与剩余范围已在[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)登记。开工基线使用完整交付，真实科学/LSF、MCP 默认入口和独立发行仍按各自证据验收。
 
 **验收目标**：在本服务器运行隔离的 ACP Controller、MCP stdio 入口、DSH 官方客户端和真实模型，完成发现→预检→提交→查询→工件读取；同一任务可在 CLI/Workbench 查看。Local 计算在本机，LSF 计算在实际远端节点。普通 pytest、FakeBackend、直接调用 `McpServer.handle()` 均不能替代这条链。
 
@@ -543,7 +543,7 @@ p1-run01/
 
 ## B00 sync (2026-10-22)
 
-**Baseline reading rule.** The debug delivery revision is `096cdffe9a3817d8ee443d824830d87ec6e07bc2` and the historical code candidate is `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`; both are references only. This runbook's start baseline is the frozen overlay `final_debug_candidate = sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`, applied from `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/`. Never run the runbook from the dirty development checkout; B02 materializes and records the full commit SHA in `runtime/baseline-lock.json`.
+**Baseline reading rule.** The debug delivery revision is `3670790363c7a1959ad1dbe4b4297adec518952a` and the historical code candidate is `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`; both are references only. This runbook's start baseline is the frozen overlay `final_debug_candidate = sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`, applied from `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/`. Never run the runbook from the dirty development checkout; B02 materializes and records the full commit SHA in `runtime/baseline-lock.json`.
 
 **Path ownership.** A owns `src/cccp/**` and `acp2-contracts/science/**`; B owns `src/acp/**`, `src/acp_services/**`, `packaging/**`, `acp2-contracts/runtime/**` and runtime acceptance tooling; C owns `frontend/**`, `rph/**` and `acp2-contracts/experience/**`. Shared files and their single owners are frozen in `manifest.json.shared_files`.
 

@@ -87,9 +87,9 @@
   "candidate": {
     "client_revision": null,
     "harness_revision": "218a3097a36e6976b6638ab04212895aa0b22f89b7ee634cdac59a078ad14319",
-    "server_revision": "f60fda89b700bf1f828bf651183f88cf5e1913da"
+    "server_revision": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555"
   },
-  "candidate_revision": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+  "candidate_revision": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
   "command": [
     "/tmp/opencode/b26a-clean/venvs/web/bin/python",
     "/tmp/opencode/b26a-clean/tools/scripts/acceptance/acp2_runtime.py",

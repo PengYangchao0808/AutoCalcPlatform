@@ -9,8 +9,8 @@ one self-contained bundle from the contract root.
 
 | Field | Value |
 |---|---|
-| Base commit | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` |
-| Historical code candidate | `ab492cc8be9e46125fa2d2fae69a3ecaac64a548` |
+| Base commit | `3670790363c7a1959ad1dbe4b4297adec518952a` |
+| Historical code candidate | `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798` |
 | `candidate_id` | `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12` |
 | Candidate kind | source-overlay SHA-256, **not** a Git commit |
 | Source report | `reports/architecture_repair_20261022/REPORT.md` (`sha256:1a970c8d…15de`) |

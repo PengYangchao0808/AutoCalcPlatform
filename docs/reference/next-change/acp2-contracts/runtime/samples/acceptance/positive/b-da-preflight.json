@@ -6,7 +6,7 @@
   "scenario": "da-runtime",
   "phase": "da-preflight",
   "run_id": "20261022T123000Z-b-da-preflight-0001",
-  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "candidate_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
   "candidate": {
     "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
     "client_revision": null,

@@ -19,7 +19,7 @@
     "client_revision": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
     "harness_revision": "sha256:9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
     "harness_source_revision": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
-    "health_candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "health_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
     "contract_default_server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
   },
   "revision_note": "Explicit combination, not a single-identity claim. server_revision/client_revision are the candidate SHA because the Controller and the served frontend were loaded from the integration worktree (verified by module __file__, _FRONTEND_DIR and the second-Controller traceback paths). harness_revision is the harness script identity by its own sha256 rule, and harness_source_revision is the candidate SHA. /api/health still reports candidate_revision=ab492cc8... from the frozen runtime/baseline-lock.json; the four-location version/contract-lock bump is owned by B25a, so this is recorded rather than silently rewritten.",

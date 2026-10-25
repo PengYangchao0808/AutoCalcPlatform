@@ -1,4 +1,4 @@
-$ git diff --stat 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2..493790709830eac4ce347b5fb81414050f7a1e21 -- src
+$ git diff --stat 5e2898acc386335ee1cb11ac9170650bb23d501d..c134109c696e9bcb941e176bf681d45a569370b8 -- src
  src/acp/calculations/attempt_freeze.py       |  23 ++-
  src/acp/calculations/attempt_publication.py  | 192 ++++++++++++++++++---
  src/acp/calculations/batch/options.py        |  12 +-

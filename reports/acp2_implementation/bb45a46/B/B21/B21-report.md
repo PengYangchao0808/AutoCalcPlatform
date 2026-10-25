@@ -1,6 +1,6 @@
 # B21 — Infrastructure adapter contract, discovery and isolation
 
-- Candidate: `feat/frontend-plan1-closure` @ `9793bfa16640e29f293a1d5672565f3a7c30e1cf` (working tree)
+- Candidate: `feat/frontend-plan1-closure` @ `a1562e10a3e3bac8ef62db9fe7ad692c1effd41c` (working tree)
 - Date: 2026-10-23 UTC
 - Owner: Plan B runtime (B21; B22 consumes these facts)
 - Controller: one loopback test Controller at `127.0.0.1:18782`, run root

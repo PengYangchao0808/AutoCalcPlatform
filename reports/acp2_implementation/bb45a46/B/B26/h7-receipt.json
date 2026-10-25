@@ -37,16 +37,16 @@
     "h7_effect": "H7 stays OPEN; B does not sign C's missing experience scope.",
     "observed_evidence_present": false,
     "plan_path": "docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md",
-    "plan_sha256": "7b7a10da9a102f84e843836911216c252f1c2137e946432dfd6123ad79eb42a5"
+    "plan_sha256": "d915b5365b632fbcfba5b36a33a51db598ac738d44bdafe1dafbc0ff39bb1fab"
   },
   "candidate": {
-    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "evidence_revision": "0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d",
     "harness_revision": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b",
-    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head": "c134109c696e9bcb941e176bf681d45a569370b8",
     "landed_head_delta": {
-      "base_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
-      "command": "git diff --stat 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2..493790709830eac4ce347b5fb81414050f7a1e21 -- src",
+      "base_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
+      "command": "git diff --stat 5e2898acc386335ee1cb11ac9170650bb23d501d..c134109c696e9bcb941e176bf681d45a569370b8 -- src",
       "deletions": 161,
       "files": [
         "src/acp/calculations/attempt_freeze.py",
@@ -60,14 +60,14 @@
         "src/acp_services/runtime/worker.py",
         "src/acp_services/worker_bootstrap.py"
       ],
-      "head_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "head_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
       "insertions": 823,
       "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 6ec01ec and their digests are unchanged."
     },
     "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
     "release_manifest_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
     "release_source_json_sha256": "e2ee1096e0a7ec05efe86ffb35c4e6772d65021c1c50d8643c099780ced436df",
-    "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "source_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
     "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
   },
   "generated_at": "2026-10-23T20:51:56Z",
@@ -142,7 +142,7 @@
         {
           "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4/B-fix-5 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-          "receipt_sha256": "4a9c23e2b522a0e0cda43d2b06b3427d7855c9c0a82e234e4107b7cc9b4e94ca",
+          "receipt_sha256": "edd24943ac7263d1c2bd1e68d2e54bf111d428d6c5e595831282432c21b6dbec",
           "unchanged": [
             "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
             "A/B/C path ownership globs",
@@ -152,7 +152,7 @@
         {
           "rationale": "Environment identity is host-level and was not changed by B-fix-4/B-fix-5 (no dependency, config, or interpreter change).",
           "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
-          "receipt_sha256": "23482d905b2fdcaec0c6b0ca4e1347ee394e5955d20c401c4dccb097f50a5d1f",
+          "receipt_sha256": "3055cdd512092c510a0805c2d4c89ee14609fe11892303a5ff7eba4376f0bc8e",
           "unchanged": [
             "isolated worktree and host environment",
             "three-package import source at the P0 baseline"
@@ -285,7 +285,7 @@
         {
           "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
-          "receipt_sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
+          "receipt_sha256": "5467d708af041585b26ed77ae80c51cc8638fbfa7a07d0c25e2c6eb2e2a336cd",
           "unchanged": [
             "src/acp_services/runtime/adapter_registry.py and capability_registry.py",
             "plugin workspace fixtures and descriptor digests",

@@ -1,5 +1,5 @@
 {
-  "candidate_sha": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "candidate_sha": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
   "compat_reader_pytest": {
     "argv": [
       "/usr/bin/python3.11",
@@ -21,7 +21,7 @@
     {
       "browser": "PASS",
       "candidate_patch_sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
-      "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+      "candidate_revision": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
       "cell": "F0/S1",
       "legacy_readers": {
         "BatchOptimize": "PASS",
@@ -46,7 +46,7 @@
     {
       "browser": "PASS",
       "candidate_patch_sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
-      "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+      "candidate_revision": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
       "cell": "F1/S1",
       "legacy_readers": {
         "BatchOptimize": "PASS",

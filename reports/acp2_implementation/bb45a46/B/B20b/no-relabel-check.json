@@ -5,7 +5,7 @@
   "source_facts": {
     "b20a_receipt": {
       "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
-      "sha256": "98c7315da0463ea17fd9eb4e5e065f1b0f5b3639cd6e337055d4a3ca75f3bb1f",
+      "sha256": "9f148482c6f29b5a85938e452fad8b5f14b368404d4020fd15d601f5e0dc8b18",
       "result": "NOT_VERIFIED",
       "reason": "c24a_absent",
       "exit_code": 2

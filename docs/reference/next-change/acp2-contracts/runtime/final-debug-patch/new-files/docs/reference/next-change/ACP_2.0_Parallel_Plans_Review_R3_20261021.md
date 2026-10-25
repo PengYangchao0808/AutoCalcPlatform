@@ -11,11 +11,11 @@
 
 ### 1.1 评审基线
 
-工作区 HEAD 为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2`，分支为 `feat/frontend-plan1-closure`。工作区存在未提交业务修改及未跟踪规划文档，因此本文的代码判断绑定于**本次读取的工作区文件**，不能仅用 HEAD 代表全部被审内容。正式实施仍应按 B00/B02 重新冻结实际 debug 候选。
+工作区 HEAD 为 `3670790363c7a1959ad1dbe4b4297adec518952a`，分支为 `feat/frontend-plan1-closure`。工作区存在未提交业务修改及未跟踪规划文档，因此本文的代码判断绑定于**本次读取的工作区文件**，不能仅用 HEAD 代表全部被审内容。正式实施仍应按 B00/B02 重新冻结实际 debug 候选。
 
 | 文档 | 行数 | 实施 todo / 终验 | 本次 SHA-256 |
 | --- | ---: | ---: | --- |
-| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | — | `018247dd1df0df9d8ce6fce93d44d0bdf9ee051a565de9d67090d98e73aa3e38` |
+| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | — | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
 | [A 科学轨](../../../.omo/plans/acp2-plan-a-cccp-science.md) | 780 | 51 / 4 | `8410ed69a532add15d2e950e6032e72ae8987d07187c4c34556b15e48e7f5801` |
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 541 | 33 / 4 | `2bdf7cee901d80c8073aa487050b1efe2efdb1465517f588407c735f5ab9b70f` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 680 | 46 / 4 | `f5ac439b12e319c1d1f3d471106bd44735cebd63b8a5dc2997d8e117966c0cc5` |

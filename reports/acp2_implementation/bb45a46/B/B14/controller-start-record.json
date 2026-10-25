@@ -27,7 +27,7 @@
   "production_port": 8765,
   "production_touched": false,
   "health": {
-    "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
     "contract_digest": "d0a338dc934b720253e4ca872b08b8c5b7a10b090c41387e1f4bdc8ecbe011d1",
     "contract_version": "1.1.0",
     "read_only": true

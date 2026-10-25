@@ -8,7 +8,7 @@
   "contract_set_frozen": true,
   "source": {
     "branch": "acp2/a-science",
-    "pre_delivery_commit": "98fdc2eec026f6a181648c9d2a0c7e4a1b41f4c9",
+    "pre_delivery_commit": "4f123256dfd2e8d1a2486d422261405bc95efce0",
     "worktree": "/opt/acp2-dev/A",
     "interpreter": "/opt/acp2-dev/envs/a-python/bin/python",
     "python_version": "3.11.13",
@@ -18,7 +18,7 @@
   "handoff_digests": {
     "H1": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
-      "sha256": "052d03e5084df7378ca388cb924d5be9efa4337049ae8f84ac040eacbec138ae",
+      "sha256": "6773501bc30e0c4ea95a07dce01259b0ba2317f51131f8a4c3c391f763d5a4ec",
       "handoff_version": 1,
       "generated_by": "A-01b",
       "contract_set_version": null,
@@ -28,27 +28,27 @@
     },
     "H2": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
-      "sha256": "a40275b408790b1ce2b99a99d8a7cd91a9d4e5adba38e54cc482ad7408eb8d54",
+      "sha256": "eb8ec28094290637889c3a323e935a4e0990e67c09ed4648d84aafafdabcccbe",
       "handoff_version": 1,
       "generated_by": "A-08",
       "contract_set_version": 1,
       "contract_set_frozen": true,
-      "source_pre_delivery_commit": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+      "source_pre_delivery_commit": "b5fe2e81f5d430d0df7feae514d28a77c8b97a2a",
       "revision_check": "PASS"
     },
     "H3": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
-      "sha256": "7f8af9eff3892cfb87ba330c76b936fdd36aeadf03e04509ea5c26224416d95b",
+      "sha256": "4d7194fbfbc535d039bdb6e505e4b7882b2321f7549338785a213c695e836e35",
       "handoff_version": 1,
       "generated_by": "A-13",
       "contract_set_version": 1,
       "contract_set_frozen": true,
-      "source_pre_delivery_commit": "fa5e5a173964188e7bf25e621a1bf37c7110d669",
+      "source_pre_delivery_commit": "5f8df59d0eca0d7663f8ae3deadece1f0fa5e42d",
       "revision_check": "PASS"
     },
     "H4": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
-      "sha256": "026c55842df5eadfb7e38780a851f2993f4828302fd504f13d26c71d68855a6e",
+      "sha256": "96ffbdba096ba81b570509153bde1c2dc99a620bef5e993f14ea49a2d1eb536d",
       "handoff_version": 1,
       "generated_by": "A-20",
       "contract_set_version": 1,
@@ -58,7 +58,7 @@
     },
     "H5": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
-      "sha256": "dda1d67f7cca437020c3346b171d6bb0e1a95ccb466982f34f7cbff91bc46984",
+      "sha256": "e3e153978a616f9fbc4789daa843a33265cdf21bbed5361c738875ecec60fa44",
       "handoff_version": 1,
       "generated_by": "A-23",
       "contract_set_version": 1,
@@ -68,7 +68,7 @@
     },
     "H6": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
-      "sha256": "d791c9c4c3a5bc38f7fba333591f5ec2c3f3374a0fa6abd3f9f22c4074fdb0e5",
+      "sha256": "23140d80ec281eb4b7363c8b923d82016d23ef14d3ff5693026d1cb9d7323b3f",
       "handoff_version": 1,
       "generated_by": "A-26",
       "contract_set_version": 1,
@@ -139,7 +139,7 @@
       "result": "PASS",
       "scope": "static/constructed",
       "scope_detail": "static baseline record; no computation",
-      "revision": "2e0ce9c202f5a65180aa97ca2787f82dc0054e6b",
+      "revision": "3bf5127365e63012eb0a9915467883433e7ad0cd",
       "revision_kind": "commit",
       "revision_source": null,
       "recorded_revision": null,
@@ -157,7 +157,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/baseline.md",
-            "sha256": "e2166e36c7c86e3dbc20b6d99918dbc4dd081c890c25104fbd6bd5fb8ed40bcd"
+            "sha256": "3523fbca0bc5b89beb273318a07aad86d42a37ed2619f55ce19bfe0799d5becf"
           }
         ],
         "records": [
@@ -174,7 +174,7 @@
       "result": "PASS",
       "scope": "static/constructed",
       "scope_detail": "static contract digests and contract tests",
-      "revision": "sha256:052d03e5084df7378ca388cb924d5be9efa4337049ae8f84ac040eacbec138ae",
+      "revision": "sha256:6773501bc30e0c4ea95a07dce01259b0ba2317f51131f8a4c3c391f763d5a4ec",
       "revision_kind": "digest",
       "revision_source": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
       "recorded_revision": null,
@@ -191,7 +191,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
-            "sha256": "052d03e5084df7378ca388cb924d5be9efa4337049ae8f84ac040eacbec138ae"
+            "sha256": "6773501bc30e0c4ea95a07dce01259b0ba2317f51131f8a4c3c391f763d5a4ec"
           },
           {
             "path": "docs/reference/next-change/acp2-contracts/science/capability.schema.json",
@@ -213,10 +213,10 @@
       "result": "PASS",
       "scope": "static/constructed",
       "scope_detail": "static contract implementation and registry; no real MCP/stdin session",
-      "revision": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+      "revision": "b5fe2e81f5d430d0df7feae514d28a77c8b97a2a",
       "revision_kind": "commit",
       "revision_source": null,
-      "recorded_revision": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+      "recorded_revision": "b5fe2e81f5d430d0df7feae514d28a77c8b97a2a",
       "real_run": false,
       "required_for_release": true,
       "requires_real_run": false,
@@ -230,7 +230,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
-            "sha256": "a40275b408790b1ce2b99a99d8a7cd91a9d4e5adba38e54cc482ad7408eb8d54"
+            "sha256": "eb8ec28094290637889c3a323e935a4e0990e67c09ed4648d84aafafdabcccbe"
           }
         ],
         "records": [
@@ -238,7 +238,7 @@
           "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h2.exit-code"
         ],
         "real_artifact": false,
-        "summary": "The H2 gate command passed on this host; recorded revision 'b20c28614638a47b9f74be15db9226ae62d1aadd' resolves. The handoff remains closed/verified."
+        "summary": "The H2 gate command passed on this host; recorded revision 'b5fe2e81f5d430d0df7feae514d28a77c8b97a2a' resolves. The handoff remains closed/verified."
       },
       "gap": null
     },
@@ -248,10 +248,10 @@
       "result": "NOT_VERIFIED",
       "scope": "static/constructed",
       "scope_detail": "static P1 ledger only; six real Local/LSF cells NOT_VERIFIED",
-      "revision": "fa5e5a173964188e7bf25e621a1bf37c7110d669",
+      "revision": "5f8df59d0eca0d7663f8ae3deadece1f0fa5e42d",
       "revision_kind": "commit",
       "revision_source": null,
-      "recorded_revision": "fa5e5a173964188e7bf25e621a1bf37c7110d669",
+      "recorded_revision": "5f8df59d0eca0d7663f8ae3deadece1f0fa5e42d",
       "real_run": false,
       "required_for_release": true,
       "requires_real_run": true,
@@ -265,7 +265,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
-            "sha256": "7f8af9eff3892cfb87ba330c76b936fdd36aeadf03e04509ea5c26224416d95b"
+            "sha256": "4d7194fbfbc535d039bdb6e505e4b7882b2321f7549338785a213c695e836e35"
           }
         ],
         "records": [
@@ -273,7 +273,7 @@
           "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h3.exit-code"
         ],
         "real_artifact": false,
-        "summary": "The H3 gate command passed on this host; recorded revision 'fa5e5a173964188e7bf25e621a1bf37c7110d669' resolves. The handoff remains open."
+        "summary": "The H3 gate command passed on this host; recorded revision '5f8df59d0eca0d7663f8ae3deadece1f0fa5e42d' resolves. The handoff remains open."
       },
       "gap": "Real Local/LSF same-task rows are NOT_VERIFIED: B10 three-entry task, B07 deadlines, B05 stdio launch, C15 browser record and LSF receipts are unpublished."
     },
@@ -283,7 +283,7 @@
       "result": "NOT_VERIFIED",
       "scope": "static/constructed",
       "scope_detail": "constructed validators/checkers only; real DA rows and search NOT_VERIFIED",
-      "revision": "243d2b7c1f2d115b1fa67d8af35e4020fe7be2d8",
+      "revision": "9977a106445177708e929557f9460e86914787ad",
       "revision_kind": "commit",
       "revision_source": null,
       "recorded_revision": "243d2b7",
@@ -300,7 +300,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
-            "sha256": "026c55842df5eadfb7e38780a851f2993f4828302fd504f13d26c71d68855a6e"
+            "sha256": "96ffbdba096ba81b570509153bde1c2dc99a620bef5e993f14ea49a2d1eb536d"
           }
         ],
         "records": [
@@ -335,7 +335,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
-            "sha256": "dda1d67f7cca437020c3346b171d6bb0e1a95ccb466982f34f7cbff91bc46984"
+            "sha256": "e3e153978a616f9fbc4789daa843a33265cdf21bbed5361c738875ecec60fa44"
           }
         ],
         "records": [
@@ -370,7 +370,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
-            "sha256": "d791c9c4c3a5bc38f7fba333591f5ec2c3f3374a0fa6abd3f9f22c4074fdb0e5"
+            "sha256": "23140d80ec281eb4b7363c8b923d82016d23ef14d3ff5693026d1cb9d7323b3f"
           }
         ],
         "records": [
@@ -425,7 +425,7 @@
       "result": "PASS",
       "scope": "static/constructed",
       "scope_detail": "four software-free examples plus harness absent-wheel exit 2 / present-wheel PASS; no real QC",
-      "revision": "6608f83380d15cbe396601870fe49b9c61d54cb5",
+      "revision": "e7ff0a5a2fcc13079c96690fa5b85c4299de9b4f",
       "revision_kind": "commit",
       "revision_source": null,
       "recorded_revision": "6608f83",

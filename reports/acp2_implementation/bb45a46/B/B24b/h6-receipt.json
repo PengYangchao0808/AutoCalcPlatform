@@ -17,7 +17,7 @@
   "b_owned_rows": [
     {
       "attribution": {
-        "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+        "candidate_revision": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
         "note": "Historical B24b migration run at f32c670; B-fix-7 does not re-run migration and does not re-attribute it to X."
       },
       "evidence": "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",
@@ -32,7 +32,7 @@
       "status": "PASS"
     },
     {
-      "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
       "evidence": "reports/acp2_implementation/bb45a46/B/B24b/four-combination-summary.json",
       "note": "Clean detached F1 worktree at X (status --porcelain empty); harness a44e39a; no working-tree patch. S0 cells stay FAIL (NOT_APPLICABLE scope) and are not an H6 PASS.",
       "owner": "B",
@@ -40,7 +40,7 @@
       "status": "PASS"
     },
     {
-      "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
       "evidence": "reports/acp2_implementation/bb45a46/B/B24b/legacy-reader-log.json",
       "note": "Compat pytest 41 passed and seven ordinary legacy workflows PASS at X; clean worktree, harness a44e39a, no working-tree patch.",
       "owner": "B",
@@ -93,17 +93,17 @@
     }
   },
   "candidate": {
-    "a_reference_revision": "1b580a3dcda1351a0869353e6a505acde10dcfe0",
-    "c_reference_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "a_reference_revision": "dcf7084999e00ecc8b6a5154ca02c4684785ee5d",
+    "c_reference_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "clean_worktree_evidence": "reports/acp2_implementation/bb45a46/B/Bfix7/candidate-clean.txt",
     "clean_worktree_status_porcelain": [],
     "harness_revision": "a44e39a73960b735556dfc47608210300c4c6d95",
     "historical_b24b_overlay": {
       "path": "reports/acp2_implementation/bb45a46/B/B24b/candidate-runnable-overlay.patch",
       "sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9",
-      "superseded_by": "493790709830eac4ce347b5fb81414050f7a1e21"
+      "superseded_by": "c134109c696e9bcb941e176bf681d45a569370b8"
     },
-    "server_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "server_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
     "server_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a"
   },
   "contract": {
@@ -120,18 +120,18 @@
       "--out",
       "reports/acp2_implementation/bb45a46/B/B24b/four-combination",
       "--f1-revision",
-      "493790709830eac4ce347b5fb81414050f7a1e21",
+      "c134109c696e9bcb941e176bf681d45a569370b8",
       "--cells",
       "F0/S1,F1/S1"
     ],
     "cells": [
       {
-        "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+        "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
         "cell": "F0/S1",
         "result": "PASS"
       },
       {
-        "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+        "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
         "cell": "F1/S1",
         "result": "PASS"
       },
@@ -156,11 +156,11 @@
     "s0_closure_claimed": false,
     "summary": "reports/acp2_implementation/bb45a46/B/B24b/four-combination-summary.json"
   },
-  "frozen_candidate_sha": "493790709830eac4ce347b5fb81414050f7a1e21",
+  "frozen_candidate_sha": "c134109c696e9bcb941e176bf681d45a569370b8",
   "generated_at": "2026-10-23T20:51:56Z",
   "h6_status": "OPEN",
   "legacy_readers": {
-    "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
     "compat_pytest": {
       "argv": [
         "/usr/bin/python3.11",
@@ -191,7 +191,7 @@
     "result": "PASS"
   },
   "migration": {
-    "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+    "candidate_revision": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
     "oldest_supported_schema": 21,
     "result": "PASS",
     "summary": "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",

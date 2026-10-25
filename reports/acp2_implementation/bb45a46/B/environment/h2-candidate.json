@@ -1,7 +1,7 @@
 {
   "built_at_utc": "2026-10-22T15:20:00Z",
   "candidate_label": "bb45a46",
-  "client_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a",
+  "client_revision": "b8c4f29198b2bc314ed21eb48dd9d7b79dd547de",
   "client_revision_kind": "C-owned RPH/client",
   "client_revision_source": "/opt/acp2-dev/C HEAD (Plan C checkout)",
   "client_revision_status": "clean",

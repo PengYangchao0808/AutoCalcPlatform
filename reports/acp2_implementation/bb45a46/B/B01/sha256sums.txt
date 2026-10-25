@@ -6,7 +6,7 @@ a3c377a8cb2d063b6e0ebd866f3397341e700a38f3c70f68e1c27076461aff05  docs/reference
 6154e4bca13afb3a95ca99c52fde8c77c26007501e0aacef8a44436c636ff24e  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/aggregate-missing-child-phase.json
 506086598e1757c8f54e57c069af984cb7a78d44445a70367ff04ff50488873d  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/artifacts/corrupt-target.txt
 3d1aa967ba0b7a9c1783e14d151eebb7ff441f2927fc64ca84ce28584d4cfd5d  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/bad-time-field.json
-cab7ecfe70c05668f43f2f21cff4dc66cca23c9863e6d727dc5f9458d1781bda  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/corrupt-digest.json
+e52c7947c70507884aaa2f96c5f5244c2f6da74d458455ed0c41882bce9753a7  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/corrupt-digest.json
 34de570cc204db9b8145b77cc3a67d4cfb35a6b47f00f5f633b29dae5bf989e4  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/duplicate-platform-conflict.json
 affd6c6f27bf97e536e06d04b1fb6cb9efc9406f231277ef451bb38f6fb0b444  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/fixture-phase-with-live-kind.json
 5d2b7aec55979a1e7d19cb376a2f72ecc3767caeed39ca712d28868e8afba8b5  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/fixture-with-platform-refs.json
@@ -22,7 +22,7 @@ fea334c0328362b99aff52d46994290b8dc70b444ea36e09abfb54d74a03f230  docs/reference
 4f512ab46f8d5128f6b972d6dfe83cb4860fc94a3a03dd6faaedab76fd5f0fb6  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/pending-a-c/README.md
 a61d8dfb886c82967f3c3e0bca14b250a42604506130ff2981bde459080a4c15  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/artifacts/read-output.txt
 84494600dc4e6d8f5409b2837e02ce4f41361c93d9835446ce54414065cd20c2  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-approval.json
-159bf933560b826e64adf62e57dc0777dee5247a53ca4f0afb9a28c32f8f907c  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-artifact-read.json
+90b70da646fef0f32f059d5967d149aa8398471e6e1fefc156ac36b9dad43f9c  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-artifact-read.json
 e5e2ca3be287c72ec0aa6c88a41118de57cf071c50b6f39641990402f11e20a7  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-budget.json
 43ebc6fc1831a80e2eef95602dea958a77970f534cb912b9b324a31f6a27f456  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-da-aggregate.json
 24efac6b8ae14a3bc29413aca84015879605ec47fe487126acacfdb7357d4d39  docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/positive/b-da-evidence.json

@@ -3,7 +3,7 @@
 日期：2026-10-20。评审对象：[修改后的实施计划](../../../.omo/plans/acp-architecture-acceptance-remediation.md)，45 个 todo、7 个 wave、4 个最终验证任务。
 
 - 计划 SHA-256：`e0a3fb0a6a2c0b23c07cbf906c1fcae4e2189522b07491674509aa206b07a346`。
-- 代码基线：`878e3557b3b593a0c42adf842e80fe1408db395e`。
+- 代码基线：`d5d85e7c804878edd0cedb6bce1d32af2d92ad83`。
 - 对照：[上一轮评审](ACP_Architecture_Acceptance_Remediation_Review_20261020.md)、[整改要求](ACP_Architecture_Acceptance_Remediation_Plan_20261020.md)、[原验收报告](../../../reports/architecture_acceptance_20261019/REPORT.md)，并核对相关实现与原始探针。
 
 **结论：主体方案合理，上轮主要意见已经落实；仍建议修正以下 3 项 P1 协议问题和 2 项 P2 验收问题，再启动整批执行。无需重写计划或增加一轮架构设计，可直接修订现有 todo。**

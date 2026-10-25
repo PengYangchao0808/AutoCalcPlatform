@@ -21,7 +21,7 @@
   "pythonpath": "src",
   "release": "a0185b15c546fbd07919326d581fab13e05000fa",
   "release_source": "GET /api/health.candidate_revision of the running Controller",
-  "source_head": "e4c9d723d3c717738c16d3beef347814e6457829",
+  "source_head": "67a45db634ff02cbc3f379252b6cc18a684b9661",
   "source_head_note": "working tree also carries B06 uncommitted changes; health revision is the frozen B02 materialization used by the B venv",
   "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
   "run_root": "/opt/acp2-dev/data/b/run-root",

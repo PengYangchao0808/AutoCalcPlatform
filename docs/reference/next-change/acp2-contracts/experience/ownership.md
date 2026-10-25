@@ -67,13 +67,13 @@ Invariant: `ACP2_SOURCE` == `ACP2_INTEGRATION_SOURCE` == `/opt/acp2-dev/integrat
 
 - `candidate_id`: `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`
 - `source_candidate_id`: `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`
-- `server_revision`: `75a8f08a06b5528b310b26bd309940e99d9cd9bd`
-- `client_revision`: `75a8f08a06b5528b310b26bd309940e99d9cd9bd`
-- `harness_revision`: `75a8f08a06b5528b310b26bd309940e99d9cd9bd`
+- `server_revision`: `68653bbcb3f613231c9c800521d88184eeb41a66`
+- `client_revision`: `68653bbcb3f613231c9c800521d88184eeb41a66`
+- `harness_revision`: `68653bbcb3f613231c9c800521d88184eeb41a66`
 - `baseline_source`: `reports/architecture_repair_20261022 (candidate-overlay.tar.gz + candidate-snapshot.json)`
-- `historical_debug_revision`: `096cdffe9a3817d8ee443d824830d87ec6e07bc2`
+- `historical_debug_revision`: `3670790363c7a1959ad1dbe4b4297adec518952a`
 - `materialized_commit`: `a0185b15c546fbd07919326d581fab13e05000fa` (B02, `/opt/acp2-dev/B`)
-- `c_baseline_commit`: `75a8f08a06b5528b310b26bd309940e99d9cd9bd` (tree `1a1b4b23c554acaf2818db1dcee336b69494a887`)
+- `c_baseline_commit`: `68653bbcb3f613231c9c800521d88184eeb41a66` (tree `1a1b4b23c554acaf2818db1dcee336b69494a887`)
 - `tree_equality`: C `75a8f08^{tree}` == B `a0185b15^{tree}` == `1a1b4b23c554acaf2818db1dcee336b69494a887`
 - `verification`: `1906/1906` per-file matches in B02's clean reconstruction (`materialization.verification`)
 - `b00_commit`: `ac43c16` (`manifest.json`, `runtime/baseline-lock.json`, `runtime/dependencies.json`)
@@ -83,7 +83,7 @@ Invariant: `ACP2_SOURCE` == `ACP2_INTEGRATION_SOURCE` == `/opt/acp2-dev/integrat
 
 Frozen baseline construction (reproducible):
 
-1. `git worktree add <path> -b acp2/c-experience 096cdffe9a3817d8ee443d824830d87ec6e07bc2`
+1. `git worktree add <path> -b acp2/c-experience 3670790363c7a1959ad1dbe4b4297adec518952a`
 2. extract `reports/architecture_repair_20261022/candidate-overlay.tar.gz` to a temp dir
 3. `git apply tracked-changes.patch`
 4. copy `new-files/**` **excluding `new-files/.omo/**`** (planning state must not overwrite current plans)

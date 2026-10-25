@@ -2,11 +2,11 @@
 
 **Status: BATCH COMPLETE / SCOPED — NOT "ALL ARCHITECTURE COMPLETE"**
 
-**Code candidate SHA:** `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`
+**Code candidate SHA:** `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`
 
 **Evidence-only report SHA:** recorded in `evidence/report_sha256.txt` (the report cannot contain its own digest; the sidecar and `evidence_manifest.json` bind it).
 
-**Baseline:** `878e3557b3b593a0c42adf842e80fe1408db395e` (20261019 FAIL report preserved read-only under `evidence/baseline-20261019/`).
+**Baseline:** `d5d85e7c804878edd0cedb6bce1d32af2d92ad83` (20261019 FAIL report preserved read-only under `evidence/baseline-20261019/`).
 
 > This report supersedes the 20261019 FAIL conclusions **only for the in-scope remediation batch**.
 > It does not declare the whole architecture adjustment complete. `G4` is OPEN, real science/LSF are
@@ -24,8 +24,8 @@
 
 | Item | Value | Evidence |
 |---|---|---|
-| Code candidate | `ab492cc8be9e46125fa2d2fae69a3ecaac64a548` | `git rev-parse HEAD`; T39 |
-| Baseline / F0 | `878e3557b3b593a0c42adf842e80fe1408db395e` | `evidence/collection.log` |
+| Code candidate | `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798` | `git rev-parse HEAD`; T39 |
+| Baseline / F0 | `d5d85e7c804878edd0cedb6bce1d32af2d92ad83` | `evidence/collection.log` |
 | Regressions | `10,005 passed, 11 skipped, 95 deselected` (27m41s) | `evidence/t39-nonslow.log` |
 | Guard set | `2,124 passed` (6m42s) | `evidence/t39-guards.log` |
 | Compile | `compileall` exit 0; syntax-error negative exit 1; import smoke OK | T39 evidence |

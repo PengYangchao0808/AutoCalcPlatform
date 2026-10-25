@@ -7,7 +7,7 @@
 | Field | Value |
 |---|---|
 | candidate id | `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12` |
-| base commit | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` |
+| base commit | `3670790363c7a1959ad1dbe4b4297adec518952a` |
 | worktree | `/opt/acp2-dev/B` |
 | applied | `tracked-changes.patch` then `new-files/` per `apply-order.md` |
 | per-file verification | **1906/1906 PASS**, 0 mismatches, 0 missing |

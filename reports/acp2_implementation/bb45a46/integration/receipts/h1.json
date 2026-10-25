@@ -17,7 +17,7 @@
     },
     {
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "2ad71c56f57c66b70e69e11d76e22f0c34f3483ca0a266724d41ebdf202638ff",
+      "sha256": "6154e455a2de0f16ea9a6115dc7f38e61240dd649e95e2f9e0e358821e16ad28",
       "size_bytes": 35791
     },
     {
@@ -40,7 +40,7 @@
   ],
   "attempt": null,
   "candidate": {
-    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
     "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
   },

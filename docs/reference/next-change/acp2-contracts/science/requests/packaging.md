@@ -3,7 +3,7 @@
 - **Task**: A-27a (todo 48) — audit the science import closure and deliver the packaging delta to B25a.
 - **Owner of this request**: A (cccp science) · **implementer**: B (platform packaging).
 - **Closes (after B applies)**: GAP-11 (independent science distribution), GAP-12 (standalone validation assets).
-- **Branch / base**: `acp2/a-science` @ `bcb9fa9654d2c5a0aae59a24f8c1ed5766cf94f9`.
+- **Branch / base**: `acp2/a-science` @ `fd80ca2d66cd20d61975d80e957388e9f6264ccb`.
 - **Evidence run**: `$ACP2_EVIDENCE/A/A-27/a27a-20261023T040251Z/` (`result.json`, raw audit stdout/stderr, script copy).
 - **Status**: request + exact patch delivered. **No wheel is built or installed by A here** — that is A-27b
   (todo 49) against B25a's actual artifact. Nothing below is a third-party install success claim.

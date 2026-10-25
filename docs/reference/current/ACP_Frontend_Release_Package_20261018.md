@@ -1,7 +1,7 @@
 # ACP 前端静态发布包与回退步骤（2026-10-18）
 
 - 生成：并行计划一路 A（Frontend 收口）todo T33（`.omo/plans/acp-parallel-plan-1-frontend.md`）；依据主方案 §38.6 路径约定、§38.9 发布/旧页面/回退。
-- 发布集修订：branch `feat/frontend-plan1-closure` @ `5518aa6fe9fb8ec6905c02d55f85754309ed9303`（本文件记录时的现盘实测；frontend/** 当时干净、与 HEAD 一致）。
+- 发布集修订：branch `feat/frontend-plan1-closure` @ `899c7c028e4ec378550b1bef235043878cc359df`（本文件记录时的现盘实测；frontend/** 当时干净、与 HEAD 一致）。
 - 原始证据（清单、原始 curl/TestClient 输出、演练日志）：`.omo/evidence/acp-parallel-plan-1-frontend/task-33-acp-parallel-plan-1-frontend.md` + `t33/`（含机器可查清单 `resource_listing.txt`）。本文件是面向部署/运维的**交付摘要**；`.omo` 为本地工件不入提交。
 - 三态纪律：PASS / FAIL / NOT_VERIFIED；生产发布与本机 systemd 重启不在本计划范围（交接见 §6）。
 
@@ -56,7 +56,7 @@ sudo systemctl stop acp
 
 # 1) 从发布修订恢复前端资源树（回退唯一被改动的目录）
 cd repo-root
-git checkout 5518aa6fe9fb8ec6905c02d55f85754309ed9303 -- frontend/
+git checkout 899c7c028e4ec378550b1bef235043878cc359df -- frontend/
 
 # 2) 校验：清单重生成 + 聚合摘要（期望 5518aa6f 对应值 f15381ea...）
 /home/redacted-user/.venvs/acp-frontend/bin/python \

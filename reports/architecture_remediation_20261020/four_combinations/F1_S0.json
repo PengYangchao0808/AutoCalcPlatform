@@ -6,9 +6,9 @@
       "sha256": "968fa1ac08337b1d5920863aee53431793b51eef2ccdacb31ba1e2e9cd3da89d"
     }
   ],
-  "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
   "cell": {
-    "frontend_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "frontend_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
     "frontend_sha256": "968fa1ac08337b1d5920863aee53431793b51eef2ccdacb31ba1e2e9cd3da89d",
     "legacy": [
       {
@@ -177,15 +177,15 @@
       "workflows_code": 200,
       "workflows_count": 15
     },
-    "service_revision": "878e3557b3b593a0c42adf842e80fe1408db395e"
+    "service_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83"
   },
   "environment": {
     "python": "3.11.13",
     "repo": "repo-root",
     "service_port": 48467
   },
-  "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
-  "f1_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "f0_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+  "f1_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
   "harness": "four_combinations.py",
   "harness_version": "1",
   "metrics": {

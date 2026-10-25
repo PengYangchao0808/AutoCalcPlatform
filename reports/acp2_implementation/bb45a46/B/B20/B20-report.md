@@ -17,7 +17,7 @@
 ## Receipt
 
 - `da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json` — exit 2, `evidence_kind=live`, `candidate_revision=bc59e04…`, `claim_status=not_evaluated`, `h4_gate=open`.
-- Candidate: server `bc59e04758450321747068e679ca3a8d0efc5ad7`; client `39d4aeb20451c984e20d27e12270a15070adce12` (C HEAD, read-only contracts); harness `2fc709f7…`; contract `7d35beef…`; env `d487f3af…`; contract version `1.3.0`.
+- Candidate: server `042e560c4af0c64703728e6b43b3bb2030fe97f5`; client `6905477c51c34fa1f8d53421553805ecbf88d897` (C HEAD, read-only contracts); harness `2fc709f7…`; contract `7d35beef…`; env `d487f3af…`; contract version `1.3.0`.
 - `contract_version` is derived at runtime from `docs/reference/next-change/acp2-contracts/manifest.json` via `contract_version()`; the fallback `1.0.0` is used only if the manifest is unreadable. The receipt and summary both report `1.3.0`, matching `/api/health`.
 
 ## B20a-ready (zero side effects)

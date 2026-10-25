@@ -18,7 +18,7 @@
     "detail": "The run was executed before commit 2a57d6b made the B13 fault seam and Controller restart reproducible. The preserved receipt records only the FAIL status and the row budget/PID/TaskRef; the failing run's race comparison and timing files were not preserved, so the cause is classified from the FAIL assertion plus the subsequent re-run rather than from a surviving race log.",
     "confidence": "derived",
     "fixed_by": {
-      "commit": "2a57d6b6d91427093c6a10e710e5a52446ed801e",
+      "commit": "a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4",
       "subject": "test(acceptance): make the B13 fault seam reproducible",
       "commit_date": "2026-10-23T07:46:12+08:00"
     }

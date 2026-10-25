@@ -8,11 +8,11 @@
 
 ## 1. 评审基线与方法
 
-工作区 HEAD 为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2`。工作区仍有未提交业务修改及未跟踪规划文件；本报告以读取到的文件摘要确定评审版本，不能仅凭 HEAD 还原本轮计划。
+工作区 HEAD 为 `3670790363c7a1959ad1dbe4b4297adec518952a`。工作区仍有未提交业务修改及未跟踪规划文件；本报告以读取到的文件摘要确定评审版本，不能仅凭 HEAD 还原本轮计划。
 
 | 文件 | 行数 | SHA-256 |
 | --- | ---: | --- |
-| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `018247dd1df0df9d8ce6fce93d44d0bdf9ee051a565de9d67090d98e73aa3e38` |
+| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
 | [A 科学轨](../../../.omo/plans/acp2-plan-a-cccp-science.md) | 798 | `8dc780f23a8fa46828a6eb27b50261a16451024c65ed16dd5dc7db3a25dd3032` |
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 548 | `33a3603e991fbbc4b7684df174f5fba8aa33e0a0a0a7ae1033912b5fe6e41b74` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 681 | `e6e3737283bc472565696839aa32cf91de43f5b44ae9eb32e3f6caf1ffa18584` |

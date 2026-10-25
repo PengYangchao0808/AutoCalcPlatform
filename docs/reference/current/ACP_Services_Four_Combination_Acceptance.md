@@ -17,15 +17,15 @@
 | S0 | 冻结的服务/CCCP/配置行为基线（未改动服务） | 既有旧 GET 路径（在 S1 中**逐字保留**，S1 改动为加性） |
 | S1 | 后续服务版本（Services 切片） | `src/acp_services/**` + 加性 HTTP 面（cache-only / availability / events / prepare） |
 
-**执行基线（execution base HEAD）：`d048950714a412073b72afc9ee25c2ea16919380`**（分支 `feat/frontend-plan1-closure`）。
+**执行基线（execution base HEAD）：`fded1160c4edb0974a6e49b528ee263975fd0075`**（分支 `feat/frontend-plan1-closure`）。
 Python `3.11.13`（`/usr/bin/python3.11`）；Node `v20.19.0`。配置：每个套件使用 `mktemp -d` 隔离的 `ACP_RUN_ROOT`；**未重启服务、未改配置、未改 DB**；默认配置来源 `cccp.config._get_default_config()`（built-in 权威，ANTI #3）。
 
-**移动目标披露（并发车道）**：本记录全部套件在 `d048950` 上执行；记录撰写期间 HEAD 因并发 worker 前进到 `a4f2cd89028e815a9a31cce797205f396b10e3a9`（todo 56 `feat(services-metering): decouple usage collection from science completion/result access`），另有 todo 55 的 `src/acp_services/runtime/quota.py` 未跟踪在途。该并发提交是加性的用量采集路径，不触及本文件四组合的 S0/S1 表面（旧 GET / cache-only / events / frames）。**S0 旧记录不得用作 S1 证据；本记录不拼接不同提交的通过记录。**
+**移动目标披露（并发车道）**：本记录全部套件在 `d048950` 上执行；记录撰写期间 HEAD 因并发 worker 前进到 `16799d18f4a823942a4fd6a9a76e6e109f3e5873`（todo 56 `feat(services-metering): decouple usage collection from science completion/result access`），另有 todo 55 的 `src/acp_services/runtime/quota.py` 未跟踪在途。该并发提交是加性的用量采集路径，不触及本文件四组合的 S0/S1 表面（旧 GET / cache-only / events / frames）。**S0 旧记录不得用作 S1 证据；本记录不拼接不同提交的通过记录。**
 
 | 绑定项 | 值 |
 |---|---|
-| execution commit | `d048950714a412073b72afc9ee25c2ea16919380` |
-| observed HEAD（撰写时） | `a4f2cd89028e815a9a31cce797205f396b10e3a9` |
+| execution commit | `fded1160c4edb0974a6e49b528ee263975fd0075` |
+| observed HEAD（撰写时） | `16799d18f4a823942a4fd6a9a76e6e109f3e5873` |
 | First Slice 契约版本 | `contract_version = 1`（`docs/reference/next-change/ACP_Services_First_Slice_Contracts.md`，sha256[0:16]=`e4e7dc4a0f020e38`） |
 | A04 事件契约 | sha256[0:16]=`140148c325dd7f42`；**状态 DEFERRED（未接入，见 §6）** |
 | cache-only 切换矩阵 | `tests/baseline/services-evidence/cache_only_switch_matrix.md`，sha256[0:16]=`6f97e465929bb7c1` |
@@ -45,7 +45,7 @@ Python `3.11.13`（`/usr/bin/python3.11`）；Node `v20.19.0`。配置：每个�
 
 **逐项预期能力声明（评审 X3 硬性条款）**：
 - **F0＋S0 基线通过不代表支持新 prepare 或账户 UI。** 旧 GET 通过只证明基线读取流程未回归，不声明任何 S1 新能力。
-- **Lab 功能启用的组合需等 todo 73 身份交付。** todo 73（identity lifecycle）**已交付**（提交 `ca55bdbabefcfb66f9586f7ded0ea839badcfde1`），但其**组件未接入 HTTP/UI**（该任务自述假设）。因此 Lab 账户 UI 组合 = `NOT_VERIFIED`（channel: B，理由见 §5）。
+- **Lab 功能启用的组合需等 todo 73 身份交付。** todo 73（identity lifecycle）**已交付**（提交 `014234c1a403eb885d8d02435a9013096b112cd1`），但其**组件未接入 HTTP/UI**（该任务自述假设）。因此 Lab 账户 UI 组合 = `NOT_VERIFIED`（channel: B，理由见 §5）。
 - **首批本地组合不被未选 Lab 能力阻塞。** 本地四组合的仓内证据不依赖未选用的 Lab/OIDC 能力；OIDC 恒为 `NOT_VERIFIED`（todo 73 `OIDC_SUPPORTED = False`）。
 
 ---
@@ -60,7 +60,7 @@ $ python3.11 -m pytest tests/test_acp_api_v1.py tests/test_acp_api_structure_vie
 219 passed, 2 warnings in 216.93s
 ```
 旧 GET 路径在 S1 中为**加性保留**（`src/acp/api/v1_routes.py` 的 S1 改动为 +120/0，见 cache-only 切换矩阵 §2），故本套件执行的是 S0 服务表面。F0 客户端以直接调用旧 GET 的测试替身代表。
-**历史基线引用（非本提交通过记录）**：`.omo/evidence/acp-parallel-plan-2-services/b00-baseline.md`（todo 1，冻结于 `7327259c717b53a7fd36f7b95599c5e1b6365856`）——仅作基线对照引用，**不拼接为本提交的通过证据**。
+**历史基线引用（非本提交通过记录）**：`.omo/evidence/acp-parallel-plan-2-services/b00-baseline.md`（todo 1，冻结于 `24ffca5a4eda31a3dcdf417fb7c69f11fb0dbc33`）——仅作基线对照引用，**不拼接为本提交的通过证据**。
 
 ### 3.2 F1＋S0（前端兼容）
 ```
@@ -124,7 +124,7 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
 | C | **C10**（科学/架构验收、清理与证据交付） | 在**同一集成候选**上以固定输入/参数/软件/算法版本判定旧/新科学输出等价（黄金容差 + 恢复 fixtures），并交付源码唯一性/数值/隔离证据 | 科学等价与真实软件（ORCA/xTB/CREST/LSF）执行；接口模拟/纯输入生成不得冒充真实运行；ch&#8203;annel `C10` | REGISTERED（科学等价 `NOT_VERIFIED`；HN-02 状态 B pending） |
 | B | T69 | 消费本文件的四组合结果生成三分层收口记录 | 组合执行与产出归 T75；T69 不再重复执行四组合 | 下游 |
 
-**科学等价判定引用**：C 侧映射契约 `tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md`（provider commit `4d2c6f8d10370faf84138678e9e10eba26c5f13a`，provider 侧 `delivered`）。其 **状态 B「跨路端到端验收完成」当前为 `pending`**（HN-02 §0/§9.3），故本文件**科学等价 = `NOT_VERIFIED`（channel C10）**，不以跨版本摘要拼作当前证据。
+**科学等价判定引用**：C 侧映射契约 `tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md`（provider commit `06ce0452a714ff1e389e7ed1aedc022e8640cef9`，provider 侧 `delivered`）。其 **状态 B「跨路端到端验收完成」当前为 `pending`**（HN-02 §0/§9.3），故本文件**科学等价 = `NOT_VERIFIED`（channel C10）**，不以跨版本摘要拼作当前证据。
 
 ---
 
@@ -166,9 +166,9 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
   "plan_todo": 75,
   "generated_at": "2026-10-19T06:08:00Z",
   "binding": {
-    "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+    "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
     "branch": "feat/frontend-plan1-closure",
-    "observed_head_after": "a4f2cd89028e815a9a31cce797205f396b10e3a9",
+    "observed_head_after": "16799d18f4a823942a4fd6a9a76e6e109f3e5873",
     "interpreter": "python3.11 (3.11.13)",
     "node": "v20.19.0",
     "contract_versions": {
@@ -197,14 +197,14 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
         {
           "command": "python3.11 -m pytest tests/test_acp_api_v1.py tests/test_acp_api_structure_viewer.py -q",
           "result": "219 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "S0 old-GET surface, byte-preserved additive in S1"
         }
       ],
       "references": [
         {
           "path": ".omo/evidence/acp-parallel-plan-2-services/b00-baseline.md",
-          "commit": "7327259c717b53a7fd36f7b95599c5e1b6365856",
+          "commit": "24ffca5a4eda31a3dcdf417fb7c69f11fb0dbc33",
           "note": "frozen todo-1 baseline; referenced for comparison only, not spliced into this commit's pass"
         }
       ],
@@ -228,19 +228,19 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
         {
           "command": "node frontend/js/module_tests/run_all.js",
           "result": "306 passed, 0 failed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "F1 frontend module behaviour"
         },
         {
           "command": "python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\\n' ' ') -q",
           "result": "525 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "F1 frontend static/sync selection"
         },
         {
           "command": "python3.11 -m pytest tests/test_acp_api_v1.py tests/test_acp_api_structure_viewer.py -q",
           "result": "219 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "S0 old-GET surface"
         }
       ],
@@ -271,13 +271,13 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
         {
           "command": "python3.11 -m pytest tests/test_services_cache_only_switch.py -q",
           "result": "32 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "F0 对拍 + per-resource fallback drill + negative control"
         },
         {
           "command": "python3.11 -m pytest tests/test_acp_api_v1.py tests/test_acp_api_structure_viewer.py -q",
           "result": "219 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "old GET fallback surface"
         }
       ],
@@ -308,25 +308,25 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
         {
           "command": "python3.11 -m pytest tests/test_services_read_root.py tests/test_services_events_authz.py tests/test_services_data_port.py tests/test_services_first_slice_contracts.py tests/test_services_cli_full_loop.py -q",
           "result": "89 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "S1 services module/API integration"
         },
         {
           "command": "python3.11 -m pytest tests/test_services_cli_offline_loop.py -q",
           "result": "25 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "persistent controller/worker CLI loop"
         },
         {
           "command": "node frontend/js/module_tests/run_all.js",
           "result": "306 passed, 0 failed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "F1 frontend module behaviour"
         },
         {
           "command": "python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\\n' ' ') -q",
           "result": "525 passed",
-          "commit": "d048950714a412073b72afc9ee25c2ea16919380",
+          "commit": "fded1160c4edb0974a6e49b528ee263975fd0075",
           "scope": "F1 frontend static/sync selection"
         }
       ],
@@ -359,7 +359,7 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
     "status": "NOT_VERIFIED",
     "channel": "C10",
     "reference": "tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md",
-    "reference_commit": "4d2c6f8d10370faf84138678e9e10eba26c5f13a",
+    "reference_commit": "06ce0452a714ff1e389e7ed1aedc022e8640cef9",
     "reason": "C10 judgement record not delivered; HN-02 cross-lane state B pending; real science not executed on this candidate"
   },
   "lane_receipts": [

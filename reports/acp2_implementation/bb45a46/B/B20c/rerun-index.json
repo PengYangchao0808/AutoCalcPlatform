@@ -1,5 +1,5 @@
 {
-  "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+  "candidate_sha": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
   "commands": [
     {
       "argv": [
@@ -20,7 +20,7 @@
       ],
       "cwd": ".",
       "env": {
-        "ACP_CANDIDATE_REVISION": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+        "ACP_CANDIDATE_REVISION": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
         "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root-b20a",
         "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
         "CONFSEARCH_ORCA_PATH": "/home/redacted-user/orca611/orca",

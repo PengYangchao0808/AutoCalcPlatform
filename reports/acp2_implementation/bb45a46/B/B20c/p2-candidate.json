@@ -37,8 +37,8 @@
       "size_bytes": 58068
     }
   ],
-  "a_head": "1b580a3dcda1351a0869353e6a505acde10dcfe0",
-  "base_revision": "9ee70af73c59db5fb5e1738064f7f4b4123849fd",
+  "a_head": "dcf7084999e00ecc8b6a5154ca02c4684785ee5d",
+  "base_revision": "c3040007cd360af2373b6d1710c763634377761f",
   "base_revision_role": "P2 wave base (B19 commit); the frozen candidate is the later committed state B00-B20b at 460b0db",
   "c_contracts": [
     {
@@ -66,7 +66,7 @@
       "size_bytes": 12558
     }
   ],
-  "c_head": "39d4aeb20451c984e20d27e12270a15070adce12",
+  "c_head": "6905477c51c34fa1f8d53421553805ecbf88d897",
   "candidate_files_manifest": {
     "file_count": 2907,
     "path": "reports/acp2_implementation/bb45a46/B/B20c/candidate-files.sha256",
@@ -76,9 +76,9 @@
   "candidate_label": "b20c-460b0db",
   "candidate_revision": "sha256:c415d71598e43ac5de1046616b5fbc4c1b808881eebe56c0731642027788932e",
   "candidate_revision_rule": "sha256 over sorted git ls-tree -r lines '<mode> <type> <blob>\\t<path>'",
-  "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+  "candidate_sha": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
   "candidate_tree": "041706226619a403256a2ea206d05ad30a509033",
-  "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+  "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
   "client_revision_status": "C HEAD read for P2 contracts; C24a/C25 artifacts are absent",
   "content_scope": "B00-B20b committed state + A/C P2 contracts by reference (contracts are not vendored)",
   "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
@@ -109,7 +109,7 @@
     "rule": "the frozen P1 candidate is not reused or modified by P2",
     "sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c"
   },
-  "parent_revision": "430b4ba09378bf3a63839be3610ad3d7a075a861",
+  "parent_revision": "e0ae07b4f1e9f6bce697e5e7676c58595060c90b",
   "per_file_digests": [
     {
       "path": "/opt/acp2-dev/data/b/b20-candidate/scripts/acceptance/acp2_runtime.py",
@@ -173,7 +173,7 @@
     }
   ],
   "schema": "acp2.b20c.p2-candidate.v1",
-  "server_revision": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+  "server_revision": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
   "todo": "24 / B20c",
   "validator_command": [
     "/usr/bin/python3.11",

@@ -1819,7 +1819,7 @@ Antigravity 提交行数分布、原符号→新文件/依赖地图、测试迁�
 
 ## 46. 验收缺陷整改计划（2026-10-20）
 
-对提交 `878e3557b3b593a0c42adf842e80fe1408db395e` 的[验收报告](../reports/architecture_acceptance_20261019/REPORT.md)判定整体 FAIL，列出 12 项业务/契约或测试缺陷，以及 D07 默认执行链交付缺口。此前实施记录仅代表各自提交与范围，不能代替本次正确性和默认闭环验收。
+对提交 `d5d85e7c804878edd0cedb6bce1d32af2d92ad83` 的[验收报告](../reports/architecture_acceptance_20261019/REPORT.md)判定整体 FAIL，列出 12 项业务/契约或测试缺陷，以及 D07 默认执行链交付缺口。此前实施记录仅代表各自提交与范围，不能代替本次正确性和默认闭环验收。
 
 后续按[架构调整验收整改计划](reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md)执行：先恢复有效守护并修复五项 P1，再完成 Data 与可视化闭环，补齐普通提交到 worker 回执/CAS/发布的默认链路，最后在固定候选上复验发行、兼容与真实功能。该附件沿用 D01—D13 和本方案工作包，分别规定修改驻点、依赖、回归、关闭门与延期能力接入条件，不改变既有架构及兼容约束。
 

@@ -72,17 +72,17 @@
     },
     {
       "path": "infra_upgrade-third-party-capability.json",
-      "sha256": "07d87e8062028b83dcd939a1de723c76bc1ca59a6e23010262f0996326bdc6da",
+      "sha256": "5e446a3dfc5055af12eaa2c8ade10b0050c38c75762af01ecfef2d15bc6734f4",
       "size_bytes": 31973
     },
     {
       "path": "h5-manifest.json",
-      "sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
+      "sha256": "5467d708af041585b26ed77ae80c51cc8638fbfa7a07d0c25e2c6eb2e2a336cd",
       "size_bytes": 21716
     },
     {
       "path": "packaging-requests.json",
-      "sha256": "1a426d7c187a778d6cc9a3e740ec841f350481aa27f47bbf3249a83aead15d7d",
+      "sha256": "8514502753671f6e40f8a9ecfd4524bb862591b5269e8299289ca84da22f75b2",
       "size_bytes": 6684
     },
     {
@@ -377,9 +377,9 @@
   "candidate": {
     "client_revision": null,
     "harness_revision": "534def6293adb48e497a5b9ff4eeff2f857a0433e6dbb03068d39c1925787988",
-    "server_revision": "ded5cfd804675f7b341726990b925e08bc27794c"
+    "server_revision": "9457e0247caf52de3949de00bad8d006a6d68424"
   },
-  "candidate_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
+  "candidate_revision": "9457e0247caf52de3949de00bad8d006a6d68424",
   "command": [
     "/opt/acp2-dev/venvs/b/bin/python",
     "scripts/acceptance/acp2_runtime.py",
@@ -770,7 +770,7 @@
           "provenance": {
             "digest": "sha256:7437285ef98c63c6f7c8a8e069bffc36fdd2b5fa6bbb69badc6e9f5b3b21b8bd",
             "produced_at": "2026-10-23T10:22:26Z",
-            "producer_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
+            "producer_revision": "9457e0247caf52de3949de00bad8d006a6d68424",
             "source": "B22 third-party capability acceptance"
           },
           "read_only": true,

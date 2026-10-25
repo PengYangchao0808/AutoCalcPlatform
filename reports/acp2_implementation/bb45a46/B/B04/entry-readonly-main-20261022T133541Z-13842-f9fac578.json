@@ -21,9 +21,9 @@
   "candidate": {
     "client_revision": null,
     "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
-    "server_revision": "21610bc1b071d58f367cd04c4f65edb4d2153a5b"
+    "server_revision": "46d5fe31b0f72dea4bdb5aaa07ef3938700e5d48"
   },
-  "candidate_revision": "21610bc1b071d58f367cd04c4f65edb4d2153a5b",
+  "candidate_revision": "46d5fe31b0f72dea4bdb5aaa07ef3938700e5d48",
   "command": [
     "/usr/bin/python3.11",
     "scripts/acceptance/acp2_runtime.py",
@@ -43,7 +43,7 @@
   "extensions": {
     "acceptance.operation_class": "discover",
     "acceptance.target": "local",
-    "b04a.candidate_revision": "21610bc1b071d58f367cd04c4f65edb4d2153a5b",
+    "b04a.candidate_revision": "46d5fe31b0f72dea4bdb5aaa07ef3938700e5d48",
     "b04a.contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488",
     "b04a.contract_version": "1.0.0",
     "b04a.controller": "http://127.0.0.1:18765",

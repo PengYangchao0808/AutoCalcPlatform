@@ -1,6 +1,6 @@
 # Apply order — final_debug_candidate `sha256:bb45a46c…c3e12`
 
-Base commit: `096cdffe9a3817d8ee443d824830d87ec6e07bc2` (historical debug delivery revision, **not** the start baseline).
+Base commit: `3670790363c7a1959ad1dbe4b4297adec518952a` (historical debug delivery revision, **not** the start baseline).
 Candidate label: `bb45a46` (evidence root `reports/acp2_implementation/bb45a46/`).
 
 Apply this bundle only in a **clean, dedicated worktree**. The original checkout is dirty (90 porcelain paths at B00 capture: 39 modified tracked + 51 untracked); a dirty tree is never the baseline.
@@ -9,8 +9,8 @@ Apply this bundle only in a **clean, dedicated worktree**. The original checkout
 
 ```bash
 export WORKTREE=/absolute/native/path/acp2-final-debug
-git -C repo-root worktree add --detach "$WORKTREE" 096cdffe9a3817d8ee443d824830d87ec6e07bc2
-test "$(git -C "$WORKTREE" rev-parse HEAD)" = "096cdffe9a3817d8ee443d824830d87ec6e07bc2"
+git -C repo-root worktree add --detach "$WORKTREE" 3670790363c7a1959ad1dbe4b4297adec518952a
+test "$(git -C "$WORKTREE" rev-parse HEAD)" = "3670790363c7a1959ad1dbe4b4297adec518952a"
 test -z "$(git -C "$WORKTREE" status --porcelain)"
 sha256sum tracked-changes.patch   # expect 4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242
 ```
@@ -58,7 +58,7 @@ B02 writes `FINAL_SHA` and the empty `git status --porcelain` check into `runtim
 In the dedicated worktree only:
 
 ```bash
-git -C "$WORKTREE" reset --hard 096cdffe9a3817d8ee443d824830d87ec6e07bc2
+git -C "$WORKTREE" reset --hard 3670790363c7a1959ad1dbe4b4297adec518952a
 git -C "$WORKTREE" clean -fdx
 ```
 

@@ -330,11 +330,11 @@
   ],
   "attempt": null,
   "candidate": {
-    "client_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+    "client_revision": "35614fd83f616005a0546af35631c477151e7dde",
     "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
     "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
   },
-  "candidate_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+  "candidate_revision": "35614fd83f616005a0546af35631c477151e7dde",
   "command": [
     "/opt/acp2-dev/venvs/integration/bin/python",
     "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
@@ -350,7 +350,7 @@
   "evidence_kind": "live",
   "exit_code": 2,
   "extensions": {
-    "experience.dsh_discovery.b05_sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046",
+    "experience.dsh_discovery.b05_sha256": "efa764d897c09fd42a0f4a600fac4c36a7bf5509d788d5e91a1f38831ced93eb",
     "experience.dsh_discovery.closes_h2": false,
     "experience.dsh_discovery.controller_reachable": false,
     "experience.dsh_discovery.evidence_kind": "live",
@@ -384,8 +384,8 @@
       "registration.eight_p1_tools",
       "registration.source_plugin"
     ],
-    "experience.dsh_discovery.overlay_headless_sha256": "2d8141461bcec91d772f9d3a8daae5c59c17948e9ec0e667877659007ecc4513",
-    "experience.dsh_discovery.overlay_web_sha256": "ca9294b0c50b60425306375b1f69376aec756fd42de52295ed5b5b2b5f7449a4",
+    "experience.dsh_discovery.overlay_headless_sha256": "0825e4a85367bbd38fb49a4b70a9420230ff4ed84b6d809fe5f40bb836620c72",
+    "experience.dsh_discovery.overlay_web_sha256": "f83ffa63302714e99c128b004b6c68f1b3ee9334e68f5fc2881f14c3eacaada6",
     "experience.dsh_discovery.registration_ok": false,
     "experience.dsh_discovery.web_model_visible_tools": [
       "todo_write",
@@ -399,7 +399,7 @@
     "experience.run_id": "f3-honesty-dsh-20261022T234142Z",
     "experience.scenario_key": "dsh-discovery-live",
     "experience.subcase": null,
-    "experience.test_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d"
+    "experience.test_revision": "35614fd83f616005a0546af35631c477151e7dde"
   },
   "finished_at": "2026-10-22T23:41:59Z",
   "job_id": null,
