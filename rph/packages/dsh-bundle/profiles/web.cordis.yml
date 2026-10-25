@@ -9,7 +9,7 @@
 # example apps/cli/config/examples/mcp-memory/mcp-reference-memory.cordis.yml).
 #
 # command/args/cwd/env below are byte-for-byte the B05 launch descriptor
-# (sha256 ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046).
+# (sha256 07e140de13b72ef4ef5fcd87bcfb185467625d61ae20499b58ab0420ee827971).
 # They must not drift from the B-owned launch manifest.
 #
 # The model sees MCP tools as `mcp__<serverName>__<rawName>`; `serverName: acp`

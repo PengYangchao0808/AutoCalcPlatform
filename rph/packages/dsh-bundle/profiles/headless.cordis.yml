@@ -7,7 +7,7 @@
 # target row's whole config (no field-level deep merge).
 #
 # command/args/cwd/env below are byte-for-byte the B05 launch descriptor
-# (sha256 ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046).
+# (sha256 07e140de13b72ef4ef5fcd87bcfb185467625d61ae20499b58ab0420ee827971).
 #
 # The headless profile has no agent-preset plane, so its global registry IS the
 # model-visible set. The base bundle mounts bash/pwsh and the background-job
