@@ -11,7 +11,7 @@
   },
   "decisions": [
     {
-      "path_class": "B00 final-debug overlay files absent or reverted in 2a57d6b",
+      "path_class": "B00 final-debug overlay files absent or reverted in a72e8db",
       "count": 168,
       "owner": "B",
       "decision": "Restored byte-for-byte from the B00 manifest. Source commit was A's branch only as a byte-identical carrier; each restored file's sha256 was verified against the B-owned manifest, so no A change was accepted.",
@@ -32,13 +32,13 @@
     {
       "path_class": "A-owned science paths",
       "owner": "A",
-      "decision": "Took A's committed content from 243d2b7. Excluded A's uncommitted worktree edit and untracked handoff-H4.json.",
+      "decision": "Took A's committed content from 9977a10. Excluded A's uncommitted worktree edit and untracked handoff-H4.json.",
       "result": "PASS"
     },
     {
       "path_class": "C-owned experience paths",
       "owner": "C",
-      "decision": "Took C's committed content from e03a9dd.",
+      "decision": "Took C's committed content from 35614fd.",
       "result": "PASS"
     },
     {

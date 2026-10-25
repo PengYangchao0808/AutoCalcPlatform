@@ -3,7 +3,7 @@
   "reason": "B25a acp_web wheel failed at Lab startup: OriginPolicy did not accept public_origin",
   "b25a_summary_web_http": "NOT_VERIFIED(candidate_origin_policy_mismatch)",
   "build_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
-  "build_source_description": "clean HEAD 672b651 + boundary.py public_origin fix committed in the temporary build worktree",
+  "build_source_description": "clean HEAD 67f1789 + boundary.py public_origin fix committed in the temporary build worktree",
   "original_artifacts": {
     "acp-web-0.3.0.tar.gz": "60069ec0c5ad260bbd67afa95824f10d220f49fa885e5d99838095f9fb11ab72",
     "acp-worker-0.3.0.tar.gz": "ceff0a603b9f4add5bd8a94ac7d840b0aaec9195cf690fd7de0bdcbeffabeac1",

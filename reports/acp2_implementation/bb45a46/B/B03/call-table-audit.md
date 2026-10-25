@@ -1,6 +1,6 @@
 # B03 entry-to-use-case audit notes
 
-Audited: 2026-10-22. Branch `feat/frontend-plan1-closure` (B00 `ac43c16`).
+Audited: 2026-10-22. Branch `feat/frontend-plan1-closure` (B00 `31e60cb`).
 Inputs read: `src/acp_services/runtime/commands.py`, `src/acp_services/contracts/injection.py`,
 `src/acp_services/entrypoints/machine_output.py`, `src/acp_services/entrypoints/mcp.py`,
 `src/acp_services/runtime/plan_contracts.py`, `src/acp_services/runtime/step_requirements.py`,

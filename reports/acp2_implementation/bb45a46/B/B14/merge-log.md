@@ -17,30 +17,30 @@ Created: 2026-10-23 (Asia/Shanghai)
 | C changeset | `35614fd83f616005a0546af35631c477151e7dde` | `acp2/c-experience` |
 
 The B worktree P1 candidate (`10eb71e`) was not used as the base because it stops at
-B00–B09. The main B branch `2a57d6b` carries B00–B13, but it never committed 144
-overlay files and still matched `096cdff` on 24 tracked overlay files. Both facts
+B00–B09. The main B branch `a72e8db` carries B00–B13, but it never committed 144
+overlay files and still matched `3670790` on 24 tracked overlay files. Both facts
 were measured against the B00 manifest, so the base was corrected before A/C were
 merged.
 
 ## 2. Commit sequence (all in the integration worktree)
 
 1. `a44e39a` — **restore the frozen B00 debug overlay onto the B candidate** (B-owned).
-   * 144 files absent from `2a57d6b` added.
-   * 24 files where `2a57d6b` still equalled `096cdff` replaced with the overlay bytes.
+   * 144 files absent from `a72e8db` added.
+   * 24 files where `a72e8db` still equalled `3670790` replaced with the overlay bytes.
    * 169 files changed, +43610/−209.
    * Every restored file was verified `sha256(file) == manifest.files[].sha256`
      (168/168 restore targets matched; the source commit was A's branch only because
      it carries a byte-identical copy of the B00 overlay — not an A domain change).
    * `src/acp/api/server.py` keeps the B13 admission wiring and gains the overlay's
      `acp_web_assets` fallback block (5 added lines, disjoint from the B13 hunk).
-2. `b00bafc` — **merge A by domain ownership** (parents `a44e39a` + `243d2b7`).
+2. `b00bafc` — **merge A by domain ownership** (parents `a44e39a` + `9977a10`).
    * 178 files, +68301, all A-owned.
    * `src/cccp/**`, `acp2-contracts/science/**`, `scripts/acceptance/acp2_science.py`,
      `tests/test_acp2_science_*.py`, `tests/fixtures/acp2/science/**`.
    * A's uncommitted worktree edit (`scripts/acceptance/acp2_science.py`, +383 lines)
      and untracked `science/handoff-H4.json` are **not** part of A's delivered SHA and
      were not included.
-3. `fbac5ab` — **merge C by domain ownership** (parents `b00bafc` + `e03a9dd`).
+3. `fbac5ab` — **merge C by domain ownership** (parents `b00bafc` + `35614fd`).
    * 137 files, +42859/−11, all C-owned.
    * `frontend/**`, `rph/**`, `acp2-contracts/experience/**`,
      `scripts/acceptance/acp2_experience*`, `acp2_mcp_live_client.mjs`,
@@ -61,7 +61,7 @@ Manifest total 1906 files. At the candidate:
   `src/acp/api/{routes,server,v1_routes,v1_schemas}.py`, `src/acp/cli.py`,
   `src/acp/scheduler/manager.py`, `src/acp/services_{bootstrap,data_bootstrap}.py`,
   `src/acp_services/...` 10 files, `tests/test_services_runtime_usecases.py`).
-* For each of those 20, every textual line the overlay added relative to `096cdff`
+* For each of those 20, every textual line the overlay added relative to `3670790`
   is present in the candidate (checked line-by-line; 0 missing), including the
   manually merged `server.py` fallback block.
 

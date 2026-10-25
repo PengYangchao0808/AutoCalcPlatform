@@ -267,11 +267,11 @@ index 6b41ca1..6943f75 100644
 --- a/tests/baseline/services-evidence/handoff_registry.md
 +++ b/tests/baseline/services-evidence/handoff_registry.md
 @@ -64,6 +64,22 @@
- | B | `src/acp/scheduler/remote/{runner,sync}.py`（远端冻结组、release、receipt 与 task_result） | B | B | `878e355` | T30（冻结先于选择、manifest 最后提交、三窗口） | `tests/test_services_chain_switch.py` 与 `tests/test_remote_phase1.py` PASS；真实 LSF 为 NOT_VERIFIED | `c12490e` | integrated |
- | B | `src/cccp/analysis/structure/parsers.py`（path_safe）+ `src/acp/intake/parsers.py`（Path_safe 旧导入面） | B | A/B | `878e355` | T33（命名诊断与兼容别名） | `tests/test_acp_intake.py` 与 T33 import smoke PASS；旧 `Path_safe` 仍可导入 | `ab987e5` | integrated |
+ | B | `src/acp/scheduler/remote/{runner,sync}.py`（远端冻结组、release、receipt 与 task_result） | B | B | `d5d85e7` | T30（冻结先于选择、manifest 最后提交、三窗口） | `tests/test_services_chain_switch.py` 与 `tests/test_remote_phase1.py` PASS；真实 LSF 为 NOT_VERIFIED | `ac915aa` | integrated |
+ | B | `src/cccp/analysis/structure/parsers.py`（path_safe）+ `src/acp/intake/parsers.py`（Path_safe 旧导入面） | B | A/B | `d5d85e7` | T33（命名诊断与兼容别名） | `tests/test_acp_intake.py` 与 T33 import smoke PASS；旧 `Path_safe` 仍可导入 | `ab987e5` | integrated |
  
-+| B | `packaging/roles/**`、`scripts/build_release.py`、`release/release-manifest.json`（0.3.0 角色 wheel/sdist） | B | A（A-27b）、C（C33）、B（B25b/B26a） | `672b651` | B25a 冻结；A-27a 打包规格；C32 静态资产请求 | `scripts/acceptance/check_release_artifacts.py` + `release_role_probe.py`；B25b `package-install` 校验摘要与安装 | B25b（本提交） | integrated |
-+| B | 独立安装验收与发布路径（`scripts/acceptance/acp2_package_install.py`、`reports/acp2_implementation/bb45a46/B/B25/`） | B | B26a/B26b、A/C 文档引用 | `672b651` | B25a 实际制品；A-27b/A-28 原始回执（C33/C34 未发布） | 干净 venv 安装四个发行、CCCP 无 Controller、Lab/MCP/CLI、资产/notice/license、四版本位置；`package-install` 返回 0 | B25b（本提交） | integrated |
++| B | `packaging/roles/**`、`scripts/build_release.py`、`release/release-manifest.json`（0.3.0 角色 wheel/sdist） | B | A（A-27b）、C（C33）、B（B25b/B26a） | `67f1789` | B25a 冻结；A-27a 打包规格；C32 静态资产请求 | `scripts/acceptance/check_release_artifacts.py` + `release_role_probe.py`；B25b `package-install` 校验摘要与安装 | B25b（本提交） | integrated |
++| B | 独立安装验收与发布路径（`scripts/acceptance/acp2_package_install.py`、`reports/acp2_implementation/bb45a46/B/B25/`） | B | B26a/B26b、A/C 文档引用 | `67f1789` | B25a 实际制品；A-27b/A-28 原始回执（C33/C34 未发布） | 干净 venv 安装四个发行、CCCP 无 Controller、Lab/MCP/CLI、资产/notice/license、四版本位置；`package-install` 返回 0 | B25b（本提交） | integrated |
 +
 +## B25b raw install/operation aggregation (2026-10-23)
 +
@@ -729,7 +729,7 @@ index 0000000..840fff6
 +- `final_debug_candidate = sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`
 +  是 overlay 摘要而非 commit；B00/B02 必须应用
 +  `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/`，并由 B02 在
-+  `runtime/baseline-lock.json` 记录落成后的完整 commit。`096cdff…` 与 `ab492cc…` 仅为历史参考。
++  `runtime/baseline-lock.json` 记录落成后的完整 commit。`3670790…` 与 `bb30913…` 仅为历史参考。
 +- 角色源码变量：`ACP2_A_SOURCE`（A 科学）、`ACP2_B_SOURCE`（B 平台）、`ACP2_C_SOURCE`
 +  （C 体验）、`ACP2_INTEGRATION_SOURCE`（集成候选）；`ACP2_SOURCE` 只作当前单轨目录的兼容
 +  别名，不得同时赋两种含义。`ACP2_EVIDENCE` 是证据根。
@@ -1695,7 +1695,7 @@ index 0000000..9e56187
 +- **final_debug_candidate 读取规则.** `final_debug_candidate = sha256:bb45a46c…3e12` 是
 +  overlay 摘要，不是 commit SHA。B00/B02 必须应用
 +  `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/` 并由 B02 记录
-+  `runtime/baseline-lock.json` 的完整 commit；脏 checkout、`096cdff…`、`ab492cc…` 均只能
++  `runtime/baseline-lock.json` 的完整 commit；脏 checkout、`3670790…`、`bb30913…` 均只能
 +  作为历史参考。
 +- **角色源码变量.** `ACP2_A_SOURCE` / `ACP2_B_SOURCE` / `ACP2_C_SOURCE` /
 +  `ACP2_INTEGRATION_SOURCE` 分别指向 A/B/C/集成冻结目录；`ACP2_SOURCE` 仅作当前单轨兼容

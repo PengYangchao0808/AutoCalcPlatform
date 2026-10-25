@@ -62,7 +62,7 @@
     "server_revision": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000"
   },
   "closed": false,
-  "closeout_input_digest": "9a75addbf025c789c2fd25778fabdc5a39cdece7e327d3ba20ef99c34a99dfb2",
+  "closeout_input_digest": "7c5227e03daf3e36321a7a21936d217e064698b1cfc5073f653aab510915f544",
   "closeout_input_digest_rule": "sha256 over sorted lines '<repo-relative path> <file sha256>\\n' for these input entries only; the closeout's own result file is not an input",
   "closeout_input_set": {
     "artifact": "reports/acp2_implementation/bb45a46/B/B20c/closeout-input-set.json",
@@ -109,7 +109,7 @@
     "search_run_key": null,
     "search_status": "NOT_VERIFIED(search_not_declared)"
   },
-  "final_reference_digest": "50f3f8bb76d8677f1f1d8f695e1e07db5b3311b4578bae7c34f173c97773d100",
+  "final_reference_digest": "4662250057ef034550d2473b156b5bd8080df32b7694ba259e1f72805450b719",
   "final_reference_digest_rule": "sha256 of canonical JSON (sort_keys=True, separators=(',',':'), ensure_ascii=False) of this document with final_reference_digest set to the empty string",
   "generated_at": "2026-10-23T09:32:36Z",
   "generated_at_head": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",

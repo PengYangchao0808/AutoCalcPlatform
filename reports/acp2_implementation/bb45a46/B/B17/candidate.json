@@ -1,6 +1,6 @@
 {
   "base_revision": "761a641e7e13ace5f0038539aecb9beed2773ec5",
-  "base_revision_short": "e5463de",
+  "base_revision_short": "761a641",
   "branch": "feat/frontend-plan1-closure",
   "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
   "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B17 working-tree files",
@@ -20,7 +20,7 @@
   "fixture": "/opt/acp2-dev/data/b/fixtures/approval-b17.json",
   "fixture_sha256": "093a3671d15134794a581acb673e40c0e74b8e3e893373d1ceb13ed1f6ea4a99",
   "schema": "acp2.b17.candidate.v1",
-  "server_revision": "e5463de + B17 working-tree files",
+  "server_revision": "761a641 + B17 working-tree files",
   "source_checkout": "repo-root",
   "source_composition": "current working tree (PYTHONPATH=src)",
   "working_tree_files": [

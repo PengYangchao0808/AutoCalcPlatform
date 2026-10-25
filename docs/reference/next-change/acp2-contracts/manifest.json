@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
   "contract_version": "1.3.0",
-  "contract_digest": "4a1d8ce9e6c6a8033814e6045606969ab3f44cd437116b83918b2664ae5f480d",
+  "contract_digest": "070400e7720d401ca2f71bf8fd60f7bdf03140588392cff4dd3f9fa67bc77a6c",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "6dd8a2398c63a2868fb8f6169adeb8a8803801068ca5d22a445922f2e633fda5",
+      "sha256": "573716d38bba28bc6ece676f03d127da12dd34f30d9ebfc4638a4c3197460a83",
       "delivered_by": "B00"
     },
     {
@@ -202,7 +202,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
       "owner": "B",
       "status": "delivered",
-      "sha256": "981594f6497e3d1ea26577e37c91c33ed9927c004f585681c0429ad97b08b16b",
+      "sha256": "f008a100c24bc8e8719bc1b7141c1ac4cefb305d43dafb9ba63615d449db9d24",
       "digest_target": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json",
       "delivered_by": "B00"
     },
@@ -584,7 +584,7 @@
           "kind": "post_freeze_worktree_edit"
         }
       ],
-      "handling": "Do not commit these files as baseline; B02 applies runtime/final-debug-patch to a clean 096cdff worktree."
+      "handling": "Do not commit these files as baseline; B02 applies runtime/final-debug-patch to a clean 3670790 worktree."
     },
     {
       "id": "D-B00-02",

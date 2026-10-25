@@ -62,7 +62,7 @@
       ],
       "head_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
       "insertions": 823,
-      "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 6ec01ec and their digests are unchanged."
+      "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 5e2898a and their digests are unchanged."
     },
     "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
     "release_manifest_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
@@ -76,7 +76,7 @@
     {
       "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
       "owner": "B",
-      "reason": "Release-fix5 artifacts, source 6ec01ec and all eight digests verified on disk.",
+      "reason": "Release-fix5 artifacts, source 5e2898a and all eight digests verified on disk.",
       "row_id": "H7-release-candidate",
       "status": "PASS"
     },
@@ -142,9 +142,9 @@
         {
           "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4/B-fix-5 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-          "receipt_sha256": "edd24943ac7263d1c2bd1e68d2e54bf111d428d6c5e595831282432c21b6dbec",
+          "receipt_sha256": "f138b19c83ea3806bf13e33d678c93e86c7c680524b7f139403b6b9a2a056cd3",
           "unchanged": [
-            "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
+            "historical debug baseline 3670790 and final_debug_candidate overlay sha256",
             "A/B/C path ownership globs",
             "contract manifest identity and baseline-lock rule"
           ]
@@ -276,14 +276,14 @@
       "notes": [
         "H5 plugin install (B21) and upgrade/rollback (B22) rows PASS with real infrastructure-adapter execution and historical read-only behavior.",
         "Process/OS isolation, LSF, DSH and Chromium remain NOT_VERIFIED in the H5 manifest and are not H5 closure rows.",
-        "The PASS is a reused immutable receipt: applicability is recorded above rather than claiming a rerun on 6ec01ec."
+        "The PASS is a reused immutable receipt: applicability is recorded above rather than claiming a rerun on 5e2898a."
       ],
       "owner": "B",
       "reason": null,
       "result": "PASS",
       "reuse_mapping": [
         {
-          "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and 6ec01ec.",
+          "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between 9457e02 and 5e2898a.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
           "receipt_sha256": "5467d708af041585b26ed77ae80c51cc8638fbfa7a07d0c25e2c6eb2e2a336cd",
           "unchanged": [

@@ -3,7 +3,7 @@
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
   "previous_candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
-  "refreeze_reason": "Re-freeze the P1 candidate after the B-owned base-suite fixes (B-fix-34/35/36) and the advanced A (1cfb197) and C (052962e) heads. The previous merge procedure and ownership map were reused; no merge was rebuilt from scratch.",
+  "refreeze_reason": "Re-freeze the P1 candidate after the B-owned base-suite fixes (B-fix-34/35/36) and the advanced A (aa5e193) and C (49ddfad) heads. The previous merge procedure and ownership map were reused; no merge was rebuilt from scratch.",
   "policy": {
     "rule": "A shared file goes to its single owner. An A/C change to a B-owned shared file is a request, not an auto-merge. Last-writer-wins was never used.",
     "owners": {
@@ -24,7 +24,7 @@
   },
   "decisions": [
     {
-      "path_class": "B 2a57d6b..12bf105 runtime fixes and shared contract refresh",
+      "path_class": "B a72e8db..308ef76 runtime fixes and shared contract refresh",
       "owner": "B",
       "files": [
         "src/acp/services_data_bootstrap.py (+12, prefetch forwarding)",
@@ -34,7 +34,7 @@
         "docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json",
         "reports/acp2_implementation/bb45a46/B/Bfix3/**"
       ],
-      "decision": "Took B's committed content from 12bf105. The integration branch matched 2a57d6b on every B-touched file, so the merge was clean.",
+      "decision": "Took B's committed content from 308ef76. The integration branch matched a72e8db on every B-touched file, so the merge was clean.",
       "result": "PASS"
     },
     {
@@ -51,7 +51,7 @@
       "result": "PASS"
     },
     {
-      "path_class": "A 243d2b7..1cfb197 science/plugin changeset",
+      "path_class": "A 9977a10..aa5e193 science/plugin changeset",
       "owner": "A",
       "count": 52,
       "files": [
@@ -69,11 +69,11 @@
         "tests/test_acp2_science_plugin_registry.py",
         "tests/test_cccp_plugin_pilot.py"
       ],
-      "decision": "Took A's committed content from 1cfb197. Every changed path is A-owned; the integration branch matched A's merge base on all A-owned paths, so the merge was clean.",
+      "decision": "Took A's committed content from aa5e193. Every changed path is A-owned; the integration branch matched A's merge base on all A-owned paths, so the merge was clean.",
       "result": "PASS"
     },
     {
-      "path_class": "C e03a9dd..052962e experience fix changeset",
+      "path_class": "C 35614fd..49ddfad experience fix changeset",
       "owner": "C",
       "count": 21,
       "files": [
@@ -84,13 +84,13 @@
         "scripts/acceptance/acp2_experience_scenario_approval_budget_live.py",
         "tests/test_acp2_experience_harness.py"
       ],
-      "decision": "Took C's committed content from 052962e. Every changed path is C-owned; the integration branch matched C's merge base on all C-owned paths, so the merge was clean. B did not edit frontend/**.",
+      "decision": "Took C's committed content from 49ddfad. Every changed path is C-owned; the integration branch matched C's merge base on all C-owned paths, so the merge was clean. B did not edit frontend/**.",
       "result": "PASS"
     },
     {
       "path_class": "A uncommitted worktree state",
       "owner": "A",
-      "decision": "Excluded. Only the committed A head 1cfb197 was merged; the dirty worktree was not part of the changeset.",
+      "decision": "Excluded. Only the committed A head aa5e193 was merged; the dirty worktree was not part of the changeset.",
       "result": "EXCLUDED"
     },
     {
@@ -117,12 +117,12 @@
         "tests/fixtures/acp2/science/cross_domain/",
         "tests/test_acp2_science_nmr_binding.py"
       ],
-      "note": "The A session was still running during the re-freeze; the uncommitted worktree was deliberately excluded and only 1cfb197 is the candidate's A changeset."
+      "note": "The A session was still running during the re-freeze; the uncommitted worktree was deliberately excluded and only aa5e193 is the candidate's A changeset."
     },
     "c_owned_frontend_defect": {
       "path": "frontend/js/workbench/features/scientific-evidence.js",
-      "previous_state": "At C e03a9dd the file named a local callback variable `token` and called `token.fn()`, tripping tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin.",
-      "this_changeset": "C 052962e modifies this file as C-owned content; the candidate takes C's version verbatim.",
+      "previous_state": "At C 35614fd the file named a local callback variable `token` and called `token.fn()`, tripping tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin.",
+      "this_changeset": "C 49ddfad modifies this file as C-owned content; the candidate takes C's version verbatim.",
       "note": "The re-freeze guard/suite result determines whether the row is fixed; this decision does not edit frontend/** in B."
     }
   },

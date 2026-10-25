@@ -4,7 +4,7 @@ Status: **input for the platform owner's shared ADR-008.** A (science track) own
 this scientific text; B aggregates ADR-008 and owns its platform decisions. This
 document does not execute anything, does not issue a run key and does not claim a
 result. Its facts come from the frozen fixture
-`tests/fixtures/acp2/science/diels_alder/v1/` (commit `a71b0c7`) and the frozen
+`tests/fixtures/acp2/science/diels_alder/v1/` (commit `ef207f5`) and the frozen
 reaction/question contract v1.
 
 Reference rows: `Plan A R3-11`, `Plan A R5-04`, `Plan A §A-14/A-17`,

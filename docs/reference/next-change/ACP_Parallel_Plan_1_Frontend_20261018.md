@@ -31,11 +31,11 @@ A00 状态（2026-10-18，T6 收口）：四项全部交付，证据 = `docs/ref
 
 关联：P3-02/03/04、R5/R6、CQ-03；依赖 A00 对应场景地图，无新后端前置。
 
-- [x] 审计并扩展现有 `scene_instance.js`，在 Visualization 内部创建/持有 viewer，收敛模型句柄、监听器、动画/resize/framing 及销毁；明确 setData/selection/style/export 等受限能力和错误结果。（T7 `7327259`；模块 v2 受限实例 API）
-- [x] 处理当前 `opts.viewer` 外部注入及 `addModel` 返回原生 model 的边界缺口；不得只用函数白名单或隐藏一个字段宣称封装完成。（T7 `7327259`：TEST-ONLY `opts.viewer` seam + addModel 结果 token 白名单方法 pin `test_add_model_result_restricted_methods_pin`）
-- [x] 先迁主结构与能量预览，再迁向导、NMR、振动、结构查看/编辑及其他地图内活跃场景。每个场景分别完成数据注入、回调、默认页装配、撤除旧句柄/动画 owner 和验证。（T8–T14：`9fe8f3d`/`d836600`/`83367e9`/`4e863ec`/`26ee295`/`5954b5a`/`6521c1a`；scene_instance HTML:1239 装载）
-- [x] 使用稳定原子/帧/原生振动模式身份；保留 scheduleViewerFraming/frame3DViewer、多实例相机/选择、PNG 导出和缺 3Dmol 的页面降级。（T15 `10afe61` 矩阵 8 行；T31 S7 降级 / S8 多实例 / S9 PNG 浏览器复证）
-- [x] 验证反复挂载、A→B→A、隐藏/显示、暂停/停止、销毁后迟到回调；一个 canvas 一个实例，不让不同场景共享一个原生 viewer。（T15 `10afe61` `scene_lifecycle_matrix.test.js` + red-ability；T30 Node 306 全绿含 scene_instance 27）
+- [x] 审计并扩展现有 `scene_instance.js`，在 Visualization 内部创建/持有 viewer，收敛模型句柄、监听器、动画/resize/framing 及销毁；明确 setData/selection/style/export 等受限能力和错误结果。（T7 `24ffca5`；模块 v2 受限实例 API）
+- [x] 处理当前 `opts.viewer` 外部注入及 `addModel` 返回原生 model 的边界缺口；不得只用函数白名单或隐藏一个字段宣称封装完成。（T7 `24ffca5`：TEST-ONLY `opts.viewer` seam + addModel 结果 token 白名单方法 pin `test_add_model_result_restricted_methods_pin`）
+- [x] 先迁主结构与能量预览，再迁向导、NMR、振动、结构查看/编辑及其他地图内活跃场景。每个场景分别完成数据注入、回调、默认页装配、撤除旧句柄/动画 owner 和验证。（T8–T14：`9a33fa6`/`7cb26a1`/`d6cb7cc`/`931343f`/`5184f14`/`77daa87`/`05b8e18`；scene_instance HTML:1239 装载）
+- [x] 使用稳定原子/帧/原生振动模式身份；保留 scheduleViewerFraming/frame3DViewer、多实例相机/选择、PNG 导出和缺 3Dmol 的页面降级。（T15 `4d7d371` 矩阵 8 行；T31 S7 降级 / S8 多实例 / S9 PNG 浏览器复证）
+- [x] 验证反复挂载、A→B→A、隐藏/显示、暂停/停止、销毁后迟到回调；一个 canvas 一个实例，不让不同场景共享一个原生 viewer。（T15 `4d7d371` `scene_lifecycle_matrix.test.js` + red-ability；T30 Node 306 全绿含 scene_instance 27）
 
 退出门：迁移范围内业务只持有受限实例；返回值/事件也不泄漏原生模型；默认页实际使用新实例且没有第二套动画或旧监听器。→ **交付面已满足（T27 复核 features 创建点=0；接管表 §5.1 终态）；整门随 A05/终验关闭。**
 
@@ -43,10 +43,10 @@ A00 状态（2026-10-18，T6 收口）：四项全部交付，证据 = `docs/ref
 
 关联：R3/R4/R6、FE-08、CQ-03；依赖 A00 的对应契约，沿用 S0。
 
-- [x] 在 `wizard-endpoints.js` 端点单源基础上，按上传/解析、预览/校验、草稿/表单、提交/编辑重算四片提取用例，先迁真实职责与状态 owner，再按完整依赖拆文件。（T16 边界冻结 + T17–T20：`345ab67`/`5408146`/`b5196a3`/`94ccfff`；四片 `features/wizard/*.js` HTML:1251–1254 装载）
-- [x] 新建/编辑继续共用 defaults 与校验，保留 `batch_role_defaults.js`、旧草稿 reader、显式 0/false/null、FormData、无超时例外、409/422 和编辑 POST `/jobs` 拦截。（T21 `5dfa994` 跨片保留行为 pin 全 PASS；T32 A6/A8 真实 409/422 直测）
-- [x] 将 `reaction-builder.js::loadNodes/loadBackends` 等通用职责通过 Client 端点 facade 和 Workbench 用例归位；保留有实际调用者的历史机理只读逻辑。（T22 `ebfc772`：`system-endpoints.js` + `system_resources_controller.js`；F-④-1 catalog cache 终 owner draft-form.js；机理只读/410 由 T25 清理后保持）
-- [x] 逐项核对文件/日志、候选与结果加载在 taskSession 下的身份、revision、dirty/锁定与迟到响应处理；已有 controller 只补缺口，不重写第二份。（T23 `783435a`：`task_session_identity.test.js` 4 项 + files_session +2；T31 B1/B2 迟到竞态浏览器复证）
+- [x] 在 `wizard-endpoints.js` 端点单源基础上，按上传/解析、预览/校验、草稿/表单、提交/编辑重算四片提取用例，先迁真实职责与状态 owner，再按完整依赖拆文件。（T16 边界冻结 + T17–T20：`e564c30`/`ec3779b`/`7ce58a6`/`a35ccfd`；四片 `features/wizard/*.js` HTML:1251–1254 装载）
+- [x] 新建/编辑继续共用 defaults 与校验，保留 `batch_role_defaults.js`、旧草稿 reader、显式 0/false/null、FormData、无超时例外、409/422 和编辑 POST `/jobs` 拦截。（T21 `ea5dd26` 跨片保留行为 pin 全 PASS；T32 A6/A8 真实 409/422 直测）
+- [x] 将 `reaction-builder.js::loadNodes/loadBackends` 等通用职责通过 Client 端点 facade 和 Workbench 用例归位；保留有实际调用者的历史机理只读逻辑。（T22 `3f2b031`：`system-endpoints.js` + `system_resources_controller.js`；F-④-1 catalog cache 终 owner draft-form.js；机理只读/410 由 T25 清理后保持）
+- [x] 逐项核对文件/日志、候选与结果加载在 taskSession 下的身份、revision、dirty/锁定与迟到响应处理；已有 controller 只补缺口，不重写第二份。（T23 `c3375ba`：`task_session_identity.test.js` 4 项 + files_session +2；T31 B1/B2 迟到竞态浏览器复证）
 
 退出门：四片各有单一状态与调用入口；原向导/编辑/候选流程保持，候选保存不隐式创建任务。→ **已满足（T30 五组回归 + T31 S5/S6 编辑不新建/候选冲突 PASS）。**
 
@@ -54,11 +54,11 @@ A00 状态（2026-10-18，T6 收口）：四项全部交付，证据 = `docs/ref
 
 关联：P3-01、OS-08、FE-04/05/09/10/11、CQ-03/07、P7 前端部分。
 
-- [x] 复核能量图 22 个窄委托与其他在用二维视图；renderer 不联网、不读全局任务、不做全量科学分析，必要选择由 controller 注入。（T24 `3503d4e` 纯度复核修复 PASS；FE-08 inspector markup / NMR 2D N/A 登记为设计内例外）
-- [x] 对 FE-04 报告链、FE-05 退役写交互/空钩子及 FE-11 样式候选核查调用闭包，先替代或确认无用再清理，保留 `/legacy/` 与历史报告读取。（T25 `b7f95de` 5 项 REMOVED + s2scan 死字段；T26 `6421ffe` CSS 归并 computed-style/截图等价；`apiV2Remote` 死入口未删→登记开放项）
+- [x] 复核能量图 22 个窄委托与其他在用二维视图；renderer 不联网、不读全局任务、不做全量科学分析，必要选择由 controller 注入。（T24 `ee0d849` 纯度复核修复 PASS；FE-08 inspector markup / NMR 2D N/A 登记为设计内例外）
+- [x] 对 FE-04 报告链、FE-05 退役写交互/空钩子及 FE-11 样式候选核查调用闭包，先替代或确认无用再清理，保留 `/legacy/` 与历史报告读取。（T25 `6376137` 5 项 REMOVED + s2scan 死字段；T26 `233b096` CSS 归并 computed-style/截图等价；`apiV2Remote` 死入口未删→登记开放项）
 - [x] FE-09 的创建入口归并与 A01 同一实现交付，不能另建第二 adapter。ECharts 仅在确有视图需求时做比较试点，不作为前端收口前置。（T27 验证 PASS：features 创建点=0，唯一 raw 驻点 mol3d_adapter.js，未建第二 adapter，未引入 ECharts）
 - [x] FE-10 二面角既有差异保持黄金样例；统一需 C02/C07 确认科学约定并单列数值行为变更，不当作等价去重。（T28 验证 PASS：fe10_dihedral_golden 9 项保持，T30 复跑不变）
-- [x] 拆分巨大页面测试时保留等效断言、fixture 和收集范围；异常区分缺库/销毁/网络失败，不静默显示成功或填零。（T29 `5518aa6`：`frontend_test_selection.txt` 权威清单 525 passed 等效断言）
+- [x] 拆分巨大页面测试时保留等效断言、fixture 和收集范围；异常区分缺库/销毁/网络失败，不静默显示成功或填零。（T29 `899c7c0`：`frontend_test_selection.txt` 权威清单 525 passed 等效断言）
 
 退出门：已接管能力唯一实现；所有保留兼容面都有调用者和保留理由，清理不改变原外观/交互或科学语义。→ **已满足（接管表 §5.3 终态 + T26 截图等价 + T30/T31 回归）。**
 
@@ -86,7 +86,7 @@ A00 状态（2026-10-18，T6 收口）：四项全部交付，证据 = `docs/ref
 - [x] 按当前源码运行 Node、相关前端/编辑/候选/结果 API 回归，分别记录基线、改动后结果与跳过原因。（T30：Node 306 / 前端选择 525 / 扩展 303 / 编辑候选 API 202 / `node --check` 80/80，全绿零跳过；基线对照 T3 183/508/303 delta 表）
 - [x] 在隔离数据、真实 S0 默认入口执行列表→详情→文件/日志→结果，覆盖分页/筛选、A→B→A、rerun、编辑不新建、候选冲突、缺库、多实例、导出、隐藏/重挂载、中英和断网恢复。（T31：13 场景 + 2 async race 全 PASS + 独立复验一致；INJECTED 行 S2b/S7/S12/R1/R2 行内标注）
 - [x] 对真实响应和故障注入分别标记；真实科学/LSF/SSH/SFTP 与生产另记 PASS/FAIL/NOT_VERIFIED，不以模拟成功替代。（T32：表 A REAL 6 行 + 表 B INJECTED 6 行 + 表 C 真实科学/LSF/SSH/SFTP/生产全 NOT_VERIFIED 注明未涉及）
-- [x] 交付匹配 HTML/JS/CSS、装载顺序与摘要，验证冷/暖缓存、普通刷新和旧标签页；按现有静态挂载形成一致切入口与回退步骤。（T33 `e0acc29`：58/58 清单冷 200/暖 304/硬刷 200 字节一致；回退演练 A/B1/B2 三方一致；旧标签页浏览器组合交 B-T71）
+- [x] 交付匹配 HTML/JS/CSS、装载顺序与摘要，验证冷/暖缓存、普通刷新和旧标签页；按现有静态挂载形成一致切入口与回退步骤。（T33 `3cfd439`：58/58 清单冷 200/暖 304/硬刷 200 字节一致；回退演练 A/B1/B2 三方一致；旧标签页浏览器组合交 B-T71）
 - [x] 分列“H 拆分完成”“任务前端兼容重构完成”“新服务接入状态”“真实远端/生产状态”，删除被替代实现并关闭接管表。（T34 = 本勾选：五维分列见 `docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md` §1；被替代实现删除审计 §3.2 全 PASS（唯一遗留 `apiV2Remote` 死入口登记开放）；接管表终态 = 基线地图 §5）
 
 退出门：默认页真实通过、资源无混载/缺失、旧 owner 撤除，前端回退不修改 DB/attempt/工件、不重复发命令。→ **三项事实证据已备（T31/T33/接管表终态），但按计划指令与评审 A5，本门保持 OPEN 不条件关闭**（终验波 F1–F4 待执行；跨车道真实故障轴 NOT_VERIFIED）。

@@ -29,7 +29,7 @@ with `verification: partial`, and the exact reason is stored in `manifest.json` 
 the B00 patch-verification log.
 
 The per-file evidence was verified independently: applying `tracked-changes.patch`
-to a clean `096cdff` worktree and copying `new-files/` reproduced
+to a clean `3670790` worktree and copying `new-files/` reproduced
 **1,906/1,906** logged files with matching SHA-256 (0 mismatches, 0 missing), which
 matches `reconstruction.json` (`result: PASS`). The current dirty checkout differs
 from the frozen snapshot in 16 files due to later uncommitted edits; those paths are
@@ -46,6 +46,6 @@ recorded as drift and are **not** part of the candidate.
 
 ## Use
 
-Follow `apply-order.md`. Apply only to a clean worktree at `096cdff`; never to the
+Follow `apply-order.md`. Apply only to a clean worktree at `3670790`; never to the
 dirty development checkout. B02 records the resulting full commit SHA in
 `runtime/baseline-lock.json`.

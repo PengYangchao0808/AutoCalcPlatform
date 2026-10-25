@@ -11,7 +11,7 @@
     "expected_readability_receipt": "reports/acp2_implementation/bb45a46/A/A-26/result.json",
     "owner": "A",
     "readability_receipt_present": false,
-    "reason": "A published handoff-H6.json (readable, parsed here) but no A-26 result/readability receipt that verifies B data remains readable at f32c670. B does not sign A scope.",
+    "reason": "A published handoff-H6.json (readable, parsed here) but no A-26 result/readability receipt that verifies B data remains readable at 31dc79a. B does not sign A scope.",
     "result": "NOT_VERIFIED(a_readability_absent)"
   },
   "c": {

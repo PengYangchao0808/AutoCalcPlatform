@@ -17,7 +17,7 @@
 | G0 门禁（F1—F4 全 APPROVE） | **PASS** | 4 份 APPROVE 证据在案（§1） |
 | G1 版本 lockstep（4 处 `0.2.0`） | **PASS** | `grep __version__` + `pyproject.toml` 四处一致（§2.1） |
 | 构建产物 + provenance | **PASS** | wheel sha256/大小/namelist 记录（§2.2—2.3） |
-| 与 C-T54 候选产物可核对（评审 R4） | **PASS（配置/资产/条目集）· NOT_VERIFIED（字节级）** | 配置 sha 一致、8/8 资产摘要一致、候选树重建与发布 wheel 条目集零差异；但冻结候选 `355d96f` 之后有 **7 个触及 `src/` 的提交**，按 R4/C-T54 失效规则其字节级验收不覆盖本次产物（§2.4） |
+| 与 C-T54 候选产物可核对（评审 R4） | **PASS（配置/资产/条目集）· NOT_VERIFIED（字节级）** | 配置 sha 一致、8/8 资产摘要一致、候选树重建与发布 wheel 条目集零差异；但冻结候选 `c7b0b4f` 之后有 **7 个触及 `src/` 的提交**，按 R4/C-T54 失效规则其字节级验收不覆盖本次产物（§2.4） |
 | G2 扩展前快照 | **PASS（位置改记 /tmp，见偏离说明）** | 生产 DB 经 online-backup API 复制，生产目录零写入（§3.1） |
 | G3 候选提交守卫套件 | **PASS（本执行实跑部分）· 覆盖引用（未复跑部分）** | 实跑 83 项 + grep gates + 旧 GET 101 项全绿；未复跑部分逐条引用 F1/F4 在 HEAD 的回执（§3.4、§8） |
 | schema 扩展/收缩/回退演练（副本上） | **PASS（8/8 步骤）** | 生产 v20 → 副本 v21（迁移 021）→ 旧 reader 可读 → 数据恢复版本守恒（§3.2） |
@@ -34,14 +34,14 @@
 
 | 门 | APPROVE 证据 | 审计 HEAD |
 |---|---|---|
-| F1 计划/证据合规 | `.omo/evidence/acp-parallel-plan-2-services/f1-plan-compliance.md`（`VERDICT: APPROVE`） | `5f4b833` |
-| F2 代码质量 | `.omo/evidence/acp-parallel-plan-2-services/f2-code-quality.md`（`VERDICT: APPROVE`） | 整改提交 `6f83a37`…`5f4b833` |
-| F3 人工 QA | `.omo/evidence/acp-parallel-plan-2-services/f3-manual-qa.md`（`Verdict: APPROVE`） | 基线 `5f4b833`（整改 `d9dcb25`） |
-| F4 理想态保真 | `.omo/evidence/acp-parallel-plan-2-services/f4-ideal-state-fidelity.md`（`VERDICT: APPROVE`） | `c7c26c6` |
+| F1 计划/证据合规 | `.omo/evidence/acp-parallel-plan-2-services/f1-plan-compliance.md`（`VERDICT: APPROVE`） | `30d531a` |
+| F2 代码质量 | `.omo/evidence/acp-parallel-plan-2-services/f2-code-quality.md`（`VERDICT: APPROVE`） | 整改提交 `b7db7c5`…`30d531a` |
+| F3 人工 QA | `.omo/evidence/acp-parallel-plan-2-services/f3-manual-qa.md`（`Verdict: APPROVE`） | 基线 `30d531a`（整改 `3922f07`） |
+| F4 理想态保真 | `.omo/evidence/acp-parallel-plan-2-services/f4-ideal-state-fidelity.md`（`VERDICT: APPROVE`） | `1dcd461` |
 
 - **发布提交（本记录唯一对象）**：`1dcd4619cf882973409160b91bfd546e8b54713c`
   （`fix(services): route remaining production writes through Data port; refresh closure F-3 status`，2026-10-19 21:57 +0800）。
-- 构建输入洁净度：`git status --porcelain -- src/ pyproject.toml README.md LICENSE` → **clean**（工作区打包面与提交树一致，构建取提交树 `git archive c7c26c6`）。
+- 构建输入洁净度：`git status --porcelain -- src/ pyproject.toml README.md LICENSE` → **clean**（工作区打包面与提交树一致，构建取提交树 `git archive 1dcd461`）。
 - 发布形态说明：本次为**候选冒烟级发布执行**——产物构建、隔离环境冒烟、schema 演练在副本执行完毕；**生产服务切换（restart）因 sudo 无口令未执行**（§5，NOT_VERIFIED）。
 
 ---
@@ -64,7 +64,7 @@ $ grep -n '^version' pyproject.toml
 ### 2.2 构建命令与产物
 
 ```bash
-git archive c7c26c6 | tar -x -C /tmp/rel76/tree        # 提交树出树（非工作区）
+git archive 1dcd461 | tar -x -C /tmp/rel76/tree        # 提交树出树（非工作区）
 python3.11 -m build --wheel --outdir /tmp/rel76 /tmp/rel76/tree
 # → Successfully built acp-0.2.0-py3-none-any.whl   (exit 0, build 1.6.1, py3.11.13)
 sha256sum /tmp/rel76/acp-0.2.0-py3-none-any.whl
@@ -77,7 +77,7 @@ sha256sum /tmp/rel76/acp-0.2.0-py3-none-any.whl
 | 大小 | 46,139,616 B |
 | 构建配置 sha256（`pyproject.toml`） | `4d40cf842a31b9d04d18136a24086418422a17019b1bb90daa1bfc774423bbfb` |
 | 工具链 | `/usr/bin/python3.11`（3.11.13）· `build 1.6.1`（隔离构建环境，`METADATA-Version: 2.4`） |
-| 源 | `git archive c7c26c6`（提交树） |
+| 源 | `git archive 1dcd461`（提交树） |
 
 ### 2.3 namelist 核对
 
@@ -111,8 +111,8 @@ C-T54（`.omo/evidence/acp-parallel-plan-3-cccp/task-54-acp-parallel-plan-3-cccp
 | R4-a | 构建配置同一性 | **PASS** | 本仓 `pyproject.toml` sha256 == C-T54 候选 blob `4d40cf84…`（逐字节同） |
 | R4-b | 版本同一性 | **PASS** | 四处 lockstep `0.2.0` == C-T54 产物版本 |
 | R4-c | 资产摘要同一性 | **PASS** | 8/8 `model_assets` digest == `release_manifest.md` master == C-T54 审计 8/8 True |
-| R4-d | **条目集（namelist）同一性** | **PASS** | 本执行在同一工具链下额外重建候选树 wheel：`git archive 355d96f` → `acp-0.2.0-py3-none-any.whl`（sha `b2128f8854dd80d50a849a2a52690cdbd73c4ba89f0ff6768bb57634dbb420b5`，46,131,436 B，545 条）；**与发布 wheel 条目集 diff = ∅（0 差异）** —— 冻结候选后条目集未变（唯一新增文件 `src/acp_services/AGENTS.md` 不入包） |
-| R4-e | 字节级 sha256 同一性 | **NOT_VERIFIED（按设计不成立 + R4 失效规则触发）** | ① wheel 非字节复现（C-T54 自述 sha 仅绑定其构建株；同为候选树，其记录 `bd2acb…` ≠ 本机重建 `b2128f…`，实证跨构建株不可比）；② `355d96f..c7c26c6` 有 **18 个提交、其中 7 个触及 `src/`**（`71c36da` `48b1660` `233297c` `6f83a37` `d9dcb25` `d51b024` `c7c26c6`）——按 C-T54 失效规则（“冻结后触及 `src/cccp|src/acp|src/acp_services` 的 commit 使本复验失效须重跑”）与 R4（“影响产物的后续修改使原验收失效”），**C-T54 的产物级验收不覆盖本次发布产物**，字节级“由 C-T54 所验”不成立 |
+| R4-d | **条目集（namelist）同一性** | **PASS** | 本执行在同一工具链下额外重建候选树 wheel：`git archive c7b0b4f` → `acp-0.2.0-py3-none-any.whl`（sha `b2128f8854dd80d50a849a2a52690cdbd73c4ba89f0ff6768bb57634dbb420b5`，46,131,436 B，545 条）；**与发布 wheel 条目集 diff = ∅（0 差异）** —— 冻结候选后条目集未变（唯一新增文件 `src/acp_services/AGENTS.md` 不入包） |
+| R4-e | 字节级 sha256 同一性 | **NOT_VERIFIED（按设计不成立 + R4 失效规则触发）** | ① wheel 非字节复现（C-T54 自述 sha 仅绑定其构建株；同为候选树，其记录 `bd2acb…` ≠ 本机重建 `b2128f…`，实证跨构建株不可比）；② `c7b0b4f..1dcd461` 有 **18 个提交、其中 7 个触及 `src/`**（`f5a9c9b` `2ecc517` `1996260` `b7db7c5` `3922f07` `afb612a` `1dcd461`）——按 C-T54 失效规则（“冻结后触及 `src/cccp|src/acp|src/acp_services` 的 commit 使本复验失效须重跑”）与 R4（“影响产物的后续修改使原验收失效”），**C-T54 的产物级验收不覆盖本次发布产物**，字节级“由 C-T54 所验”不成立 |
 | R4-f | C-T54 记录条目数（543）与本机重建（545）差异 | **NOT_VERIFIED（差异未归因，移交 F5）** | 两次本机构建（候选树/发布树）条目集完全一致且均为 545，故 543↔545 差 2 条出在 C-T54 侧计数/构建环境，未归因；不作为阻塞项，但**禁止**把本 wheel 的 sha 与 C-T54 三个 sha 互相拼接引用 |
 
 > **R4 结论（如实）**：发布产物在**配置、版本、资产、条目集**四个维度与 C-T54 候选可核对（PASS）；
@@ -128,7 +128,7 @@ C-T54（`.omo/evidence/acp-parallel-plan-3-cccp/task-54-acp-parallel-plan-3-cccp
 ```bash
 # 生产 DB 以 sqlite3 online-backup API 复制（连接 URI mode=ro，未写生产）
 python3.11 -c "…conn=sqlite3.connect('file:/var/lib/acp/runs/acp_jobs.db?mode=ro',uri=True)…; conn.backup(dst)"
-# → /tmp/rel76/db/pre_expand_c7c26c6.db   847,872 B   (v20, quick_check=ok, jobs=15, stage_tasks=129)
+# → /tmp/rel76/db/pre_expand_1dcd461.db   847,872 B   (v20, quick_check=ok, jobs=15, stage_tasks=129)
 # → /tmp/rel76/runroot/acp_jobs.db         847,872 B   (候选冒烟副本，后经迁移 → v21)
 ```
 
@@ -161,7 +161,7 @@ python3.11 -c "…conn=sqlite3.connect('file:/var/lib/acp/runs/acp_jobs.db?mode=
 
 **收缩（contract）**：本发布**不执行任何收缩**（Release_Prep §3.4；`_MIGRATIONS` append-only，无 DROP/RENAME 迁移 — 步骤 5 实测）。
 
-### 3.4 本执行实跑的守卫套件（候选提交 `c7c26c6`）
+### 3.4 本执行实跑的守卫套件（候选提交 `1dcd461`）
 
 | 命令 | 结果 | exit |
 |---|---|---|
@@ -172,9 +172,9 @@ python3.11 -c "…conn=sqlite3.connect('file:/var/lib/acp/runs/acp_jobs.db?mode=
 
 **未在本执行复跑的 G3 项（逐条引用既有 HEAD 回执，不冒充本次执行）**：`tests/test_services_*.py` 全量、
 `test_f4_scope_audit.py`、执行完整性/恢复四门（`test_execution_integrity_e2e` / `checkpoint_resume_semantics` /
-`recovery_fixtures_smoke` / `recovery_cross_version`）——引用 F4 在 `c7c26c6` 的回执
+`recovery_fixtures_smoke` / `recovery_cross_version`）——引用 F4 在 `1dcd461` 的回执
 （Services 聚合 **1455 passed**、isolation+invariants **43 passed**、IS-11 组合 **78 passed**）
-与 F1 在 `5f4b833` 的 17 文件子集 **510 passed**。这些项在本记录中计为 **“覆盖引用（非本次执行）”**，不计入本执行 PASS 数。
+与 F1 在 `30d531a` 的 17 文件子集 **510 passed**。这些项在本记录中计为 **“覆盖引用（非本次执行）”**，不计入本执行 PASS 数。
 
 ---
 

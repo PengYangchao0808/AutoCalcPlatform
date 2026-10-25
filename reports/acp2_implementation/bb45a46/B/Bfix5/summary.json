@@ -19,7 +19,7 @@
   },
   "rows": {
     "F2.clean_guards": {
-      "detail": "100 passed on clean worktree at 6ec01ec",
+      "detail": "100 passed on clean worktree at 5e2898a",
       "evidence": "clean-guards-fix5.txt",
       "result": "PASS"
     },

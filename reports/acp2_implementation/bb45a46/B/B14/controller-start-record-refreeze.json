@@ -40,5 +40,5 @@
     "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
     "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
   },
-  "note": "PID/port are from this B14a re-freeze; the candidate serves integration source through PYTHONPATH while the B02 venv remains the interpreter environment. /api/health's candidate_revision is the B02 acceptance-env override, not the candidate SHA; the authoritative candidate SHA is recorded separately and the frozen baseline-lock still names ab492cc."
+  "note": "PID/port are from this B14a re-freeze; the candidate serves integration source through PYTHONPATH while the B02 venv remains the interpreter environment. /api/health's candidate_revision is the B02 acceptance-env override, not the candidate SHA; the authoritative candidate SHA is recorded separately and the frozen baseline-lock still names bb30913."
 }

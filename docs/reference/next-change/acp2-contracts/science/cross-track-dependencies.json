@@ -140,7 +140,7 @@
     {
       "artifact_id": "A-26:h6-cross-domain-handoff",
       "consumer": "C T-40b",
-      "digest": "sha256:d791c9c4c3a5bc38f7fba333591f5ec2c3f3374a0fa6abd3f9f22c4074fdb0e5",
+      "digest": "sha256:770223e49d440633735460842d4ec4e3013755d4a1e77ea9ae54851b98498f7a",
       "evidence_state": "NOT_VERIFIED",
       "gap": "A-26 delivered handoff-H6.json (schema_version 1) with h6_closure.status=open, closed=false, real_run=false and the nmr/thermo rows PASS only for static/constructed contract verification. The selectivity subcase and the C T-40b signoff row stay NOT_VERIFIED because no C T-40a submission, B23b authorized artifact, real A-25b audit or public run_id exists. C T-40b signs only after a real A-25b audit; this file's presence never upgrades evidence_state.",
       "phase": "experience:selectivity",
@@ -180,7 +180,7 @@
       "consumer": "A-00a",
       "digest": "sha256:3fb835b5069f96642bf6bb889a804532bbb70b69cf796d21208a6e3364117734",
       "evidence_state": "PASS",
-      "gap": "B00 has not published its final re-frozen baseline (see the sibling row with the OR-form precondition). This row certifies only that the 2026-10-22 repair-report overlay restored 1906/1906 snapshot files in A-00a (snapshot-verify PASS, drift 0, missing 0; tracked patch digest matched the snapshot). B00 must still ratify/route the final baseline; A never treats 096cdffe... as the final baseline.",
+      "gap": "B00 has not published its final re-frozen baseline (see the sibling row with the OR-form precondition). This row certifies only that the 2026-10-22 repair-report overlay restored 1906/1906 snapshot files in A-00a (snapshot-verify PASS, drift 0, missing 0; tracked patch digest matched the snapshot). B00 must still ratify/route the final baseline; A never treats 3670790e... as the final baseline.",
       "phase": "main",
       "preconditions": {
         "and": [],
@@ -197,7 +197,7 @@
       "consumer": "A-00a",
       "digest": null,
       "evidence_state": "NOT_VERIFIED",
-      "gap": "B00 has published neither accepted form yet: no full 40-hex final baseline SHA and no reproducible patch manifest with digest. Both form ids are A-declared provisional ids (declared_external_artifacts) pending B00's machine ids; 096cdffe... is the historical reference only (Plan A B00 prerequisite, R5-05).",
+      "gap": "B00 has published neither accepted form yet: no full 40-hex final baseline SHA and no reproducible patch manifest with digest. Both form ids are A-declared provisional ids (declared_external_artifacts) pending B00's machine ids; 3670790e... is the historical reference only (Plan A B00 prerequisite, R5-05).",
       "phase": "main",
       "preconditions": {
         "and": [],

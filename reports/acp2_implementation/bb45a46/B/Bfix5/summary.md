@@ -14,7 +14,7 @@ overwritten.
 | Installed wheel → non-empty release manifest | PASS — 510 files, `release_id=1c79785a657c6614`, local identity matches | `installed-manifest.json` |
 | LSF normal singlepoint (real `bsub`) | PASS — job `1765`, terminal `completed`, ORCA 6.1.1 `-1.116759307204 Ha` | `lsf/job-terminal.json`, `lsf/remote/facts.json`, `lsf/local-artifacts/execution_receipt.json` |
 | Bare root wheel `acp run singlepoint` (no extras) | PASS — exit 0, `-1.116773191779 Ha` | `bare-root/singlepoint.log` |
-| Package-install receipt candidate identity | PASS — `candidate_revision=6ec01ec…` from `release_manifest.source.revision`; Lab health matches | `package-install/summary.json` |
+| Package-install receipt candidate identity | PASS — `candidate_revision=5e2898a…` from `release_manifest.source.revision`; Lab health matches | `package-install/summary.json` |
 | Cross-entry release projection | PASS — HTTP/CLI/MCP equal release/plan/submission fields | `three-entry-compare.json` |
 | Targeted tests | PASS — 263 passed | `pytest-fix5.txt` |
 | ruff check/format | PASS | `ruff-check-fix5.txt`, `ruff-format-fix5.txt` |

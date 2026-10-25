@@ -2,7 +2,7 @@
   "artifacts": [
     {
       "path": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-      "sha256": "edd24943ac7263d1c2bd1e68d2e54bf111d428d6c5e595831282432c21b6dbec",
+      "sha256": "f138b19c83ea3806bf13e33d678c93e86c7c680524b7f139403b6b9a2a056cd3",
       "size_bytes": 23421
     },
     {
@@ -60,7 +60,7 @@
         "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
         "receipt_sha256": "213ea0b2a71ee28e1b6d55180b57f9dce04bc003b40d552f30b668c7a15c2c2e",
         "unchanged": [
-          "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
+          "historical debug baseline 3670790 and final_debug_candidate overlay sha256",
           "A/B/C path ownership globs",
           "contract manifest identity and baseline-lock rule"
         ]

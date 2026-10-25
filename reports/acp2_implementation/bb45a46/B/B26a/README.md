@@ -1,7 +1,7 @@
 # B26a — External reproduction from a clean shell (2026-10-23)
 
-**Schema:** `acp2.b26a.reproduction-matrix.v1` · **Overall:** `NOT_VERIFIED` (reconciled at HEAD `8349f21`; the original `FAIL` at `dc72de2` is preserved in `result_history`; both original FAIL rows PASS after B-fix-4; four rows remain NOT_VERIFIED)
-**Release under test:** `0.3.0`, built from clean source `a84c4266bfc4738c8efc2988b7c5c37079a8a324` (`release/release-manifest.json`) · **Repo HEAD at reproduction:** `d5b4a8a2ac7a9becf2f88c516ff690b4078cb555` · **Controller env label in B15/B17 receipts:** `f60fda8…` (not a code claim)
+**Schema:** `acp2.b26a.reproduction-matrix.v1` · **Overall:** `NOT_VERIFIED` (reconciled at HEAD `69deded`; the original `FAIL` at `aaf2c4b` is preserved in `result_history`; both original FAIL rows PASS after B-fix-4; four rows remain NOT_VERIFIED)
+**Release under test:** `0.3.0`, built from clean source `a84c4266bfc4738c8efc2988b7c5c37079a8a324` (`release/release-manifest.json`) · **Repo HEAD at reproduction:** `d5b4a8a2ac7a9becf2f88c516ff690b4078cb555` · **Controller env label in B15/B17 receipts:** `d5b4a8a…` (not a code claim)
 **Independence:** `independent_operator: false (same agent/session)` — this is a **self-reproduction**, not an independent operator run.
 
 ## 1. Clean shell proof
@@ -53,7 +53,7 @@ Each row in `reproduction-matrix.json` carries `command`, `cwd`, `exit_code`, `r
 | B-fix-4 re-run | source `abec2bc4f1d302827248d36171973df5bc1bc4dd` | rows PASS | `authorization` PASS (12 assertions), `installed_workbench_submission` PASS (HTTP + CLI, real scheduler task) |
 | Reconciled roll-up | HEAD `69deded634fae075024597549e2990e8e7de51d4` | NOT_VERIFIED | Remaining `third_party_plugin_install` (no published procedure), `agent_research_entry` (C DSH/browser absent), `lsf` (no LSF client), `disconnect_recovery` (not re-run) |
 
-`superseded_by: B/Bfix4/b26a-rerun` (`../Bfix4/b26a-rerun/`, `../Bfix4/summary.json`). No FAIL was silently relabelled: the first history entry keeps `overall_result: FAIL`, and `dc72de2` still contains the original matrix.
+`superseded_by: B/Bfix4/b26a-rerun` (`../Bfix4/b26a-rerun/`, `../Bfix4/summary.json`). No FAIL was silently relabelled: the first history entry keeps `overall_result: FAIL`, and `aaf2c4b` still contains the original matrix.
 
 ## 4. Defects found by the external reproduction
 

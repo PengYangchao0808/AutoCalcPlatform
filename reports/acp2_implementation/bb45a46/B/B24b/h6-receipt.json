@@ -11,14 +11,14 @@
     "expected_readability_receipt": "reports/acp2_implementation/bb45a46/A/A-26/result.json",
     "owner": "A",
     "readability_receipt_present": false,
-    "reason": "A published handoff-H6.json (readable, parsed here) but no A-26 result/readability receipt that verifies B data remains readable at f32c670. B does not sign A scope.",
+    "reason": "A published handoff-H6.json (readable, parsed here) but no A-26 result/readability receipt that verifies B data remains readable at 31dc79a. B does not sign A scope.",
     "result": "NOT_VERIFIED(a_readability_absent)"
   },
   "b_owned_rows": [
     {
       "attribution": {
         "candidate_revision": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
-        "note": "Historical B24b migration run at f32c670; B-fix-7 does not re-run migration and does not re-attribute it to X."
+        "note": "Historical B24b migration run at 31dc79a; B-fix-7 does not re-run migration and does not re-attribute it to X."
       },
       "evidence": "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",
       "owner": "B",

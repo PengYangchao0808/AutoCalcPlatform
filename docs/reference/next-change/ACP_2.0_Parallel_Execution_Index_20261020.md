@@ -285,7 +285,7 @@ ADR 归属：A 起草 ADR-002/003/008 的科学部分；B 起草 ADR-001/004/005
 - **final_debug_candidate 读取规则.** `final_debug_candidate = sha256:bb45a46c…3e12` 是
   overlay 摘要，不是 commit SHA。B00/B02 必须应用
   `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/` 并由 B02 记录
-  `runtime/baseline-lock.json` 的完整 commit；脏 checkout、`096cdff…`、`ab492cc…` 均只能
+  `runtime/baseline-lock.json` 的完整 commit；脏 checkout、`3670790…`、`bb30913…` 均只能
   作为历史参考。
 - **角色源码变量.** `ACP2_A_SOURCE` / `ACP2_B_SOURCE` / `ACP2_C_SOURCE` /
   `ACP2_INTEGRATION_SOURCE` 分别指向 A/B/C/集成冻结目录；`ACP2_SOURCE` 仅作当前单轨兼容

@@ -166,7 +166,7 @@ A validated receipt (abridged) with the P0 environment verdict:
   "evidence_kind": "fixture",
   "exit_code": 0,
   "assertions": [
-    {"name": "baseline.git_head", "status": "PASS", "detail": "6e85a49..."}
+    {"name": "baseline.git_head", "status": "PASS", "detail": "b3b7fc2..."}
   ],
   "artifacts": [
     {"path": "baseline.json", "size_bytes": 512, "sha256": "<64 hex>"}

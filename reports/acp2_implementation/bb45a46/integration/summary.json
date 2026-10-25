@@ -1,6 +1,6 @@
 {
   "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
-  "candidate_revision_note": "The H0-H7 receipt set under receipts/ is frozen at the pre-fix5 code candidate and is immutable; release-fix5 was rebuilt from 6ec01ec and is referenced by release_candidate. The aggregate receipts were not rewritten to a SHA they never ran on.",
+  "candidate_revision_note": "The H0-H7 receipt set under receipts/ is frozen at the pre-fix5 code candidate and is immutable; release-fix5 was rebuilt from 5e2898a and is referenced by release_candidate. The aggregate receipts were not rewritten to a SHA they never ran on.",
   "contract_version": "1.3.0",
   "fix5_runs": [
     "reports/acp2_implementation/bb45a46/B/Bfix5/summary.json",

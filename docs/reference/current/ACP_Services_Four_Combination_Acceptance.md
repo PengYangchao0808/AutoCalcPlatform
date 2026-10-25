@@ -20,7 +20,7 @@
 **执行基线（execution base HEAD）：`fded1160c4edb0974a6e49b528ee263975fd0075`**（分支 `feat/frontend-plan1-closure`）。
 Python `3.11.13`（`/usr/bin/python3.11`）；Node `v20.19.0`。配置：每个套件使用 `mktemp -d` 隔离的 `ACP_RUN_ROOT`；**未重启服务、未改配置、未改 DB**；默认配置来源 `cccp.config._get_default_config()`（built-in 权威，ANTI #3）。
 
-**移动目标披露（并发车道）**：本记录全部套件在 `d048950` 上执行；记录撰写期间 HEAD 因并发 worker 前进到 `16799d18f4a823942a4fd6a9a76e6e109f3e5873`（todo 56 `feat(services-metering): decouple usage collection from science completion/result access`），另有 todo 55 的 `src/acp_services/runtime/quota.py` 未跟踪在途。该并发提交是加性的用量采集路径，不触及本文件四组合的 S0/S1 表面（旧 GET / cache-only / events / frames）。**S0 旧记录不得用作 S1 证据；本记录不拼接不同提交的通过记录。**
+**移动目标披露（并发车道）**：本记录全部套件在 `fded116` 上执行；记录撰写期间 HEAD 因并发 worker 前进到 `16799d18f4a823942a4fd6a9a76e6e109f3e5873`（todo 56 `feat(services-metering): decouple usage collection from science completion/result access`），另有 todo 55 的 `src/acp_services/runtime/quota.py` 未跟踪在途。该并发提交是加性的用量采集路径，不触及本文件四组合的 S0/S1 表面（旧 GET / cache-only / events / frames）。**S0 旧记录不得用作 S1 证据；本记录不拼接不同提交的通过记录。**
 
 | 绑定项 | 值 |
 |---|---|
@@ -52,7 +52,7 @@ Python `3.11.13`（`/usr/bin/python3.11`）；Node `v20.19.0`。配置：每个�
 
 ## 3. 逐组合执行记录（命令 + 结果 + 证据绑定）
 
-所有命令在 `d048950` 上执行；每个套件以隔离 `ACP_RUN_ROOT` 运行，未重启服务。
+所有命令在 `fded116` 上执行；每个套件以隔离 `ACP_RUN_ROOT` 运行，未重启服务。
 
 ### 3.1 F0＋S0（基线）
 ```
@@ -109,7 +109,7 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
 ## 4. 证据绑定规则（强制）
 
 1. **每份证据绑定实际提交/契约版本/配置/fixture 摘要**：本文件 §1 与 §8 的 `binding` 块给出 execution commit、`contract_version=1`、配置（隔离 run_root）、fixture 摘要（contract_samples / frames_mapping / cache-only 矩阵）。
-2. **S0 旧记录不能证明 S1**：`references` 中的历史基线（todo 1，`7327259c`）仅作对照；S1 组合（F0＋S1 / F1＋S1）各自必须在 execution commit 上拥有 `executed` 记录（由 checker 守护）。
+2. **S0 旧记录不能证明 S1**：`references` 中的历史基线（todo 1，`24ffca5c`）仅作对照；S1 组合（F0＋S1 / F1＋S1）各自必须在 execution commit 上拥有 `executed` 记录（由 checker 守护）。
 3. **不拼接不同提交的通过记录**：所有 `executed` 记录的 `commit` 必须恰为 execution commit；历史提交只能出现在 `references` 且必须带非空 `note` 说明其"仅引用"性质。
 4. **不以单组合代替四组合**：四组合必须同时在场且相互独立（无 `covered_by`）。
 5. **mock 通过只记模块完成**：本记录的仓内 PASS 一律标注为 PASS_IN_REPO（模块/API 级），不得外推为浏览器/真实科学/生产通过。
@@ -138,7 +138,7 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
 | 科学等价（旧/新同输入输出对照） | F0＋S1 / F1＋S1 | NOT_VERIFIED | C10 判定记录未交付；HN-02 状态 B pending；真实科学软件未运行 | C10 |
 | 真实科学执行（ORCA/xTB/CREST/CENSO） | 全部 | NOT_VERIFIED | 二进制不可当场真实运行（config 源可解析⚠但非运行证据） | C10/B |
 | 远端 LSF/SSH/SFTP 路径 | 全部 | NOT_VERIFIED | 无网络；未涉及远端执行 | B |
-| Lab 账户/会话 UI | F1＋S1 | NOT_VERIFIED | todo 73 identity 组件已交付（`ca55bdb`），但**未接入 HTTP/UI**；OIDC 恒不可用 | B |
+| Lab 账户/会话 UI | F1＋S1 | NOT_VERIFIED | todo 73 identity 组件已交付（`014234c`），但**未接入 HTTP/UI**；OIDC 恒不可用 | B |
 | A04 刷新协议接入（cursor/重置/停轮询） | F1＋S1 | NOT_VERIFIED | A04 为 **DEFERRED / 未接入**（plan-1 §3 A04 六条全未勾选）；故本次交付是**前端兼容重构**，非新刷新协议 | A04-lane |
 | 生产发布/静态缓存/旧标签页 | F1＋S0 / F1＋S1 | NOT_VERIFIED | 未做生产发布演练 | B |
 
@@ -344,7 +344,7 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
         },
         {
           "item": "Lab account/session UI",
-          "reason": "todo 73 identity delivered (ca55bdb) but not wired into HTTP/UI; OIDC unavailable",
+          "reason": "todo 73 identity delivered (014234c) but not wired into HTTP/UI; OIDC unavailable",
           "channel": "B"
         },
         {
@@ -387,7 +387,7 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
     {
       "item": "todo 73 Lab identity HTTP/UI wiring",
       "status": "NOT_VERIFIED",
-      "note": "component delivered ca55bdb; not wired into HTTP/UI and OIDC unavailable"
+      "note": "component delivered 014234c; not wired into HTTP/UI and OIDC unavailable"
     }
   ]
 }

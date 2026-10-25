@@ -1,6 +1,6 @@
 # B03 evidence — application API, MCP launch and science binding (H1)
 
-Candidate label `bb45a46`. Branch `feat/frontend-plan1-closure`, B00 baseline commit `ac43c16`.
+Candidate label `bb45a46`. Branch `feat/frontend-plan1-closure`, B00 baseline commit `31e60cb`.
 
 ## Deliverables (contract root `docs/reference/next-change/acp2-contracts/`)
 

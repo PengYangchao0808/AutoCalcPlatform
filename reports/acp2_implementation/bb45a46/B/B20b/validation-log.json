@@ -4,7 +4,7 @@
   "result": "PASS",
   "artifacts": {
     "science-handoff.json": {
-      "sha256": "6f46568f071bd59ec4d30316c9f796ef6ec07b34ea57445de2320f1edb455a4b",
+      "sha256": "29dd99a4dc0d806ae20216d4acbe33d5d3fa8721f9435e46f034915f99db1803",
       "schema": "acp2.b20b.science-handoff.v1"
     },
     "h4-ledger.json": {

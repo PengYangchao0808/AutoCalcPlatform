@@ -14,7 +14,7 @@ found, and they are not promoted to B's PASS.
   `tests/test_acp2_science_*.py` with fixtures in `tests/fixtures/acp2/science/`.
 * A's worktree had one uncommitted edit (`scripts/acceptance/acp2_science.py`,
   +383 lines) and one untracked `science/handoff-H4.json`; neither is part of the
-  delivered `243d2b7` SHA and neither is included in this candidate.
+  delivered `9977a10` SHA and neither is included in this candidate.
 * A's `cross-track-dependencies.json` marks every B- or C-produced edge
   `NOT_VERIFIED` with an explicit gap; B does not upgrade any of them here.
 
@@ -30,4 +30,4 @@ C's worktree evidence root (outside git) contains these receipts:
 | `.../task-15-...md` | T-15 / C10a science and research client query modules | DONE |
 
 These are C-authored receipts. B14a only records that they exist and that C's
-included code is the `e03a9dd` content; no B acceptance row is derived from them.
+included code is the `35614fd` content; no B acceptance row is derived from them.

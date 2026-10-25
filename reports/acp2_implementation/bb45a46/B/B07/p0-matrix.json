@@ -35,7 +35,7 @@
     {
       "owner": "B07",
       "raw_log": "reports/acp2_implementation/bb45a46/B/environment/h2-candidate.json",
-      "reason": "H2 clean commit tree equals main f67f90f; server/client/harness/contract/env recorded",
+      "reason": "H2 clean commit tree equals main 5d1e970; server/client/harness/contract/env recorded",
       "result": "PASS",
       "row_id": "h2_candidate_record",
       "sha256": "79b415d0797daf2b6b11b5181e27775f75bb270de973c4c35eb1aeefeccb5c5e"

@@ -23,7 +23,7 @@ jobs.
 
 ## Current schema revision
 
-The C baseline (`e79473d`, tree aligned with B `1a1b4b23…`) contains:
+The C baseline (`63cd88c`, tree aligned with B `1a1b4b23…`) contains:
 
 - no root `package.json`, `pnpm-workspace.yaml`, `node_modules` or
   `pnpm-lock.yaml`;

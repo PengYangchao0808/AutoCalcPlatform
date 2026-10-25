@@ -11,5 +11,5 @@ $ git diff --stat 5e2898acc386335ee1cb11ac9170650bb23d501d..c134109c696e9bcb941e
  src/acp_services/worker_bootstrap.py         |  45 ++++-
  10 files changed, 823 insertions(+), 161 deletions(-)
 
-$ git diff --numstat 6ec01ec..4937907 -- src (totals)
+$ git diff --numstat 5e2898a..c134109 -- src (totals)
 10 files, +823 -161

@@ -15,7 +15,7 @@
   },
   "cause": {
     "classification": "pre-fix controller-restart race in the pre-reproducible acceptance harness",
-    "detail": "The run was executed before commit 2a57d6b made the B13 fault seam and Controller restart reproducible. The preserved receipt records only the FAIL status and the row budget/PID/TaskRef; the failing run's race comparison and timing files were not preserved, so the cause is classified from the FAIL assertion plus the subsequent re-run rather than from a surviving race log.",
+    "detail": "The run was executed before commit a72e8db made the B13 fault seam and Controller restart reproducible. The preserved receipt records only the FAIL status and the row budget/PID/TaskRef; the failing run's race comparison and timing files were not preserved, so the cause is classified from the FAIL assertion plus the subsequent re-run rather than from a surviving race log.",
     "confidence": "derived",
     "fixed_by": {
       "commit": "a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4",

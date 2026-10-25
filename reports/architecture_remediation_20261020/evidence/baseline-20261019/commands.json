@@ -1,7 +1,7 @@
 [
   {
     "name": "non_slow_regression",
-    "command": "pytest -m 'not slow' -q --disable-warnings -o faulthandler_timeout=90 --junitxml=/tmp/acp-acceptance-878e355/nonslow-unrestricted.xml",
+    "command": "pytest -m 'not slow' -q --disable-warnings -o faulthandler_timeout=90 --junitxml=/tmp/acp-acceptance-d5d85e7/nonslow-unrestricted.xml",
     "exit_code": 1,
     "log": "nonslow-unrestricted.log",
     "status": "FAIL"
@@ -59,7 +59,7 @@
   },
   {
     "name": "single_wheel_build",
-    "command": "PYTHONPATH=/tmp/opencode/builddeps python3.11 -m build --wheel --no-isolation --outdir /tmp/acp-acceptance-878e355/wheels /tmp/acp-acceptance-878e355/build-stage",
+    "command": "PYTHONPATH=/tmp/opencode/builddeps python3.11 -m build --wheel --no-isolation --outdir /tmp/acp-acceptance-d5d85e7/wheels /tmp/acp-acceptance-d5d85e7/build-stage",
     "exit_code": 0,
     "log": "wheel-build-with-local-tools.log",
     "status": "PASS",

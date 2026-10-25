@@ -6,7 +6,7 @@
 **Release directory:** `reports/acp2_implementation/bb45a46/B/B25/release-fix5/`
 **Manifest:** `release-manifest.json` (sha256 `9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec`)
 
-**6ec01ec..c134109c696e9bcb941e176bf681d45a569370b8 -- src delta:** 10 files, +823/-161 (B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes plus the B-fix-7 `batch/options.py` overlay); release-fix5 artifacts remain built from `6ec01ec` with unchanged digests.
+**5e2898a..c134109c696e9bcb941e176bf681d45a569370b8 -- src delta:** 10 files, +823/-161 (B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes plus the B-fix-7 `batch/options.py` overlay); release-fix5 artifacts remain built from `5e2898a` with unchanged digests.
 
 This is a reviewable release candidate, **not a production deployment**. `acp.service`
 was not restarted and `/var/lib/acp/runs` was not touched.
@@ -75,7 +75,7 @@ not overwritten.
 ### B-fix-5 — F2/F3 blocking remediation (final candidate)
 
 - Rebuilt every role artifact and the root build from a clean detached worktree at
-  `6ec01ec`; `release-fix5/` is the frozen candidate consumed by this index.
+  `5e2898a`; `release-fix5/` is the frozen candidate consumed by this index.
 - **F2 — installed-wheel remote sync.** `sync._project_root()` now resolves installed
   package roots instead of `Path(__file__).parents[4]`, so the synced keys are
   `acp/...`/`acp_services/...`/`cccp/...` and the remote release manifest is non-empty.
@@ -97,7 +97,7 @@ not overwritten.
   `release_digest=c5ccfcd1…`, `submission_id=sub_0fea781820a81666`. The remote ORCA
   runtime was exported through `cluster.pre_cmds` in an isolated HOME — operator
   environment configuration, not a code fake.
-- **Guards.** 100 clean-checkout guards passed at `6ec01ec`; 263 targeted tests passed;
+- **Guards.** 100 clean-checkout guards passed at `5e2898a`; 263 targeted tests passed;
   ruff check/format and `validate_acp2_contracts.py` PASS.
 
 ## Known gaps (not closed by this changelog)

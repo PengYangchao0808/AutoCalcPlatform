@@ -20,7 +20,7 @@
 | Web 静态资源 | `frontend/**`（`ACP_Workbench_v2.html` + `js/` 模块 + `css/`）——**不入 wheel**（已声明缺口，`packaging_rollout_receipts.md` §2；由仓库检出 + 服务静态托管提供，代码 release 与静态资源同检出原子切换） |
 | 数据库 schema | `acp_jobs.db`（SQLite）；forward-only 迁移台账 `acp_services/store/migrations.py`（21 条；`JobStore` 初始化后 schema version = 21） |
 | 远端 release | 内容寻址版本化 release（`acp/scheduler/remote/release.py`）；生产 `auto_sync`，dev 逃生门 `ACP_REMOTE_ALLOW_UNVERSIONED=1`（显式 `unversioned-shared`） |
-| 四组合记录 | `ACP_Services_Four_Combination_Acceptance.md`：F0+S0 / F1+S0 / F0+S1 / F1+S1 全部 PASS_IN_REPO（execution commit `d048950`；浏览器/科学等价 NOT_VERIFIED） |
+| 四组合记录 | `ACP_Services_Four_Combination_Acceptance.md`：F0+S0 / F1+S0 / F0+S1 / F1+S1 全部 PASS_IN_REPO（execution commit `fded116`；浏览器/科学等价 NOT_VERIFIED） |
 | 收口记录 | `ACP_Services_Closure_20261019.md`（L1 1348 passed / F-3 FAIL 如实登记；L2 后端入口 10 PASS；生产门 NOT_VERIFIED） |
 
 ---
@@ -31,7 +31,7 @@
 
 | # | 对象 | 窗口内承诺 | 依据（已在候选上验证） | 失效条件（窗口何时结束） |
 |---|---|---|---|---|
-| M1 | **旧页面**（浏览器中已打开的 F0/F1 旧 tab，持有旧 JS bundle 或缓存静态资源） | 旧 GET 端点逐字保留（`/api/v1/jobs`、`jobs/{id}`、structure-viewer/energy-graph 等）；旧字段/错误/409 `pending_fetch` 语义不变；旧 tab 的轮询与 SSE 继续工作 | F0+S0 / F0+S1 四组合（旧 GET 219 passed，`d048950`）；`migration_ledger.md` 5 行 cache-only 逐资源 `[OPEN]` 兼容面 + 旧读取根 `[RETAINED]` 适配器；closure L2-03 | 新读取面（`/availability`、`/prepared/{resource}`）成为唯一读取路径且旧 GET 零消费者证据齐备后（ledger 退出条件；**不早于本发布**） |
+| M1 | **旧页面**（浏览器中已打开的 F0/F1 旧 tab，持有旧 JS bundle 或缓存静态资源） | 旧 GET 端点逐字保留（`/api/v1/jobs`、`jobs/{id}`、structure-viewer/energy-graph 等）；旧字段/错误/409 `pending_fetch` 语义不变；旧 tab 的轮询与 SSE 继续工作 | F0+S0 / F0+S1 四组合（旧 GET 219 passed，`fded116`）；`migration_ledger.md` 5 行 cache-only 逐资源 `[OPEN]` 兼容面 + 旧读取根 `[RETAINED]` 适配器；closure L2-03 | 新读取面（`/availability`、`/prepared/{resource}`）成为唯一读取路径且旧 GET 零消费者证据齐备后（ledger 退出条件；**不早于本发布**） |
 | M2 | **旧 worker**（远端节点上按旧 release 提交的在途计算进程） | 一次 attempt 冻结其 envelope/plan/release：在途计算不被新代码重启或改写；PAUSED 远端 `bstop/bresume` 语义不变；attempt 回执归档 `WORK/00_RUNTIME/attempts/<N>/` 不变 | execution_chain 按 attempt 冻结选择（closure L2-06）；workflow enablement 8/15 envelope + 7 legacy 旧路径（L2-07）；执行完整性不变量 1/2 | 该 attempt 进入终态并被拉回；此后新任务走新 release |
 | M3 | **旧 release**（远端内容寻址 release 目录） | 旧 release 目录不被删除/覆盖（内容寻址 = 按摘要存新不改旧）；`auto_sync` 只为新提交分配新 release_id；dev `unversioned-shared` 显式标注 | `release.py` 内容寻址设计 + `test_remote_code_release*`；执行不变量 1（一次 attempt ↔ 一个已验证执行版本） | 磁盘保留期清理（远端清理策略）触达旧 release 且无在途 attempt 引用 |
 | M4 | **在途任务**（本地+远端 RUNNING/PAUSED/QUEUED/STARTING 任务） | 重启后 JobManager 启动恢复：`_requeue_active_on_startup` 先对账再派发（0 重复 bsub）；控制意图不被旧观测覆盖（CAS）；v1 checkpoint 保守重算；rerun 原地 attempt+1 | `backup_restore_drill.md` D1/D2/D3（对账先于派发、不重复派发、收养不二提交）；`test_checkpoint_resume_semantics` / `test_recovery_cross_version` | 任务终态；QUEUED 任务在新代码下派发（其 attempt 身份仍冻结） |

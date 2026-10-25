@@ -17,7 +17,7 @@
       "src/acp/calculations/batch/options.py"
     ],
     "path": "reports/acp2_implementation/bb45a46/B/B24b/candidate-runnable-overlay.patch",
-    "reason": "f32c670 cannot construct OriginPolicy(public_origin=...) and does not forward the ordinary BatchOptimize --method into typed role options; both fixes are the working-tree delta B24a already used. The overlay is recorded, not hidden, and changes no B24b evidence claim.",
+    "reason": "31dc79a cannot construct OriginPolicy(public_origin=...) and does not forward the ordinary BatchOptimize --method into typed role options; both fixes are the working-tree delta B24a already used. The overlay is recorded, not hidden, and changes no B24b evidence claim.",
     "sha256": "2f8095bccccc55f132efc780f1966d35a6b058f5718e4f086a3a4461ba4f75e9"
   },
   "cells": [

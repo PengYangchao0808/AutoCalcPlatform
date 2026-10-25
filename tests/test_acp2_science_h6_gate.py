@@ -576,7 +576,7 @@ def validate_h6(doc: Mapping[str, Any]) -> None:
             "source carries only the pre-delivery commit; a delivered external commit "
             "belongs in the evidence record, never in H6"
         )
-    if source.get("pre_delivery_commit") != "a1319b9":
+    if source.get("pre_delivery_commit") != "effc258":
         raise H6ContractError("source.pre_delivery_commit must be the A-26 base commit")
 
     rows = [_require_mapping(row, "rows[]") for row in _require_list(doc.get("rows"), "rows")]

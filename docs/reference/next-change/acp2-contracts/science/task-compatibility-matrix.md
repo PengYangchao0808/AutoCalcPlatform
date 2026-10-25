@@ -1,6 +1,6 @@
 # ACP2 Plan A — Fifteen-Task Compatibility Matrix (A-06b)
 
-Status: static contract record. Source of truth is the code at commit `42f5272`
+Status: static contract record. Source of truth is the code at commit `7374a16`
 (parent of the A-06b delivery commit) on `acp2/a-science`.
 
 Scope: the fifteen `cccp.calculation.requests.TaskKind` members and their

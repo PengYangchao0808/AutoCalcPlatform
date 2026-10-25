@@ -37,7 +37,7 @@
     "client_revision_gap": "No MCP client revision is known: B/C have not published a client build or a negotiated protocol transcript.",
     "h2_test_candidate": {
       "candidate_revision": null,
-      "gap": "No H2 integration test candidate has been published. A's static worktree revision b20c286 is the science source snapshot, not an H2 server/client/harness candidate.",
+      "gap": "No H2 integration test candidate has been published. A's static worktree revision b5fe2e8 is the science source snapshot, not an H2 server/client/harness candidate.",
       "result": "NOT_VERIFIED"
     },
     "harness_revision": null,
@@ -190,7 +190,7 @@
           },
           {
             "path": "docs/reference/next-change/acp2-contracts/science/identity-boundary.md",
-            "sha256": "927687e79d3a2b9749262298e0a28735d4d778b9e4290af0e660468ee639dd09"
+            "sha256": "aa000be0c79d588cf57ce7512f466cc8b8745fa5534d8dd6f6b0eeaf07fd68d4"
           }
         ],
         "commands": [
@@ -237,7 +237,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/task-compatibility-matrix.md",
-            "sha256": "0a0622d755f8e66b250b3fe266434f240e4877a493bbec61ac66b5a11e4d272f"
+            "sha256": "6971d35c4497f0e1b4d9c518cc9626e60045a3513587e3cd28cd98e6cbe1f6c4"
           }
         ],
         "commands": [

@@ -13,11 +13,11 @@
   "candidate_tree": "041706226619a403256a2ea206d05ad30a509033",
   "closed": false,
   "closeout": {
-    "closeout_input_digest": "9a75addbf025c789c2fd25778fabdc5a39cdece7e327d3ba20ef99c34a99dfb2",
-    "final_reference_digest": "50f3f8bb76d8677f1f1d8f695e1e07db5b3311b4578bae7c34f173c97773d100",
+    "closeout_input_digest": "7c5227e03daf3e36321a7a21936d217e064698b1cfc5073f653aab510915f544",
+    "final_reference_digest": "4662250057ef034550d2473b156b5bd8080df32b7694ba259e1f72805450b719",
     "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
     "schema": "acp2.h4.closeout.v1",
-    "sha256": "2aef9939b1d921ab101563a3f9e4e87a72ec2bab7c1eb7c18d4fe8a67d67ae21"
+    "sha256": "16177b89677be1adbb6d1c82bb02f1f3856fee0411840c94409cceb9969fa529"
   },
   "generated_at": "2026-10-23T09:32:36Z",
   "h4_status": "OPEN",

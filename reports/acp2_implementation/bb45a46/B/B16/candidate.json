@@ -1,6 +1,6 @@
 {
   "base_revision": "37354b9a91a072a026e355cc11b443027ba3eba7",
-  "base_revision_short": "57bac39",
+  "base_revision_short": "37354b9",
   "branch": "feat/frontend-plan1-closure",
   "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
   "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B16 working-tree files (the harness schema accepts a source-overlay sha256)",
@@ -20,7 +20,7 @@
   "fixture": "/opt/acp2-dev/data/b/fixtures/approval.json",
   "fixture_sha256": "67a35f1eaff4cb61b727e5c528e4fc767839ad712e299d681969f5fb98d55157",
   "schema": "acp2.b16.candidate.v1",
-  "server_revision": "57bac39 + B16 working-tree files",
+  "server_revision": "37354b9 + B16 working-tree files",
   "source_checkout": "repo-root",
   "source_composition": "current working tree (PYTHONPATH=src) because B16 adds code; not the frozen integration candidate",
   "working_tree_files": [

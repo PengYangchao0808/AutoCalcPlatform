@@ -80,7 +80,7 @@ B04 初次关闭只检查 Controller 独占、HTTP/CLI 和第二 Controller 拒�
 
 位置：[B00](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L168)、[B14a](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L308)、[C 候选绑定](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L79)、[C T-01](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L175)。
 
-B00/C T-01 将 `096cdff...` 写成必须满足的启动基线。若最终 debug 修复仍在当前未提交工作区，照此新建 worktree 会从旧文件内容启动。应把该 SHA 降为历史参照，另指定实际最终修复候选：完整提交 SHA，或可重建且有摘要的明确补丁清单。不能只保存 dirty 文件名就认为修复已进入新 worktree。
+B00/C T-01 将 `3670790...` 写成必须满足的启动基线。若最终 debug 修复仍在当前未提交工作区，照此新建 worktree 会从旧文件内容启动。应把该 SHA 降为历史参照，另指定实际最终修复候选：完整提交 SHA，或可重建且有摘要的明确补丁清单。不能只保存 dirty 文件名就认为修复已进入新 worktree。
 
 C 又要求所有 live 场景来自 B 冻结的集成候选，但 B14a 才首次明确执行 A/B/C 集成冻结，且它排在 B13、真实 Local/LSF 与 DSH 恢复测试之后。应增加 H2 测试候选、P1 测试候选的前置构建步骤，B14a 改为汇总/晋级候选，而不是第一次得到可测集成代码。
 
