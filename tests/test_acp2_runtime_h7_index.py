@@ -21,9 +21,9 @@ RESULT_VALUES = {"PASS", "FAIL", "NOT_VERIFIED"}
 #: declare the external reference and its status instead of pointing at a
 #: repo-relative file that a clean checkout cannot contain.
 EXTERNAL_EVIDENCE_ROOTS = (
-    Path("<acp2-dev>/A"),
-    Path("<acp2-dev>/C"),
-    Path("<acp2-dev>/evidence/C"),
+    Path("/opt/acp2-dev/A"),
+    Path("/opt/acp2-dev/C"),
+    Path("/opt/acp2-dev/evidence/C"),
     REPO_ROOT / "reports/acp2_implementation/bb45a46/C",
 )
 EXTERNAL_EVIDENCE_STATUS = "NOT_VERIFIED(external_evidence_not_in_repo)"

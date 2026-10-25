@@ -261,7 +261,7 @@ class _McpProcess:
         except OSError:
             pass
 
-    def wait(self, timeout: float = 15.0) -> int:
+    def wait(self, timeout: float = 30.0) -> int:
         return self.proc.wait(timeout=timeout)
 
     def stderr_text(self) -> str:

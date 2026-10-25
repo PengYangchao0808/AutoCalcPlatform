@@ -259,7 +259,7 @@ def test_a_and_c_references_are_attached_by_reference_not_fabricated() -> None:
     assert c_ref["digest"] is None
     for expected in c_ref["expected_artifacts"]:
         assert expected["path"].startswith(
-            "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/b/"
+            "reports/acp2_implementation/bb45a46/C/da-research-live/b/"
         )
         assert expected["schema"].startswith(("acp2.experience.", "acp2.acceptance."))
     assert c_ref["does_not_overwrite_b_task_truth"] is True
