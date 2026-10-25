@@ -61,11 +61,29 @@ SCOPE = resolve_scope_id("principal_local", "b08-project")
 PAYLOAD = {"workflow": "fake", "name": "b08", "input": {"source": "C"}}
 
 
+QC_SHIM_NAMES = ("orca", "xtb", "crest", "censo", "isostat", "shermo", "molclus")
+
+
+def _qc_shims(run_root: Path) -> Path:
+    """Reachable stand-in QC executables for cluster-less CI runners."""
+    shim = run_root.parent / "_qc_shims"
+    shim.mkdir(parents=True, exist_ok=True)
+    for name in QC_SHIM_NAMES:
+        exe = shim / name
+        if not exe.exists():
+            exe.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            exe.chmod(0o755)
+    return shim
+
+
 def _env(run_root: Path, **extra: str) -> dict[str, str]:
     env = dict(os.environ)
     existing = env.get("PYTHONPATH")
     env["PYTHONPATH"] = str(SRC_ROOT) if not existing else f"{SRC_ROOT}{os.pathsep}{existing}"
     env["ACP_RUN_ROOT"] = str(run_root)
+    shim = _qc_shims(run_root)
+    for name in QC_SHIM_NAMES:
+        env[f"CONFSEARCH_{name.upper()}_PATH"] = str(shim / name)
     env.update(extra)
     return env
 
