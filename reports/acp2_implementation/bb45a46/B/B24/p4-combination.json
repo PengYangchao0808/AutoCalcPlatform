@@ -62,10 +62,10 @@
         }
       },
       "cell": "F0/S0",
-      "frontend_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+      "frontend_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
       "p4_rows_preserved": true,
       "service_ok": true,
-      "service_revision": "878e3557b3b593a0c42adf842e80fe1408db395e"
+      "service_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83"
     },
     {
       "after": {
@@ -129,10 +129,10 @@
         }
       },
       "cell": "F1/S0",
-      "frontend_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+      "frontend_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
       "p4_rows_preserved": true,
       "service_ok": true,
-      "service_revision": "878e3557b3b593a0c42adf842e80fe1408db395e"
+      "service_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83"
     },
     {
       "after": {
@@ -196,10 +196,10 @@
         }
       },
       "cell": "F0/S1",
-      "frontend_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+      "frontend_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
       "p4_rows_preserved": true,
       "service_ok": true,
-      "service_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6"
+      "service_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca"
     },
     {
       "after": {
@@ -263,14 +263,14 @@
         }
       },
       "cell": "F1/S1",
-      "frontend_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+      "frontend_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
       "p4_rows_preserved": true,
       "service_ok": true,
-      "service_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6"
+      "service_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca"
     }
   ],
-  "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
-  "f1_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+  "f0_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+  "f1_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
   "harness": "acp2_p4_combination.py",
   "note": "approval/idempotency rows live in the jobs DB; research budget and admission rows live in acp_admission.db. Rows are seeded before the service opens either database and compared after start-up.",
   "result": "PASS",

@@ -5,7 +5,7 @@
 **前提**：按架构 debug 已完成规划；执行时使用 `.omo/plans/acp-architecture-acceptance-remediation.md` 实际交付的冻结候选与证据，不继续在移动中的 debug 工作区实施。  
 **本机操作依据**：[MCP / DSH 本服务器联调手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)。
 
-**基线核对（2026-10-22 更新）**：[正式报告](../../../reports/architecture_remediation_20261020/REPORT.md)记录的科学/平台代码候选为 `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`；包含当时 Harness 与报告的 debug 交付 revision 为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2`。两者均为历史参考，**不得直接作为后续开发基线**：工作树中还有后续 debug 与质量修复。B00/B02 必须使用包含这些修改的 `final_debug_candidate`，核验[本次修复报告](../../../reports/architecture_repair_20261022/REPORT.md)中的源码快照和 SHA-256，再把经审查候选落为实际 commit，分发同一完整 SHA。真实科学/LSF、生产、恢复部署及六项延期接线沿各自证据保持 OPEN / NOT_VERIFIED；历史报告不改写为 PASS。
+**基线核对（2026-10-22 更新）**：[正式报告](../../../reports/architecture_remediation_20261020/REPORT.md)记录的科学/平台代码候选为 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`；包含当时 Harness 与报告的 debug 交付 revision 为 `3670790363c7a1959ad1dbe4b4297adec518952a`。两者均为历史参考，**不得直接作为后续开发基线**：工作树中还有后续 debug 与质量修复。B00/B02 必须使用包含这些修改的 `final_debug_candidate`，核验[本次修复报告](../../../reports/architecture_repair_20261022/REPORT.md)中的源码快照和 SHA-256，再把经审查候选落为实际 commit，分发同一完整 SHA。真实科学/LSF、生产、恢复部署及六项延期接线沿各自证据保持 OPEN / NOT_VERIFIED；历史报告不改写为 PASS。
 
 ## 1. 三份可独立分发的计划
 

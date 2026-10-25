@@ -1,6 +1,6 @@
 # ACP2 Plan A — Deliverable Path Map and Ownership Boundary
 
-Baseline: delivery revision `2e0ce9c202f5a65180aa97ca2787f82dc0054e6b` on `acp2/a-science`
+Baseline: delivery revision `3bf5127365e63012eb0a9915467883433e7ad0cd` on `acp2/a-science`
 (see `baseline.md`). All paths below are relative to the A worktree
 `/opt/acp2-dev/A` unless prefixed with `$ACP2_EVIDENCE`.
 

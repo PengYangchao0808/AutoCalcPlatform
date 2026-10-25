@@ -140,7 +140,7 @@
   "contract_set_version": 1,
   "contract_version_basis": {
     "handoff_h2": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
-    "handoff_h2_sha256": "a40275b408790b1ce2b99a99d8a7cd91a9d4e5adba38e54cc482ad7408eb8d54",
+    "handoff_h2_sha256": "eb8ec28094290637889c3a323e935a4e0990e67c09ed4648d84aafafdabcccbe",
     "handoff_h2_version": 1,
     "rule": "H3 closes P1 on the exact H2 bytes it was built from. It adds no contract field and widens no enum; a new semantic requires the next contract version."
   },
@@ -318,7 +318,7 @@
   },
   "source": {
     "branch": "acp2/a-science",
-    "pre_delivery_commit": "fa5e5a173964188e7bf25e621a1bf37c7110d669",
+    "pre_delivery_commit": "5f8df59d0eca0d7663f8ae3deadece1f0fa5e42d",
     "python": "/opt/acp2-dev/envs/a-python/bin/python",
     "worktree": "/opt/acp2-dev/A"
   }

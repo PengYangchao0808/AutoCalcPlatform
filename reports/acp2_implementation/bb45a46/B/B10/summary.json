@@ -129,7 +129,7 @@
     "client_revision": "NOT_VERIFIED",
     "harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
     "label": "bb45a46",
-    "server_base_revision": "964618321a63694112be25c297b927bfc776e3d0",
+    "server_base_revision": "400f4a7060daef336f33570b0c14c3a0662c000a",
     "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a"
   },
   "fixture": {

@@ -3,11 +3,11 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
   "contract_version": "1.3.0",
-  "contract_digest": "206affd34dfd3e90a18df7f9b572faac7562201302330d64c0bafc9682cd2f88",
+  "contract_digest": "4a1d8ce9e6c6a8033814e6045606969ab3f44cd437116b83918b2664ae5f480d",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
-    "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
-    "code_candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
     "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
     "final_debug_candidate_kind": "source_overlay_sha256",
     "final_debug_candidate_commit": null,
@@ -23,8 +23,8 @@
     }
   },
   "historical_revisions": {
-    "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
-    "code_candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
     "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
   },
   "owners": {
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "d909cafbe4a7de34d75b0f8122da21565c2a01d4269e0d39442f6d95ae2389a6",
+      "sha256": "6dd8a2398c63a2868fb8f6169adeb8a8803801068ca5d22a445922f2e633fda5",
       "delivered_by": "B00"
     },
     {
@@ -177,7 +177,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "277bc6e31391d375c958634782bb83887ccb7fd2f27d937cabfa3fa22b841dc9",
+      "sha256": "4564a6da918e26c2cf3d0047bb31f87ddf76690b944891319c814720e94e86cf",
       "delivered_by": "B00"
     },
     {
@@ -185,7 +185,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "f370af4f5052d88925bd67bb5e46442c0d60d525c660484338cef3c1f2a6ffe6",
+      "sha256": "6b86427a6897ba0b882497bc9ca514b4d3854df9c83706a2e539b603f8f00d0a",
       "delivered_by": "B00"
     },
     {
@@ -202,7 +202,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
       "owner": "B",
       "status": "delivered",
-      "sha256": "97802f08b840a98c3475298704a45a8a7aac1322dce61b3b86109dc7d99572ad",
+      "sha256": "981594f6497e3d1ea26577e37c91c33ed9927c004f585681c0429ad97b08b16b",
       "digest_target": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json",
       "delivered_by": "B00"
     },
@@ -314,7 +314,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B04a",
-      "sha256": "9b673c12dcc2ed901093d9cf4840fa3ed0284b26ad3b1a0ac615130e9b6e8be0"
+      "sha256": "90932780ff6867541879c4b6acba3ea59523500f1f1b0fe57120b2d96993ad27"
     },
     {
       "id": "fallback-deferral",
@@ -339,7 +339,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B06",
-      "sha256": "2a31b716f1b07ff73fc938d195c6b27fec9004e3d7a1808de4493396b888dd19"
+      "sha256": "9980acb26e43c99304eb303f8e8c583b59cc60361008131c5313d2eac3f1add4"
     },
     {
       "id": "events-recovery",

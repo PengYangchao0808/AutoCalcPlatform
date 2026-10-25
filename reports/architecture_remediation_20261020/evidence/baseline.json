@@ -58,19 +58,19 @@
         "bytes": 36338,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md",
-        "sha256": "8d26e3b385ff687396bc67257fd1bd8e71c2bc9f287a453d978da88fbd2c69e2"
+        "sha256": "6a9d2e6539c476e31b7038e8ab194babbd4f957407d07e816076b7fda7b19ca6"
       },
       {
         "bytes": 18113,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md",
-        "sha256": "bb29bc2458dfe9b85eab9bf6cfde5be1cb330d34ed7384c9e81d8a8a1b6c34ac"
+        "sha256": "46f07e5610c1986c884e499c99b0cfb6c9b527b6179dc3f83ccb9c67c7966638"
       },
       {
         "bytes": 12543,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md",
-        "sha256": "49f55fe92aa2cf452d6ef7200311870ce750cb8769b1419e6b8b93eb3743ba8d"
+        "sha256": "c28d0a104fbb0b95fdb1287c66aec14e28219d67edcb7f95bf380a4f2b195ee6"
       },
       {
         "bytes": 6614,
@@ -82,7 +82,7 @@
         "bytes": 3828,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md",
-        "sha256": "d18f19283997008c517ddb5f755d8f73967aade8e9c1dc666e91a6152623b2f2"
+        "sha256": "1d185728d5953f840b0afaa4815fde81951207403de9fe39a48d66771e5450d0"
       },
       {
         "bytes": 15915,
@@ -342,7 +342,7 @@
       "evidence/qc-doctor.log"
     ]
   },
-  "revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+  "revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
   "revision_source": "git rev-parse HEAD",
   "schema": "acp.architecture.remediation.baseline.v1",
   "status": "DRAFT / NOT_ACCEPTED",

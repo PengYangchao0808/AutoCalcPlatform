@@ -1,6 +1,6 @@
 # ACP 架构验收整改实施计划评审
 
-日期：2026-10-20。对象：[实施计划](../../../.omo/plans/acp-architecture-acceptance-remediation.md)（43 个 todo、7 个 wave、4 个最终验证任务）。对照：[整改要求](ACP_Architecture_Acceptance_Remediation_Plan_20261020.md)、[原验收报告](../../../reports/architecture_acceptance_20261019/REPORT.md)及当前代码 `878e3557b3b593a0c42adf842e80fe1408db395e`。
+日期：2026-10-20。对象：[实施计划](../../../.omo/plans/acp-architecture-acceptance-remediation.md)（43 个 todo、7 个 wave、4 个最终验证任务）。对照：[整改要求](ACP_Architecture_Acceptance_Remediation_Plan_20261020.md)、[原验收报告](../../../reports/architecture_acceptance_20261019/REPORT.md)及当前代码 `d5d85e7c804878edd0cedb6bce1d32af2d92ad83`。
 
 **结论：总体方向合理、缺陷覆盖完整，但建议修订以下执行语义和验收条件后再启动整批实施。** 主要问题集中于 D07 的状态推进/恢复，以及 D05/D06 的资源身份。它们不能仅靠增加测试数量解决，须先把正确行为写清楚。
 

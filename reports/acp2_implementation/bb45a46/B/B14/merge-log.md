@@ -9,12 +9,12 @@ Created: 2026-10-23 (Asia/Shanghai)
 
 | Element | SHA | Note |
 |---|---|---|
-| B candidate base | `2a57d6b6d91427093c6a10e710e5a52446ed801e` | B00–B13 plus B fixes |
-| Historical delivery / debug base | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` | common merge base of A/B/C |
+| B candidate base | `a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4` | B00–B13 plus B fixes |
+| Historical delivery / debug base | `3670790363c7a1959ad1dbe4b4297adec518952a` | common merge base of A/B/C |
 | Final debug candidate (source overlay) | `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12` | B00 `final-debug-patch/manifest.json` |
-| A changeset | `243d2b7c1f2d115b1fa67d8af35e4020fe7be2d8` | `acp2/a-science` |
-| B changeset | `2a57d6b6d91427093c6a10e710e5a52446ed801e` | `feat/frontend-plan1-closure` |
-| C changeset | `e03a9dd9f6897ca0a8d43e69a10b22a20097f05d` | `acp2/c-experience` |
+| A changeset | `9977a106445177708e929557f9460e86914787ad` | `acp2/a-science` |
+| B changeset | `a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4` | `feat/frontend-plan1-closure` |
+| C changeset | `35614fd83f616005a0546af35631c477151e7dde` | `acp2/c-experience` |
 
 The B worktree P1 candidate (`10eb71e`) was not used as the base because it stops at
 B00–B09. The main B branch `2a57d6b` carries B00–B13, but it never committed 144

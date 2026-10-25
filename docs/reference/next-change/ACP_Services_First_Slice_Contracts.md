@@ -1,7 +1,7 @@
 # ACP Services First-Slice Contracts — 首片契约冻结（B00-3 / todo 3）
 
 **Status:** FROZEN first slice（字段命名由 owner=B 定义，各路不得另起 DTO）。
-**Created:** 2026-10-18，基线 HEAD `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9`。
+**Created:** 2026-10-18，基线 HEAD `5184f1452de1fdad73e2a78b5739daa6e671eb61`。
 **Contract version:** `1`（本文件头部版本号即交付物版本；样例集 `sample_version=1` 与之绑定冻结）。
 **Owner:** B 路（`src/acp_services/**` 单写者）。消费者：A（前端）、C（科学）。
 **Samples:** `tests/baseline/services-evidence/contract_samples/`（正常/空/部分/损坏/旧版本，逐版本冻结）。

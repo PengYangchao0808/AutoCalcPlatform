@@ -7,7 +7,7 @@
     }
   ],
   "candidate_patch_sha256": "bc7029506c66c97a5652b782e589d0af7439ac50c65adef03fafc05389b2c4a2",
-  "candidate_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+  "candidate_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
   "cell": {
     "browser": {
       "api_responses": [
@@ -116,7 +116,7 @@
       "index_status": 200,
       "ok": true
     },
-    "frontend_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+    "frontend_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
     "frontend_sha256": "5eb26d813e680530eb433017521d050991f41e434ae62b8c2daa662f7913c8ba",
     "legacy": [
       {
@@ -1566,7 +1566,7 @@
       "workflows_count": 15
     },
     "service_config_sha256": "4de5f3094ebdb9ec33c6ccd106f79f027966e38890509f6217c38e8011227b69",
-    "service_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+    "service_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
     "submission": {
       "created": true,
       "detail_status": 200,
@@ -1586,8 +1586,8 @@
     "repo": "repo-root",
     "service_port": 47483
   },
-  "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
-  "f1_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+  "f0_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+  "f1_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
   "harness": "four_combinations.py",
   "harness_version": "3",
   "metrics": {

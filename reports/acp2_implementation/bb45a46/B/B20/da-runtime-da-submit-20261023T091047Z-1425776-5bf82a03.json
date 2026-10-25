@@ -2,7 +2,7 @@
   "artifacts": [
     {
       "path": "p2-candidate.json",
-      "sha256": "3aaeac6db6833c8822905f6e372ed89af6badcdc48bd94f163475cd2708cd9e0",
+      "sha256": "c662ca574c79821f0bd11add6dde263972537c8a5171c31ed6dbf803c6b865d0",
       "size_bytes": 5098
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "path": "b20a-ready.json",
-      "sha256": "c67bcaf0e55944ceb13d9f35556f5855b9557cba1030172aa509692eaa47ff62",
+      "sha256": "036b5afff235f7b40c5bb5618c1d63dc6f2efbfb3339dcda107ce17a6887a3d1",
       "size_bytes": 12811
     },
     {
@@ -53,7 +53,7 @@
   ],
   "assertions": [
     {
-      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': 'bc59e04758450321747068e679ca3a8d0efc5ad7', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T09:08:39.010735Z'}",
+      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': '042e560c4af0c64703728e6b43b3bb2030fe97f5', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T09:08:39.010735Z'}",
       "name": "b20a.controller_health",
       "status": "PASS"
     },
@@ -100,11 +100,11 @@
   ],
   "attempt": null,
   "candidate": {
-    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
-    "server_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7"
+    "server_revision": "042e560c4af0c64703728e6b43b3bb2030fe97f5"
   },
-  "candidate_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7",
+  "candidate_revision": "042e560c4af0c64703728e6b43b3bb2030fe97f5",
   "claim_status": "not_evaluated",
   "command": [
     "/opt/acp2-dev/venvs/b/bin/python",

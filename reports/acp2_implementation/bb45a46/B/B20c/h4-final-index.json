@@ -9,7 +9,7 @@
     "expected_path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
     "status": "NOT_VERIFIED(c25_absent)"
   },
-  "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
+  "candidate_sha": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
   "candidate_tree": "041706226619a403256a2ea206d05ad30a509033",
   "closed": false,
   "closeout": {

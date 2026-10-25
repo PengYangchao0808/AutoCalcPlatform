@@ -1,6 +1,6 @@
 B-fix-7 verification (rows 39-41)
 
-Candidate fix commit: 493790709830eac4ce347b5fb81414050f7a1e21 (tree f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a)
+Candidate fix commit: c134109c696e9bcb941e176bf681d45a569370b8 (tree f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a)
 Harness revision: a44e39a73960b735556dfc47608210300c4c6d95 (clean worktree, status --porcelain empty)
 Four-combination: exit 0; F0/S1 PASS, F1/S1 PASS; no candidate patch
 Legacy readers: exit 0; 41 passed

@@ -88,7 +88,7 @@
   "contract_set_version": 1,
   "contract_version_basis": {
     "handoff_h3": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
-    "handoff_h3_sha256": "7f8af9eff3892cfb87ba330c76b936fdd36aeadf03e04509ea5c26224416d95b",
+    "handoff_h3_sha256": "4d7194fbfbc535d039bdb6e505e4b7882b2321f7549338785a213c695e836e35",
     "handoff_h3_version": 1,
     "rule": "H4 is built on the exact H3 bytes. It adds no contract field, rewrites no H3 row and never upgrades a row because a producer name exists."
   },
@@ -761,7 +761,7 @@
         "artifacts": [
           {
             "path": "scripts/acceptance/acp2_science.py",
-            "sha256": "fc777b9adf7a5995a7556f0d349ef0029add5672a07f3397a7f5812c03186530"
+            "sha256": "987baad96f15b6242a47bf53239d4f32323bfc4ebd47b58b9cc663fbb314168b"
           }
         ],
         "commands": [
@@ -789,7 +789,7 @@
         "artifacts": [
           {
             "path": "scripts/acceptance/acp2_science.py",
-            "sha256": "fc777b9adf7a5995a7556f0d349ef0029add5672a07f3397a7f5812c03186530"
+            "sha256": "987baad96f15b6242a47bf53239d4f32323bfc4ebd47b58b9cc663fbb314168b"
           }
         ],
         "commands": [

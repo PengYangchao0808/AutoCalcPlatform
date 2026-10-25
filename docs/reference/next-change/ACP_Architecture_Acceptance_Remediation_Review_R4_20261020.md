@@ -3,7 +3,7 @@
 日期：2026-10-20。对象：[实施计划](../../../.omo/plans/acp-architecture-acceptance-remediation.md)，45 个 todo、7 个 wave、4 个最终验证任务。
 
 - 计划 SHA-256：`d7b1a560dd772278e2f7badd4934475be1e7f34129bd9ecb18de225752030848`。
-- 代码基线：`878e3557b3b593a0c42adf842e80fe1408db395e`。
+- 代码基线：`d5d85e7c804878edd0cedb6bce1d32af2d92ad83`。
 - 对照：[R3 评审](ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md)，以及 CCCP 任务核心、结果契约和 Services 前置条件实现。
 
 **结论：上轮剩余意见已在计划层解决，本轮未发现新的阻断项；计划可以进入实施。无需继续增加任务或扩大整改范围。**

@@ -195,7 +195,7 @@
     "cwd": "/opt/acp2-dev/data/b/controller-config",
     "db_path": "/opt/acp2-dev/data/b/run-root/acp_jobs.db",
     "run_root": "/opt/acp2-dev/data/b/run-root",
-    "release": "a3ff3c5c4725d3e5bec8a7cb196b81c85a0da45e",
+    "release": "a84aa493b3d9d42a89393923f7575c88c66f1915",
     "release_source": "git rev-parse HEAD of repo-root (B04a working tree; frozen B candidate a0185b1 remains the acceptance baseline)",
     "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
     "pythonpath": "src",

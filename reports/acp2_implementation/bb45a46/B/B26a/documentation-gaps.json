@@ -106,7 +106,7 @@
   "reconciled_at": "2026-10-24T00:00:00Z",
   "result_history": [
     {
-      "commit": "dc72de26f76c054471e59b6434eab1f9160d96b9",
+      "commit": "aaf2c4bfd8a393ccd49d4dca9b61d994f53813f9",
       "note": "Original FAIL retained; not relabelled.",
       "overall_result": "FAIL",
       "row_results": {
@@ -130,7 +130,7 @@
       "superseded_by": "B/Bfix4/b26a-rerun"
     },
     {
-      "commit": "8349f210dfff34249b6472e29e012bd12ec3ff16",
+      "commit": "69deded634fae075024597549e2990e8e7de51d4",
       "note": "Both original FAIL rows PASS after B-fix-4; four rows stay NOT_VERIFIED (plugin procedure, DSH/browser, LSF, disconnect running-task recovery) plus the self-reproduction independence limitation.",
       "overall_result": "NOT_VERIFIED",
       "stage": "Reconciled roll-up at HEAD 8349f21"

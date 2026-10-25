@@ -1,7 +1,7 @@
 {
   "candidate_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
   "candidate_revision_note": "candidate_revision is the clean release source recorded by release-manifest.json; the B15/B17 receipts carry the controller env label f60fda8, and package-install defaults to the harness baseline 096cdff. These labels are not code claims.",
-  "controller_candidate_revision_label": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+  "controller_candidate_revision_label": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
   "defects": [
     {
       "blocks": [
@@ -110,10 +110,10 @@
   },
   "release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
   "release_version": "0.3.0",
-  "repo_head_at_reproduction": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+  "repo_head_at_reproduction": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
   "result_history": [
     {
-      "commit": "dc72de26f76c054471e59b6434eab1f9160d96b9",
+      "commit": "aaf2c4bfd8a393ccd49d4dca9b61d994f53813f9",
       "failing_rows": [
         "authorization",
         "installed_workbench_submission"
@@ -127,7 +127,7 @@
       "note": "Original FAIL retained verbatim; it is not relabelled. Both FAIL rows were real defects (B26A-D1, B26A-D2) found by the external reproduction.",
       "overall_result": "FAIL",
       "release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
-      "repo_head_at_reproduction": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+      "repo_head_at_reproduction": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
       "stage": "Original self-reproduction, as published at dc72de2"
     },
     {
@@ -145,7 +145,7 @@
       "superseded_by": "B/Bfix4/b26a-rerun"
     },
     {
-      "commit": "8349f210dfff34249b6472e29e012bd12ec3ff16",
+      "commit": "69deded634fae075024597549e2990e8e7de51d4",
       "not_verified_rows": [
         "third_party_plugin_install",
         "agent_research_entry",
@@ -183,7 +183,7 @@
         "c33_c34": "NOT_VERIFIED (registered paths absent)",
         "cccp_sample_without_controller": true,
         "four_fresh_venvs": true,
-        "harness_default_candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+        "harness_default_candidate_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
         "installed_paths_site_packages": true,
         "lab_health": true,
         "manual_import_proof": "reports/acp2_implementation/bb45a46/B/B26a/install-import-proof.txt",
@@ -459,7 +459,7 @@
       "id": "authorization",
       "item": "Authorization (B15 multitenant authz path)",
       "observations": {
-        "controller_candidate_revision_label": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+        "controller_candidate_revision_label": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
         "failing_assertions": 0,
         "failure_detail": "The SSE stream received an event before revocation but did not emit permission_changed after key/account revocation; read-after-revoke was 401.",
         "fix4_rerun": true,
@@ -513,7 +513,7 @@
       "item": "Budget (B17 approval-bound cumulative budget path)",
       "observations": {
         "at_cap_submit": "201",
-        "controller_candidate_revision_label": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+        "controller_candidate_revision_label": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
         "dispatch_side_effect": "The accepted jobs failed at the installed execution-tree freeze (see installed_workbench_submission); budget enforcement itself passed.",
         "duplicate_settlement_idempotent": true,
         "pre_dispatch_refusal": "403 budget_exhausted",

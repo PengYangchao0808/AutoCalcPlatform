@@ -7,12 +7,12 @@ Owner: A (science track). This file is the single baseline record consumed by ta
 
 | Field | Value |
 |---|---|
-| Actual worktree HEAD at A-00 start | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` (bare base, no business fixes) |
+| Actual worktree HEAD at A-00 start | `3670790363c7a1959ad1dbe4b4297adec518952a` (bare base, no business fixes) |
 | Branch | `acp2/a-science` (worktree `/opt/acp2-dev/A`) |
-| Frozen base revision (`ACP2_BASE_REV`) | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` — overlay restore/apply base only; **not** the code candidate |
+| Frozen base revision (`ACP2_BASE_REV`) | `3670790363c7a1959ad1dbe4b4297adec518952a` — overlay restore/apply base only; **not** the code candidate |
 | B00 candidate id (`candidate-snapshot.json::candidate_id`) | `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12` |
-| Code-candidate revision (declared in repair report, historical reference) | `ab492cc8be9e46125fa2d2fae69a3ecaac64a548` |
-| **Delivery revision** (baseline commit created by A-00) | **`2e0ce9c202f5a65180aa97ca2787f82dc0054e6b`** |
+| Code-candidate revision (declared in repair report, historical reference) | `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798` |
+| **Delivery revision** (baseline commit created by A-00) | **`3bf5127365e63012eb0a9915467883433e7ad0cd`** |
 | Commit subject | `chore(cccp): lock ACP2 science baseline and ownership boundary` |
 
 `096cdff` is the Git starting point only. The executed code is the overlay-restored candidate; `2e0ce9c` is the commit that materializes it on `acp2/a-science`.
@@ -81,7 +81,7 @@ A-00 evidence: `/opt/acp2-evidence/a-science-20261022/A/A-00/a00-20261022T111022
 ### 6a. A worktree (`/opt/acp2-dev/A`)
 
 Command: `cd "$ACP2_A_SOURCE" && git status --short && git diff --stat`
-(at HEAD `096cdffe9a3817d8ee443d824830d87ec6e07bc2`, branch `acp2/a-science`):
+(at HEAD `3670790363c7a1959ad1dbe4b4297adec518952a`, branch `acp2/a-science`):
 
 ```text
 <no output>   # git status --short returned 0 lines
@@ -95,7 +95,7 @@ was created fresh from the bare base; no other agent had written to it.
 
 GAP-13 names the dirty primary checkout and its untracked planning documents as the baseline risk.
 Observed by the orchestrator at **2026-10-22T11:06Z**, before A-00 materialized the overlay.
-Branch `feat/frontend-plan1-closure`, HEAD `096cdffe9a3817d8ee443d824830d87ec6e07bc2`.
+Branch `feat/frontend-plan1-closure`, HEAD `3670790363c7a1959ad1dbe4b4297adec518952a`.
 The primary checkout was **only read** by A-00 (overlay tarball, `REPORT.md`, `SHA256SUMS`, evidence
 JSON and the cited plan documents); nothing was cleaned, reset, stashed, committed or otherwise written.
 

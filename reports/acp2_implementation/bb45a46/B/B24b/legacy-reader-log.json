@@ -3,7 +3,7 @@
     "evidence": "reports/acp2_implementation/bb45a46/B/Bfix7/candidate-clean.txt",
     "status_porcelain": []
   },
-  "candidate_sha": "493790709830eac4ce347b5fb81414050f7a1e21",
+  "candidate_sha": "c134109c696e9bcb941e176bf681d45a569370b8",
   "candidate_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
   "compat_reader_pytest": {
     "argv": [
@@ -27,7 +27,7 @@
     {
       "browser": "PASS",
       "candidate_patch_sha256": null,
-      "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
       "candidate_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
       "cell": "F0/S1",
       "evidence": "reports/acp2_implementation/bb45a46/B/B24b/four-combination/F0_S1.json",
@@ -54,7 +54,7 @@
     {
       "browser": "PASS",
       "candidate_patch_sha256": null,
-      "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
       "candidate_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
       "cell": "F1/S1",
       "evidence": "reports/acp2_implementation/bb45a46/B/B24b/four-combination/F1_S1.json",

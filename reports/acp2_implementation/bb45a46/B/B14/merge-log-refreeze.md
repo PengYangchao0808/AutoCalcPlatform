@@ -14,19 +14,19 @@ ownership map were reused; no merge was rebuilt from scratch.
 | Element | SHA | Note |
 |---|---|---|
 | Previous candidate | `fbac5abb50ba7f86603b786fc98d857df52f5f2a` | 9 recorded failures (6 B-owned, now fixed) |
-| B changeset (basis) | `12bf105f66bea49ea6e9bf5601b5c757131674a5` | B00-B13 + B-fix-34/35/36; `feat/frontend-plan1-closure` |
-| A changeset | `1cfb1975d29a34fd76a986a6f293813579acd2aa` | `acp2/a-science` (committed head only) |
-| C changeset | `052962eac7782dc2e00253dd5df120badc3bff52` | `acp2/c-experience` (clean worktree) |
-| Historical delivery / debug base | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` | common merge base of A/B/C |
+| B changeset (basis) | `308ef76e014e43a061d0cbffe219b2451de8feba` | B00-B13 + B-fix-34/35/36; `feat/frontend-plan1-closure` |
+| A changeset | `aa5e19399fd44a7cec0ae4e7632d9a4683151815` | `acp2/a-science` (committed head only) |
+| C changeset | `49ddfad860e3ba4bdd8a23e3b1d7e20919cf50bd` | `acp2/c-experience` (clean worktree) |
+| Historical delivery / debug base | `3670790363c7a1959ad1dbe4b4297adec518952a` | common merge base of A/B/C |
 | Final debug candidate (source overlay) | `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12` | B00 `final-debug-patch/manifest.json` |
 
 Merge bases actually used by git:
 
 | Merge | Merge base |
 |---|---|
-| integration HEAD + B `12bf105` | `2a57d6b6d91427093c6a10e710e5a52446ed801e` |
-| integration HEAD + A `1cfb197` | `243d2b7c1f2d115b1fa67d8af35e4020fe7be2d8` |
-| integration HEAD + C `052962e` | `e03a9dd9f6897ca0a8d43e69a10b22a20097f05d` |
+| integration HEAD + B `12bf105` | `a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4` |
+| integration HEAD + A `1cfb197` | `9977a106445177708e929557f9460e86914787ad` |
+| integration HEAD + C `052962e` | `35614fd83f616005a0546af35631c477151e7dde` |
 
 A's worktree was dirty during the re-freeze (6 tracked modifications + 3 untracked
 paths). Only the committed A head was merged; the dirty state is recorded as
@@ -114,8 +114,8 @@ Full record: `ownership-decisions-refreeze.json`.
 
 ## 6. Source heads after the freeze
 
-A advanced to `f981273fff99e8d198e157d02042a2688345e00c` and C advanced to
-`39d4aeb20451c984e20d27e12270a15070adce12` while the re-freeze ran (the A session
+A advanced to `8f4d9b98a584575cf74c0ff1ba7eb693468f288b` and C advanced to
+`6905477c51c34fa1f8d53421553805ecbf88d897` while the re-freeze ran (the A session
 was still working). The candidate intentionally keeps the recorded changesets
 `1cfb197` and `052962e`; neither later head was merged and no evidence was assembled
 from them.

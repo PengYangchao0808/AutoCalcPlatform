@@ -4,7 +4,7 @@
     "schema": "acp2.runtime.b19a-handoff.v1",
     "sha256": "sha256:8ba8e0bd9a181d7477cc51280db1ddec6e762e497d24510193ad74bef45f34c1"
   },
-  "base_revision": "938e894342d643f75740289a0e7aa84ef071115f",
+  "base_revision": "3fa7e7b5329df7b6b825c895bc2924ad4ea17df3",
   "branch": "feat/frontend-plan1-closure",
   "candidate_revision": "sha256:253f1ea9775daf310f591d96116e58c69de327eee2cfaef218587b466c336bce",
   "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B19 working-tree files",

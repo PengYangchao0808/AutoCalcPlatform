@@ -212,9 +212,9 @@
   "candidate": {
     "client_revision": null,
     "harness_revision": "ace5d0298ab2b05bcc95f526c5b749b5a79eaf3e00625dd2b60259be48cfc5be",
-    "server_revision": "9793bfa16640e29f293a1d5672565f3a7c30e1cf"
+    "server_revision": "a1562e10a3e3bac8ef62db9fe7ad692c1effd41c"
   },
-  "candidate_revision": "9793bfa16640e29f293a1d5672565f3a7c30e1cf",
+  "candidate_revision": "a1562e10a3e3bac8ef62db9fe7ad692c1effd41c",
   "command": [
     "/opt/acp2-dev/venvs/b/bin/python",
     "scripts/acceptance/acp2_runtime.py",

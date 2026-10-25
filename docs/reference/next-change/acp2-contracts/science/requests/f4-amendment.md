@@ -9,7 +9,7 @@ backend scope against undeclared implementation changes. A checked whether the
 P0 science work touches that scope:
 
 ```bash
-git diff --name-only 096cdffe9a3817d8ee443d824830d87ec6e07bc2..HEAD \
+git diff --name-only 3670790363c7a1959ad1dbe4b4297adec518952a..HEAD \
   -- src/cccp/qc src/cccp/backends src/cccp/calculation/tasks
 ```
 

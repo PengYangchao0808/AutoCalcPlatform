@@ -45,9 +45,9 @@
 
 | 绑定项 | 值 |
 |---|---|
-| 收口候选提交（closure candidate） | `71c36dacfd15bc035eb3efe3047e950ccab29144`（branch `feat/frontend-plan1-closure`） |
-| 四组合执行提交（t75，**不是**本提交） | `d048950714a412073b72afc9ee25c2ea16919380` |
-| 本记录执行时的前一个 HEAD | `cadf5b6e313d2841afed9337f5cd7c5927eedcab`（F4 amendment） |
+| 收口候选提交（closure candidate） | `f5a9c9b85392e1ae018a1752db4e036e1a95646d`（branch `feat/frontend-plan1-closure`） |
+| 四组合执行提交（t75，**不是**本提交） | `fded1160c4edb0974a6e49b528ee263975fd0075` |
+| 本记录执行时的前一个 HEAD | `99b5ee2c5bb9c0249b5ea8cf6d892f67ddc5cc95`（F4 amendment） |
 | 解释器 / Node | `python3.11 (3.11.13)` / `v20.19.0` |
 | 配置 | 每个套件 `mktemp -d` 隔离 `ACP_RUN_ROOT`；默认配置 `cccp.config._get_default_config()`（built-in 权威，ANTI #3）；**未重启服务、未改配置、未改生产 DB** |
 | First Slice 契约版本 | `contract_version = 1`；`docs/reference/next-change/ACP_Services_First_Slice_Contracts.md` sha256[0:16]=`e4e7dc4a0f020e38` |
@@ -176,7 +176,7 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 ### 7.1 四组合消费（不重跑、不拼接）
 
 本记录**消费** todo 75 的
-`docs/reference/current/ACP_Services_Four_Combination_Acceptance.md`（commit `cbf326cce154b4924ce75c1583139be2db91d315`），
+`docs/reference/current/ACP_Services_Four_Combination_Acceptance.md`（commit `3d2af348680da232aa4e8328483be41a33cc7c0a`），
 组合执行与产出归 todo 75；本 todo 不重复执行四组合。
 
 | 组合 | t75 状态 | 本记录如何引用 |
@@ -192,7 +192,7 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 ### 7.2 科学一致性（固定输入对照，禁前端模拟）
 
 - 判定位置（唯一权威）：C 路 `tests/baseline/cccp-evidence/c10-final-evidence-index.md`（todo 49：NMR×4 / PES×1 / simple×2 / CLI×1 = PASS，失败 0；真实 QC/LSF/Web/MCP 明确 NOT_VERIFIED）+ `tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md`。
-- **本候选状态 = NOT_VERIFIED（channel C10）**：C10 判定记录未在 `71c36da` 交付；HN-02 状态 B（跨路端到端）仍 `pending`（provider `4d2c6f8d10370faf84138678e9e10eba26c5f13a`）。
+- **本候选状态 = NOT_VERIFIED（channel C10）**：C10 判定记录未在 `71c36da` 交付；HN-02 状态 B（跨路端到端）仍 `pending`（provider `06ce0452a714ff1e389e7ed1aedc022e8640cef9`）。
 - **禁前端模拟**：本记录**不使用**任何 DOM/浏览器截图/前端断言作为科学等价证据；前端证据只用于前端任务面（§5.1 浏览器行，且为 NOT_VERIFIED）。
 - **不拼接**：C 的 `c10-compare-*` 是其候选上的记录，不拼作 `71c36da` 的通过证据。
 
@@ -268,9 +268,9 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
   "plan_todo": 69,
   "generated_at": "2026-10-19T08:30:00Z",
   "binding": {
-    "commit": "71c36dacfd15bc035eb3efe3047e950ccab29144",
+    "commit": "f5a9c9b85392e1ae018a1752db4e036e1a95646d",
     "branch": "feat/frontend-plan1-closure",
-    "previous_head": "cadf5b6e313d2841afed9337f5cd7c5927eedcab",
+    "previous_head": "99b5ee2c5bb9c0249b5ea8cf6d892f67ddc5cc95",
     "interpreter": "python3.11 (3.11.13)",
     "node": "v20.19.0",
     "config": "isolated ACP_RUN_ROOT per suite (mktemp); default cccp.config._get_default_config(); no service restart; no config/DB mutation",
@@ -289,13 +289,13 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
       "frames_mapping": {"kind": "dir", "path": "tests/fixtures/science_products/frames_mapping", "files": 12, "sha256_16": "79d229e24101a430"}
     },
     "recorded_digests": {
-      "four_combination_record": {"path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md", "sha256_16": "8b3e6bb407a0c51b", "commit": "cbf326cce154b4924ce75c1583139be2db91d315"},
+      "four_combination_record": {"path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md", "sha256_16": "8b3e6bb407a0c51b", "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a"},
       "cache_only_switch_matrix": {"path": "tests/baseline/services-evidence/cache_only_switch_matrix.md", "sha256_16": "6f97e465929bb7c1"}
     }
   },
   "consumes": {
     "path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md",
-    "commit": "cbf326cce154b4924ce75c1583139be2db91d315",
+    "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a",
     "sha256_16": "8b3e6bb407a0c51b",
     "combination_execution_owner": "plan todo 75",
     "re_executed_here": false,
@@ -380,7 +380,7 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
     "channel": "C10",
     "method": "fixed-input old-vs-new comparison using C golden evidence; frontend/DOM simulation explicitly not accepted",
     "reference": "tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md",
-    "reference_commit": "4d2c6f8d10370faf84138678e9e10eba26c5f13a",
+    "reference_commit": "06ce0452a714ff1e389e7ed1aedc022e8640cef9",
     "reference_state_b": "pending",
     "supporting_index": "tests/baseline/cccp-evidence/c10-final-evidence-index.md",
     "reason": "C10 judgement record not delivered on this candidate; HN-02 cross-lane state B pending; real science not executed here",

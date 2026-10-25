@@ -1,5 +1,5 @@
 {
-  "candidate_sha": "f32c6704e0348585a5a58ce8516450ab3afc7077",
+  "candidate_sha": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
   "cleanup_order": [
     "stop any harness-started service only",
     "remove detached git worktrees",

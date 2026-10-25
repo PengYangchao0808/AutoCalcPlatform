@@ -27,7 +27,7 @@
   `runtime/final-debug-patch/` with `bundle_dir`, `apply_order`, and a per-file
   `sha256` map. A bare aggregate `git diff` digest is not acceptable.
 - `candidate_id` must not be the historical reference
-  `096cdffe9a3817d8ee443d824830d87ec6e07bc2`.
+  `3670790363c7a1959ad1dbe4b4297adec518952a`.
 
 `docs/reference/next-change/acp2-contracts/runtime/manifest.json`:
 
@@ -48,7 +48,7 @@ B and must not land in a path B later reassigns. Today C uses
   "user": "C/T-01",
   "observed_baseline_lock": "absent",
   "observed_manifest": "absent",
-  "historical_reference_sha": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "historical_reference_sha": "3670790363c7a1959ad1dbe4b4297adec518952a",
   "provisional_evidence_root": "/opt/acp2-dev/evidence"
 }
 ```
@@ -62,7 +62,7 @@ B and must not land in a path B later reassigns. Today C uses
     "candidate_id": "sha256:<b00-signed>",
     "evidence_root": "/absolute/b00/assigned/evidence-root",
     "final_debug_candidate": "0123456789abcdef0123456789abcdef01234567",
-    "historical_reference": "096cdffe9a3817d8ee443d824830d87ec6e07bc2"
+    "historical_reference": "3670790363c7a1959ad1dbe4b4297adec518952a"
   },
   "manifest.json": {
     "schema": "acp2.manifest.v1",
@@ -102,7 +102,7 @@ candidate:
   "request": "B-req-17",
   "result": "FAIL",
   "reason": "final_debug_candidate equals the historical reference",
-  "detail": "final_debug_candidate = 096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "detail": "final_debug_candidate = 3670790363c7a1959ad1dbe4b4297adec518952a",
   "expected": "a new applied-and-committed SHA, or a pending_fix_bundle with per-file sha256"
 }
 ```

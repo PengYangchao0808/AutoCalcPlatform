@@ -1,6 +1,6 @@
 {
-  "revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
-  "reported_code_candidate": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+  "reported_code_candidate": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
   "code_files_changed_after_reported_candidate": [
     "scripts/acceptance/four_combinations.py"
   ],

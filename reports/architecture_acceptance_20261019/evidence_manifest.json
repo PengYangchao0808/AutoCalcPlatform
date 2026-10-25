@@ -2,7 +2,7 @@
   "schema": "acp.architecture.acceptance.review.v1",
   "started_on": "2026-10-19",
   "completed_on": "2026-10-20",
-  "revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+  "revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
   "verdict": "FAIL",
   "business_contract_defects": 10,
   "test_maintenance_defects": 2,
@@ -65,7 +65,7 @@
     {
       "path": "REPORT.md",
       "bytes": 36722,
-      "sha256": "e4af978a6124f6c8c53a556a3b22854152247e28376554b26a1dd24128970796"
+      "sha256": "7b7c958b2f95ef46ad12ea9820c5c5868100a7ab65e9c23ede812c7dd2d4cce8"
     },
     {
       "path": "browser_probe.py",
@@ -80,7 +80,7 @@
     {
       "path": "evidence/baseline.json",
       "bytes": 800,
-      "sha256": "74b0e07668f11e2cc1804dedff0ab8d0b89ddc7450e57bd0d3a477d6a0e03a97"
+      "sha256": "237705c132e3cfb2e6800d7355398e7285c1a49852c0b8db093f58b8004a3eaa"
     },
     {
       "path": "evidence/browser-probe.log",

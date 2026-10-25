@@ -1,7 +1,7 @@
 {
   "b_fix_overlay": {
     "applied_with": "git apply --3way --whitespace=nowarn (no conflicts; 9646183+overlay state)",
-    "base_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "base_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
     "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
     "files_changed": 150,
     "kind": "frozen_final_debug_candidate",
@@ -14,7 +14,7 @@
   "client_revision": "NOT_VERIFIED",
   "client_revision_kind": "C-owned RPH Workbench + DSH",
   "client_revision_reason": "C P1 Workbench UI/DSH is not delivered and this host has no Chromium/DSH driver; C HEAD is recorded for identity only and is not a verified client of this P1 candidate.",
-  "client_revision_ref": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+  "client_revision_ref": "39543ebea96942dea8ecf300b1887902007b27a0",
   "client_revision_source": "/opt/acp2-dev/C HEAD (identity only)",
   "client_revision_status": "NOT_VERIFIED",
   "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
@@ -40,7 +40,7 @@
   ],
   "schema": "acp2.p1-candidate.v1",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
-  "server_base_revision": "964618321a63694112be25c297b927bfc776e3d0",
+  "server_base_revision": "400f4a7060daef336f33570b0c14c3a0662c000a",
   "server_base_tree": "0982ff03355a5a82b6624116a75f38a82d4dcb85",
   "server_base_tree_equals_main_head_9646183_tree": true,
   "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",

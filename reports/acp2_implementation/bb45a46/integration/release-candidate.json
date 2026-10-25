@@ -98,7 +98,7 @@
       "submission_id": "sub_0fea781820a81666"
     },
     "package_install_candidate_identity": {
-      "candidate_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+      "candidate_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
       "evidence": [
         "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/summary.json",
         "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json"
@@ -132,9 +132,9 @@
   "source_candidate": {
     "base_release_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
     "label": "release-fix5",
-    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head": "c134109c696e9bcb941e176bf681d45a569370b8",
     "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
-    "revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
     "tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
   },
   "version": "0.3.0",

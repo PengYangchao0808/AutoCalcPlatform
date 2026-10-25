@@ -19,7 +19,7 @@
   ],
   "cwd": "/opt/acp2-dev/data/b/controller-config",
   "pythonpath": "src",
-  "release": "0d7f6c9f01007c6dde83c7a4a944c279101aa3a3",
+  "release": "0e9a0651ddb5bfafac687eb7ec897a761943fb4b",
   "release_source": "git rev-parse HEAD of repo-root (B05 checkout)",
   "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
   "run_root": "/opt/acp2-dev/data/b/run-root",

@@ -10,13 +10,13 @@ C25, and does **not** claim that the Diels–Alder reaction mechanism is proven.
 
 | Field | Value |
 |---|---|
-| Candidate commit (`candidate_sha`) | `460b0dbe8cee7d0ba0ef5afff3c8656b79a66462` |
+| Candidate commit (`candidate_sha`) | `1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000` |
 | Candidate tree | `041706226619a403256a2ea206d05ad30a509033` |
 | Content revision (`candidate_revision`) | `sha256:c415d71598e43ac5de1046616b5fbc4c1b808881eebe56c0731642027788932e` |
-| P2 wave base (`base_revision`) | `9ee70af73c59db5fb5e1738064f7f4b4123849fd` |
-| Parent revision | `430b4ba09378bf3a63839be3610ad3d7a075a861` |
-| `server_revision` | `460b0dbe8cee7d0ba0ef5afff3c8656b79a66462` |
-| `client_revision` | `39d4aeb20451c984e20d27e12270a15070adce12` (C HEAD; C24a/C25 absent) |
+| P2 wave base (`base_revision`) | `c3040007cd360af2373b6d1710c763634377761f` |
+| Parent revision | `e0ae07b4f1e9f6bce697e5e7676c58595060c90b` |
+| `server_revision` | `1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000` |
+| `client_revision` | `6905477c51c34fa1f8d53421553805ecbf88d897` (C HEAD; C24a/C25 absent) |
 | `harness_revision` | `2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884` |
 | `contract_digest` | `7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6` |
 | `contract_version` | `1.3.0` |

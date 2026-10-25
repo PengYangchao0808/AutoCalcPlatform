@@ -6,7 +6,7 @@
 **服务器操作依据**：[MCP / DSH 本服务器联调手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)。  
 **执行约定**：本批 debug 按完成后的冻结基线规划；启动时填实际 freeze SHA。A 不重做 debug，也不根据旧报告推断当前代码仍有同一缺陷。
 
-**2026-10-21 基线**：用户确认 debug 完成，默认开工 revision 为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2`；其报告内代码候选 `ab492cc8be9e46125fa2d2fae69a3ecaac64a548` 单独登记。[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)规定实际范围、文件 Owner 与阶段依赖。
+**2026-10-21 基线**：用户确认 debug 完成，默认开工 revision 为 `3670790363c7a1959ad1dbe4b4297adec518952a`；其报告内代码候选 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798` 单独登记。[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)规定实际范围、文件 Owner 与阶段依赖。
 
 ## 1. 交付范围、写入边界与执行顺序
 

@@ -7,7 +7,7 @@
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B24/migration-log.json",
-      "sha256": "5414887db4292b9ed6480070f5226c5905c57b0e127c07cfb383fb5ed4b8e1ad",
+      "sha256": "a9ec8c92261eb590d4cb07b6c4af88d10b3afbda7c6a21416176f7ca3498a870",
       "size_bytes": 3060
     },
     {
@@ -119,7 +119,7 @@
     "harness_revision": "084b63641564d677d942cc8b89de144f515b071f783b417d680eb6b521e6156a",
     "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
   },
-  "candidate_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+  "candidate_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
   "command": [
     "/opt/acp2-dev/venvs/b/bin/python",
     "scripts/acceptance/acp2_runtime.py",

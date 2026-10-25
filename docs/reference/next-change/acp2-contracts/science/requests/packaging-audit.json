@@ -210,7 +210,7 @@
     "ok": true,
     "qc": []
   },
-  "git_commit": "bcb9fa9654d2c5a0aae59a24f8c1ed5766cf94f9",
+  "git_commit": "fd80ca2d66cd20d61975d80e957388e9f6264ccb",
   "interpreter": {
     "executable": "/opt/acp2-dev/envs/a-python/bin/python",
     "version": "3.11.13"

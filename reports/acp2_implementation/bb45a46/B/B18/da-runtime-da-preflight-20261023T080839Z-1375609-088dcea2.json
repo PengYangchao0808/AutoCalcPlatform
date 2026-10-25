@@ -47,7 +47,7 @@
     },
     {
       "path": "da-preflight.json",
-      "sha256": "482eda833390ec7f75bb4d8d13905d9fc95183222e9e47e4e0f479edd4532c5c",
+      "sha256": "f14ef92452fae723d47d7a2ef8d9c466da9269ead74c1894d623fb138839c234",
       "size_bytes": 14933
     }
   ],
@@ -196,7 +196,7 @@
       },
       {
         "path": "da-preflight.json",
-        "sha256": "482eda833390ec7f75bb4d8d13905d9fc95183222e9e47e4e0f479edd4532c5c",
+        "sha256": "f14ef92452fae723d47d7a2ef8d9c466da9269ead74c1894d623fb138839c234",
         "size_bytes": 14933
       }
     ],

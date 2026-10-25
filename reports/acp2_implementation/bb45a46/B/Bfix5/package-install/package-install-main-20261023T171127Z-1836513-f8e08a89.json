@@ -27,7 +27,7 @@
     },
     {
       "path": "lab-health.json",
-      "sha256": "a1fc9da10ad5c3b5c5ed7e998c3dace0570c911397124456e45965b00f60b9a5",
+      "sha256": "5bd39f500b191f3fa2ab04bdfe2d2d88810bf4f545bdd5cc7d89e862ddb7c51b",
       "size_bytes": 353
     },
     {
@@ -103,7 +103,7 @@
   ],
   "assertions": [
     {
-      "detail": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2 from release_manifest.source.revision",
+      "detail": "5e2898acc386335ee1cb11ac9170650bb23d501d from release_manifest.source.revision",
       "name": "b25.candidate_revision",
       "status": "PASS"
     },
@@ -138,7 +138,7 @@
       "status": "PASS"
     },
     {
-      "detail": "installed Lab health candidate_revision='6ec01ec96fa81b89bec8ff321c38e3db2dc154d2'",
+      "detail": "installed Lab health candidate_revision='5e2898acc386335ee1cb11ac9170650bb23d501d'",
       "name": "b25.health_candidate_revision",
       "status": "PASS"
     },
@@ -202,9 +202,9 @@
   "candidate": {
     "client_revision": null,
     "harness_revision": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b",
-    "server_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2"
+    "server_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d"
   },
-  "candidate_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+  "candidate_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
   "command": [
     "/opt/acp2-dev/venvs/b/bin/python",
     "scripts/acceptance/acp2_runtime.py",
@@ -282,7 +282,7 @@
       },
       {
         "path": "lab-health.json",
-        "sha256": "a1fc9da10ad5c3b5c5ed7e998c3dace0570c911397124456e45965b00f60b9a5",
+        "sha256": "5bd39f500b191f3fa2ab04bdfe2d2d88810bf4f545bdd5cc7d89e862ddb7c51b",
         "size_bytes": 353
       },
       {
@@ -356,7 +356,7 @@
         "size_bytes": 323
       }
     ],
-    "b25.candidate_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "b25.candidate_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
     "b25.candidate_revision_source": "release_manifest.source.revision",
     "b25.expected_version": "0.3.0",
     "b25.fixture": "/tmp/opencode/fix5-qa/package-install-fixture.json",

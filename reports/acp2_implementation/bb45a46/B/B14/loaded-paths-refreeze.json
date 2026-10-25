@@ -21,7 +21,7 @@
     "harness_source_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
     "health_candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
     "health_candidate_revision_source": "/opt/acp2-dev/data/b/acceptance-env.sh::ACP_CANDIDATE_REVISION (B02 H2 value)",
-    "baseline_lock_code_candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "baseline_lock_code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
     "contract_default_server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
     "health_contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
     "health_contract_version": "1.1.0"

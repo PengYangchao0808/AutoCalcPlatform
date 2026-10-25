@@ -17,7 +17,7 @@
   ],
   "cwd": "/tmp/opencode/acp-b00-candidate",
   "ruff_version": "0.15.22",
-  "source_context": "Clean reconstruction of final_debug_candidate: git worktree add --detach 096cdffe9a3817d8ee443d824830d87ec6e07bc2; apply tracked-changes.patch; copy new-files/.",
+  "source_context": "Clean reconstruction of final_debug_candidate: git worktree add --detach 3670790363c7a1959ad1dbe4b4297adec518952a; apply tracked-changes.patch; copy new-files/.",
   "diagnostics": [
     {
       "cell": null,

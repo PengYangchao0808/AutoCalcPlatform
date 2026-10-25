@@ -6,8 +6,8 @@
   "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
   "candidate_label": "bb45a46",
   "evidence_root": "reports/acp2_implementation/bb45a46",
-  "historical_debug_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
-  "code_candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "historical_debug_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+  "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
   "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
   "final_debug_candidate_kind": "source_overlay_sha256",
   "final_debug_candidate_commit": null,
@@ -57,7 +57,7 @@
   "worktree": {
     "source_checkout": "repo-root",
     "branch": "feat/frontend-plan1-closure",
-    "head": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "head": "3670790363c7a1959ad1dbe4b4297adec518952a",
     "verification_worktree": "/tmp/opencode/acp-b00-candidate (detached clean reconstruction; removed after verification)",
     "dirty_source_tree_used_as_baseline": false
   },

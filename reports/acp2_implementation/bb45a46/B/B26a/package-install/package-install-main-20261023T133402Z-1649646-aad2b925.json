@@ -144,7 +144,7 @@
     "harness_revision": "218a3097a36e6976b6638ab04212895aa0b22f89b7ee634cdac59a078ad14319",
     "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
   },
-  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "candidate_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
   "command": [
     "/usr/bin/python3.11",
     "/tmp/opencode/b26a-clean/tools/scripts/acceptance/acp2_runtime.py",

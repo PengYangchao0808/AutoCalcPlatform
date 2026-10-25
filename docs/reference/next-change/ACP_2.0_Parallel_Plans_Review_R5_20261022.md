@@ -12,7 +12,7 @@
 | [A 科学轨](../../../.omo/plans/acp2-plan-a-cccp-science.md) | 801 | `e2655422a8c547facdebc2350b4c63949b3c5084b4f301456510ebd90f6a8530` |
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 548 | `c4cf98867dcd55f2659ec80b152afa16582248a25683fcaaf489b93618a7a043` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 682 | `2fc752cca50b27c9bea82dc3c4b24f53d16654da0ca0ef76add08acc5050a575` |
-| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `018247dd1df0df9d8ce6fce93d44d0bdf9ee051a565de9d67090d98e73aa3e38` |
+| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
 | [总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 250 | `a5b2702022c34f00cadfc3ae60c24feec5b547e9073be6226639d8873f38f98e` |
 | [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 

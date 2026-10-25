@@ -1,6 +1,6 @@
 # ACP 架构缺陷整改后独立复核
 
-日期：2026-10-21。审查提交：`096cdffe9a3817d8ee443d824830d87ec6e07bc2`。整改报告声明的代码候选为 `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`；两者之间业务源码未变，验收脚本 `scripts/acceptance/four_combinations.py` 有修改。
+日期：2026-10-21。审查提交：`3670790363c7a1959ad1dbe4b4297adec518952a`。整改报告声明的代码候选为 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`；两者之间业务源码未变，验收脚本 `scripts/acceptance/four_combinations.py` 有修改。
 
 **结论：FAIL，仍存在需要修复的问题。确认 11 项产品/执行缺陷及 1 项验收证据缺口，共 7 项 P1、5 项 P2。现有测试通过不足以支持“本批缺陷已全部关闭”。**
 

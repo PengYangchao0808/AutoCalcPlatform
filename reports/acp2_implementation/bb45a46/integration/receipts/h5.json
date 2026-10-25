@@ -2,12 +2,12 @@
   "artifacts": [
     {
       "path": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
-      "sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
+      "sha256": "5467d708af041585b26ed77ae80c51cc8638fbfa7a07d0c25e2c6eb2e2a336cd",
       "size_bytes": 21716
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B22/summary.json",
-      "sha256": "e990cacefc9034f3277936d846ef2478be9228a8112d6136998ea07ee2c60706",
+      "sha256": "df2ec9a5796c97b83f6c76cfc37854006850df45a05f76d24c693d17225a6996",
       "size_bytes": 343
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B22/infra_upgrade-third-party-capability.json",
-      "sha256": "07d87e8062028b83dcd939a1de723c76bc1ca59a6e23010262f0996326bdc6da",
+      "sha256": "5e446a3dfc5055af12eaa2c8ade10b0050c38c75762af01ecfef2d15bc6734f4",
       "size_bytes": 31973
     }
   ],
@@ -35,7 +35,7 @@
   ],
   "attempt": null,
   "candidate": {
-    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
     "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
   },

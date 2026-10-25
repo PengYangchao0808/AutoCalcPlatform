@@ -2,17 +2,17 @@
   "artifacts": [
     {
       "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-final-index.json",
-      "sha256": "7131217f5b9e5a2f6e2aaa7a0557a51f4208273c2fc2213247701a5c0531f67b",
+      "sha256": "18d7dfd64fd89a1d1c8d60aee10b48205e437ac28840e3acbd86e846f4becf3b",
       "size_bytes": 3332
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
-      "sha256": "0b4d98152b2530032399672965998d995b8b1f3fb26066a3d70d392c1c872dc8",
+      "sha256": "b25ab4ebc9df66d28e8a1329d12a5062726ba836f06e22d55c4eb9834a21214d",
       "size_bytes": 6817
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
-      "sha256": "2aef9939b1d921ab101563a3f9e4e87a72ec2bab7c1eb7c18d4fe8a67d67ae21",
+      "sha256": "aea6ab66f4fc60d40c0210b9a5aebd020739211af02229708d33194e7269f5a1",
       "size_bytes": 13367
     },
     {
@@ -35,7 +35,7 @@
   ],
   "attempt": null,
   "candidate": {
-    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
     "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
   },

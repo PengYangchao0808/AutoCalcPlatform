@@ -41,7 +41,7 @@ Ruff 对本次新增/修复的相关 Python 实现和独立测试通过，`git d
 
 ### 四组合
 
-本次真正创建 F0/F1 detached worktree，启动 S0/S1 两个隔离服务，四格分别组合实际静态 bundle 与服务。F0/S0 固定在 `878e3557b3b593a0c42adf842e80fe1408db395e`；F1/S1 为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2` 加 [candidate-source.patch](evidence/candidate-source.patch)，补丁 SHA256 **`ffba7728ba70800c06b3b254acc529bc286b594a30768328e3b39c72b3546863`**。19 个运行源码/资源文件摘要见 [candidate-source.json](evidence/candidate-source.json)，执行后无源码漂移。
+本次真正创建 F0/F1 detached worktree，启动 S0/S1 两个隔离服务，四格分别组合实际静态 bundle 与服务。F0/S0 固定在 `d5d85e7c804878edd0cedb6bce1d32af2d92ad83`；F1/S1 为 `3670790363c7a1959ad1dbe4b4297adec518952a` 加 [candidate-source.patch](evidence/candidate-source.patch)，补丁 SHA256 **`ffba7728ba70800c06b3b254acc529bc286b594a30768328e3b39c72b3546863`**。19 个运行源码/资源文件摘要见 [candidate-source.json](evidence/candidate-source.json)，执行后无源码漂移。
 
 | 组合 | 结果 | 说明 |
 |---|---|---|
@@ -58,8 +58,8 @@ Ruff 对本次新增/修复的相关 Python 实现和独立测试通过，`git d
 
 ```bash
 /opt/acp2/venv/bin/python scripts/acceptance/four_combinations.py \
-  --f0-revision 878e3557b3b593a0c42adf842e80fe1408db395e \
-  --f1-revision 096cdffe9a3817d8ee443d824830d87ec6e07bc2 \
+  --f0-revision d5d85e7c804878edd0cedb6bce1d32af2d92ad83 \
+  --f1-revision 3670790363c7a1959ad1dbe4b4297adec518952a \
   --candidate-patch reports/architecture_debug_20261021/evidence/candidate-source.patch \
   --out /tmp/acp-four-combination-reproduce
 ```

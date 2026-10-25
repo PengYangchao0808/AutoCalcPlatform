@@ -3,9 +3,9 @@
 Status: **published** · H6: **OPEN** · production release: **false** · production restart executed: **false**.
 
 Owner: Plan B runtime (B24b, todo 29).
-Frozen H6 candidate: `493790709830eac4ce347b5fb81414050f7a1e21` (`feat/frontend-plan1-closure`). Historical migration evidence: `f32c6704e0348585a5a58ce8516450ab3afc7077` (B24b migration run; not re-attributed by B-fix-7).
-A reference: `1b580a3dcda1351a0869353e6a505acde10dcfe0` (`acp2/a-science`).
-C reference: `39d4aeb20451c984e20d27e12270a15070adce12` (`acp2/c-experience`).
+Frozen H6 candidate: `c134109c696e9bcb941e176bf681d45a569370b8` (`feat/frontend-plan1-closure`). Historical migration evidence: `31dc79a904cab47ecd4af474628f1c07a1bc94f6` (B24b migration run; not re-attributed by B-fix-7).
+A reference: `dcf7084999e00ecc8b6a5154ca02c4684785ee5d` (`acp2/a-science`).
+C reference: `6905477c51c34fa1f8d53421553805ecbf88d897` (`acp2/c-experience`).
 
 This runbook is operational guidance for the **B runtime/services layer** only. It does not
 sign A science scope, C experience scope, a production release, a production restart, LSF,
@@ -43,7 +43,7 @@ export PYTHONPATH="$ACP2_REPO/src:$ACP2_REPO"
 export B24B_WORKSPACE=/opt/acp2-dev/data/b/b24b-migration
 export B24B_EVIDENCE="$ACP2_EVIDENCE/B/B24b"
 export B24B_FIXTURE=/opt/acp2-dev/data/b/fixtures/migration/b24b-migration.json
-export B24B_CANDIDATE=493790709830eac4ce347b5fb81414050f7a1e21
+export B24B_CANDIDATE=c134109c696e9bcb941e176bf681d45a569370b8
 export ACP_CANDIDATE_REVISION="$B24B_CANDIDATE"
 ```
 
@@ -59,7 +59,7 @@ test -f "$B24B_EVIDENCE/migration/summary.json"
 ss -ltnp | grep ':8765' || true
 ```
 
-Acceptance: `git rev-parse HEAD` is `493790709830eac4ce347b5fb81414050f7a1e21` for the H6 four-combination/legacy-reader evidence; the B24b
+Acceptance: `git rev-parse HEAD` is `c134109c696e9bcb941e176bf681d45a569370b8` for the H6 four-combination/legacy-reader evidence; the B24b
 workspace marker exists; the production listener is observed but never touched. The B24b
 migration run was executed from this exact commit; a different SHA's evidence is not reused.
 

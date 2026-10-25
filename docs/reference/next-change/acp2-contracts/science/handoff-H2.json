@@ -12,7 +12,7 @@
   "contract_set_version": 1,
   "contract_version_basis": {
     "handoff_h1": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
-    "handoff_h1_sha256": "052d03e5084df7378ca388cb924d5be9efa4337049ae8f84ac040eacbec138ae",
+    "handoff_h1_sha256": "6773501bc30e0c4ea95a07dce01259b0ba2317f51131f8a4c3c391f763d5a4ec",
     "handoff_h1_version": 1,
     "rule": "This H2 freezes acp2.science version 1. New semantics require the next contract version; no field is silently widened."
   },
@@ -42,7 +42,7 @@
     },
     "harness_revision": null,
     "harness_revision_gap": "No DSH/acceptance harness revision is known: no harness artifact, Node version or protocol transcript was published for this run.",
-    "recorded_a_static_revision": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+    "recorded_a_static_revision": "b5fe2e81f5d430d0df7feae514d28a77c8b97a2a",
     "recorded_a_static_revision_note": "This is A's science source commit only. It must never be presented as a server, client or harness revision.",
     "server_revision": null,
     "server_revision_gap": "No MCP server revision is known: B05/B06 have not published a server build, and no launch or handshake exists to identify one."
@@ -93,7 +93,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
-            "sha256": "da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902"
+            "sha256": "6773501bc30e0c4ea95a07dce01259b0ba2317f51131f8a4c3c391f763d5a4ec"
           }
         ],
         "commands": [
@@ -115,7 +115,7 @@
         "artifacts": [
           {
             "path": "src/cccp/calculation/capabilities/registry.py",
-            "sha256": null
+            "sha256": "8013269803d1f7abbbe2b77443fe560600a266e5432441079892d53f039a929c"
           }
         ],
         "commands": [
@@ -136,7 +136,7 @@
         "artifacts": [
           {
             "path": "src/cccp/calculation/capabilities/task_binding.py",
-            "sha256": null
+            "sha256": "b589aa3d045b071a8f72b0883de22aea64f4c403b15b42a2fe5ace59a271c86b"
           }
         ],
         "commands": [
@@ -157,11 +157,11 @@
         "artifacts": [
           {
             "path": "src/cccp/calculation/recipes/contracts.py",
-            "sha256": null
+            "sha256": "b6339adf245318294bec0828df2d79d10b64f3e519040739980fedc4896c011b"
           },
           {
             "path": "src/cccp/calculation/recipes/validation.py",
-            "sha256": null
+            "sha256": "e9b5b93e90d9cedb1dbe4fa0aebce083893a13cb813e7e467b8e82bcbbbea4aa"
           }
         ],
         "commands": [
@@ -186,11 +186,11 @@
         "artifacts": [
           {
             "path": "src/cccp/calculation/recipes/compile.py",
-            "sha256": null
+            "sha256": "439fac0c98dd5111307bbc9025b0b969008dc5de23c04edf1feace517def4254"
           },
           {
             "path": "docs/reference/next-change/acp2-contracts/science/identity-boundary.md",
-            "sha256": null
+            "sha256": "927687e79d3a2b9749262298e0a28735d4d778b9e4290af0e660468ee639dd09"
           }
         ],
         "commands": [
@@ -216,7 +216,7 @@
         "artifacts": [
           {
             "path": "src/cccp/calculation/capabilities/builtin.py",
-            "sha256": null
+            "sha256": "082064a09d18838292d9261a3c6bb511efbdbec8c6468f9dfe854e6f594720e9"
           }
         ],
         "commands": [
@@ -237,7 +237,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/task-compatibility-matrix.md",
-            "sha256": null
+            "sha256": "0a0622d755f8e66b250b3fe266434f240e4877a493bbec61ac66b5a11e4d272f"
           }
         ],
         "commands": [
@@ -258,7 +258,7 @@
         "artifacts": [
           {
             "path": "src/cccp/calculation/__init__.py",
-            "sha256": null
+            "sha256": "2833760083e1e8409827775bb2c523298b1dcdba262823cb03d8ae11dfaaf710"
           }
         ],
         "commands": [
@@ -281,11 +281,11 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
-            "sha256": null
+            "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d"
           },
           {
             "path": "docs/reference/next-change/acp2-contracts/science/question.schema.json",
-            "sha256": null
+            "sha256": "513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1"
           }
         ],
         "commands": [
@@ -326,9 +326,9 @@
     }
   ],
   "source": {
-    "base_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "base_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
     "branch": "acp2/a-science",
-    "pre_delivery_commit": "b20c28614638a47b9f74be15db9226ae62d1aadd",
+    "pre_delivery_commit": "b5fe2e81f5d430d0df7feae514d28a77c8b97a2a",
     "python": "/opt/acp2-dev/envs/a-python/bin/python",
     "worktree": "/opt/acp2-dev/A"
   },

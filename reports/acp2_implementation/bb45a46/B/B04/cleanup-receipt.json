@@ -17,5 +17,5 @@
     }
   ],
   "leftover_temp_dirs": [],
-  "note": "Fix-pass Controller (pid 13419, release 21610bc1b071d58f367cd04c4f65edb4d2153a5b) stopped with SIGTERM and reaped; ports 18765/18766 verified free by socket connect and ss; production 8765 and /var/lib/acp/runs untouched. The fake parity job is a completed task row under the isolated test run root, not a running process."
+  "note": "Fix-pass Controller (pid 13419, release 46d5fe31b0f72dea4bdb5aaa07ef3938700e5d48) stopped with SIGTERM and reaped; ports 18765/18766 verified free by socket connect and ss; production 8765 and /var/lib/acp/runs untouched. The fake parity job is a completed task row under the isolated test run root, not a running process."
 }

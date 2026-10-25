@@ -8,7 +8,7 @@
   T-40–T-42
 - **Consumer track:** C (`acp2-plan-c-rph-workbench`)
 - **Current revision:** B has not handed C a versioned registry or a
-  synchronized index; the C baseline (`c54823109010b651de3f0cca28da5af54a10fdfb`)
+  synchronized index; the C baseline (`e7fa3283d040fedd7926ec50df06ae56e283c7ee`)
   has no `runtime/**`. C writes only `extensions.experience` and references B01
   by `registry_ref`. Status: `NOT_VERIFIED(b01_handoff)` +
   `NOT_VERIFIED(b03_handoff)`.
@@ -80,7 +80,7 @@ counted as PASS.
   "request": "B-req-13",
   "consumer": "C/T-02",
   "observed": {
-    "c_baseline_head": "c54823109010b651de3f0cca28da5af54a10fdfb",
+    "c_baseline_head": "e7fa3283d040fedd7926ec50df06ae56e283c7ee",
     "runtime_dir_present": false,
     "b01_registry_present": false,
     "b03_mcp_extension_present": false,

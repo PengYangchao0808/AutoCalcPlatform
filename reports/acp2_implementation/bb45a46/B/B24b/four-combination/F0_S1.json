@@ -7,7 +7,7 @@
     }
   ],
   "candidate_patch_sha256": null,
-  "candidate_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+  "candidate_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
   "cell": {
     "browser": {
       "api_responses": [
@@ -120,7 +120,7 @@
       "index_status": 200,
       "ok": true
     },
-    "frontend_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
+    "frontend_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
     "frontend_sha256": "5eb26d813e680530eb433017521d050991f41e434ae62b8c2daa662f7913c8ba",
     "legacy": [
       {
@@ -1570,7 +1570,7 @@
       "workflows_count": 15
     },
     "service_config_sha256": "4de5f3094ebdb9ec33c6ccd106f79f027966e38890509f6217c38e8011227b69",
-    "service_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "service_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
     "submission": {
       "created": true,
       "detail_status": 200,
@@ -1590,8 +1590,8 @@
     "repo": "/tmp/opencode/bfix7/harness",
     "service_port": 43101
   },
-  "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
-  "f1_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+  "f0_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+  "f1_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
   "harness": "four_combinations.py",
   "harness_version": "3",
   "metrics": {

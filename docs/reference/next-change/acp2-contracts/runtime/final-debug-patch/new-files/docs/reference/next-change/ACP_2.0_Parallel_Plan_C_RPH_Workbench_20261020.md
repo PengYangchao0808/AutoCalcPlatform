@@ -5,7 +5,7 @@
 **总方案**：[ACP 2.0 四组分协同升级方案](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)  
 **操作依据**：[MCP / DSH 本服务器联调与验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)
 
-**2026-10-21 基线**：用户已确认 debug 完成；默认开发 revision 为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2`，报告内代码候选为 `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`。按[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)消费实际范围和剩余接线，不把 debug 完成推定为真实科学/LSF/MCP 已验。
+**2026-10-21 基线**：用户已确认 debug 完成；默认开发 revision 为 `3670790363c7a1959ad1dbe4b4297adec518952a`，报告内代码候选为 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`。按[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)消费实际范围和剩余接线，不把 debug 完成推定为真实科学/LSF/MCP 已验。
 
 ## 1. 目标、边界和开始条件
 

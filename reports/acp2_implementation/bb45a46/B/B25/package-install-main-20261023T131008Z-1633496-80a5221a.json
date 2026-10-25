@@ -27,7 +27,7 @@
     },
     {
       "path": "lab-health.json",
-      "sha256": "45d5df7f1c91c6d499c920bbbbc4e263d68d4fd1df9cbb55f31d715fcdf9ade9",
+      "sha256": "73c00902995a8b5fbef8d08bee1774e896ab91fddbd211037cacb7eea3051c11",
       "size_bytes": 353
     },
     {
@@ -144,7 +144,7 @@
     "harness_revision": "0ea8d0cc7e17f27ff53a7e10b7f28cc289831b04934ae92aaf560e4596b13ab6",
     "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
   },
-  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "candidate_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
   "command": [
     "/opt/acp2-dev/venvs/b/bin/python",
     "scripts/acceptance/acp2_runtime.py",
@@ -222,7 +222,7 @@
       },
       {
         "path": "lab-health.json",
-        "sha256": "45d5df7f1c91c6d499c920bbbbc4e263d68d4fd1df9cbb55f31d715fcdf9ade9",
+        "sha256": "73c00902995a8b5fbef8d08bee1774e896ab91fddbd211037cacb7eea3051c11",
         "size_bytes": 353
       },
       {

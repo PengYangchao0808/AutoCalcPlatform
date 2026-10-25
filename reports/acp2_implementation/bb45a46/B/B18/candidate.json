@@ -1,5 +1,5 @@
 {
-  "base_revision": "7f0fa7ee4942ac587ce4eccb48008e68feb1ce42",
+  "base_revision": "48512ffe158004527d3bfee7ba204c7cf55c5dbf",
   "branch": "feat/frontend-plan1-closure",
   "candidate_revision": "sha256:c08246ebfc5ee0105d2e07903da6def673de40b02160e584703fa96c4e95bf26",
   "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B18 working-tree files",
@@ -7,7 +7,7 @@
   "contract_version": "1.2.0",
   "controller_command": "/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18778 --run-root /opt/acp2-dev/data/b/run-root-b18 --poll-interval 1 --no-browser",
   "controller_health": {
-    "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
     "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
     "contract_digest_scope": "delivered-contract-set",
     "contract_version": "1.2.0",

@@ -17,7 +17,7 @@
     },
     {
       "path": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
-      "sha256": "a2f7ca1a925400c1819a7442e7769b70063db7fcefb0bdff0564111cdfd4813c",
+      "sha256": "ae1cb409a83ebba33b0a6db2c879e77e267b2bee35ca00c129bb7d87eb993cbe",
       "size_bytes": 22241
     }
   ],
@@ -35,7 +35,7 @@
   ],
   "attempt": null,
   "candidate": {
-    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
     "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
   },

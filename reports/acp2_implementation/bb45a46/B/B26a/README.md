@@ -1,7 +1,7 @@
 # B26a — External reproduction from a clean shell (2026-10-23)
 
 **Schema:** `acp2.b26a.reproduction-matrix.v1` · **Overall:** `NOT_VERIFIED` (reconciled at HEAD `8349f21`; the original `FAIL` at `dc72de2` is preserved in `result_history`; both original FAIL rows PASS after B-fix-4; four rows remain NOT_VERIFIED)
-**Release under test:** `0.3.0`, built from clean source `a84c4266bfc4738c8efc2988b7c5c37079a8a324` (`release/release-manifest.json`) · **Repo HEAD at reproduction:** `f60fda89b700bf1f828bf651183f88cf5e1913da` · **Controller env label in B15/B17 receipts:** `f60fda8…` (not a code claim)
+**Release under test:** `0.3.0`, built from clean source `a84c4266bfc4738c8efc2988b7c5c37079a8a324` (`release/release-manifest.json`) · **Repo HEAD at reproduction:** `d5b4a8a2ac7a9becf2f88c516ff690b4078cb555` · **Controller env label in B15/B17 receipts:** `f60fda8…` (not a code claim)
 **Independence:** `independent_operator: false (same agent/session)` — this is a **self-reproduction**, not an independent operator run.
 
 ## 1. Clean shell proof
@@ -49,9 +49,9 @@ Each row in `reproduction-matrix.json` carries `command`, `cwd`, `exit_code`, `r
 
 | Stage | Commit / source | Overall | Detail |
 |---|---|---|---|
-| Original reproduction | `dc72de26f76c054471e59b6434eab1f9160d96b9` | **FAIL** | Two real FAIL rows (`authorization`, `installed_workbench_submission`) and four NOT_VERIFIED rows; defects B26A-D1/D2 |
+| Original reproduction | `aaf2c4bfd8a393ccd49d4dca9b61d994f53813f9` | **FAIL** | Two real FAIL rows (`authorization`, `installed_workbench_submission`) and four NOT_VERIFIED rows; defects B26A-D1/D2 |
 | B-fix-4 re-run | source `abec2bc4f1d302827248d36171973df5bc1bc4dd` | rows PASS | `authorization` PASS (12 assertions), `installed_workbench_submission` PASS (HTTP + CLI, real scheduler task) |
-| Reconciled roll-up | HEAD `8349f210dfff34249b6472e29e012bd12ec3ff16` | NOT_VERIFIED | Remaining `third_party_plugin_install` (no published procedure), `agent_research_entry` (C DSH/browser absent), `lsf` (no LSF client), `disconnect_recovery` (not re-run) |
+| Reconciled roll-up | HEAD `69deded634fae075024597549e2990e8e7de51d4` | NOT_VERIFIED | Remaining `third_party_plugin_install` (no published procedure), `agent_research_entry` (C DSH/browser absent), `lsf` (no LSF client), `disconnect_recovery` (not re-run) |
 
 `superseded_by: B/Bfix4/b26a-rerun` (`../Bfix4/b26a-rerun/`, `../Bfix4/summary.json`). No FAIL was silently relabelled: the first history entry keeps `overall_result: FAIL`, and `dc72de2` still contains the original matrix.
 

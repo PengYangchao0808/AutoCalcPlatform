@@ -38,7 +38,7 @@
     "dirty_paths": [],
     "git": true,
     "path": "/tmp/opencode/fix5-build-src",
-    "revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
     "tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
   },
   "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5"

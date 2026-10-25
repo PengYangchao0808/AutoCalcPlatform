@@ -70,7 +70,7 @@ else:
     )
     from ordinary_legacy_cli import run_legacy_cli_checks
 
-F0_REVISION = "878e3557b3b593a0c42adf842e80fe1408db395e"
+F0_REVISION = "d5d85e7c804878edd0cedb6bce1d32af2d92ad83"
 CELL_NAMES = ("F0/S0", "F1/S0", "F0/S1", "F1/S1")
 LEGACY_WORKFLOWS = (
     "Confsearch",

@@ -1,7 +1,7 @@
 # ACP 2.0 Plan B — install, upgrade and rollback path
 
 **Candidate:** `acp2.plan-b.h7.release-fix5` · version `0.3.0`
-**Source:** `6ec01ec96fa81b89bec8ff321c38e3db2dc154d2`
+**Source:** `5e2898acc386335ee1cb11ac9170650bb23d501d`
 **Artifacts:** `reports/acp2_implementation/bb45a46/B/B25/release-fix5/`
 **Scope:** reviewable release candidate only. No production deployment is authorized by
 this document, and `acp.service` was not restarted.

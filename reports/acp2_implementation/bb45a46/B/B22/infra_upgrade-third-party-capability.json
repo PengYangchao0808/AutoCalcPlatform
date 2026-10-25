@@ -39,7 +39,7 @@
       "provenance": {
         "digest": "sha256:7437285ef98c63c6f7c8a8e069bffc36fdd2b5fa6bbb69badc6e9f5b3b21b8bd",
         "produced_at": "2026-10-23T10:22:26Z",
-        "producer_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
+        "producer_revision": "9457e0247caf52de3949de00bad8d006a6d68424",
         "source": "B22 third-party capability acceptance"
       },
       "read_only": true,

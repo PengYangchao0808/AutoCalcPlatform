@@ -5,7 +5,7 @@
 **总方案**：[四组分协同方案](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)；操作依据：[本服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)。  
 **任务数**：B00—B26，共 27 项；P0：B00—B07，P1：B08—B14，P2：B15—B20，P3：B21—B22，P4：B23—B24，P5：B25—B26。
 
-**2026-10-21 基线**：用户已确认 debug 完成。默认开发起点为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2`，代码候选 `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`、最终 Harness 和报告版本分别登记。依[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)管理 H0～H7；原报告中的真实科学/LSF 与 G4 打包缺口由本计划接续，不改原结论。
+**2026-10-21 基线**：用户已确认 debug 完成。默认开发起点为 `3670790363c7a1959ad1dbe4b4297adec518952a`，代码候选 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`、最终 Harness 和报告版本分别登记。依[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)管理 H0～H7；原报告中的真实科学/LSF 与 G4 打包缺口由本计划接续，不改原结论。
 
 ## 1. 执行边界与并行纪律
 

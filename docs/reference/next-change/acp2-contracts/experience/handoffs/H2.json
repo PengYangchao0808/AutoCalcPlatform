@@ -120,11 +120,11 @@
   ],
   "attempt": null,
   "candidate": {
-    "client_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+    "client_revision": "776e2568e72938eee551941507aec852642765b0",
     "harness_revision": "5a29a7c2988d2f1832ee3c095105749d6d7c6c5d0d06f8b31c28098dde514636",
     "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
   },
-  "candidate_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+  "candidate_revision": "776e2568e72938eee551941507aec852642765b0",
   "command": [
     "/opt/acp2-dev/venvs/c/bin/python",
     "reports/acp2_implementation/bb45a46/C/h2/build_h2_receipt.py"
@@ -162,7 +162,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "client_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
           "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -189,7 +189,7 @@
         "run_id": "baseline-20261022T140927Z-117944",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T14:09:27Z",
-        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "test_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
         "usage": null
       },
       "bridge-contract": {
@@ -236,7 +236,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "4fa39bb309d0230c88164268df02a87bb2922e7a",
+          "client_revision": "f69ca5c01dced3322025b84a025000225b0f49a5",
           "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -263,7 +263,7 @@
         "run_id": "bridge-contract-20261022T150332Z-301445",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T15:03:32Z",
-        "test_revision": "4fa39bb309d0230c88164268df02a87bb2922e7a",
+        "test_revision": "f69ca5c01dced3322025b84a025000225b0f49a5",
         "usage": null
       },
       "browser-install": {
@@ -285,7 +285,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+          "client_revision": "776e2568e72938eee551941507aec852642765b0",
           "harness_revision": "99ac06c63b47d04745003e7765a2cc31ef988e426f9ee11a667afd9abda068c4",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -312,7 +312,7 @@
         "run_id": "browser-install-20261022T223020Z-701925",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T22:30:20Z",
-        "test_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+        "test_revision": "776e2568e72938eee551941507aec852642765b0",
         "usage": null
       },
       "contracts": {
@@ -324,7 +324,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "client_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
           "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -351,7 +351,7 @@
         "run_id": "contracts-20261022T140749Z-114132",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T14:07:49Z",
-        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "test_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
         "usage": null
       },
       "dsh-discovery-live": {
@@ -473,7 +473,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+          "client_revision": "8c15952642d1988d8080d87ff646ed80ed67925d",
           "harness_revision": "f1935c19e3ed1397394b68339872a84f7d40ad130b088c5fbad7dc9f5126e89c",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -500,7 +500,7 @@
         "run_id": "dsh-discovery-live-20261022T204231Z-649186",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T20:42:31Z",
-        "test_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+        "test_revision": "8c15952642d1988d8080d87ff646ed80ed67925d",
         "usage": null
       },
       "harness-selftest": {
@@ -512,7 +512,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "2b56235a9900b73ce7d7f52ec260f9ea4a4b7cec",
+          "client_revision": "e00ad3bba2f79ffaeda0d5d5842fedfb95586065",
           "harness_revision": "3d2336581fe60cd8ba63fbb40d6e235f52327d751b7c4ee04c91ba3818c376a6",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -539,7 +539,7 @@
         "run_id": "harness-selftest-t13-20261022T214307Z",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T21:43:07Z",
-        "test_revision": "2b56235a9900b73ce7d7f52ec260f9ea4a4b7cec",
+        "test_revision": "e00ad3bba2f79ffaeda0d5d5842fedfb95586065",
         "usage": null
       },
       "mcp-live": {
@@ -611,7 +611,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+          "client_revision": "39543ebea96942dea8ecf300b1887902007b27a0",
           "harness_revision": "642c2643c9db7bebcbe90d69ff24d6560a3f4ac1ee278e585e407ecd99c8c36f",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -638,7 +638,7 @@
         "run_id": "mcp-live-20261022T183515Z-569902",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T18:35:15Z",
-        "test_revision": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+        "test_revision": "39543ebea96942dea8ecf300b1887902007b27a0",
         "usage": null
       },
       "model-live": {
@@ -660,7 +660,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+          "client_revision": "776e2568e72938eee551941507aec852642765b0",
           "harness_revision": "31e4ec61f4441e823ca031afba6ce070f360be627aafa587067cdeb194224352",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -687,7 +687,7 @@
         "run_id": "model-live-verify2-20261022T222152Z",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T22:21:53Z",
-        "test_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+        "test_revision": "776e2568e72938eee551941507aec852642765b0",
         "usage": {
           "batch_id": null,
           "caps": {
@@ -730,7 +730,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "client_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
           "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -757,7 +757,7 @@
         "run_id": "node-dsh-install-20261022T140818Z-115914",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T14:08:18Z",
-        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "test_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
         "usage": null
       },
       "workspace": {
@@ -769,7 +769,7 @@
           }
         ],
         "candidate": {
-          "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+          "client_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
           "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
@@ -796,7 +796,7 @@
         "run_id": "workspace-20261022T140756Z-114553",
         "scope": "IN_SCOPE",
         "started_at": "2026-10-22T14:07:56Z",
-        "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+        "test_revision": "87b9e23f4eb174ed5551ece206db45a3949e1dee",
         "usage": null
       }
     },

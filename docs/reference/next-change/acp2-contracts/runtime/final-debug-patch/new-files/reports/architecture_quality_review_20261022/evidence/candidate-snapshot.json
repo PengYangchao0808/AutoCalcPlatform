@@ -1,5 +1,5 @@
 {
-  "base_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "base_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
   "candidate_kind": "working_tree_with_archived_runtime_patch_and_additional_tests",
   "runtime_patch": "reports/architecture_debug_20261021/evidence/candidate-source.patch",
   "runtime_patch_sha256": "ffba7728ba70800c06b3b254acc529bc286b594a30768328e3b39c72b3546863",
@@ -19,7 +19,7 @@
     },
     {
       "path": "scripts/acceptance/four_combinations.py",
-      "sha256": "cac4adb40f7e928cdecd8d333f7b9d4185b17d4a05e7d3735abccbb67c72bd1d"
+      "sha256": "ecc50a8d315eb725197748a713a0c9bdf2423c6629456bfb035dc919263bfb6a"
     },
     {
       "path": "scripts/acceptance/ordinary_legacy_cli.py",

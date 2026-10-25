@@ -3,8 +3,8 @@
   "todo": "23 / B20b",
   "owner": "B",
   "generated_at": "2026-10-23T09:17:41Z",
-  "generated_at_head": "430b4ba09378bf3a63839be3610ad3d7a075a861",
-  "b20a_candidate_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7",
+  "generated_at_head": "e0ae07b4f1e9f6bce697e5e7676c58595060c90b",
+  "b20a_candidate_revision": "042e560c4af0c64703728e6b43b3bb2030fe97f5",
   "b20a_exec_status": "NOT_VERIFIED(c24a_absent)",
   "purpose": "Record A's scientific audit reference and C's evidence/ResearchRecord handoff against B20a execution facts without signing A or C scope or relabelling science.",
   "run_spec_ref": {
@@ -53,7 +53,7 @@
     "real_scientific_chain_executed": false,
     "receipt": {
       "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
-      "sha256": "98c7315da0463ea17fd9eb4e5e065f1b0f5b3639cd6e337055d4a3ca75f3bb1f",
+      "sha256": "9f148482c6f29b5a85938e452fad8b5f14b368404d4020fd15d601f5e0dc8b18",
       "schema": "acp2.acceptance.v1",
       "run_id": "20261023T091047Z-1425776-5bf82a03",
       "scenario": "da-runtime",

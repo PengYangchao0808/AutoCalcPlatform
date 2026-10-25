@@ -10,7 +10,7 @@ index f15a6e4..ab634d9 100644
 +  "contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
    "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
    "baseline": {
-     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+     "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
 @@ -169,7 +169,7 @@
        "owner": "B",
        "status": "delivered",
@@ -25,7 +25,7 @@ index f15a6e4..ab634d9 100644
        "status": "delivered",
        "delivered_by": "B06",
 -      "sha256": "89745da73977dcc7ac8fd87d88bd194701f944d2ee4d9a365ac232e710b26d70"
-+      "sha256": "2a31b716f1b07ff73fc938d195c6b27fec9004e3d7a1808de4493396b888dd19"
++      "sha256": "9980acb26e43c99304eb303f8e8c583b59cc60361008131c5313d2eac3f1add4"
      }
    ],
    "deferred_capabilities": [
@@ -48,7 +48,7 @@ index b8518ed..4c420c5 100644
 +      "evidence": [
 +        "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
 +        "frontend/js/workbench/features/scientific-evidence.js:751",
-+        "C HEAD e03a9dd9f6897ca0a8d43e69a10b22a20097f05d (same failure: token.fn() name collision)"
++        "C HEAD 35614fd83f616005a0546af35631c477151e7dde (same failure: token.fn() name collision)"
 +      ],
 +      "residual": "Open and C-owned; B did not edit frontend/**. The skill is recorded NOT_VERIFIED for the integration candidate until C fixes it at its own HEAD; this row is the visible cross-track request, not a PASS."
      }

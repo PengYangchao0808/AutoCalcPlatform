@@ -7,7 +7,7 @@ translate, and what the C track is not allowed to invent.
 
 Ground truth is the shipped adapter:
 `src/acp_services/entrypoints/mcp.py` (read at the frozen C baseline
-`c54823109010b651de3f0cca28da5af54a10fdfb`). Line references below are to that
+`e7fa3283d040fedd7926ec50df06ae56e283c7ee`). Line references below are to that
 revision. The machine envelope is
 `src/acp_services/entrypoints/machine_output.py`.
 

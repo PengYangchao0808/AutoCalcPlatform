@@ -39,7 +39,7 @@
 | F3 人工 QA | `.omo/evidence/acp-parallel-plan-2-services/f3-manual-qa.md`（`Verdict: APPROVE`） | 基线 `5f4b833`（整改 `d9dcb25`） |
 | F4 理想态保真 | `.omo/evidence/acp-parallel-plan-2-services/f4-ideal-state-fidelity.md`（`VERDICT: APPROVE`） | `c7c26c6` |
 
-- **发布提交（本记录唯一对象）**：`c7c26c6ed535fabf9ff7c0ed9c5e4d181f71fa09`
+- **发布提交（本记录唯一对象）**：`1dcd4619cf882973409160b91bfd546e8b54713c`
   （`fix(services): route remaining production writes through Data port; refresh closure F-3 status`，2026-10-19 21:57 +0800）。
 - 构建输入洁净度：`git status --porcelain -- src/ pyproject.toml README.md LICENSE` → **clean**（工作区打包面与提交树一致，构建取提交树 `git archive c7c26c6`）。
 - 发布形态说明：本次为**候选冒烟级发布执行**——产物构建、隔离环境冒烟、schema 演练在副本执行完毕；**生产服务切换（restart）因 sudo 无口令未执行**（§5，NOT_VERIFIED）。
@@ -95,7 +95,7 @@ sha256sum /tmp/rel76/acp-0.2.0-py3-none-any.whl
 ### 2.4 与 C-T54 候选产物的可核对性（评审 R4 — 三态如实）
 
 C-T54（`.omo/evidence/acp-parallel-plan-3-cccp/task-54-acp-parallel-plan-3-cccp.md`）冻结候选 =
-`355d96f66fcdaca2fc53d17c5e3eeca0319358ca`，其产物记录：
+`c7b0b4f89ad815be27ebf287764aa0870703dcb9`，其产物记录：
 
 | C-T54 产物 | sha256 | 大小 | 条目 |
 |---|---|---|---|

@@ -17,7 +17,7 @@
   "cwd": "/tmp/opencode/b26a-clean/work/orca",
   "fault_file": null,
   "health": {
-    "candidate_revision": "f60fda89b700bf1f828bf651183f88cf5e1913da",
+    "candidate_revision": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
     "contract_digest": "812b9ba0886874f7a1fad6fd75c63dd57181cc2e5348e10ea15511f2653b8f50",
     "contract_digest_scope": "delivered-contract-set",
     "contract_version": "1.0.0",

@@ -4,7 +4,7 @@
   "created_at": "2026-10-22T19:45:00+08:00",
   "candidate": {
     "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
-    "base_commit": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "base_commit": "3670790363c7a1959ad1dbe4b4297adec518952a",
     "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
     "worktree": "/opt/acp2-dev/B",
     "per_file_verification": "1906/1906 PASS (0 mismatches, 0 missing)",

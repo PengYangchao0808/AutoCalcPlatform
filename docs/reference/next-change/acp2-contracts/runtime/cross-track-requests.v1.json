@@ -72,7 +72,7 @@
       "evidence": [
         "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
         "frontend/js/workbench/features/scientific-evidence.js:751",
-        "C HEAD e03a9dd9f6897ca0a8d43e69a10b22a20097f05d (same failure: token.fn() name collision)"
+        "C HEAD 35614fd83f616005a0546af35631c477151e7dde (same failure: token.fn() name collision)"
       ],
       "residual": "Open and C-owned; B did not edit frontend/**. The skill is recorded NOT_VERIFIED for the integration candidate until C fixes it at its own HEAD; this row is the visible cross-track request, not a PASS."
     }

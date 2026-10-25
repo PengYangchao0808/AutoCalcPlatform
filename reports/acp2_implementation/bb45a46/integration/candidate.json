@@ -11,13 +11,13 @@
   "previous_candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
   "refreeze_reason": "Re-freeze after the B-owned base-suite fixes (B-fix-34/35/36) and the advanced A/C heads; the previous merge procedure and ownership map were reused.",
   "source_heads_observed_after_freeze": {
-    "a_head": "f981273fff99e8d198e157d02042a2688345e00c",
-    "c_head": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "a_head": "8f4d9b98a584575cf74c0ff1ba7eb693468f288b",
+    "c_head": "6905477c51c34fa1f8d53421553805ecbf88d897",
     "note": "Observed while the re-freeze ran, after the merges. The candidate deliberately keeps the recorded changesets a=1cfb197 and c=052962e; these later heads are not part of the candidate and no evidence was assembled from them."
   },
   "candidate_parents": [
     "bd94a7b54c278040af284ee76d7657fcaedb71fe",
-    "052962eac7782dc2e00253dd5df120badc3bff52"
+    "49ddfad860e3ba4bdd8a23e3b1d7e20919cf50bd"
   ],
   "merge_commits": {
     "b_merge": "5b365e14d5f8fea52083446c2abe8ee6e591bdac",
@@ -25,15 +25,15 @@
     "c_merge": "77ac1de1af6a5db6b57f4f904a859305ff73042c"
   },
   "merge_bases": {
-    "a": "243d2b7c1f2d115b1fa67d8af35e4020fe7be2d8",
-    "b": "2a57d6b6d91427093c6a10e710e5a52446ed801e",
-    "c": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d"
+    "a": "9977a106445177708e929557f9460e86914787ad",
+    "b": "a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4",
+    "c": "35614fd83f616005a0546af35631c477151e7dde"
   },
-  "historical_debug_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "historical_debug_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
   "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
-  "a_changeset": "1cfb1975d29a34fd76a986a6f293813579acd2aa",
-  "b_changeset": "12bf105f66bea49ea6e9bf5601b5c757131674a5",
-  "c_changeset": "052962eac7782dc2e00253dd5df120badc3bff52",
+  "a_changeset": "aa5e19399fd44a7cec0ae4e7632d9a4683151815",
+  "b_changeset": "308ef76e014e43a061d0cbffe219b2451de8feba",
+  "c_changeset": "49ddfad860e3ba4bdd8a23e3b1d7e20919cf50bd",
   "included_tracks": [
     "A",
     "B",

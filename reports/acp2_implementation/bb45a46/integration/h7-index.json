@@ -2,7 +2,7 @@
   "a_revision": {
     "source": "/opt/acp2-dev/A git rev-parse HEAD",
     "status": "observed_a_head; A-20/A-29 absent",
-    "value": "1b580a3dcda1351a0869353e6a505acde10dcfe0"
+    "value": "dcf7084999e00ecc8b6a5154ca02c4684785ee5d"
   },
   "absent_external_rows": [
     {
@@ -42,7 +42,7 @@
     "h7_effect": "H7 stays OPEN; B does not sign C's missing experience scope.",
     "observed_evidence_present": false,
     "plan_path": "docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md",
-    "plan_sha256": "7b7a10da9a102f84e843836911216c252f1c2137e946432dfd6123ad79eb42a5"
+    "plan_sha256": "d915b5365b632fbcfba5b36a33a51db598ac738d44bdafe1dafbc0ff39bb1fab"
   },
   "candidate_label": "bb45a46",
   "cleanup": {
@@ -64,7 +64,7 @@
   "client_revision": {
     "source": "/opt/acp2-dev/C git rev-parse HEAD (clean worktree)",
     "status": "observed_c_head; C24a/C25/C33/C34/C35 absent",
-    "value": "39d4aeb20451c984e20d27e12270a15070adce12"
+    "value": "6905477c51c34fa1f8d53421553805ecbf88d897"
   },
   "contract": {
     "acceptance_schema": "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
@@ -170,7 +170,7 @@
     "digests_verified": true,
     "label": "release-fix5",
     "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
-    "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "source_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
     "version": "0.3.0"
   },
   "rerun_commands": [
@@ -200,7 +200,7 @@
         {
           "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4/B-fix-5 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-          "receipt_sha256": "4a9c23e2b522a0e0cda43d2b06b3427d7855c9c0a82e234e4107b7cc9b4e94ca",
+          "receipt_sha256": "edd24943ac7263d1c2bd1e68d2e54bf111d428d6c5e595831282432c21b6dbec",
           "unchanged": [
             "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
             "A/B/C path ownership globs",
@@ -210,7 +210,7 @@
         {
           "rationale": "Environment identity is host-level and was not changed by B-fix-4/B-fix-5 (no dependency, config, or interpreter change).",
           "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
-          "receipt_sha256": "23482d905b2fdcaec0c6b0ca4e1347ee394e5955d20c401c4dccb097f50a5d1f",
+          "receipt_sha256": "3055cdd512092c510a0805c2d4c89ee14609fe11892303a5ff7eba4376f0bc8e",
           "unchanged": [
             "isolated worktree and host environment",
             "three-package import source at the P0 baseline"
@@ -347,7 +347,7 @@
         {
           "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
-          "receipt_sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
+          "receipt_sha256": "5467d708af041585b26ed77ae80c51cc8638fbfa7a07d0c25e2c6eb2e2a336cd",
           "unchanged": [
             "src/acp_services/runtime/adapter_registry.py and capability_registry.py",
             "plugin workspace fixtures and descriptor digests",
@@ -422,10 +422,10 @@
   "schema": "acp2.h7.index.v1",
   "schema_version": 1,
   "source_candidate": {
-    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head": "c134109c696e9bcb941e176bf681d45a569370b8",
     "landed_head_delta": {
-      "base_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
-      "command": "git diff --stat 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2..493790709830eac4ce347b5fb81414050f7a1e21 -- src",
+      "base_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
+      "command": "git diff --stat 5e2898acc386335ee1cb11ac9170650bb23d501d..c134109c696e9bcb941e176bf681d45a569370b8 -- src",
       "deletions": 161,
       "files": [
         "src/acp/calculations/attempt_freeze.py",
@@ -439,16 +439,16 @@
         "src/acp_services/runtime/worker.py",
         "src/acp_services/worker_bootstrap.py"
       ],
-      "head_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "head_revision": "c134109c696e9bcb941e176bf681d45a569370b8",
       "insertions": 823,
       "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 6ec01ec and their digests are unchanged."
     },
     "landed_head_historical_previous": {
-      "head": "09fc41da9171e1d466c0036a114feb272652e028",
+      "head": "be81deb79b45c4ca52336891cdf6348b0f571ee9",
       "note": "Previous value was the B-fix-5 evidence commit and its relation was false after the release fix commits.",
       "tree": "b0718da04b2acd32e886c82a03b3217cf99cad97"
     },
-    "landed_head_relation": "Landed code-fix commit B-fix-7 (reviewed batch options overlay) on branch feat/frontend-plan1-closure. The release was built from detached 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2; 6ec01ec..493790709830eac4ce347b5fb81414050f7a1e21 -- src differs in 10 files (+823/-161), including attempt_freeze, attempt_publication, batch/options, scheduler/remote/runner, acp_services/runtime/{attempt_freeze,attempt_recovery,cgroup,isolation,worker} and worker_bootstrap. The docs(evidence) index commit follows this code commit; it does not change src. This relation replaces the previous false \"report/evidence only\" claim.",
+    "landed_head_relation": "Landed code-fix commit B-fix-7 (reviewed batch options overlay) on branch feat/frontend-plan1-closure. The release was built from detached 5e2898acc386335ee1cb11ac9170650bb23d501d; 6ec01ec..c134109c696e9bcb941e176bf681d45a569370b8 -- src differs in 10 files (+823/-161), including attempt_freeze, attempt_publication, batch/options, scheduler/remote/runner, acp_services/runtime/{attempt_freeze,attempt_recovery,cgroup,isolation,worker} and worker_bootstrap. The docs(evidence) index commit follows this code commit; it does not change src. This relation replaces the previous false \"report/evidence only\" claim.",
     "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
     "raw_receipt_shas_need_not_match": true,
     "release_base_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
@@ -458,7 +458,7 @@
     "release_source_is_final_candidate": true,
     "release_source_json": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
     "release_source_json_sha256": "e2ee1096e0a7ec05efe86ffb35c4e6772d65021c1c50d8643c099780ced436df",
-    "release_source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "release_source_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
     "release_source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
     "version": "0.3.0"
   },
@@ -471,7 +471,7 @@
         {
           "rationale": "B-fix-5 rebuilt the role artifacts from the clean commit 6ec01ec; all six manifest digests and both root-build digests were recomputed from disk in this refresh and cross-checked against release-fix5/source.json.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
-          "receipt_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
+          "receipt_sha256": "56123906c7eaee2bcf87e5e8efa39f7c1e7ae34111b34851dccfe6f0ac7dfd63",
           "unchanged": [
             "artifact bytes (six role artifacts + two root-build artifacts)",
             "release source 6ec01ec and tree e2b2377",
@@ -481,7 +481,7 @@
         {
           "rationale": "The release source identity used by the installed validation is the same source.json consumed by this index.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
-          "receipt_sha256": "95c6abbe858bc07ce20df489423e9ab56973d4ad7b604677c69d38491c8131bf",
+          "receipt_sha256": "402e5d2bf7d31fa57d47a9022da311c32c98dfba1bb6ddb601edfdfc81146b47",
           "unchanged": [
             "source revision 6ec01ec and tree e2b2377",
             "eight artifact digests",
@@ -499,7 +499,7 @@
         {
           "rationale": "B-fix-5 re-ran the package-install scenario against release-fix5; the receipt derives candidate_revision 6ec01ec from release_manifest.source.revision and the installed Lab health matches it, with one real scheduler task completed.",
           "receipt": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json",
-          "receipt_sha256": "90d719ed71ae85df03ebc0a7a49d6b74c897fd77b1da04b5fe1862d45876862d",
+          "receipt_sha256": "fee97ca6909853cc176051c8953b233e8e5f25aab66e207203d726dac9bb0df2",
           "unchanged": [
             "release-fix5 artifacts (same digests)",
             "acp/cccp/acp_services installed code",
@@ -581,7 +581,7 @@
         {
           "rationale": "No H5 row executes a task (all platform refs null) or calls the installed-release identity helper; inputs and validator are unchanged between abec2bc and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
-          "receipt_sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
+          "receipt_sha256": "5467d708af041585b26ed77ae80c51cc8638fbfa7a07d0c25e2c6eb2e2a336cd",
           "unchanged": [
             "adapter registry and capability registry",
             "plugin fixtures and descriptor digests",

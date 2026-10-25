@@ -12,7 +12,7 @@
     "python_version": "3.11.13"
   },
   "candidate": {
-    "base_commit": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "base_commit": "3670790363c7a1959ad1dbe4b4297adec518952a",
     "bundle_digest_sha256": {
       "candidate_snapshot_json": "37dd2320cc5d97ea7eb866a2275641c0d0518801202137f08e8f84046cea1194",
       "manifest_json": "8340f2e81d8f4adcfe2aa872106285468d6b2c71ccc3fcd3b9cef1bbced8f21e",
@@ -180,7 +180,7 @@
     "matrix_version": 1,
     "roles": {
       "A": {
-        "candidate_commit": "94c8ea946a4f400202ff337a660a5ce46739d8be",
+        "candidate_commit": "d7f21ea5130bc6c3c1f452e52756db26758fa0fb",
         "cwd": "/opt/acp2-dev/A",
         "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
         "dependency_digest_sha256": "f4a9340436bfec7e1f505be4da0e1292bfe776f3e2fa9fab28b5642e4278776c",
@@ -222,7 +222,7 @@
         "worktree_dirty_paths": 0
       },
       "C": {
-        "candidate_commit": "c54823109010b651de3f0cca28da5af54a10fdfb",
+        "candidate_commit": "e7fa3283d040fedd7926ec50df06ae56e283c7ee",
         "cwd": "/opt/acp2-dev/C",
         "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
         "dependency_digest_sha256": "ac76cd7fd12fde80e39021173609de9006892d58c5a8fcb95a5459f78276a5de",
@@ -243,7 +243,7 @@
         "worktree_dirty_paths": 0
       },
       "integration": {
-        "candidate_commit": "75a8f08a06b5528b310b26bd309940e99d9cd9bd",
+        "candidate_commit": "68653bbcb3f613231c9c800521d88184eeb41a66",
         "cwd": "/opt/acp2-dev/integration",
         "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
         "dependency_digest_sha256": "6ba4052f3a7572503740f90b5df7047c0b00d68d8ef84ae271b6c3bc5cbbaadc",

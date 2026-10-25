@@ -6,7 +6,7 @@
 
 **实施前提（2026-10-20 补充）**：按 `.omo/plans/acp-architecture-acceptance-remediation.md` 本批 debug 已完成并形成冻结候选来规划后续工作；实际验收仍记录其交付 revision 和证据。该批明确延期的 MCP 默认入口、身份/配额生产接线等，纳入 2.0 对应阶段交付，不能由“debug 完成”推定为已实现。本文的 ACR/ACV 为产品职责名称，沿用现有 `acp_services` / `frontend/js/visualization` 实现路径，不以本提案触发目录重命名。
 
-**2026-10-21 更新**：用户已确认 debug 完成；正式代码候选为 `ab492cc8be9e46125fa2d2fae69a3ecaac64a548`，含 Harness/报告的交付 revision 为 `096cdffe9a3817d8ee443d824830d87ec6e07bc2`。后续三 Agent 计划以此交付为默认开工基线，具体范围与未验证项见[正式报告](../reports/architecture_remediation_20261020/REPORT.md)及[并行执行总索引](reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md)。
+**2026-10-21 更新**：用户已确认 debug 完成；正式代码候选为 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`，含 Harness/报告的交付 revision 为 `3670790363c7a1959ad1dbe4b4297adec518952a`。后续三 Agent 计划以此交付为默认开工基线，具体范围与未验证项见[正式报告](../reports/architecture_remediation_20261020/REPORT.md)及[并行执行总索引](reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md)。
 
 > **Chemistry First. Complexity Last.**  
 > Draw a reaction. Ask a question. Explore the mechanism.

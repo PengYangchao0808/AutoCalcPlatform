@@ -1,5 +1,5 @@
 {
-  "candidate_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+  "candidate_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
   "candidate_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
   "historical_artifacts_untouched": [
     "B25/release/",
@@ -51,7 +51,7 @@
       "result": "PASS"
     },
     "F3.package_install_candidate_identity": {
-      "detail": "receipt candidate_revision=6ec01ec96fa81b89bec8ff321c38e3db2dc154d2 (release_manifest.source.revision); installed Lab health matches",
+      "detail": "receipt candidate_revision=5e2898acc386335ee1cb11ac9170650bb23d501d (release_manifest.source.revision); installed Lab health matches",
       "evidence": [
         "package-install/summary.json",
         "package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json"
