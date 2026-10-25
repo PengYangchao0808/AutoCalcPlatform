@@ -3,32 +3,32 @@
     "install_exit": 0,
     "ok": true,
     "role": "cccp",
-    "venv": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp",
+    "venv": "reports/acp2_implementation/bb45a46/B/B25/venvs/cccp",
     "venv_exit": 0,
-    "wheel": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0-py3-none-any.whl"
+    "wheel": "reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0-py3-none-any.whl"
   },
   {
     "install_exit": 0,
     "ok": true,
     "role": "worker",
-    "venv": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/worker",
+    "venv": "reports/acp2_implementation/bb45a46/B/B25/venvs/worker",
     "venv_exit": 0,
-    "wheel": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp_worker-0.3.0-py3-none-any.whl"
+    "wheel": "reports/acp2_implementation/bb45a46/B/B25/release/acp_worker-0.3.0-py3-none-any.whl"
   },
   {
     "install_exit": 0,
     "ok": true,
     "role": "web",
-    "venv": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web",
+    "venv": "reports/acp2_implementation/bb45a46/B/B25/venvs/web",
     "venv_exit": 0,
-    "wheel": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl"
+    "wheel": "reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl"
   },
   {
     "install_exit": 0,
     "ok": true,
     "role": "root",
-    "venv": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/root",
+    "venv": "reports/acp2_implementation/bb45a46/B/B25/venvs/root",
     "venv_exit": 0,
-    "wheel": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl"
+    "wheel": "reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl"
   }
 ]

@@ -1,4 +1,4 @@
-pwd: /ACPServer/AutoCalcPlatform
+pwd: repo-root
 command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/integration/summary.json
 stdout:
 VALID: reports/acp2_implementation/bb45a46/integration/summary.json (tool check only; this is not a scenario PASS)

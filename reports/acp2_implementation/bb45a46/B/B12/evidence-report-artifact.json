@@ -1,5 +1,5 @@
 {
-  "a_schema": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+  "a_schema": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
   "claim_status_served": "not_evaluated",
   "fixture": "fixtures/evidence-report.a-fixture.json (static, B12-labelled)",
   "platform_interpretation_added": false,

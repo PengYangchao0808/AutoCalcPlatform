@@ -47,7 +47,7 @@
     "new_dependencies": [],
     "pyproject_changed_by_b22": false,
     "requirements_node_changed": false,
-    "requirements_node_path": "/ACPServer/AutoCalcPlatform/requirements-node.txt",
+    "requirements_node_path": "requirements-node.txt",
     "requirements_node_sha256": "f21f3a327cb1d581ffaf54ee5bb2b9e1916948156e3f48e52a68269f28cc3758"
   },
   "entry_point_requests": [
@@ -78,71 +78,71 @@
   "reviewed_requests": [
     {
       "owner": "A",
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.md",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.md",
       "queued_with": "B25a",
       "read": true,
-      "sha256": "6a83a285b574f4b2348abeacdaae8cb1fc90008402fbe60d9c08f697386937c3"
+      "sha256": "f02386bc95562f7171ed82d20a5ce7c65e770616fd7a7fd2e068c825aa361d5b"
     },
     {
       "owner": "A",
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
       "queued_with": "B25a",
       "read": true,
       "sha256": "e7c3186ac03ef565b4d0380bf04c4a185b39fd730db03831a10432fd216c07b8"
     },
     {
       "owner": "A",
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
       "queued_with": "B25a",
       "read": true,
       "sha256": "5082907a836caf09a3b86dad448d6c1cbad05f7d4feeb029de6c5004124657fa"
     },
     {
       "owner": "A",
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md",
       "queued_with": "B25a",
       "read": true,
       "sha256": "d64a887a53f601675dfb1f0f1e9e3af949a93c8a384be821c944fea0c2a48692"
     },
     {
       "owner": "A",
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/requests/ADR-007-input.md",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/ADR-007-input.md",
       "queued_with": "B25a / platform ADR owner",
       "read": true,
       "sha256": "6c4dc5fb9ba6eec59b67f0c9454494e6b461d51c79f87cf5e9e08f2d4c414c07"
     },
     {
       "owner": "C",
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md",
       "queued_with": "B25a",
       "read": true,
       "sha256": "e16267ff713a2d7cd984add8340e38f0a61b2bab9dbf05f79b94531aad471d33"
     },
     {
       "owner": "C",
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-07.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-07.md",
       "queued_with": "B03",
       "read": true,
-      "sha256": "f27a4d0f6f9f6da6902e53506db72f1439bc3e4247a47d2ccc1673651e614962"
+      "sha256": "36da8e8528ad67335ce30e64ee75900b9d8c23ae87afe1771d75e8d93036f933"
     },
     {
       "owner": "C",
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md",
       "queued_with": "B25b",
       "read": true,
-      "sha256": "c79f504dacd2efe8d431e2ee1e3ec01dffd298bfd7c823f12361a8bc0a76c2f3"
+      "sha256": "20d27c5882fbaa46a43f25821a92b4b34a7f3a9cfdf10bde863fe0db08b8f3f3"
     },
     {
       "owner": "C",
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-02.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-02.md",
       "queued_with": "B01",
       "read": true,
-      "sha256": "1a8bdad03c4d53896de9354f4a6abd6bd23563b71b6e43d49b13a20ce50960e2"
+      "sha256": "da786880f37c4d12432d6e652e7e4a88d571dce5514c5334f903e3cd7807b7c1"
     }
   ],
   "rollback": [
     "Do not apply the A packaging patch until A-49/50 lands the 14-file corpus.",
-    "If applied, revert with: git -C /ACPServer/AutoCalcPlatform apply -R /ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
+    "If applied, revert with: git -C repo-root apply -R /opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
     "If a version bump is later applied by B25a, restore all four version locations from B25a's release commit; B22 holds no bump."
   ],
   "schema": "acp2.b22.packaging-requests.v1",

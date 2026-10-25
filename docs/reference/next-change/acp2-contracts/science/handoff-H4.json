@@ -88,7 +88,7 @@
   "contract_set_version": 1,
   "contract_version_basis": {
     "handoff_h3": "docs/reference/next-change/acp2-contracts/science/handoff-H3.json",
-    "handoff_h3_sha256": "1fed3a5a4ae32390e9f59a06ecc1b7ca4a64a0ba68a6750211065fe54d050ddd",
+    "handoff_h3_sha256": "7f8af9eff3892cfb87ba330c76b936fdd36aeadf03e04509ea5c26224416d95b",
     "handoff_h3_version": 1,
     "rule": "H4 is built on the exact H3 bytes. It adds no contract field, rewrites no H3 row and never upgrades a row because a producer name exists."
   },
@@ -137,7 +137,7 @@
   },
   "frozen_at": "2026-10-23T00:11:03Z",
   "gate_command": [
-    "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "/opt/acp2-dev/envs/a-python/bin/python",
     "-m",
     "pytest",
     "tests/test_acp2_science_da_validators.py",
@@ -1202,7 +1202,7 @@
   "source": {
     "branch": "acp2/a-science",
     "pre_delivery_commit": "243d2b7",
-    "python": "/ACPServer/acp2-development/envs/a-python/bin/python",
-    "worktree": "/ACPServer/acp2-development/A"
+    "python": "/opt/acp2-dev/envs/a-python/bin/python",
+    "worktree": "/opt/acp2-dev/A"
   }
 }

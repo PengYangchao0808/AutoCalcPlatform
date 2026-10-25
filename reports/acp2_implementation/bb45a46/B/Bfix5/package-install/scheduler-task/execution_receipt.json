@@ -11,7 +11,7 @@
       "mapping_version": 1,
       "project_id": "",
       "relative_path": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
-      "root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/lab-run-root/uncategorized",
+      "root": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/lab-run-root/uncategorized",
       "tenant_id": ""
     }
   ],
@@ -31,7 +31,7 @@
   },
   "fencing_token": "8f8bfd45b0966b5122d22434df7b9136",
   "job_id": "20261024_011311_001_b25-scheduler-smoke",
-  "owner": "local:workstation:1837495:1",
+  "owner": "local:redacted-host:1837495:1",
   "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
   "receipt_version": 1,
   "release_digest": "c4b54feb6a0b25ccbf0163b852ec66e0a1f003e778081d079030844871e90cc0",

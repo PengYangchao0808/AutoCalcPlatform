@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "contract_version": "1.0.0",
   "owner": "C",
-  "scenario": "experience:dsh-local-singlepoint-live",
+  "scenario": "experience:dsh-local-singlepoint",
   "phase": "experience:live",
   "run_id": "20261022T121500Z-c-dsh-live-0001",
   "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -16,15 +16,11 @@
     "/usr/bin/python3.11",
     "scripts/acceptance/acp2_experience.py",
     "--scenario",
-    "dsh-local-singlepoint-live",
-    "--out",
-    "$ACP2_EVIDENCE/C/dsh-local-singlepoint-live/20261022T121500Z-c-dsh-live-0001/experience/live",
-    "--timeout",
-    "1800",
-    "--mode",
-    "live"
+    "dsh-local-singlepoint",
+    "--controller",
+    "http://127.0.0.1:8765"
   ],
-  "cwd": "/ACPServer/acp2-development/C",
+  "cwd": "/opt/acp2-dev/C",
   "started_at": "2026-10-22T12:15:00Z",
   "finished_at": "2026-10-22T12:15:30Z",
   "result": "PASS",
@@ -43,23 +39,7 @@
   "extensions": {
     "acceptance.operation_class": "submit",
     "acceptance.target": "local",
-    "experience.sample": "C-authored live shape sample; declares required observations (M0-03/R10)",
-    "experience.mode": "display-only",
-    "experience.observations": {
-      "schema": "acp2.experience.observations.v1",
-      "observed": {
-        "transport": "present",
-        "controller": "present",
-        "model": "present",
-        "qc": "present",
-        "lsf": "absent",
-        "browser": "absent",
-        "artifact": "present",
-        "denial": "absent"
-      },
-      "model_calls": 1,
-      "model_evidence": "model gateway usage receipt: 1 request settled by the C budget proxy",
-      "offline_fixture_content": false
-    }
+    "experience.sample": "B-authored-shape-exemplar; C-authored sample pending",
+    "experience.mode": "display-only"
   }
 }

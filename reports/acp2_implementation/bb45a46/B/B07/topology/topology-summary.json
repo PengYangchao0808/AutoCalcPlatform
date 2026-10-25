@@ -9,11 +9,11 @@
     "launch_manifest": "reports/acp2_implementation/bb45a46/B/B07/topology/mcp-launch-b07.json",
     "pids": [
       {
-        "argv": "/ACPServer/acp2-development/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO",
+        "argv": "/opt/acp2-dev/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO",
         "pid": 368344
       },
       {
-        "argv": "/ACPServer/acp2-development/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO",
+        "argv": "/opt/acp2-dev/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO",
         "pid": 368348
       }
     ],
@@ -77,9 +77,9 @@
     }
   ],
   "candidate": {
-    "pythonpath": "/ACPServer/acp2-development/B/src",
+    "pythonpath": "/opt/acp2-dev/B/src",
     "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
-    "source": "/ACPServer/acp2-development/B/src"
+    "source": "/opt/acp2-dev/B/src"
   },
   "cleanup": {
     "adapters": "both exited with code 0; no adapter process remains",
@@ -87,7 +87,7 @@
   },
   "controller": {
     "argv": [
-      "/ACPServer/acp2-development/venvs/b/bin/python",
+      "/opt/acp2-dev/venvs/b/bin/python",
       "-m",
       "acp",
       "run",
@@ -97,12 +97,12 @@
       "--port",
       "18765",
       "--run-root",
-      "/ACPServer/acp2-development/data/b/run-root",
+      "/opt/acp2-dev/data/b/run-root",
       "--no-browser",
       "--log-level",
       "INFO"
     ],
-    "cwd": "/ACPServer/acp2-development/data/b/controller-config",
+    "cwd": "/opt/acp2-dev/data/b/controller-config",
     "health": {
       "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
       "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
@@ -125,7 +125,7 @@
     },
     "pid": 365514,
     "production_8765_touched": false,
-    "run_root": "/ACPServer/acp2-development/data/b/run-root",
+    "run_root": "/opt/acp2-dev/data/b/run-root",
     "still_serving_after_both_closed": true,
     "url": "http://127.0.0.1:18765"
   },

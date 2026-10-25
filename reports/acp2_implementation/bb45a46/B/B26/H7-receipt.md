@@ -62,7 +62,7 @@ root is absent on this host, so H7 stays open and B does not sign C experience s
 
 ## Validation and cleanup
 
-- `cd /ACPServer/AutoCalcPlatform && /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/integration/summary.json`
+- `cd repo-root && /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/integration/summary.json`
   → `VALID`, exit 0 (`B26/check-only.txt` plus `check-only.pwd.txt`, `check-only.command.txt`,
   `check-only.stdout.txt`, `check-only.stderr.txt`, `check-only.exit`).
 - No active queued/running/cancelling/waiting_review test job remains in a live run root.

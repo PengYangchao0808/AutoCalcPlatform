@@ -9,11 +9,11 @@ scenarios.
 
 | Item | Value |
 | --- | --- |
-| Browser interpreter | `$ACP2_BROWSER_PYTHON` = `/ACPServer/acp2-development/venvs/browser/bin/python` |
+| Browser interpreter | `$ACP2_BROWSER_PYTHON` = `/opt/acp2-dev/venvs/browser/bin/python` |
 | Playwright | `1.63.0` (`importlib.metadata.version("playwright")`) |
-| `PLAYWRIGHT_BROWSERS_PATH` | `$ACP2_TOOLS/playwright-browsers` = `/ACPServer/acp2-tools/playwright-browsers` |
+| `PLAYWRIGHT_BROWSERS_PATH` | `$ACP2_TOOLS/playwright-browsers` = `/opt/acp2-tools/playwright-browsers` |
 | Installed build | `chromium-1243` (`Chrome Headless Shell 153.0.8010.12`) |
-| Chromium executable | `/ACPServer/acp2-tools/playwright-browsers/chromium-1243/chrome-linux64/chrome` |
+| Chromium executable | `/opt/acp2-tools/playwright-browsers/chromium-1243/chrome-linux64/chrome` |
 | `browser.version` | `153.0.8010.12` |
 | Disk after install | `658 MiB` (`chromium-1243` 393 MiB, `chromium_headless_shell-1243` 261 MiB, `ffmpeg-1011` 4.9 MiB) |
 | Install command | `PLAYWRIGHT_BROWSERS_PATH="$ACP2_TOOLS/playwright-browsers" "$ACP2_BROWSER_PYTHON" -m playwright install chromium` |
@@ -22,7 +22,7 @@ scenarios.
 Playwright is installed only in the browser role venv. The C development venv
 and the C harness interpreter are never used for Playwright.
 
-Install log: `/ACPServer/acp2-tools/browser-install-logs/chromium-install-20261022T142128Z.log`
+Install log: `/opt/acp2-tools/browser-install-logs/chromium-install-20261022T142128Z.log`
 (SHA-256 `1e9a39c0205b65fe601b3d525091177f5a1eb0f6f7f1394298efee256330bfbc`).
 The host is not an officially supported Playwright distro, so Playwright
 downloaded the `ubuntu24.04-x64` fallback build; the browser launched anyway.

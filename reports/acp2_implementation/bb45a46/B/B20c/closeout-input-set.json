@@ -1,28 +1,28 @@
 {
   "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
-  "closeout_input_digest": "d7795d45f952db139583e6b85292b1b905699c7574b9dc427faf66cdcc7fce3b",
+  "closeout_input_digest": "9a75addbf025c789c2fd25778fabdc5a39cdece7e327d3ba20ef99c34a99dfb2",
   "closeout_input_digest_rule": "sha256 over sorted lines '<repo-relative path> <file sha256>\\n' for these input entries only; the closeout's own result file is not an input",
   "entries": [
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/b20a-ready.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/b20a-ready.json",
       "phase": "B20a-ready",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20/b20a-ready.json",
       "result": "PASS",
       "schema": "acp2.b20a.ready.v1",
-      "sha256": "1817799d9247e2614f81347e69839a52d4026e4ae411f7c4fc9d7348a16e4949",
-      "size_bytes": 13175
+      "sha256": "c67bcaf0e55944ceb13d9f35556f5855b9557cba1030172aa509692eaa47ff62",
+      "size_bytes": 12811
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
       "phase": "B20a-exec",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
       "result": "NOT_VERIFIED",
       "schema": "acp2.acceptance.v1",
-      "sha256": "51cc4c89453cae166b79f4ec0e69e166703503fdf56f1c05cb9cec051e25bdcc",
-      "size_bytes": 10977
+      "sha256": "a0ea0cf7743069b4e59f43595e3e443472e1360b2ef9169fb675eeb3d12117c5",
+      "size_bytes": 10643
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
       "phase": "B20a-search",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
       "result": "NOT_VERIFIED",
@@ -31,25 +31,25 @@
       "size_bytes": 648
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
       "phase": "B20b",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
       "result": "PASS",
       "schema": "acp2.b20b.science-handoff.v1",
-      "sha256": "83a30a6e9e531dea8c229fc729cc8ac2f193e040e94173e0049a1f2afa2b06fc",
-      "size_bytes": 19206
+      "sha256": "7d9e55073b8a5a56d8b92bc651cbe098a9a94f86f66fe3c82d030ed7cdc36024",
+      "size_bytes": 18744
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B19/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B19/summary.json",
       "phase": "B19",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B19/summary.json",
       "result": "PASS",
       "schema": "acp2.b19.summary.v1",
-      "sha256": "85f0cde2ccdf934148cede64f775d4eece78d6a8db293a718f3e95c67b108bdc",
-      "size_bytes": 3524
+      "sha256": "0556efc5483247ae4d672f172cbeede7ce5269a06fa55423f60b7515491704f8",
+      "size_bytes": 3496
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B18/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B18/summary.json",
       "phase": "B18",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B18/summary.json",
       "result": "PASS",
@@ -58,7 +58,7 @@
       "size_bytes": 340
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B17/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B17/summary.json",
       "phase": "B17",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B17/summary.json",
       "result": "PASS",
@@ -67,7 +67,7 @@
       "size_bytes": 370
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B16/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B16/summary.json",
       "phase": "B16",
       "repo_relative_path": "reports/acp2_implementation/bb45a46/B/B16/summary.json",
       "result": "PASS",
@@ -81,22 +81,22 @@
   "input_role": "the P2 phase results the H4 closeout aggregates",
   "not_inputs": [
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
       "reason": "the closeout result itself"
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/h4-final-index.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-final-index.json",
       "reason": "index consumes the closeout"
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/candidate-files.sha256",
+      "path": "reports/acp2_implementation/bb45a46/B/B20c/candidate-files.sha256",
       "reason": "candidate manifest, not a phase result"
     }
   ],
   "owner": "B",
   "schema": "acp2.b20c.closeout-input-set.v1",
   "self_exclusion": {
-    "closeout_result_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+    "closeout_result_path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
     "closeout_result_repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
     "rule": "Validation runs against this closed input set before the closeout result is written; the closeout and final index reference this digest, never the reverse.",
     "self_included": false
@@ -104,15 +104,15 @@
   "supporting_references": [
     {
       "consumed_via": "B20a-exec",
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
       "role": "run_spec",
-      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9"
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b"
     },
     {
       "consumed_via": "superseded by the B20c candidate freeze",
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json",
       "role": "candidate_record",
-      "sha256": "f089b9bc766de552976689721d1e38055ed797f9765ed15e4dc317a421646b13"
+      "sha256": "5b4b65f3aff2dd663e2357a6a7d7d78c3be8a38c068bf201e72264f75676e353"
     }
   ],
   "todo": "24 / B20c"

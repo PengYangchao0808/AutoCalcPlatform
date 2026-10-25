@@ -174,9 +174,9 @@ A validated receipt (abridged) with the P0 environment verdict:
   "extensions": {
     "experience.mode": "fixture",
     "experience.scenario_key": "baseline",
-    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
-    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
-    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/opt/acp2-dev/venvs/c/bin/python",
+    "experience.product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
+    "experience.harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
     "experience.test_revision": "<40-hex>"
   }
 }

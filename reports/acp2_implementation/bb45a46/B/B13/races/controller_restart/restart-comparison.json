@@ -16,7 +16,7 @@
     "task_count": 22,
     "task_id": "20261023_073435_005_singlepoint",
     "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
-    "work_dir": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
   },
   "before": {
     "attempt": 1,
@@ -35,6 +35,6 @@
     "task_count": 22,
     "task_id": "20261023_073435_005_singlepoint",
     "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
-    "work_dir": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
   }
 }

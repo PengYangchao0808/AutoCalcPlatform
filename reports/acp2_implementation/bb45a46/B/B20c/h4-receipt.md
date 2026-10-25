@@ -22,7 +22,7 @@ C25, and does **not** claim that the Diels–Alder reaction mechanism is proven.
 | `contract_version` | `1.3.0` |
 | `env_digest` | `d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6` |
 | Freeze kind | `verified_immutable_overlay` |
-| Overlay root | `/ACPServer/acp2-development/data/b/b20-candidate` |
+| Overlay root | `/opt/acp2-dev/data/b/b20-candidate` |
 | Frozen P1 candidate | `77ac1de1af6a5db6b57f4f904a859305ff73042c` — not reused, not modified |
 
 The source checkout is intentionally dirty with unrelated changes, so the freeze is **not** claimed
@@ -50,7 +50,7 @@ The run spec is one cumulative budget; the export and aggregate windows are used
 |---|---|
 | Scenario / phase | `da-runtime` / `da-submit` |
 | `run_id` | `20261023T091047Z-1425776-5bf82a03` |
-| Fixture | `/ACPServer/acp2-development/data/b/fixtures/da/da-run.json` (`ef543b69…`, 2413 bytes) |
+| Fixture | `/opt/acp2-dev/data/b/fixtures/da/da-run.json` (`ef543b69…`, 2413 bytes) |
 | Phase result | `NOT_VERIFIED`, reason `c24a_absent`, exit `2` |
 | Platform refs | `job_id`/`operation_id`/`attempt`/`release_id`/`submission_id`/`manifest_generation` all `null` |
 | Search run key | `null` (`NOT_VERIFIED(search_not_declared)`) |
@@ -62,7 +62,7 @@ The run spec is one cumulative budget; the export and aggregate windows are used
 
 ### A-20 — `NOT_VERIFIED(a20_absent)`
 
-- Expected evidence: `/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/A/A-20/result.json`
+- Expected evidence: `reports/acp2_implementation/bb45a46/A/A-20/result.json`
 - Accepted pattern (A plan): `.../A/A-20/<run-id>/result.json`
 - Expected schema: `acp2.acceptance.v1`; the science sign-off is `handoff-H4.json`
   (`handoff_id=H4`, `handoff_version=1`).
@@ -72,8 +72,8 @@ The run spec is one cumulative budget; the export and aggregate windows are used
 
 ### C25 — `NOT_VERIFIED(c25_absent)`
 
-- Expected handoff: `/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json`
-- Expected receipt root: `/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/p2-closeout/`
+- Expected handoff: `/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json`
+- Expected receipt root: `reports/acp2_implementation/bb45a46/C/p2-closeout/`
   (schema `acp2.acceptance.v1`).
 - Digest: **null** (not fabricated).
 - C T-34 and T-35 are both `[~]` blocked; no `p2-closeout` receipt and no C `H4.json` exist.

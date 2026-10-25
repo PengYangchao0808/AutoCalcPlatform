@@ -9,7 +9,7 @@
     "B25/release-fix4/"
   ],
   "label": "B-fix-5",
-  "lsf_environment_prerequisite": "The real LSF run used cluster.pre_cmds in an isolated HOME to export ORCA/OpenMPI runtime variables on the remote node: LD_LIBRARY_PATH=/home/xieningke/openmpi418/lib:/home/xieningke/orca611, CONFSEARCH_ORCA_PATH=/home/xieningke/orca611/orca, CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/xieningke/openmpi418/lib:/home/xieningke/orca611, CONFSEARCH_ORCA_MPI_PATH=/home/xieningke/openmpi418/bin/orterun. This is operator environment configuration, not a code fake; bsub executed job 1765 and ORCA 6.1.1 finished.",
+  "lsf_environment_prerequisite": "The real LSF run used cluster.pre_cmds in an isolated HOME to export ORCA/OpenMPI runtime variables on the remote node: LD_LIBRARY_PATH=/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611, CONFSEARCH_ORCA_PATH=/home/redacted-user/orca611/orca, CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611, CONFSEARCH_ORCA_MPI_PATH=/home/redacted-user/openmpi418/bin/orterun. This is operator environment configuration, not a code fake; bsub executed job 1765 and ORCA 6.1.1 finished.",
   "plan": "acp2-parallel-plan-b-runtime final-wave remediation (F2 + F3)",
   "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
   "remote_release": {

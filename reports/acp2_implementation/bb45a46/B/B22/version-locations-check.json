@@ -1,7 +1,7 @@
 {
   "all_versions_unchanged": true,
   "created_by": "B22 (record only; B25a owns any bump)",
-  "git_status_short_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B22/git-status-b22.txt",
+  "git_status_short_path": "reports/acp2_implementation/bb45a46/B/B22/git-status-b22.txt",
   "rows": [
     {
       "head_version": "0.2.0",

@@ -1,7 +1,7 @@
-pwd: /ACPServer/AutoCalcPlatform
-command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B26a/package-install/summary.json
+pwd: repo-root
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/B/B26a/package-install/summary.json
 stdout:
-VALID: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B26a/package-install/summary.json (tool check only; this is not a scenario PASS)
+VALID: reports/acp2_implementation/bb45a46/B/B26a/package-install/summary.json (tool check only; this is not a scenario PASS)
 stderr: <empty>
 exit=0
 

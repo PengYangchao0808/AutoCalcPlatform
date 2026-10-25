@@ -16,10 +16,10 @@
   "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
   "command": [
     "curl -fsS http://127.0.0.1:8765/api/v2/tasks",
-    "/usr/bin/python3.11 /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py --scenario entry-readonly --phase main --out /tmp/acp2-b01-cli.HPrJgk/missing-controller --controller http://127.0.0.1:8765"
+    "/usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario entry-readonly --phase main --out /tmp/acp2-b01-cli.HPrJgk/missing-controller --controller http://127.0.0.1:8765"
   ],
   "contract_version": "1.0.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 2,
   "extensions": {

@@ -1,62 +1,62 @@
 {
   "artifacts": [
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
+      "path": "reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
       "sha256": "14658f7a87e4d92bba822c5967273a49ce86c842b2022f7b0aa90f04d32c5f3e",
       "size_bytes": 3249
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
+      "path": "reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
       "sha256": "cebfaa915aa8c979f4042ae452f8c4eb02131b2695decb10f6523adc5de742cb",
       "size_bytes": 5064
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
+      "path": "reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
       "sha256": "a8051db6a8e86c1b9392c46566a18c96d976a394f98042deaf4ed7455bdd6e89",
       "size_bytes": 3403
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
+      "path": "reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
       "sha256": "24e6d72bb05baf406ef7461d1e283d60646f25e864ed40eeb4d3ba761a2973db",
       "size_bytes": 2384
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
+      "path": "reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
       "sha256": "161d8a91632f3b01d55debdfef9f5e303b3cc73e94fdaef2bd66ce7e160a1d2e",
       "size_bytes": 3059
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
+      "path": "reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
       "sha256": "1ae6cf3e9bd1f15faf54c414a17942418fe5abe866127fff8a514b5f68cc39ad",
       "size_bytes": 4867
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
+      "path": "reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
       "sha256": "0cc20449f5f18ae00f69a01ee3efe7c675e6bfe478fa8922f148b5082a397e70",
       "size_bytes": 12614
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
+      "path": "reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
       "sha256": "5d187a3c926573c0460f270109d679af568bec9aab5f5578ca48ec1e7bd13cd2",
       "size_bytes": 9587
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
+      "path": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
       "sha256": "e2b44830ff6d5dd2e5afad7a102b8eac30403af4f43b39b75232e22516363ccb",
       "size_bytes": 22737
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
+      "path": "reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
       "sha256": "71b39452ff60d28230c74e0a2af3dce4ed1d91e3b228b016a9d538b8cbfa00a4",
       "size_bytes": 15342
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/h2/env-reuse-variables.txt",
+      "path": "reports/acp2_implementation/bb45a46/C/h2/env-reuse-variables.txt",
       "sha256": "26a6b3dada91f9850713dbfe7581ab5387105df9f63e88948ce9566a62b7d521",
       "size_bytes": 3182
     },
     {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/h2/env-reuse-newshell-check.txt",
+      "path": "reports/acp2_implementation/bb45a46/C/h2/env-reuse-newshell-check.txt",
       "sha256": "ca9731ad1233bb282132edfbb9ce7369c0532d2853c6888688a7934cdb0969ea",
       "size_bytes": 848
     }
@@ -126,11 +126,11 @@
   },
   "candidate_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
   "command": [
-    "/ACPServer/acp2-development/venvs/c/bin/python",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/h2/build_h2_receipt.py"
+    "/opt/acp2-dev/venvs/c/bin/python",
+    "reports/acp2_implementation/bb45a46/C/h2/build_h2_receipt.py"
   ],
   "contract_version": "1.0.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": "repo-root",
   "evidence_kind": "aggregate",
   "exit_code": 2,
   "extensions": {
@@ -138,8 +138,8 @@
       "experience:fixture",
       "experience:live"
     ],
-    "experience.env_reuse_newshell_check": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/h2/env-reuse-newshell-check.txt",
-    "experience.env_reuse_variables": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/h2/env-reuse-variables.txt",
+    "experience.env_reuse_newshell_check": "reports/acp2_implementation/bb45a46/C/h2/env-reuse-newshell-check.txt",
+    "experience.env_reuse_variables": "reports/acp2_implementation/bb45a46/C/h2/env-reuse-variables.txt",
     "experience.gap_scenarios": [
       "mcp-live",
       "dsh-discovery-live",
@@ -167,24 +167,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/c/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/c/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "baseline",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main"
+          "reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main"
         ],
-        "cwd": "/ACPServer/AutoCalcPlatform",
+        "cwd": "repo-root",
         "exit_code": 0,
         "finished_at": "2026-10-22T14:09:32Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
         "phase": "experience:fixture",
-        "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
         "reason": null,
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
         "result": "PASS",
         "run_id": "baseline-20261022T140927Z-117944",
         "scope": "IN_SCOPE",
@@ -241,24 +241,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/c/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/c/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "bridge-contract",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main"
+          "reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main"
         ],
-        "cwd": "/ACPServer/acp2-development/C",
+        "cwd": "/opt/acp2-dev/C",
         "exit_code": 0,
         "finished_at": "2026-10-22T15:03:45Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
         "phase": "experience:fixture",
-        "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
         "reason": null,
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
         "result": "PASS",
         "run_id": "bridge-contract-20261022T150332Z-301445",
         "scope": "IN_SCOPE",
@@ -290,24 +290,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/c/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/c/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "browser-install",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main"
+          "reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main"
         ],
-        "cwd": "/ACPServer/AutoCalcPlatform",
+        "cwd": "repo-root",
         "exit_code": 0,
         "finished_at": "2026-10-22T22:30:22Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
         "phase": "experience:fixture",
-        "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
         "reason": null,
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
         "result": "PASS",
         "run_id": "browser-install-20261022T223020Z-701925",
         "scope": "IN_SCOPE",
@@ -329,24 +329,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/c/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/c/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "contracts",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main"
+          "reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main"
         ],
-        "cwd": "/ACPServer/AutoCalcPlatform",
+        "cwd": "repo-root",
         "exit_code": 0,
         "finished_at": "2026-10-22T14:07:49Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
         "phase": "experience:fixture",
-        "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
         "reason": null,
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
         "result": "PASS",
         "run_id": "contracts-20261022T140749Z-114132",
         "scope": "IN_SCOPE",
@@ -478,24 +478,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/integration/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/integration/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "dsh-discovery-live",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main"
+          "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main"
         ],
-        "cwd": "/ACPServer/acp2-development/C",
+        "cwd": "/opt/acp2-dev/C",
         "exit_code": 2,
         "finished_at": "2026-10-22T20:42:47Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/integration/bin/python",
         "phase": "experience:live",
-        "product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/integration/src/acp/__init__.py",
         "reason": "controller_unavailable",
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
         "result": "NOT_VERIFIED",
         "run_id": "dsh-discovery-live-20261022T204231Z-649186",
         "scope": "IN_SCOPE",
@@ -517,24 +517,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/c/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/c/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "harness-selftest",
           "--timeout",
           "120",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main"
+          "reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main"
         ],
-        "cwd": "/ACPServer/acp2-development/C",
+        "cwd": "/opt/acp2-dev/C",
         "exit_code": 0,
         "finished_at": "2026-10-22T21:43:08Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
         "phase": "experience:fixture",
-        "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
         "reason": null,
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
         "result": "PASS",
         "run_id": "harness-selftest-t13-20261022T214307Z",
         "scope": "IN_SCOPE",
@@ -616,24 +616,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/integration/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/integration/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "mcp-live",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main"
+          "reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main"
         ],
-        "cwd": "/ACPServer/acp2-development/C",
+        "cwd": "/opt/acp2-dev/C",
         "exit_code": 2,
         "finished_at": "2026-10-22T18:35:17Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/integration/bin/python",
         "phase": "experience:live",
-        "product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/integration/src/acp/__init__.py",
         "reason": "controller_unavailable",
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
         "result": "NOT_VERIFIED",
         "run_id": "mcp-live-20261022T183515Z-569902",
         "scope": "IN_SCOPE",
@@ -654,7 +654,7 @@
             "size_bytes": 11054
           },
           {
-            "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/b-real-call/model-live-verify2-20261022T222152Z/prerequisites.json",
+            "path": "reports/acp2_implementation/bb45a46/C/model-live/b-real-call/model-live-verify2-20261022T222152Z/prerequisites.json",
             "sha256": "7efbdfc58385980f2d25113562b7b1145f51edc6be54a41861096e3f422e211b",
             "size_bytes": 1398
           }
@@ -665,24 +665,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/integration/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/integration/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "model-live",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main"
+          "reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main"
         ],
-        "cwd": "/ACPServer/acp2-development/C",
+        "cwd": "/opt/acp2-dev/C",
         "exit_code": 2,
         "finished_at": "2026-10-22T22:22:05Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/integration/bin/python",
         "phase": "experience:live",
-        "product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/integration/src/acp/__init__.py",
         "reason": "no_model_credential|controller_unavailable:no_approved_provider_configured;GET http://127.0.0.1:18765/api/health -> URLError: <urlopen error [Errno 111] Connection refused>",
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
         "result": "NOT_VERIFIED",
         "run_id": "model-live-verify2-20261022T222152Z",
         "scope": "IN_SCOPE",
@@ -698,7 +698,7 @@
           "input_tokens": 0,
           "input_tokens_estimated": 0,
           "input_tokens_reported": 0,
-          "ledger_path": "/ACPServer/acp2-development/data/budget/ledger.json",
+          "ledger_path": "/opt/acp2-dev/data/budget/ledger.json",
           "ledger_present": false,
           "model_calls": 0,
           "output_tokens": 0,
@@ -707,8 +707,8 @@
           "selftest": {
             "checks_passed": 56,
             "checks_total": 56,
-            "data_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z",
-            "ledger_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z/budget/ledger.json",
+            "data_root": "reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z",
+            "ledger_path": "reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z/budget/ledger.json",
             "model_requests": 12,
             "status": "PASS",
             "thirteenth_refused": true,
@@ -735,24 +735,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/c/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/c/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "node-dsh-install",
           "--timeout",
           "1200",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main"
+          "reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main"
         ],
-        "cwd": "/ACPServer/AutoCalcPlatform",
+        "cwd": "repo-root",
         "exit_code": 0,
         "finished_at": "2026-10-22T14:08:20Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
         "phase": "experience:fixture",
-        "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
         "reason": null,
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
         "result": "PASS",
         "run_id": "node-dsh-install-20261022T140818Z-115914",
         "scope": "IN_SCOPE",
@@ -774,24 +774,24 @@
           "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
         },
         "command": [
-          "/ACPServer/acp2-development/venvs/c/bin/python",
-          "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+          "/opt/acp2-dev/venvs/c/bin/python",
+          "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
           "--scenario",
           "workspace",
           "--timeout",
           "300",
           "--out",
-          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main"
+          "reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main"
         ],
-        "cwd": "/ACPServer/AutoCalcPlatform",
+        "cwd": "repo-root",
         "exit_code": 0,
         "finished_at": "2026-10-22T14:08:01Z",
-        "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
-        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+        "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
         "phase": "experience:fixture",
-        "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+        "product_import": "/opt/acp2-dev/C/src/acp/__init__.py",
         "reason": null,
-        "receipt_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
+        "receipt_path": "reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
         "result": "PASS",
         "run_id": "workspace-20261022T140756Z-114553",
         "scope": "IN_SCOPE",
@@ -835,7 +835,7 @@
     {
       "owner": "C",
       "phase": "experience:fixture",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140927Z-117944/main/experience_baseline-experience_fixture-baseline-20261022T140927Z-117944.json",
       "result": "PASS",
       "run_id": "baseline-20261022T140927Z-117944",
       "scenario": "experience:baseline"
@@ -843,7 +843,7 @@
     {
       "owner": "C",
       "phase": "experience:fixture",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
       "result": "PASS",
       "run_id": "contracts-20261022T140749Z-114132",
       "scenario": "experience:contracts"
@@ -851,7 +851,7 @@
     {
       "owner": "C",
       "phase": "experience:fixture",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
       "result": "PASS",
       "run_id": "workspace-20261022T140756Z-114553",
       "scenario": "experience:workspace"
@@ -859,7 +859,7 @@
     {
       "owner": "C",
       "phase": "experience:fixture",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main/experience_harness-selftest-experience_fixture-harness-selftest-t13-20261022T214307Z.json",
       "result": "PASS",
       "run_id": "harness-selftest-t13-20261022T214307Z",
       "scenario": "experience:harness-selftest"
@@ -867,7 +867,7 @@
     {
       "owner": "C",
       "phase": "experience:fixture",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
       "result": "PASS",
       "run_id": "node-dsh-install-20261022T140818Z-115914",
       "scenario": "experience:node-dsh-install"
@@ -875,7 +875,7 @@
     {
       "owner": "C",
       "phase": "experience:fixture",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main/experience_browser-install-experience_fixture-browser-install-20261022T223020Z-701925.json",
       "result": "PASS",
       "run_id": "browser-install-20261022T223020Z-701925",
       "scenario": "experience:browser-install"
@@ -883,7 +883,7 @@
     {
       "owner": "C",
       "phase": "experience:fixture",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main/experience_bridge-contract-experience_fixture-bridge-contract-20261022T150332Z-301445.json",
       "result": "PASS",
       "run_id": "bridge-contract-20261022T150332Z-301445",
       "scenario": "experience:bridge-contract"
@@ -891,7 +891,7 @@
     {
       "owner": "C",
       "phase": "experience:live",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/experience_mcp-live-experience_live-mcp-live-20261022T183515Z-569902.json",
       "result": "NOT_VERIFIED",
       "run_id": "mcp-live-20261022T183515Z-569902",
       "scenario": "experience:mcp-live"
@@ -899,7 +899,7 @@
     {
       "owner": "C",
       "phase": "experience:live",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T204231Z-649186/main/experience_dsh-discovery-live-experience_live-dsh-discovery-live-20261022T204231Z-649186.json",
       "result": "NOT_VERIFIED",
       "run_id": "dsh-discovery-live-20261022T204231Z-649186",
       "scenario": "experience:dsh-discovery-live"
@@ -907,7 +907,7 @@
     {
       "owner": "C",
       "phase": "experience:live",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
+      "receipt": "reports/acp2_implementation/bb45a46/C/model-live/model-live-verify2-20261022T222152Z/main/experience_model-live-experience_live-model-live-verify2-20261022T222152Z.json",
       "result": "NOT_VERIFIED",
       "run_id": "model-live-verify2-20261022T222152Z",
       "scenario": "experience:model-live"

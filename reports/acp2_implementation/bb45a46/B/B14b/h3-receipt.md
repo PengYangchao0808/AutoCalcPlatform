@@ -38,7 +38,7 @@
 - B10b Workbench, B11 LSF normal completion, B13 LSF control and DSH rows remain NOT_VERIFIED and are listed separately, not collapsed into the capability rows.
 
 ## T0–T5
-- `T0` environment/version: **PASS** — Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/xieningke/orca611/orca (sha256 d65fe8fe...), contract 1.1.0; LSF absent by design.
+- `T0` environment/version: **PASS** — Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/redacted-user/orca611/orca (sha256 d65fe8fe...), contract 1.1.0; LSF absent by design.
 - `T1` MCP process: **PASS** — Real stdio MCP adapter (8 tools, protocol 2025-06-18) performed the B14b acp_submit calls on 77ac1de; B05 protocol matrix and B06 entry mapping PASS.
 - `T2` platform use case: **PASS** — MCP submit -> Controller -> real Workspace/Runtime/Data Local chains produced three distinct TaskRefs; B06 entry parity and B12 artifact lifecycle PASS.
 - `T3` DSH: **NOT_VERIFIED** — C DSH/Workbench P1 is not present on this host; no real official-client handshake is claimed.

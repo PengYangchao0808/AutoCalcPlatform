@@ -15,10 +15,10 @@
     "tasks_before": 0,
     "tasks_created": 0
   },
-  "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json",
+  "path": "reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json",
   "phase": "da-preflight",
   "result": "PASS",
   "scenario": "da-runtime",
   "schema": "acp2.b20a.consumed-preflight.v1",
-  "sha256": "7036d580036d6bba3a8a3b8229650222e354cb9469ca50821eae2b7b6e4107cb"
+  "sha256": "ec2918beb4bce513db2c05c2a2ecdb3ca8576afbb3ef8d08680fbedc31bfbd76"
 }

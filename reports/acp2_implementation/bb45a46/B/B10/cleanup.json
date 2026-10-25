@@ -10,7 +10,7 @@
   ],
   "orca_processes": 0,
   "port_18768_busy": false,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b10",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b10",
   "run_root_preserved_for_evidence": true,
   "schema": "acp2.b10.cleanup.v1"
 }

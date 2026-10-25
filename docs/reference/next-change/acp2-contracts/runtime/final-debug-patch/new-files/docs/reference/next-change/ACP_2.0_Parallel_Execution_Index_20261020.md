@@ -49,10 +49,10 @@ A-02～04/A-07 是可在 P0 并行开展的反应/Recipe 预研，最迟在 A-14
 : "${ACP2_BASE_REV:?B00 must set the reviewed final_debug_candidate commit}"
 export ACP2_CHECKOUT_ROOT='/可写绝对路径/acp2-development'
 mkdir -p "$ACP2_CHECKOUT_ROOT"
-git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/a-science "$ACP2_CHECKOUT_ROOT/A" "$ACP2_BASE_REV"
-git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/b-runtime "$ACP2_CHECKOUT_ROOT/B" "$ACP2_BASE_REV"
-git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/c-experience "$ACP2_CHECKOUT_ROOT/C" "$ACP2_BASE_REV"
-git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/integration "$ACP2_CHECKOUT_ROOT/integration" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/a-science "$ACP2_CHECKOUT_ROOT/A" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/b-runtime "$ACP2_CHECKOUT_ROOT/B" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/c-experience "$ACP2_CHECKOUT_ROOT/C" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/integration "$ACP2_CHECKOUT_ROOT/integration" "$ACP2_BASE_REV"
 ```
 
 若分支/目录已存在，核对其基线后复用，不执行覆盖/重置。开发 checkout 彼此独立；本机安装、科学作业与真实模型测试只由被指定操作者运行，避免三方重复执行同一笔计算。

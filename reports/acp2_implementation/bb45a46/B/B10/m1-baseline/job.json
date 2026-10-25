@@ -153,7 +153,7 @@
         "job_id": "20261023_031220_001_singlepoint",
         "artifact_type": "json",
         "file_path": "RESULT/task_result.json",
-        "checksum": "sha256:f8da9fa49da2b95e18ee61d09af5fc6989395c8e5c0ef8a3e9e343818cb8344d",
+        "checksum": "sha256:fe0196b740765119ff82ebb198b6380ce5e26974dcb1dbde0fc078acac107c7c",
         "size_bytes": 2403,
         "parser_status": "pending",
         "mime_type": "application/json",

@@ -2,13 +2,13 @@
   "artifacts": [
     {
       "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/source-digests.json",
-      "sha256": "2860d972bbae324098aa1239bae44f0353619d2f4ede41324750d79b00b72fa6",
-      "size_bytes": 11714
+      "sha256": "8572483029e946dc1bbeff3299af1ff0e7852f84fa51a2efe6682dfb97ce3add",
+      "size_bytes": 11672
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/migration-log.json",
-      "sha256": "2fcb384fec14dcfd28b5d05a0739bf1351392f47470afc5bfd0fa01e18158080",
-      "size_bytes": 3198
+      "sha256": "76f16e4ff7f0d95d5f20122a8c2b74cfe51b212b735a91f0af34d9b92967037d",
+      "size_bytes": 3072
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/restore-comparison.json",
@@ -17,8 +17,8 @@
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/drill-receipts.json",
-      "sha256": "f2ef55bfffab37c347c2c388ada0e870c1988d34cf21afe76a73f7e36631285d",
-      "size_bytes": 10046
+      "sha256": "188eacf14223d48768830b4fd33e0d5a8ff261061542e1a360ace4b4535df53f",
+      "size_bytes": 10032
     },
     {
       "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/corrupt-artifacts.json",
@@ -43,7 +43,7 @@
       "status": "PASS"
     },
     {
-      "detail": "{\"exit\": 0, \"result\": {\"action\": \"migrate\", \"applied\": 0, \"db\": \"/ACPServer/acp2-development/data/b/b24b-migration/db/acp_jobs.db\", \"schema_version\": 23}, \"stderr\": \"\"}",
+      "detail": "{\"exit\": 0, \"result\": {\"action\": \"migrate\", \"applied\": 0, \"db\": \"/opt/acp2-dev/data/b/b24b-migration/db/acp_jobs.db\", \"schema_version\": 23}, \"stderr\": \"\"}",
       "name": "b24.migration.candidate_schema",
       "status": "PASS"
     },
@@ -73,7 +73,7 @@
       "status": "PASS"
     },
     {
-      "detail": "{\"after\": {\"counts\": {\"approval_records\": 0, \"artifacts\": 0, \"idempotency_records\": 0, \"job_outbox\": 0, \"jobs\": 1, \"organization_events\": 0, \"stage_tasks\": 0, \"tasks\": 0}, \"digests\": {\"approval_records\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"artifacts\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"idempotency_records\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"job_outbox\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"jobs\": \"97e33d16c83ec29b56492707e836b1c2eba5fceed98a1eb6ab58dd2bd5a83593\", \"organization_events\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"stage_tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\"}, \"prepared_schema_version\": 0, \"present\": true, \"schema_version\": 23}, \"before\": {\"counts\": {\"artifacts\": 0, \"job_outbox\": 0, \"jobs\": 1, \"organization_events\": 0, \"stage_tasks\": 0, \"tasks\": 0}, \"digests\": {\"artifacts\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"job_outbox\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"jobs\": \"97e33d16c83ec29b56492707e836b1c2eba5fceed98a1eb6ab58dd2bd5a83593\", \"organization_events\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"stage_tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\"}, \"prepared_schema_version\": 0, \"present\": true, \"schema_version\": 21}, \"result\": {\"action\": \"migrate\", \"applied\": 2, \"db\": \"/ACPServer/acp2-development/data/b/b24b-migration/legacy/acp_jobs.db\", \"schema_version\": 23}, \"stderr\": \"\"}",
+      "detail": "{\"after\": {\"counts\": {\"approval_records\": 0, \"artifacts\": 0, \"idempotency_records\": 0, \"job_outbox\": 0, \"jobs\": 1, \"organization_events\": 0, \"stage_tasks\": 0, \"tasks\": 0}, \"digests\": {\"approval_records\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"artifacts\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"idempotency_records\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"job_outbox\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"jobs\": \"97e33d16c83ec29b56492707e836b1c2eba5fceed98a1eb6ab58dd2bd5a83593\", \"organization_events\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"stage_tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\"}, \"prepared_schema_version\": 0, \"present\": true, \"schema_version\": 23}, \"before\": {\"counts\": {\"artifacts\": 0, \"job_outbox\": 0, \"jobs\": 1, \"organization_events\": 0, \"stage_tasks\": 0, \"tasks\": 0}, \"digests\": {\"artifacts\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"job_outbox\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"jobs\": \"97e33d16c83ec29b56492707e836b1c2eba5fceed98a1eb6ab58dd2bd5a83593\", \"organization_events\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"stage_tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\"}, \"prepared_schema_version\": 0, \"present\": true, \"schema_version\": 21}, \"result\": {\"action\": \"migrate\", \"applied\": 2, \"db\": \"/opt/acp2-dev/data/b/b24b-migration/legacy/acp_jobs.db\", \"schema_version\": 23}, \"stderr\": \"\"}",
       "name": "b24.legacy.upgrade",
       "status": "PASS"
     },
@@ -83,12 +83,12 @@
       "status": "PASS"
     },
     {
-      "detail": "{\"result\": {\"action\": \"receipts\", \"duplicate\": {\"manifest_twice\": \"/ACPServer/acp2-development/data/b/b24b-migration/drills/duplicate_receipt/result_manifest.json\", \"product_ids\": [\"sp_output.log\"], \"product_ids_unique\": true, \"publication_complete\": true, \"publication_result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\", \"result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\"}, \"old_v1\": {\"default_adopted\": false, \"default_decision\": \"conservative_recompute\", \"explicit_legacy_adopted\": true}}, \"stderr\": \"\"}",
+      "detail": "{\"result\": {\"action\": \"receipts\", \"duplicate\": {\"manifest_twice\": \"/opt/acp2-dev/data/b/b24b-migration/drills/duplicate_receipt/result_manifest.json\", \"product_ids\": [\"sp_output.log\"], \"product_ids_unique\": true, \"publication_complete\": true, \"publication_result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\", \"result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\"}, \"old_v1\": {\"default_adopted\": false, \"default_decision\": \"conservative_recompute\", \"explicit_legacy_adopted\": true}}, \"stderr\": \"\"}",
       "name": "b24.drill.old_receipt.conservative_recompute",
       "status": "PASS"
     },
     {
-      "detail": "{\"manifest_twice\": \"/ACPServer/acp2-development/data/b/b24b-migration/drills/duplicate_receipt/result_manifest.json\", \"product_ids\": [\"sp_output.log\"], \"product_ids_unique\": true, \"publication_complete\": true, \"publication_result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\", \"result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\"}",
+      "detail": "{\"manifest_twice\": \"/opt/acp2-dev/data/b/b24b-migration/drills/duplicate_receipt/result_manifest.json\", \"product_ids\": [\"sp_output.log\"], \"product_ids_unique\": true, \"publication_complete\": true, \"publication_result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\", \"result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\"}",
       "name": "b24.drill.duplicate_receipt.idempotent",
       "status": "PASS"
     },
@@ -122,18 +122,18 @@
   "candidate_revision": "f32c6704e0348585a5a58ce8516450ab3afc7077",
   "command": [
     "/usr/bin/python3.11",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "migration",
     "--fixture",
-    "/ACPServer/acp2-development/data/b/fixtures/migration/b24b-migration.json",
+    "/opt/acp2-dev/data/b/fixtures/migration/b24b-migration.json",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B24b/migration",
     "--timeout",
     "1800"
   ],
   "contract_version": "1.3.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "fixture",
   "exit_code": 0,
   "extensions": {
@@ -142,12 +142,12 @@
     "b24.artifacts": [
       {
         "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/source-digests.json",
-        "sha256": "2860d972bbae324098aa1239bae44f0353619d2f4ede41324750d79b00b72fa6",
+        "sha256": "6b67211051d2b1a3ca57b942df4166c86cb2c1f6b2066f3662752837bc305bc1",
         "size_bytes": 11714
       },
       {
         "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/migration-log.json",
-        "sha256": "2fcb384fec14dcfd28b5d05a0739bf1351392f47470afc5bfd0fa01e18158080",
+        "sha256": "7e5883cdc28761533764b6f7e72ec392398487c25a51d02c5e434a4d351c787e",
         "size_bytes": 3198
       },
       {
@@ -157,7 +157,7 @@
       },
       {
         "path": "reports/acp2_implementation/bb45a46/B/B24b/migration/drill-receipts.json",
-        "sha256": "f2ef55bfffab37c347c2c388ada0e870c1988d34cf21afe76a73f7e36631285d",
+        "sha256": "67269428da02c15b621acfef35d67054825738159157096fbd491692902618e6",
         "size_bytes": 10046
       },
       {
@@ -171,7 +171,7 @@
         "size_bytes": 7869
       }
     ],
-    "b24.backup_manifest": "/ACPServer/acp2-development/data/b/b24b-migration/backup/manifest.json",
+    "b24.backup_manifest": "/opt/acp2-dev/data/b/b24b-migration/backup/manifest.json",
     "b24.corrupt": [
       {
         "error": "JSONDecodeError: Expecting value: line 2 column 1 (char 15)",
@@ -302,7 +302,7 @@
       "target_schema_version": 23
     },
     "b24.drill_receipts": "reports/acp2_implementation/bb45a46/B/B24b/migration/drill-receipts.json",
-    "b24.fixture": "/ACPServer/acp2-development/data/b/fixtures/migration/b24b-migration.json",
+    "b24.fixture": "/opt/acp2-dev/data/b/fixtures/migration/b24b-migration.json",
     "b24.fixture_id": "fx-migration-v1-b24b",
     "b24.migration_log": "reports/acp2_implementation/bb45a46/B/B24b/migration/migration-log.json",
     "b24.reason": null,
@@ -317,7 +317,7 @@
     },
     "b24.seed": {
       "action": "seed",
-      "admission_db": "/ACPServer/acp2-development/data/b/b24b-migration/db/acp_admission.db",
+      "admission_db": "/opt/acp2-dev/data/b/b24b-migration/db/acp_admission.db",
       "approvals": {
         "approved": "ap_dbfe4549156e4aaaba4973672d498d7e",
         "approved_binding": {
@@ -341,7 +341,7 @@
         },
         "reservation_id": "mig-budget-res-1"
       },
-      "db": "/ACPServer/acp2-development/data/b/b24b-migration/db/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24b-migration/db/acp_jobs.db",
       "idempotency": {
         "committed_claim": "idem_9d02323faf2c43e4a2de60b24fff317b",
         "expired": [
@@ -362,19 +362,19 @@
         "mig_done": {
           "pid": null,
           "status": "completed",
-          "work_dir": "/ACPServer/acp2-development/data/b/b24b-migration/tasks/mig_done"
+          "work_dir": "/opt/acp2-dev/data/b/b24b-migration/tasks/mig_done"
         },
         "mig_lost": {
           "pid": 999999,
           "status": "running",
-          "work_dir": "/ACPServer/acp2-development/data/b/b24b-migration/tasks/mig_lost"
+          "work_dir": "/opt/acp2-dev/data/b/b24b-migration/tasks/mig_lost"
         }
       },
       "schema_version": 23
     },
     "b24.source_digests": "reports/acp2_implementation/bb45a46/B/B24b/migration/source-digests.json",
-    "b24.source_fixtures": "/ACPServer/AutoCalcPlatform/tests/baseline/recovery_fixtures",
-    "b24.workspace": "/ACPServer/acp2-development/data/b/b24b-migration"
+    "b24.source_fixtures": "tests/baseline/recovery_fixtures",
+    "b24.workspace": "/opt/acp2-dev/data/b/b24b-migration"
   },
   "finished_at": "2026-10-23T11:28:56Z",
   "job_id": null,

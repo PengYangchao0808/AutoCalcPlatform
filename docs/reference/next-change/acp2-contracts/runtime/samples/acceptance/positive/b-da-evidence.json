@@ -22,7 +22,7 @@
     "export",
     "job-da-0001"
   ],
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": "repo-root",
   "started_at": "2026-10-22T12:40:00Z",
   "finished_at": "2026-10-22T12:40:01Z",
   "result": "PASS",

@@ -6,8 +6,8 @@
   "identity": {
     "mode": "api-key",
     "tenant_id": "acp-b16-approval",
-    "database": "/ACPServer/acp2-development/data/b/run-root-b16/acp_identity.db",
-    "credentials_file": "/ACPServer/acp2-development/data/b/run-root-b16/secrets/b16-credentials.json",
+    "database": "/opt/acp2-dev/data/b/run-root-b16/acp_identity.db",
+    "credentials_file": "/opt/acp2-dev/data/b/run-root-b16/secrets/b16-credentials.json",
     "accounts": [
       {
         "name": "alice",
@@ -63,8 +63,8 @@
     ]
   },
   "controller": {
-    "run_root": "/ACPServer/acp2-development/data/b/run-root-b16",
-    "jobs_database": "/ACPServer/acp2-development/data/b/run-root-b16/acp_jobs.db"
+    "run_root": "/opt/acp2-dev/data/b/run-root-b16",
+    "jobs_database": "/opt/acp2-dev/data/b/run-root-b16/acp_jobs.db"
   },
   "projects": [
     {

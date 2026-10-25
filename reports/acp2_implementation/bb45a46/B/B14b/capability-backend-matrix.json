@@ -7,7 +7,7 @@
     "label": "bb45a46",
     "frozen_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
     "tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
-    "source_root": "/ACPServer/acp2-development/integration",
+    "source_root": "/opt/acp2-dev/integration",
     "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
     "client_revision": "NOT_VERIFIED (C DSH/Workbench absent)",
     "contract_version": "1.1.0",
@@ -16,23 +16,23 @@
     "controller": {
       "url": "http://127.0.0.1:18774",
       "port": 18774,
-      "run_root": "/ACPServer/acp2-development/data/b/run-root-b14b",
-      "config": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+      "run_root": "/opt/acp2-dev/data/b/run-root-b14b",
+      "config": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
       "started_at": "2026-10-23T03:15:08.498141Z",
       "production_port_8765_touched": false
     },
     "loaded_module_paths": {
-      "acp": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
-      "cccp": "/ACPServer/acp2-development/integration/src/cccp/__init__.py",
-      "acp_services": "/ACPServer/acp2-development/integration/src/acp_services/__init__.py"
+      "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+      "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
+      "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
     },
     "harness": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py",
-      "sha256": "sha256:27db692eb0fa454aa6bc7f159f448393bd8af318f2227a2a6b9903f5f51c14d1"
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/driver.py",
+      "sha256": "sha256:077a59a6e162a50b3d044f127fd4a4b634b54f58ef7fecfb3ffc815db52a324f"
     },
     "mcp_launch": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json",
-      "sha256": "sha256:f31216d04c7fa04c245352bb44d41854c20cfed850c8a41ba9b5f4c0a7f2701a"
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json",
+      "sha256": "sha256:1e0c8b6ce904747ff53a57e0cb1e970707afce4bdc48852e3bade5bb742ac0f2"
     },
     "reuse_rule": "No B10 10eb71e result is used as a B14b PASS. singlepoint was re-executed on 77ac1de. optimize and frequency were executed on 77ac1de with their own TaskRefs."
   },
@@ -42,8 +42,8 @@
       "capability": "singlepoint",
       "backend": "local",
       "fixture_id": "fx-local-singlepoint-h2-sto3g-b14b-v1",
-      "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
       "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
       "task_ref": "20261023_111633_001_singlepoint",
       "attempt": 1,
@@ -104,8 +104,8 @@
       "capability": "singlepoint",
       "backend": "lsf",
       "fixture_id": "fx-lsf-singlepoint-v1",
-      "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
       "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
       "task_ref": null,
       "attempt": null,
@@ -135,8 +135,8 @@
       "capability": "optimize",
       "backend": "local",
       "fixture_id": "fx-local-optimize-h2-sto3g-v1",
-      "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
       "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
       "task_ref": "20261023_111652_002_optimize",
       "attempt": 1,
@@ -199,8 +199,8 @@
       "capability": "optimize",
       "backend": "lsf",
       "fixture_id": "fx-lsf-optimize-h2-sto3g-v1",
-      "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
       "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
       "task_ref": null,
       "attempt": null,
@@ -230,8 +230,8 @@
       "capability": "frequency",
       "backend": "local",
       "fixture_id": "fx-local-frequency-h2-sto3g-v1",
-      "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
       "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
       "task_ref": "20261023_111946_003_frequency",
       "attempt": 1,
@@ -296,8 +296,8 @@
       "capability": "frequency",
       "backend": "lsf",
       "fixture_id": "fx-lsf-frequency-h2-sto3g-v1",
-      "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
       "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
       "task_ref": null,
       "attempt": null,
@@ -472,7 +472,7 @@
         "layer": "T0",
         "subject": "environment/version",
         "result": "PASS",
-        "detail": "Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/xieningke/orca611/orca (sha256 d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1), contract 1.1.0; LSF absent by design.",
+        "detail": "Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/redacted-user/orca611/orca (sha256 d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1), contract 1.1.0; LSF absent by design.",
         "owner": "B",
         "evidence": [
           "B/environment/b07-environment.json",
@@ -586,8 +586,8 @@
   "a_scientific_audit": {
     "result": "NOT_VERIFIED",
     "reason": "a_not_available",
-    "detail": "A published no B14b/H3 scientific audit under /ACPServer/acp2-development/A/** at the time of this run. B does not sign A science scope.",
-    "searched_root": "/ACPServer/acp2-development/A",
+    "detail": "A published no B14b/H3 scientific audit under /opt/acp2-dev/A/** at the time of this run. B does not sign A science scope.",
+    "searched_root": "/opt/acp2-dev/A",
     "owner": "A"
   },
   "c_dsh_browser": {

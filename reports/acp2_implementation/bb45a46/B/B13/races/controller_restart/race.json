@@ -16,7 +16,7 @@
     "task_count": 22,
     "task_id": "20261023_073435_005_singlepoint",
     "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
-    "work_dir": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
   },
   "assertions": [],
   "attempt": 1,
@@ -37,7 +37,7 @@
     "task_count": 22,
     "task_id": "20261023_073435_005_singlepoint",
     "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
-    "work_dir": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
   },
   "budget": {
     "cleanup_seconds": 10,
@@ -85,20 +85,20 @@
   "release_id": "98e0695545d668e6",
   "restart": {
     "command_before": [
-      "/ACPServer/acp2-development/venvs/b/bin/python",
-      "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+      "/opt/acp2-dev/venvs/b/bin/python",
+      "scripts/acceptance/acp2_fault_controller.py",
       "--source",
-      "/ACPServer/acp2-development/B/src",
+      "/opt/acp2-dev/B/src",
       "--fault-file",
-      "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
       "--config",
-      "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+      "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
       "--candidate-revision",
       "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
       "--orca",
-      "/home/xieningke/orca611/orca",
+      "/home/redacted-user/orca611/orca",
       "--orca-ld-library-path",
-      "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
+      "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
       "--",
       "run",
       "serve",
@@ -107,12 +107,12 @@
       "--port",
       "18771",
       "--run-root",
-      "/ACPServer/acp2-development/data/b/run-root-b13",
+      "/opt/acp2-dev/data/b/run-root-b13",
       "--poll-interval",
       "1",
       "--no-browser"
     ],
-    "cwd_before": "/ACPServer/AutoCalcPlatform",
+    "cwd_before": "repo-root",
     "health_after": {
       "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
       "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
@@ -125,13 +125,13 @@
     },
     "log": "controller/controller-restart-1792712080.log",
     "parsed_before": {
-      "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
       "fault_seam": true,
       "module": null,
       "port": 18771,
-      "run_root": "/ACPServer/acp2-development/data/b/run-root-b13",
-      "script": "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
-      "source": "/ACPServer/acp2-development/B/src"
+      "run_root": "/opt/acp2-dev/data/b/run-root-b13",
+      "script": "scripts/acceptance/acp2_fault_controller.py",
+      "source": "/opt/acp2-dev/B/src"
     },
     "pid_after": 750900,
     "pid_before": 749204,

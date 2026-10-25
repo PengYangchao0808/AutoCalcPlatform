@@ -1,6 +1,6 @@
 {
   "a_revision": {
-    "source": "/ACPServer/acp2-development/A git rev-parse HEAD",
+    "source": "/opt/acp2-dev/A git rev-parse HEAD",
     "status": "observed_a_head; A-20/A-29 absent",
     "value": "1b580a3dcda1351a0869353e6a505acde10dcfe0"
   },
@@ -36,8 +36,8 @@
     "c35_prerequisites": "C32-C34; A/B/C candidate SHA agreement; required scenario evidence (no B26 prerequisite in the C plan)",
     "disposition": "c35_absent",
     "expected_evidence_roots": [
-      "/ACPServer/acp2-development/C/experience-release-closeout/",
-      "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/experience-release-closeout/"
+      "/opt/acp2-dev/C/experience-release-closeout/",
+      "reports/acp2_implementation/bb45a46/C/experience-release-closeout/"
     ],
     "h7_effect": "H7 stays OPEN; B does not sign C's missing experience scope.",
     "observed_evidence_present": false,
@@ -54,7 +54,7 @@
       "ps -eo pid,ppid,stat,cmd"
     ],
     "evidence": "reports/acp2_implementation/bb45a46/integration/cleanup.json",
-    "evidence_sha256": "c009521d7b3ad0e9d83c1fecad2f0a6554393f5754150ffbca521e74599cdaeb",
+    "evidence_sha256": "3a837698cfd76fb89ddad637dcdc8f13b64c744355e6f2891f3745761b986269",
     "listening_test_ports": [],
     "note": "Cleanup evidence is recorded in integration/cleanup.json.",
     "production_deployed": false,
@@ -62,7 +62,7 @@
     "reconciled_stale_job_count": 1
   },
   "client_revision": {
-    "source": "/ACPServer/acp2-development/C git rev-parse HEAD (clean worktree)",
+    "source": "/opt/acp2-dev/C git rev-parse HEAD (clean worktree)",
     "status": "observed_c_head; C24a/C25/C33/C34/C35 absent",
     "value": "39d4aeb20451c984e20d27e12270a15070adce12"
   },
@@ -70,8 +70,7 @@
     "acceptance_schema": "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
     "acceptance_schema_digest": "sha256:81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e",
     "manifest": "docs/reference/next-change/acp2-contracts/manifest.json",
-    "manifest_digest": "sha256:d24de4c6123fa48ef052eadb7a69215dd1d3f030053d2432c2aa64935e14d0ce",
-    "manifest_digest_note": "Refreshed 2026-10-25 by acp2-final-acceptance-remediation (m1): previous value sha256:5ddf8c4ae0bd88517328d787a16b66976f9a599dfffa135f9ea950a693e7eaeb. The contract-registry digests for the two edited runtime contracts changed; contract version stays 1.3.0.",
+    "manifest_digest": "sha256:5ddf8c4ae0bd88517328d787a16b66976f9a599dfffa135f9ea950a693e7eaeb",
     "version": "1.3.0"
   },
   "dependency_versions": {
@@ -97,25 +96,22 @@
   },
   "evidence_revision": {
     "artifact_count": 34,
-    "note": "sha256 over sorted \"<repo-relative path> <file sha256>\\n\" for every artifact referenced by the H0-H7 receipts. The aggregate receipt set keeps its historical candidate revision; live artifact digests were refreshed for the B-fix-7/B-fix-8 evidence edits and again on 2026-10-25 after acp2-final-acceptance-remediation m1 refreshed the acp2-contracts manifest (the H1 receipt was re-registered as receipts/h1-r2.json; nothing was re-executed).",
+    "note": "sha256 over sorted \"<repo-relative path> <file sha256>\\n\" for every artifact referenced by the H0-H7 receipts. The aggregate receipt set keeps its historical candidate revision; only live artifact digests were refreshed for the B-fix-7/B-fix-8 evidence edits.",
     "rule": "sha256 over sorted '<repo-relative path> <file sha256>\\n' for every artifact referenced by the H0-H7 receipts",
-    "value": "af0c0ff10cbed93b7fb37e160314501d10d3d210a943341af2917108be619eaa"
+    "value": "0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d"
   },
   "generated_at": "2026-10-23T20:51:56Z",
   "harness_revision": {
-    "note": "Metadata-only refresh per the remediation plan §4. The harness was updated by acp2-final-acceptance-remediation (B1-8 v2 science probes + m5 version check) after the previous index value was recorded; no scenario result in this index changed.",
     "path": "scripts/acceptance/acp2_runtime.py",
-    "previous_value": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b",
     "rule": "sha256 of the harness file used to validate this index",
-    "value": "b5499a1ce889392b16f7724b556636a1cfa283d664ab1d890ca366c49fea5e8f"
+    "value": "298e8d0e70910ad721d2bf1720311251d947dc2f1a45c79f6a242e5f32579b99"
   },
   "notes": [
     "Every row has an explicit PASS/FAIL/NOT_VERIFIED result and immutable evidence path.",
     "Reused PASS rows carry an applicability mapping; the final source SHA is not claimed to equal every raw receipt SHA.",
     "B-fix-5 records a real LSF normal singlepoint (bsub job 1765) plus an installed-release sync/identity PASS, so H3's LSF gap and H7's installed-sync gap are closed; H3 still stays OPEN on C DSH/Workbench and the A audit.",
     "H4/H6/H7 stay OPEN; H2/H3/H1 also remain OPEN because their own receipts/rows are NOT_VERIFIED.",
-    "No FAIL was rewritten as NOT_VERIFIED and no A/C row was signed by B.",
-    "2026-10-25 metadata-only reconciliation by acp2-final-acceptance-remediation: harness_revision, contract.manifest_digest and evidence_revision now point at the real current files (B1-8 harness probes/m5 check and m1 contract-manifest refresh). All row results, gate statuses, landed_head, source_candidate and client_revision values are unchanged; H1 now references receipts/h1-r2.json while receipts/h1.json stays byte-identical."
+    "No FAIL was rewritten as NOT_VERIFIED and no A/C row was signed by B."
   ],
   "open_rows": [
     {
@@ -204,7 +200,7 @@
         {
           "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4/B-fix-5 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-          "receipt_sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
+          "receipt_sha256": "4a9c23e2b522a0e0cda43d2b06b3427d7855c9c0a82e234e4107b7cc9b4e94ca",
           "unchanged": [
             "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
             "A/B/C path ownership globs",
@@ -214,7 +210,7 @@
         {
           "rationale": "Environment identity is host-level and was not changed by B-fix-4/B-fix-5 (no dependency, config, or interpreter change).",
           "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
-          "receipt_sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
+          "receipt_sha256": "23482d905b2fdcaec0c6b0ca4e1347ee394e5955d20c401c4dccb097f50a5d1f",
           "unchanged": [
             "isolated worktree and host environment",
             "three-package import source at the P0 baseline"
@@ -258,7 +254,7 @@
         "reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
         "reports/acp2_implementation/bb45a46/B/B13/dsh-disconnect.json",
         {
-          "external_ref": "/ACPServer/acp2-development/evidence/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
+          "external_ref": "/opt/acp2-dev/evidence/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
           "path": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
           "status": "NOT_VERIFIED(external_evidence_not_in_repo)"
         }
@@ -351,7 +347,7 @@
         {
           "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
-          "receipt_sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
+          "receipt_sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
           "unchanged": [
             "src/acp_services/runtime/adapter_registry.py and capability_registry.py",
             "plugin workspace fixtures and descriptor digests",
@@ -458,10 +454,10 @@
     "release_base_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
     "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
     "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
-    "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
+    "release_manifest_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
     "release_source_is_final_candidate": true,
     "release_source_json": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
-    "release_source_json_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+    "release_source_json_sha256": "e2ee1096e0a7ec05efe86ffb35c4e6772d65021c1c50d8643c099780ced436df",
     "release_source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
     "release_source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
     "version": "0.3.0"
@@ -475,7 +471,7 @@
         {
           "rationale": "B-fix-5 rebuilt the role artifacts from the clean commit 6ec01ec; all six manifest digests and both root-build digests were recomputed from disk in this refresh and cross-checked against release-fix5/source.json.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
-          "receipt_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
+          "receipt_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
           "unchanged": [
             "artifact bytes (six role artifacts + two root-build artifacts)",
             "release source 6ec01ec and tree e2b2377",
@@ -485,7 +481,7 @@
         {
           "rationale": "The release source identity used by the installed validation is the same source.json consumed by this index.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
-          "receipt_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+          "receipt_sha256": "95c6abbe858bc07ce20df489423e9ab56973d4ad7b604677c69d38491c8131bf",
           "unchanged": [
             "source revision 6ec01ec and tree e2b2377",
             "eight artifact digests",
@@ -503,7 +499,7 @@
         {
           "rationale": "B-fix-5 re-ran the package-install scenario against release-fix5; the receipt derives candidate_revision 6ec01ec from release_manifest.source.revision and the installed Lab health matches it, with one real scheduler task completed.",
           "receipt": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json",
-          "receipt_sha256": "37e0f23d39b18f7a02e10ce4429621fb00c16716f92b1f241da224e4811916a5",
+          "receipt_sha256": "90d719ed71ae85df03ebc0a7a49d6b74c897fd77b1da04b5fe1862d45876862d",
           "unchanged": [
             "release-fix5 artifacts (same digests)",
             "acp/cccp/acp_services installed code",
@@ -521,7 +517,7 @@
         {
           "rationale": "Real LSF normal singlepoint executed by bsub as job 1765: terminal state completed, exit_code 0, release_id 1c79785a657c6614 and submission_id sub_0fea781820a81666. ORCA 6.1.1 finished with -1.116759307204 Ha. This closes the LSF prerequisite gap that kept H3/H7 rows NOT_VERIFIED.",
           "receipt": "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
-          "receipt_sha256": "f0b7c72fc33b8b7c21cbcd168bf1f6e8b052056a3b581770fa27b3482d9877f3",
+          "receipt_sha256": "c7f94aa361822f9abfbde857f63ced24aa5e55b8895029999fbc8cbeccdcd3f2",
           "unchanged": [
             "scheduler submission and terminal receipt",
             "release identity 1c79785a657c6614",
@@ -549,7 +545,7 @@
         {
           "rationale": "D2 was a reused-fixture-state defect; the harness fix resets fixture jobs to PAUSED, while the 12 assertions are unchanged. B-fix-5 does not touch the B15 harness or authz code.",
           "receipt": "reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
-          "receipt_sha256": "ead98a93dfd079634f01006b804448c5b281f8b23db3f8a94bd3a8e1f55278ff",
+          "receipt_sha256": "79ab5aab55b456874675b60c37b41fed411ec12b31bae6ff432d4714ccdd7569",
           "unchanged": [
             "B15 authz fixture",
             "release candidate artifacts",
@@ -567,7 +563,7 @@
         {
           "rationale": "B-fix-5 does not touch src/cccp, ORCA invocation, or the local execution chain; it changes the installed-release sync/remote-import path and the API release projection. These rows are reused and are not promoted to H3 closure.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
-          "receipt_sha256": "5c59082214294dabf91e64135af56f4790fcb0ad37ff57531ef2aed3d5339d46",
+          "receipt_sha256": "a6bb5842308ad951ea3cbc85a071f6b524af8361e5703b7a39d89f40654f13da",
           "unchanged": [
             "src/cccp science task cores",
             "ORCA backend/config used by the local runs",
@@ -585,7 +581,7 @@
         {
           "rationale": "No H5 row executes a task (all platform refs null) or calls the installed-release identity helper; inputs and validator are unchanged between abec2bc and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
-          "receipt_sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
+          "receipt_sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
           "unchanged": [
             "adapter registry and capability registry",
             "plugin fixtures and descriptor digests",

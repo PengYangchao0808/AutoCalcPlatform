@@ -4,16 +4,16 @@
   "roles": {
     "A": {
       "candidate_commit": "94c8ea946a4f400202ff337a660a5ce46739d8be",
-      "cwd": "/ACPServer/acp2-development/A",
+      "cwd": "/opt/acp2-dev/A",
       "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
       "dependency_digest_sha256": "f4a9340436bfec7e1f505be4da0e1292bfe776f3e2fa9fab28b5642e4278776c",
-      "expected_source_prefix": "/ACPServer/acp2-development/A/src",
+      "expected_source_prefix": "/opt/acp2-dev/A/src",
       "import_source_assertion": "PASS",
-      "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+      "interpreter": "/opt/acp2-dev/envs/a-python/bin/python",
       "modules": {
-        "acp": "/ACPServer/acp2-development/A/src/acp/__init__.py",
-        "acp_services": "/ACPServer/acp2-development/A/src/acp_services/__init__.py",
-        "cccp": "/ACPServer/acp2-development/A/src/cccp/__init__.py"
+        "acp": "/opt/acp2-dev/A/src/acp/__init__.py",
+        "acp_services": "/opt/acp2-dev/A/src/acp_services/__init__.py",
+        "cccp": "/opt/acp2-dev/A/src/cccp/__init__.py"
       },
       "per_module_match": {
         "acp": true,
@@ -25,16 +25,16 @@
     },
     "B": {
       "candidate_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
-      "cwd": "/ACPServer/acp2-development/B",
+      "cwd": "/opt/acp2-dev/B",
       "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
       "dependency_digest_sha256": "5f9561c2f542bff9b8e0df2a58ddc8bdd3fd342b2c6ce11d730bded09bee3c66",
-      "expected_source_prefix": "/ACPServer/acp2-development/B/src",
+      "expected_source_prefix": "/opt/acp2-dev/B/src",
       "import_source_assertion": "PASS",
-      "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
+      "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
       "modules": {
-        "acp": "/ACPServer/acp2-development/B/src/acp/__init__.py",
-        "acp_services": "/ACPServer/acp2-development/B/src/acp_services/__init__.py",
-        "cccp": "/ACPServer/acp2-development/B/src/cccp/__init__.py"
+        "acp": "/opt/acp2-dev/B/src/acp/__init__.py",
+        "acp_services": "/opt/acp2-dev/B/src/acp_services/__init__.py",
+        "cccp": "/opt/acp2-dev/B/src/cccp/__init__.py"
       },
       "per_module_match": {
         "acp": true,
@@ -46,16 +46,16 @@
     },
     "C": {
       "candidate_commit": "c54823109010b651de3f0cca28da5af54a10fdfb",
-      "cwd": "/ACPServer/acp2-development/C",
+      "cwd": "/opt/acp2-dev/C",
       "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
       "dependency_digest_sha256": "ac76cd7fd12fde80e39021173609de9006892d58c5a8fcb95a5459f78276a5de",
-      "expected_source_prefix": "/ACPServer/acp2-development/C/src",
+      "expected_source_prefix": "/opt/acp2-dev/C/src",
       "import_source_assertion": "PASS",
-      "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+      "interpreter": "/opt/acp2-dev/venvs/c/bin/python",
       "modules": {
-        "acp": "/ACPServer/acp2-development/C/src/acp/__init__.py",
-        "acp_services": "/ACPServer/acp2-development/C/src/acp_services/__init__.py",
-        "cccp": "/ACPServer/acp2-development/C/src/cccp/__init__.py"
+        "acp": "/opt/acp2-dev/C/src/acp/__init__.py",
+        "acp_services": "/opt/acp2-dev/C/src/acp_services/__init__.py",
+        "cccp": "/opt/acp2-dev/C/src/cccp/__init__.py"
       },
       "per_module_match": {
         "acp": true,
@@ -67,16 +67,16 @@
     },
     "integration": {
       "candidate_commit": "75a8f08a06b5528b310b26bd309940e99d9cd9bd",
-      "cwd": "/ACPServer/acp2-development/integration",
+      "cwd": "/opt/acp2-dev/integration",
       "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
       "dependency_digest_sha256": "6ba4052f3a7572503740f90b5df7047c0b00d68d8ef84ae271b6c3bc5cbbaadc",
-      "expected_source_prefix": "/ACPServer/acp2-development/integration/src",
+      "expected_source_prefix": "/opt/acp2-dev/integration/src",
       "import_source_assertion": "PASS",
-      "interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+      "interpreter": "/opt/acp2-dev/venvs/integration/bin/python",
       "modules": {
-        "acp": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
-        "acp_services": "/ACPServer/acp2-development/integration/src/acp_services/__init__.py",
-        "cccp": "/ACPServer/acp2-development/integration/src/cccp/__init__.py"
+        "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+        "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py",
+        "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py"
       },
       "per_module_match": {
         "acp": true,

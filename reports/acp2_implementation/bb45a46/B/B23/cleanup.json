@@ -4,17 +4,17 @@
   "generated_at": "2026-10-23T10:48:00Z",
   "port_18784_listening": false,
   "preserved": [
-    "/ACPServer/acp2-development/data/b/run-root-b23/acp_identity.db",
-    "/ACPServer/acp2-development/data/b/run-root-b23/acp_jobs.db",
-    "/ACPServer/acp2-development/data/b/run-root-b23/secrets/b23-credentials.json",
-    "/ACPServer/acp2-development/data/b/run-root-b23/b23-*/WORK/00_RUNTIME/events.jsonl"
+    "/opt/acp2-dev/data/b/run-root-b23/acp_identity.db",
+    "/opt/acp2-dev/data/b/run-root-b23/acp_jobs.db",
+    "/opt/acp2-dev/data/b/run-root-b23/secrets/b23-credentials.json",
+    "/opt/acp2-dev/data/b/run-root-b23/b23-*/WORK/00_RUNTIME/events.jsonl"
   ],
   "production_port_8765_listening": true,
   "production_port_touched": false,
   "production_touched": false,
   "removed_transient_paths": [
-    "/ACPServer/acp2-development/data/b/run-root-b23/.b23-quota",
-    "/ACPServer/acp2-development/data/b/run-root-b23/.remote_cache"
+    "/opt/acp2-dev/data/b/run-root-b23/.b23-quota",
+    "/opt/acp2-dev/data/b/run-root-b23/.remote_cache"
   ],
   "run_root_processes": [],
   "schema": "acp2.b23.cleanup.v1"

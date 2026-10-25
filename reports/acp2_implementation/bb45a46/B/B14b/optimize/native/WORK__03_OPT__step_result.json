@@ -8,7 +8,7 @@
     },
     {
       "path": "WORK/03_OPT/optimize.out",
-      "sha256": "a4f7784444b52aba028b1130fac9994aebe3f6a121c3c70bd6755b7afca68806",
+      "sha256": "d0cdf32826ff4b594e7528fcc5d978f28da9f177f9692f262ee8a119b8d2e033",
       "source": "orca",
       "type": "log"
     }
@@ -40,7 +40,7 @@
   },
   "provenance": {
     "backend": "orca",
-    "input_signature": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/input.xyz",
+    "input_signature": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/input.xyz",
     "method": "HF",
     "profile": "",
     "version": "unknown"

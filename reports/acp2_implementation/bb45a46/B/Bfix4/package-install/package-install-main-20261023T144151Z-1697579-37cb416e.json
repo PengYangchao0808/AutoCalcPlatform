@@ -2,13 +2,13 @@
   "artifacts": [
     {
       "path": "release-digests.json",
-      "sha256": "81665c584b73c74f22deb5cdfd77f2c88c6462a7e657aeed399a0ab2235d4568",
-      "size_bytes": 1982
+      "sha256": "03fcd48b535a05ea888ccab5d22e834b181f6418f6dd24c6e0b89703bcedc3ca",
+      "size_bytes": 1926
     },
     {
       "path": "install-results.json",
-      "sha256": "29d65360e4215aadafa72918a4e016f405ca5c8123000fd9505d3840b3a108ef",
-      "size_bytes": 1200
+      "sha256": "83706828ab1781c7242058b6da35ca6879529fd47d99e2f1a36c2717e60020cc",
+      "size_bytes": 1088
     },
     {
       "path": "installed-probes.json",
@@ -47,13 +47,13 @@
     },
     {
       "path": "scheduler-task/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "154548ac5d5b3fb1bee595e22bd4c43b2c10776a0b22954a8638f70a76fcaa84",
-      "size_bytes": 1512
+      "sha256": "6b442875aead5fd3acdd5b9240044aeb8677fc9d18ba70123f6769f496a71063",
+      "size_bytes": 1514
     },
     {
       "path": "scheduler-task/execution_receipt.json",
-      "sha256": "88e4f49539ea44fb6015c19ae5416a10b2aef7f6eeb869d7509cf76906eb7724",
-      "size_bytes": 1643
+      "sha256": "7b179c7283225bda79853535ff528e079ae836dfdb781e5334f968b306957304",
+      "size_bytes": 1645
     },
     {
       "path": "scheduler-task/installed-identity.json",
@@ -62,8 +62,8 @@
     },
     {
       "path": "scheduler-task/job.json",
-      "sha256": "1245a25a1325e2e7f72d01ea7d26759820627623e9b94e3d6710366ee8f0c586",
-      "size_bytes": 5328
+      "sha256": "e362bac62d48d36bf534688e5583bfec789945cd124feafbde473e826a40166c",
+      "size_bytes": 5332
     },
     {
       "path": "scheduler-task/scheduler-task.json",
@@ -77,8 +77,8 @@
     },
     {
       "path": "scheduler-task/sp.out",
-      "sha256": "1915391b4ca3ee143612a13dcdc7bd96ae0908f82986071071e3f2af6b26402b",
-      "size_bytes": 42204
+      "sha256": "a63ecef6c5c190d64ca398721ed0d4abc0831af75d4890735c407ced7d0723e7",
+      "size_bytes": 42206
     },
     {
       "path": "assets-audit.json",
@@ -92,12 +92,12 @@
     },
     {
       "path": "a-c-evidence.json",
-      "sha256": "36a91a043f98a23d6868f65a452a358e512bb640a17ee0e2960583e82c0fa43a",
+      "sha256": "0d5b21ca119c0b8c4ae8f22d946f7e1bbba46be961775463564271cca91e8d8a",
       "size_bytes": 902
     },
     {
       "path": "static-assets-status.json",
-      "sha256": "f7c7a8d134b1f8b6336fb31a7e03d471a0bd6245b0e6f6cd74f02e5d03390010",
+      "sha256": "19b04d16a18cb41414c7b58e417418910f5e4f0332f6e70600fd461b3bcda8b3",
       "size_bytes": 323
     }
   ],
@@ -158,27 +158,27 @@
       "status": "PASS"
     },
     {
-      "detail": "raw evidence at /ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+      "detail": "raw evidence at /opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
       "name": "b25.aggregate_A-27b",
       "status": "PASS"
     },
     {
-      "detail": "raw evidence at /ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+      "detail": "raw evidence at /opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
       "name": "b25.aggregate_A-28",
       "status": "PASS"
     },
     {
-      "detail": "expected path absent: /ACPServer/acp2-development/evidence/C/clean-install-live",
+      "detail": "expected path absent: /opt/acp2-dev/evidence/C/clean-install-live",
       "name": "b25.aggregate_C33",
       "status": "NOT_VERIFIED"
     },
     {
-      "detail": "expected path absent: /ACPServer/acp2-development/evidence/C/operator-runbook-live",
+      "detail": "expected path absent: /opt/acp2-dev/evidence/C/operator-runbook-live",
       "name": "b25.aggregate_C34",
       "status": "NOT_VERIFIED"
     },
     {
-      "detail": "NOT_VERIFIED(c_static_assets_absent) expected /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+      "detail": "NOT_VERIFIED(c_static_assets_absent) expected docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
       "name": "b25.static_assets_mount",
       "status": "NOT_VERIFIED"
     },
@@ -197,7 +197,7 @@
   "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
   "command": [
     "/usr/bin/python3.11",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "package-install",
     "--fixture",
@@ -218,28 +218,28 @@
       {
         "id": "A-27b",
         "note": "raw evidence present; scientific/experience sign-off stays with its owner",
-        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+        "path": "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
         "present": true,
         "status": "PASS"
       },
       {
         "id": "A-28",
         "note": "raw evidence present; scientific/experience sign-off stays with its owner",
-        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+        "path": "/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
         "present": true,
         "status": "PASS"
       },
       {
         "id": "C33",
         "note": "evidence absent at the registered path",
-        "path": "/ACPServer/acp2-development/evidence/C/clean-install-live",
+        "path": "/opt/acp2-dev/evidence/C/clean-install-live",
         "present": false,
         "status": "NOT_VERIFIED"
       },
       {
         "id": "C34",
         "note": "evidence absent at the registered path",
-        "path": "/ACPServer/acp2-development/evidence/C/operator-runbook-live",
+        "path": "/opt/acp2-dev/evidence/C/operator-runbook-live",
         "present": false,
         "status": "NOT_VERIFIED"
       }
@@ -247,12 +247,12 @@
     "b25.artifacts": [
       {
         "path": "release-digests.json",
-        "sha256": "81665c584b73c74f22deb5cdfd77f2c88c6462a7e657aeed399a0ab2235d4568",
+        "sha256": "77c9161e77056fde3c033df001c5e861fb840d56124562237d5fe87688a62bfd",
         "size_bytes": 1982
       },
       {
         "path": "install-results.json",
-        "sha256": "29d65360e4215aadafa72918a4e016f405ca5c8123000fd9505d3840b3a108ef",
+        "sha256": "996c35f1570ea7ce6797a82ea76497981a4f4fd458dbadbd78e395971d41f470",
         "size_bytes": 1200
       },
       {
@@ -292,12 +292,12 @@
       },
       {
         "path": "scheduler-task/WORK__00_RUNTIME__frozen__envelope.json",
-        "sha256": "154548ac5d5b3fb1bee595e22bd4c43b2c10776a0b22954a8638f70a76fcaa84",
+        "sha256": "6b442875aead5fd3acdd5b9240044aeb8677fc9d18ba70123f6769f496a71063",
         "size_bytes": 1512
       },
       {
         "path": "scheduler-task/execution_receipt.json",
-        "sha256": "88e4f49539ea44fb6015c19ae5416a10b2aef7f6eeb869d7509cf76906eb7724",
+        "sha256": "7b179c7283225bda79853535ff528e079ae836dfdb781e5334f968b306957304",
         "size_bytes": 1643
       },
       {
@@ -307,7 +307,7 @@
       },
       {
         "path": "scheduler-task/job.json",
-        "sha256": "1245a25a1325e2e7f72d01ea7d26759820627623e9b94e3d6710366ee8f0c586",
+        "sha256": "e362bac62d48d36bf534688e5583bfec789945cd124feafbde473e826a40166c",
         "size_bytes": 5328
       },
       {
@@ -322,7 +322,7 @@
       },
       {
         "path": "scheduler-task/sp.out",
-        "sha256": "1915391b4ca3ee143612a13dcdc7bd96ae0908f82986071071e3f2af6b26402b",
+        "sha256": "a63ecef6c5c190d64ca398721ed0d4abc0831af75d4890735c407ced7d0723e7",
         "size_bytes": 42204
       },
       {
@@ -337,12 +337,12 @@
       },
       {
         "path": "a-c-evidence.json",
-        "sha256": "36a91a043f98a23d6868f65a452a358e512bb640a17ee0e2960583e82c0fa43a",
+        "sha256": "0d5b21ca119c0b8c4ae8f22d946f7e1bbba46be961775463564271cca91e8d8a",
         "size_bytes": 902
       },
       {
         "path": "static-assets-status.json",
-        "sha256": "f7c7a8d134b1f8b6336fb31a7e03d471a0bd6245b0e6f6cd74f02e5d03390010",
+        "sha256": "19b04d16a18cb41414c7b58e417418910f5e4f0332f6e70600fd461b3bcda8b3",
         "size_bytes": 323
       }
     ],
@@ -350,7 +350,7 @@
     "b25.fixture": "/tmp/opencode/b26a-fix4/fixtures/package-install-fix4.json",
     "b25.lab_port": 41319,
     "b25.python": "/usr/bin/python3.11",
-    "b25.release_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+    "b25.release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix4",
     "b25.scheduler_task": {
       "artifacts": {
         "envelope": {
@@ -436,7 +436,7 @@
       "task_ok": true
     },
     "b25.static_assets": {
-      "expected_path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+      "expected_path": "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
       "mount": "/experience/<release_id>/",
       "note": "C has not published experience/static-assets.manifest.json; no mount was fabricated",
       "status": "NOT_VERIFIED(c_static_assets_absent)"

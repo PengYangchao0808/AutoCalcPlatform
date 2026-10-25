@@ -1,39 +1,39 @@
 {
   "a_contracts": [
     {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
       "role": "reaction",
       "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
       "size_bytes": 15559
     },
     {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
       "role": "recipe",
       "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
       "size_bytes": 12521
     },
     {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
       "role": "task_binding",
       "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
       "size_bytes": 18004
     },
     {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
       "role": "evidence",
       "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
       "size_bytes": 14038
     },
     {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
       "role": "reaction_example",
       "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
       "size_bytes": 6035
     },
     {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "role": "h4_handoff",
-      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+      "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
       "size_bytes": 58068
     }
   ],
@@ -42,25 +42,25 @@
   "base_revision_role": "P2 wave base (B19 commit); the frozen candidate is the later committed state B00-B20b at 460b0db",
   "c_contracts": [
     {
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
       "role": "proposal",
       "sha256": "4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
       "size_bytes": 16781
     },
     {
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
       "role": "research_record",
       "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
       "size_bytes": 9943
     },
     {
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
       "role": "p2_operation_map",
       "sha256": "5818be3b6e86b62c4f0fb421186a567223727fb6e5a8266a6354dd3f501921c4",
       "size_bytes": 10826
     },
     {
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
       "role": "plan_identity",
       "sha256": "79bb1c226a6f23af65eb1f2a1a4af27a3ea26dfead0299d40d4bd94ac9a8dd9d",
       "size_bytes": 12558
@@ -69,7 +69,7 @@
   "c_head": "39d4aeb20451c984e20d27e12270a15070adce12",
   "candidate_files_manifest": {
     "file_count": 2907,
-    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/candidate-files.sha256",
+    "path": "reports/acp2_implementation/bb45a46/B/B20c/candidate-files.sha256",
     "rule": "sha256 of every file in the immutable overlay, sorted by path",
     "sha256": "662356063b9506d21476d5d0e554ea603db4ccae55aa6df756dba3d78752d569"
   },
@@ -85,14 +85,14 @@
   "contract_version": "1.3.0",
   "dirty_repo_note": "The source checkout is intentionally dirty with unrelated changes; the freeze is the verified immutable overlay, not the live worktree.",
   "env_digest": "d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6",
-  "env_path": "/ACPServer/acp2-development/data/b/acceptance-env.sh",
+  "env_path": "/opt/acp2-dev/data/b/acceptance-env.sh",
   "freeze_kind": "verified_immutable_overlay",
   "generated_at": "2026-10-23T09:32:36Z",
   "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
   "integration_worktree_touched": false,
   "moving_worktree_claimed": false,
   "overlay_method": "git archive 460b0db extracted into a fresh directory; no working-tree file was copied",
-  "overlay_root": "/ACPServer/acp2-development/data/b/b20-candidate",
+  "overlay_root": "/opt/acp2-dev/data/b/b20-candidate",
   "overlay_verification": {
     "committed_files": 2907,
     "extra_files": [],
@@ -112,63 +112,63 @@
   "parent_revision": "430b4ba09378bf3a63839be3610ad3d7a075a861",
   "per_file_digests": [
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/scripts/acceptance/acp2_runtime.py",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/scripts/acceptance/acp2_runtime.py",
       "role": "harness",
       "sha256": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
       "size_bytes": 482763
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
       "role": "receipt_schema",
       "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e",
       "size_bytes": 11264
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
       "role": "dependency_graph",
       "sha256": "7fcda6d28eb60f51cf11281fd7757786ae5d3f4332a7eb3f3a6fb71f316c3047",
       "size_bytes": 65263
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/manifest.json",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/manifest.json",
       "role": "contract_manifest",
       "sha256": "f83a5736b0a191883e24032ce94294cea80c9703b622e7f0fc4300ba2a8181dd",
       "size_bytes": 35588
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/tests/test_acp2_runtime_contracts.py",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/tests/test_acp2_runtime_contracts.py",
       "role": "contract_tests",
       "sha256": "ae4c75499930328e3e398f48cf9ef87292ddb682182b26d86bc9e9c5612f648d",
       "size_bytes": 51575
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/tests/test_acp2_runtime_science_handoff.py",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/tests/test_acp2_runtime_science_handoff.py",
       "role": "handoff_tests",
-      "sha256": "dc0b43e4b5a2603ee1114e4dd50eca07d2e35918afdbd74e90ea5074b1d30f6e",
+      "sha256": "7031fe219a003aa60ec16d962df0d374b476eba3c461d96f6a34d08bce730ccd",
       "size_bytes": 15441
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json",
       "role": "b20_candidate_record",
-      "sha256": "f089b9bc766de552976689721d1e38055ed797f9765ed15e4dc317a421646b13",
+      "sha256": "5b4b65f3aff2dd663e2357a6a7d7d78c3be8a38c068bf201e72264f75676e353",
       "size_bytes": 5280
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
       "role": "run_spec",
-      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
       "size_bytes": 3680
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
       "role": "h4_ledger",
-      "sha256": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b",
+      "sha256": "2e51cb70b2465060a608d136e480f04172a04b373345e7cd8736d72d0cdec624",
       "size_bytes": 4854
     },
     {
-      "path": "/ACPServer/acp2-development/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
       "role": "science_handoff",
-      "sha256": "83a30a6e9e531dea8c229fc729cc8ac2f193e040e94173e0049a1f2afa2b06fc",
+      "sha256": "ccb112b6c535e33f3388a643d2c8fae040dbf8915c298ab9a71a7903ca03d400",
       "size_bytes": 19206
     }
   ],

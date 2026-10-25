@@ -20,12 +20,12 @@ not touch the root distribution, CI or any version constant. The repo has **thre
 Method: AST walk from the declared entry modules, following relative and absolute `cccp.*` imports,
 including ancestor packages; imports under `if TYPE_CHECKING:` and function-local imports are excluded
 from the runtime closure but still scanned for forbidden roots. A second, independent check imports every
-entry in a **fresh interpreter** from `/tmp` with `PYTHONPATH=<repo>/src` and inspects `sys.modules`.
+entry in a **fresh interpreter** from `/tmp` with `PYTHONPATH=src` and inspects `sys.modules`.
 The audit script is preserved verbatim in the evidence run; exact invocation:
 
 ```bash
-/ACPServer/acp2-development/envs/a-python/bin/python packaging_audit.py \
-  --root /ACPServer/acp2-development/A \
+/opt/acp2-dev/envs/a-python/bin/python packaging_audit.py \
+  --root /opt/acp2-dev/A \
   --output $ACP2_EVIDENCE/A/A-27/a27a-20261023T040251Z/packaging-audit.raw.json
 # exit 0
 ```
@@ -213,7 +213,7 @@ the remote-node floor and is **not** part of the patch.
 
 `requires-python = ">=3.10"` in all three role configs (`cccp`, `worker`, `web`); this request does **not**
 narrow, raise or otherwise change it. The audit ran on **CPython 3.11.13**
-(`/ACPServer/acp2-development/envs/a-python/bin/python`). No version constant is touched; the version is
+(`/opt/acp2-dev/envs/a-python/bin/python`). No version constant is touched; the version is
 still read by `build_release.py::release_version()` from `src/cccp/version.py`.
 
 ## 7. Exact patch

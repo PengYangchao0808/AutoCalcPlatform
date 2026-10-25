@@ -8,7 +8,7 @@
 |---|---|
 | candidate id | `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12` |
 | base commit | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` |
-| worktree | `/ACPServer/acp2-development/B` |
+| worktree | `/opt/acp2-dev/B` |
 | applied | `tracked-changes.patch` then `new-files/` per `apply-order.md` |
 | per-file verification | **1906/1906 PASS**, 0 mismatches, 0 missing |
 | materialized commit | `a0185b15c546fbd07919326d581fab13e05000fa` |
@@ -20,11 +20,11 @@
 
 | Role | Interpreter | Source assertion |
 |---|---|---|
-| A | `/ACPServer/acp2-development/envs/a-python/bin/python` | PASS |
-| B | `/ACPServer/acp2-development/venvs/b/bin/python` | PASS |
-| C | `/ACPServer/acp2-development/venvs/c/bin/python` | PASS |
-| integration | `/ACPServer/acp2-development/venvs/integration/bin/python` | PASS |
-| browser | `/ACPServer/acp2-development/venvs/browser/bin/python` | playwright 1.63.0 importable; Chromium not launched |
+| A | `/opt/acp2-dev/envs/a-python/bin/python` | PASS |
+| B | `/opt/acp2-dev/venvs/b/bin/python` | PASS |
+| C | `/opt/acp2-dev/venvs/c/bin/python` | PASS |
+| integration | `/opt/acp2-dev/venvs/integration/bin/python` | PASS |
+| browser | `/opt/acp2-dev/venvs/browser/bin/python` | playwright 1.63.0 importable; Chromium not launched |
 
 Full interpreter/cwd/`__file__`/candidate/dependency digest matrix: `role-interpreters.json`.
 

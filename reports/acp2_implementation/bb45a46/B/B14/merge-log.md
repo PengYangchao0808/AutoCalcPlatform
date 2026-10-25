@@ -2,7 +2,7 @@
 
 Candidate: `fbac5abb50ba7f86603b786fc98d857df52f5f2a`
 Tree: `0a9436f24a2a62232c2186a8ba75d0b05f3397a8`
-Branch: `acp2/integration-p1` (worktree `/ACPServer/acp2-development/integration`)
+Branch: `acp2/integration-p1` (worktree `/opt/acp2-dev/integration`)
 Created: 2026-10-23 (Asia/Shanghai)
 
 ## 1. Base and changesets

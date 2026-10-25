@@ -68,7 +68,7 @@
     "status": 201
   },
   "retry_status": 409,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b09",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b09",
   "usage_proof": {
     "after": {
       "core_hours": "2.000556",

@@ -7,5 +7,5 @@
   "port_free_after_stop": true,
   "production_8765_touched": false,
   "production_run_root_touched": false,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b12"
+  "run_root": "/opt/acp2-dev/data/b/run-root-b12"
 }

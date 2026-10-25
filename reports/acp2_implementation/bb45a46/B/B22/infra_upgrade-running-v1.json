@@ -20,7 +20,7 @@
       "max_io_bytes": 1048576,
       "max_memory_bytes": 33554432
     },
-    "snapshot_dir": "/ACPServer/acp2-development/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+    "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
     "supported_schema": [
       "acp2.adapter.v1"
     ],
@@ -45,7 +45,7 @@
       "max_io_bytes": 1048576,
       "max_memory_bytes": 33554432
     },
-    "snapshot_dir": "/ACPServer/acp2-development/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+    "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
     "supported_schema": [
       "acp2.adapter.v1"
     ],

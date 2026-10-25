@@ -4,13 +4,13 @@
     "capability": "storage.inventory",
     "descriptors": [
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.0.0/adapter.json",
         "relative_path": "storage-inventory-1.0.0/adapter.json",
         "sha256": "61b836e06bf7e99b40babd964c97ec0b2117b67ed98a234cdafd86fed797f0f4",
         "size_bytes": 659
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.1.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.1.0/adapter.json",
         "relative_path": "storage-inventory-1.1.0/adapter.json",
         "sha256": "5266acf69c4e421ae6a4b82d973a90c7e681dbd3523db91b704cd8616202fccc",
         "size_bytes": 659
@@ -21,163 +21,163 @@
     "notices": [],
     "sources": [
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-conflict-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-conflict-1.0.0/adapter.json",
         "relative_path": "storage-conflict-1.0.0/adapter.json",
         "sha256": "b75b37653f65dc1d82cf9ab07f1dc8513e16d76920b137f2e11b3683ce8bc8ee",
         "size_bytes": 631
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-conflict-1.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-conflict-1.0.0/adapter.py",
         "relative_path": "storage-conflict-1.0.0/adapter.py",
         "sha256": "d0cd56d1ff894940911f4f4513b3c304466e2581c2e8ff4f13038d2c49f0e73e",
         "size_bytes": 1458
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-conflict-1.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-conflict-1.0.0/verification.json",
         "relative_path": "storage-conflict-1.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.0.0/adapter.json",
         "relative_path": "storage-inventory-1.0.0/adapter.json",
         "sha256": "61b836e06bf7e99b40babd964c97ec0b2117b67ed98a234cdafd86fed797f0f4",
         "size_bytes": 659
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.0.0/adapter.py",
         "relative_path": "storage-inventory-1.0.0/adapter.py",
         "sha256": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
         "size_bytes": 1459
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.0.0/verification.json",
         "relative_path": "storage-inventory-1.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.1.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.1.0/adapter.json",
         "relative_path": "storage-inventory-1.1.0/adapter.json",
         "sha256": "5266acf69c4e421ae6a4b82d973a90c7e681dbd3523db91b704cd8616202fccc",
         "size_bytes": 659
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.1.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.1.0/adapter.py",
         "relative_path": "storage-inventory-1.1.0/adapter.py",
         "sha256": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
         "size_bytes": 1459
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-inventory-1.1.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.1.0/verification.json",
         "relative_path": "storage-inventory-1.1.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-isolation-claim-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-isolation-claim-1.0.0/adapter.json",
         "relative_path": "storage-isolation-claim-1.0.0/adapter.json",
         "sha256": "510b1d2563db43ff484646704ef0a1423957fb3d1e2fbc62b1a0b0e96d6a0a30",
         "size_bytes": 645
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-isolation-claim-1.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-isolation-claim-1.0.0/adapter.py",
         "relative_path": "storage-isolation-claim-1.0.0/adapter.py",
         "sha256": "dc73903d7c346fee5690fdb66197d851393a6dd00bcb8e5a3f052682ba9000f9",
         "size_bytes": 1465
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-isolation-claim-1.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-isolation-claim-1.0.0/verification.json",
         "relative_path": "storage-isolation-claim-1.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.json",
         "relative_path": "storage-missing-env-1.0.0/adapter.json",
         "sha256": "756de91ce804bcf2a9d9117a27888f03b41eecc125ab817eac644f459a723526",
         "size_bytes": 664
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.py",
         "relative_path": "storage-missing-env-1.0.0/adapter.py",
         "sha256": "bb21e83fab25297cf2f252ffdc0223593d4776c44ffc5541f27fb54f80eab8d8",
         "size_bytes": 1461
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-missing-env-1.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-missing-env-1.0.0/verification.json",
         "relative_path": "storage-missing-env-1.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-science-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-science-1.0.0/adapter.json",
         "relative_path": "storage-science-1.0.0/adapter.json",
         "sha256": "e0d5c8b41ff2a54050c4feb8aae929014be66b8b59fd59065be90568421b14c0",
         "size_bytes": 626
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-science-1.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-science-1.0.0/adapter.py",
         "relative_path": "storage-science-1.0.0/adapter.py",
         "sha256": "7fb938e89b4cf796eee3727b831d7012a5595798d3c34474559105877f199ec5",
         "size_bytes": 1457
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-science-1.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-science-1.0.0/verification.json",
         "relative_path": "storage-science-1.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.json",
         "relative_path": "storage-sideeffect-1.0.0/adapter.json",
         "sha256": "c6a438287e1c24ad3e87bc52127b2d2252e794fed99bef576d64e3ce62a12d98",
         "size_bytes": 636
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.py",
         "relative_path": "storage-sideeffect-1.0.0/adapter.py",
         "sha256": "bda60e52d1afd38ae32dd7f41edc9d602f905cee99fa7bd91b31e3f1c53fa6e7",
         "size_bytes": 350
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-sideeffect-1.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-sideeffect-1.0.0/verification.json",
         "relative_path": "storage-sideeffect-1.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.json",
         "relative_path": "storage-untrusted-1.0.0/adapter.json",
         "sha256": "fb987e1fc2f975f8d5c05c61f798cbcd28181ed0ab176ff543abfe4579c92acf",
         "size_bytes": 634
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.py",
         "relative_path": "storage-untrusted-1.0.0/adapter.py",
         "sha256": "d088495e9a5072d33196757a0a2eedadf36df02165dc9ebdeb6c9bde98ed88a8",
         "size_bytes": 1459
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-untrusted-1.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-untrusted-1.0.0/verification.json",
         "relative_path": "storage-untrusted-1.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.json",
         "relative_path": "storage-wrong-version-2.0.0/adapter.json",
         "sha256": "8cd8ee2fed23434ce5a20aeaa12f489613052a971dfe88e6e4fa1287a2f343d2",
         "size_bytes": 642
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.py",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.py",
         "relative_path": "storage-wrong-version-2.0.0/adapter.py",
         "sha256": "9b2fdcae982756edf2e60462d9ffdbd24e32af3b247474f12f38364e8e721951",
         "size_bytes": 1463
       },
       {
-        "path": "/ACPServer/acp2-development/data/b/plugins/b21/storage-wrong-version-2.0.0/verification.json",
+        "path": "/opt/acp2-dev/data/b/plugins/b21/storage-wrong-version-2.0.0/verification.json",
         "relative_path": "storage-wrong-version-2.0.0/verification.json",
         "sha256": "fda51c0a7f75bd0e5d29e4b92b16127ada1b4a3a72bb4006c6538e358633310f",
         "size_bytes": 84
@@ -198,22 +198,22 @@
   "candidate_revision": "ded5cfd804675f7b341726990b925e08bc27794c",
   "capability_contracts": {
     "a_example": {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json",
       "sha256": "8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
       "size_bytes": 4232
     },
     "a_schema": {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
       "sha256": "39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
       "size_bytes": 18581
     },
     "a_task_binding": {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/examples/task-binding-singlepoint.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/task-binding-singlepoint.json",
       "sha256": "de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
       "size_bytes": 5594
     },
     "c_view_model": {
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
       "sha256": "b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",
       "size_bytes": 8650
     }
@@ -271,7 +271,7 @@
       "class": "science-node",
       "name": "orca",
       "new": false,
-      "source": "/home/xieningke/.cccp.yaml",
+      "source": "/home/redacted-user/.cccp.yaml",
       "state": "verified",
       "version": "configured executable"
     },
@@ -311,7 +311,7 @@
       "approved": true,
       "license_state": "approved",
       "owner": "B/platform",
-      "path": "/ACPServer/AutoCalcPlatform/LICENSE",
+      "path": "LICENSE",
       "sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d",
       "size_bytes": 1066,
       "source": "repository LICENSE",
@@ -321,7 +321,7 @@
       "approved": true,
       "license_state": "approved",
       "owner": "A/cccp",
-      "path": "/ACPServer/acp2-development/A/LICENSE",
+      "path": "/opt/acp2-dev/A/LICENSE",
       "sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d",
       "size_bytes": 1066,
       "source": "repository LICENSE",
@@ -331,7 +331,7 @@
       "approved": true,
       "license_state": "approved",
       "owner": "C/experience",
-      "path": "/ACPServer/acp2-development/C/LICENSE",
+      "path": "/opt/acp2-dev/C/LICENSE",
       "sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d",
       "size_bytes": 1066,
       "source": "repository LICENSE",
@@ -351,7 +351,7 @@
       "approved": true,
       "license_state": "approved",
       "owner": "B/platform",
-      "path": "/ACPServer/AutoCalcPlatform/LICENSE",
+      "path": "LICENSE",
       "sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d",
       "size_bytes": 1066,
       "source": "repository LICENSE",
@@ -361,7 +361,7 @@
       "approved": true,
       "license_state": "approved",
       "owner": "A/cccp",
-      "path": "/ACPServer/acp2-development/A/LICENSE",
+      "path": "/opt/acp2-dev/A/LICENSE",
       "sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d",
       "size_bytes": 1066,
       "source": "repository LICENSE",
@@ -371,7 +371,7 @@
       "approved": true,
       "license_state": "approved",
       "owner": "C/experience",
-      "path": "/ACPServer/acp2-development/C/LICENSE",
+      "path": "/opt/acp2-dev/C/LICENSE",
       "sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d",
       "size_bytes": 1066,
       "source": "repository LICENSE",
@@ -381,31 +381,31 @@
   "rollback_steps": [
     {
       "action": "uninstall the upgraded adapter version",
-      "command": "PYTHONPATH=/ACPServer/AutoCalcPlatform/src /ACPServer/acp2-development/venvs/b/bin/python -c \"from acp_services.runtime.adapter_registry import AdapterRegistry, AdapterAuthorization; r=AdapterRegistry(plugin_root='reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root', state_root='/ACPServer/acp2-development/data/b/plugin-state/b21'); r.uninstall('acp.storage.inventory', '1.1.0', authorization=AdapterAuthorization(action='adapter.uninstall', adapter_id='acp.storage.inventory', version='1.1.0', descriptor_digest='97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec', authorized_by='controller', issued_at='2026-10-23T00:00:00Z'))\"",
+      "command": "PYTHONPATH=src /opt/acp2-dev/venvs/b/bin/python -c \"from acp_services.runtime.adapter_registry import AdapterRegistry, AdapterAuthorization; r=AdapterRegistry(plugin_root='reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root', state_root='/opt/acp2-dev/data/b/plugin-state/b21'); r.uninstall('acp.storage.inventory', '1.1.0', authorization=AdapterAuthorization(action='adapter.uninstall', adapter_id='acp.storage.inventory', version='1.1.0', descriptor_digest='97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec', authorized_by='controller', issued_at='2026-10-23T00:00:00Z'))\"",
       "expected": "active version becomes null; historical task freeze/snapshot remains readable",
       "order": 1
     },
     {
       "action": "re-enable the frozen v1 version for new work",
-      "command": "PYTHONPATH=/ACPServer/AutoCalcPlatform/src /ACPServer/acp2-development/venvs/b/bin/python -c \"from acp_services.runtime.adapter_registry import AdapterRegistry, AdapterAuthorization; r=AdapterRegistry(plugin_root='reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root', state_root='/ACPServer/acp2-development/data/b/plugin-state/b21'); r.enable('acp.storage.inventory', '1.0.0', authorization=AdapterAuthorization(action='adapter.enable', adapter_id='acp.storage.inventory', version='1.0.0', descriptor_digest='ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e', authorized_by='controller', issued_at='2026-10-23T00:00:00Z'))\"",
+      "command": "PYTHONPATH=src /opt/acp2-dev/venvs/b/bin/python -c \"from acp_services.runtime.adapter_registry import AdapterRegistry, AdapterAuthorization; r=AdapterRegistry(plugin_root='reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root', state_root='/opt/acp2-dev/data/b/plugin-state/b21'); r.enable('acp.storage.inventory', '1.0.0', authorization=AdapterAuthorization(action='adapter.enable', adapter_id='acp.storage.inventory', version='1.0.0', descriptor_digest='ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e', authorized_by='controller', issued_at='2026-10-23T00:00:00Z'))\"",
       "expected": "new tasks freeze v1; old task snapshots stay unchanged",
       "order": 2
     },
     {
       "action": "revert A's package-data patch if B25a applied it",
-      "command": "git -C /ACPServer/AutoCalcPlatform apply -R /ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
+      "command": "git -C repo-root apply -R /opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
       "expected": "packaging/roles/cccp/pyproject.toml returns to the pre-request bytes; B22 did not apply it",
       "order": 3
     },
     {
       "action": "unregister the third-party capability",
-      "command": "PYTHONPATH=/ACPServer/AutoCalcPlatform/src /ACPServer/acp2-development/venvs/b/bin/python -c \"from acp_services.runtime.capability_registry import CapabilityRegistry, CapabilityAuthorization; r=CapabilityRegistry(capability_root='reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root', state_root='reports/acp2_implementation/bb45a46/B/B22/workspace/capability-state', schema_path='/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json'); r.unregister('electronic.energy', authorization=CapabilityAuthorization(action='capability.unregister', capability_id='electronic.energy', version='1.0.0', descriptor_digest='sha256:8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846', authorized_by='controller', issued_at='2026-10-23T00:00:00Z'))\"",
+      "command": "PYTHONPATH=src /opt/acp2-dev/venvs/b/bin/python -c \"from acp_services.runtime.capability_registry import CapabilityRegistry, CapabilityAuthorization; r=CapabilityRegistry(capability_root='reports/acp2_implementation/bb45a46/B/B22/workspace/capability-root', state_root='reports/acp2_implementation/bb45a46/B/B22/workspace/capability-state', schema_path='/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json'); r.unregister('electronic.energy', authorization=CapabilityAuthorization(action='capability.unregister', capability_id='electronic.energy', version='1.0.0', descriptor_digest='sha256:8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846', authorized_by='controller', issued_at='2026-10-23T00:00:00Z'))\"",
       "expected": "registration removed; frozen task snapshot still readable",
       "order": 4
     },
     {
       "action": "reinstall the previous B02b role wheel if a B25a wheel replaced it",
-      "command": "/ACPServer/acp2-development/venvs/b/bin/python -m pip install --no-index --force-reinstall /ACPServer/acp2-development/data/b/package-smoke/artifacts/acp_worker-0.2.0-py3-none-any.whl",
+      "command": "/opt/acp2-dev/venvs/b/bin/python -m pip install --no-index --force-reinstall /opt/acp2-dev/data/b/package-smoke/artifacts/acp_worker-0.2.0-py3-none-any.whl",
       "expected": "previous installed role restored; no network access",
       "order": 5
     }
@@ -418,7 +418,7 @@
       "asset": "acp.storage.inventory@1.0.0/1.1.0",
       "license_state": "unknown",
       "owner": "external B21 plugin bundle",
-      "path": "/ACPServer/acp2-development/data/b/plugins/b21",
+      "path": "/opt/acp2-dev/data/b/plugins/b21",
       "reason": "bundle declares no LICENSE/NOTICE/COPYING file; absence is not approval",
       "spdx": null,
       "status": "NOT_VERIFIED"
@@ -467,7 +467,7 @@
         "version_bump_performed": false
       },
       "builder": {
-        "command": "/ACPServer/acp2-development/venvs/b/bin/python scripts/build_release.py --source /ACPServer/AutoCalcPlatform --out /tmp/opencode/b22-wheel --role all",
+        "command": "/opt/acp2-dev/venvs/b/bin/python scripts/build_release.py --source repo-root --out /tmp/opencode/b22-wheel --role all",
         "exit": 0
       },
       "historical_read_after_uninstall": {
@@ -494,7 +494,7 @@
       ],
       "schema": "acp2.b22.wheel-check.v1",
       "scope": "minimal local wheel build/install/uninstall; not the B25a release candidate",
-      "source_tree": "/ACPServer/AutoCalcPlatform (working tree @ ded5cfd804675f7b341726990b925e08bc27794c, intentionally dirty)",
+      "source_tree": "repo-root (working tree @ ded5cfd804675f7b341726990b925e08bc27794c, intentionally dirty)",
       "status": "PASS",
       "uninstall": {
         "cccp_still_importable": true,

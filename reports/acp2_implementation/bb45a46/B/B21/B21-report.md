@@ -4,7 +4,7 @@
 - Date: 2026-10-23 UTC
 - Owner: Plan B runtime (B21; B22 consumes these facts)
 - Controller: one loopback test Controller at `127.0.0.1:18782`, run root
-  `/ACPServer/acp2-development/data/b/run-root-b21`; production `8765` and
+  `/opt/acp2-dev/data/b/run-root-b21`; production `8765` and
   `/var/lib/acp/runs` untouched. The scenario observed `tasks_before=0` and
   `tasks_after=0`, so adapter discovery/install did not start a second
   authority or create a task.
@@ -28,7 +28,7 @@ unchanged behaviour.
 ## External plugin without a core-source edit
 
 Bundle outside the repository:
-`/ACPServer/acp2-development/data/b/plugins/b21/`.
+`/opt/acp2-dev/data/b/plugins/b21/`.
 
 - adapter: `acp.storage.inventory` (storage infrastructure; no science)
 - v1 `1.0.0` descriptor `ae511f7aa91ff85e…`, entrypoint

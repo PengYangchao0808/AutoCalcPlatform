@@ -69,7 +69,7 @@
     }
   ],
   "boundary": "FakeSSHClient/FakeSFTP phase-2 scheduler spy; no real cluster, no real bsub.",
-  "command": "PYTHONPATH=/ACPServer/AutoCalcPlatform/src /ACPServer/acp2-development/venvs/b/bin/python -m pytest tests/test_acp2_runtime_lsf_scenario.py tests/test_remote_phase1.py tests/test_remote_phase4.py -q",
+  "command": "PYTHONPATH=src /opt/acp2-dev/venvs/b/bin/python -m pytest tests/test_acp2_runtime_lsf_scenario.py tests/test_remote_phase1.py tests/test_remote_phase4.py -q",
   "is_live": false,
   "note": "This proves the remote contract at a simulated scheduler boundary. It is not a real LSF execution and must not be read as one.",
   "pytest_exit_file": "pytest.exit",

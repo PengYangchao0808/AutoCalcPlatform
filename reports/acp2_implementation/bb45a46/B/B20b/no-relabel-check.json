@@ -4,21 +4,21 @@
   "result": "PASS",
   "source_facts": {
     "b20a_receipt": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
-      "sha256": "51cc4c89453cae166b79f4ec0e69e166703503fdf56f1c05cb9cec051e25bdcc",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "sha256": "98c7315da0463ea17fd9eb4e5e065f1b0f5b3639cd6e337055d4a3ca75f3bb1f",
       "result": "NOT_VERIFIED",
       "reason": "c24a_absent",
       "exit_code": 2
     },
     "b20a_counters": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/counters.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/counters.json",
       "sha256": "05529afc19f637c7944f6171e22d87beb146248d93c22342aeabedbf8fe63693",
       "tasks_created": 0,
       "submission_attempted": false
     },
     "b20a_run_spec": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
-      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
       "started_at": null,
       "budgets": [
         13380,
@@ -28,8 +28,8 @@
       ]
     },
     "a_h4": {
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
-      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
       "status": "open"
     }
   },

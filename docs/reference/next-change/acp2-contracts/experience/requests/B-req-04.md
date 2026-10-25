@@ -62,7 +62,7 @@ Additionally, C observed a validator boundary B should close on its side:
   "dsh_revision": "687f282e8625c6b8d11ff58211a90524be2e4317",
   "node_version": "22.19.0",
   "pnpm_version": "11.28.5",
-  "loader": "file:///ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs"
+  "loader": "file:///opt/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs"
 }
 ```
 
@@ -142,9 +142,9 @@ Second failure mode: signing off H2 on B's side while the C side is open:
 ## Evidence path
 
 - H2 receipt: `docs/reference/next-change/acp2-contracts/experience/handoffs/H2.json`
-  (C worktree `/ACPServer/acp2-development/C`)
+  (C worktree `/opt/acp2-dev/C`)
 - Env reuse: `docs/reference/next-change/acp2-contracts/experience/handoffs/H2-env-reuse.md`
-- Closeout evidence: `/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/h2/`
+- Closeout evidence: `reports/acp2_implementation/bb45a46/C/h2/`
   (`build.log`, `verify.log` incl. tamper-proof section, `row-diff-check.log`,
   `ten-row-summary.md`, env-reuse captures, `build_h2_receipt.py`,
   `check_h2_rows.py`)

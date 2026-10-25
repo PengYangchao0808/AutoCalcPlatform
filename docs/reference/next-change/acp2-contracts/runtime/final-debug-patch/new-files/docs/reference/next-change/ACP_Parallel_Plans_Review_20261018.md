@@ -10,9 +10,9 @@
 
 | 路线 | 评审文件 | 当前任务规模 | 判断 |
 | --- | --- | --- | --- |
-| A 前端 | [草案](/ACPServer/AutoCalcPlatform/.omo/drafts/acp-parallel-plan-1-frontend.md)、[正式计划](/ACPServer/AutoCalcPlatform/.omo/plans/acp-parallel-plan-1-frontend.md) | 34 项 + F1–F4 | 可保留主要结构；补完整实例契约、原子切换范围和严格验收状态 |
-| B Services | [正式计划](/ACPServer/AutoCalcPlatform/.omo/plans/acp-parallel-plan-2-services.md) | 71 项 + F1–F4 | 需要实质性修订，尤其是禁止反向依赖与委托旧实现之间的矛盾 |
-| C CCCP | [正式计划](/ACPServer/AutoCalcPlatform/.omo/plans/acp-parallel-plan-3-cccp.md) | 51 项 + F1–F4 | 迁移原则正确；需要按真实依赖重排，并补科学闭包与正式发行验收 |
+| A 前端 | [草案](.omo/drafts/acp-parallel-plan-1-frontend.md)、[正式计划](.omo/plans/acp-parallel-plan-1-frontend.md) | 34 项 + F1–F4 | 可保留主要结构；补完整实例契约、原子切换范围和严格验收状态 |
+| B Services | [正式计划](.omo/plans/acp-parallel-plan-2-services.md) | 71 项 + F1–F4 | 需要实质性修订，尤其是禁止反向依赖与委托旧实现之间的矛盾 |
+| C CCCP | [正式计划](.omo/plans/acp-parallel-plan-3-cccp.md) | 51 项 + F1–F4 | 迁移原则正确；需要按真实依赖重排，并补科学闭包与正式发行验收 |
 
 评审依据是计划正文、架构主方案、三路原始清单和当前源码的静态核对。本次没有运行测试、真实科学计算或部署；下文“验收”均为建议补入实施计划的要求。计划已有的评审通过记录不能替代本次三路之间的交叉检查。
 
@@ -92,7 +92,7 @@ B-T34 分“每工作流切换”与“15 项最终覆盖”；B-T40/T41、C-T39
 
 ### X6 · P0：隔离运行环境，并把发布放在终验之后
 
-**问题。** 独立 worktree 不会自动隔离 editable install、Python 环境、运行目录、端口和 systemd 服务。A 的安装示例允许使用 `/opt/acp/venv`；三路轮流 `pip install -e` 到同一环境可能改变彼此的实际 import 来源。B-T71 在 F1–F4 之前包含真实发布/重启；“每 commit 可独立回退”也不能证明新数据库写入后旧代码可运行。
+**问题。** 独立 worktree 不会自动隔离 editable install、Python 环境、运行目录、端口和 systemd 服务。A 的安装示例允许使用 `/opt/acp2/venv`；三路轮流 `pip install -e` 到同一环境可能改变彼此的实际 import 来源。B-T71 在 F1–F4 之前包含真实发布/重启；“每 commit 可独立回退”也不能证明新数据库写入后旧代码可运行。
 
 **修改建议。** 每路固定自己的 worktree、venv、run_root、配置、端口和临时输出；集成另用一套环境，记录模块实际来源。开发切片只启动隔离测试服务；实际部署由集成发布任务统一执行。把 B-T71 拆为“发布包/兼容矩阵准备”与“终验通过后的发布及冒烟”。
 

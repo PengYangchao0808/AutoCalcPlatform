@@ -8,7 +8,7 @@
   "port_free": true,
   "production_8765_touched": false,
   "production_run_root_touched": false,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b19",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b19",
   "run_root_removed": true,
   "schema": "acp2.b19.cleanup.v1",
   "sigterm_sent": true

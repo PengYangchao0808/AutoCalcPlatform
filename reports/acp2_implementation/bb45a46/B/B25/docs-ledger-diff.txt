@@ -67,7 +67,7 @@ index 3dafc7a..ff8298e 100644
 +|---|---|---|---|---|
 +| W1 三角色 wheel 安装 | `python3.11 -m venv /tmp/opencode/b25b/venvs/web && env -u PYTHONPATH /tmp/opencode/b25b/venvs/web/bin/python -m pip install --find-links <release> <release>/acp_web-0.3.0-py3-none-any.whl` | exit 0；模块来自 venv site-packages | 四个 venv（cccp/worker/web/root）安装 0.3.0；`cccp.__file__`、`acp.__file__`、`acp_services.__file__` 均在各自 site-packages | PASS |
 +| W2 CCCP 独立样例 | `/tmp/opencode/b25b/venvs/cccp/bin/python cccp-sample.py` | 无 Controller、无 `acp` import，受控单点完成 | `complete=true`，energy `-1.0`，`acp`/`acp_services` 不在 `sys.modules` | PASS |
-+| W3 根/角色 CLI | `<venv>/bin/acp --help` | usage 打印，exit 0 | web 与 root 均 exit 0 | PASS |
++| W3 根/角色 CLI | `/opt/acp2/venv/bin/acp --help` | usage 打印，exit 0 | web 与 root 均 exit 0 | PASS |
 +| W4 Lab 服务 | `acp run serve --host 127.0.0.1 --port <free> --run-root <isolated> --no-browser` | `/api/health` status=ok | 随机 loopback 端口返回 `status=ok`，测毕停止 | PASS |
 +| W5 stdio MCP | `acp mcp serve --controller http://127.0.0.1:<port>` | initialize `2025-06-18` + 八工具 | 八个 P1 工具全部列出 | PASS |
 +| W6 资产/许可/配置/SDK | `unzip -l` + 安装面 import | LICENSE/NOTICE/LICENSE-DP5/model assets/py.typed/sample config/schema/SDK/docs | 全部在场；根发行 LICENSE 在 dist-info；样例配置与 schema/docs 随 `release/docs/` | PASS |
@@ -279,11 +279,11 @@ index 6b41ca1..6943f75 100644
 +
 +| track | task | registered path | observed | B25b treatment |
 +|---|---|---|---|---|
-+| A | A-27b | `/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | raw result present; its own `platform_row` still records `NOT_VERIFIED` because it was produced before the B25a candidate | aggregated as raw evidence; no science re-sign-off |
-+| A | A-28 | `/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | raw result `PASS` on the A-built cccp-0.2.0 wheel | aggregated; does not replace B25b's 0.3.0 install |
-+| C | C33 | `/ACPServer/acp2-development/evidence/C/clean-install-live` | absent | `NOT_VERIFIED` at the registered path |
-+| C | C34 | `/ACPServer/acp2-development/evidence/C/operator-runbook-live` | absent | `NOT_VERIFIED` at the registered path |
-+| C | static assets | `/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | absent | `NOT_VERIFIED(c_static_assets_absent)`; no mount fabricated |
++| A | A-27b | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | raw result present; its own `platform_row` still records `NOT_VERIFIED` because it was produced before the B25a candidate | aggregated as raw evidence; no science re-sign-off |
++| A | A-28 | `/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | raw result `PASS` on the A-built cccp-0.2.0 wheel | aggregated; does not replace B25b's 0.3.0 install |
++| C | C33 | `/opt/acp2-dev/evidence/C/clean-install-live` | absent | `NOT_VERIFIED` at the registered path |
++| C | C34 | `/opt/acp2-dev/evidence/C/operator-runbook-live` | absent | `NOT_VERIFIED` at the registered path |
++| C | static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | absent | `NOT_VERIFIED(c_static_assets_absent)`; no mount fabricated |
 +| C | C35 | n/a | not a B25b prerequisite | not signed |
 +
  ## Deferred capability handoffs (T36)
@@ -766,9 +766,9 @@ index 0000000..840fff6
 +
 +| 行 | 期望路径/状态 | 处理 |
 +|---|---|---|
-+| A-27b/A-28 | `/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z`、`…/A/A-28/20261023T044051Z` | 原始回执已汇总，B25b 不重签科学结论 |
-+| C33 | `/ACPServer/acp2-development/evidence/C/clean-install-live` | 未发布 → `NOT_VERIFIED` |
-+| C34 | `/ACPServer/acp2-development/evidence/C/operator-runbook-live` | 未发布 → `NOT_VERIFIED` |
++| A-27b/A-28 | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z`、`…/A/A-28/20261023T044051Z` | 原始回执已汇总，B25b 不重签科学结论 |
++| C33 | `/opt/acp2-dev/evidence/C/clean-install-live` | 未发布 → `NOT_VERIFIED` |
++| C34 | `/opt/acp2-dev/evidence/C/operator-runbook-live` | 未发布 → `NOT_VERIFIED` |
 +| C static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | 未发布 → `NOT_VERIFIED(c_static_assets_absent)`；不伪造挂载 |
 +| C35 | 非 B25b 前置 | 不签，等待 C 自签 |
 diff --git a/docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md b/docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md
@@ -891,7 +891,7 @@ index 0000000..8e23c18
 +export ACP2_EVIDENCE='/绝对路径/acp2-evidence/p1-run01'
 +
 +mkdir -p "$ACP2_TOOLS" "$ACP2_DATA_ROOT" "$ACP2_EVIDENCE"
-+git -C /ACPServer/AutoCalcPlatform worktree add --detach "$ACP2_SOURCE" "$ACP2_REV"
++git -C repo-root worktree add --detach "$ACP2_SOURCE" "$ACP2_REV"
 +findmnt -T "$ACP2_DATA_ROOT"
 +git -C "$ACP2_SOURCE" rev-parse HEAD
 +git -C "$ACP2_SOURCE" status --short
@@ -1353,8 +1353,8 @@ index 0000000..8e23c18
 +```bash
 +python3.11 -m venv /tmp/opencode/b25b/venvs/web
 +env -u PYTHONPATH /tmp/opencode/b25b/venvs/web/bin/python -m pip install \
-+  --find-links /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release \
-+  /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
++  --find-links reports/acp2_implementation/bb45a46/B/B25/release \
++  reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
 +```
 +
 +升级时同一环境只选择“根 `acp`”或“三角色发行”之一；不要混装同路径文件。升级前后各跑一次
@@ -1459,10 +1459,10 @@ index 0000000..9e56187
 +: "${ACP2_BASE_REV:?B00 must set the reviewed final_debug_candidate commit}"
 +export ACP2_CHECKOUT_ROOT='/可写绝对路径/acp2-development'
 +mkdir -p "$ACP2_CHECKOUT_ROOT"
-+git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/a-science "$ACP2_CHECKOUT_ROOT/A" "$ACP2_BASE_REV"
-+git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/b-runtime "$ACP2_CHECKOUT_ROOT/B" "$ACP2_BASE_REV"
-+git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/c-experience "$ACP2_CHECKOUT_ROOT/C" "$ACP2_BASE_REV"
-+git -C /ACPServer/AutoCalcPlatform worktree add -b acp2/integration "$ACP2_CHECKOUT_ROOT/integration" "$ACP2_BASE_REV"
++git -C repo-root worktree add -b acp2/a-science "$ACP2_CHECKOUT_ROOT/A" "$ACP2_BASE_REV"
++git -C repo-root worktree add -b acp2/b-runtime "$ACP2_CHECKOUT_ROOT/B" "$ACP2_BASE_REV"
++git -C repo-root worktree add -b acp2/c-experience "$ACP2_CHECKOUT_ROOT/C" "$ACP2_BASE_REV"
++git -C repo-root worktree add -b acp2/integration "$ACP2_CHECKOUT_ROOT/integration" "$ACP2_BASE_REV"
 +```
 +
 +若分支/目录已存在，核对其基线后复用，不执行覆盖/重置。开发 checkout 彼此独立；本机安装、科学作业与真实模型测试只由被指定操作者运行，避免三方重复执行同一笔计算。
@@ -1716,7 +1716,7 @@ index 0000000..9e56187
 +- **B25b 安装事实.** 四个干净 venv 安装 0.3.0 四发行；CCCP 无 Controller 样例、Lab、
 +  stdio MCP、CLI、资产/notice/license、四版本位置均通过；`package-install` exit 0。
 +- **未解决跨轨行.** C33/C34 未发布 → `NOT_VERIFIED`（期望
-+  `/ACPServer/acp2-development/evidence/C/clean-install-live`、
++  `/opt/acp2-dev/evidence/C/clean-install-live`、
 +  `…/C/operator-runbook-live`）；C 静态资产 manifest 未发布 →
 +  `NOT_VERIFIED(c_static_assets_absent)`；C35 不是 B25b 前置，不代签。
 +
@@ -1729,10 +1729,10 @@ index 0000000..9e56187
 +| B | Lab/MCP smoke | `…/B/B25/lab-health.json`; `…/B/B25/mcp-tools.json` | PASS | isolated port/run root; `2025-06-18`, 8 tools |
 +| B | asset audit | `…/B/B25/assets-audit.json` | PASS | LICENSE/NOTICE/DP5/model assets/config/schema/SDK/docs |
 +| B | version list | `…/B/B25/version-locations.json` | PASS | four locations `0.3.0` |
-+| A | A-27b raw install | `/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | present | raw only; no re-sign |
-+| A | A-28 SDK/examples | `/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | present (`PASS`) | on A-built 0.2.0 wheel |
-+| C | C33 clean install | `/ACPServer/acp2-development/evidence/C/clean-install-live` | `NOT_VERIFIED` | expected path absent |
-+| C | C34 operator runbook | `/ACPServer/acp2-development/evidence/C/operator-runbook-live` | `NOT_VERIFIED` | expected path absent |
++| A | A-27b raw install | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | present | raw only; no re-sign |
++| A | A-28 SDK/examples | `/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | present (`PASS`) | on A-built 0.2.0 wheel |
++| C | C33 clean install | `/opt/acp2-dev/evidence/C/clean-install-live` | `NOT_VERIFIED` | expected path absent |
++| C | C34 operator runbook | `/opt/acp2-dev/evidence/C/operator-runbook-live` | `NOT_VERIFIED` | expected path absent |
 +| C | static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | `NOT_VERIFIED(c_static_assets_absent)` | no mount fabricated |
 diff --git a/docs/reference/next-change/ACP_2.0_Release_Version_List_20261023.md b/docs/reference/next-change/ACP_2.0_Release_Version_List_20261023.md
 new file mode 100644
@@ -1844,19 +1844,19 @@ index 0000000..5aec3d5
 +DEFAULT_A_C_EVIDENCE = (
 +    {
 +        "id": "A-27b",
-+        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
++        "path": "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
 +    },
 +    {
 +        "id": "A-28",
-+        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
++        "path": "/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
 +    },
 +    {
 +        "id": "C33",
-+        "path": "/ACPServer/acp2-development/evidence/C/clean-install-live",
++        "path": "/opt/acp2-dev/evidence/C/clean-install-live",
 +    },
 +    {
 +        "id": "C34",
-+        "path": "/ACPServer/acp2-development/evidence/C/operator-runbook-live",
++        "path": "/opt/acp2-dev/evidence/C/operator-runbook-live",
 +    },
 +)
 +DEFAULT_STATIC_MANIFEST = (

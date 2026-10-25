@@ -1,32 +1,32 @@
 {
   "artifacts": {
     "acp-web-0.3.0.tar.gz": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-web-0.3.0.tar.gz",
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-web-0.3.0.tar.gz",
       "sha256": "3186b347377599c1e71514bdccc52d1ebf2811eb73b6d802d18b2141a8c927a7",
       "size_bytes": 2046926
     },
     "acp-worker-0.3.0.tar.gz": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-worker-0.3.0.tar.gz",
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-worker-0.3.0.tar.gz",
       "sha256": "223fd6aec2760c35d5346f56edf5b17a3dc0376481e5ea4b48348d36493358b5",
       "size_bytes": 580783
     },
     "acp_web-0.3.0-py3-none-any.whl": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_web-0.3.0-py3-none-any.whl",
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_web-0.3.0-py3-none-any.whl",
       "sha256": "d055e869de602cf1a257d4542243849806b3e3ebe805b78c70a412e8e5a2b210",
       "size_bytes": 2233023
     },
     "acp_worker-0.3.0-py3-none-any.whl": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_worker-0.3.0-py3-none-any.whl",
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_worker-0.3.0-py3-none-any.whl",
       "sha256": "edd849a75b28f58bba54d8613ec14e1ecae46a325d51d3874967fc683c6ec949",
       "size_bytes": 614654
     },
     "cccp-0.3.0-py3-none-any.whl": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0-py3-none-any.whl",
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0-py3-none-any.whl",
       "sha256": "b505413147e3c3a07c9b405631e3ee244d0dc9f7a8f699a45ec112ec692c559c",
       "size_bytes": 44570492
     },
     "cccp-0.3.0.tar.gz": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0.tar.gz",
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0.tar.gz",
       "sha256": "31631e2f5c131ccba6e08ffac23035feb7670d226b0349cb6816c23959aea425",
       "size_bytes": 44429877
     },
@@ -120,12 +120,12 @@
   "release_candidate_id": "acp2.plan-b.h7.release-fix5",
   "release_manifest": {
     "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
-    "sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
+    "sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
     "size_bytes": 88578
   },
   "release_source": {
     "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
-    "sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+    "sha256": "e2ee1096e0a7ec05efe86ffb35c4e6772d65021c1c50d8643c099780ced436df",
     "size_bytes": 2612
   },
   "schema": "acp2.release.candidate.v1",

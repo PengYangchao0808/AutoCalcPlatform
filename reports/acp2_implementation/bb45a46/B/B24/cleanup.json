@@ -15,10 +15,10 @@
   "no_test_listener": true,
   "no_test_process": true,
   "preserved": [
-    "/ACPServer/acp2-development/data/b/b24-migration/backup/manifest.json",
-    "/ACPServer/acp2-development/data/b/b24-migration/backup/acp_jobs.db",
-    "/ACPServer/acp2-development/data/b/b24-migration/backup/acp_admission.db",
-    "/ACPServer/acp2-development/data/b/b24-migration/backup/legacy-acp_jobs.db"
+    "/opt/acp2-dev/data/b/b24-migration/backup/manifest.json",
+    "/opt/acp2-dev/data/b/b24-migration/backup/acp_jobs.db",
+    "/opt/acp2-dev/data/b/b24-migration/backup/acp_admission.db",
+    "/opt/acp2-dev/data/b/b24-migration/backup/legacy-acp_jobs.db"
   ],
   "production_port_8765_touched": false,
   "production_run_root_touched": false,
@@ -30,7 +30,7 @@
   "schema": "acp2.b24.cleanup.v1",
   "test_listeners": [],
   "test_processes": [],
-  "workspace": "/ACPServer/acp2-development/data/b/b24-migration",
+  "workspace": "/opt/acp2-dev/data/b/b24-migration",
   "workspace_bytes": 1749125,
   "workspace_preserved": true
 }

@@ -61,12 +61,12 @@
         "baseline-lock.json contains a final_debug_candidate field"
       ],
       "observed": {
-        "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
         "exists": true,
         "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
         "evidence_root": "reports/acp2_implementation/bb45a46",
         "evidence_root_is_project_relative": true,
-        "evidence_root_absolute": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+        "evidence_root_absolute": "reports/acp2_implementation/bb45a46",
         "evidence_roots_c": "reports/acp2_implementation/bb45a46/C",
         "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
         "verification": "1906/1906",
@@ -91,17 +91,17 @@
         "manifest.json evidence_root equals baseline-lock.json evidence_root"
       ],
       "observed": {
-        "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/manifest.json",
+        "path": "docs/reference/next-change/acp2-contracts/manifest.json",
         "exists": true,
         "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
-        "evidence_root_absolute": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+        "evidence_root_absolute": "reports/acp2_implementation/bb45a46",
         "note": "Adopted absolute root equals B02a's ACP2_EVIDENCE value."
       }
     },
     "B02a:tools-root": {
       "producer": "B02a",
       "consumer": "C/T-04, C/T-11, C/T-12 (Node/pnpm/DSH/browser tooling)",
-      "artifact": "/ACPServer/acp2-development/venvs",
+      "artifact": "/opt/acp2-dev/venvs",
       "readiness": "integration_ready",
       "readiness_ladder": "producer_evidence_verified",
       "delivery_status": "planned",
@@ -117,10 +117,10 @@
         "B02a provides the frozen DSH checkout revision"
       ],
       "observed": {
-        "path": "/ACPServer/acp2-development/venvs",
+        "path": "/opt/acp2-dev/venvs",
         "exists": true,
-        "b_env_acp2_tools": "/ACPServer/acp2-development/venvs",
-        "c_env_acp2_tools": "/ACPServer/acp2-tools",
+        "b_env_acp2_tools": "/opt/acp2-dev/venvs",
+        "c_env_acp2_tools": "/opt/acp2-tools",
         "divergence": "Intentional. B02a's root holds Python role venvs; C's root holds the T-04 Node/pnpm/DSH/browser toolchain. Neither replaces the other.",
         "note": "The artifact/sha256 fields identify the B02a env handoff file data/b/acceptance-env.sh."
       }
@@ -134,7 +134,7 @@
       "delivery_status": "planned",
       "delivered": true,
       "commit": "0dee16f",
-      "sha256": "4ed3f5b76ce7e20822841d125c97426b9e8e838ec03f8749c5ffc993e3d04cd7",
+      "sha256": "f5cc67f7203bf1cc675757be01ded7fa3837ab90d3a0c92a41e6f2b49ffca940",
       "evidence": "reports/acp2_implementation/bb45a46/B/B02/role-interpreters.json",
       "requires": [
         "B02a publishes ACP2_C_PYTHON path",
@@ -144,17 +144,17 @@
       ],
       "observed": {
         "c_python": {
-          "path": "/ACPServer/acp2-development/venvs/c/bin/python",
+          "path": "/opt/acp2-dev/venvs/c/bin/python",
           "exists": true,
           "import_source_assertion": "PASS",
-          "acp_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+          "acp_import": "/opt/acp2-dev/C/src/acp/__init__.py",
           "provenance": "created by C/T-01 bootstrap; B02a verified it in role-interpreters.json"
         },
         "integration_python": {
-          "path": "/ACPServer/acp2-development/venvs/integration/bin/python",
+          "path": "/opt/acp2-dev/venvs/integration/bin/python",
           "exists": true,
           "import_source_assertion": "PASS",
-          "acp_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+          "acp_import": "/opt/acp2-dev/integration/src/acp/__init__.py",
           "provenance": "created by C/T-01 bootstrap; B02a verified it in role-interpreters.json"
         },
         "note": "sha256 is that of the B02 role-interpreters evidence file."
@@ -177,9 +177,9 @@
         "B02a does not require Chromium launch as its acceptance condition"
       ],
       "observed": {
-        "path": "/ACPServer/acp2-development/venvs/browser/bin/python",
+        "path": "/opt/acp2-dev/venvs/browser/bin/python",
         "exists": true,
-        "playwright_import": "/ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py",
+        "playwright_import": "/opt/acp2-dev/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py",
         "playwright_version": "1.63.0",
         "chromium_installed": false,
         "note": "Chromium installation and launch belong to C/T-08, not B02a. B02a must not be accepted on Chromium launch."

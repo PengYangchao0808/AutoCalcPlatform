@@ -51,7 +51,7 @@
   "remote_job_id": "1765",
   "group_id": "20261024_015940_001_fix5-lsf-sp4",
   "node_id": "node-157",
-  "host": "10.16.5.157",
+  "host": "192.168.1.100",
   "result": {
     "admission": {
       "reservation_id": "res_idem_5e58b1ddca8a42419b98eae81778919a",
@@ -84,7 +84,7 @@
       "submitted_at": "2026-10-23T18:06:15.145435+00:00"
     },
     "node": "node-157",
-    "remote_dir": "/home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c",
+    "remote_dir": "/home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c",
     "execution": {
       "schema": 1,
       "attempt": 1,
@@ -95,8 +95,8 @@
       "release_id": "1c79785a657c6614"
     },
     "lsf_job_id": "1765",
-    "command_line": "/home/xieningke/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
-    "host": "10.16.5.157",
+    "command_line": "/home/redacted-user/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
+    "host": "192.168.1.100",
     "exit_code": 0,
     "provenance": {
       "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
@@ -107,8 +107,8 @@
       "method": "singlepoint",
       "basis": null,
       "solvent": null,
-      "command_line": "/home/xieningke/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/xieningke/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
-      "hostname": "10.16.5.157",
+      "command_line": "/home/redacted-user/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
+      "hostname": "192.168.1.100",
       "ncores": 1,
       "memory_gb": 1.0,
       "wall_time_seconds": 414.671252,

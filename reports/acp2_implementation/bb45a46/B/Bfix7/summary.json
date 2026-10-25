@@ -44,7 +44,7 @@
           "F0/S1": "PASS",
           "F1/S1": "PASS"
         },
-        "command": "/usr/bin/python3.11 scripts/acceptance/four_combinations.py --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24b/four-combination --f1-revision 493790709830eac4ce347b5fb81414050f7a1e21 --cells F0/S1,F1/S1",
+        "command": "/usr/bin/python3.11 scripts/acceptance/four_combinations.py --out reports/acp2_implementation/bb45a46/B/B24b/four-combination --f1-revision 493790709830eac4ce347b5fb81414050f7a1e21 --cells F0/S1,F1/S1",
         "exit_code": 0,
         "result": "PASS",
         "summary": "reports/acp2_implementation/bb45a46/B/B24b/four-combination-summary.json"
@@ -113,8 +113,8 @@
       "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
       "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
       "release_fix5_digests_unchanged": {
-        "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
-        "source_json_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6"
+        "release_manifest_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
+        "source_json_sha256": "e2ee1096e0a7ec05efe86ffb35c4e6772d65021c1c50d8643c099780ced436df"
       },
       "status": "CLOSED"
     }

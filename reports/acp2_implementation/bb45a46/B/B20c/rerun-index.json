@@ -3,7 +3,7 @@
   "commands": [
     {
       "argv": [
-        "/ACPServer/acp2-development/venvs/b/bin/python",
+        "/opt/acp2-dev/venvs/b/bin/python",
         "scripts/acceptance/acp2_runtime.py",
         "--scenario",
         "da-runtime",
@@ -12,36 +12,36 @@
         "--controller",
         "http://127.0.0.1:18781",
         "--fixture",
-        "/ACPServer/acp2-development/data/b/fixtures/da/da-run.json",
+        "/opt/acp2-dev/data/b/fixtures/da/da-run.json",
         "--out",
-        "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20",
+        "reports/acp2_implementation/bb45a46/B/B20",
         "--timeout",
         "14400"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "env": {
         "ACP_CANDIDATE_REVISION": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
-        "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root-b20a",
-        "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
-        "CONFSEARCH_ORCA_PATH": "/home/xieningke/orca611/orca",
-        "LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
-        "PYTHONPATH": "/ACPServer/AutoCalcPlatform/src"
+        "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root-b20a",
+        "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+        "CONFSEARCH_ORCA_PATH": "/home/redacted-user/orca611/orca",
+        "LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+        "PYTHONPATH": "src"
       },
       "phase": "B20a-exec",
       "result_expected": "NOT_VERIFIED(c24a_absent) until C24a publishes the single approved submission",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/scenario-command.txt"
+      "source_evidence": "reports/acp2_implementation/bb45a46/B/B20/scenario-command.txt"
     },
     {
       "argv": [
-        "/ACPServer/acp2-development/venvs/b/bin/python",
+        "/opt/acp2-dev/venvs/b/bin/python",
         "scripts/acceptance/acp2_runtime.py",
         "--check-only",
-        "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/summary.json"
+        "reports/acp2_implementation/bb45a46/B/B20/summary.json"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "phase": "B20a-ready-check",
       "result_expected": "VALID (tool check only, never a scenario PASS)",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/.omo/evidence/task-22-acp2-parallel-plan-b-runtime.md"
+      "source_evidence": ".omo/evidence/task-22-acp2-parallel-plan-b-runtime.md"
     },
     {
       "argv": [
@@ -51,20 +51,20 @@
         "tests/test_acp2_runtime_science_handoff.py",
         "-q"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "env": {
         "PYTHONPATH": "src:."
       },
       "phase": "B20b",
       "result_expected": "test suite passes; H4 stays open",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20b/validation-log.json"
+      "source_evidence": "reports/acp2_implementation/bb45a46/B/B20b/validation-log.json"
     },
     {
       "argv": null,
       "phase": "B20a-search",
       "reason": "No search producer command exists; a known-candidate chain is not search evidence.",
       "result_expected": "NOT_VERIFIED(search_not_declared)",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
+      "source_evidence": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
     },
     {
       "argv": [
@@ -74,7 +74,7 @@
         "tests/test_acp2_runtime_h4_closeout.py",
         "-q"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "env": {
         "PYTHONPATH": "src:."
       },
@@ -88,7 +88,7 @@
         "--manifest",
         "docs/reference/next-change/acp2-contracts/manifest.json"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "phase": "contract-validation",
       "result_expected": "VALID"
     }

@@ -11,7 +11,7 @@
       "mapping_version": 1,
       "project_id": "",
       "relative_path": "STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
-      "root": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized",
+      "root": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized",
       "tenant_id": ""
     }
   ],
@@ -31,7 +31,7 @@
   },
   "fencing_token": "2efe90c650d4cf675c65dc8b51fe27e8",
   "job_id": "20261023_111633_001_singlepoint",
-  "owner": "local:workstation:1051867:1",
+  "owner": "local:redacted-host:1051867:1",
   "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
   "receipt_version": 1,
   "release_digest": "42a004836eec9fad89a9c54a06cdfb62cf674ed3da5fac9deda832b0f968dd19",

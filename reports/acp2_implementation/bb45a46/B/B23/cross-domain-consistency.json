@@ -26,7 +26,7 @@
   "rows": [
     {
       "artifact": {
-        "path": "/ACPServer/acp2-development/A/tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+        "path": "/opt/acp2-dev/A/tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
         "sha256": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78",
         "size_bytes": 2670
       },
@@ -68,7 +68,7 @@
     },
     {
       "artifact": {
-        "path": "/ACPServer/acp2-development/A/tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+        "path": "/opt/acp2-dev/A/tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
         "sha256": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3",
         "size_bytes": 1015
       },

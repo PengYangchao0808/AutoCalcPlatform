@@ -293,7 +293,7 @@
       "delivery_status": "planned",
       "description": "C24a unique approved submission",
       "observed_state": "blocked: C plan T-34 is [~] and no approved single submission exists",
-      "observed_plan": "/ACPServer/AutoCalcPlatform/.omo/plans/acp2-plan-c-rph-workbench.md",
+      "observed_plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
       "c_t34_gates_on": "B20a-ready"
     },
     {
@@ -2193,7 +2193,7 @@
       "A": {
         "status": "NOT_VERIFIED",
         "reason": "blocked_fixture",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json"
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json"
       }
     },
     "consumer_edge_checks": {
@@ -2225,7 +2225,7 @@
     {
       "track": "C",
       "role": "C handoff ledger merged into consumer_edges",
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/handoffs/dependencies-c.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/handoffs/dependencies-c.json",
       "sha256": "505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b",
       "schema": "acp2.experience.dependencies-c.v1",
       "generated_at": "2026-10-22T19:14:00Z",
@@ -2235,7 +2235,7 @@
     {
       "track": "A",
       "role": "A cross-track dependency ledger",
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
       "repo_relative_equivalent": "docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
       "sha256": null,
       "status": "NOT_VERIFIED",
@@ -2249,7 +2249,7 @@
     {
       "id": "A-CROSS-TRACK-DEPENDENCIES-ABSENT",
       "track": "A",
-      "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
       "repo_relative_equivalent": "docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
       "status": "NOT_VERIFIED",
       "reason": "blocked_fixture",
@@ -2293,16 +2293,16 @@
     {
       "consumer": "C/T-04, C/T-11, C/T-12",
       "producer": "B02a",
-      "artifact": "/ACPServer/acp2-tools",
+      "artifact": "/opt/acp2-tools",
       "version": "1.0.0",
       "digest_or_pending": "PENDING",
       "readiness": "contract_ready",
       "relation": "AND",
       "delivered": true,
       "observed": {
-        "node": "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
-        "pnpm": "/ACPServer/acp2-tools/pnpm",
-        "dsh": "/ACPServer/acp2-tools/deepseek-harness",
+        "node": "/opt/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+        "pnpm": "/opt/acp2-tools/pnpm",
+        "dsh": "/opt/acp2-tools/deepseek-harness",
         "evidence": "reports/acp2_implementation/bb45a46/B/B02/b-runtime.json"
       },
       "supersedes_c_row": "B02a:tools-root"
@@ -2317,8 +2317,8 @@
       "relation": "AND",
       "delivered": true,
       "observed": {
-        "B": "/ACPServer/acp2-development/venvs/b/bin/python",
-        "browser": "/ACPServer/acp2-development/venvs/browser/bin/python",
+        "B": "/opt/acp2-dev/venvs/b/bin/python",
+        "browser": "/opt/acp2-dev/venvs/browser/bin/python",
         "evidence": "reports/acp2_implementation/bb45a46/B/B02/role-interpreters.json"
       },
       "supersedes_c_row": "B02a:role-interpreters"
@@ -2333,7 +2333,7 @@
       "relation": "AND",
       "delivered": true,
       "observed": {
-        "browser_python": "/ACPServer/acp2-development/venvs/browser/bin/python",
+        "browser_python": "/opt/acp2-dev/venvs/browser/bin/python",
         "chromium_launch_owner": "C T-08 (never a B02a acceptance condition)",
         "evidence": "reports/acp2_implementation/bb45a46/B/B02/browser-env.json"
       },

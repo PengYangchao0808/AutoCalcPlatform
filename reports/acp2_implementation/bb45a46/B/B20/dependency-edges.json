@@ -18,7 +18,7 @@
     "c24a_delivery_status": "planned",
     "c24a_observed_state": "blocked: C plan T-34 is [~] and no approved single submission exists",
     "c24a_readiness": "contract_ready",
-    "path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+    "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
     "ready_to_c24a_edges": [
       {
         "artifact": "DA execution interface/preflight",

@@ -4,9 +4,9 @@
   "backend": "local",
   "result": "PASS",
   "fixture_id": "fx-local-singlepoint-h2-sto3g-v1",
-  "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+  "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
   "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
-  "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
+  "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "controller": "http://127.0.0.1:18774",
   "task_ref": "20261023_111633_001_singlepoint",
@@ -17,9 +17,9 @@
   "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
   "result_digest": "sha256:7a443c5e8d1192429e166f6d058cc861d7d006405eca1a7d65f40556c6e1c2dd",
   "result_manifest_digest": "sha256:a2bc8d41b00072ccd94780c689fee79d634095a57080fa4701883fa055af3d3b",
-  "work_dir": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
-  "orca_binary": "/home/xieningke/orca611/orca",
-  "orca_output": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
+  "orca_binary": "/home/redacted-user/orca611/orca",
+  "orca_output": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
   "orca_terminated_normally": true,
   "orca_energy_hartree": -1.116759307204,
   "orca_pids": [
@@ -74,7 +74,7 @@
     {
       "name": "orca_terminated_normally",
       "status": "PASS",
-      "detail": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out"
+      "detail": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out"
     },
     {
       "name": "orca_energy_matches_task_result",
@@ -106,7 +106,7 @@
     {
       "path": "native/RESULT__task_result.json",
       "size_bytes": 1965,
-      "sha256": "4df24be5efd501dcabb446160b056c29d48d2d26e904f12d3b6fc9064038a1cf"
+      "sha256": "42a140e79ffd0bebdfa3e096ed8350078ab50e2673c1121ce8c6ae4ceeffc022"
     },
     {
       "path": "native/RESULT__result_manifest.json",
@@ -131,22 +131,22 @@
     {
       "path": "native/execution_receipt.json",
       "size_bytes": 1699,
-      "sha256": "2fca719aca44ed04b7753171cc4a81f73ded77cc38e9d6e7db2ab546b33f7cc4"
+      "sha256": "f7a7ec658cde74d2e51831664676a341475f20d19c1805c663c26c854a31076d"
     },
     {
       "path": "native/job.json",
       "size_bytes": 6582,
-      "sha256": "6cfc53f46f35a358526161568181c3926441a57faf6e47150a64d6dc2b35c8a1"
+      "sha256": "b5d2e474b590595cc4034d602dfb76aa84d731794ef97475fff500a61a0e139b"
     },
     {
       "path": "native/task.json",
       "size_bytes": 969,
-      "sha256": "05f0552779b1209dd30006a1f24abb4d474b8f5db186edfdd043a9135690fc08"
+      "sha256": "79c05a1c6ed8617550abcf10375e7345ab86f3467fc179903beb0debbd6a918f"
     },
     {
       "path": "native/sp.out",
       "size_bytes": 41904,
-      "sha256": "e970d7bc4c8d74912413ae9c9a1bbf3ed6e9d8d47c7fcb0b512bd5bf7dd4d497"
+      "sha256": "8d8993b355e244cef30b64f3bad8966c7e6cbba52d506ddd583c2d03fad530c3"
     },
     {
       "path": "native/sp.inp",

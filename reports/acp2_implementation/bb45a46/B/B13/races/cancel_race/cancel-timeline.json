@@ -49,7 +49,7 @@
         "mapping_version": 1,
         "project_id": "",
         "relative_path": "9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__14",
-        "root": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized",
+        "root": "/opt/acp2-dev/data/b/run-root-b13/uncategorized",
         "tenant_id": ""
       }
     ],
@@ -57,7 +57,7 @@
     "evidence_digests": {},
     "fencing_token": "cd5da85fa1e00512a4044a044a50ae83",
     "job_id": "20261023_073458_002_singlepoint",
-    "owner": "local:workstation:750900:1",
+    "owner": "local:redacted-host:750900:1",
     "plan_identity": "v2:35dbd3c213a1f15d4ea8b5224a537ec9",
     "receipt_version": 1,
     "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",

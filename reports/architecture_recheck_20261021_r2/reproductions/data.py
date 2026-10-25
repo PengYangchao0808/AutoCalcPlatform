@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-sys.path.insert(0, "/ACPServer/AutoCalcPlatform/src")
+sys.path.insert(0, "src")
 
 from acp.results.remote_structure_cache import RemoteStructureCache
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus

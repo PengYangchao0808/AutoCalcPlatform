@@ -57,7 +57,7 @@ Ruff 对本次新增/修复的相关 Python 实现和独立测试通过，`git d
 可复现四组合（先将归档补丁复制到当前机器的稳定路径）：
 
 ```bash
-/opt/acp/venv/bin/python scripts/acceptance/four_combinations.py \
+/opt/acp2/venv/bin/python scripts/acceptance/four_combinations.py \
   --f0-revision 878e3557b3b593a0c42adf842e80fe1408db395e \
   --f1-revision 096cdffe9a3817d8ee443d824830d87ec6e07bc2 \
   --candidate-patch reports/architecture_debug_20261021/evidence/candidate-source.patch \

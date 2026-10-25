@@ -6,7 +6,7 @@
   "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B17 working-tree files",
   "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
   "contract_version": "1.1.0",
-  "controller_command": "/ACPServer/acp2-development/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18777 --run-root /ACPServer/acp2-development/data/b/run-root-b17 --poll-interval 1 --no-browser",
+  "controller_command": "/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18777 --run-root /opt/acp2-dev/data/b/run-root-b17 --poll-interval 1 --no-browser",
   "controller_health": {
     "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
     "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
@@ -17,12 +17,12 @@
     "started_at": "2026-10-23T05:55:24.018219Z",
     "status": "ok"
   },
-  "fixture": "/ACPServer/acp2-development/data/b/fixtures/approval-b17.json",
+  "fixture": "/opt/acp2-dev/data/b/fixtures/approval-b17.json",
   "fixture_sha256": "093a3671d15134794a581acb673e40c0e74b8e3e893373d1ceb13ed1f6ea4a99",
   "schema": "acp2.b17.candidate.v1",
   "server_revision": "e5463de + B17 working-tree files",
-  "source_checkout": "/ACPServer/AutoCalcPlatform",
-  "source_composition": "current working tree (PYTHONPATH=/ACPServer/AutoCalcPlatform/src)",
+  "source_checkout": "repo-root",
+  "source_composition": "current working tree (PYTHONPATH=src)",
   "working_tree_files": [
     {
       "path": "src/acp_services/runtime/usage_units.py",

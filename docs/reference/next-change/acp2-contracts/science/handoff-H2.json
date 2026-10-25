@@ -12,7 +12,7 @@
   "contract_set_version": 1,
   "contract_version_basis": {
     "handoff_h1": "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
-    "handoff_h1_sha256": "da58d71880d406f068c9138008c21e76c0fe1a9e5e307302c511b23c8e9e6902",
+    "handoff_h1_sha256": "052d03e5084df7378ca388cb924d5be9efa4337049ae8f84ac040eacbec138ae",
     "handoff_h1_version": 1,
     "rule": "This H2 freezes acp2.science version 1. New semantics require the next contract version; no field is silently widened."
   },
@@ -49,7 +49,7 @@
   },
   "frozen_at": "2026-10-22T15:04:22Z",
   "gate_command": [
-    "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "/opt/acp2-dev/envs/a-python/bin/python",
     "-m",
     "pytest",
     "tests/test_acp2_science_schema.py",
@@ -97,7 +97,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py -q"
         ],
         "summary": "handoff-H1.json lists 14 contract artifacts; every schema, example and prose file is present, parses, and matches its recorded sha256. H1 declares accepted schema versions [1] and keeps the single B01 receipt gap.",
         "tests": [
@@ -119,7 +119,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_registry.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_registry.py -q"
         ],
         "summary": "tests/test_acp2_science_registry.py: 25 passed. The registry is immutable, returns capability ids in deterministic order, rejects duplicate capability/implementation ids, and never imports cccp.calculation.tasks at discovery.",
         "tests": [
@@ -140,7 +140,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_task_binding.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_task_binding.py -q"
         ],
         "summary": "tests/test_acp2_science_task_binding.py: 35 passed (15 parametrized task kinds + 20 behaviour tests). Each compute capability reaches exactly one run_* core; vibration.analyze never calls a task core; preflight writes no file and starts no subprocess; unsupported bindings raise typed errors.",
         "tests": [
@@ -165,7 +165,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_recipe.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_recipe.py -q"
         ],
         "summary": "Recipe contracts mirror recipe.schema.json v1 as frozen dataclasses; validation rejects cycles, dangling refs, missing required upstreams and diagnostic-only steps masquerading as required. tests/test_acp2_science_recipe.py: 34 passed (contract + compile/identity cases).",
         "tests": [
@@ -194,7 +194,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_recipe.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_recipe.py -q"
         ],
         "summary": "Compiling the same recipe twice is byte-identical; the definition digest covers method/structure/mapping/charge/multiplicity/electronic state/standard state/provider versions/OutputRef selectors and ignores approval, evidence, timestamps and display name. Step identity materializes from actual upstream digests at dispatch; unresolved selectors are typed errors. identity-boundary.md joins these inputs to the existing plan/step identity without a second recovery truth.",
         "tests": [
@@ -220,7 +220,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_registry.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_registry.py -q"
         ],
         "summary": "Catalog seeds electronic.energy, geometry.optimize, vibration.compute and vibration.analyze only. Ordering is deterministic and the analysis entry point resolves lazily without importing task modules. The ten unsupported families are declared explicitly with no invented descriptor.",
         "tests": [
@@ -241,7 +241,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_handoff.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_handoff.py -q"
         ],
         "summary": "task-compatibility-matrix.md has exactly 15 rows derived from the live TASK_KINDS, not the stale README list. Every row names its run_* core, options/payload types, execution status implemented and evidence static-fact. No row claims a real run.",
         "tests": [
@@ -262,7 +262,7 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_task_binding.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_task_binding.py -q"
         ],
         "summary": "cccp.calculation now exports run_xtb_constrained_opt, XtbConstrainedOptOptions and XtbConstrainedOptPayload. The lazy export table covers all fifteen TaskKinds and the package-root object is identical to the task module object; no existing export changed.",
         "tests": [
@@ -289,8 +289,8 @@
           }
         ],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_reaction_contract.py -q",
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_evidence_contract.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_reaction_contract.py -q",
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_evidence_contract.py -q"
         ],
         "summary": "Reaction and question schemas, public types, fixtures and semantic rules are delivered. Reaction contract suite: 32 passed; evidence/provenance suite: delivered with its named negatives. These rows are recorded because the artifacts exist, not because the P0 gate depends on them.",
         "tests": [
@@ -307,7 +307,7 @@
       "evidence": {
         "artifacts": [],
         "commands": [
-          "/ACPServer/acp2-development/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py tests/test_acp2_science_registry.py tests/test_acp2_science_task_binding.py tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_acp2_science_handoff.py -q"
+          "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_schema.py tests/test_acp2_science_registry.py tests/test_acp2_science_task_binding.py tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_acp2_science_handoff.py -q"
         ],
         "summary": "Required P0 gate command: schema 14, registry 25, binding 35, architecture invariants 20, isolation 8 and handoff validator 9 tests. Seven-suite science regression: 170 passed. The gate command includes only delivered test files.",
         "tests": [
@@ -329,8 +329,8 @@
     "base_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
     "branch": "acp2/a-science",
     "pre_delivery_commit": "b20c28614638a47b9f74be15db9226ae62d1aadd",
-    "python": "/ACPServer/acp2-development/envs/a-python/bin/python",
-    "worktree": "/ACPServer/acp2-development/A"
+    "python": "/opt/acp2-dev/envs/a-python/bin/python",
+    "worktree": "/opt/acp2-dev/A"
   },
   "unsupported_capabilities": {
     "families": [

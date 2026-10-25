@@ -1,6 +1,6 @@
 {
   "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
-  "controller_start_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py --source /ACPServer/acp2-development/B/src --fault-file /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json --config /ACPServer/acp2-development/data/b/controller-config/cccp.yaml --candidate-revision 10eb71e4bc1811054c9d19ae4fd71d974e027f8a --orca /home/xieningke/orca611/orca --orca-ld-library-path /home/xieningke/openmpi418/lib:/home/xieningke/orca611 -- run serve --host 127.0.0.1 --port 18771 --run-root /ACPServer/acp2-development/data/b/run-root-b13 --poll-interval 1 --no-browser",
+  "controller_start_command": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/acp2_fault_controller.py --source /opt/acp2-dev/B/src --fault-file reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json --config /opt/acp2-dev/data/b/controller-config/cccp.yaml --candidate-revision 10eb71e4bc1811054c9d19ae4fd71d974e027f8a --orca /home/redacted-user/orca611/orca --orca-ld-library-path /home/redacted-user/openmpi418/lib:/home/redacted-user/orca611 -- run serve --host 127.0.0.1 --port 18771 --run-root /opt/acp2-dev/data/b/run-root-b13 --poll-interval 1 --no-browser",
   "controller_start_command_file": "controller-start-command.txt",
   "fault_file": "fault/publication-fault.json",
   "fault_file_after_run": "disarmed (armed=false) with the failure event and QC PIDs",

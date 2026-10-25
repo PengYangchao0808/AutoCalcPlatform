@@ -23,11 +23,11 @@
     "summary:root_acp-0.3.0.tar.gz": "1ebd408e4657f8894021d98984ec82673ca9050ef80741dc8c2fa9a995e9e3fe"
   },
   "errors": [],
-  "evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25",
-  "install_results": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/b25a-install-results.json",
-  "release_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-b25a-original",
-  "release_manifest": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-b25a-original/release-manifest.json",
+  "evidence": "reports/acp2_implementation/bb45a46/B/B25",
+  "install_results": "reports/acp2_implementation/bb45a46/B/B25/b25a-install-results.json",
+  "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-b25a-original",
+  "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-b25a-original/release-manifest.json",
   "result": "PASS",
   "schema": "acp2.b25.digest_consistency.v2",
-  "summary": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/b25a-summary.json"
+  "summary": "reports/acp2_implementation/bb45a46/B/B25/b25a-summary.json"
 }

@@ -6,7 +6,7 @@
   "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B16 working-tree files (the harness schema accepts a source-overlay sha256)",
   "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
   "contract_version": "1.1.0",
-  "controller_command": "/ACPServer/acp2-development/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18776 --run-root /ACPServer/acp2-development/data/b/run-root-b16 --poll-interval 1 --no-browser",
+  "controller_command": "/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18776 --run-root /opt/acp2-dev/data/b/run-root-b16 --poll-interval 1 --no-browser",
   "controller_health": {
     "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
     "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
@@ -17,12 +17,12 @@
     "started_at": "2026-10-23T05:03:23.170199Z",
     "status": "ok"
   },
-  "fixture": "/ACPServer/acp2-development/data/b/fixtures/approval.json",
-  "fixture_sha256": "502a2b7f3daefe7a7de756fa63a99035366529e5090972873c33079156179b41",
+  "fixture": "/opt/acp2-dev/data/b/fixtures/approval.json",
+  "fixture_sha256": "67a35f1eaff4cb61b727e5c528e4fc767839ad712e299d681969f5fb98d55157",
   "schema": "acp2.b16.candidate.v1",
   "server_revision": "57bac39 + B16 working-tree files",
-  "source_checkout": "/ACPServer/AutoCalcPlatform",
-  "source_composition": "current working tree (PYTHONPATH=/ACPServer/AutoCalcPlatform/src) because B16 adds code; not the frozen integration candidate",
+  "source_checkout": "repo-root",
+  "source_composition": "current working tree (PYTHONPATH=src) because B16 adds code; not the frozen integration candidate",
   "working_tree_files": [
     {
       "path": "src/acp_services/runtime/canonical_digest.py",

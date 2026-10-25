@@ -1,12 +1,12 @@
 {
   "c24a": {
     "evidence_roots": [
-      "/ACPServer/acp2-development/C/reports/acp2_implementation/bb45a46/C/da-research-live",
-      "/ACPServer/acp2-development/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+      "/opt/acp2-dev/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+      "/opt/acp2-dev/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
     ],
-    "expected_artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+    "expected_artifact": "reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
     "owner": "C",
-    "plan": "/ACPServer/AutoCalcPlatform/.omo/plans/acp2-plan-c-rph-workbench.md",
+    "plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
     "plan_todo": "34. T-34 / C24a",
     "required_fields": [
       "proposal_digest",
@@ -20,7 +20,7 @@
   },
   "da_preflight": {
     "expected_result": "PASS",
-    "receipt_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B18"
+    "receipt_root": "reports/acp2_implementation/bb45a46/B/B18"
   },
   "fixture_id": "fx-da-bounded-dag-v1",
   "incomplete_inputs": [
@@ -46,7 +46,7 @@
   ],
   "run_spec": "run-spec.json",
   "schema": "acp2.b20a.da-run.v1",
-  "science_root": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science",
+  "science_root": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science",
   "scientific_expectations": {
     "energy": {
       "comparability_fields": [

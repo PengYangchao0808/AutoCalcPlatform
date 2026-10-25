@@ -17,7 +17,7 @@
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 548 | `33a3603e991fbbc4b7684df174f5fba8aa33e0a0a0a7ae1033912b5fe6e41b74` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 681 | `e6e3737283bc472565696839aa32cf91de43f5b44ae9eb32e3f6caf1ffa18584` |
 | [并行总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 248 | `f803e36a597bab129d80431de7d413b029770f139117e5d8a385fd4d2e8e95a8` |
-| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `91c738a3a3580c264b843c62dbcb78f63a900f5d6eb6c1dad9fcabcad7e1bd66` |
+| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 
 与 R3 快照相比，三份执行计划均已修改；主计划、总索引、服务器验收手册的摘要完全相同。三轨仍为 51、33、46 个实施 todo，共 130 个；没有因为增加子交付而同步增加顶层 todo。
 

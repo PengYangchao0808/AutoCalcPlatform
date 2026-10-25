@@ -1,7 +1,7 @@
 Controller: http://127.0.0.1:18767
 PID: 551927
-Run root: /ACPServer/acp2-development/data/b/run-root-b09
-Started from: /ACPServer/acp2-development/data/b/controller-config
-Env: PYTHONPATH=/ACPServer/AutoCalcPlatform/src ACP_RUN_ROOT=<run-root> ACP_SERVER_PROJECT=proj-a ACP_ADMISSION_MAX_CORES=2 ACP_ADMISSION_MAX_TASKS=4
+Run root: /opt/acp2-dev/data/b/run-root-b09
+Started from: /opt/acp2-dev/data/b/controller-config
+Env: PYTHONPATH=src ACP_RUN_ROOT=<run-root> ACP_SERVER_PROJECT=proj-a ACP_ADMISSION_MAX_CORES=2 ACP_ADMISSION_MAX_TASKS=4
 Health: {"schema_version":1,"status":"ok","candidate_revision":"58d81ec5ec528577692e6c1aa300c46fbf3b43c6","contract_version":"1.1.0","contract_digest":"67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4","contract_digest_scope":"delivered-contract-set","read_only":true,"started_at":"2026-10-22T18:16:05.058046Z"}
 Cleanup: {"pid":551927,"sigterm":true,"alive_after_wait":"no","port_18767_busy":"no","checked_at":"2026-10-22T18:16:45Z"}

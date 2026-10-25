@@ -8,9 +8,9 @@
   "b20a_exec_status": "NOT_VERIFIED(c24a_absent)",
   "purpose": "Record A's scientific audit reference and C's evidence/ResearchRecord handoff against B20a execution facts without signing A or C scope or relabelling science.",
   "run_spec_ref": {
-    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+    "path": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
     "schema": "acp2.b20a.run-spec.v1",
-    "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+    "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
     "read_by": [
       "B20a",
       "B20b"
@@ -52,8 +52,8 @@
     "execution_chain_executed": false,
     "real_scientific_chain_executed": false,
     "receipt": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
-      "sha256": "51cc4c89453cae166b79f4ec0e69e166703503fdf56f1c05cb9cec051e25bdcc",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "sha256": "98c7315da0463ea17fd9eb4e5e065f1b0f5b3639cd6e337055d4a3ca75f3bb1f",
       "schema": "acp2.acceptance.v1",
       "run_id": "20261023T091047Z-1425776-5bf82a03",
       "scenario": "da-runtime",
@@ -64,7 +64,7 @@
       "evidence_kind": "live"
     },
     "counters": {
-      "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/counters.json",
+      "source": "reports/acp2_implementation/bb45a46/B/B20/counters.json",
       "sha256": "05529afc19f637c7944f6171e22d87beb146248d93c22342aeabedbf8fe63693",
       "tasks_created": 0,
       "prepare_operations": 0,
@@ -79,8 +79,8 @@
       "candidate_ts_used": 0,
       "scenario_submissions_used": 0,
       "science_clock_started": false,
-      "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
-      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9"
+      "source": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b"
     },
     "facts_only_rule": "B records execution/release/attempt/manifest/budget facts only. B does not assign a scientific status and does not relabel an execution terminal state as claim support."
   },
@@ -88,13 +88,13 @@
     "owner": "A-20",
     "status": "NOT_VERIFIED",
     "reason": "b20a_exec_absent",
-    "expected_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+    "expected_artifact": "docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
     "expected_schema": "no standalone JSON Schema declared; identified by handoff_id=H4, handoff_version=1 (contract_set=acp2.science, contract_set_version=1)",
     "attached_by_reference": true,
     "present": true,
     "digest": {
       "algorithm": "sha256",
-      "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      "value": "026c55842df5eadfb7e38780a851f2993f4828302fd504f13d26c71d68855a6e"
     },
     "observed_h4_status": "open",
     "observed_real_run": false,
@@ -121,23 +121,23 @@
     "expected_artifacts": [
       {
         "kind": "research_record",
-        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/b/research-record.json",
+        "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/research-record.json",
         "schema": "acp2.experience.research-record.v1",
         "contract_reference": {
-          "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+          "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
           "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752"
         }
       },
       {
         "kind": "c24b_receipt",
-        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/b/experience_da-research-live-da-evidence-da-research-live-r1.json",
+        "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/experience_da-research-live-da-evidence-da-research-live-r1.json",
         "schema": "acp2.acceptance.v1",
         "run_id": "da-research-live-r1",
         "phase": "da-evidence"
       },
       {
         "kind": "summary",
-        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/b/summary.json",
+        "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/summary.json",
         "schema": "acp2.acceptance.summary.v1"
       }
     ],
@@ -150,10 +150,10 @@
       "claim_id": "c-ts-first-order-saddle-candidate",
       "statement": "The real B20a-exec transition-state candidate has exactly one significant imaginary frequency with a mapped native mode.",
       "status": "not_evaluated",
-      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "source_role": "audit_gap_declaration",
       "owner": "A-20",
@@ -168,10 +168,10 @@
       "claim_id": "c-ts-connects-intended-endpoints",
       "statement": "Real forward and reverse IRC both complete and connect the declared reactant/product endpoints for the same TS identity.",
       "status": "not_evaluated",
-      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "source_role": "audit_gap_declaration",
       "owner": "A-20",
@@ -186,10 +186,10 @@
       "claim_id": "c-endpoint-connectivity",
       "statement": "The real IRC endpoint geometries and bond-topology mapping prove the declared reactant-to-product path under stable atom order.",
       "status": "not_evaluated",
-      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "source_role": "audit_gap_declaration",
       "owner": "A-20",
@@ -204,10 +204,10 @@
       "claim_id": "c-electronic-activation-barrier-comparable",
       "statement": "The real electronic activation energy is comparable under the frozen method, basis, electronic state, temperature, pressure and standard state with an explicit unit.",
       "status": "not_evaluated",
-      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "source_role": "audit_gap_declaration",
       "owner": "A-20",
@@ -222,10 +222,10 @@
       "claim_id": "c-free-energy-activation-barrier-comparable",
       "statement": "The real free-energy activation barrier is comparable under the frozen thermochemistry conditions, separate from the electronic barrier claim.",
       "status": "not_evaluated",
-      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "source_role": "audit_gap_declaration",
       "owner": "A-20",
@@ -240,7 +240,7 @@
       "claim_id": "c-search-capability",
       "statement": "A separate declared search run generates and accepts at least one candidate under declared input criteria, candidate source/count, generation steps, filtering/rejection reasons, validator and success criteria.",
       "status": "not_evaluated",
-      "source_artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
+      "source_artifact": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
       "source_digest": {
         "algorithm": "sha256",
         "value": "cc70787c02fc9b488d5d0e5d0ebf608d3292050f799fbe6da9fa010988280f8e"
@@ -258,7 +258,7 @@
       "claim_id": "c-negative-missing-frequency-honesty",
       "statement": "A TS artifact with no frequency evidence is reported inconclusive (frequency_not_computed), never supported and never refuted.",
       "status": "inconclusive",
-      "source_artifact": "/ACPServer/acp2-development/A/tests/fixtures/acp2/science/diels_alder/validators/ts-missing-frequency-result.json",
+      "source_artifact": "/opt/acp2-dev/A/tests/fixtures/acp2/science/diels_alder/validators/ts-missing-frequency-result.json",
       "source_digest": {
         "algorithm": "sha256",
         "value": "c3f506d0dc0e1c2e81b38b492abe06e5ff7a01809b94ddb2f75de256eb811f66"
@@ -338,7 +338,7 @@
     ],
     "rule": "C's ResearchRecord may reference evidence and record a research decision, but it must not overwrite B's persisted task/execution truth."
   },
-  "h4_ledger_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+  "h4_ledger_path": "reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
   "validation": {
     "supported_rows": 0,
     "supported_rows_without_source_artifact": 0,
@@ -349,25 +349,25 @@
       "owner": "B20a-exec",
       "status": "NOT_VERIFIED(c24a_absent)",
       "expected": "one approved C24a submission and its TaskRef/attempt/release/manifest artifacts",
-      "detail_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/c24a-gap.json"
+      "detail_path": "reports/acp2_implementation/bb45a46/B/B20/c24a-gap.json"
     },
     {
       "owner": "A-20",
       "status": "NOT_VERIFIED",
       "expected": "A audit of the real B20a-exec EvidenceReport rows H4-01..H4-04",
-      "detail_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json"
+      "detail_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json"
     },
     {
       "owner": "B20a-search",
       "status": "NOT_VERIFIED(search_not_declared)",
       "expected": "a separately declared search run with criteria and candidate accounting",
-      "detail_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
+      "detail_path": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
     },
     {
       "owner": "C T-35 / C24b",
       "status": "NOT_VERIFIED(c24b_absent)",
       "expected": "a real da-evidence receipt plus ResearchRecord for the same task/attempt",
-      "detail_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/b"
+      "detail_path": "reports/acp2_implementation/bb45a46/C/da-research-live/b"
     }
   ]
 }

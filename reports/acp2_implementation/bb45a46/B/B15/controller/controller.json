@@ -1,17 +1,17 @@
 {
   "candidate_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
-  "command": "/ACPServer/acp2-development/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18775 --run-root /ACPServer/acp2-development/data/b/run-root-b15 --poll-interval 1 --no-browser",
+  "command": "/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18775 --run-root /opt/acp2-dev/data/b/run-root-b15 --poll-interval 1 --no-browser",
   "deployment_tier": "local-single",
   "env": {
     "ACP_CANDIDATE_REVISION": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
     "ACP_DEPLOYMENT_TIER": "local-single",
     "ACP_IDENTITY_MODE": "api-key"
   },
-  "identity_db": "/ACPServer/acp2-development/data/b/run-root-b15/acp_identity.db",
+  "identity_db": "/opt/acp2-dev/data/b/run-root-b15/acp_identity.db",
   "identity_mode": "api-key",
   "identity_tenant": "acp-b15-multiuser",
   "pid": 1162171,
   "port": 18775,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b15",
-  "source": "/ACPServer/acp2-development/data/b/b15-src"
+  "run_root": "/opt/acp2-dev/data/b/run-root-b15",
+  "source": "/opt/acp2-dev/data/b/b15-src"
 }

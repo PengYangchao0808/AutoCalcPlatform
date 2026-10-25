@@ -36,9 +36,9 @@
     },
     "base_release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
     "build_source_note": "Clean detached commit abec2bc = B25b a84c426 + only the B-fix-4 change. The landed B-fix-4 commit carries the same change on the current branch tip; branch tips differ in unrelated files, so the artifacts are the B25b-derived candidate that B26b consumes.",
-    "release_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4",
-    "release_manifest": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
-    "release_source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
+    "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+    "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+    "release_source": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
     "source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
     "source_tree": "c9844959c4c39814234a0a46c71d6f70a42456a4",
     "version": "0.3.0"
@@ -49,7 +49,7 @@
       "size_bytes": 3558
     },
     "b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json": {
-      "sha256": "ead98a93dfd079634f01006b804448c5b281f8b23db3f8a94bd3a8e1f55278ff",
+      "sha256": "ec2824178f615615aabd51a039fce21424b86ae1b8969bf0bf3287fdd94f41ed",
       "size_bytes": 6770
     },
     "b15/summary.json": {
@@ -65,11 +65,11 @@
       "size_bytes": 725
     },
     "b26a-rerun/WORK__00_RUNTIME__frozen__envelope.json": {
-      "sha256": "e4a3d99619039bc779b93bac2dae33fe692fa34f9ce0292de6b09f0191841914",
+      "sha256": "7474cb540751980be57a0887382efa28a038bf4efee8ac5208e2816cdf6eacec",
       "size_bytes": 1486
     },
     "b26a-rerun/cli-row.json": {
-      "sha256": "3231942eb5e66fbff00cbe70905f1fd56064e28e4aef5e5837626ed4f16b2d68",
+      "sha256": "384ce21e6516fbc3c293c73e3583a58a17581fd4fe2ff1a26d10507736e04d6d",
       "size_bytes": 4864
     },
     "b26a-rerun/cli__RESULT_result_manifest.json": {
@@ -81,23 +81,23 @@
       "size_bytes": 725
     },
     "b26a-rerun/cli__WORK_00_RUNTIME_frozen_envelope.json": {
-      "sha256": "ac1c41c0fa0a2155175a338ca7f7c45b4ff1de047fc9662c09856b01241c1153",
+      "sha256": "a37204444e722db9a2dc4e9e702d4d61517da31d68e1292056f0a3633416f17b",
       "size_bytes": 1464
     },
     "b26a-rerun/cli__execution_receipt.json": {
-      "sha256": "6abdcc70925fe4a470b45a6ece30cdf5a7764eef2f2229f17e2c21000bc907e7",
+      "sha256": "f445acaa941cc57641c681dc2a6708c7cbd58e15b46684e99e0e0ec0f2dca1f9",
       "size_bytes": 1595
     },
     "b26a-rerun/cli__job.json": {
-      "sha256": "7bab7c5cbf3f7665af9fdb5072069325baa85afa0bd79b99449ca326bc6dd4cb",
+      "sha256": "22b6d57fd011cd81d6034edbe3ea5841866365a5f1c8b79579fa4efc029e2ceb",
       "size_bytes": 4663
     },
     "b26a-rerun/execution_receipt.json": {
-      "sha256": "9a9beb7c17871c5a5fe73767a6dbc8bbb88a9bf0c50e4d9bbb042352602b7426",
+      "sha256": "11d0b4f9ae43caa14e77c65fda34a55e729fa92b191a8f9c1f823e8bd908f45c",
       "size_bytes": 1617
     },
     "b26a-rerun/http-row.json": {
-      "sha256": "98cbb4d167cc126ed69fdf7e7e4056c473cc69f58fa4b58c6fe80ceaed6d1525",
+      "sha256": "1968cc5cdaeba1809d03c3bb75ca3f8e2e182e92a803fc3658eba4237f0d8a82",
       "size_bytes": 6465
     },
     "b26a-rerun/installed-identity.json": {
@@ -105,11 +105,11 @@
       "size_bytes": 785
     },
     "b26a-rerun/job.json": {
-      "sha256": "e8787bf072c8e2ad5f6d6e6008504a400ca9533b664d315bb840e0375782442a",
+      "sha256": "1215983bbb3359382ac628d3f110e5d3bc23c2e24e29357d644c9ad3282b1225",
       "size_bytes": 5270
     },
     "package-install/install-results.json": {
-      "sha256": "29d65360e4215aadafa72918a4e016f405ca5c8123000fd9505d3840b3a108ef",
+      "sha256": "996c35f1570ea7ce6797a82ea76497981a4f4fd458dbadbd78e395971d41f470",
       "size_bytes": 1200
     },
     "package-install/lab-health.json": {
@@ -117,11 +117,11 @@
       "size_bytes": 353
     },
     "package-install/package-install-main-20261023T144151Z-1697579-37cb416e.json": {
-      "sha256": "153863c00aee6fcb55905d704467add26c04cfcaaff67a762cf6fb597999ef1a",
+      "sha256": "64345db6bb972ca71be9fee401f77b6a72d04eea3a57aa531ceba5ab81428027",
       "size_bytes": 15985
     },
     "package-install/release-digests.json": {
-      "sha256": "81665c584b73c74f22deb5cdfd77f2c88c6462a7e657aeed399a0ab2235d4568",
+      "sha256": "77c9161e77056fde3c033df001c5e861fb840d56124562237d5fe87688a62bfd",
       "size_bytes": 1982
     },
     "package-install/scheduler-task/RESULT__result_manifest.json": {
@@ -133,11 +133,11 @@
       "size_bytes": 725
     },
     "package-install/scheduler-task/WORK__00_RUNTIME__frozen__envelope.json": {
-      "sha256": "154548ac5d5b3fb1bee595e22bd4c43b2c10776a0b22954a8638f70a76fcaa84",
+      "sha256": "6b442875aead5fd3acdd5b9240044aeb8677fc9d18ba70123f6769f496a71063",
       "size_bytes": 1512
     },
     "package-install/scheduler-task/execution_receipt.json": {
-      "sha256": "88e4f49539ea44fb6015c19ae5416a10b2aef7f6eeb869d7509cf76906eb7724",
+      "sha256": "7b179c7283225bda79853535ff528e079ae836dfdb781e5334f968b306957304",
       "size_bytes": 1643
     },
     "package-install/scheduler-task/installed-identity.json": {
@@ -145,7 +145,7 @@
       "size_bytes": 785
     },
     "package-install/scheduler-task/job.json": {
-      "sha256": "1245a25a1325e2e7f72d01ea7d26759820627623e9b94e3d6710366ee8f0c586",
+      "sha256": "e362bac62d48d36bf534688e5583bfec789945cd124feafbde473e826a40166c",
       "size_bytes": 5328
     },
     "package-install/scheduler-task/scheduler-task.json": {
@@ -188,7 +188,7 @@
       "assertion_strength": "unchanged (received_event_before_revocation AND permission_changed_after_revocation AND stream_thread_stopped AND read_after_revoke==401)",
       "command": [
         "/tmp/opencode/b26a-fix4/venvs/lab/bin/python",
-        "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/acp2_runtime.py",
         "--scenario",
         "multitenant",
         "--phase",
@@ -203,7 +203,7 @@
         "600"
       ],
       "exit_code": 0,
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
+      "receipt": "reports/acp2_implementation/bb45a46/B/Bfix4/b15/multitenant-multitenant_authz-20261023T144412Z-1699050-11be1713.json",
       "result": "PASS",
       "revocation": {
         "account": {
@@ -291,7 +291,7 @@
       },
       "command": [
         "/usr/bin/python3.11",
-        "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/acp2_runtime.py",
         "--scenario",
         "package-install",
         "--fixture",
@@ -309,7 +309,7 @@
         "status": "completed"
       },
       "method": "HF/STO-3G",
-      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix4/package-install/package-install-main-20261023T144151Z-1697579-37cb416e.json",
+      "receipt": "reports/acp2_implementation/bb45a46/B/Bfix4/package-install/package-install-main-20261023T144151Z-1697579-37cb416e.json",
       "receipt_state": {
         "release_id": "2c7ffd56045b5bd5",
         "state": "completed"

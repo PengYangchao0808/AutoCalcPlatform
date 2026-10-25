@@ -315,7 +315,7 @@
         "producer_task": "A-03",
         "version": "1.0.0",
         "digest_or_pending": "sha256:39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -325,7 +325,7 @@
         "producer_task": "A-06/A-15",
         "version": "1.0.0",
         "digest_or_pending": "sha256:0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -335,7 +335,7 @@
         "producer_task": "A-16",
         "version": "1.0.0",
         "digest_or_pending": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -345,7 +345,7 @@
         "producer_task": "A-14",
         "version": "1.0.0",
         "digest_or_pending": "sha256:3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -355,7 +355,7 @@
         "producer_task": "A-11/A-12",
         "version": "1.0.0",
         "digest_or_pending": "sha256:20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -365,7 +365,7 @@
         "producer_task": "A-04",
         "version": "1.0.0",
         "digest_or_pending": "sha256:a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -375,7 +375,7 @@
         "producer_task": "A-02",
         "version": "1.0.0",
         "digest_or_pending": "sha256:513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -385,7 +385,7 @@
         "producer_task": "A-04",
         "version": "1.0.0",
         "digest_or_pending": "sha256:ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
         "status": "delivered",
         "types_copied": false
       },
@@ -395,7 +395,7 @@
         "producer_task": "A-02a",
         "version": "1.0.0",
         "digest_or_pending": "sha256:53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
-        "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
         "status": "delivered",
         "types_copied": false
       }
@@ -440,7 +440,7 @@
     "contract_set": "acp2.science",
     "version": "1.0.0",
     "rule": "B18a reads these published A files and records id/version/byte digest. No A type, field list or parser is copied; PENDING is never executable.",
-    "source_root": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science",
+    "source_root": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science",
     "entries": [
       {
         "schema_id": "acp2.science.capability.v1",
@@ -448,7 +448,7 @@
         "producer_task": "A-03",
         "version": "1.0.0",
         "digest": "sha256:39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -459,7 +459,7 @@
         "producer_task": "A-06/A-15",
         "version": "1.0.0",
         "digest": "sha256:0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -470,7 +470,7 @@
         "producer_task": "A-16",
         "version": "1.0.0",
         "digest": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -481,7 +481,7 @@
         "producer_task": "A-14",
         "version": "1.0.0",
         "digest": "sha256:3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -492,7 +492,7 @@
         "producer_task": "A-11/A-12",
         "version": "1.0.0",
         "digest": "sha256:20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -503,7 +503,7 @@
         "producer_task": "A-04",
         "version": "1.0.0",
         "digest": "sha256:a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -514,7 +514,7 @@
         "producer_task": "A-02",
         "version": "1.0.0",
         "digest": "sha256:513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -525,7 +525,7 @@
         "producer_task": "A-04",
         "version": "1.0.0",
         "digest": "sha256:ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
         "status": "delivered",
         "types_copied": false,
         "schema_version": 1
@@ -536,7 +536,7 @@
         "producer_task": "A-02a",
         "version": "1.0.0",
         "digest": "sha256:53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
-        "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
         "status": "delivered",
         "types_copied": false,
         "schema_version": null

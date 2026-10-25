@@ -13,7 +13,7 @@
     "harness_revision": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   },
   "command": ["/usr/bin/python3.11", "-m", "acp", "doctor"],
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": "repo-root",
   "started": "2026-10-22T13:00:00Z",
   "finished": "2026-10-22T13:00:05Z",
   "result": "PASS",

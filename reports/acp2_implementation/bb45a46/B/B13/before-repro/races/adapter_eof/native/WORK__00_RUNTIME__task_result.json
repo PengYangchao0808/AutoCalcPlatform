@@ -18,13 +18,13 @@
     "artifacts": [
       {
         "checksum": "sha256:8ef681ceae0fd930ad61dfde38119a294170331660aea686e57d4e5d69e45b5a",
-        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__07/sp.inp",
+        "path": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__07/sp.inp",
         "source": "orca",
         "type": "output"
       },
       {
         "checksum": "sha256:1c7db0afca636479a131daf0bc206d7aa208425b00d9760fdc80898340a54d91",
-        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__07/sp.out",
+        "path": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__07/sp.out",
         "source": "orca",
         "type": "log"
       }

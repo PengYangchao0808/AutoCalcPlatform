@@ -37,7 +37,7 @@
     "custom_name": null
   },
   "status": "completed",
-  "work_dir": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency",
   "created_at": "2026-10-23T03:19:46.132235+00:00",
   "updated_at": "2026-10-23T03:19:49.727558+00:00",
   "started_at": "2026-10-23T03:19:46.148223+00:00",
@@ -52,7 +52,7 @@
   "remote_job_id": null,
   "group_id": "20261023_111946_003_frequency",
   "node_id": "local",
-  "host": "workstation",
+  "host": "redacted-host",
   "result": {
     "admission": {
       "reservation_id": "res_idem_0a0754cac6f34836ae1bbfb4bab2dba0",
@@ -151,7 +151,7 @@
       "basis": null,
       "solvent": null,
       "command_line": "",
-      "hostname": "workstation",
+      "hostname": "redacted-host",
       "ncores": 1,
       "memory_gb": 1.0,
       "wall_time_seconds": 3.579282,

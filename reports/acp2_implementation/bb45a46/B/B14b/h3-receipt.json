@@ -5,8 +5,8 @@
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "candidate_label": "bb45a46",
   "h3_status": "OPEN",
-  "matrix_sha256": "sha256:d2e9de40763751d6107bcdbfe26536c7350d716f5e596bfe0cede13f335e5c4b",
-  "rerun_index_sha256": "sha256:ddd6deb10791549a6af8ce2449de7857e16080556b026d92b2ab9f5ee4f4353e",
+  "matrix_sha256": "sha256:5fb445a7de2bc5c65cf049eab5f02abe3332b5f74af4e0a939055be29b83a547",
+  "rerun_index_sha256": "sha256:13e003313ffdc0f069f4d8e47cf384f0f86173ff524d5b1268db9b373d2dbbef",
   "capability_rows": [
     {
       "row_id": "singlepoint/local",
@@ -117,7 +117,7 @@
       "result": "NOT_VERIFIED",
       "owner": "A",
       "open_reason": "a_not_available",
-      "evidence": "/ACPServer/acp2-development/A/**"
+      "evidence": "/opt/acp2-dev/A/**"
     },
     {
       "row_id": "C/dsh-browser",
@@ -166,7 +166,7 @@
         "layer": "T0",
         "subject": "environment/version",
         "result": "PASS",
-        "detail": "Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/xieningke/orca611/orca (sha256 d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1), contract 1.1.0; LSF absent by design.",
+        "detail": "Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/redacted-user/orca611/orca (sha256 d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1), contract 1.1.0; LSF absent by design.",
         "owner": "B",
         "evidence": [
           "B/environment/b07-environment.json",
@@ -263,8 +263,8 @@
   "a_scientific_audit": {
     "result": "NOT_VERIFIED",
     "reason": "a_not_available",
-    "detail": "A published no B14b/H3 scientific audit under /ACPServer/acp2-development/A/** at the time of this run. B does not sign A science scope.",
-    "searched_root": "/ACPServer/acp2-development/A",
+    "detail": "A published no B14b/H3 scientific audit under /opt/acp2-dev/A/** at the time of this run. B does not sign A science scope.",
+    "searched_root": "/opt/acp2-dev/A",
     "owner": "A"
   },
   "c_dsh_browser": {

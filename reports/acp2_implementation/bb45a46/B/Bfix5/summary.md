@@ -26,10 +26,10 @@ The real LSF run used an isolated `HOME` whose `cluster.pre_cmds` exported the
 remote ORCA/OpenMPI runtime:
 
 ```
-export LD_LIBRARY_PATH=/home/xieningke/openmpi418/lib:/home/xieningke/orca611:$LD_LIBRARY_PATH
-export CONFSEARCH_ORCA_PATH=/home/xieningke/orca611/orca
-export CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/xieningke/openmpi418/lib:/home/xieningke/orca611
-export CONFSEARCH_ORCA_MPI_PATH=/home/xieningke/openmpi418/bin/orterun
+export LD_LIBRARY_PATH=/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611:$LD_LIBRARY_PATH
+export CONFSEARCH_ORCA_PATH=/home/redacted-user/orca611/orca
+export CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611
+export CONFSEARCH_ORCA_MPI_PATH=/home/redacted-user/openmpi418/bin/orterun
 ```
 
 That is operator environment configuration; no scheduler or receipt result was

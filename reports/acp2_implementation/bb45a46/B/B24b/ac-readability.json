@@ -2,23 +2,23 @@
   "a": {
     "contract_handoff": {
       "parsed": true,
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
       "present": true,
       "schema": null,
-      "sha256": "f690e7e993125b509e4f5a55ce9465323292346dddfdabc0beacb4e4533b0bd0",
+      "sha256": "3d56f030cecf82df20ccc040876a80db6127fe5c6120e6a7343ffa147e644357",
       "size_bytes": 26991
     },
-    "expected_readability_receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/A/A-26/result.json",
+    "expected_readability_receipt": "reports/acp2_implementation/bb45a46/A/A-26/result.json",
     "owner": "A",
     "readability_receipt_present": false,
     "reason": "A published handoff-H6.json (readable, parsed here) but no A-26 result/readability receipt that verifies B data remains readable at f32c670. B does not sign A scope.",
     "result": "NOT_VERIFIED(a_readability_absent)"
   },
   "c": {
-    "expected_readability_receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
+    "expected_readability_receipt": "reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
     "manifest_extension_schema": {
       "parsed": true,
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/manifest-extension.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/manifest-extension.schema.json",
       "present": true,
       "schema": "acp2.experience.manifest-extension.v1",
       "sha256": "6552b04d33f5bc84d2415a4fe6f68912fb73bc65a44b5e50eaebc1e384c5f5ed",
@@ -29,7 +29,7 @@
     "reason": "C contract schemas are readable (parsed, digests recorded) but C has published no H6 readability receipt and no cross-domain-live/selectivity record; B does not sign C scope.",
     "research_record_schema": {
       "parsed": true,
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
       "present": true,
       "schema": "acp2.experience.research-record.v1",
       "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
@@ -38,7 +38,7 @@
     "result": "NOT_VERIFIED(c_readability_absent)",
     "view_model_schema": {
       "parsed": true,
-      "path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
       "present": true,
       "schema": "acp2.experience.view-model.v1",
       "sha256": "b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",

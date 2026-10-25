@@ -2,8 +2,8 @@
   "artifacts": [
     {
       "path": "infra_install-discovery.json",
-      "sha256": "802bab0a51da66cdf496f28e4d5b368880fc00683a2928ec76613f60d42db59b",
-      "size_bytes": 12730
+      "sha256": "85b2651cf1e601ca6f91f8eea20e76c37761dfd3b20e6823312726a143893e40",
+      "size_bytes": 12478
     },
     {
       "path": "infra_install-authorization.json",
@@ -216,8 +216,8 @@
   },
   "candidate_revision": "9793bfa16640e29f293a1d5672565f3a7c30e1cf",
   "command": [
-    "/ACPServer/acp2-development/venvs/b/bin/python",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "infra-plugin",
     "--phase",
@@ -225,14 +225,14 @@
     "--controller",
     "http://127.0.0.1:18782",
     "--fixture",
-    "/ACPServer/acp2-development/data/b/fixtures/plugin/plugin-fixture.json",
+    "/opt/acp2-dev/data/b/fixtures/plugin/plugin-fixture.json",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B21",
     "--timeout",
     "900"
   ],
   "contract_version": "1.3.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {
@@ -250,7 +250,7 @@
     "b21.artifacts": [
       {
         "path": "infra_install-discovery.json",
-        "sha256": "802bab0a51da66cdf496f28e4d5b368880fc00683a2928ec76613f60d42db59b",
+        "sha256": "7296d931e5d0f2ea68cb103fdc782e9058aa848ffc4bb70a2c59d2b45719cc36",
         "size_bytes": 12730
       },
       {
@@ -329,9 +329,9 @@
       "schema": "acp2.b21.compatibility.v1"
     },
     "b21.controller": "http://127.0.0.1:18782",
-    "b21.fixture": "/ACPServer/acp2-development/data/b/fixtures/plugin/plugin-fixture.json",
+    "b21.fixture": "/opt/acp2-dev/data/b/fixtures/plugin/plugin-fixture.json",
     "b21.phase": "infra:install",
-    "b21.plugin_root": "/ACPServer/acp2-development/data/b/plugins/b21",
+    "b21.plugin_root": "/opt/acp2-dev/data/b/plugins/b21",
     "b21.rejection_rows": [
       {
         "actual_code": "adapter_authorization_required",
@@ -414,7 +414,7 @@
         "passed": true
       }
     ],
-    "b21.state_root": "/ACPServer/acp2-development/data/b/plugin-state/b21"
+    "b21.state_root": "/opt/acp2-dev/data/b/plugin-state/b21"
   },
   "finished_at": "2026-10-23T09:52:35Z",
   "job_id": null,

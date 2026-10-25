@@ -406,23 +406,23 @@ owner = 并行计划一路 A（frontend/** 写权；B/C 以契约样例或修改
 
 ### 9.5 大日志登记表（X5：URI/摘要/产生提交/环境/命令/退出码）
 
-产生提交：全部为**基线 `f410ac9d` + 工作区（uncommitted 本地产物）**——`.omo/` 不入 git（仓忽略），摘要即完整性凭据。环境：lane venv `/home/xieningke/.venvs/acp-frontend`（Python 3.11.13）与/或 node `v20.19.0`，按行注明。sha256/bytes 为 2026-10-18 本文件成文时现盘实测。
+产生提交：全部为**基线 `f410ac9d` + 工作区（uncommitted 本地产物）**——`.omo/` 不入 git（仓忽略），摘要即完整性凭据。环境：lane venv `/home/redacted-user/.venvs/acp-frontend`（Python 3.11.13）与/或 node `v20.19.0`，按行注明。sha256/bytes 为 2026-10-18 本文件成文时现盘实测。
 
 | URI（相对仓库根） | sha256 | bytes | 产生提交 | 环境 | 命令（产出该工件） | 退出码 |
 |---|---|---|---|---|---|---|
 | `.omo/evidence/acp-parallel-plan-1-frontend/task-1-acp-parallel-plan-1-frontend.md` | `23235990e401892f4ec9023bc223897fd9d35410d98eb1a3432d9e9c2ec1ac7a` | 15113 | f410ac9d + worktree | lane venv（记录型） | git rev-parse/show/status；stat -f；pip/playwright 安装（见下两行） | 0（全部子命令） |
 | `.omo/evidence/acp-parallel-plan-1-frontend/task-2-acp-parallel-plan-1-frontend.md` | `cb9ee952c01f9aca30c000ae0f7ec976291b4f68e2a4eeb6af537df8971ad471` | 84999 | f410ac9d + worktree | node v20.19.0（grep/python 清点） | `python3 -c` 计数 script/link；`grep -rn '\$3Dmol'\|getElementById(...)…` frontend/js | 0 |
-| `.omo/evidence/acp-parallel-plan-1-frontend/task-3-acp-parallel-plan-1-frontend.md` | `c091bf845e1f048826a298f95d7ed02afc9dfbb2b393678d71116466dba94f5d` | 17627 | f410ac9d + worktree | lane venv + node v20.19.0 | `node frontend/js/module_tests/run_all.js`；`PYTHONPATH=src <venv>/python -m pytest <四文件> -q`；扩展回归同上；逐条 grep 校正复核 | 0（三套） |
-| `.omo/evidence/acp-parallel-plan-1-frontend/task-4-acp-parallel-plan-1-frontend.md` | `5148ee8bac7bff053770f5cab89f822382575368c16b16edaff191d4b55bcf29` | 22576 | f410ac9d + worktree | lane venv | `PYTHONPATH=src <venv>/python tmp/t4_testclient_check.py`；sha256sum 枚举 | 0 |
-| `.omo/evidence/acp-parallel-plan-1-frontend/task-5-acp-parallel-plan-1-frontend.md` | `419fc6f2e89086bd5c99b4ae53933cc69adaa1b598f722ba59d3b70a418d04ff` | 20406 | f410ac9d + worktree | lane venv + Playwright | `ACP_RUN_ROOT=<隔离> <venv>/acp run serve --port 8899` + `<venv>/python tmp/capture_requests.py` | 0 |
-| `.omo/evidence/.../tmp/pip-install.log` | `887cedf7bad7a504167dd2edef9e25bce45bc79a4d8190758a1049b8c1e03ae9` | 13502 | f410ac9d + worktree | lane venv（pip 22.3.1） | `<venv>/bin/pip install -e '.[dev,api,remote,browser]'` | 0 |
-| `.omo/evidence/.../tmp/playwright-install.log` | `bceca26fc40ccad96c5602df6bf1322aa9919f5a12c1b2ea6627d2b249e9d43a` | 7113 | f410ac9d + worktree | lane venv | `<venv>/bin/python -m playwright install chromium` | 0 |
+| `.omo/evidence/acp-parallel-plan-1-frontend/task-3-acp-parallel-plan-1-frontend.md` | `c091bf845e1f048826a298f95d7ed02afc9dfbb2b393678d71116466dba94f5d` | 17627 | f410ac9d + worktree | lane venv + node v20.19.0 | `node frontend/js/module_tests/run_all.js`；`PYTHONPATH=src /opt/acp2/venv/python -m pytest <四文件> -q`；扩展回归同上；逐条 grep 校正复核 | 0（三套） |
+| `.omo/evidence/acp-parallel-plan-1-frontend/task-4-acp-parallel-plan-1-frontend.md` | `5148ee8bac7bff053770f5cab89f822382575368c16b16edaff191d4b55bcf29` | 22576 | f410ac9d + worktree | lane venv | `PYTHONPATH=src /opt/acp2/venv/python tmp/t4_testclient_check.py`；sha256sum 枚举 | 0 |
+| `.omo/evidence/acp-parallel-plan-1-frontend/task-5-acp-parallel-plan-1-frontend.md` | `419fc6f2e89086bd5c99b4ae53933cc69adaa1b598f722ba59d3b70a418d04ff` | 20406 | f410ac9d + worktree | lane venv + Playwright | `ACP_RUN_ROOT=<隔离> /opt/acp2/venv/acp run serve --port 8899` + `/opt/acp2/venv/python tmp/capture_requests.py` | 0 |
+| `.omo/evidence/.../tmp/pip-install.log` | `887cedf7bad7a504167dd2edef9e25bce45bc79a4d8190758a1049b8c1e03ae9` | 13502 | f410ac9d + worktree | lane venv（pip 22.3.1） | `/opt/acp2/venv/bin/pip install -e '.[dev,api,remote,browser]'` | 0 |
+| `.omo/evidence/.../tmp/playwright-install.log` | `bceca26fc40ccad96c5602df6bf1322aa9919f5a12c1b2ea6627d2b249e9d43a` | 7113 | f410ac9d + worktree | lane venv | `/opt/acp2/venv/bin/python -m playwright install chromium` | 0 |
 | `.omo/evidence/.../tmp/logs/network-requests.jsonl` | `3fe7f431e0c1f87848000d37da1b82f3bf6164f84d846e17ce9ec4a84881d0ba` | 52239 | f410ac9d + worktree | lane venv + Playwright chromium 156.0.8078.4 | `page.on("request"/"response"/"requestfailed")` 抓取（capture_requests.py） | 0 |
 | `.omo/evidence/.../tmp/logs/network-summary.json` | `efad3653d465155f343141bd8b698584b4f165e857a4b6e1d2012822c8d2d026` | 14162 | f410ac9d + worktree | 同上 | 同上（汇总器输出） | 0 |
 | `.omo/evidence/.../tmp/logs/derived-metrics.json` | `183a7c550dce429f3ce291c1080f475f92c115da73e8c079a3350c99633385db` | 1627 | f410ac9d + worktree | 同上 | 同上（派生指标：突发/并发/SSE 计数） | 0 |
-| `.omo/evidence/.../tmp/logs/service-8899.log` | `04cd2958b92f33216ed846ae66cb5e1875196e5c352ce718b7e03a35f3236e8d` | 38392 | f410ac9d + worktree | lane venv（uvicorn） | `ACP_RUN_ROOT=<隔离> <venv>/acp run serve --port 8899`（后台，任务后 SIGTERM 收） | 143（SIGTERM 终止，预期） |
+| `.omo/evidence/.../tmp/logs/service-8899.log` | `04cd2958b92f33216ed846ae66cb5e1875196e5c352ce718b7e03a35f3236e8d` | 38392 | f410ac9d + worktree | lane venv（uvicorn） | `ACP_RUN_ROOT=<隔离> /opt/acp2/venv/acp run serve --port 8899`（后台，任务后 SIGTERM 收） | 143（SIGTERM 终止，预期） |
 | `.omo/evidence/.../tmp/logs/cleanup-receipt.txt` | `e4a9d9de53c41167d312ac2aa74095b74a91cbf585e0d0967d6df9fbdf14afee` | 4735 | f410ac9d + worktree | lane venv（shell 检查） | `kill 221454`；`/sbin/ss -ltn`；netstat/lsof/curl 交叉 | 0 |
-| `.omo/evidence/.../tmp/t4_testclient_output.txt` | `041aa78ac9ae8e866e59fbed268696e1b12ee63ac32782513eef1518ef8622d3` | 7659 | f410ac9d + worktree | lane venv（httpx 0.28.1 TestClient） | `PYTHONPATH=src <venv>/python tmp/t4_testclient_check.py`（stdout 重定向） | 0 |
+| `.omo/evidence/.../tmp/t4_testclient_output.txt` | `041aa78ac9ae8e866e59fbed268696e1b12ee63ac32782513eef1518ef8622d3` | 7659 | f410ac9d + worktree | lane venv（httpx 0.28.1 TestClient） | `PYTHONPATH=src /opt/acp2/venv/python tmp/t4_testclient_check.py`（stdout 重定向） | 0 |
 | `.omo/evidence/.../tmp/t4_resource_listing.txt` | `41d88e91902cdbd7153032a82d237bb68860bbd46bbfef86284364b10079db34` | 6070 | f410ac9d + worktree | lane venv | 资源枚举脚本（HTML 解析 + sha256sum，T4 §2） | 0 |
 
 登记纪律（X5）：不以「证据路径存在」为唯一验收——上表摘要为完整性凭据；契约/写权/样例/交接状态/验收摘要受版本控制（本文档 §5/§6/§9.1–§9.4 即 tracked 面）；大日志保留在 `.omo/` 稳定工件位置。

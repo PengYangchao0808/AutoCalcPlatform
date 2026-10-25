@@ -40,8 +40,8 @@
   },
   "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "command": [
-    "/ACPServer/acp2-development/venvs/b/bin/python",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "three-entry",
     "--phase",
@@ -56,7 +56,7 @@
     "300"
   ],
   "contract_version": "1.1.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 2,
   "extensions": {
@@ -64,7 +64,7 @@
     "acceptance.target": "local",
     "b10.attempt": 1,
     "b10.cli_command": [
-      "/ACPServer/acp2-development/venvs/b/bin/python",
+      "/opt/acp2-dev/venvs/b/bin/python",
       "-m",
       "acp",
       "task",

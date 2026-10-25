@@ -1,1 +1,1 @@
-VALID: /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/manifest.json
+VALID: docs/reference/next-change/acp2-contracts/manifest.json

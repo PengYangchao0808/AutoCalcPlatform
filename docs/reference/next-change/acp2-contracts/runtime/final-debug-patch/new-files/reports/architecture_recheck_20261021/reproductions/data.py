@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, "/ACPServer/AutoCalcPlatform/src")
+sys.path.insert(0, "src")
 
 from acp.results.remote_structure_cache import RemoteStructureCache
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus

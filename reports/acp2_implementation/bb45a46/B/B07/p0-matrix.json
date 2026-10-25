@@ -43,7 +43,7 @@
     {
       "owner": "B07",
       "raw_log": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.out",
-      "reason": "/home/xieningke/orca611/orca is ELF; ORCA 6.1.1 H2/STO-3G probe terminated normally in 0.302s (energy -1.116759307204 Ha); academic license bundle present; /usr/bin/orca explicitly excluded",
+      "reason": "/home/redacted-user/orca611/orca is ELF; ORCA 6.1.1 H2/STO-3G probe terminated normally in 0.302s (energy -1.116759307204 Ha); academic license bundle present; /usr/bin/orca explicitly excluded",
       "result": "PASS",
       "row_id": "local_orca_binary_and_license",
       "supporting_logs": [
@@ -66,7 +66,7 @@
     {
       "exit_code": 0,
       "gaps": [
-        "run_root/store are /home/xieningke/.local/share/acp/runs, not the acceptance run root",
+        "run_root/store are /home/redacted-user/.local/share/acp/runs, not the acceptance run root",
         "no remote node/LSF check",
         "binary sanity only; only ORCA has a real scientific probe",
         "no Playwright/Chromium check"
@@ -80,7 +80,7 @@
     {
       "owner": "B07",
       "raw_log": "reports/acp2_implementation/bb45a46/B/B07/environment/host-facts.log",
-      "reason": "/ACPServer/acp2-development/data/b/run-root is xfs with 47.6 GiB free; production 8765 and /var/lib/acp/runs untouched",
+      "reason": "/opt/acp2-dev/data/b/run-root is xfs with 47.6 GiB free; production 8765 and /var/lib/acp/runs untouched",
       "result": "PASS",
       "row_id": "local_run_root"
     },
@@ -105,7 +105,7 @@
       "reason": "Two stdio adapters (pids 368344/368348) ran concurrently against one Controller; entry-readonly and mcp-stdio PASS on both; task count 2->2; jobs byte-identical; Controller still serving after both closed",
       "result": "PASS",
       "row_id": "local_controller_two_adapter_topology",
-      "sha256": "59312f4225d328c8d4b4e565838ef4761c5e99efdc496b2a554dddc372fe3676"
+      "sha256": "094b0bed7e985185a73918b52eadc6188d38d1dcc277409f798372afef9d225f"
     },
     {
       "owner": "B07",
@@ -119,7 +119,7 @@
     {
       "owner": "C",
       "prerequisite": "C T-11/T-12 real DSH session -> MCP initialize/tools/call log against the H2 Controller",
-      "raw_log": "/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04/10-dsh-acceptance-smoke.txt",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/10-dsh-acceptance-smoke.txt",
       "reason": "No real DSH MCP handshake log is delivered by C T-11/T-12; C node-dsh smoke only checks the wrapper/help surface. B does not sign this C-owned row",
       "result": "NOT_VERIFIED",
       "row_id": "c_dsh_real_handshake",
@@ -147,20 +147,20 @@
     },
     {
       "owner": "C",
-      "raw_log": "/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04/result.json",
-      "reason": "C ENV-03 node/pnpm/DSH install evidence PASS (linked only; C-owned). Node 22.19.0, pnpm 11.28.5, DSH 0.2.1-rc.2 at /ACPServer/acp2-tools/deepseek-harness",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/result.json",
+      "reason": "C ENV-03 node/pnpm/DSH install evidence PASS (linked only; C-owned). Node 22.19.0, pnpm 11.28.5, DSH 0.2.1-rc.2 at /opt/acp2-tools/deepseek-harness",
       "result": "PASS",
       "row_id": "c_env_03_node_dsh",
       "sha256": "8488c49e948128aa5dc764b09e9a3f2e15d09a757f3b9b37adbc834f35215ce2",
       "signed_by_b": false,
       "supporting_logs": [
-        "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/dsh-compatibility.json"
+        "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/dsh-compatibility.json"
       ]
     },
     {
       "owner": "C",
       "prerequisite": "C ENV-05 DSH profile/overlay/model configuration summary and a real invocation usage record (no secret values)",
-      "raw_log": "/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04/10-dsh-acceptance-smoke.txt",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/10-dsh-acceptance-smoke.txt",
       "reason": "No C ENV-05 profile/overlay/model invocation receipt with real usage is delivered; model keys are C-owned and absent from B evidence",
       "result": "NOT_VERIFIED",
       "row_id": "c_env_05_dsh_profile_model",
@@ -169,7 +169,7 @@
     {
       "owner": "C",
       "prerequisite": "C ENV-08 per-target connection results (no keys/proxy credentials printed)",
-      "raw_log": "/ACPServer/acp2-development/evidence/C/node-dsh-install/20261022T112416Z-c04/01-node-download.txt",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/01-node-download.txt",
       "reason": "No C network/SSH/port connection evidence for its own test targets is delivered beyond the Node download/install log",
       "result": "NOT_VERIFIED",
       "row_id": "c_env_08_network",

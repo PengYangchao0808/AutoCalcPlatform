@@ -8,7 +8,7 @@
       "tests": "10075",
       "time": "1922.374",
       "timestamp": "2026-10-22T00:12:37.741506+08:00",
-      "hostname": "workstation"
+      "hostname": "redacted-host"
     }
   ],
   "original_759_missing": [],
@@ -110,7 +110,7 @@
     }
   ],
   "existing_e2e_artifact_restored": true,
-  "full_command": "PYTHONPATH=src:. /opt/acp/venv/bin/python -m pytest -m 'not slow' -q --disable-warnings --junitxml=/tmp/acp-architecture-assessment-20261022-nonslow-normalized.xml",
+  "full_command": "PYTHONPATH=src:. /opt/acp2/venv/bin/python -m pytest -m 'not slow' -q --disable-warnings --junitxml=/tmp/acp-architecture-assessment-20261022-nonslow-normalized.xml",
   "full_exit_code": 1,
   "full_counts": {
     "passed": 10058,
@@ -123,7 +123,7 @@
     "passed": 329,
     "failed": 0,
     "exit_code": 0,
-    "command": "ACP_PYTHON=/opt/acp/venv/bin/python node frontend/js/module_tests/run_all.js"
+    "command": "ACP_PYTHON=/opt/acp2/venv/bin/python node frontend/js/module_tests/run_all.js"
   },
   "ruff_roots": {
     "exit_code": 0,
@@ -150,7 +150,7 @@
     "current_stdin_check_exit": 1
   },
   "compileall": {
-    "python": "/opt/acp/venv/bin/python",
+    "python": "/opt/acp2/venv/bin/python",
     "exit_code": 0,
     "scope": "src"
   },

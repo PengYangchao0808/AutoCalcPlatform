@@ -1,24 +1,24 @@
 {
   "candidate": {
     "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
-    "source": "/ACPServer/acp2-development/B",
+    "source": "/opt/acp2-dev/B",
     "tree": "eb54b1a28a9922ffd2917758cc35530cc346af90",
     "tree_equals_main_f67f90f": true,
     "worktree_status_porcelain_empty": true
   },
   "doctor": {
     "command": [
-      "/ACPServer/acp2-development/venvs/b/bin/python",
+      "/opt/acp2-dev/venvs/b/bin/python",
       "-m",
       "acp",
       "doctor",
       "--log-level",
       "INFO"
     ],
-    "cwd": "/ACPServer/acp2-development/data/b/controller-config",
+    "cwd": "/opt/acp2-dev/data/b/controller-config",
     "exit_code": 0,
     "gaps": [
-      "run_root/store rows validate /home/xieningke/.local/share/acp/runs (platform default), not the acceptance run root /ACPServer/acp2-development/data/b/run-root. H2 `src/acp/core/paths.py::resolve_run_root` ignores deployment.params.run_root unless passed explicitly; the test Controller must pass --run-root explicitly.",
+      "run_root/store rows validate /home/redacted-user/.local/share/acp/runs (platform default), not the acceptance run root /opt/acp2-dev/data/b/run-root. H2 `src/acp/core/paths.py::resolve_run_root` ignores deployment.params.run_root unless passed explicitly; the test Controller must pass --run-root explicitly.",
       "No remote node is configured (cluster.nodes=[]), so doctor does not check LSF, SSH identity, queue, remote Python/software, release root or a remote work directory. LSF remains NOT_VERIFIED.",
       "Doctor performs binary-path/sanity checks only; it does not prove dynamic libraries, licenses or scientific execution. The ORCA H2/STO-3G probe is the execution evidence; non-ORCA executables were only version-probed.",
       "Doctor does not check Playwright/Chromium; that is C T-08 and is NOT_VERIFIED here."
@@ -27,7 +27,7 @@
     "summary": "10 PASS / 0 FAIL / 0 NOT_VERIFIED"
   },
   "env_handoff": {
-    "file": "/ACPServer/acp2-development/data/b/acceptance-env.sh",
+    "file": "/opt/acp2-dev/data/b/acceptance-env.sh",
     "mode": "0o600",
     "note": "recomputed after the H2 ACP_CANDIDATE_REVISION update",
     "sha256": "2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc"
@@ -44,7 +44,7 @@
     "file_type": "Python script, ASCII text executable",
     "observed": "Python script / GNOME Orca screen reader (package orca-40.3-1.el9.noarch)",
     "path": "/usr/bin/orca",
-    "rule": "/usr/bin/orca is the GNOME screen reader and must never be used as QC ORCA. The controller config pins /home/xieningke/orca611/orca.",
+    "rule": "/usr/bin/orca is the GNOME screen reader and must never be used as QC ORCA. The controller config pins /home/redacted-user/orca611/orca.",
     "use_as_qc_orca": false
   },
   "gaps": [
@@ -60,14 +60,14 @@
     "cores": 40,
     "cpu_model": "Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz",
     "glibc": "2.34",
-    "hostname": "workstation",
+    "hostname": "redacted-host",
     "kernel": "5.14.0-687.56.1.el9_8.x86_64",
     "memory_total_bytes": 66796507136,
     "memory_total_gib": 62.2,
     "os": "Rocky Linux 9.8 (Blue Onyx)",
     "production_run_root": "/var/lib/acp/runs",
     "production_run_root_touched": false,
-    "run_root": "/ACPServer/acp2-development/data/b/run-root",
+    "run_root": "/opt/acp2-dev/data/b/run-root",
     "run_root_free_bytes": 51068715008,
     "run_root_free_gib": 47.56,
     "run_root_fstype": "xfs"
@@ -115,7 +115,7 @@
       "mode": "0755",
       "name": "CENSO",
       "on_path": false,
-      "path": "/home/xieningke/anaconda3/bin/censo",
+      "path": "/home/redacted-user/anaconda3/bin/censo",
       "sha256": "cb1ad178fbdb2d37f9acccfad25e93995c396aa5d0296454986147f185382a69",
       "size_bytes": 229,
       "source": "config",
@@ -127,7 +127,7 @@
       "mode": "0755",
       "name": "CREST",
       "on_path": false,
-      "path": "/home/xieningke/crest/crest",
+      "path": "/home/redacted-user/crest/crest",
       "sha256": "45ad4e82016f2805c05373c1494f97096365a438d0bdbe1e556be09d91d92a03",
       "size_bytes": 79244784,
       "source": "config",
@@ -138,7 +138,7 @@
       "mode": "0744",
       "name": "Isostat",
       "on_path": false,
-      "path": "/home/xieningke/molclus_1.14_Linux/isostat",
+      "path": "/home/redacted-user/molclus_1.14_Linux/isostat",
       "sha256": "1605925c66bcbe8ea555b2c66d1d013744547e8c7fbd95c3e4eaf2a535d2bd28",
       "size_bytes": 2818965,
       "source": "config",
@@ -149,7 +149,7 @@
       "mode": "0744",
       "name": "Molclus",
       "on_path": false,
-      "path": "/home/xieningke/molclus_1.14_Linux/molclus",
+      "path": "/home/redacted-user/molclus_1.14_Linux/molclus",
       "sha256": "a27724c2b9181b4ffa0e71062fcd49f441f24aa84dd6d9dcc4f5c896b9c563ec",
       "size_bytes": 1132947,
       "source": "config",
@@ -161,13 +161,13 @@
       "file_type": "ELF 64-bit LSB executable, x86-64, dynamically linked",
       "ldd_ok": true,
       "license": {
-        "license_file": "/home/xieningke/orca611/Third_Party_Licenses_Academic_6.1.pdf",
+        "license_file": "/home/redacted-user/orca611/Third_Party_Licenses_Academic_6.1.pdf",
         "license_file_sha256": "16f68a456fe4ef576ed037c2abc1d471336da9a02fedab9216f2f0c50cfea974",
         "observation": "Academic 6.1 license bundle present; the minimal probe ran without a license server/token checkout. Legal terms are the deployment owner\u2019s responsibility and were not audited by B07."
       },
       "mode": "0755",
       "name": "ORCA",
-      "path": "/home/xieningke/orca611/orca",
+      "path": "/home/redacted-user/orca611/orca",
       "probe": {
         "evidence_note": "Tiny H2/STO-3G probe only; never a large job and never a fake binary.",
         "exit_code": 0,
@@ -179,9 +179,9 @@
         "molecule": "H2",
         "status": "PASS",
         "stderr": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.err",
-        "stderr_sha256": "4647f7094c041b78ba63b1d03d48ac810a8312817cceff256e8683c8be1335d3",
+        "stderr_sha256": "f6e638a4662c41157780c67ea64f739a8b32b28bda511e022fb5cccb82e3dc70",
         "stdout": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.out",
-        "stdout_sha256": "4447a5bf6b40b07d0b421842fcc9578219fbbcddefb86532a23a1c1ca779d16d",
+        "stdout_sha256": "5419f592f0d1ac996f35bfb7824384ea6c05eb6986673221aa9690993e2c9e07",
         "termination_line": "****ORCA TERMINATED NORMALLY****",
         "total_run_time": "0 days 0 hours 0 minutes 0 seconds 302 msec",
         "wall_clock_s": 0.32
@@ -197,7 +197,7 @@
       "mode": "0744",
       "name": "Shermo",
       "on_path": false,
-      "path": "/home/xieningke/Shermo_2.6.1/Shermo",
+      "path": "/home/redacted-user/Shermo_2.6.1/Shermo",
       "sha256": "82c607f9703ffb41a79143b0df4c2a5ec7e716fbb2870eeda830e70eb733b2dd",
       "size_bytes": 1519547,
       "source": "config",
@@ -209,7 +209,7 @@
       "mode": "0755",
       "name": "xTB",
       "on_path": false,
-      "path": "/home/xieningke/xtb-dist/bin/xtb",
+      "path": "/home/redacted-user/xtb-dist/bin/xtb",
       "sha256": "debf27a9e0fa4bfb5ca75aafe4b90d8211f08ec2f4a482f375a4987212eaa12a",
       "size_bytes": 63253248,
       "source": "config",

@@ -1,14 +1,14 @@
 {
   "agents_docs": [
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/backends/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/core/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/io/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/pipeline/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/cluster/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/interfaces/AGENTS.md",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/utils/AGENTS.md"
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/backends/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/core/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/io/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/pipeline/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/cluster/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/interfaces/AGENTS.md",
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/utils/AGENTS.md"
   ],
   "dist_info_license": {
     "acp-web": [
@@ -29,9 +29,9 @@
   },
   "py_typed": true,
   "root_acp_license": [
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/root/lib/python3.11/site-packages/acp-0.3.0.dist-info/LICENSE"
+    "reports/acp2_implementation/bb45a46/B/B25/venvs/root/lib/python3.11/site-packages/acp-0.3.0.dist-info/LICENSE"
   ],
-  "sample_config": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/docs/sample-config.yaml",
+  "sample_config": "reports/acp2_implementation/bb45a46/B/B25/release/docs/sample-config.yaml",
   "schema_module": true,
   "sdk": true
 }

@@ -1,4 +1,4 @@
 External plugin bundle (not committed to the ACP repository):
-/ACPServer/acp2-development/data/b/plugins/b21
+/opt/acp2-dev/data/b/plugins/b21
 The adapter was discovered/installed/enabled by reading adapter.json and entrypoint bytes only;
-no file under /ACPServer/AutoCalcPlatform/src was modified to recognize this adapter.
+no file under src was modified to recognize this adapter.

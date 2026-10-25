@@ -1,7 +1,7 @@
 {
   "candidate": {
     "candidate_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
-    "source": "/ACPServer/AutoCalcPlatform/src"
+    "source": "src"
   },
   "fixture_id": "fx-migration-v1",
   "interrupted": {
@@ -26,12 +26,12 @@
   "legacy_migration": {
     "action": "migrate",
     "applied": 2,
-    "db": "/ACPServer/acp2-development/data/b/b24-migration/legacy/acp_jobs.db",
+    "db": "/opt/acp2-dev/data/b/b24-migration/legacy/acp_jobs.db",
     "schema_version": 23
   },
   "legacy_seed": {
     "action": "seed-legacy",
-    "db": "/ACPServer/acp2-development/data/b/b24-migration/legacy/acp_jobs.db",
+    "db": "/opt/acp2-dev/data/b/b24-migration/legacy/acp_jobs.db",
     "jobs": [
       {
         "id": "mig_legacy_done",
@@ -43,7 +43,7 @@
   "migration": {
     "action": "migrate",
     "applied": 0,
-    "db": "/ACPServer/acp2-development/data/b/b24-migration/db/acp_jobs.db",
+    "db": "/opt/acp2-dev/data/b/b24-migration/db/acp_jobs.db",
     "schema_version": 23
   },
   "schema": "acp2.migration.log.v1",
@@ -57,7 +57,7 @@
   },
   "seed": {
     "action": "seed",
-    "admission_db": "/ACPServer/acp2-development/data/b/b24-migration/db/acp_admission.db",
+    "admission_db": "/opt/acp2-dev/data/b/b24-migration/db/acp_admission.db",
     "approvals": {
       "approved": "ap_e45a4f5a71074e249ec6fa557eb066ec",
       "approved_binding": {
@@ -81,7 +81,7 @@
       },
       "reservation_id": "mig-budget-res-1"
     },
-    "db": "/ACPServer/acp2-development/data/b/b24-migration/db/acp_jobs.db",
+    "db": "/opt/acp2-dev/data/b/b24-migration/db/acp_jobs.db",
     "idempotency": {
       "committed_claim": "idem_44bc76781b5d4df3876c261679c8064e",
       "expired": [
@@ -102,12 +102,12 @@
       "mig_done": {
         "pid": null,
         "status": "completed",
-        "work_dir": "/ACPServer/acp2-development/data/b/b24-migration/tasks/mig_done"
+        "work_dir": "/opt/acp2-dev/data/b/b24-migration/tasks/mig_done"
       },
       "mig_lost": {
         "pid": 999999,
         "status": "running",
-        "work_dir": "/ACPServer/acp2-development/data/b/b24-migration/tasks/mig_lost"
+        "work_dir": "/opt/acp2-dev/data/b/b24-migration/tasks/mig_lost"
       }
     },
     "schema_version": 23

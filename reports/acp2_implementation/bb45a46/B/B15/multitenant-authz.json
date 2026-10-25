@@ -21,8 +21,8 @@
       "b15-alpha-paused-v1",
       "b15-beta-paused-v1"
     ],
-    "jobs_database": "/ACPServer/acp2-development/data/b/run-root-b15/acp_jobs.db",
-    "run_root": "/ACPServer/acp2-development/data/b/run-root-b15"
+    "jobs_database": "/opt/acp2-dev/data/b/run-root-b15/acp_jobs.db",
+    "run_root": "/opt/acp2-dev/data/b/run-root-b15"
   },
   "forged_hint_identity": {
     "account_id": "acct_d4a87b63609fa017",

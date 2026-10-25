@@ -110,14 +110,14 @@
   },
   "clean_worktree": true,
   "commands": [
-    "/ACPServer/acp2-development/venvs/b/bin/python scripts/build_release.py --source /tmp/opencode/acp2-b25-clean --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release",
-    "/ACPServer/acp2-development/venvs/b/bin/python -m build --no-isolation --outdir /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build /tmp/opencode/acp2-b25-fix",
-    "/ACPServer/acp2-development/venvs/b/bin/python -m pip wheel --no-deps --no-build-isolation --wheel-dir /tmp/opencode/b25-fix-roundtrip /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0.tar.gz /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp-worker-0.3.0.tar.gz /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp-web-0.3.0.tar.gz",
-    "/ACPServer/acp2-development/venvs/b/bin/python scripts/acceptance/check_release_artifacts.py --artifacts /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release --roundtrip-wheels /tmp/opencode/b25-fix-roundtrip --source /tmp/opencode/acp2-b25-fix --output /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/artifacts-acceptance.json",
-    "env -u PYTHONPATH /tmp/opencode/b25-fix-cccp-venv/bin/python /tmp/opencode/acp2-b25-fix/scripts/acceptance/release_role_probe.py --role cccp --output /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/cccp-role-probe.json",
-    "env -u PYTHONPATH /tmp/opencode/b25-fix-worker-venv/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/worker-receipt-check.py",
-    "env -u PYTHONPATH /tmp/opencode/b25-fix-web-venv/bin/python /tmp/opencode/acp2-b25-fix/scripts/acceptance/release_role_probe.py --role web --output /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/web-role-probe.json",
-    "/ACPServer/acp2-development/venvs/b/bin/python -m pytest tests/test_packaging_assets.py tests/test_services_packaging_roles.py -q"
+    "/opt/acp2-dev/venvs/b/bin/python scripts/build_release.py --source /tmp/opencode/acp2-b25-clean --out reports/acp2_implementation/bb45a46/B/B25/release",
+    "/opt/acp2-dev/venvs/b/bin/python -m build --no-isolation --outdir reports/acp2_implementation/bb45a46/B/B25/root-build /tmp/opencode/acp2-b25-fix",
+    "/opt/acp2-dev/venvs/b/bin/python -m pip wheel --no-deps --no-build-isolation --wheel-dir /tmp/opencode/b25-fix-roundtrip reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0.tar.gz reports/acp2_implementation/bb45a46/B/B25/release/acp-worker-0.3.0.tar.gz reports/acp2_implementation/bb45a46/B/B25/release/acp-web-0.3.0.tar.gz",
+    "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/check_release_artifacts.py --artifacts reports/acp2_implementation/bb45a46/B/B25/release --roundtrip-wheels /tmp/opencode/b25-fix-roundtrip --source /tmp/opencode/acp2-b25-fix --output reports/acp2_implementation/bb45a46/B/B25/artifacts-acceptance.json",
+    "env -u PYTHONPATH /tmp/opencode/b25-fix-cccp-venv/bin/python /tmp/opencode/acp2-b25-fix/scripts/acceptance/release_role_probe.py --role cccp --output reports/acp2_implementation/bb45a46/B/B25/cccp-role-probe.json",
+    "env -u PYTHONPATH /tmp/opencode/b25-fix-worker-venv/bin/python reports/acp2_implementation/bb45a46/B/B25/worker-receipt-check.py",
+    "env -u PYTHONPATH /tmp/opencode/b25-fix-web-venv/bin/python /tmp/opencode/acp2-b25-fix/scripts/acceptance/release_role_probe.py --role web --output reports/acp2_implementation/bb45a46/B/B25/web-role-probe.json",
+    "/opt/acp2-dev/venvs/b/bin/python -m pytest tests/test_packaging_assets.py tests/test_services_packaging_roles.py -q"
   ],
   "commit_subject": "build(release): build separate ACP 2.0 role packages",
   "contract_validator": "reports/acp2_implementation/bb45a46/B/B25/contract-validator.txt",

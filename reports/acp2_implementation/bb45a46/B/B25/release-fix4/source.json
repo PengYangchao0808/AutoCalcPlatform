@@ -36,8 +36,8 @@
   "base_release": "reports/acp2_implementation/bb45a46/B/B25/release",
   "base_release_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
   "build_commands": [
-    "/ACPServer/acp2-development/venvs/b/bin/python scripts/build_release.py --source /tmp/opencode/b26a-fix4/build-src --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4",
-    "/ACPServer/acp2-development/venvs/b/bin/python -m build --no-isolation --outdir /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build /tmp/opencode/b26a-fix4/build-src"
+    "/opt/acp2-dev/venvs/b/bin/python scripts/build_release.py --source /tmp/opencode/b26a-fix4/build-src --out reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+    "/opt/acp2-dev/venvs/b/bin/python -m build --no-isolation --outdir reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build /tmp/opencode/b26a-fix4/build-src"
   ],
   "build_exit_codes": {
     "release": "0",

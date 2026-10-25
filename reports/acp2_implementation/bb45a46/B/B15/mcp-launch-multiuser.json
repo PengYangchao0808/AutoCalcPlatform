@@ -11,7 +11,7 @@
     "--log-level",
     "INFO"
   ],
-  "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "command": "/opt/acp2-dev/venvs/b/bin/python",
   "constraints": {
     "no_credential_in_descriptor": true,
     "stdout_protocol_only": true,
@@ -24,11 +24,11 @@
     "start_controller": false,
     "transport": "loopback-http"
   },
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "env": {
     "ACP_API_KEY": "env:ACP_API_KEY",
     "ACP_CONTROLLER_URL": "http://127.0.0.1:18775",
-    "PYTHONPATH": "/ACPServer/acp2-development/data/b/b15-src"
+    "PYTHONPATH": "/opt/acp2-dev/data/b/b15-src"
   },
   "identity_binding": {
     "bound_fields": [

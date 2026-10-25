@@ -26,16 +26,16 @@
 ### 1.2 可复现校验命令
 
 ```bash
-cd /ACPServer/AutoCalcPlatform
+cd repo-root
 # 资源清单重生成（HTML 现盘解析；输出 58 行 + 头）
-/home/xieningke/.venvs/acp-frontend/bin/python \
+/home/redacted-user/.venvs/acp-frontend/bin/python \
     .omo/evidence/acp-parallel-plan-1-frontend/t33/collect_manifest.py
 
 # 发布集聚合摘要（期望 f15381ea...）
 find frontend -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum
 
 # 冷/暖缓存与字节一致（起本地隔离服务于 8898，结束自动杀进程并给出端口空闲回执）
-/home/xieningke/.venvs/acp-frontend/bin/python \
+/home/redacted-user/.venvs/acp-frontend/bin/python \
     .omo/evidence/acp-parallel-plan-1-frontend/t33/cache_check.py
 ```
 
@@ -55,11 +55,11 @@ find frontend -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256su
 sudo systemctl stop acp
 
 # 1) 从发布修订恢复前端资源树（回退唯一被改动的目录）
-cd /ACPServer/AutoCalcPlatform
+cd repo-root
 git checkout 5518aa6fe9fb8ec6905c02d55f85754309ed9303 -- frontend/
 
 # 2) 校验：清单重生成 + 聚合摘要（期望 5518aa6f 对应值 f15381ea...）
-/home/xieningke/.venvs/acp-frontend/bin/python \
+/home/redacted-user/.venvs/acp-frontend/bin/python \
     .omo/evidence/acp-parallel-plan-1-frontend/t33/collect_manifest.py
 find frontend -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum
 
@@ -67,7 +67,7 @@ find frontend -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256su
 sudo systemctl restart acp
 
 # 备选（无 git 环境）：用发布包内 frontend tarball 覆盖
-#   tar -xzf <release>/frontend-5518aa6f.tar.gz -C /ACPServer/AutoCalcPlatform
+#   tar -xzf <release>/frontend-5518aa6f.tar.gz -C repo-root
 #   然后仍执行步骤 2–3（聚合校验不可省略）
 # 更深回退到计划前基线：同上把修订换成 f410ac9d（聚合期望 fe9da69f...）
 ```

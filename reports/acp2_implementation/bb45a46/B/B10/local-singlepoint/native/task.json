@@ -8,7 +8,7 @@
   "molecule_name": "STO-3G)\nH 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000",
   "name_revision": 0,
   "node_id": "local",
-  "node_path": "/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
+  "node_path": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
   "project_id": "uncategorized",
   "remark": "",
   "result_manifest_path": null,

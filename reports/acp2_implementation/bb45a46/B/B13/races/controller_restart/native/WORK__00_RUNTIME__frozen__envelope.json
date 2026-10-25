@@ -11,7 +11,7 @@
       "mapping_version": 1,
       "project_id": "",
       "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09",
-      "root": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized",
+      "root": "/opt/acp2-dev/data/b/run-root-b13/uncategorized",
       "tenant_id": ""
     }
   ],
@@ -19,7 +19,7 @@
   "envelope_version": 1,
   "fencing_token": "6ff417cfa6cf9a9bbf0bd31b983694e6",
   "job_id": "20261023_073435_005_singlepoint",
-  "owner": "local:workstation:749204:1",
+  "owner": "local:redacted-host:749204:1",
   "plan_digest": "v2:43ed969410124e1654f49950902b10f6",
   "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
   "protocol": "local",

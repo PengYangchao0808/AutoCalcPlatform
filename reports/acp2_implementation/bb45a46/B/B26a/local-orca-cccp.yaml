@@ -1,7 +1,7 @@
 executables:
   orca:
-    path: /home/xieningke/orca611/orca
-    ld_library_path: /home/xieningke/orca611
+    path: /home/redacted-user/orca611/orca
+    ld_library_path: /home/redacted-user/orca611
 cluster:
   enabled: false
   execution_mode: local

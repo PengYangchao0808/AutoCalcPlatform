@@ -8,7 +8,7 @@ Owner: A (science track). This file is the single baseline record consumed by ta
 | Field | Value |
 |---|---|
 | Actual worktree HEAD at A-00 start | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` (bare base, no business fixes) |
-| Branch | `acp2/a-science` (worktree `/ACPServer/acp2-development/A`) |
+| Branch | `acp2/a-science` (worktree `/opt/acp2-dev/A`) |
 | Frozen base revision (`ACP2_BASE_REV`) | `096cdffe9a3817d8ee443d824830d87ec6e07bc2` — overlay restore/apply base only; **not** the code candidate |
 | B00 candidate id (`candidate-snapshot.json::candidate_id`) | `sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12` |
 | Code-candidate revision (declared in repair report, historical reference) | `ab492cc8be9e46125fa2d2fae69a3ecaac64a548` |
@@ -21,19 +21,19 @@ Owner: A (science track). This file is the single baseline record consumed by ta
 
 | Field | Value |
 |---|---|
-| Overlay archive (concrete path) | `/ACPServer/AutoCalcPlatform/reports/architecture_repair_20261022/candidate-overlay.tar.gz` |
+| Overlay archive (concrete path) | `reports/architecture_repair_20261022/candidate-overlay.tar.gz` |
 | Overlay archive SHA-256 | `3fb835b5069f96642bf6bb889a804532bbb70b69cf796d21208a6e3364117734` (matches `SHA256SUMS`) |
 | `tracked-changes.patch` SHA-256 | `4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242` |
 | Snapshot-declared `tracked_patch_sha256` | `4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242` (**match**) |
-| `candidate-snapshot.json` SHA-256 | `33861de7d5578a8cfa5b48bcde27e7bd2b25ac3427c4dacb47c4eca921ae872c` |
+| `candidate-snapshot.json` SHA-256 | `37dd2320cc5d97ea7eb866a2275641c0d0518801202137f08e8f84046cea1194` |
 | Patch content | 28 tracked files (`git apply` to `096cdff`) |
 | New files | 144 files (`new-files/` copied over the worktree) |
 | Excluded path | `tests/baseline/refactor-evidence/e2e-task-root.txt` — pre-existing local test-run marker; **not** committed, **not** modified |
 
-Materialization commands (executed in `/ACPServer/acp2-development/A`):
+Materialization commands (executed in `/opt/acp2-dev/A`):
 
 ```bash
-tar -xzf /ACPServer/AutoCalcPlatform/reports/architecture_repair_20261022/candidate-overlay.tar.gz -C /tmp/opencode/a00-overlay-a00-20261022T111022Z
+tar -xzf reports/architecture_repair_20261022/candidate-overlay.tar.gz -C /tmp/opencode/a00-overlay-a00-20261022T111022Z
 git apply /tmp/opencode/a00-overlay-a00-20261022T111022Z/tracked-changes.patch
 cp -a /tmp/opencode/a00-overlay-a00-20261022T111022Z/new-files/. .
 ```
@@ -55,12 +55,12 @@ Raw machine record: `$ACP2_EVIDENCE/A/A-00/a00-20261022T111022Z/snapshot-verify.
 
 | Field | Value |
 |---|---|
-| Role interpreter (`$ACP2_A_PYTHON`) | `/ACPServer/acp2-development/envs/a-python/bin/python` (CPython 3.11.13) |
+| Role interpreter (`$ACP2_A_PYTHON`) | `/opt/acp2-dev/envs/a-python/bin/python` (CPython 3.11.13) |
 | Editable install | `"$ACP2_A_PYTHON" -m pip install -e "$ACP2_A_SOURCE" --no-deps --no-build-isolation` (exit 0) |
-| `cccp` import | `/ACPServer/acp2-development/A/src/cccp/__init__.py` |
-| `acp` import | `/ACPServer/acp2-development/A/src/acp/__init__.py` |
-| `acp_services` import | `/ACPServer/acp2-development/A/src/acp_services/__init__.py` |
-| All imports in source tree | **YES** (all three resolve under `/ACPServer/acp2-development/A/src/`) |
+| `cccp` import | `/opt/acp2-dev/A/src/cccp/__init__.py` |
+| `acp` import | `/opt/acp2-dev/A/src/acp/__init__.py` |
+| `acp_services` import | `/opt/acp2-dev/A/src/acp_services/__init__.py` |
+| All imports in source tree | **YES** (all three resolve under `/opt/acp2-dev/A/src/`) |
 
 Build note: the venv has no `wheel` distribution, so the first editable build failed at
 `error: invalid command 'bdist_wheel'`. The build was re-run with the already-present local
@@ -70,15 +70,15 @@ no new runtime package was added.
 
 ## 5. Evidence root
 
-`$ACP2_EVIDENCE` = `/ACPServer/acp2-evidence/a-science-20261022`
+`$ACP2_EVIDENCE` = `/opt/acp2-evidence/a-science-20261022`
 
-A-00 evidence: `/ACPServer/acp2-evidence/a-science-20261022/A/A-00/a00-20261022T111022Z/`
+A-00 evidence: `/opt/acp2-evidence/a-science-20261022/A/A-00/a00-20261022T111022Z/`
 (`result.json`, `argv.json`, `stdout.log`, `stderr.log`, `pre-state.txt`,
 `snapshot-verify.json`, `overlay-digests.txt`, `failure-qa.txt`).
 
 ## 6. Dirty-path inventory before materialization
 
-### 6a. A worktree (`/ACPServer/acp2-development/A`)
+### 6a. A worktree (`/opt/acp2-dev/A`)
 
 Command: `cd "$ACP2_A_SOURCE" && git status --short && git diff --stat`
 (at HEAD `096cdffe9a3817d8ee443d824830d87ec6e07bc2`, branch `acp2/a-science`):
@@ -91,7 +91,7 @@ Command: `cd "$ACP2_A_SOURCE" && git status --short && git diff --stat`
 Inventory: **0 dirty paths** (clean worktree, no staged/unstaged/untracked entries). The A worktree
 was created fresh from the bare base; no other agent had written to it.
 
-### 6b. Primary checkout (`/ACPServer/AutoCalcPlatform`)
+### 6b. Primary checkout (`repo-root`)
 
 GAP-13 names the dirty primary checkout and its untracked planning documents as the baseline risk.
 Observed by the orchestrator at **2026-10-22T11:06Z**, before A-00 materialized the overlay.
@@ -99,7 +99,7 @@ Branch `feat/frontend-plan1-closure`, HEAD `096cdffe9a3817d8ee443d824830d87ec6e0
 The primary checkout was **only read** by A-00 (overlay tarball, `REPORT.md`, `SHA256SUMS`, evidence
 JSON and the cited plan documents); nothing was cleaned, reset, stashed, committed or otherwise written.
 
-`git -C /ACPServer/AutoCalcPlatform status --short` — **39 modified + 11 untracked**:
+`git -C repo-root status --short` — **39 modified + 11 untracked**:
 
 ```text
 M README.md
@@ -198,7 +198,7 @@ is explicitly excluded and stays untouched in both the primary checkout and the 
 
 - Plan: `docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md`
 - Index: `docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md`
-- Repair report: `/ACPServer/AutoCalcPlatform/reports/architecture_repair_20261022/REPORT.md`
+- Repair report: `reports/architecture_repair_20261022/REPORT.md`
 - Deliverable path map / ownership boundary: `path-map.md` (same directory)
 
 ---
@@ -355,7 +355,7 @@ before any subprocess.
 | External plugin distribution install/enable/conflict | third-party wheel outside core | A-22b/A-23 (todos 41, 42) | `NOT_VERIFIED` |
 | Selectivity + NMR/thermo cross-domain records | registered `experience:*` phase receipts with a real `run_id` | A-25b/A-26 (todos 46, 47) | `NOT_VERIFIED` |
 | Live HTTP `GET /api/workflows` | the §8.1 count came from the in-process response builder, not an HTTP round trip against `acp run serve` | A-13-adjacent | in-process probe only |
-| `reports/architecture_repair_20261022/REPORT.md` content | read **read-only from the primary checkout** (`/ACPServer/AutoCalcPlatform/...`); that directory does **not** exist in the A worktree (`git ls-files` shows it absent) | — | read from primary checkout; `static-fact` as a path fact, primary-checkout-only |
+| `reports/architecture_repair_20261022/REPORT.md` content | read **read-only from the primary checkout** (`...`); that directory does **not** exist in the A worktree (`git ls-files` shows it absent) | — | read from primary checkout; `static-fact` as a path fact, primary-checkout-only |
 
 ### 8.8 Reconciliation: 15 (code/plan) vs 14 (README / claimed API)
 
@@ -388,7 +388,7 @@ shrink the plan's 15 executable workflows.
 | 7 | `WorkflowSpec` unused at runtime | zero constructions outside `tests/test_core_workflow.py` (§8.1) | `static-fact` |
 | 8 | CDXML input | `DEFERRED` outside initial A/B/C scope (R3-12); unsupported features must be rejected explicitly | `static-fact` (scope decision) |
 | 9 | B01 receipt protocol | `acceptance-result.schema.json` / `acp2.acceptance.v1` and the `(owner, scenario, phase, run_id)` registry unpublished → A's `result.json` stays a provisional A-internal record | `needs-real-evidence` (B01) |
-| 10 | Repair-report directory in A worktree | `reports/architecture_repair_20261022/` absent from the A worktree; `REPORT.md` read read-only from `/ACPServer/AutoCalcPlatform` | `static-fact` (path fact) |
+| 10 | Repair-report directory in A worktree | `reports/architecture_repair_20261022/` absent from the A worktree; `REPORT.md` read read-only from `repo-root` | `static-fact` (path fact) |
 | 11 | Build dependency | `$ACP2_A_PYTHON` has `setuptools 65.5.1` but **no `wheel`**; editable install/wheel build needs a prepared build env (A-00a fallback) — no network install performed | `static-fact` (env), wheel build `needs-real-evidence` |
 | 12 | Real QC/LSF/plugin/selectivity execution | see §8.7 | `needs-real-evidence` |
 

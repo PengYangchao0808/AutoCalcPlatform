@@ -1,7 +1,7 @@
 # ACP Services Standalone Recipe — 可复现安装配方与 capability 报告（B41a+B41b，todo 41）
 
 > **Status**: B41a（配方设计与首批复现）与 B41b（真实安装与完整 CLI 复现，todo 74 之后）均已执行。B41b 在本机干净 venv + 隔离 HOME/CWD/run_root 完成（见 §2.1）；**不是异机复现**。
-> **Reproduced at**: B41a — 2026-10-19，repo `main` @ `e447783`；B41b — 2026-10-19，repo `main` @ `48b1660`（含 todo 74 CLI task 面），host python3.11.13（用户 xieningke）。两批记录分列保留（§2 / §2.1），回填不覆盖原始记录。
+> **Reproduced at**: B41a — 2026-10-19，repo `main` @ `e447783`；B41b — 2026-10-19，repo `main` @ `48b1660`（含 todo 74 CLI task 面），host python3.11.13（用户 redacted-user）。两批记录分列保留（§2 / §2.1），回填不覆盖原始记录。
 > **依据**: 主方案 §35-M1（退出门）/§36.2 step7（PASS/FAIL/NOT_VERIFIED 分列）/§36.5 IN-03；并行计划二 B07-7；`docs/reference/current/ACP_Function_Test_Manual.md` §1/§3.0；`scripts/install_systemd.sh`；`scripts/start_acp.sh`。
 > 两批任务均未重启 `acp.service`、未修改真实 run_root（`/var/lib/acp/runs`）、未修改真实 `~/.cccp.yaml`；干净环境复现全部落在 `/tmp/acp_recipe_*`（B41a）与 `/tmp/b41b_*`（B41b）。
 
@@ -24,11 +24,11 @@
 
 - 干净 venv：`/tmp/acp_recipe_venv`（`python3.11 -m venv`，pip 26.2.1），`pip install -e '.[api,remote]'` 安装 acp-0.2.0 + 65 依赖（INSTALL_EXIT=0，544M）。
 - 本机已有 editable 安装 acp 0.2.0（`~/.local`，console script `~/.local/bin/acp`，默认 PATH 不含 `~/.local/bin`）。
-- **PATH 陷阱（务必记录）**：`command -v orca` 命中的是 GNOME Orca 40.3（`/usr/bin/orca`，Python 脚本，Igalia），**不是** Schatzburg 组 QC ORCA。QC ORCA 位于 `/home/xieningke/orca611/orca`，只能经 `executables.orca.path`（配置）或 `CONFSEARCH_ORCA_PATH`（环境变量）解析。
+- **PATH 陷阱（务必记录）**：`command -v orca` 命中的是 GNOME Orca 40.3（`/usr/bin/orca`，Python 脚本，Igalia），**不是** Schatzburg 组 QC ORCA。QC ORCA 位于 `/home/redacted-user/orca611/orca`，只能经 `executables.orca.path`（配置）或 `CONFSEARCH_ORCA_PATH`（环境变量）解析。
 - QC 二进制均不在 PATH，均位于 `~/.cccp.yaml` / 项目 `./cccp.yaml` 指定路径（7/7 存在且可执行）。
 - **CWD 配置泄漏陷阱**：配置合并会读取 CWD 下 `./cccp.yaml`（项目级）。本次 host 仓库根存在未入库的 `cccp.yaml`（含 node-157 与凭据引用），从仓库根目录运行 `acp doctor` 会连真实远程节点；干净环境复现必须在**不含 `cccp.yaml` 的工作目录**中执行，或显式隔离 `HOME`。
 - 主机 systemd：`acp.service` enabled + active（unit 生成于 2026-09-06），`/api/status` 200，run_root `/var/lib/acp/runs`；**该运行中进程自报 version 0.1.3（进程启动时加载的代码），本任务按约束未重启服务，故 HTTP 层验证不构成"当前源码已被主机服务加载"的证据**；当前源码行为以干净 venv 实例（自报 0.2.0）为准。
-- **B41b 环境基线（2026-10-19）**：新干净 venv `/tmp/b41b-venv`（python3.11 -m venv，pip 升级至 26.2.1 后 `pip install -e '/ACPServer/AutoCalcPlatform[api,remote]'`，INSTALL_EXIT=0，acp-0.2.0 editable + 42 依赖，venv 544M）；隔离 `HOME=/tmp/b41b_home`（init 写入）、工作目录 `/tmp/b41b_work`（无 `cccp.yaml`）、`ACP_RUN_ROOT=/tmp/b41b_runs`。交互向导另用 `HOME=/tmp/b41b_home_s3a`、`ACP_RUN_ROOT=/tmp/b41b_runs_s3a`。B41b 另发现两条运行期要求（详见 §2.1）：**ORCA 需要配置 `executables.orca.ld_library_path` 且 OpenMPI `bin` 目录在 PATH 上（`mpirun` 缺失时 ORCA 启动即败）**；`run_root` 有实例锁（serve 持锁期间 `acp task` 拒绝第二控制器实例，防误杀运行中任务——正面行为）。
+- **B41b 环境基线（2026-10-19）**：新干净 venv `/tmp/b41b-venv`（python3.11 -m venv，pip 升级至 26.2.1 后 `pip install -e 'repo-root[api,remote]'`，INSTALL_EXIT=0，acp-0.2.0 editable + 42 依赖，venv 544M）；隔离 `HOME=/tmp/b41b_home`（init 写入）、工作目录 `/tmp/b41b_work`（无 `cccp.yaml`）、`ACP_RUN_ROOT=/tmp/b41b_runs`。交互向导另用 `HOME=/tmp/b41b_home_s3a`、`ACP_RUN_ROOT=/tmp/b41b_runs_s3a`。B41b 另发现两条运行期要求（详见 §2.1）：**ORCA 需要配置 `executables.orca.ld_library_path` 且 OpenMPI `bin` 目录在 PATH 上（`mpirun` 缺失时 ORCA 启动即败）**；`run_root` 有实例锁（serve 持锁期间 `acp task` 拒绝第二控制器实例，防误杀运行中任务——正面行为）。
 
 ---
 
@@ -43,12 +43,12 @@
 | S3 init 非交互（回答文件） | `HOME=/tmp/acp_recipe_home acp init --config /tmp/acp_recipe_home/.cccp.yaml --answers answers.yaml`（answers：version 1 / usage local / tier standalone / components science-core+local-identity+local-storage / resources.software=7 二进制路径 / cluster.type local / params.run_root=/tmp/acp_recipe_runs） | 渲染版本化计划 → 应用到目标配置 → 输出 PASS/FAIL/NOT_VERIFIED 分列的 doctor 能力报告；不触碰真实 `~/.cccp.yaml` | 计划 v1 应用成功（写入 0644，含回退说明与配置差异清单）；内嵌 doctor 报告 PASS(12)/FAIL(0)/NOT_VERIFIED(0)；exit 0 | PASS |
 | S3a init 交互式（TTY 向导） | `acp init` | 交互完成最小配置 | B41a 原记录（保留）："本任务未执行：交互路径会写真实 `~/.cccp.yaml`（任务约束禁止触碰真实配置），且交互验收不属于 B41a 范围 → NOT_VERIFIED"。**B41b 回填**：tmux TTY 驱动完整交互（隔离 `HOME=/tmp/b41b_home_s3a`）——usage=本机部署 → 档位=Standalone → 资源=本地（自动检测表 + isostat/molclus 手动路径回填）→ 组件=默认组合 → run_root 默认 → secrets 跳过 → 计划预览 → 应用；计划应用成功（deployment 段 + 手动 executables 路径写入 `.cccp.yaml`，含 `.bak` 回退），内嵌 doctor 报告 PASS(12)/FAIL(0)/NOT_VERIFIED(0)，`q` 干净退出（"再见"）。**注记**：自动检测把 GNOME Orca 40.3（`/usr/bin/orca`）列为 orca 且 doctor 报 PASS——即 S4c 缺陷在交互路径同样存在；自动检测项（orca/xtb/crest/censo/shermo）不写入配置（保持 PATH 解析），仅手动输入的 isostat/molclus 落盘 | PASS — **B41b 回填**：交互向导端到端跑通；orca 假成功缺陷见 S4c（同一缺陷，不重复计 FAIL）。原始 B41a NOT_VERIFIED 记录保留在 Actual 列 |
 | S4 doctor（Standalone 本地配置，无远程节点） | `cd /tmp/acp_recipe_work && HOME=/tmp/acp_recipe_home acp doctor` | 输出能力报告；本地-only 档位不因缺远程节点整体判失败（待确认语义） | 输出 `No remote nodes configured (cluster.nodes is empty).`，exit 1。**B41b 复核（2026-10-19，/tmp/b41b-venv）**：同样输出且 exit 1——缺陷未修复 | FAIL — 原因：`acp doctor` 当前自检范围是远程节点（cli 描述 "Deployment self-check for remote compute nodes"），零节点即 exit 1；本地 Standalone 的 doctor 门应改用 S3 内嵌能力报告或扩展 doctor 本地检查——语义裁定不在本任务；**B41b 复核仍未修复** |
-| S4b doctor（已配置远程节点） | `cd <含 cccp.yaml 的项目目录> && acp doctor`（或真实 `HOME`） | 各节点可达、Python 与二进制解析成功 → exit 0 | node-157（10.16.5.157）SSH 认证成功，python 3.13.9；censo 3.0.8 / crest 3.0.2 / xtb 6.7.1 / mpi 4.1.8 / orca / shermo / isostat / molclus 全部解析；`Doctor finished: all checks passed`，exit 0 | PASS |
+| S4b doctor（已配置远程节点） | `cd <含 cccp.yaml 的项目目录> && acp doctor`（或真实 `HOME`） | 各节点可达、Python 与二进制解析成功 → exit 0 | node-157（192.168.1.100）SSH 认证成功，python 3.13.9；censo 3.0.8 / crest 3.0.2 / xtb 6.7.1 / mpi 4.1.8 / orca / shermo / isostat / molclus 全部解析；`Doctor finished: all checks passed`，exit 0 | PASS |
 | S4c 负例探针（错误配置的 typed 呈现） | `acp init --answers answers_bad.yaml`（隔离 HOME，answers 中 `executables.orca.path=/nonexistent/orca`，crest/censo/shermo/isostat/molclus 故意不配置） | 缺失/错误的软件配置必须 typed unavailable（FAIL 或 NOT_VERIFIED），不得假成功 | 未配置的 5 项正确记 `NOT_VERIFIED（未配置；配置完成但科学能力尚未验证）`；但 orca 配置路径不存在时被回落到 PATH，doctor 报 `software:orca — /usr/bin/orca` **PASS**——该二进制实为 GNOME Orca 40.3（`file /usr/bin/orca`：Python script，Igalia），非 QC ORCA；BAD_INIT exit=0。**B41b 复核（2026-10-19）**：同样回落 PATH 报 `software:orca — /usr/bin/orca` PASS、6 项 NOT_VERIFIED、BAD_INIT exit=0——缺陷未修复；交互向导（S3a）的软件检测表同样显示 orca→/usr/bin/orca 40.3 path | FAIL — 原因：`resolve_executable` 在配置路径无效时静默回落 PATH，无关二进制被报为 PASS（假成功）；负例门未通过，须在 doctor/解析层修复；**B41b 复核仍未修复** |
 | S5 首个本地科研闭环 | `HOME=/tmp/acp_recipe_home ACP_RUN_ROOT=/tmp/acp_recipe_runs acp run xtb_optimize --input water.xyz --output out`（water.xyz 取自功能测试手册 §3.0） | exit 0；state.json status=completed；`RESULT/result_manifest.json` 存在且 `load_result_manifest` 非 None | exit 0；Energy -5.070544374391 Hartree；WORK/03_OPT/ 留有真实 xtb 产物（xtb.log、xtbopt.xyz、.xtboptok、charges、wbo）；state=completed；manifest 解析成功（4 products，structure converged） | PASS |
 | S6 Web 服务冒烟（干净 venv，备用端口） | `HOME=… ACP_RUN_ROOT=/tmp/acp_recipe_runs acp run serve --host 127.0.0.1 --port 8899 --no-browser` | `/api/status` 200 | 200（version 0.2.0，run_root=/tmp/acp_recipe_runs 隔离生效）；`/` 200（Workbench 静态页）；`/api/workflows` 200 → 15 个工作流；测毕即杀进程，未与 8765 主机服务冲突 | PASS |
 | S7a 主机服务状态观测 | `systemctl is-enabled acp; systemctl is-active acp; curl -s http://127.0.0.1:8765/api/status` | enabled + active + HTTP 200 | enabled / active / 200（run_root=/var/lib/acp/runs，进程自报 version 0.1.3，uptime≈23.7h——见 §1 基线说明） | PASS |
-| S7b 从脚本重建 systemd unit | `sudo scripts/install_systemd.sh --user <user> --enable` | unit 由脚本生成、daemon-reload、服务启动 | 未执行：任务约束禁止重启服务；现役 unit 生成于 2026-09-06，与当前 `install_systemd.sh` 的逐字一致性未核验。**B41b 复核**：约束仍禁止重启/重建，未执行 | NOT_VERIFIED — 原因：两批任务均禁止重启/重建服务；须在无此约束的发布验收（todo 76）复现 |
+| S7b 从脚本重建 systemd unit | `sudo scripts/install_systemd.sh --user redacted-user --enable` | unit 由脚本生成、daemon-reload、服务启动 | 未执行：任务约束禁止重启服务；现役 unit 生成于 2026-09-06，与当前 `install_systemd.sh` 的逐字一致性未核验。**B41b 复核**：约束仍禁止重启/重建，未执行 | NOT_VERIFIED — 原因：两批任务均禁止重启/重建服务；须在无此约束的发布验收（todo 76）复现 |
 | S8 完整 CLI 复现（B41b） | install → init → doctor → 15 工作流 CLI 全链路 + 进程重启后控制/恢复（todo 74 范围） | todo 74 交付后执行并回填证据 | **B41b 已执行**（见 §2.1）：install/init/doctor/闭环/控制恢复腿全部在 `/tmp/b41b-venv` 复现；15 工作流仅真实验收 4 项（xtb_optimize / frequency / Confsearch / singlepoint-ORCA），其余 11 项未跑 | NOT_VERIFIED — 原因：完整 CLI（含进程重启控制/恢复）PASS，但"15 工作流逐项真实验收"仅 4/15，未满足，仍属退出门二（§5）；不以本行代表完整发行 |
 
 **步骤小结（B41a 原记录，保留）**：S1/S2/S3/S4b/S5/S6/S7a 全部 PASS（真实观测，命令可复跑）；S4 与 S4c 为 FAIL（doctor 本地-only 语义、错误配置回落 PATH 假成功——均如实记录不粉饰）；S3a/S7b/S8 为 NOT_VERIFIED（各附原因与复现条件）。**"向导跑完"不作为任何步骤的验收依据**（§8）。
@@ -59,7 +59,7 @@
 
 ## 2.1 B41b 完整 CLI 复现记录（2026-10-19，`/tmp/b41b-venv`，todo 74 之后）
 
-环境：`HOME=/tmp/b41b_home`（S3 init 写入）、CWD `/tmp/b41b_work`（无 `cccp.yaml`）、`ACP_RUN_ROOT=/tmp/b41b_runs`。ORCA 腿额外要求：PATH 前置 `/home/xieningke/openmpi418/bin`（`mpirun`），配置含 `executables.orca.ld_library_path`（见 §1 B41b 基线）。以下每条命令均为独立进程（"fresh process" = 重启的控制器，验证持久连接语义）。
+环境：`HOME=/tmp/b41b_home`（S3 init 写入）、CWD `/tmp/b41b_work`（无 `cccp.yaml`）、`ACP_RUN_ROOT=/tmp/b41b_runs`。ORCA 腿额外要求：PATH 前置 `/home/redacted-user/openmpi418/bin`（`mpirun`），配置含 `executables.orca.ld_library_path`（见 §1 B41b 基线）。以下每条命令均为独立进程（"fresh process" = 重启的控制器，验证持久连接语义）。
 
 | 腿 | 命令 | Expected | Actual | 结果 |
 |---|---|---|---|---|
@@ -124,10 +124,10 @@
 | 组件 | installed | configured | enabled | verified | 证据 |
 |---|---|---|---|---|---|
 | ACP CLI（science-core） | YES — venv `/tmp/acp_recipe_venv/bin/acp`（acp-0.2.0 editable）；host `~/.local` acp 0.2.0；B41b：`/tmp/b41b-venv/bin/acp`（同版本，另一干净 venv 二次复现） | YES — 本次 init 写入 `/tmp/acp_recipe_home/.cccp.yaml`；host `~/.cccp.yaml`（2026-09-06）；B41b：`/tmp/b41b_home/.cccp.yaml` + 交互向导 `/tmp/b41b_home_s3a/.cccp.yaml` | YES — tier standalone 必选组件 science-core 已启用（init 计划 deployment.components） | PASS — S2 help、S3 init、S5 闭环均 exit 0；B41b：B1/B2/B6/B7/B10–B21 复现 | §2 S1–S5；§2.1 B1–B21 |
-| 本地 QC 软件：xtb | YES — `/home/xieningke/xtb-dist/bin/xtb` 可执行（6.7.1） | YES — executables.xtb.path 已配置 | YES — science-core 组件选中 | PASS — S5 真实闭环执行（xtb.log / xtbopt.xyz 产物）；B41b：B6 + task 面 xtb_optimize 多次真实完成（含 rerun/continue 重算） | §2 S5；§2.1 B6/B10–B12 |
+| 本地 QC 软件：xtb | YES — `/home/redacted-user/xtb-dist/bin/xtb` 可执行（6.7.1） | YES — executables.xtb.path 已配置 | YES — science-core 组件选中 | PASS — S5 真实闭环执行（xtb.log / xtbopt.xyz 产物）；B41b：B6 + task 面 xtb_optimize 多次真实完成（含 rerun/continue 重算） | §2 S5；§2.1 B6/B10–B12 |
 | 本地 QC 软件：crest / censo | YES — crest 3.0.2 / censo 3.0.8 可执行 | YES — executables.{crest,censo}.path 已配置 | YES — science-core 组件选中 | **PASS（B41b 升级）** — 3 次真实 Confsearch（censo-crest + screen 协议）完成：`Confsearch completed`、2 构象、G1 gate PASS、manifest 落盘（含跨暂停恢复后完成 1 次） | §2.1 B15–B17/B20 |
 | 本地 QC 软件：shermo / isostat / molclus | YES — 3/3 配置路径可执行；交互向导手动路径回填 isostat/molclus | YES — executables.{shermo,isostat,molclus}.path 已配置 | YES — science-core 组件选中 | NOT_VERIFIED（原因：仅 `--version`/路径解析级证据；B41b 未跑依赖 shermo/isostat/molclus 的科学任务——xtbmd-censo 协议 / molclus 专用腿未执行） | `--version` exit 码 + §2.1 B3 |
-| 本地 QC 软件：orca(6.1.1) | YES — `/home/xieningke/orca611/orca` 可执行 | YES — executables.orca.path（含 ld_library_path）已配置 | YES — science-core 组件选中 | **PASS（B41b 升级，附环境要求）** — 真实 ORCA 6.1.1 科学任务 3 次完成：singlepoint B3LYP/def2-SVP（Energy -76.321049541296 Hartree）+ frequency ×2（scheduler 面）；**环境要求**：`mpirun` 须在 PATH（OpenMPI bin），缺失时 ORCA Startup error termination（首跑 FAIL 如实记录）；PATH 上的 orca 仍是 GNOME 40.3（S4c 缺陷未修复，不得以 doctor 的 orca PASS 为证据——本行证据是真实 SCF 产物） | §2.1 B7/B21 + sp.out 产物 |
+| 本地 QC 软件：orca(6.1.1) | YES — `/home/redacted-user/orca611/orca` 可执行 | YES — executables.orca.path（含 ld_library_path）已配置 | YES — science-core 组件选中 | **PASS（B41b 升级，附环境要求）** — 真实 ORCA 6.1.1 科学任务 3 次完成：singlepoint B3LYP/def2-SVP（Energy -76.321049541296 Hartree）+ frequency ×2（scheduler 面）；**环境要求**：`mpirun` 须在 PATH（OpenMPI bin），缺失时 ORCA Startup error termination（首跑 FAIL 如实记录）；PATH 上的 orca 仍是 GNOME 40.3（S4c 缺陷未修复，不得以 doctor 的 orca PASS 为证据——本行证据是真实 SCF 产物） | §2.1 B7/B21 + sp.out 产物 |
 | Web 服务（FastAPI + Workbench 静态） | YES — uvicorn 0.54.0 + fastapi 0.146.0（venv）；acp.api + frontend 静态文件在源码树 | YES — unit Environment=ACP_RUN_ROOT/ACP_HOST/ACP_PORT；serve 参数默认 127.0.0.1:8765 | YES — 主机 acp.service enabled；本次临时实例（8899）已启动并回收 | PASS — S6：/api/status 200（0.2.0）、/ 200、/api/workflows 200（15 项）；S7a：主机 8765 /api/status 200；B41b：B8/B9 二次复现（200/200/200，15 workflows；主机观测 200） | §2 S6/S7a；§2.1 B8/B9 |
 | 本地任务管理 CLI（acp task，todo 74 面） | YES — `acp task` 11 动词随 acp-0.2.0 editable 安装（B41b 二次确认） | YES — 消费同一 run_root store（ACP_RUN_ROOT/--run-root）；`JobManager(reconnect_local_workers=True)` 持久控制器语义 | YES — B41b 在隔离 run_root 实际启用全部动词 | PASS — ingest/plan/execute/query/pause/unpause/continue/cancel/rerun/export 10 动词真实观测 PASS；**recover FAIL（缺陷 D2）**；跨进程收尾存在缺陷 D1/D3（见 §2.1） | §2.1 B10–B19 |
 | systemd 服务 acp.service | YES — `/etc/systemd/system/acp.service` 存在（2026-09-06 生成） | YES — unit 指向 `scripts/start_acp.sh`、WorkingDirectory=项目根、StateDirectory=acp | YES — is-enabled=enabled | PASS — is-active=active + HTTP 200（S7a，仅主机现状观测） | §2 S7a；unit 由 `install_systemd.sh` 重建一致性 NOT_VERIFIED（原因：S7b 禁止重启服务） |
@@ -219,7 +219,7 @@ cd /tmp/acp_recipe_work
 # 1) install
 python3.11 -m venv /tmp/acp_recipe_venv
 /tmp/acp_recipe_venv/bin/python -m pip install -U pip setuptools wheel
-/tmp/acp_recipe_venv/bin/python -m pip install -e '/ACPServer/AutoCalcPlatform[api,remote]'
+/tmp/acp_recipe_venv/bin/python -m pip install -e 'repo-root[api,remote]'
 
 # 2) init（非交互回答文件；answers.yaml 内容见 §2 S3 行）
 export HOME=/tmp/acp_recipe_home
@@ -253,7 +253,7 @@ curl -s http://127.0.0.1:8899/api/status   # 期望 200 + version 0.2.0 + run_ro
 # ===== B41b 追加（§2.1）：todo 74 task 面 + ORCA 真实科学 =====
 
 # 6) ORCA 真实科学（环境要求：OpenMPI bin 在 PATH，否则 mpirun 缺失 → ORCA Startup 失败）
-export PATH=/home/xieningke/openmpi418/bin:$PATH
+export PATH=/home/redacted-user/openmpi418/bin:$PATH
 # 注：isolated .cccp.yaml 需含 executables.orca.{path,ld_library_path}（init answers 不写 ld_library_path，
 #     可手工补写——见 §1 B41b 基线；或依赖用户配置）
 ACP_RUN_ROOT=/tmp/b41b_runs /tmp/b41b-venv/bin/acp run singlepoint \

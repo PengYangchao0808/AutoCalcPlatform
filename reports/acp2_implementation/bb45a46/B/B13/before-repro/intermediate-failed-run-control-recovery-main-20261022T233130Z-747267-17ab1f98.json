@@ -2,8 +2,8 @@
   "artifacts": [
     {
       "path": "races.json",
-      "sha256": "a9be197375f0dec3890ea489a05f0d367b2cbe5d0ff7e1e4d984a9d0c712ccb4",
-      "size_bytes": 27351
+      "sha256": "995bdd48f7a2a343da7199dacd53ecccda2ad3d81d3aa14db5b4d97d522525f8",
+      "size_bytes": 25482
     },
     {
       "path": "exit-semantics.json",
@@ -12,7 +12,7 @@
     },
     {
       "path": "lsf-control-fixture.json",
-      "sha256": "6b50a65b74babdef1290cb7b4a6a98ed1d27c68b882d7b7afe34247996eb3803",
+      "sha256": "e7e303bfbab1a03d6eea37fe8af42b29388f36706e8fd8dde37264a12f1c7d85",
       "size_bytes": 1354
     },
     {
@@ -22,13 +22,13 @@
     },
     {
       "path": "controller.json",
-      "sha256": "f59a06da677b46590f7c70664e608e4bb97a69dc85ebf7b1a2ef69eaa7f8ee66",
-      "size_bytes": 2081
+      "sha256": "a918c9cebae0ee8e6c32eeb4a6ae8150e017b38608850d8388e088888fd4d28e",
+      "size_bytes": 747
     },
     {
       "path": "mcp-launch.json",
-      "sha256": "ae6d2bb278e395693cb330da9f43b9c5e88d67d1d7cfbedf0f8c284c60eae104",
-      "size_bytes": 16051
+      "sha256": "477f5711f2b0024d2ae8aad94754c88837fbd6d0c82d4fcd825d60db6dbc684c",
+      "size_bytes": 15993
     },
     {
       "path": "dsh-disconnect.json",
@@ -37,33 +37,33 @@
     },
     {
       "path": "races/adapter_eof/native/RESULT__scientific_result.json",
-      "sha256": "6a9e97441b29e8c0c3792dec68cecdd911d9913d7d3e6820afc557eca7b355a6",
+      "sha256": "373cde13e7f21d01144848281d3ccb96fb2f1e25500216344a85fc6ecf493b04",
       "size_bytes": 919
     },
     {
       "path": "races/adapter_eof/native/RESULT__task_result.json",
-      "sha256": "eac8d205335e233b45568fc46692e3cce907bc44ff34fdc84bb973d925d27c6a",
-      "size_bytes": 2501
+      "sha256": "34ec3be76746a1ff9aa5cb75b2c5b71ae63886a6c0a044ecb14ac3ca8be626fa",
+      "size_bytes": 2473
     },
     {
       "path": "races/adapter_eof/native/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "08a4eb25a1d8f506a6d6ff989e797f37a4ac6a83bcf1172b232514bf226a02e3",
-      "size_bytes": 2431
+      "sha256": "c0e6e5641eee348a79eb1e9d1959346513a5fc854591ce2fab2db5ab5d02c021",
+      "size_bytes": 2170
     },
     {
       "path": "races/adapter_eof/native/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "7c301ac5f39763aa1ee0cc94cb7ac09cb5886d73e2396f9ed09e06d8674f6f4d",
-      "size_bytes": 1622
+      "sha256": "c4b6684708ebc187e0aa00969e690c43b19ff98a17354584b303618fa3fa7f18",
+      "size_bytes": 1610
     },
     {
       "path": "races/adapter_eof/native/WORK__00_RUNTIME__task_result.json",
-      "sha256": "eac8d205335e233b45568fc46692e3cce907bc44ff34fdc84bb973d925d27c6a",
-      "size_bytes": 2501
+      "sha256": "34ec3be76746a1ff9aa5cb75b2c5b71ae63886a6c0a044ecb14ac3ca8be626fa",
+      "size_bytes": 2473
     },
     {
       "path": "races/adapter_eof/native/execution_receipt.json",
-      "sha256": "150e512f2d768fac421bc75ab76985d26a2df2e084303a49eb2c785ec360e669",
-      "size_bytes": 1753
+      "sha256": "4eb2d97a16145d5eb26a50f4e4b34c62fc8febac22a403fb94c9e49d3e306c42",
+      "size_bytes": 1741
     },
     {
       "path": "races/adapter_eof/native/sp.inp",
@@ -77,48 +77,48 @@
     },
     {
       "path": "races/adapter_eof/process-table-after-adapter-exit.txt",
-      "sha256": "4846db3364a90e05f25d9dd237b63f90fbec5d0e7d5c03d9b072c9912a84bbfe",
-      "size_bytes": 1005
+      "sha256": "1fb4b75e21fef5fc73efdafe7c9979c09eea2f531fe0a6144fd5269f5e138bb8",
+      "size_bytes": 935
     },
     {
       "path": "races/adapter_eof/process-table-before.txt",
-      "sha256": "f7e1d0777333113a9b334c5b76109208a82f9c4501e2a6aa2974d28c4a39a71d",
-      "size_bytes": 1194
+      "sha256": "e065340b5155a5e5defdeccb3437e2c65c5798fcbfbb2822aa972a70c92f843f",
+      "size_bytes": 1110
     },
     {
       "path": "races/adapter_eof/race.json",
-      "sha256": "f61bc804684154094fb4ee22545bceb324caba546bbd120070ff3932358b6a4b",
+      "sha256": "b896c96885ba450e3e40a5b86d2822bff6a1eb41cb738ac6ace391053f91fa38",
       "size_bytes": 1448
     },
     {
       "path": "races/controller_restart/native/RESULT__scientific_result.json",
-      "sha256": "d4eecd6fb1d974f9ee1de42a02ddd921eb7283422e35e01029e4aec6ba2d7923",
+      "sha256": "0d36841fe2802d09b25606708c0aeafd8471f672b56f201d42f202461ddd4e58",
       "size_bytes": 917
     },
     {
       "path": "races/controller_restart/native/RESULT__task_result.json",
-      "sha256": "24dc3e6d64df47aa8df93d988a41144fb653a985d671092734b16e93f954938a",
-      "size_bytes": 2019
+      "sha256": "cb48a304905dca0ba8ee732527493e3501f71345f38721fa784d93c0581713e3",
+      "size_bytes": 1991
     },
     {
       "path": "races/controller_restart/native/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "7d1a2e79c74b6a0e505bff63995710e360b903e3b91cfe21dac452c779326dbb",
-      "size_bytes": 3132
+      "sha256": "1bd4cfd277a3ef7e33b71bd36718f1e1948a7e97a0dc002bac86337619c564d1",
+      "size_bytes": 2411
     },
     {
       "path": "races/controller_restart/native/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "10028d53e492b880a65d0e2059652288f7a6aeff06bada0ff5cb5fcabc3ab6d5",
-      "size_bytes": 1622
+      "sha256": "4071f7eebffcd8fe07eb01027ca24b928d1f422e887c1341173f9c8a0f73bfee",
+      "size_bytes": 1610
     },
     {
       "path": "races/controller_restart/native/WORK__00_RUNTIME__task_result.json",
-      "sha256": "24dc3e6d64df47aa8df93d988a41144fb653a985d671092734b16e93f954938a",
-      "size_bytes": 2019
+      "sha256": "cb48a304905dca0ba8ee732527493e3501f71345f38721fa784d93c0581713e3",
+      "size_bytes": 1991
     },
     {
       "path": "races/controller_restart/native/execution_receipt.json",
-      "sha256": "c1b3a74813daf070cfd6c86f099ff2fd551fcf74f4eb318dabd7e16da0f18d6d",
-      "size_bytes": 1753
+      "sha256": "71129690b62d418135cb51eee639c93d27eef17bf992d1095a97dd7d1f068644",
+      "size_bytes": 1741
     },
     {
       "path": "races/controller_restart/native/sp.inp",
@@ -132,13 +132,13 @@
     },
     {
       "path": "races/controller_restart/race.json",
-      "sha256": "71a484eecdf1e9f82d56cbd14b59e95deb4b14954ae5299baa96ba201fa876df",
-      "size_bytes": 4966
+      "sha256": "928ce500acc7d3b6cd935ef717c298eeb41e5a067e78b8b1eb64e085388ccfe2",
+      "size_bytes": 4414
     },
     {
       "path": "races/controller_restart/restart-comparison.json",
-      "sha256": "0ffdec383e5e5d8b318e559470c0f95e16d55bd3d889dd5f3268eb1e115c66e3",
-      "size_bytes": 1696
+      "sha256": "9f3a0abde5f405ca18120d4fdd09b7ac5a61e83b697310e5747fe44522ab7a6f",
+      "size_bytes": 1794
     },
     {
       "path": "races/publication_failure/fault-disarmed.json",
@@ -147,48 +147,48 @@
     },
     {
       "path": "races/publication_failure/publication-failure.json",
-      "sha256": "5cf7e563363d36e4498def8bfc57cb4c250583ffec19f4d5e5a0c51d2c3a3187",
-      "size_bytes": 4654
+      "sha256": "ac2fa535d4b368f94cf9c3af45b94e03f8aeb0a99627802c8d1d2b2ead63d66f",
+      "size_bytes": 4584
     },
     {
       "path": "races/publication_failure/published/RESULT__publication_state.json",
-      "sha256": "d041230cf52c875b04a5cbb95e3f679ebf6fefe0a74ce93f4062cd6e46af5fe0",
+      "sha256": "73dfee07c5b0ff9a23a283a9b62768ab80c3039b40a19a61e606ffdde7d4a027",
       "size_bytes": 102
     },
     {
       "path": "races/publication_failure/published/RESULT__result_manifest.json",
-      "sha256": "910f10d5143958c844609c6a9c0583e413e3dbf2c5ba79157ce7be7ce9e7ab40",
+      "sha256": "d7590730a7fddc006637ca40930a8aa0247b829cb5d066a510a4519a9bfd4e03",
       "size_bytes": 1247
     },
     {
       "path": "races/publication_failure/published/RESULT__scientific_result.json",
-      "sha256": "457b2ca4ecf1f5ceb9671c4d51b326ae42ef80d223d30baa505f4c9fab1f15e5",
+      "sha256": "cea0bb5799a2bf5ba3c708710ed7cef085a4a2425ca96f9e610637606c60dcbe",
       "size_bytes": 917
     },
     {
       "path": "races/publication_failure/published/RESULT__task_result.json",
-      "sha256": "d4d56f4cf62c59574a271defe3e24d7a04e67efe6c4c7b15ced6448b171c7a91",
-      "size_bytes": 2019
+      "sha256": "b2d9a9eade1dc91984f8d1c5eb91eee074288bdeafc2547aab0d6dd2c8cff21c",
+      "size_bytes": 1991
     },
     {
       "path": "races/publication_failure/published/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "5f85d8b1ccbe380757ab6b320b6c819867207219442ec721f961ee2833f1dbeb",
-      "size_bytes": 3434
+      "sha256": "b781692bc2b4acc2a0b95b74366debec0b2ae0a33ae46eb540eac19f77b7f7c2",
+      "size_bytes": 3303
     },
     {
       "path": "races/publication_failure/published/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "bcf52dede9dc5dcedc39af95b4793ef0f0a6fe2e1bf069ecd63475082e7de49b",
-      "size_bytes": 1622
+      "sha256": "6987837ff1072e95c4290b2846f79f9c2ae51bb5595dd5dcc34f38f6ccc4c38c",
+      "size_bytes": 1610
     },
     {
       "path": "races/publication_failure/published/WORK__00_RUNTIME__task_result.json",
-      "sha256": "d4d56f4cf62c59574a271defe3e24d7a04e67efe6c4c7b15ced6448b171c7a91",
-      "size_bytes": 2019
+      "sha256": "b2d9a9eade1dc91984f8d1c5eb91eee074288bdeafc2547aab0d6dd2c8cff21c",
+      "size_bytes": 1991
     },
     {
       "path": "races/publication_failure/published/execution_receipt.json",
-      "sha256": "3db89283fcf28671866f8e47b7b04c8101219bce251ce5e4c5f1286d77362a44",
-      "size_bytes": 1753
+      "sha256": "5cfb63cb26954727ac68f305631d3909bef1dd0d5fc9900ea4a1d88fa022d62a",
+      "size_bytes": 1741
     },
     {
       "path": "races/publication_failure/published/sp.inp",
@@ -202,43 +202,43 @@
     },
     {
       "path": "races/publication_failure/qc-counter-proof.json",
-      "sha256": "2f338a2336962f40c68e0a08df64629f1ea8549cfa7bb69b62bb6738db1a5d39",
+      "sha256": "d1e17eccbe1f80bca155bca78355564ae3424f0e107d67fd7a43be716e3584db",
       "size_bytes": 2739
     },
     {
       "path": "races/publication_failure/race.json",
-      "sha256": "ac510fcb7da462a78a7501e6c032dc4ce89e11873f8ad4e4545565b6a8eca5a7",
+      "sha256": "6ad52199371067fa8f61c8dba79a4660221de1c22b6b618e04d94e26535aad78",
       "size_bytes": 3669
     },
     {
       "path": "races/publication_failure/scientific/RESULT__scientific_result.json",
-      "sha256": "457b2ca4ecf1f5ceb9671c4d51b326ae42ef80d223d30baa505f4c9fab1f15e5",
+      "sha256": "cea0bb5799a2bf5ba3c708710ed7cef085a4a2425ca96f9e610637606c60dcbe",
       "size_bytes": 917
     },
     {
       "path": "races/publication_failure/scientific/RESULT__task_result.json",
-      "sha256": "d4d56f4cf62c59574a271defe3e24d7a04e67efe6c4c7b15ced6448b171c7a91",
-      "size_bytes": 2019
+      "sha256": "b2d9a9eade1dc91984f8d1c5eb91eee074288bdeafc2547aab0d6dd2c8cff21c",
+      "size_bytes": 1991
     },
     {
       "path": "races/publication_failure/scientific/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "829522e549953d442c420feda2504be8aaaf75eab4751c48fb634407c952d60c",
-      "size_bytes": 3132
+      "sha256": "8dce04b3ece96074e3f1ea0108d50d5fbde21294dad371f394ca4fac14863d0e",
+      "size_bytes": 3001
     },
     {
       "path": "races/publication_failure/scientific/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "bcf52dede9dc5dcedc39af95b4793ef0f0a6fe2e1bf069ecd63475082e7de49b",
-      "size_bytes": 1622
+      "sha256": "6987837ff1072e95c4290b2846f79f9c2ae51bb5595dd5dcc34f38f6ccc4c38c",
+      "size_bytes": 1610
     },
     {
       "path": "races/publication_failure/scientific/WORK__00_RUNTIME__task_result.json",
-      "sha256": "d4d56f4cf62c59574a271defe3e24d7a04e67efe6c4c7b15ced6448b171c7a91",
-      "size_bytes": 2019
+      "sha256": "b2d9a9eade1dc91984f8d1c5eb91eee074288bdeafc2547aab0d6dd2c8cff21c",
+      "size_bytes": 1991
     },
     {
       "path": "races/publication_failure/scientific/execution_receipt.json",
-      "sha256": "3db89283fcf28671866f8e47b7b04c8101219bce251ce5e4c5f1286d77362a44",
-      "size_bytes": 1753
+      "sha256": "5cfb63cb26954727ac68f305631d3909bef1dd0d5fc9900ea4a1d88fa022d62a",
+      "size_bytes": 1741
     },
     {
       "path": "races/publication_failure/scientific/sp.inp",
@@ -252,23 +252,23 @@
     },
     {
       "path": "races/cancel_race/cancel-timeline.json",
-      "sha256": "b3afc51d52302c14ff0df9a1d4aef7b99ba93f8808f2fb0e7df50104d9c2b525",
-      "size_bytes": 3055
+      "sha256": "5d96cfa2c591d22e5158b0b46fb902b9f44df3062a313733e39409afd189f8be",
+      "size_bytes": 3043
     },
     {
       "path": "races/cancel_race/native/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "f59839740f443f0e67ac028d7c132fad4949f46afea8781486279e0497a26b5d",
-      "size_bytes": 2392
+      "sha256": "e08c3cf3082ff3d6bfd3d592bcbb9d7c58c0698f2ebd4fa0e47dce2725b89a18",
+      "size_bytes": 2307
     },
     {
       "path": "races/cancel_race/native/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "824607bfd0ffe92a49193bfa04bd7a8e09b5aaab56a410f195e9c1b01e464987",
-      "size_bytes": 1622
+      "sha256": "2f2a22d4e0edaef7001760ce08b848c7f98f2298c5ec6ef4940e1413f8385297",
+      "size_bytes": 1610
     },
     {
       "path": "races/cancel_race/native/execution_receipt.json",
-      "sha256": "de0babd699a792a3cd9d1d3b27a127a0938141df211f7ffa09c7c2d34e82d8e4",
-      "size_bytes": 1343
+      "sha256": "e23217cf1050978114b464988353eab0794d2299b5a3f08f670b08a5ca3dc1af",
+      "size_bytes": 1331
     },
     {
       "path": "races/cancel_race/process-table-after-cancel.txt",
@@ -277,23 +277,23 @@
     },
     {
       "path": "races/cancel_race/process-table-before-cancel.txt",
-      "sha256": "b97c59b5e67cff134134f866435a04a798e15e45c603000ec917613d10383360",
-      "size_bytes": 1005
+      "sha256": "1b99355e2f5cac170037f2195865af4a500a33cb7edd608aa1dc94d74f7885bc",
+      "size_bytes": 935
     },
     {
       "path": "races/cancel_race/race.json",
-      "sha256": "e19acbec79913dcb9eaf8c908cd045edd377f9465410f1f1bb5898d6c00b4544",
+      "sha256": "2b42afb445e9af11c29f456202c2dbacc35db25bb252fb3052ab18d112b3966d",
       "size_bytes": 2093
     },
     {
       "path": "races/timeout_cancel/native/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "17a1054198eaf5e57c5b370f0755075277bde775160c5da20a4d31c32f7beb32",
-      "size_bytes": 2392
+      "sha256": "d40fb12caa7c7c7c4fb5300cd9e84e973f856ff6029746d436d4d94cf840d777",
+      "size_bytes": 2307
     },
     {
       "path": "races/timeout_cancel/native/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "a7fec52b4328144f6513890f3b74dddbd41f53496b28c87376cbf6843de5f669",
-      "size_bytes": 1622
+      "sha256": "fed898b20303902eaa90ef1612e3336e4b9ab2df577aad7651feeb72fdc61b3b",
+      "size_bytes": 1610
     },
     {
       "path": "races/timeout_cancel/native/sp.inp",
@@ -302,12 +302,12 @@
     },
     {
       "path": "races/timeout_cancel/race.json",
-      "sha256": "e3acb052318eaf1feb270a06887aee14e47b6baffb3b369e41b3663ec808aef0",
+      "sha256": "165ea81206575b99eae94b044ec25a5451b7d5eb966e02aa16f365530b02bd2f",
       "size_bytes": 1436
     },
     {
       "path": "races/timeout_cancel/timeout-timeline.json",
-      "sha256": "8301450cd080b593a2c4a39a47ac4e08030e542b036c2200c9d53828bdb58ab2",
+      "sha256": "73357be0ae30e7842a24f22ea8ae5007105d9d49268c90242591787aa133f97c",
       "size_bytes": 483
     }
   ],
@@ -371,19 +371,19 @@
   },
   "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "command": [
-    "/ACPServer/acp2-development/venvs/b/bin/python",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "control-recovery",
     "--controller",
     "http://127.0.0.1:18771",
     "--fixture",
-    "/ACPServer/acp2-development/data/b/fixtures/control.json",
+    "/opt/acp2-dev/data/b/fixtures/control.json",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B13"
   ],
   "contract_version": "1.1.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 1,
   "extensions": {
@@ -402,7 +402,7 @@
       },
       {
         "path": "lsf-control-fixture.json",
-        "sha256": "6b50a65b74babdef1290cb7b4a6a98ed1d27c68b882d7b7afe34247996eb3803",
+        "sha256": "e7e303bfbab1a03d6eea37fe8af42b29388f36706e8fd8dde37264a12f1c7d85",
         "size_bytes": 1354
       },
       {
@@ -417,7 +417,7 @@
       },
       {
         "path": "mcp-launch.json",
-        "sha256": "ae6d2bb278e395693cb330da9f43b9c5e88d67d1d7cfbedf0f8c284c60eae104",
+        "sha256": "aa772682cddb50d6c374aba423fa52670bb78cc8829bf877b8709d79e030a3ba",
         "size_bytes": 16051
       },
       {
@@ -713,20 +713,20 @@
     "b13.contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
     "b13.controller": {
       "argv": [
-        "/ACPServer/acp2-development/venvs/b/bin/python",
-        "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+        "/opt/acp2-dev/venvs/b/bin/python",
+        "scripts/acceptance/acp2_fault_controller.py",
         "--source",
-        "/ACPServer/acp2-development/B/src",
+        "/opt/acp2-dev/B/src",
         "--fault-file",
-        "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+        "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
         "--config",
-        "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+        "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
         "--candidate-revision",
         "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
         "--orca",
-        "/home/xieningke/orca611/orca",
+        "/home/redacted-user/orca611/orca",
         "--orca-ld-library-path",
-        "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
+        "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
         "--",
         "run",
         "serve",
@@ -735,22 +735,22 @@
         "--port",
         "18771",
         "--run-root",
-        "/ACPServer/acp2-development/data/b/run-root-b13",
+        "/opt/acp2-dev/data/b/run-root-b13",
         "--poll-interval",
         "1",
         "--no-browser"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
-      "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "cwd": ".",
+      "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
       "fault_seam": true,
       "pid": 744322,
-      "run_root": "/ACPServer/acp2-development/data/b/run-root-b13",
-      "script": "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
-      "source": "/ACPServer/acp2-development/B/src",
+      "run_root": "/opt/acp2-dev/data/b/run-root-b13",
+      "script": "scripts/acceptance/acp2_fault_controller.py",
+      "source": "/opt/acp2-dev/B/src",
       "source_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
       "source_revision_matches": true,
-      "source_root": "/ACPServer/acp2-development/B",
-      "start_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py --source /ACPServer/acp2-development/B/src --fault-file /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json --config /ACPServer/acp2-development/data/b/controller-config/cccp.yaml --candidate-revision 10eb71e4bc1811054c9d19ae4fd71d974e027f8a --orca /home/xieningke/orca611/orca --orca-ld-library-path /home/xieningke/openmpi418/lib:/home/xieningke/orca611 -- run serve --host 127.0.0.1 --port 18771 --run-root /ACPServer/acp2-development/data/b/run-root-b13 --poll-interval 1 --no-browser"
+      "source_root": "/opt/acp2-dev/B",
+      "start_command": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/acp2_fault_controller.py --source /opt/acp2-dev/B/src --fault-file reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json --config /opt/acp2-dev/data/b/controller-config/cccp.yaml --candidate-revision 10eb71e4bc1811054c9d19ae4fd71d974e027f8a --orca /home/redacted-user/orca611/orca --orca-ld-library-path /home/redacted-user/openmpi418/lib:/home/redacted-user/orca611 -- run serve --host 127.0.0.1 --port 18771 --run-root /opt/acp2-dev/data/b/run-root-b13 --poll-interval 1 --no-browser"
     },
     "b13.dsh_disconnect": {
       "client_revision": "NOT_VERIFIED",
@@ -775,7 +775,7 @@
       "rule": "0 only if every Local fault row PASS and the LSF control row is PASS/NOT_REQUIRED; 2 when Local PASS but LSF is NOT_VERIFIED; 1 on any Local failure",
       "schema": "acp2.b13.exit-semantics.v1"
     },
-    "b13.fixture": "/ACPServer/acp2-development/data/b/fixtures/control.json",
+    "b13.fixture": "/opt/acp2-dev/data/b/fixtures/control.json",
     "b13.lsf_control_fixture": {
       "budget": {
         "cores": 1,
@@ -787,7 +787,7 @@
       "distinct_from_normal": true,
       "fixture_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
       "fixture_id": "fx-control-recovery-lsf-v1",
-      "input": "/ACPServer/acp2-development/data/b/fixtures/control.json",
+      "input": "/opt/acp2-dev/data/b/fixtures/control.json",
       "input_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
       "input_digest_matches": true,
       "missing_prerequisites": [
@@ -815,7 +815,7 @@
       },
       "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
       "registered": true,
-      "registry": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+      "registry": "reports/acp2_implementation/bb45a46/B/fixture-runs.json",
       "status": "NOT_VERIFIED",
       "submitted_once": false,
       "task_ref": null,
@@ -846,7 +846,7 @@
     "b13.publication_fault_seam": {
       "available": true,
       "descriptor_schema": "acp2.b13.publication-fault.v1",
-      "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
       "wrapper": "scripts/acceptance/acp2_fault_controller.py"
     },
     "b13.races": [

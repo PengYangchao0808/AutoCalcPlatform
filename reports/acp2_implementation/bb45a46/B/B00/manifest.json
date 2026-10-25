@@ -176,7 +176,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
       "owner": "B",
       "status": "delivered",
-      "sha256": "db909c034429fff2422f0df620d5d9be06c1cdda6930216eddcb05f693cfc668"
+      "sha256": "08904e4583b802ba278b1a1254380bb8fecc98e17c3dceab8cb02a5149a041d6"
     },
     {
       "id": "lint-baseline",
@@ -197,7 +197,7 @@
       "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
       "owner": "B",
       "status": "delivered",
-      "sha256": "95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181",
+      "sha256": "8340f2e81d8f4adcfe2aa872106285468d6b2c71ccc3fcd3b9cef1bbced8f21e",
       "digest_target": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json"
     },
     {

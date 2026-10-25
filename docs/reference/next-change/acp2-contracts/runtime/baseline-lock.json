@@ -11,12 +11,12 @@
   "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
   "final_debug_candidate_kind": "source_overlay_sha256",
   "final_debug_candidate_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
-  "final_debug_candidate_commit_note": "Materialized by B02 in /ACPServer/acp2-development/B from the frozen bundle; see materialization.",
+  "final_debug_candidate_commit_note": "Materialized by B02 in /opt/acp2-dev/B from the frozen bundle; see materialization.",
   "pending_fix_bundle": {
     "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
     "tracked_patch_sha256": "4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242",
-    "candidate_snapshot_sha256": "33861de7d5578a8cfa5b48bcde27e7bd2b25ac3427c4dacb47c4eca921ae872c",
-    "bundle_manifest_sha256": "95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181",
+    "candidate_snapshot_sha256": "37dd2320cc5d97ea7eb866a2275641c0d0518801202137f08e8f84046cea1194",
+    "bundle_manifest_sha256": "8340f2e81d8f4adcfe2aa872106285468d6b2c71ccc3fcd3b9cef1bbced8f21e",
     "verification": "partial",
     "per_file_verification": "1906/1906 matched in clean reconstruction",
     "digest_rule": "inherited_from_report (candidate_id derivation not reconstructable; see manifest drift)"
@@ -55,7 +55,7 @@
   "env_digest": "2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc",
   "env_digest_status": "recorded by B07 (acceptance-env.sh sha256 at the H2 freeze)",
   "worktree": {
-    "source_checkout": "/ACPServer/AutoCalcPlatform",
+    "source_checkout": "repo-root",
     "branch": "feat/frontend-plan1-closure",
     "head": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
     "verification_worktree": "/tmp/opencode/acp-b00-candidate (detached clean reconstruction; removed after verification)",
@@ -108,7 +108,7 @@
       "mismatches": 0,
       "missing": 0
     },
-    "worktree": "/ACPServer/acp2-development/B",
+    "worktree": "/opt/acp2-dev/B",
     "apply_order": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/apply-order.md",
     "tracked_patch_sha256": "4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242",
     "commit_message": "fix(debug): apply frozen 2026-10-22 final debug candidate",

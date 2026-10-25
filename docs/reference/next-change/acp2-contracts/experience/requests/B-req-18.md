@@ -1,6 +1,6 @@
 # B-req-18 — Keep one isolated Controller running for the C H2 window
 
-- **Status:** open — Controller window only. **R1 and R2 are RESOLVED (2026-10-26, M0-08 / ADR-006).**
+- **Status:** open
 - **Raised by:** C (T-11 / C07), 2026-10-22 (capture 2026-10-23T02:00Z)
 - **Requested of:** B (owner of the single isolated Controller and the MCP
   launch descriptors)
@@ -8,21 +8,6 @@
   `model-live` (T-13) and the H2 receipt (T-14)
 - **C evidence:** `$ACP2_EVIDENCE/C/mcp-live/mcp-live-20261022T180038Z-540504/main/`
   (receipt `result=NOT_VERIFIED`, `reason=controller_unavailable`, exit `2`)
-
-## Resolution summary (M0-08, 2026-10-26)
-
-| Item | Status | Where |
-| --- | --- | --- |
-| R1 — protocol negotiation | **RESOLVED** | ADR-006 D1/D2/D3/D6; `src/acp_services/entrypoints/mcp.py::_negotiate_protocol_version` |
-| R2 — descriptor vs live `tools/list` | **RESOLVED** (decision) | ADR-006; `experience/mcp-handshake.md` §5.1 |
-| Isolated Controller window | **STILL OPEN** — unchanged by M0-08 |
-
-R1 needed no client pin and no new supported version: the server now answers the
-version it speaks (`2025-06-18`) and the frozen client accepts it because the SDK
-supports that version. R2 is decided in favour of the **live** `tools/list` as
-the client contract; frozen launch descriptors are audit material and a future
-descriptor must be generated from a live snapshot. C needs no profile change and
-no server schema change for either item.
 
 ## Consumer step
 
@@ -62,54 +47,51 @@ Please provide, and keep alive for the agreed H2 window:
 
 ## Two additional decisions C cannot make
 
-### R1 — protocol negotiation — RESOLVED (2026-10-26)
+### R1 — protocol negotiation
 
 The frozen official client (`@deepseek-ai/dsh-mcp-client@0.2.1-rc.2`,
 `@modelcontextprotocol/client@2.2.0`) actually sends
 `initialize.protocolVersion = "2025-11-25"` and does **not** emit the server's
-declarative `protocolVersions` fallback list. The server advertised
-`LOCKED_PROTOCOL_VERSIONS = ("2025-06-18",)` and used to reject that request with
-`data.code = "unsupported_protocol_version"`.
+declarative `protocolVersions` fallback list. The server advertises
+`LOCKED_PROTOCOL_VERSIONS = ("2025-06-18",)`. Static expectation: a live
+`initialize` fails with `data.code = "unsupported_protocol_version"`.
 
-**Decision (ADR-006 D1–D3/D6):** follow the MCP 2025-06-18 lifecycle rule — the
-server answers a version it speaks (`2025-06-18`) and the client decides
-compatibility. Only a malformed `protocolVersion`/`protocolVersions` shape is
-`-32602`; the private `protocolVersions` list is recorded, never a gate. No new
-supported version is added and **no client pin is required** in the DSH profile.
+Please decide and document one of:
 
-Evidence: `tests/test_acp2_mcp_sdk_contract.py` (real SDK/transport: client
-offers `2025-11-25`, server answers `2025-06-18`, client accepts, `tools/list` =
-8, zero tasks) and the 7-row `scripts/acceptance/acp2_mcp_negotiation_probe.py`.
-C's static expectation in §4.1 of `mcp-handshake.md` is superseded.
+- add the client-offered version to the server's supported set (with the
+  process-level proof / ADR-006 update the code comment requires),
+- accept the declarative `protocolVersions` list as the negotiation input and
+  keep the locked default, or
+- pin the client to `2025-06-18` in the DSH profile (and record that pin).
 
-### R2 — descriptor vs live `tools/list` schema drift — RESOLVED (2026-10-26)
+C will not change server protocol constants and will not treat a differing
+version string as incompatible when both sides do support a common version.
+
+### R2 — descriptor vs live `tools/list` schema drift
 
 `B/B05/probe/wire.jsonl` (sha256 `f4d89890…9be1f5`, B-recorded live
 `tools/list`) advertises `additionalProperties: true` and much weaker required
 fields than the frozen descriptor `tools[].inputSchema`. Example: live
 `acp_read_artifact` = `job_id/resource_id/relative_path/attempt/idempotency_key`;
-the descriptor requires `artifact_ref`. All eight tools differ.
+the descriptor requires `artifact_ref`. All eight tools differ. The same
+weaker schemas exist in the source the launch `cwd` executes
+(`src/acp_services/entrypoints/mcp.py::_tool_specs`, both the main checkout and
+B `58d81ec`).
 
-**Decision (ADR-006):** the **live `tools/list`** is the client contract — it is
-what DSH registers and what the model sees. The frozen B05/B06 descriptors are
-audit material for that capture; a future descriptor must be generated from a
-live `tools/list` snapshot, and a descriptor that disagrees with the adapter is a
-descriptor bug. The weaker live required-fields remain a product input to M1-01
-(schema strengthening), not a handshake blocker. C needs no change.
-
-Finding F1 in `experience/mcp-handshake.md` is updated accordingly
-(`CLOSED as a decision`).
+Please state which surface is authoritative for clients and reconcile the
+descriptor or the server. DSH registers the live `tools/list`, so the model
+currently sees the weaker parameter surface. C records this as Finding F1 in
+`experience/mcp-handshake.md`; it is not a C-side fix.
 
 ## Minimal acceptance C will run once the Controller is up
 
 ```bash
-source /ACPServer/acp2-development/data/acceptance-env-c.sh
+source /opt/acp2-dev/data/acceptance-env-c.sh
 c_accept mcp-live 300          # expect 0/PASS or 2/NOT_VERIFIED, never fabricated PASS
 ```
 
-Expected rows when the Controller is healthy: `initialize` answers
-`2025-06-18` for the client's `2025-11-25` offer and the client accepts it; eight
-live `inputSchema` snapshots stand as the client contract; matrix rows (a)–(g)
-PASS (row (g) exits cleanly); Controller PID and task count are unchanged
-before/after. Any executed mismatch is `FAIL`; any remaining environment gap
-stays `NOT_VERIFIED`.
+Expected rows when the Controller is healthy: `initialize` and `tools/list`
+negotiate a common version; eight `inputSchema` snapshots match the authoritative
+surface; matrix rows (a)–(d) PASS and row (e) exits cleanly; Controller PID and
+task count are unchanged before/after. Any executed mismatch is `FAIL`; any
+remaining environment gap stays `NOT_VERIFIED`.

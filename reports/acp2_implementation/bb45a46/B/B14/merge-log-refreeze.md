@@ -2,7 +2,7 @@
 
 Candidate: `77ac1de1af6a5db6b57f4f904a859305ff73042c`
 Tree: `9809bea68e7132ae9ab5c0285b2c41373966f443`
-Branch: `acp2/integration-p1` (worktree `/ACPServer/acp2-development/integration`)
+Branch: `acp2/integration-p1` (worktree `/opt/acp2-dev/integration`)
 Created: 2026-10-23 (Asia/Shanghai)
 
 This re-freeze supersedes the `fbac5ab` candidate after the B-owned base-suite fixes
@@ -86,7 +86,7 @@ B00 overlay manifest total: 1906 files.
 
 ## 4. Contract validity and digests
 
-`/ACPServer/acp2-development/venvs/b/bin/python scripts/acceptance/validate_acp2_contracts.py`
+`/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/validate_acp2_contracts.py`
 from the candidate: **VALID**.
 
 | Digest | Value |

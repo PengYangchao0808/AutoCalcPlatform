@@ -1725,98 +1725,98 @@
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/reaction/atom_id_missing.json",
       "rule": "R-01",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/reaction/atom_id_duplicate.json",
       "rule": "R-01",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/reaction/element_mismatch.json",
       "rule": "R-03",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/reaction/invented_stereo.json",
       "rule": "R-04",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/reaction/uninterpretable_input.json",
       "rule": "R-05",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/reaction/representable_not_applicable.json",
       "rule": "R-05",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/reaction/unsupported_cdxml.json",
       "rule": "R-07",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/question/job_status.json",
       "rule": "R-08",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/question/role.json",
       "rule": "R-08",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/question/cost.json",
       "rule": "R-08",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/question/price.json",
       "rule": "R-08",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/question/unknown_claim_status.json",
       "rule": "R-09",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/question/missing_standard_state.json",
       "rule": "R-10",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     },
     {
       "exists": false,
       "path": "tests/fixtures/acp2/science/contracts/question/incompatible_method.json",
       "rule": "R-10",
-      "source": "A-02b semantic-rules.md \u00a72.1 planned fixtures",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
       "status": "planned"
     }
   ],

@@ -9,7 +9,7 @@
   },
   "transport": "stdio",
   "protocol_version": "2025-06-18",
-  "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "command": "/opt/acp2-dev/venvs/b/bin/python",
   "args": [
     "-m",
     "acp",
@@ -22,14 +22,14 @@
     "--log-level",
     "INFO"
   ],
-  "cwd": "/ACPServer/acp2-development/B/src",
+  "cwd": "/opt/acp2-dev/B/src",
   "env": {
-    "PYTHONPATH": "/ACPServer/acp2-development/B/src",
-    "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root",
+    "PYTHONPATH": "/opt/acp2-dev/B/src",
+    "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root",
     "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
-    "ACP_CONFIG": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+    "ACP_CONFIG": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
     "ACP_CANDIDATE_REVISION": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
-    "PATH": "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+    "PATH": "/opt/acp2-dev/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
   },
   "controller": {
     "transport": "loopback-http",
@@ -49,5 +49,5 @@
     "logs_to": "stderr"
   },
   "source_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
-  "source_path": "/ACPServer/acp2-development/B/src"
+  "source_path": "/opt/acp2-dev/B/src"
 }

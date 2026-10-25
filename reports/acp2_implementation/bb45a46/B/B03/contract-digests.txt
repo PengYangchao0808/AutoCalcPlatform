@@ -8,6 +8,6 @@ ce889df114c3138b60cb23ee7dcf3b53cf4246343b5c7a3a3e2549b2c6c87358  docs/reference
 75169a703ab6d3e0ef0e95ee08aecca755c01d5ab880f1f7e2ef929016442b0d  docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json
 7cbd97ee055a10eec2de475b9eb54d46e8c1e2c0950ca7cd1d347b5958edbb94  docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json
 40be4642bf9d22f510df238bd3a92ba571e9d75edb2beef39cee38a7c26aed50  docs/reference/next-change/acp2-contracts/runtime/fallback-deferral.json
-d37dcfab39f2181e4ca9533267eac156fc84ca8772e6831a9a8d9108a1fc852e  docs/reference/next-change/acp2-contracts/runtime/samples/manifest.json
+542ab8abcfda65b2ca1617bf5b718268d2f43fe2decc5083bef66888fe199456  docs/reference/next-change/acp2-contracts/runtime/samples/manifest.json
 96862edd6534614bfa64620f170161c7cbad6c2117d941dd215e49ab9131c4ac  docs/reference/next-change/acp2-contracts/runtime/dependencies.json
 b83919a71f55c4131b4daa7e82b13369863aa495e951665178f9be63c1b78769  docs/reference/next-change/acp2-contracts/manifest.json

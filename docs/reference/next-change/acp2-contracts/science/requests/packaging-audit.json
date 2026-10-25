@@ -212,7 +212,7 @@
   },
   "git_commit": "bcb9fa9654d2c5a0aae59a24f8c1ed5766cf94f9",
   "interpreter": {
-    "executable": "/ACPServer/acp2-development/envs/a-python/bin/python",
+    "executable": "/opt/acp2-dev/envs/a-python/bin/python",
     "version": "3.11.13"
   },
   "module_level_third_party_imports": {

@@ -4,9 +4,9 @@
   "backend": "local",
   "result": "FAIL",
   "fixture_id": "fx-local-optimize-h2-sto3g-v1",
-  "fixture_path": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+  "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
   "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
-  "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+  "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "controller": "http://127.0.0.1:18774",
   "task_ref": "20261023_111652_002_optimize",
@@ -17,8 +17,8 @@
   "plan_identity": "",
   "result_digest": "",
   "result_manifest_digest": "sha256:d0766a4d0f220d6a1ed37faeded7fa872b5208d19ac5289e3a8a37497d355ff1",
-  "work_dir": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
-  "orca_binary": "/home/xieningke/orca611/orca",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
+  "orca_binary": "/home/redacted-user/orca611/orca",
   "orca_output": null,
   "orca_terminated_normally": false,
   "orca_energy_hartree": null,
@@ -95,12 +95,12 @@
     {
       "path": "native/job.json",
       "size_bytes": 5805,
-      "sha256": "b84b5e66ba9bb735ffe22f935b0e624fe11f05bfc7605f3eada11d2ce9ac884e"
+      "sha256": "e764d6b92dc4c8cb714ad9ef86ca9db48c7deaef27b22dcee63fb8ad369d8d00"
     },
     {
       "path": "native/task.json",
       "size_bytes": 951,
-      "sha256": "01a9935e53c675db11bdccf21f4258e75521847d16b9e05f4e45aa2c58129e5d"
+      "sha256": "46d26e9873e78a157a1ecc30ac4cff11f160f5487b2e78c8f7b688952ccb52d3"
     }
   ],
   "written_at_utc": "2026-10-23T03:16:59Z"

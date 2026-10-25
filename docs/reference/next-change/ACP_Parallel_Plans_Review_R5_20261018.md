@@ -16,7 +16,7 @@ B40a/B40b 的前置、B41b/T74 的 T34a 范围、M1 中 T18 的 DEFERRED 规则�
 
 **剩余一处：M1 的安装验收仍间接等待完整发行**
 
-[C-T54](/ACPServer/AutoCalcPlatform/.omo/plans/acp-parallel-plan-3-cccp.md:793) 的前置仍无条件包含 T40；[T40](/ACPServer/AutoCalcPlatform/.omo/plans/acp-parallel-plan-3-cccp.md:637) 等待 T39；[T39](/ACPServer/AutoCalcPlatform/.omo/plans/acp-parallel-plan-3-cccp.md:626) 等待 T30/T33/T38，其中 T30 收口 NMR 迁移、T33 是大数据交付。
+[C-T54](.omo/plans/acp-parallel-plan-3-cccp.md:793) 的前置仍无条件包含 T40；[T40](.omo/plans/acp-parallel-plan-3-cccp.md:637) 等待 T39；[T39](.omo/plans/acp-parallel-plan-3-cccp.md:626) 等待 T30/T33/T38，其中 T30 收口 NMR 迁移、T33 是大数据交付。
 
 ```text
 M1 发布 → 必须通过 T54 → T40 → T39 → T30 / T33 / T38

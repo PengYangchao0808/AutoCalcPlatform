@@ -2,17 +2,17 @@
   "schema": "acp2.integration.loaded_paths.v1",
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
-  "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
   "python_version": "3.11.13",
-  "pythonpath": "/ACPServer/acp2-development/integration/src",
-  "cwd": "/ACPServer/acp2-development/integration",
+  "pythonpath": "/opt/acp2-dev/integration/src",
+  "cwd": "/opt/acp2-dev/integration",
   "modules": {
-    "acp": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
-    "cccp": "/ACPServer/acp2-development/integration/src/cccp/__init__.py",
-    "acp_services": "/ACPServer/acp2-development/integration/src/acp_services/__init__.py"
+    "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+    "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
+    "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
   },
-  "frontend_dir": "/ACPServer/acp2-development/integration/frontend",
-  "harness_path": "/ACPServer/acp2-development/integration/scripts/acceptance/acp2_runtime.py",
+  "frontend_dir": "/opt/acp2-dev/integration/frontend",
+  "harness_path": "/opt/acp2-dev/integration/scripts/acceptance/acp2_runtime.py",
   "harness_sha256": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
   "revisions": {
     "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
@@ -20,7 +20,7 @@
     "harness_revision": "sha256:9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
     "harness_source_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
     "health_candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
-    "health_candidate_revision_source": "/ACPServer/acp2-development/data/b/acceptance-env.sh::ACP_CANDIDATE_REVISION (B02 H2 value)",
+    "health_candidate_revision_source": "/opt/acp2-dev/data/b/acceptance-env.sh::ACP_CANDIDATE_REVISION (B02 H2 value)",
     "baseline_lock_code_candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
     "contract_default_server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
     "health_contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
@@ -31,8 +31,8 @@
     "acp_import": "PASS",
     "cccp_import": "PASS",
     "acp_services_import": "PASS",
-    "frontend_dir": "PASS (/ACPServer/acp2-development/integration/frontend)",
+    "frontend_dir": "PASS (/opt/acp2-dev/integration/frontend)",
     "harness": "PASS (sha256 recomputed from the integration checkout)",
-    "controller_traceback_paths": "PASS (controller-second-refusal-refreeze.log resolves acp/api/server.py, acp/scheduler/manager.py under /ACPServer/acp2-development/integration/src)"
+    "controller_traceback_paths": "PASS (controller-second-refusal-refreeze.log resolves acp/api/server.py, acp/scheduler/manager.py under /opt/acp2-dev/integration/src)"
   }
 }

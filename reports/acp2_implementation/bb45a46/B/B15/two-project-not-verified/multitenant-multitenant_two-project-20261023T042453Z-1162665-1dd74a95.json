@@ -15,8 +15,8 @@
   },
   "candidate_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "command": [
-    "/ACPServer/acp2-development/venvs/b/bin/python",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "multitenant",
     "--phase",
@@ -24,12 +24,12 @@
     "--controller",
     "http://127.0.0.1:18775",
     "--fixture",
-    "/ACPServer/acp2-development/data/b/fixtures/multi.json",
+    "/opt/acp2-dev/data/b/fixtures/multi.json",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B15/two-project-not-verified"
   ],
   "contract_version": "1.1.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 2,
   "extensions": {

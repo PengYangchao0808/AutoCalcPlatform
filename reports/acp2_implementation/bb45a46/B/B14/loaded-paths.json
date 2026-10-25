@@ -2,17 +2,17 @@
   "schema": "acp2.integration.loaded_paths.v1",
   "candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
   "candidate_tree": "0a9436f24a2a62232c2186a8ba75d0b05f3397a8",
-  "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
   "python_version": "3.11.13",
-  "pythonpath": "/ACPServer/acp2-development/integration/src",
-  "cwd": "/ACPServer/acp2-development/integration",
+  "pythonpath": "/opt/acp2-dev/integration/src",
+  "cwd": "/opt/acp2-dev/integration",
   "modules": {
-    "acp": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
-    "cccp": "/ACPServer/acp2-development/integration/src/cccp/__init__.py",
-    "acp_services": "/ACPServer/acp2-development/integration/src/acp_services/__init__.py"
+    "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+    "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
+    "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
   },
-  "frontend_dir": "/ACPServer/acp2-development/integration/frontend",
-  "harness_path": "/ACPServer/acp2-development/integration/scripts/acceptance/acp2_runtime.py",
+  "frontend_dir": "/opt/acp2-dev/integration/frontend",
+  "harness_path": "/opt/acp2-dev/integration/scripts/acceptance/acp2_runtime.py",
   "harness_sha256": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
   "revisions": {
     "server_revision": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
@@ -27,8 +27,8 @@
     "acp_import": "PASS",
     "cccp_import": "PASS",
     "acp_services_import": "PASS",
-    "frontend_dir": "PASS (/ACPServer/acp2-development/integration/frontend contains frontend/js/workbench/contracts/experience_contract.js and the C client modules)",
+    "frontend_dir": "PASS (/opt/acp2-dev/integration/frontend contains frontend/js/workbench/contracts/experience_contract.js and the C client modules)",
     "harness": "PASS (sha256 recomputed from the integration checkout)",
-    "controller_traceback_paths": "PASS (controller-second-refusal.log resolves acp/api/server.py and acp/scheduler/manager.py under /ACPServer/acp2-development/integration/src)"
+    "controller_traceback_paths": "PASS (controller-second-refusal.log resolves acp/api/server.py and acp/scheduler/manager.py under /opt/acp2-dev/integration/src)"
   }
 }

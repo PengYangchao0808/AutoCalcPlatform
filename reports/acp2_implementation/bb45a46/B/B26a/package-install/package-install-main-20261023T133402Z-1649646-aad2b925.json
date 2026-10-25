@@ -47,8 +47,8 @@
     },
     {
       "path": "a-c-evidence.json",
-      "sha256": "36a91a043f98a23d6868f65a452a358e512bb640a17ee0e2960583e82c0fa43a",
-      "size_bytes": 902
+      "sha256": "88fd13b20a3084a9f045934eeb0e2b8aadb13c0acca5a49b3f02d4bf1feee4c2",
+      "size_bytes": 862
     },
     {
       "path": "static-assets-status.json",
@@ -108,22 +108,22 @@
       "status": "PASS"
     },
     {
-      "detail": "raw evidence at /ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+      "detail": "raw evidence at /opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
       "name": "b25.aggregate_A-27b",
       "status": "PASS"
     },
     {
-      "detail": "raw evidence at /ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+      "detail": "raw evidence at /opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
       "name": "b25.aggregate_A-28",
       "status": "PASS"
     },
     {
-      "detail": "expected path absent: /ACPServer/acp2-development/evidence/C/clean-install-live",
+      "detail": "expected path absent: /opt/acp2-dev/evidence/C/clean-install-live",
       "name": "b25.aggregate_C33",
       "status": "NOT_VERIFIED"
     },
     {
-      "detail": "expected path absent: /ACPServer/acp2-development/evidence/C/operator-runbook-live",
+      "detail": "expected path absent: /opt/acp2-dev/evidence/C/operator-runbook-live",
       "name": "b25.aggregate_C34",
       "status": "NOT_VERIFIED"
     },
@@ -168,28 +168,28 @@
       {
         "id": "A-27b",
         "note": "raw evidence present; scientific/experience sign-off stays with its owner",
-        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+        "path": "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
         "present": true,
         "status": "PASS"
       },
       {
         "id": "A-28",
         "note": "raw evidence present; scientific/experience sign-off stays with its owner",
-        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+        "path": "/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
         "present": true,
         "status": "PASS"
       },
       {
         "id": "C33",
         "note": "evidence absent at the registered path",
-        "path": "/ACPServer/acp2-development/evidence/C/clean-install-live",
+        "path": "/opt/acp2-dev/evidence/C/clean-install-live",
         "present": false,
         "status": "NOT_VERIFIED"
       },
       {
         "id": "C34",
         "note": "evidence absent at the registered path",
-        "path": "/ACPServer/acp2-development/evidence/C/operator-runbook-live",
+        "path": "/opt/acp2-dev/evidence/C/operator-runbook-live",
         "present": false,
         "status": "NOT_VERIFIED"
       }
@@ -242,7 +242,7 @@
       },
       {
         "path": "a-c-evidence.json",
-        "sha256": "36a91a043f98a23d6868f65a452a358e512bb640a17ee0e2960583e82c0fa43a",
+        "sha256": "0d5b21ca119c0b8c4ae8f22d946f7e1bbba46be961775463564271cca91e8d8a",
         "size_bytes": 902
       },
       {

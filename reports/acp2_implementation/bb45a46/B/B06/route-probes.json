@@ -174,7 +174,7 @@
         "remark": ""
       },
       "status": "cancelling",
-      "work_dir": "/ACPServer/acp2-development/data/b/run-root/uncategorized/mol_singlepoint",
+      "work_dir": "/opt/acp2-dev/data/b/run-root/uncategorized/mol_singlepoint",
       "project_id": "uncategorized",
       "project_name": null,
       "input_hash": "sha256:58435294c9e1402dc0012817d568a67ee81a361b9af07373154d4e973d930ac0",
@@ -190,7 +190,7 @@
       "remote_job_id": null,
       "group_id": "20261022_223248_001_b06-evidence",
       "node_id": "local",
-      "host": "workstation",
+      "host": "redacted-host",
       "study_id": null,
       "study_status": null,
       "result": {

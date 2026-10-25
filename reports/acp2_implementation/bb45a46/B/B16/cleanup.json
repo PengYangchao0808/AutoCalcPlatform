@@ -8,7 +8,7 @@
   "production_8765_processes": [],
   "production_run_root_touched": false,
   "production_service_8765_touched": false,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b16",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b16",
   "run_root_note": "test-only native filesystem root; never /var/lib/acp/runs",
   "schema": "acp2.b16.cleanup.v1",
   "stopped": true,

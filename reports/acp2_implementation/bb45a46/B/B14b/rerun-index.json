@@ -8,16 +8,16 @@
     {
       "row_id": "singlepoint/local",
       "result": "PASS",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
-      "workspace": "/ACPServer/AutoCalcPlatform",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
+      "workspace": "repo-root",
       "prerequisites": [],
       "notes": "Re-executes the capability and creates one new TaskRef; the original TaskRef is in the matrix."
     },
     {
       "row_id": "singlepoint/lsf",
       "result": "NOT_VERIFIED",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
-      "workspace": "/ACPServer/acp2-development/integration",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
+      "workspace": "/opt/acp2-dev/integration",
       "prerequisites": [
         "LSF_ENVDIR",
         "ACP_LSF_NODE",
@@ -31,16 +31,16 @@
     {
       "row_id": "optimize/local",
       "result": "PASS",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
-      "workspace": "/ACPServer/AutoCalcPlatform",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+      "workspace": "repo-root",
       "prerequisites": [],
       "notes": "Re-executes the capability and creates one new TaskRef; the original TaskRef is in the matrix."
     },
     {
       "row_id": "optimize/lsf",
       "result": "NOT_VERIFIED",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
-      "workspace": "/ACPServer/acp2-development/integration",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
+      "workspace": "/opt/acp2-dev/integration",
       "prerequisites": [
         "LSF_ENVDIR",
         "ACP_LSF_NODE",
@@ -54,16 +54,16 @@
     {
       "row_id": "frequency/local",
       "result": "PASS",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
-      "workspace": "/ACPServer/AutoCalcPlatform",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
+      "workspace": "repo-root",
       "prerequisites": [],
       "notes": "Re-executes the capability and creates one new TaskRef; the original TaskRef is in the matrix."
     },
     {
       "row_id": "frequency/lsf",
       "result": "NOT_VERIFIED",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
-      "workspace": "/ACPServer/acp2-development/integration",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
+      "workspace": "/opt/acp2-dev/integration",
       "prerequisites": [
         "LSF_ENVDIR",
         "ACP_LSF_NODE",
@@ -77,19 +77,19 @@
     {
       "row_id": "compatibility-guard/15-active-workflows",
       "result": "PASS",
-      "exact_command": "source /ACPServer/acp2-development/data/b/acceptance-env.sh && export PYTHONPATH=/ACPServer/acp2-development/integration/src && export ACP_RUN_ROOT=/ACPServer/acp2-development/data/integration/run-root && export ACP2_RUN_ROOT=/ACPServer/acp2-development/data/integration/run-root && export ACP2_PROJECT_ROOT=/ACPServer/acp2-development/integration && cd /ACPServer/acp2-development/integration && /ACPServer/acp2-development/venvs/b/bin/python -m pytest -q tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered tests/test_architecture_invariants.py::test_each_active_workflow_has_dispatch_and_method_schema tests/test_services_workflow_enablement.py::test_active_workflows_match_the_canonical_active_set tests/test_acp_workflow_task_matrix.py::test_active_workflow_set_matches_matrix",
+      "exact_command": "source /opt/acp2-dev/data/b/acceptance-env.sh && export PYTHONPATH=/opt/acp2-dev/integration/src && export ACP_RUN_ROOT=/opt/acp2-dev/data/integration/run-root && export ACP2_RUN_ROOT=/opt/acp2-dev/data/integration/run-root && export ACP2_PROJECT_ROOT=/opt/acp2-dev/integration && cd /opt/acp2-dev/integration && /opt/acp2-dev/venvs/b/bin/python -m pytest -q tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered tests/test_architecture_invariants.py::test_each_active_workflow_has_dispatch_and_method_schema tests/test_services_workflow_enablement.py::test_active_workflows_match_the_canonical_active_set tests/test_acp_workflow_task_matrix.py::test_active_workflow_set_matches_matrix",
       "notes": "Four tests pin the 15 active workflows; evidence is B/B14b/guard/pytest-15-active-workflows.txt."
     },
     {
       "row_id": "controller/start",
       "result": "PASS",
-      "exact_command": "source /ACPServer/acp2-development/data/b/acceptance-env.sh && export ACP_CANDIDATE_REVISION=77ac1de1af6a5db6b57f4f904a859305ff73042c && export ACP_CONFIG=/ACPServer/acp2-development/data/b/controller-config/cccp.yaml && export ACP_RUN_ROOT=/ACPServer/acp2-development/data/b/run-root-b14b && export CONFSEARCH_ORCA_PATH=/home/xieningke/orca611/orca && export CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/xieningke/openmpi418/lib:/home/xieningke/orca611 && export LD_LIBRARY_PATH=/home/xieningke/openmpi418/lib:/home/xieningke/orca611 && export PYTHONPATH=/ACPServer/acp2-development/integration/src && cd /ACPServer/acp2-development/data/b/controller-config && /ACPServer/acp2-development/venvs/b/bin/python -m acp run serve --host 127.0.0.1 --port 18774 --run-root /ACPServer/acp2-development/data/b/run-root-b14b --poll-interval 1 --no-browser",
+      "exact_command": "source /opt/acp2-dev/data/b/acceptance-env.sh && export ACP_CANDIDATE_REVISION=77ac1de1af6a5db6b57f4f904a859305ff73042c && export ACP_CONFIG=/opt/acp2-dev/data/b/controller-config/cccp.yaml && export ACP_RUN_ROOT=/opt/acp2-dev/data/b/run-root-b14b && export CONFSEARCH_ORCA_PATH=/home/redacted-user/orca611/orca && export CONFSEARCH_ORCA_LD_LIBRARY_PATH=/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611 && export LD_LIBRARY_PATH=/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611 && export PYTHONPATH=/opt/acp2-dev/integration/src && cd /opt/acp2-dev/data/b/controller-config && /opt/acp2-dev/venvs/b/bin/python -m acp run serve --host 127.0.0.1 --port 18774 --run-root /opt/acp2-dev/data/b/run-root-b14b --poll-interval 1 --no-browser",
       "notes": "Single Controller; production 8765 untouched."
     },
     {
       "row_id": "controller/stop",
       "result": "PASS",
-      "exact_command": "kill -TERM $(cat /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/controller/controller.pid) && /usr/sbin/ss -ltn | grep -E \":18774\\b\" || true",
+      "exact_command": "kill -TERM $(cat reports/acp2_implementation/bb45a46/B/B14b/controller/controller.pid) && /usr/sbin/ss -ltn | grep -E \":18774\\b\" || true",
       "notes": "Verify 18774 is free after the stop."
     },
     {
@@ -101,13 +101,13 @@
     {
       "row_id": "b11/lsf-normal-completion",
       "result": "NOT_VERIFIED",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python scripts/acceptance/acp2_runtime.py --scenario lsf-singlepoint --phase live --controller http://127.0.0.1:18769 --launch reports/acp2_implementation/bb45a46/B/B10/mcp-launch-b10.json --fixture /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --out reports/acp2_implementation/bb45a46/B/B11/live --timeout 2400",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/acp2_runtime.py --scenario lsf-singlepoint --phase live --controller http://127.0.0.1:18769 --launch reports/acp2_implementation/bb45a46/B/B10/mcp-launch-b10.json --fixture /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --out reports/acp2_implementation/bb45a46/B/B11/live --timeout 2400",
       "notes": "This is the exact B11 live command. It remains NOT_VERIFIED because bsub/bjobs/bhosts/bqueues/LSF_ENVDIR and a configured node are absent; B11 attempted no remote job."
     },
     {
       "row_id": "b13/control-recovery",
       "result": "NOT_VERIFIED",
-      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py --scenario control-recovery --controller http://127.0.0.1:18771 --fixture /ACPServer/acp2-development/data/b/fixtures/control.json --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/acp2_runtime.py --scenario control-recovery --controller http://127.0.0.1:18771 --fixture /opt/acp2-dev/data/b/fixtures/control.json --out reports/acp2_implementation/bb45a46/B/B13",
       "notes": "Local fault/race rows PASS in B13; LSF control and DSH disconnect remain NOT_VERIFIED."
     }
   ]

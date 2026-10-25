@@ -37,12 +37,12 @@ Environment for every command (absolute paths; source only, never execute the en
 
 ```bash
 # label: REVERSIBLE
-export ACP2_REPO=/ACPServer/AutoCalcPlatform
-source /ACPServer/acp2-development/data/b/acceptance-env.sh
+export ACP2_REPO=repo-root
+source /opt/acp2-dev/data/b/acceptance-env.sh
 export PYTHONPATH="$ACP2_REPO/src:$ACP2_REPO"
-export B24B_WORKSPACE=/ACPServer/acp2-development/data/b/b24b-migration
+export B24B_WORKSPACE=/opt/acp2-dev/data/b/b24b-migration
 export B24B_EVIDENCE="$ACP2_EVIDENCE/B/B24b"
-export B24B_FIXTURE=/ACPServer/acp2-development/data/b/fixtures/migration/b24b-migration.json
+export B24B_FIXTURE=/opt/acp2-dev/data/b/fixtures/migration/b24b-migration.json
 export B24B_CANDIDATE=493790709830eac4ce347b5fb81414050f7a1e21
 export ACP_CANDIDATE_REVISION="$B24B_CANDIDATE"
 ```
@@ -302,7 +302,7 @@ export B24B_WORKSPACE=/tmp/b24b-lost-fresh
   --terminal mig_done
 ```
 
-After the drill, reset `B24B_WORKSPACE=/ACPServer/acp2-development/data/b/b24b-migration`
+After the drill, reset `B24B_WORKSPACE=/opt/acp2-dev/data/b/b24b-migration`
 before §7. Expected: `mig_lost` → `failed` with `worker_lost:pid=999999:no_live_process`;
 `terminal_revival_blocked: true`; `terminal_selected_by_recovery_scan: false`;
 `terminal_unchanged: true`.

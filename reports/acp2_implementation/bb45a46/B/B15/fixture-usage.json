@@ -1,6 +1,6 @@
 {
-  "credentials_file": "/ACPServer/acp2-development/data/b/run-root-b15/secrets/b15-credentials.json (0600, outside the repo)",
-  "fixture": "/ACPServer/acp2-development/data/b/fixtures/multi.json",
+  "credentials_file": "/opt/acp2-dev/data/b/run-root-b15/secrets/b15-credentials.json (0600, outside the repo)",
+  "fixture": "/opt/acp2-dev/data/b/fixtures/multi.json",
   "fixture_kind": "multitenant",
   "keys": [
     "alice_write (read/write/control, project_alpha)",

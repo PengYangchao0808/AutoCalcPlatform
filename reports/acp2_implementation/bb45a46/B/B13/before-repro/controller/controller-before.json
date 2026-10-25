@@ -1,10 +1,10 @@
 {
   "argv": [
-    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/opt/acp2-dev/venvs/b/bin/python",
     "-m",
     "acp2_controller_fault",
     "--fault-file",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
     "--",
     "run",
     "serve",
@@ -13,13 +13,13 @@
     "--port",
     "18771",
     "--run-root",
-    "/ACPServer/acp2-development/data/b/run-root-b13",
+    "/opt/acp2-dev/data/b/run-root-b13",
     "--poll-interval",
     "1",
     "--no-browser"
   ],
-  "cwd": "/ACPServer/acp2-development/B/src",
-  "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+  "cwd": "/opt/acp2-dev/B/src",
+  "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
   "health": {
     "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
     "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
@@ -31,5 +31,5 @@
     "status": "ok"
   },
   "pid": 715881,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b13"
+  "run_root": "/opt/acp2-dev/data/b/run-root-b13"
 }

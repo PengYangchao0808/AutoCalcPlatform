@@ -7,7 +7,7 @@
   "production_port_8765_touched": false,
   "production_run_root_touched": false,
   "read_only": true,
-  "run_root": "/ACPServer/acp2-development/data/b/run-root-b20a",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b20a",
   "schema": "acp2.runtime.controller-health.v1",
   "schema_version": 1,
   "source": "GET /api/health captured during da-submit (b20a.controller_health assertion)",

@@ -35,19 +35,19 @@
   },
   "candidate_revision": "a0185b15c546fbd07919326d581fab13e05000fa",
   "command": [
-    "/ACPServer/acp2-development/venvs/b/bin/python",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "entry-readonly",
     "--controller",
     "http://127.0.0.1:18765",
     "--out",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B06/entry",
+    "reports/acp2_implementation/bb45a46/B/B06/entry",
     "--timeout",
     "180"
   ],
   "contract_version": "1.1.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {

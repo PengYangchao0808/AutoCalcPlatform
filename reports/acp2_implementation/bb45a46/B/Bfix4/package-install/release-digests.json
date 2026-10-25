@@ -37,12 +37,12 @@
       "ok": true
     }
   ],
-  "manifest": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+  "manifest": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
   "ok": true,
   "root_wheel": {
     "actual": "423a9cd8f533429d3f2a78284ccf0d5f058c5e590c169790be6e663c982fed63",
     "expected": "423a9cd8f533429d3f2a78284ccf0d5f058c5e590c169790be6e663c982fed63",
     "ok": true,
-    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build/acp-0.3.0-py3-none-any.whl"
+    "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build/acp-0.3.0-py3-none-any.whl"
   }
 }

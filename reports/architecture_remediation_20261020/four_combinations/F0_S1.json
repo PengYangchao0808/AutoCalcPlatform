@@ -181,7 +181,7 @@
   },
   "environment": {
     "python": "3.11.13",
-    "repo": "/ACPServer/AutoCalcPlatform",
+    "repo": "repo-root",
     "service_port": 42719
   },
   "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",

@@ -1,16 +1,16 @@
 {
   "a20_ref": {
     "digest": null,
-    "expected_handoff_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+    "expected_handoff_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
     "expected_handoff_schema": "handoff_id=H4, handoff_version=1",
-    "expected_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/A/A-20/result.json",
+    "expected_path": "reports/acp2_implementation/bb45a46/A/A-20/result.json",
     "expected_schema": "acp2.acceptance.v1",
     "fabricated_digest": false,
     "observed_contract_handoff": {
       "h4_closure_closed": false,
-      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "role": "provisional contract handoff; not the A-20 real-run sign-off",
-      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+      "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
       "status": "NOT_VERIFIED"
     },
     "owner": "A",
@@ -26,8 +26,8 @@
   "aggregation_result": "PASS",
   "c25_ref": {
     "digest": null,
-    "expected_path": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
-    "expected_receipt_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/p2-closeout",
+    "expected_path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
+    "expected_receipt_root": "reports/acp2_implementation/bb45a46/C/p2-closeout",
     "expected_receipt_schema": "acp2.acceptance.v1",
     "expected_schema": "acp2.experience.handoff.v1 (H2-shaped)",
     "fabricated_digest": false,
@@ -53,19 +53,19 @@
     "contract_version": "1.3.0",
     "env_digest": "d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6",
     "freeze_kind": "verified_immutable_overlay",
-    "freeze_record": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/p2-candidate.json",
-    "freeze_record_sha256": "872271bc4946f11a2edf8c3c7daba0b980a86c55d775e2bee923a0fbf435f0c0",
+    "freeze_record": "reports/acp2_implementation/bb45a46/B/B20c/p2-candidate.json",
+    "freeze_record_sha256": "882237dedc6372f92ea3b813abb0f80a5e0852f33e0105404046f57ddbd558dc",
     "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
-    "overlay_root": "/ACPServer/acp2-development/data/b/b20-candidate",
+    "overlay_root": "/opt/acp2-dev/data/b/b20-candidate",
     "overlay_verification_result": "PASS",
     "parent_revision": "430b4ba09378bf3a63839be3610ad3d7a075a861",
     "server_revision": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462"
   },
   "closed": false,
-  "closeout_input_digest": "d7795d45f952db139583e6b85292b1b905699c7574b9dc427faf66cdcc7fce3b",
+  "closeout_input_digest": "9a75addbf025c789c2fd25778fabdc5a39cdece7e327d3ba20ef99c34a99dfb2",
   "closeout_input_digest_rule": "sha256 over sorted lines '<repo-relative path> <file sha256>\\n' for these input entries only; the closeout's own result file is not an input",
   "closeout_input_set": {
-    "artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/closeout-input-set.json",
+    "artifact": "reports/acp2_implementation/bb45a46/B/B20c/closeout-input-set.json",
     "entry_count": 8,
     "phase_results": [
       "B20a-ready",
@@ -77,21 +77,21 @@
       "B17",
       "B16"
     ],
-    "sha256": "a3463d40f9dc8f0d6bc1075d592bcd93803e0c1d8b62a56c7824c132f3b137ca"
+    "sha256": "a2055e40956827a5c5eba1b4bb6506320435b11709e3016ea7ab83e446492331"
   },
-  "closeout_result_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+  "closeout_result_path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
   "da_fixture_run_keys": {
     "fixture": {
-      "path": "/ACPServer/acp2-development/data/b/fixtures/da/da-run.json",
+      "path": "/opt/acp2-dev/data/b/fixtures/da/da-run.json",
       "role": "da_run_fixture",
-      "sha256": "ef543b6936d2e91cb64a831af3edb39aa2acf1a85d9db770df367780bb399486",
+      "sha256": "32ef892610adf61160f16f7fd0481480d6a6028711b38c6aff669d83bb47c82c",
       "size_bytes": 2413
     },
     "phase": "da-submit",
     "phase_result": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
       "role": "b20a_exec_phase_result",
-      "sha256": "51cc4c89453cae166b79f4ec0e69e166703503fdf56f1c05cb9cec051e25bdcc",
+      "sha256": "ab78a728127031ab1dd6f431ccd11e5bbf9068f81a35b2c7a8740c6140e21ee7",
       "size_bytes": 10977
     },
     "platform_refs": {
@@ -109,7 +109,7 @@
     "search_run_key": null,
     "search_status": "NOT_VERIFIED(search_not_declared)"
   },
-  "final_reference_digest": "e915a12a447ef998e9309217d62c18f5c7c087b99a95836c4c66e3503a2f84d7",
+  "final_reference_digest": "50f3f8bb76d8677f1f1d8f695e1e07db5b3311b4578bae7c34f173c97773d100",
   "final_reference_digest_rule": "sha256 of canonical JSON (sort_keys=True, separators=(',',':'), ensure_ascii=False) of this document with final_reference_digest set to the empty string",
   "generated_at": "2026-10-23T09:32:36Z",
   "generated_at_head": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
@@ -124,7 +124,7 @@
   "mechanism_proven": false,
   "open_rows": {
     "a20_present": true,
-    "artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
+    "artifact": "reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
     "c25_present": true,
     "h4_01_to_04_present": true,
     "h4_search_present": true,
@@ -182,14 +182,14 @@
         "status": "NOT_VERIFIED(c25_absent)"
       }
     ],
-    "sha256": "232daf2bc7158b44231ee3548d6f326ec6ec6f1e7498309d7bacea38e757ef5f"
+    "sha256": "3c70e1d4d1d055961771acb9411284d3ccd5a1cb26b913a5755288cdf1dc7cf6"
   },
   "owner": "B",
   "promotion_allowed": false,
   "rerun_commands": [
     {
       "argv": [
-        "/ACPServer/acp2-development/venvs/b/bin/python",
+        "/opt/acp2-dev/venvs/b/bin/python",
         "scripts/acceptance/acp2_runtime.py",
         "--scenario",
         "da-runtime",
@@ -198,36 +198,36 @@
         "--controller",
         "http://127.0.0.1:18781",
         "--fixture",
-        "/ACPServer/acp2-development/data/b/fixtures/da/da-run.json",
+        "/opt/acp2-dev/data/b/fixtures/da/da-run.json",
         "--out",
-        "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20",
+        "reports/acp2_implementation/bb45a46/B/B20",
         "--timeout",
         "14400"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "env": {
         "ACP_CANDIDATE_REVISION": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
-        "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root-b20a",
-        "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
-        "CONFSEARCH_ORCA_PATH": "/home/xieningke/orca611/orca",
-        "LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
-        "PYTHONPATH": "/ACPServer/AutoCalcPlatform/src"
+        "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root-b20a",
+        "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+        "CONFSEARCH_ORCA_PATH": "/home/redacted-user/orca611/orca",
+        "LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+        "PYTHONPATH": "src"
       },
       "phase": "B20a-exec",
       "result_expected": "NOT_VERIFIED(c24a_absent) until C24a publishes the single approved submission",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/scenario-command.txt"
+      "source_evidence": "reports/acp2_implementation/bb45a46/B/B20/scenario-command.txt"
     },
     {
       "argv": [
-        "/ACPServer/acp2-development/venvs/b/bin/python",
+        "/opt/acp2-dev/venvs/b/bin/python",
         "scripts/acceptance/acp2_runtime.py",
         "--check-only",
-        "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/summary.json"
+        "reports/acp2_implementation/bb45a46/B/B20/summary.json"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "phase": "B20a-ready-check",
       "result_expected": "VALID (tool check only, never a scenario PASS)",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/.omo/evidence/task-22-acp2-parallel-plan-b-runtime.md"
+      "source_evidence": ".omo/evidence/task-22-acp2-parallel-plan-b-runtime.md"
     },
     {
       "argv": [
@@ -237,20 +237,20 @@
         "tests/test_acp2_runtime_science_handoff.py",
         "-q"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "env": {
         "PYTHONPATH": "src:."
       },
       "phase": "B20b",
       "result_expected": "test suite passes; H4 stays open",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20b/validation-log.json"
+      "source_evidence": "reports/acp2_implementation/bb45a46/B/B20b/validation-log.json"
     },
     {
       "argv": null,
       "phase": "B20a-search",
       "reason": "No search producer command exists; a known-candidate chain is not search evidence.",
       "result_expected": "NOT_VERIFIED(search_not_declared)",
-      "source_evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
+      "source_evidence": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
     },
     {
       "argv": [
@@ -260,7 +260,7 @@
         "tests/test_acp2_runtime_h4_closeout.py",
         "-q"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "env": {
         "PYTHONPATH": "src:."
       },
@@ -274,29 +274,29 @@
         "--manifest",
         "docs/reference/next-change/acp2-contracts/manifest.json"
       ],
-      "cwd": "/ACPServer/AutoCalcPlatform",
+      "cwd": ".",
       "phase": "contract-validation",
       "result_expected": "VALID"
     }
   ],
   "rerun_index": {
-    "artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/rerun-index.json",
+    "artifact": "reports/acp2_implementation/bb45a46/B/B20c/rerun-index.json",
     "command_count": 6,
-    "sha256": "f2c5d435779c786858503855942a344a02609c05589fc909f5b8ad54e260eba0"
+    "sha256": "8442ba95cde539d775d1b68d6e3eb2b091844931dbd98d8830d3878ff5ddeec0"
   },
   "result_scope": "aggregation_only",
   "reusable_research_records": {
-    "artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/reusable-research-records.json",
-    "sha256": "2c5321d4dd54a0964c7bfd901f50464536c1f9e83e4d871ff73342d97e7a4c0e"
+    "artifact": "reports/acp2_implementation/bb45a46/B/B20c/reusable-research-records.json",
+    "sha256": "bc88af6877c6c679504f85dc36c23b43dd4ee7840b045afb398dfe195fcdef48"
   },
   "run_spec": {
     "aggregate_budget_seconds": 120,
     "export_budget_seconds": 900,
     "partition_check": "13380 + 900 + 120 = 14400",
     "ref": {
-      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
       "role": "shared_da_run_spec",
-      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
       "size_bytes": 3680
     },
     "science_deadline_seconds": 13380,
@@ -312,7 +312,7 @@
   "schema": "acp2.h4.closeout.v1",
   "scientific_result": "NOT_VERIFIED",
   "self_exclusion": {
-    "closeout_result_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+    "closeout_result_path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
     "closeout_result_repo_relative_path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
     "closeout_self_in_input_set": false,
     "rule": "closeout_input_digest is computed from the eight other P2 phase results before this file exists; this file's final_reference_digest is what the index consumes.",

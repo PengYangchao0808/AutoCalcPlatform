@@ -20,7 +20,7 @@
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 541 | 33 / 4 | `2bdf7cee901d80c8073aa487050b1efe2efdb1465517f588407c735f5ab9b70f` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 680 | 46 / 4 | `f5ac439b12e319c1d1f3d471106bd44735cebd63b8a5dc2997d8e117966c0cc5` |
 | [并行总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 248 | — | `f803e36a597bab129d80431de7d413b029770f139117e5d8a385fd4d2e8e95a8` |
-| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | — | `91c738a3a3580c264b843c62dbcb78f63a900f5d6eb6c1dad9fcabcad7e1bd66` |
+| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | — | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 
 三轨共 130 个实施 todo、12 个终验条目。任务数量不等于工期，也不能据此推算三 Agent 会获得三倍速度。
 

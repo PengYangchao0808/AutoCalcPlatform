@@ -92,7 +92,7 @@
   "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
   "command": [
     "/tmp/opencode/b26a-fix4/venvs/lab/bin/python",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "multitenant",
     "--phase",

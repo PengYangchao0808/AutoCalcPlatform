@@ -7,8 +7,8 @@
     },
     {
       "path": "restart.json",
-      "sha256": "808a9840d8b4327ed07055406d5008be9c72e5ba505049fba5ea3da3d6c6d4d5",
-      "size_bytes": 4836
+      "sha256": "5db06470c663c902a12d3c6b2095970134ad61371f7913fec3c30d673292b2e0",
+      "size_bytes": 4780
     },
     {
       "path": "invalidation-matrix.json",
@@ -136,8 +136,8 @@
   },
   "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
   "command": [
-    "/ACPServer/acp2-development/venvs/b/bin/python",
-    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "approval-budget",
     "--phase",
@@ -145,14 +145,14 @@
     "--controller",
     "http://127.0.0.1:18776",
     "--fixture",
-    "/ACPServer/acp2-development/data/b/fixtures/approval.json",
+    "/opt/acp2-dev/data/b/fixtures/approval.json",
     "--out",
-    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B16",
+    "reports/acp2_implementation/bb45a46/B/B16",
     "--timeout",
     "600"
   ],
   "contract_version": "1.1.0",
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {
@@ -168,7 +168,7 @@
       },
       {
         "path": "restart.json",
-        "sha256": "808a9840d8b4327ed07055406d5008be9c72e5ba505049fba5ea3da3d6c6d4d5",
+        "sha256": "f932c774d023e8840c89ae522b77f1ec9f27ab3343e2f0de2b9bdeefa7127d2d",
         "size_bytes": 4836
       },
       {
@@ -199,11 +199,11 @@
       "ap_cf5fe0d8bc624920a47ab674c6c958e4"
     ],
     "b16.events": 12,
-    "b16.fixture": "/ACPServer/acp2-development/data/b/fixtures/approval.json",
+    "b16.fixture": "/opt/acp2-dev/data/b/fixtures/approval.json",
     "b16.fixture_projects": {
       "created": [],
-      "jobs_database": "/ACPServer/acp2-development/data/b/run-root-b16/acp_jobs.db",
-      "run_root": "/ACPServer/acp2-development/data/b/run-root-b16"
+      "jobs_database": "/opt/acp2-dev/data/b/run-root-b16/acp_jobs.db",
+      "run_root": "/opt/acp2-dev/data/b/run-root-b16"
     },
     "b16.invalidation_rows": 10,
     "b16.phase": "approval",

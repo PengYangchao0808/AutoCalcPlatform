@@ -1,7 +1,7 @@
 """Recheck R11 using real Chromium/3Dmol and the real NMR report entry point.
 
 Run from the repository root:
-  PYTHONPATH=src:. /opt/acp/venv/bin/python /tmp/acp_review_r2_nmr_late_response.py
+  PYTHONPATH=src:. /opt/acp2/venv/bin/python /tmp/acp_review_r2_nmr_late_response.py
 
 Only the report response timing and geometry network boundary are controlled;
 the report DOM, canvas, viewer library and NMR lifecycle are the real code.

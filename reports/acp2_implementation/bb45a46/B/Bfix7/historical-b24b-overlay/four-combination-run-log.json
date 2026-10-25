@@ -72,7 +72,7 @@
       }
     }
   ],
-  "cwd": "/ACPServer/AutoCalcPlatform",
+  "cwd": ".",
   "exit_code": 0,
   "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
   "frozen_candidate_sha": "f32c6704e0348585a5a58ce8516450ab3afc7077",

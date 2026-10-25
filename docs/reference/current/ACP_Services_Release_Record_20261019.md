@@ -183,7 +183,7 @@ python3.11 -c "…conn=sqlite3.connect('file:/var/lib/acp/runs/acp_jobs.db?mode=
 ### 4.1 启动与端点
 
 ```bash
-HOME=/tmp/rel76/home PYTHONUSERBASE=/home/xieningke/.local \
+HOME=/tmp/rel76/home PYTHONUSERBASE=/home/redacted-user/.local \
   python3.11 -m acp run serve --host 127.0.0.1 --port 8897 \
     --run-root /tmp/rel76/runroot --no-browser --execution-mode local --log-level INFO
 # → INFO: Uvicorn running on http://127.0.0.1:8897 ; Run root: /tmp/rel76/runroot
@@ -246,7 +246,7 @@ $ echo $?
 
 | 项 | 状态 | 说明 |
 |---|---|---|
-| `sudo bash scripts/install_systemd.sh --user xieningke`（G4 路径 A/B 重新生成） | **NOT_VERIFIED** | 脚本内 `sudo tee` 同样需要密码；**unit 未重新生成** |
+| `sudo bash scripts/install_systemd.sh --user redacted-user`（G4 路径 A/B 重新生成） | **NOT_VERIFIED** | 脚本内 `sudo tee` 同样需要密码；**unit 未重新生成** |
 | `sudo systemctl restart acp`（G5 重启） | **NOT_VERIFIED** | `sudo -n true` 未过 → 依规**不发起** restart |
 | 重启后 `journalctl` / 重启后冒烟 | **NOT_VERIFIED** | 依赖重启 |
 | 生产切换到 0.2.0 | **NOT_VERIFIED** | 生产仍为旧进程（见下） |
@@ -258,14 +258,14 @@ $ echo $?
 |---|---|---|---|
 | Description | `ACP — Auto-Calc Platform Web Dashboard` | `ACP Auto-Calc Platform (FastAPI Web Service + Scheduler)` | DRIFT |
 | After/Wants | `After=network.target` | `network-online.target` + `Wants=` | DRIFT |
-| ExecStart | `$PROJECT_ROOT/scripts/start_acp.sh` | `/opt/acp/venv/bin/acp run serve --host 0.0.0.0 --port 8765 --no-browser` | **DRIFT（绕过 start_acp.sh）** |
+| ExecStart | `$PROJECT_ROOT/scripts/start_acp.sh` | `/opt/acp2/venv/bin/acp run serve --host 0.0.0.0 --port 8765 --no-browser` | **DRIFT（绕过 start_acp.sh）** |
 | StateDirectory / LogsDirectory | 有 | **无** | DRIFT（反向缺失） |
 | Environment | `ACP_RUN_ROOT` | 同 + `PYTHONDONTWRITEBYTECODE=1` | DRIFT |
 | 加固/日志行 | 无 | `TimeoutStopSec/UMask/LimitNOFILE/StandardOutput*/SyslogIdentifier/Documentation` | DRIFT |
 | User/Group/WorkingDirectory/Restart/WantedBy | 有 | 一致 | OK |
 
 - drift 与 todo 71（§4.2）记录**完全一致，无新增手改**；`is-active=active`、`is-enabled=enabled`；`ExecStart` 仍指向
-  `/opt/acp/venv/bin/acp`（**生产 = 旧进程 `0.1.3`，pid 4536，2026-10-18 启动**）。
+  `/opt/acp2/venv/bin/acp`（**生产 = 旧进程 `0.1.3`，pid 4536，2026-10-18 启动**）。
 - **路径 A/B 收口决策：未执行（需 sudo 重新生成）→ NOT_VERIFIED**；本执行**未手改** `/etc/systemd/system/acp.service`（项目铁律遵守）。
 - 后续（有 sudo 的执行者）：按 Release_Prep §4.2 二选一 → `install_systemd.sh` 重新生成 → restart → journal/冒烟 → 回填本记录 §5。
 

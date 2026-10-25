@@ -1,5 +1,5 @@
 {
-  "copy": "/ACPServer/acp2-development/data/b/b24-migration/source-copy",
+  "copy": "/opt/acp2-dev/data/b/b24-migration/source-copy",
   "corrupt_artifact_injected": "historical_manifest/RESULT_v2/corrupt_manifest.json",
   "post": {
     "README.md": "a082aec4a5664ce4761a54de0ff3a06fa510c86ebccd99d9af59f54ce1c8d117",
@@ -98,6 +98,6 @@
     "v2_publish_interrupted/structures/input.xyz": "9af1449826e3aea7b6b87b7f9545bfec30b27cf4372998fd4a072054f132277a"
   },
   "schema": "acp2.migration.source-digests.v1",
-  "source": "/ACPServer/AutoCalcPlatform/tests/baseline/recovery_fixtures",
+  "source": "tests/baseline/recovery_fixtures",
   "unchanged": true
 }

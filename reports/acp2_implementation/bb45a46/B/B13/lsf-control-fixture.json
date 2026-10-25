@@ -9,7 +9,7 @@
   "distinct_from_normal": true,
   "fixture_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
   "fixture_id": "fx-control-recovery-lsf-v1",
-  "input": "/ACPServer/acp2-development/data/b/fixtures/control.json",
+  "input": "/opt/acp2-dev/data/b/fixtures/control.json",
   "input_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
   "input_digest_matches": true,
   "missing_prerequisites": [
@@ -37,7 +37,7 @@
   },
   "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
   "registered": true,
-  "registry": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+  "registry": "reports/acp2_implementation/bb45a46/B/fixture-runs.json",
   "status": "NOT_VERIFIED",
   "submitted_once": false,
   "task_ref": null,
