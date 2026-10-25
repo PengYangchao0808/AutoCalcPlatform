@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "product_kind": "structure_trajectory",
+  "identity": {
+    "product_kind": "structure_trajectory",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+    "input_digest": "sha256:t13t13t13t13t13t13t13t13t13t13t13t13t13t13t13t13t13",
+    "algorithm": "structure_trajectory",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "available",
+  "complete": true,
+  "errors": [],
+  "payload": {
+    "coordinate_units": "angstrom",
+    "topology_source": "orca_xyz",
+    "atom_order": [
+      "O:0",
+      "H:0",
+      "H:1"
+    ],
+    "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+    },
+    "frames": [
+      {
+        "frame_id": "structure_trajectory:frame:0",
+        "frame_index": 0,
+        "block_index": 0,
+        "coordinate_units": "angstrom",
+        "topology_source": "orca_xyz",
+        "label": "step 0",
+        "source": {
+          "source_kind": "orca_output",
+          "artifact": "RESULT/trajectories/scan.xyz",
+          "native_index": 0,
+          "location": "trajectory"
+        },
+        "atoms": [
+          {
+            "atom_uid": "O:0",
+            "element": "O",
+            "coordinate": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "atom_uid": "H:0",
+            "element": "H",
+            "coordinate": [
+              0.96,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "atom_uid": "H:1",
+            "element": "H",
+            "coordinate": [
+              -0.24,
+              0.93,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "frame_id": "structure_trajectory:frame:1",
+        "frame_index": 1,
+        "block_index": 0,
+        "coordinate_units": "angstrom",
+        "topology_source": "orca_xyz",
+        "label": "step 1",
+        "source": {
+          "source_kind": "orca_output",
+          "artifact": "RESULT/trajectories/scan.xyz",
+          "native_index": 1,
+          "location": "trajectory"
+        },
+        "atoms": [
+          {
+            "atom_uid": "O:0",
+            "element": "O",
+            "coordinate": [
+              0.01,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "atom_uid": "H:0",
+            "element": "H",
+            "coordinate": [
+              0.97,
+              0.01,
+              0.0
+            ]
+          },
+          {
+            "atom_uid": "H:1",
+            "element": "H",
+            "coordinate": [
+              -0.23,
+              0.94,
+              0.0
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -90,10 +90,6 @@ ORPHAN_DAYS_MULTIPLIER = 3
 _ORPHAN_OWNERSHIP_MARKER = "task.json"
 
 
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 @dataclass
 class RetentionPolicy:
     """Retention windows + cleanup behaviour for :class:`LocalCleanup`.

@@ -20,6 +20,7 @@ import os
 import queue
 import random
 import shutil
+import signal
 import socket
 import sqlite3
 import threading
@@ -76,7 +77,49 @@ from acp.scheduler.runner import (
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStateConflictError, JobStore
 from acp.scheduler.tasks import PROJECTION_RECONCILE_BATCH, TaskIndex
+from acp.services_events_bootstrap import open_outbox_delivery
 from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task_dir_name
+from acp_services.contracts.envelope import EnvelopeError
+from acp_services.data.contracts import ResourceKind
+from acp_services.data.operations import (
+    PrepareOperationError,
+    PrepareOperationService,
+    PrepareOperationWorker,
+    PrepareRequest,
+    PrepareState,
+)
+from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
+from acp_services.runtime.execution_chain import (
+    ATTEMPT_PROTOCOL_FILENAME,
+    BINDING_FILENAME,
+    DEFAULT_ENVELOPE_WORKFLOWS,
+    ENVELOPE_FILENAME,
+    EXECUTION_ENTRY_ENVELOPE,
+    FROZEN_GROUP_DIRNAME,
+    FROZEN_GROUP_MANIFEST_FILENAME,
+    PLAN_FILENAME,
+    AttemptProtocolError,
+    attempt_choice_from_result,
+    read_attempt_choice,
+)
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
+from acp_services.runtime.idempotency import (
+    IdempotencyConflictError,
+    IdempotencyContext,
+    IdempotencyInProgressError,
+    IdempotencyLeaseError,
+    IdempotencyOutcome,
+    IdempotencyReservationDeniedError,
+    ReservationPort,
+)
+from acp_services.runtime.local_admission import AdmissionRefusedError
+from acp_services.runtime.outbox import OutboxDeliveryResult, OutboxEventSpec
+from acp_services.runtime.receipts import verify_receipt
+from acp_services.runtime.worker import (
+    TASK_RESULT_RELATIVE_PATH,
+    ReceiptConflictError,
+    read_receipt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +204,20 @@ def _has_pending_submission(record: JobRecord) -> bool:
     return remote_meta.get("submit_state") in _SUBMIT_RECONCILE_STATES
 
 
+def _needs_publication_retry(record: JobRecord) -> bool:
+    """Category ②b of the reconcile loop: terminal row with pending publication.
+
+    The pending fact is written by the T26 terminal CAS together with the
+    status transition; a crash after that CAS but before the publisher ran is
+    recovered from this marker without a second QC execution.
+    """
+    if not record.status.is_terminal:
+        return False
+    if record.spec.workflow not in DEFAULT_ENVELOPE_WORKFLOWS:
+        return False
+    return (record.result or {}).get("publication_pending") is True
+
+
 def _needs_side_effect_retry(record: JobRecord) -> bool:
     """Category ② of the reconcile loop: terminal but side effects unfinished.
 
@@ -195,10 +252,6 @@ if TYPE_CHECKING:
     from acp.scheduler.remote.node_manager import NodeManager
     from acp.scheduler.remote.runner import RemotePollObservation
     from acp.scheduler.remote.ssh import SSHConnectionPool
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _load_review_payload(work_dir: Path) -> dict[str, Any] | None:
@@ -318,7 +371,37 @@ class JobManager:
         local_retention_config: RetentionPolicy | None = None,
         local_cleanup_interval_hours: int = 6,
         local_max_jobs: int = 4,
+        reconnect_local_workers: bool = False,
+        envelope_completion: bool | None = None,
+        attempt_completion: Any | None = None,
+        attempt_publication: Any | None = None,
+        idempotency_reservations: ReservationPort | None = None,
+        admission: Any | None = None,
     ):
+        self._idempotency_reservations = idempotency_reservations
+        self._admission = admission
+        self._idempotency_adoption_lock = threading.Lock()
+        #: Test-only crash-injection seam (mirrors JobStore's hook).  A callable
+        #: invoked at named points of the staged idempotent submit; raising or
+        #: ``os._exit`` from it models a process crash at that boundary.
+        self._fault_point_hook: Callable[[str], None] | None = None
+        #: Persistent controller/worker connection mode (B07-8 / todo 74):
+        #: a *reconnecting controller* skips destructive startup recovery and
+        #: queue draining, and re-attaches to worker processes that survived a
+        #: previous controller via the persisted ``run.lock`` / ``/proc``
+        #: identity (otherwise a second controller marks a still-computing
+        #: RUNNING job ``[RESTART_FAILED]``).
+        self._reconnect_local_workers = bool(reconnect_local_workers)
+        # 07-B opt-in integration: only an envelope-selected local attempt whose
+        # service is explicitly injected/enabled uses receipt-verified completion.
+        # The ordinary default stays exit-code-only until task 29 activates it.
+        self._attempt_completion = attempt_completion
+        self._attempt_publication = attempt_publication
+        if envelope_completion is None:
+            envelope_completion = bool(DEFAULT_ENVELOPE_WORKFLOWS)
+        self._envelope_completion_enabled = bool(
+            envelope_completion or attempt_completion is not None or attempt_publication is not None
+        )
         self._shutdown_lock = threading.Lock()
         self._shutdown_complete = False
         # Closing latch: set by ``_stop_background_work`` (under ``self._lock``)
@@ -340,6 +423,20 @@ class JobManager:
         self._acquire_instance_lock()
         logger.info("JobManager booted: pid=%s run_root=%s", os.getpid(), self.run_root)
         self.store = store or JobStore(self.run_root / "acp_jobs.db")
+        if self._attempt_completion is None and self._envelope_completion_enabled:
+            from acp.calculations.attempt_publication import AttemptResultPublication
+            from acp.services_completion_bootstrap import build_attempt_completion_service
+
+            publication = attempt_publication or AttemptResultPublication()
+            self._attempt_publication = publication
+            self._attempt_completion = build_attempt_completion_service(
+                self.store, publication=publication
+            )
+        elif self._attempt_publication is None and self._attempt_completion is not None:
+            self._attempt_publication = getattr(self._attempt_completion, "publication", None)
+        self._publication_reconcile_enabled = bool(
+            self._attempt_completion is not None and self._attempt_publication is not None
+        )
         self.max_running = max_running  # retained for API compatibility (unused)
         self.poll_interval = max(5, int(poll_interval))
 
@@ -421,10 +518,16 @@ class JobManager:
         # code path may acquire ``_lock`` and then wait for this lock.
         self._side_effect_lock = threading.Lock()
 
-        # Background remote-catalog prefetch (terminal remote jobs).  Worker
-        # is started lazily on first enqueue; see _queue_catalog_prefetch.
+        # Persistent prepare operations (B02-3/todo 13): the terminal
+        # remote-catalog prefetch is a durable DB operation, not an in-process
+        # queue that a restart drops.  The queue below is only a low-latency
+        # wake signal; the ``data_operations`` table is the authority.
         self._catalog_prefetch_queue: queue.Queue[str | None] = queue.Queue()
         self._catalog_prefetch_thread: threading.Thread | None = None
+        self._prepare_worker_stop = threading.Event()
+        self._prepare_operations = PrepareOperationService(self.store.db_path)
+        self._prepare_worker: PrepareOperationWorker | None = None
+        self._prepare_executor = self._build_prepare_executor()
 
         # Background local-cleanup thread (Phase 5B step 5B.3).
         self._cleanup_thread: threading.Thread | None = None
@@ -438,11 +541,19 @@ class JobManager:
         self._release_gc_thread: threading.Thread | None = None
         self._start_release_gc_thread()
 
-        self._requeue_active_on_startup()
-        with self._lock:
-            self._rebuild_reservations()
-        self._dispatch_queued_jobs()
+        self._sweep_idempotency_staging()
+        if self._reconnect_local_workers:
+            self._adopt_live_orphans_on_startup()
+            with self._lock:
+                self._rebuild_reservations()
+        else:
+            self._requeue_active_on_startup()
+            with self._lock:
+                self._rebuild_reservations()
+            self._dispatch_queued_jobs()
         self._queue_startup_catalog_prefetch()
+        self._resume_pending_publications()
+        self._sweep_outbox()
         self._poll_thread.start()
         self._reconcile_thread.start()
         self._activate_run_root()
@@ -810,19 +921,42 @@ class JobManager:
         except OSError:
             logger.debug("Failed to append cleanup.log", exc_info=True)
 
-    def submit(self, spec: JobSpec, group_id: str | None = None) -> JobRecord:
+    def submit(
+        self,
+        spec: JobSpec,
+        group_id: str | None = None,
+        *,
+        idempotency: IdempotencyContext | None = None,
+        budget: dict[str, Any] | None = None,
+    ) -> JobRecord:
         """Validate, persist, and enqueue a new job. Returns immediately.
 
-        Job submission (including SSH sync, upload, bsub for remote mode)
-        runs on a background daemon thread; an immediate first poll follows
-        submission, then the periodic poller takes over.
+        With ``idempotency`` the persistent staged protocol runs (claim ->
+        reservation -> work directory -> committed job row -> adoption ->
+        dispatch).  Without it the original legacy path is byte-for-byte the
+        same, so every existing caller is unchanged.
 
         Args:
             spec: The job specification to submit.
             group_id: Queue-grouping key. Defaults to the new job's own id
                 (self-rooted); pass an ancestor's id to link a clone (e.g.
                 a ``rerun_job``) into the same group.
+            idempotency: Optional verified-scope idempotency context.
         """
+        if idempotency is None:
+            return self._submit_legacy(spec, group_id=group_id, budget=budget)
+        return self._submit_idempotent(
+            spec, group_id=group_id, idempotency=idempotency, budget=budget
+        )
+
+    def _submit_legacy(
+        self,
+        spec: JobSpec,
+        group_id: str | None = None,
+        *,
+        budget: dict[str, Any] | None = None,
+    ) -> JobRecord:
+        """Original submit path (unchanged for legacy callers)."""
         if spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
                 f"Unsupported workflow: {spec.workflow}. Supported: {PUBLIC_WORKFLOWS}"
@@ -839,54 +973,61 @@ class JobManager:
             input_hash=spec.input_hash or compute_input_hash(spec),
         )
 
-        with self._lock:
-            self._counter += 1
-            seq = self._counter
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # ``name`` used to be a UI-only label containing a batch timestamp
-        # (for example ``INT_P__energy__mt5g72i5__2``). Keep that legacy value
-        # only for the opaque job id; the persisted task name is canonicalised
-        # to the final physical directory name below.
-        raw_name = spec.name or spec.workflow
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_name)[:40]
-        job_id = f"{ts}_{seq:03d}_{safe_name}"
+        job_id = self._next_job_id(spec)
 
-        work_dir = self._allocate_work_dir(spec, job_id)
-        # The directory allocator is the single source of truth for the task
-        # label. This also captures a ``__02``/``__03`` collision suffix so
-        # queue, task index, task.json and job.json identify the same task.
-        spec = replace(spec, name=work_dir.name)
-        # v2 scaffold from creation so runtime files (events.jsonl) land in
-        # WORK/00_RUNTIME immediately; old dirs without WORK/ stay legacy.
+        admission_result: dict[str, Any] | None = None
+        if self._admission is not None:
+            decision = self._admission.admit_job(
+                job_id, spec, project_id=spec.project_id, budget=budget
+            )
+            if not decision.allowed:
+                raise AdmissionRefusedError(decision)
+            admission_result = self._admission.result_for_reservation(
+                decision.reservation_id,
+                decision=decision,
+            )
         try:
-            TaskStorage(work_dir).ensure_layout()
-        except OSError:
-            logger.warning("v2 scaffold creation failed for %s", work_dir)
+            work_dir = self._allocate_work_dir(spec, job_id)
+            # The directory allocator is the single source of truth for the task
+            # label. This also captures a ``__02``/``__03`` collision suffix so
+            # queue, task index, task.json and job.json identify the same task.
+            spec = replace(spec, name=work_dir.name)
+            # v2 scaffold from creation so runtime files (events.jsonl) land in
+            # WORK/00_RUNTIME immediately; old dirs without WORK/ stay legacy.
+            try:
+                TaskStorage(work_dir).ensure_layout()
+            except OSError:
+                logger.warning("v2 scaffold creation failed for %s", work_dir)
 
-        cancel_event = threading.Event()
-        with self._lock:
-            self._cancel_events[job_id] = cancel_event
+            cancel_event = threading.Event()
+            with self._lock:
+                self._cancel_events[job_id] = cancel_event
 
-        record = JobRecord(
-            id=job_id,
-            spec=spec,
-            status=JobStatus.QUEUED,
-            work_dir=str(work_dir),
-            project_id=spec.project_id,
-            input_hash=spec.input_hash,
-            group_id=group_id or job_id,
-        )
-        # BatchOptimize tasks may wait in the queue before the runner stages
-        # their input. Keep the submitted geometry visible in the task folder
-        # and structure viewer from the moment the task is created.
-        if spec.workflow == "BatchOptimize":
-            xyz_snapshot = input_xyz_snapshot(spec.input)
-            if xyz_snapshot:
-                try:
-                    TaskStorage(work_dir).write_input_xyz(xyz_snapshot)
-                except OSError:
-                    logger.warning("Could not snapshot input.xyz for queued job %s", job_id)
-        self.store.create(record)
+            record = JobRecord(
+                id=job_id,
+                spec=spec,
+                status=JobStatus.QUEUED,
+                work_dir=str(work_dir),
+                project_id=spec.project_id,
+                input_hash=spec.input_hash,
+                group_id=group_id or job_id,
+                result=({"admission": admission_result} if admission_result is not None else None),
+            )
+            # BatchOptimize tasks may wait in the queue before the runner stages
+            # their input. Keep the submitted geometry visible in the task folder
+            # and structure viewer from the moment the task is created.
+            if spec.workflow == "BatchOptimize":
+                xyz_snapshot = input_xyz_snapshot(spec.input)
+                if xyz_snapshot:
+                    try:
+                        TaskStorage(work_dir).write_input_xyz(xyz_snapshot)
+                    except OSError:
+                        logger.warning("Could not snapshot input.xyz for queued job %s", job_id)
+            self.store.create(record)
+        except BaseException:
+            if admission_result is not None and self._admission is not None:
+                self._admission.release_reservation_id(admission_result.get("reservation_id"))
+            raise
         if self.tasks is not None:
             try:
                 self.tasks.sync_from_job(record)
@@ -900,6 +1041,293 @@ class JobManager:
         self._start_submission_thread(job_id, f"acp-submit-{job_id}")
 
         return record
+
+    def _next_job_id(self, spec: JobSpec) -> str:
+        with self._lock:
+            self._counter += 1
+            seq = self._counter
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        raw_name = spec.name or spec.workflow
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_name)[:40]
+        return f"{ts}_{seq:03d}_{safe_name}"
+
+    def _fault_point(self, name: str) -> None:
+        hook = self._fault_point_hook
+        if hook is not None:
+            hook(name)
+
+    def _submit_idempotent(
+        self,
+        spec: JobSpec,
+        *,
+        group_id: str | None,
+        idempotency: IdempotencyContext,
+        budget: dict[str, Any] | None = None,
+    ) -> JobRecord:
+        if spec.workflow not in ALL_WORKFLOWS:
+            raise ValueError(
+                f"Unsupported workflow: {spec.workflow}. Supported: {PUBLIC_WORKFLOWS}"
+            )
+        if spec.workflow == "irc":
+            spec = self._verified_irc_spec(spec)
+        if spec.workflow != "fake":
+            spec = with_job_resources(spec)
+        spec = replace(
+            spec,
+            project_id=spec.project_id or self.default_project_id,
+            input_hash=spec.input_hash or compute_input_hash(spec),
+        )
+
+        digest = idempotency.digest()
+        outcome = self.store.claim_idempotency(
+            idempotency.scope_id,
+            idempotency.action,
+            idempotency.key,
+            digest,
+            lease_seconds=idempotency.lease_seconds,
+        )
+        self._fault_point("idempotency.after_claim")
+        if outcome.in_progress:
+            outcome = self._await_idempotent_claim(idempotency, digest)
+        if outcome.conflict:
+            raise IdempotencyConflictError(outcome.detail or "idempotency conflict")
+        if outcome.replay:
+            return self._replay_idempotent_claim(outcome)
+        claim = outcome.claim
+        if claim is None or claim.owner_token is None:
+            raise IdempotencyConflictError("idempotency claim was created without an owner")
+
+        reservations = idempotency.reservations or self._idempotency_reservations
+        staging = self._staging_dir(claim.claim_id)
+        final_dir: Path | None = None
+        reservation_id: str | None = None
+        admission_result: dict[str, Any] | None = None
+        try:
+            if reservations is not None:
+                reservation_id = reservations.reserve_for_claim(
+                    claim.claim_id,
+                    scope_id=idempotency.scope_id,
+                    action=idempotency.action,
+                    idempotency_key=idempotency.key,
+                    spec=spec,
+                    budget=budget,
+                )
+                if self._admission is not None:
+                    admission_result = self._admission.result_for_reservation(reservation_id)
+            self._fault_point("idempotency.after_reservation")
+
+            staging.mkdir(parents=True, exist_ok=True)
+            TaskStorage(staging).ensure_layout()
+
+            job_id = self._next_job_id(spec)
+            bound_dir = self._find_claim_bound_dir(claim.claim_id, spec.project_id)
+            if bound_dir is not None:
+                final_dir = bound_dir
+            else:
+                final_dir = self._allocate_work_dir(spec, job_id)
+                self._write_claim_binding(final_dir, claim)
+            spec = replace(spec, name=final_dir.name)
+
+            record = JobRecord(
+                id=job_id,
+                spec=spec,
+                status=JobStatus.QUEUED,
+                work_dir=str(final_dir),
+                project_id=spec.project_id,
+                input_hash=spec.input_hash,
+                group_id=group_id or job_id,
+                result=({"admission": admission_result} if admission_result is not None else None),
+            )
+            self._fault_point("idempotency.before_finalize")
+            finalized = self.store.finalize_idempotent_job(
+                record,
+                claim.claim_id,
+                claim.owner_token,
+                claim.lease_epoch,
+            )
+            self._fault_point("idempotency.after_finalize")
+            if finalized.claim is not None:
+                claim = finalized.claim
+            self._adopt_staging_dir(staging, final_dir, record, claim)
+            self._fault_point("idempotency.after_adoption")
+        except BaseException as exc:
+            if reservations is not None:
+                try:
+                    reservations.release_for_claim(claim.claim_id)
+                except (OSError, RuntimeError):
+                    logger.warning("idempotency reservation sweep failed", exc_info=True)
+            terminal_state = (
+                "rejected" if isinstance(exc, IdempotencyReservationDeniedError) else "released"
+            )
+            try:
+                self.store.release_idempotency(
+                    claim.claim_id,
+                    owner_token=claim.owner_token,
+                    lease_epoch=claim.lease_epoch,
+                    state=terminal_state,
+                )
+            except (IdempotencyConflictError, IdempotencyLeaseError):
+                logger.debug("idempotency claim already moved", exc_info=True)
+            if self.store.get(claim.task_id or "") is None:
+                shutil.rmtree(staging, ignore_errors=True)
+                if final_dir is not None and self._binding_matches(final_dir, claim):
+                    shutil.rmtree(final_dir, ignore_errors=True)
+            raise
+
+        self._fault_point("idempotency.before_dispatch")
+        self._dispatch_queued_jobs()
+        return record
+
+    def _await_idempotent_claim(
+        self, idempotency: IdempotencyContext, digest: str
+    ) -> IdempotencyOutcome:
+        deadline = time.monotonic() + float(idempotency.wait_seconds)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise IdempotencyInProgressError(
+                    "another submission owns this idempotency key; retry with the same key"
+                )
+            time.sleep(min(0.05, remaining))
+            outcome = self.store.claim_idempotency(
+                idempotency.scope_id,
+                idempotency.action,
+                idempotency.key,
+                digest,
+                lease_seconds=idempotency.lease_seconds,
+            )
+            if not outcome.in_progress:
+                return outcome
+
+    def _replay_idempotent_claim(self, outcome: IdempotencyOutcome) -> JobRecord:
+        claim = outcome.claim
+        task_id = None if claim is None else claim.task_id
+        record = None if not task_id else self.store.get(task_id)
+        if record is None or claim is None:
+            raise IdempotencyConflictError(
+                "idempotency claim is committed but its job row is missing"
+            )
+        self._resume_idempotent_adoption(record, claim)
+        self._dispatch_queued_jobs()
+        setattr(record, "_idempotent_replay", True)
+        setattr(record, "_idempotency_claim_id", claim.claim_id)
+        return record
+
+    def _staging_dir(self, claim_id: str) -> Path:
+        return self.run_root / ".staging" / str(claim_id)
+
+    def _write_claim_binding(self, work_dir: Path, claim: Any) -> None:
+        path = work_dir / ".claim_binding"
+        payload = {
+            "claim_id": claim.claim_id,
+            "attempt": 1,
+            "scope_id": claim.scope_id,
+            "action": claim.action,
+            "request_digest": claim.request_digest,
+        }
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _find_claim_bound_dir(self, claim_id: str, project_id: str | None) -> Path | None:
+        project_root = self.run_root.resolve() / self._projects.dir_leaf_for(
+            str(project_id or self.default_project_id)
+        )
+        if not project_root.is_dir():
+            return None
+        for candidate in project_root.iterdir():
+            if not candidate.is_dir():
+                continue
+            binding = candidate / ".claim_binding"
+            if not binding.is_file():
+                continue
+            try:
+                payload = json.loads(binding.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(payload, dict) and payload.get("claim_id") == claim_id:
+                return candidate
+        return None
+
+    def _binding_matches(self, work_dir: Path, claim: Any) -> bool:
+        path = work_dir / ".claim_binding"
+        if not path.is_file():
+            return False
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return isinstance(payload, dict) and payload.get("claim_id") == claim.claim_id
+
+    def _adopt_staging_dir(
+        self, staging: Path, work_dir: Path, record: JobRecord, claim: Any
+    ) -> None:
+        with self._idempotency_adoption_lock:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            job_json = work_dir / "job.json"
+            first_adoption = not job_json.exists()
+            if staging.is_dir():
+                for child in list(staging.iterdir()):
+                    target = work_dir / child.name
+                    if target.exists():
+                        if child.is_dir():
+                            shutil.copytree(child, target, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(child, target)
+                    else:
+                        shutil.move(str(child), str(target))
+            TaskStorage(work_dir).ensure_layout()
+            self._write_claim_binding(work_dir, claim)
+            self._write_job_json(record)
+            if first_adoption:
+                self._event_log(record).append(
+                    "job.created", job_id=record.id, workflow=record.spec.workflow
+                )
+            if record.spec.workflow == "BatchOptimize":
+                xyz_snapshot = input_xyz_snapshot(record.spec.input)
+                if xyz_snapshot:
+                    try:
+                        TaskStorage(work_dir).write_input_xyz(xyz_snapshot)
+                    except OSError:
+                        logger.warning("Could not snapshot input.xyz for queued job %s", record.id)
+            if self.tasks is not None:
+                try:
+                    self.tasks.sync_from_job(record)
+                except Exception:
+                    logger.warning("Task index sync failed for job %s", record.id, exc_info=True)
+            self._stage_task_observer.initialize_job_stages(record.id, record.spec)
+            shutil.rmtree(staging, ignore_errors=True)
+
+    def _resume_idempotent_adoption(self, record: JobRecord, claim: Any) -> None:
+        work_dir = Path(record.work_dir)
+        if (work_dir / "job.json").is_file():
+            return
+        staging = self._staging_dir(claim.claim_id)
+        self._adopt_staging_dir(staging, work_dir, record, claim)
+
+    def _idempotency_adoption_pending(self, record: JobRecord) -> bool:
+        claim = self.store.get_idempotency_claim_for_task(record.id)
+        if claim is None or not claim.is_committed:
+            return False
+        return not (Path(record.work_dir) / "job.json").is_file()
+
+    def _sweep_idempotency_staging(self) -> None:
+        """Expire stale claims, remove their staging dirs and sweep reservations."""
+        try:
+            expired = self.store.expire_stale_idempotency_claims()
+        except (sqlite3.Error, OSError):
+            logger.warning("idempotency lease sweep failed", exc_info=True)
+            return
+        reservations = self._idempotency_reservations
+        for claim in expired:
+            shutil.rmtree(self._staging_dir(claim.claim_id), ignore_errors=True)
+            if reservations is not None:
+                try:
+                    reservations.release_for_claim(claim.claim_id)
+                except (OSError, RuntimeError):
+                    logger.warning(
+                        "idempotency reservation sweep failed for claim %s",
+                        claim.claim_id,
+                        exc_info=True,
+                    )
 
     def _verified_irc_spec(self, spec: JobSpec) -> JobSpec:
         """Build an IRC spec exclusively from a verified upstream TS result."""
@@ -922,9 +1350,16 @@ class JobManager:
         if isinstance(previous, dict):
             current = source.provenance()
             locked_fields = (
-                "job_id", "product_id", "geometry_sha256", "method", "basis",
-                "charge", "multiplicity", "imaginary_frequency_cm1",
-                "frequency_evidence_sha256", "source_completed_at",
+                "job_id",
+                "product_id",
+                "geometry_sha256",
+                "method",
+                "basis",
+                "charge",
+                "multiplicity",
+                "imaginary_frequency_cm1",
+                "frequency_evidence_sha256",
+                "source_completed_at",
             )
             if any(previous.get(key) != current[key] for key in locked_fields):
                 raise ValueError("IRC source evidence changed since the previous submission")
@@ -954,12 +1389,16 @@ class JobManager:
         for block in (requested, irc_level if isinstance(irc_level, dict) else {}):
             if block.get("engine") not in (None, "", "orca"):
                 raise ValueError("IRC engine must match the ORCA TS calculation")
-        maxpoints = requested.get("maxpoints") or (
-            irc_level.get("maxpoints") if isinstance(irc_level, dict) else None
-        ) or 100
-        step = requested.get("step") or (
-            irc_level.get("step") if isinstance(irc_level, dict) else None
-        ) or 0.1
+        maxpoints = (
+            requested.get("maxpoints")
+            or (irc_level.get("maxpoints") if isinstance(irc_level, dict) else None)
+            or 100
+        )
+        step = (
+            requested.get("step")
+            or (irc_level.get("step") if isinstance(irc_level, dict) else None)
+            or 0.1
+        )
         try:
             maxpoints = int(maxpoints)
             step = float(step)
@@ -1167,35 +1606,55 @@ class JobManager:
                 "refusing to rerun — terminate them first"
             )
 
-        from acp.scheduler.job_edit import resolve_previous_outputs
         from acp.results.structure_snapshots import preserve_outputs
+        from acp.scheduler.job_edit import resolve_previous_outputs
+
         read_root = Path(record.work_dir)
         skipped_collections: list[dict[str, Any]] = []
         from acp.scheduler.structure_sources import StructureSourceService
+
         if StructureSourceService._is_remote(record):
             cached_root = self.structure_cache.fetch_catalog(record, record.spec.workflow)
-            from acp.results.manifest import load_result_manifest
             from acp.confsearch.manifest import find_confsearch_manifest
+            from acp.results.manifest import load_result_manifest
+
             if cached_root is None or (
                 load_result_manifest(cached_root) is None
                 and find_confsearch_manifest(cached_root) is None
             ):
                 logger.warning(
-                    "No synced remote results for %s; rerun proceeds without preserving old outputs",
+                    "No synced remote results for %s; rerun proceeds without "
+                    "preserving old outputs",
                     record.id,
                 )
                 previous_outputs = []
             else:
                 self.structure_cache.fetch_reusable_geometries(record, cached_root)
-                previous_outputs = resolve_previous_outputs(cached_root, job_id=record.id,
-                    project_id=current_project, attempt=attempt_number(record), strict=True,
-                    skipped=skipped_collections)
+                previous_outputs = resolve_previous_outputs(
+                    cached_root,
+                    job_id=record.id,
+                    project_id=current_project,
+                    attempt=attempt_number(record),
+                    strict=True,
+                    skipped=skipped_collections,
+                )
         else:
-            previous_outputs = resolve_previous_outputs(read_root, job_id=record.id,
-                project_id=current_project, attempt=attempt_number(record), strict=True,
-                skipped=skipped_collections)
-        preserved_outputs = preserve_outputs(self.run_root, Path(record.work_dir), previous_outputs,
-            job_id=record.id, attempt=attempt_number(record), input_spec=record.spec.input)
+            previous_outputs = resolve_previous_outputs(
+                read_root,
+                job_id=record.id,
+                project_id=current_project,
+                attempt=attempt_number(record),
+                strict=True,
+                skipped=skipped_collections,
+            )
+        preserved_outputs = preserve_outputs(
+            self.run_root,
+            Path(record.work_dir),
+            previous_outputs,
+            job_id=record.id,
+            attempt=attempt_number(record),
+            input_spec=record.spec.input,
+        )
 
         # Contract B (D01): archive this attempt's receipts + the previous
         # resume receipt BEFORE the reset clears stray files.
@@ -1326,7 +1785,9 @@ class JobManager:
         payload_json: str,
         diff_summary: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Apply an edited spec as a new attempt (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md).
+        """Apply an edited spec as a new attempt.
+
+        Design reference: ``docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md``.
 
         ``mode="in_place"`` reuses the shared in-place requeue core with a
         validated spec; ``mode="new_job"`` performs exactly one regular
@@ -1446,16 +1907,8 @@ class JobManager:
             )
         new_spec = replace(new_spec, output_dir=None)
         created = self.submit(new_spec, group_id=record.group_id)
-        source_ref = (
-            new_spec.input.get("source_ref")
-            if isinstance(new_spec.input, dict)
-            else None
-        )
-        source_job_id = (
-            str(source_ref.get("job_id") or "")
-            if isinstance(source_ref, dict)
-            else ""
-        )
+        source_ref = new_spec.input.get("source_ref") if isinstance(new_spec.input, dict) else None
+        source_job_id = str(source_ref.get("job_id") or "") if isinstance(source_ref, dict) else ""
         if not source_job_id and isinstance(new_spec.input, dict):
             source_job_id = str(new_spec.input.get("source_job_id") or "")
         self._event_log(created).append(
@@ -1553,9 +2006,7 @@ class JobManager:
             if not src.exists():
                 return
             if dest.exists():
-                raise RuntimeError(
-                    f"旧尝试回执归档目标已存在，已阻断重跑（请人工检查）: {dest}"
-                )
+                raise RuntimeError(f"旧尝试回执归档目标已存在，已阻断重跑（请人工检查）: {dest}")
             dest.parent.mkdir(parents=True, exist_ok=True)
             try:
                 src.rename(dest)
@@ -1634,21 +2085,41 @@ class JobManager:
             if not src.exists():
                 return
             if dest.exists():
-                raise RuntimeError(
-                    f"旧尝试回执归档目标已存在，已阻断（请人工检查）: {dest}"
-                )
+                raise RuntimeError(f"旧尝试回执归档目标已存在，已阻断（请人工检查）: {dest}")
             dest.parent.mkdir(parents=True, exist_ok=True)
             try:
                 src.rename(dest)
             except OSError as exc:
-                raise RuntimeError(
-                    f"归档旧尝试回执失败: {src} -> {dest}: {exc}"
-                ) from exc
+                raise RuntimeError(f"归档旧尝试回执失败: {src} -> {dest}: {exc}") from exc
 
         for name in (".exit_code", "state.json"):
             _archive(work_dir / name, archive_root / name)
         runtime = work_dir / "WORK" / "00_RUNTIME"
-        _archive(runtime / "run.lock", archive_root / "WORK" / "00_RUNTIME" / "run.lock")
+        runtime_archive = archive_root / "WORK" / "00_RUNTIME"
+        _archive(runtime / "run.lock", runtime_archive / "run.lock")
+        # 07-D: every envelope/execution record is attempt-scoped.  The
+        # continue path (include_science=False) keeps checkpoint/step_result/
+        # RESULT for adoption but must not leave the old choice, group, claim
+        # or worker receipts visible to the new attempt.
+        _archive(work_dir / "execution_receipt.json", archive_root / "execution_receipt.json")
+        _archive(
+            runtime / ATTEMPT_PROTOCOL_FILENAME,
+            runtime_archive / ATTEMPT_PROTOCOL_FILENAME,
+        )
+        _archive(
+            runtime / FROZEN_GROUP_DIRNAME,
+            runtime_archive / FROZEN_GROUP_DIRNAME,
+        )
+        for name in (
+            ENVELOPE_FILENAME,
+            PLAN_FILENAME,
+            BINDING_FILENAME,
+            FROZEN_GROUP_MANIFEST_FILENAME,
+        ):
+            _archive(runtime / name, runtime_archive / name)
+        _archive(runtime / ATTEMPT_LOCK_FILENAME, runtime_archive / ATTEMPT_LOCK_FILENAME)
+        task_result_name = TASK_RESULT_RELATIVE_PATH[-1]
+        _archive(runtime / task_result_name, runtime_archive / task_result_name)
         if not include_science:
             return
         _archive(work_dir / "checkpoint.json", archive_root / "checkpoint.json")
@@ -1663,9 +2134,7 @@ class JobManager:
                 _archive(step, archive_root / "WORK" / "00_RUNTIME" / step.name)
         _archive(work_dir / "RESULT", archive_root / "RESULT")
 
-    def _archive_previous_resume_source(
-        self, record: JobRecord, *, previous_attempt: int
-    ) -> None:
+    def _archive_previous_resume_source(self, record: JobRecord, *, previous_attempt: int) -> None:
         """Archive an existing ``resume_source.json`` before a new one is written.
 
         Consecutive continues must not overwrite the previous resume
@@ -1676,13 +2145,16 @@ class JobManager:
         src = work_dir / "resume_source.json"
         if not src.is_file():
             return
-        dest = work_dir / "WORK" / "00_RUNTIME" / "attempts" / str(
-            previous_attempt
-        ) / "resume_source.json"
+        dest = (
+            work_dir
+            / "WORK"
+            / "00_RUNTIME"
+            / "attempts"
+            / str(previous_attempt)
+            / "resume_source.json"
+        )
         if dest.exists():
-            raise RuntimeError(
-                f"旧尝试 resume_source 归档目标已存在，已阻断（请人工检查）: {dest}"
-            )
+            raise RuntimeError(f"旧尝试 resume_source 归档目标已存在，已阻断（请人工检查）: {dest}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
             src.rename(dest)
@@ -1722,9 +2194,7 @@ class JobManager:
             tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
             os.replace(tmp, work_dir / "resume_source.json")
         except OSError:
-            logger.warning(
-                "resume_source.json write failed for %s", record.id, exc_info=True
-            )
+            logger.warning("resume_source.json write failed for %s", record.id, exc_info=True)
 
     def _reset_job_artifacts(self, job_id: str) -> None:
         """Drop artifact rows captured by the previous attempt."""
@@ -1891,6 +2361,17 @@ class JobManager:
                 cache.purge_job(job_id)
             except Exception:
                 logger.debug("Failed to purge remote cache for job %s", job_id, exc_info=True)
+        # R08: eviction must also expire the job's prepare operations — a
+        # surviving SUCCEEDED row would keep answering READY and merge future
+        # same-identity enqueues instead of allowing a rebuild epoch.
+        operations = getattr(self, "_prepare_operations", None)
+        if operations is not None:
+            try:
+                operations.expire_for_job(job_id, reason="cache_purged")
+            except (OSError, sqlite3.Error, PrepareOperationError):
+                logger.warning(
+                    "Failed to expire prepare operations for job %s", job_id, exc_info=True
+                )
         # Cascade-delete structure-source org rows (index + metadata +
         # tags + index_state) — design plan §5.3 last paragraph.
         try:
@@ -2149,9 +2630,7 @@ class JobManager:
         to a newer attempt's row.
         """
         allowed = (
-            {expected_status}
-            if isinstance(expected_status, JobStatus)
-            else set(expected_status)
+            {expected_status} if isinstance(expected_status, JobStatus) else set(expected_status)
         )
         revision = record.revision
         last: JobStateConflictError | None = None
@@ -2196,9 +2675,7 @@ class JobManager:
         row still matches the caller's status/attempt precondition.
         """
         allowed = (
-            {expected_status}
-            if isinstance(expected_status, JobStatus)
-            else set(expected_status)
+            {expected_status} if isinstance(expected_status, JobStatus) else set(expected_status)
         )
         revision = expected.revision
         attempt = expected.attempt
@@ -2277,12 +2754,12 @@ class JobManager:
         record = final
 
         if record.status == JobStatus.CANCELLED:
+            self._record_admission_usage(record)
+            self._release_admission(record)
             self._stage_task_observer.finalize_job(job_id, JobStatus.CANCELLED.value)
             self._sync_task_status(record)
             self._write_job_json(record)
-            self._event_log(record).append(
-                "job.cancelled", job_id=job_id, attempt=record.attempt
-            )
+            self._event_log(record).append("job.cancelled", job_id=job_id, attempt=record.attempt)
             self._dispatch_queued_jobs()
             return record
 
@@ -2297,9 +2774,7 @@ class JobManager:
             # evidence even when the remote layer is unavailable (the
             # startup/poll reconcile finishes the job later).
             if self.remote_runner is not None:
-                if not record.remote_job_id and record.result and record.result.get(
-                    "lsf_job_id"
-                ):
+                if not record.remote_job_id and record.result and record.result.get("lsf_job_id"):
                     backfilled = self._cas_write(
                         record,
                         expected_status=JobStatus.CANCELLING,
@@ -2339,6 +2814,18 @@ class JobManager:
                     )
         else:
             self.runner.cancel_local(job_id)
+            if self._has_live_task_process(record):
+                killed = self._terminate_stale_task_processes(record)
+                if killed:
+                    try:
+                        self._event_log(record).append(
+                            "process.cleaned",
+                            job_id=job_id,
+                            pids=killed,
+                            reason="cross-process-cancel",
+                        )
+                    except OSError:
+                        logger.debug("cancel cleanup event failed for %s", job_id, exc_info=True)
 
         self._event_log(record).append("job.cancelling", job_id=job_id, attempt=record.attempt)
         self._sync_task_status(record)
@@ -2367,9 +2854,7 @@ class JobManager:
         result["review_payload"] = dict(payload)
 
         def _conflict(fresh: JobRecord) -> JobRecord:
-            raise ValueError(
-                f"pause_for_review requires RUNNING status; got {fresh.status.value}"
-            )
+            raise ValueError(f"pause_for_review requires RUNNING status; got {fresh.status.value}")
 
         record = self._cas_write(
             record,
@@ -2419,9 +2904,7 @@ class JobManager:
             target = JobStatus.STARTING if rerun_submission else JobStatus.RUNNING
 
             def _conflict(fresh: JobRecord) -> JobRecord:
-                raise ValueError(
-                    f"resume requires WAITING_REVIEW status; got {fresh.status.value}"
-                )
+                raise ValueError(f"resume requires WAITING_REVIEW status; got {fresh.status.value}")
 
             record = self._cas_write(
                 record,
@@ -2471,9 +2954,7 @@ class JobManager:
             # (frontend guidance relies on it).  The genuine race — a pause
             # that loses the CAS to a concurrent cancel/terminal write — is
             # handled by the ``_conflict`` callback below.
-            raise ValueError(
-                f"pause_job requires RUNNING status; got {record.status.value}"
-            )
+            raise ValueError(f"pause_job requires RUNNING status; got {record.status.value}")
         if record.status != JobStatus.RUNNING:
             raise ValueError(f"pause_job requires RUNNING status; got {record.status.value}")
 
@@ -2484,6 +2965,10 @@ class JobManager:
             mode = "bstop"
         elif self.runner.pause_local(job_id):
             mode = "sigstop"
+        elif self._reconnect_local_workers and self._signal_reconnected_worker(
+            record, signal.SIGSTOP
+        ):
+            mode = "sigstop-reconnected"
         else:
             # Process already gone (finished between check and signal) —
             # leave the record alone so the poller finalizes it normally.
@@ -2568,6 +3053,10 @@ class JobManager:
             mode = "bresume"
         elif self.runner.resume_local(job_id):
             mode = "sigcont"
+        elif self._reconnect_local_workers and self._signal_reconnected_worker(
+            record, signal.SIGCONT
+        ):
+            mode = "sigcont-reconnected"
         else:
             # No tracked process (e.g. record survived a restart) — keep
             # PAUSED rather than flipping to RUNNING with nothing to poll.
@@ -2661,6 +3150,12 @@ class JobManager:
                     f"job {job_id} still has a live process tracked by the runner; "
                     "refusing to re-enter (possible zombie)"
                 )
+            killed = self._terminate_stale_task_processes(record)
+            if self._has_live_task_process(record):
+                raise ValueError(
+                    f"job {job_id} still has live process(es) in its task directory; "
+                    "refusing to continue — terminate them first"
+                )
             if job_id in self._submission_jobs:
                 raise ValueError(f"job {job_id} is already being submitted")
 
@@ -2733,9 +3228,7 @@ class JobManager:
             # any previous resume receipt) before this continue writes new
             # ones — science results stay in place (adopted, not reset).
             self._archive_attempt_receipts(record, _prev_attempt, include_science=False)
-            self._archive_previous_resume_source(
-                record, previous_attempt=_prev_attempt
-            )
+            self._archive_previous_resume_source(record, previous_attempt=_prev_attempt)
             try:
                 record = self._requeue_record_cas(
                     job_id,
@@ -2753,8 +3246,7 @@ class JobManager:
                         f"job {job_id} was requeued concurrently; refresh and retry"
                     ) from exc
                 raise ValueError(
-                    "continue_job requires FAILED or CANCELLED status; got "
-                    + fresh.status.value
+                    "continue_job requires FAILED or CANCELLED status; got " + fresh.status.value
                 ) from exc
             attempts = attempt_number(record)
             self._cancel_events[job_id] = threading.Event()
@@ -2773,6 +3265,7 @@ class JobManager:
             attempt=attempts,
             attempts=attempts,
             workflow=workflow,
+            killed_pids=killed,
         )
         self._start_submission_thread(job_id, f"acp-continue-{job_id}")
         return record
@@ -2856,6 +3349,34 @@ class JobManager:
         actually references the task directory (PID-recycling guard).
         """
         return terminate_task_processes(Path(record.work_dir), extra_pids=[record.pid or 0])
+
+    def _signal_reconnected_worker(self, record: JobRecord, sig: signal.Signals) -> bool:
+        """SIGSTOP/SIGCONT a worker that survived a previous controller process.
+
+        Resolves the worker from the persisted ``run.lock`` / ``/proc`` task
+        identity (never the in-memory ``_processes`` table) so a fresh
+        controller can pause/revive the original task; returns whether any
+        signal was delivered.
+        """
+        pids = self.runner._live_task_pids(record)
+        if not pids:
+            return False
+        delivered = False
+        own_group = os.getpgrp()
+        for pid in pids:
+            try:
+                pgid = os.getpgid(pid)
+            except OSError:
+                pgid = pid
+            try:
+                if pgid == own_group:
+                    os.kill(pid, sig)
+                else:
+                    os.killpg(pgid, sig)
+                delivered = True
+            except OSError:
+                logger.debug("reconnect %s signal failed for pid %s", sig, pid, exc_info=True)
+        return delivered
 
     def _remote_bstop_bresume(self, record: JobRecord, method_name: str, action: str) -> None:
         """Invoke the remote monitor's bstop/bresume contract for *record*.
@@ -3015,6 +3536,7 @@ class JobManager:
             "_shutdown_event",
             "_cleanup_stop_event",
             "_release_gc_stop",
+            "_prepare_worker_stop",
         ):
             event = getattr(self, event_name, None)
             if event is not None:
@@ -3057,6 +3579,10 @@ class JobManager:
             # 2. Only now release the in-process registry entry and file lock.
             self._release_manager_lock()
             self._release_run_root_claim()
+            try:
+                self._prepare_operations.close()
+            except Exception:
+                logger.debug("Error closing prepare-operation store", exc_info=True)
             # 3. Cancel any remaining job signals / close pools (ownership-neutral).
             with self._lock:
                 for ev in self._cancel_events.values():
@@ -3072,6 +3598,34 @@ class JobManager:
 
     def _event_log(self, record: JobRecord) -> JobEventLog:
         return JobEventLog(runtime_file(record.work_dir, "events.jsonl"))
+
+    def _outbox_event_path(self, job_id: str) -> Path:
+        record = self.store.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        return runtime_file(record.work_dir, "events.jsonl")
+
+    def _deliver_outbox(self, job_id: str | None = None) -> OutboxDeliveryResult | None:
+        """Deliver committed outbox rows to the durable JSONL (post-commit).
+
+        Delivery only appends events — it never touches job state.  A failure is
+        non-fatal: the row stays pending and the next sweep retries it.
+        """
+        if not self.store.has_pending_outbox(job_id=job_id):
+            return None
+        try:
+            service = open_outbox_delivery(self.store, path_for=self._outbox_event_path)
+            return service.deliver_pending(job_id=job_id)
+        except Exception:
+            logger.debug("outbox delivery failed", exc_info=True)
+            return None
+
+    def _sweep_outbox(self) -> None:
+        """Deliver every undelivered outbox row (startup + periodic recovery)."""
+        try:
+            self._deliver_outbox()
+        except Exception:
+            logger.debug("outbox sweep failed", exc_info=True)
 
     def _write_job_json(self, record: JobRecord) -> None:
         path = Path(record.work_dir) / "job.json"
@@ -3228,6 +3782,9 @@ class JobManager:
                                 attempt=record.attempt,
                             )
                             self._stage_task_observer.finalize_job(job_id, "cancelled")
+                    if record.status == JobStatus.CANCELLED:
+                        self._record_admission_usage(record)
+                        self._release_admission(record)
                     self._release_reservation(job_id)
                     return
                 if record.status.is_terminal:
@@ -3253,6 +3810,11 @@ class JobManager:
                 logger.exception("Submission failed for job %s", job_id)
                 record = self.store.get(job_id)
                 if record and not record.status.is_terminal:
+                    # A failed submission must never leave a live worker
+                    # behind (startup-window orphan): confirm-stop it before
+                    # persisting FAILED.
+                    if not self._is_remote_job(record):
+                        self._cleanup_local_orphans(record)
                     # Terminal event first — same poller-consistency invariant
                     # as the fake-completion branch in _submit_job; the CAS
                     # below drops the write when a concurrent writer already
@@ -3273,6 +3835,8 @@ class JobManager:
                         self._sync_task_status(record)
                         self._write_job_json(record)
                         self._stage_task_observer.finalize_job(job_id, "failed")
+                        self._record_admission_usage(record)
+                        self._release_admission(record)
                 self._release_reservation(job_id)
                 return
 
@@ -3330,12 +3894,32 @@ class JobManager:
         return not any(candidate.status == JobStatus.QUEUED for candidate in members[:position])
 
     def _dispatch_queued_jobs(self) -> None:
-        """Re-dispatch durable queued jobs in FIFO order."""
+        """Re-dispatch durable queued jobs in FIFO order.
+
+        An idempotent job whose committed row predates directory adoption is
+        first resumed from its claim-keyed staging directory.  The job is never
+        dispatched while its adoption fact (``job.json``) is missing, so a
+        crash between the job row and adoption cannot start a half-created
+        task.  Once adopted, the committed QUEUED row is the single intent and
+        this pass starts exactly one submission worker.
+        """
         records = self.store.list(status=JobStatus.QUEUED.value, limit=10000)
         records.sort(key=lambda record: (record.created_at or "", record.id))
         for record in records:
             if self._poll_stop.is_set():
                 return
+            if self._idempotency_adoption_pending(record):
+                claim = self.store.get_idempotency_claim_for_task(record.id)
+                if claim is None:
+                    continue
+                try:
+                    self._resume_idempotent_adoption(record, claim)
+                except (OSError, ValueError):
+                    logger.warning(
+                        "idempotent adoption failed for job %s", record.id, exc_info=True
+                    )
+                if self._idempotency_adoption_pending(record):
+                    continue
             self._start_submission_thread(record.id, f"acp-queue-{record.id}")
 
     def _persist_storage_identity(self, record: JobRecord) -> JobRecord | None:
@@ -3375,9 +3959,7 @@ class JobManager:
                 record.id, expected_revision=record.revision, result=result
             )
         except JobStateConflictError:
-            logger.debug(
-                "storage identity persist lost CAS for %s; winner keeps it", record.id
-            )
+            logger.debug("storage identity persist lost CAS for %s; winner keeps it", record.id)
             return None
 
     def _stored_remote_dir_arg(self, record: JobRecord, target: NodeSpec) -> str | None:
@@ -3490,9 +4072,7 @@ class JobManager:
             if meta.get("cancel_state") == "requested":
                 self._persist_aborted_before_bsub(fresh)
                 return False
-            meta["lease_expires_at"] = lease_deadline_iso(
-                lease_ttl_seconds(self._remote_config)
-            )
+            meta["lease_expires_at"] = lease_deadline_iso(lease_ttl_seconds(self._remote_config))
             result = dict(fresh.result or {})
             result["remote"] = meta
             try:
@@ -3617,9 +4197,11 @@ class JobManager:
             result = dict(fresh.result or {})
             meta = dict(result.get("remote") or {})
             raw_orphans = meta.get("orphans")
-            orphans = [dict(o) for o in raw_orphans if isinstance(o, dict)] if isinstance(
-                raw_orphans, list
-            ) else []
+            orphans = (
+                [dict(o) for o in raw_orphans if isinstance(o, dict)]
+                if isinstance(raw_orphans, list)
+                else []
+            )
             orphans.append(
                 {
                     "node": str(meta.get("node") or result.get("node") or ""),
@@ -3744,9 +4326,7 @@ class JobManager:
             meta.pop("orphans", None)
         result["remote"] = meta
         try:
-            self.store.update_progress(
-                fresh.id, expected_revision=fresh.revision, result=result
-            )
+            self.store.update_progress(fresh.id, expected_revision=fresh.revision, result=result)
         except JobStateConflictError:
             logger.debug("orphan persist lost CAS for %s", record.id)
         return cleared
@@ -3781,8 +4361,7 @@ class JobManager:
             ok = self._remote_monitor.cancel_job(node, lsf_job_id)
         except Exception:
             logger.warning(
-                "Orphan cancel bkill failed (node=%s, lsf_job_id=%s, "
-                "attempt=%s) — will retry",
+                "Orphan cancel bkill failed (node=%s, lsf_job_id=%s, attempt=%s) — will retry",
                 node_name,
                 lsf_job_id,
                 entry.get("attempt"),
@@ -3898,9 +4477,7 @@ class JobManager:
                     attempt=record.attempt,
                 )
             except OSError:
-                logger.debug(
-                    "reconcile event append failed for job %s", record.id, exc_info=True
-                )
+                logger.debug("reconcile event append failed for job %s", record.id, exc_info=True)
             self._sync_task_status(stored)
             return
         try:
@@ -3917,15 +4494,11 @@ class JobManager:
         elif verdict == "not_accepted":
             self._mark_not_accepted(record)
         else:
-            logger.info(
-                "Submission for %s still indeterminate — keeping pending", record.id
-            )
+            logger.info("Submission for %s still indeterminate — keeping pending", record.id)
 
     def _adopt_submission(self, record: JobRecord) -> None:
         """Persist a reconciled LSF id; CANCELLING keeps its status (id only)."""
-        lsf_job_id = record.remote_job_id or str(
-            (record.result or {}).get("lsf_job_id") or ""
-        )
+        lsf_job_id = record.remote_job_id or str((record.result or {}).get("lsf_job_id") or "")
         if not lsf_job_id:
             return
         for _ in range(4):
@@ -4076,22 +4649,23 @@ class JobManager:
                     status=JobStatus.CANCELLED,
                     completed_at=_utc_now_iso(),
                     result=result_payload,
+                    outbox=OutboxEventSpec(
+                        event_type="remote.cancel_confirmed",
+                        payload={
+                            "job_id": fresh.id,
+                            "lsf_job_id": lsf_job_id,
+                            "evidence": evidence,
+                            "attempt": fresh.attempt,
+                        },
+                        attempt=fresh.attempt,
+                    ),
                 )
             except JobStateConflictError:
                 continue
             self._sync_task_status(stored)
             self._write_job_json(stored)
             self._stage_task_observer.finalize_job(stored.id, "cancelled")
-            try:
-                self._event_log(stored).append(
-                    "remote.cancel_confirmed",
-                    job_id=stored.id,
-                    lsf_job_id=lsf_job_id,
-                    evidence=evidence,
-                    attempt=stored.attempt,
-                )
-            except OSError:
-                logger.debug("cancel_confirmed event write failed for %s", stored.id)
+            self._deliver_outbox(stored.id)
             self._release_reservation(stored.id)
             self._dispatch_queued_jobs()
             return
@@ -4169,6 +4743,8 @@ class JobManager:
                 )
             except OSError:
                 logger.debug("cancel_confirmed event write failed for %s", stored.id)
+            self._record_admission_usage(stored)
+            self._release_admission(stored)
             self._release_reservation(stored.id)
             self._dispatch_queued_jobs()
             return
@@ -4219,7 +4795,6 @@ class JobManager:
                 continue
         return None
 
-
     def _submit_job(self, job_id: str) -> bool:
         """Start the job (local subprocess or remote LSF). Non-blocking.
 
@@ -4261,6 +4836,12 @@ class JobManager:
             record = claimed
             self._sync_task_status(record)
             self._write_job_json(record)
+
+        if self._admission is not None:
+            decision = self._admission.revalidate_job(record)
+            if decision is not None and not decision.allowed:
+                self._fail_admission_revalidation(record, decision)
+                return True
 
         cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
@@ -4319,6 +4900,8 @@ class JobManager:
             self._sync_task_status(record)
             self._write_job_json(record)
             self._stage_task_observer.finalize_job(job_id, "completed")
+            self._record_admission_usage(record)
+            self._release_admission(record)
             with self._lock:
                 self._cancel_events.pop(job_id, None)
             self._dispatch_queued_jobs()
@@ -4341,11 +4924,15 @@ class JobManager:
             # submission threads cannot oversubscribe local slots (M5).
             with self._lock:
                 self._admit_local(record)
-                self.runner.submit(record, event_log, cancel_event)
+                adopted = self._adopt_existing_task_process(record)
+                if not adopted:
+                    self.runner.submit(record, event_log, cancel_event)
+                    self._fault_point("dispatch.after_local_spawn")
                 running = self._cas_write(
                     record,
                     expected_status=record.status,
                     status=JobStatus.RUNNING,
+                    pid=record.pid,
                     decide=lambda fresh: None,
                 )
                 if running is None:
@@ -4372,13 +4959,13 @@ class JobManager:
         from acp.scheduler.remote.submission import submission_id_for as _sub_id
 
         try:
-            from acp.scheduler.remote.runner import (
-                RemoteSubmissionIndeterminate,
-                RemoteSubmissionRejected,
-            )
+            from acp.scheduler.remote import runner as _remote_runner
+
+            remote_submission_indeterminate = _remote_runner.RemoteSubmissionIndeterminate
+            remote_submission_rejected = _remote_runner.RemoteSubmissionRejected
         except ImportError:  # pragma: no cover - paramiko missing
-            RemoteSubmissionIndeterminate = ()  # type: ignore[assignment,misc]
-            RemoteSubmissionRejected = ()  # type: ignore[assignment,misc]
+            remote_submission_indeterminate = ()  # type: ignore[assignment,misc]
+            remote_submission_rejected = ()  # type: ignore[assignment,misc]
 
         try:
             self._ensure_remote_capacity(record, target)
@@ -4418,7 +5005,7 @@ class JobManager:
             # unbound, never emit a second write path.
             bound = self._persist_submit_intent(intent_record, target.name, code_release=release_id)
             if bound is None:
-                raise RemoteSubmissionRejected(
+                raise remote_submission_rejected(
                     f"submit intent no longer valid for job {job_id}; code "
                     f"release {release_id} could not be bound before bsub"
                 )
@@ -4434,16 +5021,14 @@ class JobManager:
                 event_log,
                 target_node=target.name,
                 remote_job_dir=self._stored_remote_dir_arg(record, target),
-                on_submitted=lambda lsf_id: self._on_submitted(
-                    job_id, lsf_id, record.attempt
-                ),
+                on_submitted=lambda lsf_id: self._on_submitted(job_id, lsf_id, record.attempt),
                 submission_id=submission_id,
                 on_code_release_bound=_on_code_release_bound,
             )
-        except RemoteSubmissionRejected as exc:
+        except remote_submission_rejected as exc:
             self._handle_rejected_submission(record, exc)
             return True
-        except RemoteSubmissionIndeterminate as exc:
+        except remote_submission_indeterminate as exc:
             self._handle_indeterminate_submission(record, exc)
             return True
         except BaseException:
@@ -4613,9 +5198,7 @@ class JobManager:
                 fresh = self.store.get(record.id)
                 if fresh is None or fresh.attempt != record.attempt:
                     # Old-attempt replay or vanished row — drop the write.
-                    logger.info(
-                        "Dropping execution-target write for %s (row moved)", record.id
-                    )
+                    logger.info("Dropping execution-target write for %s (row moved)", record.id)
                     return
                 revision = fresh.revision
         else:
@@ -4628,6 +5211,71 @@ class JobManager:
             kind=target.kind,
             attempt=record.attempt,
         )
+
+    def _fail_admission_revalidation(
+        self,
+        record: JobRecord,
+        decision: Any,
+    ) -> None:
+        """Take the defined non-dispatching FAILED transition on revalidation refusal.
+
+        The reservation is released exactly once (the ledger release is
+        idempotent) and no QC process or remote submission is started.
+        """
+        if self._admission is not None:
+            self._admission.release_reservation_id(
+                self._admission.reservation_id_for_record(record)
+            )
+        result = dict(record.result or {})
+        admission = dict(result.get("admission") or {})
+        admission["revalidation"] = decision.to_dict()
+        admission["released"] = True
+        result["admission"] = admission
+        error = f"admission_revalidation_failed: {decision.reason_code}"
+        try:
+            stored = self.store.transition(
+                record.id,
+                expected_status=record.status,
+                expected_revision=record.revision,
+                expected_attempt=record.attempt,
+                status=JobStatus.FAILED,
+                error=error,
+                completed_at=_utc_now_iso(),
+                result=result,
+            )
+        except JobStateConflictError:
+            logger.info("admission revalidation lost the state CAS for %s", record.id)
+            return
+        self._sync_task_status(stored)
+        self._write_job_json(stored)
+        try:
+            self._event_log(stored).append(
+                "job.admission_revalidation_failed",
+                job_id=stored.id,
+                reason_code=decision.reason_code,
+                detail=decision.detail,
+                attempt=stored.attempt,
+            )
+        except OSError:
+            logger.debug("admission revalidation event write failed for %s", stored.id)
+        self._stage_task_observer.finalize_job(stored.id, "failed")
+        self._dispatch_queued_jobs()
+
+    def _record_admission_usage(self, record: JobRecord) -> None:
+        if self._admission is None:
+            return
+        try:
+            self._admission.record_usage(record)
+        except (OSError, ValueError, RuntimeError):
+            logger.warning("admission usage receipt failed for job %s", record.id, exc_info=True)
+
+    def _release_admission(self, record: JobRecord) -> None:
+        if self._admission is None:
+            return
+        try:
+            self._admission.release_job(record)
+        except (OSError, RuntimeError):
+            logger.warning("admission release failed for job %s", record.id, exc_info=True)
 
     def _release_reservation(self, job_id: str) -> None:
         """Idempotently release a job's in-flight node reservation."""
@@ -4703,78 +5351,199 @@ class JobManager:
             )
 
     # ------------------------------------------------------------------ #
-    # Remote catalog prefetch (terminal remote jobs)
+    # Remote catalog prefetch (terminal remote jobs) — persistent (todo 13)
     # ------------------------------------------------------------------ #
 
-    def _queue_catalog_prefetch(self, job_id: str) -> None:
-        """Enqueue one terminal remote job for background catalog prefetch.
+    def _build_prepare_executor(self) -> Any:
+        from acp.services_data_bootstrap import (
+            build_artifact_prepare_executor,
+            build_composite_prepare_executor,
+            build_local_prepare_identity_provider,
+            build_prepare_executor,
+        )
 
-        No-op when remote fetching is not configured.  The worker thread is
-        created lazily on the first enqueue and reused afterwards.  Once the
-        manager is closing no worker is created/registered/started; the queued
-        item is best-effort and may be dropped.
+        # D06: the executor must receive the authoritative current identity.
+        # local-single states its policy explicitly (no generation/binding/
+        # authorization registry, always authorized) instead of falling back
+        # to "no provider means allow".
+        catalog = build_prepare_executor(
+            job_lookup=self.store.get,
+            identity_provider=build_local_prepare_identity_provider(self.store.get),
+            cache_provider=lambda: self.structure_cache,
+            is_remote=self._is_remote_job,
+        )
+        # B12: explicit artifact prepares (local result files or the stored
+        # EvidenceReport) use the same persistent operation state machine and
+        # the read-only artifact source; they never reuse the remote catalog
+        # fetch path and never make a GET do work.
+        artifact = build_artifact_prepare_executor(
+            job_lookup=self.store.get,
+            cache=self.structure_cache,
+            store_root=self.run_root / "artifact-store",
+        )
+        return build_composite_prepare_executor(catalog, artifact)
+
+    def _prepare_request(self, record: JobRecord) -> PrepareRequest:
+        workflow = str(record.spec.workflow or "")
+        return PrepareRequest(
+            job_id=record.id,
+            attempt=record.attempt,
+            resource_id=f"catalog:{workflow}",
+            resource_kind=ResourceKind.CACHE,
+            resource_digest=f"{record.id}\x1f{record.attempt}\x1f{workflow}",
+            permission_scope="local-single",
+            payload={"workflow": workflow, "job_id": record.id, "attempt": record.attempt},
+        )
+
+    def ensure_prepare_worker(self) -> None:
+        """Start the prepare worker if it is not already running.
+
+        Artifact prepares must work without any remote fetcher (the B12 real
+        source is a local task), so this is no longer gated on remote
+        execution.  The worker is the only component that executes leases; a
+        route never performs the work inline.
         """
-        if self._remote_fetcher is None:
-            return
-        self._catalog_prefetch_queue.put(job_id)
+        self._ensure_prepare_worker()
+
+    def _ensure_prepare_worker(self) -> None:
         with self._lock:
             if self._closing:
                 return
-            thread = self._catalog_prefetch_thread
-            if thread is None or not thread.is_alive():
-                thread = threading.Thread(
-                    target=self._catalog_prefetch_loop,
-                    daemon=True,
-                    name="acp-catalog-prefetch",
+            worker = self._prepare_worker
+            if worker is None or not worker.is_alive:
+                worker = PrepareOperationWorker(
+                    self._prepare_operations,
+                    self._prepare_executor,
+                    stop_event=self._prepare_worker_stop,
+                    wake_queue=self._catalog_prefetch_queue,
                 )
-                self._catalog_prefetch_thread = thread
-                thread.start()
+                worker.start()
+                self._prepare_worker = worker
+                self._catalog_prefetch_thread = worker.thread
 
-    def _catalog_prefetch_loop(self) -> None:
-        """Drain the prefetch queue; one failure never kills the worker."""
-        while True:
-            job_id = self._catalog_prefetch_queue.get()
-            try:
-                if job_id is None:
-                    return
-                self._prefetch_remote_catalog(job_id)
-            except Exception:
-                logger.warning("Remote catalog prefetch failed for %s", job_id, exc_info=True)
-            finally:
-                self._catalog_prefetch_queue.task_done()
+    def _queue_catalog_prefetch(self, job_id: str) -> None:
+        """Enqueue one terminal remote job as a persistent prepare operation.
+
+        No-op when remote fetching is not configured. The operation is durable
+        (deduplicated by its stable scoped key); the wake signal below only
+        shortens the worker's poll latency and is never the source of truth.
+        """
+        if self._remote_fetcher is None:
+            return
+        record = self.store.get(job_id)
+        if record is None or not record.status.is_terminal or not self._is_remote_job(record):
+            return
+        self._expire_bodyless_succeeded_operations(record)
+        try:
+            self._prepare_operations.enqueue(self._prepare_request(record))
+        except Exception:
+            logger.warning("Failed to persist prepare operation for %s", job_id, exc_info=True)
+            return
+        self._ensure_prepare_worker()
+        try:
+            self._catalog_prefetch_queue.put(job_id)
+        except Exception:  # pragma: no cover - unbounded queue never raises
+            pass
+
+    def _expire_bodyless_succeeded_operations(self, record: JobRecord) -> None:
+        """Expire SUCCEEDED prepare operations whose cache body is gone (R08).
+
+        Covers evictions that bypass ``_purge_job_records`` (TTL sweeps, manual
+        ``cache.purge_job``): without this the same-identity enqueue merges the
+        stale success and the catalog can never be rebuilt.
+        """
+        operations = getattr(self, "_prepare_operations", None)
+        cache = getattr(self, "_remote_structure_cache", None)
+        if operations is None or cache is None:
+            return
+        try:
+            from acp.services_data_bootstrap import _catalog_ready_for_attempt
+
+            workflow = str(record.spec.workflow or "")
+            ready = _catalog_ready_for_attempt(
+                cache, cache.job_root(record.id), record.id, workflow, int(record.attempt)
+            )
+            if ready:
+                return
+            request = self._prepare_request(record)
+            expired = operations.expire_succeeded_for_resource(
+                job_id=request.job_id,
+                attempt=request.attempt,
+                resource_id=request.resource_id,
+                permission_scope=request.permission_scope,
+                reason="cache_body_missing",
+            )
+            if expired:
+                logger.info(
+                    "Expired %d bodyless catalog preparation(s) for job %s",
+                    expired,
+                    record.id,
+                )
+        except (OSError, sqlite3.Error, PrepareOperationError):
+            logger.warning(
+                "Prepare-operation reconcile failed for job %s", record.id, exc_info=True
+            )
 
     def _prefetch_remote_catalog(self, job_id: str) -> None:
         """Pull one terminal remote job's small catalog files into the cache.
 
         The backend owns this sync so that ``availability`` flips from
         ``pending_fetch`` to ``ready`` without depending on a browser issuing
-        ``?fetch=1`` (cached workbench JS may lack the terminal retry).
-        Geometry stays lazy; failures are logged and never propagate.
+        ``?fetch=1`` (cached workbench JS may lack the terminal retry).  Geometry
+        stays lazy; failures are logged and never propagate.  The real fetch is
+        delegated to the injected executor so the worker and this entry point
+        share one implementation.
         """
-        record = self.store.get(job_id)
-        if record is None or not record.status.is_terminal:
-            return
-        if not self._is_remote_job(record):
-            return
-        cache = self.structure_cache
-        workflow = str(record.spec.workflow or "")
-        if cache.catalog_ready(Path(record.work_dir), workflow):
-            return
-        if cache.catalog_ready(cache.job_root(job_id), workflow):
-            return
-        if cache.fetch_catalog(record, workflow) is not None:
+        result = self._prepare_executor.prefetch(job_id)
+        if result.prepared and result.detail == "fetched":
             logger.info("Prefetched remote structure catalog for job %s", job_id)
-        else:
-            logger.debug("Remote structure catalog not ready after prefetch for %s", job_id)
+        elif not result.prepared:
+            logger.debug(
+                "Remote structure catalog not ready after prefetch for %s (%s)",
+                job_id,
+                result.detail,
+            )
 
     def _queue_startup_catalog_prefetch(self) -> None:
-        """Enqueue recent terminal remote jobs whose catalog is not cached yet.
+        """Replay undecided prepare operations and enqueue recent terminal jobs.
 
         Repairs jobs that reached a terminal state before this process started
-        (e.g. across an upgrade) so their viewers are ready on first open.
+        (e.g. across an upgrade) so their viewers are ready on first open, and
+        replays operations an earlier process left undecided (DB authority).
+        Artifact prepares are recovered even when no remote fetcher is
+        configured (the B12 source is a local task), while a catalog-only
+        backlog still needs the remote fetcher to make progress.
         """
         if self._remote_fetcher is None:
+            pending = self._prepare_operations.list(
+                states=[PrepareState.QUEUED, PrepareState.RUNNING]
+            )
+            artifact_pending = any(
+                str(dict(operation.payload or {}).get("purpose") or "") == "artifact"
+                for operation in pending
+            )
+            if not artifact_pending:
+                return
+            try:
+                report = self._prepare_operations.recover()
+                if report.requeued:
+                    logger.info(
+                        "Recovered %d undecided prepare operation(s) on startup",
+                        report.requeued,
+                    )
+            except Exception:
+                logger.warning("Prepare-operation recovery failed", exc_info=True)
+            if self._prepare_operations.pending_count() > 0:
+                self._ensure_prepare_worker()
             return
+        try:
+            report = self._prepare_operations.recover()
+            if report.requeued:
+                logger.info(
+                    "Recovered %d undecided prepare operation(s) on startup", report.requeued
+                )
+        except Exception:
+            logger.warning("Prepare-operation recovery failed", exc_info=True)
         queued = 0
         try:
             for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
@@ -4795,6 +5564,8 @@ class JobManager:
             logger.warning("Startup remote catalog prefetch sweep failed", exc_info=True)
         if queued:
             logger.info("Queued %d remote catalog prefetch(es) on startup", queued)
+        if queued or self._prepare_operations.pending_count() > 0:
+            self._ensure_prepare_worker()
 
     def _poll_job(self, job_id: str) -> None:
         """Single non-blocking check of one job's status.
@@ -4807,11 +5578,7 @@ class JobManager:
         CAS succeeds.
         """
         record = self.store.get(job_id)
-        if (
-            record is None
-            or record.status.is_terminal
-            or record.status not in _POLL_SCAN_STATUSES
-        ):
+        if record is None or record.status.is_terminal or record.status not in _POLL_SCAN_STATUSES:
             return
 
         # D02: a pending/aborted submission is reconciled here — never
@@ -4978,6 +5745,8 @@ class JobManager:
         self._write_job_json(stored)
         event_log.append("job.failed", job_id=job_id, error=str(exc))
         self._stage_task_observer.finalize_job(job_id, "failed")
+        self._record_admission_usage(stored)
+        self._release_admission(stored)
         self._release_reservation(job_id)
         self._dispatch_queued_jobs()
 
@@ -5038,6 +5807,211 @@ class JobManager:
             # running-jobs probe); terminal transitions release below.
             self._release_reservation(job_id)
 
+    def _try_envelope_completion(
+        self,
+        record: JobRecord,
+        job_id: str,
+        loaded_revision: int,
+        loaded_attempt: int,
+        exit_code: int | None,
+        cancel_event: threading.Event,
+        event_log: JobEventLog,
+        is_remote: bool,
+        observation: RemotePollObservation | None = None,
+    ) -> bool:
+        """Opt-in receipt-verified completion for an envelope-selected attempt.
+
+        Returns ``True`` when this path consumed the terminal observation (CAS
+        performed or the observation isolated/deferred) and the legacy
+        exit-code terminal decision must not run.  Returns ``False`` for a
+        legacy-selected attempt or when pause/cancel precedence keeps the
+        existing path (a stale/foreign receipt is isolated before that check).
+        """
+        if (
+            not self._envelope_completion_enabled
+            or self._attempt_completion is None
+            or exit_code == EXIT_WAITING_REVIEW
+            or record.spec.workflow not in DEFAULT_ENVELOPE_WORKFLOWS
+        ):
+            return False
+        work_dir = Path(record.work_dir)
+        cancel_intent = record.status == JobStatus.CANCELLING or cancel_event.is_set()
+        try:
+            choice = read_attempt_choice(work_dir)
+        except AttemptProtocolError as exc:
+            if cancel_intent:
+                return False
+            self._cas_envelope_failure(
+                record,
+                job_id,
+                loaded_revision,
+                loaded_attempt,
+                exit_code,
+                "attempt_protocol_corrupt",
+                str(exc),
+                event_log,
+                is_remote=is_remote,
+                observation=observation,
+            )
+            return True
+        if choice is None:
+            choice = attempt_choice_from_result(record.result)
+        if (
+            choice is None
+            or choice.entry != EXECUTION_ENTRY_ENVELOPE
+            or choice.attempt != record.attempt
+        ):
+            return False
+
+        from acp.services_completion_bootstrap import FrozenGroupSnapshotReader
+
+        snapshot = FrozenGroupSnapshotReader(self.store).read(job_id)
+        if snapshot is not None:
+            # The remote poll mutates the in-memory record before the terminal
+            # CAS; keep the current result/revision/status in the snapshot so
+            # the T26 CAS does not drop remote provenance/metadata.
+            snapshot = replace(
+                snapshot,
+                result=dict(record.result or {}),
+                revision=record.revision,
+                status=str(record.status.value),
+            )
+        if snapshot is None or snapshot.envelope is None:
+            if cancel_intent:
+                return False
+            self._cas_envelope_failure(
+                record,
+                job_id,
+                loaded_revision,
+                loaded_attempt,
+                exit_code,
+                "current_corrupt_after_exit",
+                "frozen attempt snapshot unavailable after the execution exited",
+                event_log,
+                is_remote=is_remote,
+                observation=observation,
+            )
+            return True
+
+        receipt_path = work_dir / "execution_receipt.json"
+        decoded = None
+        try:
+            decoded = read_receipt(receipt_path)
+        except (ReceiptConflictError, EnvelopeError, OSError, ValueError):
+            decoded = None
+
+        if decoded is not None:
+            check = verify_receipt(
+                decoded,
+                snapshot.envelope,
+                current_attempt=record.attempt,
+                current_submission_id=snapshot.submission_id,
+                current_release_id=snapshot.release_id,
+                owner_token=snapshot.owner,
+                fencing_token=snapshot.fencing_token,
+            )
+            if not check.accepted:
+                event_log.append(
+                    "job.completion_receipt_rejected",
+                    job_id=job_id,
+                    code=check.code,
+                    attempt=record.attempt,
+                    receipt_attempt=decoded.attempt,
+                    detail=check.reason,
+                    idempotency_key=(f"completion-rejected:{job_id}:{record.attempt}:{check.code}"),
+                )
+                return True
+            if cancel_intent:
+                # Pause/cancel intent keeps precedence; the current receipt is
+                # not used to override it.
+                return False
+            verdict = self._attempt_completion.complete(
+                snapshot, receipt=decoded, confirmed_exited=True
+            )
+        else:
+            if cancel_intent:
+                return False
+            verdict = self._attempt_completion.complete(
+                snapshot,
+                receipt_path=receipt_path,
+                confirmed_exited=True,
+            )
+
+        if verdict.code in {
+            "published",
+            "accepted_pending_publication",
+            "already_published",
+        }:
+            stored = self.store.get(job_id)
+            if stored is not None:
+                self._run_terminal_side_effects(stored, job_id, event_log, is_remote, observation)
+            return True
+        if verdict.code == "current_corrupt_after_exit":
+            failure = verdict.failure
+            self._cas_envelope_failure(
+                record,
+                job_id,
+                loaded_revision,
+                loaded_attempt,
+                exit_code,
+                failure.code if failure is not None else "current_corrupt_after_exit",
+                failure.message if failure is not None else "current receipt missing or corrupt",
+                event_log,
+                is_remote=is_remote,
+                observation=observation,
+            )
+            return True
+        event_log.append(
+            "job.completion_deferred",
+            job_id=job_id,
+            code=verdict.code,
+            attempt=record.attempt,
+            detail=verdict.detail,
+        )
+        return True
+
+    def _cas_envelope_failure(
+        self,
+        record: JobRecord,
+        job_id: str,
+        expected_revision: int,
+        expected_attempt: int,
+        exit_code: int | None,
+        code: str,
+        message: str,
+        event_log: JobEventLog,
+        *,
+        is_remote: bool = False,
+        observation: RemotePollObservation | None = None,
+    ) -> None:
+        """Write the one CAS failure for a current attempt with no valid receipt."""
+        result = dict(record.result or {})
+        result["terminal_side_effects_done"] = False
+        result["completion_failure"] = {"code": code, "message": message}
+        failure_exit = exit_code if exit_code not in (None, 0) else 1
+        try:
+            stored = self.store.transition(
+                job_id,
+                expected_status=_POLL_SCAN_STATUSES,
+                expected_revision=expected_revision,
+                expected_attempt=expected_attempt,
+                status=JobStatus.FAILED,
+                exit_code=failure_exit,
+                completed_at=_utc_now_iso(),
+                error=f"{code}: {message}",
+                result=result,
+            )
+        except JobStateConflictError as exc:
+            self._drop_stale_poll(job_id, exc, event_log, context="envelope-completion-failure")
+            return
+        event_log.append(
+            "job.completion_failure",
+            job_id=job_id,
+            code=code,
+            attempt=expected_attempt,
+        )
+        self._run_terminal_side_effects(stored, job_id, event_log, is_remote, observation)
+
     def _persist_terminal(
         self,
         record: JobRecord,
@@ -5051,6 +6025,18 @@ class JobManager:
         observation: RemotePollObservation | None,
     ) -> None:
         """Persist the terminal transition first, then run retryable side effects."""
+        if self._try_envelope_completion(
+            record,
+            job_id,
+            loaded_revision,
+            loaded_attempt,
+            exit_code,
+            cancel_event,
+            event_log,
+            is_remote,
+            observation,
+        ):
+            return
         progress = record.progress
         current_stage = record.current_stage
         error = record.error
@@ -5082,7 +6068,15 @@ class JobManager:
                 "error": error,
             }
         else:
-            if cancel_event.is_set() and exit_code and exit_code != 0:
+            if record.status == JobStatus.CANCELLING and not is_remote:
+                # A local control intent survives a controller restart: the
+                # process being gone IS the confirmed stop for a local task,
+                # so the durable CANCELLING row must finish CANCELLED instead
+                # of being overwritten by the stale/absent exit observation.
+                status = JobStatus.CANCELLED
+                if exit_code in (None, 0):
+                    exit_code = 130
+            elif cancel_event.is_set() and exit_code and exit_code != 0:
                 if is_remote:
                     # Contract A (D05): a remote cancel is finalised only
                     # after bjobs confirms the job is gone — never from
@@ -5133,6 +6127,31 @@ class JobManager:
             self._drop_stale_poll(job_id, exc, event_log, context="terminal")
             return
 
+        self._run_terminal_side_effects(
+            stored,
+            job_id,
+            event_log,
+            is_remote,
+            observation,
+            review_payload,
+        )
+
+    def _run_terminal_side_effects(
+        self,
+        stored: JobRecord,
+        job_id: str,
+        event_log: JobEventLog,
+        is_remote: bool,
+        observation: RemotePollObservation | None,
+        review_payload: Any = None,
+    ) -> None:
+        """Run the idempotent post-CAS terminal side effects (shared boundary).
+
+        The caller has already committed the terminal CAS.  This helper re-reads
+        the row under ``_side_effect_lock`` so a superseded attempt cannot write
+        into a rerun directory, then emits/captures and finally persists the
+        ``terminal_side_effects_done`` marker on success.
+        """
         side_effects_ok = True
         with self._side_effect_lock:
             stored = self._reread_side_effect_scope(stored)
@@ -5143,13 +6162,13 @@ class JobManager:
                 )
                 return
             try:
+                self._record_admission_usage(stored)
+                self._release_admission(stored)
                 self._release_reservation(job_id)
                 self._sync_task_status(stored)
                 if stored.status.is_terminal:
                     if is_remote and self.remote_runner is not None:
-                        stage_events = (
-                            observation.stage_events if observation is not None else ()
-                        )
+                        stage_events = observation.stage_events if observation is not None else ()
                         self.remote_runner.apply_terminal_side_effects(
                             stored, event_log, stage_events
                         )
@@ -5226,13 +6245,9 @@ class JobManager:
             return
         result["terminal_side_effects_done"] = True
         try:
-            self.store.update_progress(
-                record.id, expected_revision=record.revision, result=result
-            )
+            self.store.update_progress(record.id, expected_revision=record.revision, result=result)
         except JobStateConflictError:
-            logger.debug(
-                "Side-effect marker write raced for job %s; reconcile retries", record.id
-            )
+            logger.debug("Side-effect marker write raced for job %s; reconcile retries", record.id)
 
     def _retry_terminal_side_effects(self, record: JobRecord) -> None:
         """Category ②: re-run terminal side effects until the marker persists.
@@ -5244,14 +6259,12 @@ class JobManager:
         """
         with self._side_effect_lock:
             fresh = self.store.get(record.id)
-            if (
-                fresh is None
-                or not fresh.status.is_terminal
-                or fresh.attempt != record.attempt
-            ):
+            if fresh is None or not fresh.status.is_terminal or fresh.attempt != record.attempt:
                 return
             event_log = self._event_log(fresh)
             try:
+                self._record_admission_usage(fresh)
+                self._release_admission(fresh)
                 self._release_reservation(fresh.id)
                 if self._is_remote_job(fresh) and self.remote_runner is not None:
                     self.remote_runner.apply_terminal_side_effects(fresh, event_log)
@@ -5270,6 +6283,73 @@ class JobManager:
                     fresh.id,
                     exc_info=True,
                 )
+
+    def _resume_pending_publications(self, *, limit: int = 100) -> None:
+        """Startup/reconcile sweep: continue terminal rows with pending publication.
+
+        The T26 terminal CAS writes ``publication_pending=True``; a crash after
+        that CAS but before/during the publisher leaves this marker.  Recovery
+        retries only publication — it never calls the executor.
+        """
+        if not self._publication_reconcile_enabled:
+            return
+        for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            for record in self.store.list(status=status.value, limit=limit):
+                if _needs_publication_retry(record):
+                    self._resume_attempt_publication(record)
+
+    def _resume_attempt_publication(self, record: JobRecord) -> None:
+        """Retry one terminal row's pending publication through the T26 service."""
+        if not self._publication_reconcile_enabled or self._attempt_completion is None:
+            return
+        from acp.services_completion_bootstrap import FrozenGroupSnapshotReader
+
+        try:
+            snapshot = FrozenGroupSnapshotReader(self.store).read(record.id)
+        except Exception:
+            logger.warning("Publication snapshot read failed for job %s", record.id, exc_info=True)
+            return
+        if snapshot is None:
+            self._event_log(record).append(
+                "job.publication_pending",
+                job_id=record.id,
+                code="frozen_snapshot_unavailable",
+                attempt=record.attempt,
+                idempotency_key=f"publication-pending:{record.id}:{record.attempt}:snapshot",
+            )
+            return
+        try:
+            verdict = self._attempt_completion.resume_pending_publication(snapshot)
+        except Exception as exc:
+            logger.warning("Publication retry failed for job %s", record.id, exc_info=True)
+            self._event_log(record).append(
+                "job.publication_pending",
+                job_id=record.id,
+                code=type(exc).__name__,
+                attempt=record.attempt,
+                detail=str(exc),
+                idempotency_key=(
+                    f"publication-pending:{record.id}:{record.attempt}:{type(exc).__name__}"
+                ),
+            )
+            return
+        if verdict.code in {"published", "already_published"}:
+            self._event_log(record).append(
+                "job.publication_completed",
+                job_id=record.id,
+                attempt=record.attempt,
+                result_id=getattr(verdict.publication_outcome, "result_id", ""),
+                idempotency_key=f"publication-completed:{record.id}:{record.attempt}",
+            )
+            return
+        self._event_log(record).append(
+            "job.publication_pending",
+            job_id=record.id,
+            code=verdict.code,
+            attempt=record.attempt,
+            detail=verdict.detail,
+            idempotency_key=(f"publication-pending:{record.id}:{record.attempt}:{verdict.code}"),
+        )
 
     def _reconcile_starting_submission(self, record: JobRecord) -> None:
         """Category ①: converge a recoverable STARTING submission to PENDING."""
@@ -5298,11 +6378,15 @@ class JobManager:
                 self._reconcile_cancelling_remote(record)
         for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             for record in self.store.list(status=status.value, limit=10000):
-                if _needs_side_effect_retry(record):
+                side_effect_retry = _needs_side_effect_retry(record)
+                if side_effect_retry:
                     self._retry_terminal_side_effects(record)
-                elif self._pending_orphans(record.result or {}):
+                if self._publication_reconcile_enabled and _needs_publication_retry(record):
+                    self._resume_attempt_publication(record)
+                if not side_effect_retry and self._pending_orphans(record.result or {}):
                     self._orphan_cancel_pass(record)
         self._reconcile_task_projection()
+        self._sweep_outbox()
 
     def _reconcile_task_projection(self) -> None:
         """Repair one bounded batch of jobs/tasks projection drift.
@@ -5347,6 +6431,7 @@ class JobManager:
                 # recovers jobs whose submission worker disappeared because
                 # the service restarted while they were waiting for a batch
                 # slot.
+                self._sweep_idempotency_staging()
                 self._dispatch_queued_jobs()
             except Exception:
                 logger.exception("Poll loop iteration failed")
@@ -5451,6 +6536,100 @@ class JobManager:
             return owner
         return None
 
+    def _run_lock_payload(self, record: JobRecord) -> dict[str, object]:
+        try:
+            payload = json.loads(
+                runtime_file(Path(record.work_dir), "run.lock").read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _adopt_existing_task_process(self, record: JobRecord) -> bool:
+        """Adopt a live worker left behind in the submission window.
+
+        A controller killed between spawning the worker and persisting the
+        RUNNING row must not cause the next controller to either double
+        dispatch or fail the job while the worker keeps computing.  Identity
+        is proven from the task directory's live process set plus the
+        attempt-tagged ``run.lock``; a live foreign ACP owner still wins
+        (never adopt a peer's task).  Returns True when the worker was
+        adopted, in which case the caller must not spawn another process.
+        """
+        if self._is_remote_job(record):
+            return False
+        pids = list(self.runner._live_task_pids(record) or ())
+        if not pids:
+            return False
+        peer = self._run_lock_peer_pid(record)
+        if peer is not None:
+            raise RuntimeError(
+                f"task {record.id} still has live process(es) {pids} in "
+                f"{record.work_dir}; refusing to start a second execution"
+            )
+        payload = self._run_lock_payload(record)
+        recorded_attempt = payload.get("attempt")
+        if isinstance(recorded_attempt, int) and not isinstance(recorded_attempt, bool):
+            if recorded_attempt != record.attempt:
+                self._terminate_stale_task_processes(record)
+                return False
+        recorded_pid = payload.get("task_pid")
+        pid = recorded_pid if isinstance(recorded_pid, int) and recorded_pid in pids else pids[0]
+        if not isinstance(pid, int) or isinstance(pid, bool):
+            return False
+        record.pid = pid
+        self.runner.attach_run_lock(record, task_pid=pid)
+        try:
+            self._event_log(record).append(
+                "process.adopted",
+                job_id=record.id,
+                pid=pid,
+                pids=list(pids),
+                attempt=record.attempt,
+            )
+        except OSError:
+            logger.debug("adoption event failed for %s", record.id, exc_info=True)
+        return True
+
+    def _adopt_live_orphans_on_startup(self) -> None:
+        """Adopt live workers whose rows never reached RUNNING.
+
+        The reconnecting controller skips destructive startup recovery, so
+        the submission-window orphan would otherwise stay unobserved (and be
+        double-dispatched if its row was still QUEUED).
+        """
+        for status in (JobStatus.STARTING, JobStatus.QUEUED, JobStatus.PENDING):
+            for record in self.store.list(status=status.value, limit=10000):
+                if self._is_remote_job(record) or _has_pending_submission(record):
+                    continue
+                if self._skip_recovery_for_peer(record):
+                    continue
+                try:
+                    if not self._adopt_existing_task_process(record):
+                        continue
+                except RuntimeError:
+                    logger.warning(
+                        "Could not adopt live worker for job %s (peer owns it)", record.id
+                    )
+                    continue
+                adopted = self._cas_write(
+                    record,
+                    expected_status=record.status,
+                    status=JobStatus.RUNNING,
+                    pid=record.pid,
+                    decide=lambda fresh: None,
+                )
+                if adopted is None:
+                    continue
+                self._sync_task_status(adopted)
+                self._write_job_json(adopted)
+                logger.info(
+                    "Adopted startup-window worker for job %s (pid=%s, attempt=%s)",
+                    adopted.id,
+                    adopted.pid,
+                    adopted.attempt,
+                )
+
     def _skip_recovery_for_peer(self, record: JobRecord) -> bool:
         """True when a live peer server owns this task — leave it alone.
 
@@ -5503,8 +6682,20 @@ class JobManager:
                 )
                 continue
             self._cleanup_local_orphans(record)
+            if self._has_live_task_process(record):
+                logger.warning(
+                    "CANCELLING job %s still has live processes after stop sweep; "
+                    "keeping CANCELLING for the next confirmation pass",
+                    record.id,
+                )
+                continue
             self._finalize_restarted_job(
-                record, JobStatus.CANCELLED, restart_marker, "job.cancelled"
+                record,
+                JobStatus.CANCELLED,
+                None,
+                "job.cancelled",
+                exit_code=130,
+                reason="confirmed_local_stop",
             )
             logger.info("Marked CANCELLING job %s as CANCELLED after restart", record.id)
 
@@ -5561,7 +6752,19 @@ class JobManager:
                     continue
                 # Restart race guard: the workflow may have finished exactly
                 # as the server went down — probe disk before failing (Q12).
-                if self._disk_shows_completed(Path(record.work_dir), record.attempt):
+                # Never accept completion while a live task process remains:
+                # an alive worker is either a peer (skipped above) or an
+                # orphan that the destructive-startup path terminates below.
+                evidence: int | None = None
+                if not self._is_remote_job(record) and not self._has_live_task_process(record):
+                    evidence = self._local_attempt_completion_exit_code(record)
+                if evidence == 0 or self._disk_shows_completed(
+                    Path(record.work_dir), record.attempt
+                ):
+                    result = self._collect_result(record)
+                    # Scope the reconcile retry to this startup finalization:
+                    # the idempotent success side effects below mark it done.
+                    result["terminal_side_effects_done"] = False
                     completed = self._cas_write(
                         record,
                         expected_status=record.status,
@@ -5569,15 +6772,16 @@ class JobManager:
                         exit_code=0,
                         progress=1.0,
                         completed_at=_utc_now_iso(),
-                        result=self._collect_result(record),
+                        result=result,
                         decide=lambda fresh: None,
                     )
                     if completed is None:
                         continue
                     record = completed
-                    self._write_job_json(record)
                     self._stage_task_observer.finalize_job(record.id, JobStatus.COMPLETED.value)
-                    self._sync_task_status(record)
+                    # Emit job.completed + artifact capture exactly once,
+                    # identical to the poll-path terminal side effects.
+                    self._retry_terminal_side_effects(record)
                     logger.info("Marked interrupted job %s as COMPLETED (disk probe)", record.id)
                     continue
                 self._cleanup_local_orphans(record)
@@ -5586,6 +6790,7 @@ class JobManager:
                     JobStatus.FAILED,
                     restart_marker + self._restart_resume_hint(record),
                     "job.failed",
+                    exit_code=evidence,
                 )
                 logger.info("Marked interrupted job %s as FAILED", record.id)
 
@@ -5636,29 +6841,41 @@ class JobManager:
         self,
         record: JobRecord,
         status: JobStatus,
-        error: str,
+        error: str | None,
         event_type: str,
+        *,
+        exit_code: int | None = None,
+        reason: str = "server_restart",
     ) -> None:
         """Persist a restart-finalised state across DB, disk, and events.
 
         Clears the stale PID and refreshes the database row, task index,
         ``job.json``, on-disk ``task.json``, and ``events.jsonl`` so every
-        surface reports the same terminal status.
+        surface reports the same terminal status.  ``exit_code`` is written
+        only when the caller has positive evidence (e.g. a confirmed local
+        cancel), never as a placeholder for "unknown".
         """
+        fields: dict[str, Any] = {
+            "pid": None,
+            "error": error,
+            "completed_at": _utc_now_iso(),
+        }
+        if exit_code is not None:
+            fields["exit_code"] = exit_code
         final = self._cas_write(
             record,
             expected_status=record.status,
             status=status,
-            pid=None,
-            error=error,
-            completed_at=_utc_now_iso(),
             decide=lambda fresh: None,
+            **fields,
         )
         if final is None:
             return
         record = final
         self._stage_task_observer.finalize_job(record.id, status.value)
         self._sync_task_status(record)
+        self._record_admission_usage(record)
+        self._release_admission(record)
         try:
             self._write_job_json(record)
         except OSError:
@@ -5673,7 +6890,7 @@ class JobManager:
                 event_type,
                 job_id=record.id,
                 error=error,
-                reason="server_restart",
+                reason=reason,
                 attempt=record.attempt,
             )
         except OSError:
@@ -5703,6 +6920,82 @@ class JobManager:
             )
         except OSError:
             logger.debug("task.json refresh failed for %s", work_dir, exc_info=True)
+
+    def _local_attempt_completion_exit_code(self, record: JobRecord) -> int | None:
+        """Exit code proven by the *current* local attempt's durable receipts.
+
+        A local worker that finished after its controller exited writes no
+        ``.exit_code`` marker (that sentinel is wrapper/remote-only), so
+        startup recovery must read the workflow receipt instead.  Evidence is
+        accepted only for the row's current attempt:
+
+        1. ``.exit_code`` / live ``state.json`` (delegated to the runner);
+        2. the closed attempt's archived receipt under
+           ``WORK/00_RUNTIME/attempts/<n>/`` (in-place rerun contract B);
+        3. a ``RESULT/result_manifest.json`` declaring ``completed``.
+
+        A receipt declaring a different attempt, or a still-running stage
+        map, yields ``None`` (never a fabricated success).
+        """
+        evidence = self.runner.disk_completion_exit_code(record)
+        if evidence is not None:
+            return evidence
+
+        archive = Path(record.work_dir) / "WORK" / "00_RUNTIME" / "attempts" / str(record.attempt)
+        archived_marker = archive / ".exit_code"
+        try:
+            marker = archived_marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            marker = ""
+        if marker:
+            try:
+                return int(marker)
+            except ValueError:
+                logger.debug("Ignoring non-numeric archived .exit_code in %s", archive)
+
+        state_paths: list[Path] = []
+        root_state = archive / "state.json"
+        if root_state.is_file():
+            state_paths.append(root_state)
+        else:
+            state_paths.extend(
+                sorted(archive.rglob("state.json"), key=lambda p: len(p.relative_to(archive).parts))
+            )
+        for state_path in state_paths:
+            try:
+                data = json.loads(state_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            declared = data.get("attempt")
+            if isinstance(declared, int) and not isinstance(declared, bool):
+                if declared != record.attempt:
+                    continue
+            status = data.get("status")
+            if status == "completed":
+                return 0
+            if status == "failed":
+                return 1
+            stages = data.get("stages")
+            if isinstance(stages, dict) and stages:
+                if all(
+                    isinstance(info, dict) and info.get("status") in ("completed", "skipped")
+                    for info in stages.values()
+                ):
+                    return 0
+
+        for manifest_path in (
+            Path(record.work_dir) / "RESULT" / "result_manifest.json",
+            archive / "RESULT" / "result_manifest.json",
+        ):
+            try:
+                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(payload, dict) and payload.get("status") == "completed":
+                return 0
+        return None
 
     def _disk_shows_completed(self, work_dir: Path, attempt: int | None = None) -> bool:
         """Probe disk for a job that finished exactly as the server died.

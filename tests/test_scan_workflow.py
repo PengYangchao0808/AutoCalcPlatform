@@ -693,7 +693,10 @@ def _fake_scheduler(monkeypatch: pytest.MonkeyPatch, captured: list) -> None:
     from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
     from acp.scheduler.manager import JobManager
 
-    def _submit(self: JobManager, spec: JobSpec) -> JobRecord:
+    # Compatibility with the Services runtime adapter, which forwards the
+    # queue-grouping key positionally (`manager.submit(spec, group_id)`); the
+    # real JobManager.submit signature accepts it as an optional argument.
+    def _submit(self: JobManager, spec: JobSpec, group_id: str | None = None) -> JobRecord:
         captured.append(spec)
         return JobRecord(
             id=f"scanjob_{len(captured):03d}",

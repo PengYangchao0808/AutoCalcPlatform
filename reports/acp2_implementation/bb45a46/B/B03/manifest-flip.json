@@ -1,0 +1,146 @@
+{
+  "contract_version": "1.0.0",
+  "contract_digest": "cbd6580c5d0b404657952c520760cf7320c279854814ab9717fe9356c06179b1",
+  "contract_digest_rule": "contract_digest = sha256 over sorted lines '<repo-root-relative path> <sha256>\\n' for every contract with status=delivered, excluding the two self-referential files manifest.json and runtime/baseline-lock.json. Recompute at every stage freeze; the validator enforces it.",
+  "manifest_self_sha256": "e423dff0e707639f1fea0f9b7fa402339df5df5f7a852f3ed20d447ef9e54f85",
+  "delivered": [
+    {
+      "id": "manifest",
+      "delivered_by": "B00",
+      "status": "delivered",
+      "sha256": "e423dff0e707639f1fea0f9b7fa402339df5df5f7a852f3ed20d447ef9e54f85",
+      "path": "docs/reference/next-change/acp2-contracts/manifest.json"
+    },
+    {
+      "id": "baseline-lock",
+      "delivered_by": "B00",
+      "status": "delivered",
+      "sha256": "fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json"
+    },
+    {
+      "id": "lint-baseline",
+      "delivered_by": "B00",
+      "status": "delivered",
+      "sha256": "6b86427a6897ba0b882497bc9ca514b4d3854df9c83706a2e539b603f8f00d0a",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json"
+    },
+    {
+      "id": "dependencies",
+      "delivered_by": "B00",
+      "status": "delivered",
+      "sha256": "96862edd6534614bfa64620f170161c7cbad6c2117d941dd215e49ab9131c4ac",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json"
+    },
+    {
+      "id": "final-debug-patch",
+      "delivered_by": "B00",
+      "status": "delivered",
+      "sha256": "8340f2e81d8f4adcfe2aa872106285468d6b2c71ccc3fcd3b9cef1bbced8f21e",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/"
+    },
+    {
+      "id": "acceptance-harness",
+      "delivered_by": "B01",
+      "status": "delivered",
+      "sha256": "93536b91c026fa67660551d7232d5bd8cb1c3401e72b7472694c45f1a5a2f026",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md"
+    },
+    {
+      "id": "acceptance-result-schema",
+      "delivered_by": "B01",
+      "status": "delivered",
+      "sha256": "9c14f1f50bbbba5733a493b8d018e15d6ee137d49c29b3a9121fda1f6a9108ea",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json"
+    },
+    {
+      "id": "application-api",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "a9f7e741007029638b64e069d918746f7105c2bf99c97dc1e9c3818cdcc0d4a4",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json"
+    },
+    {
+      "id": "entry-call-table",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "811bb39e433ef3d23c5d8ffa6b34153f13d80f61b931e2dc891e894885363da3",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md"
+    },
+    {
+      "id": "p2-research-operations",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json"
+    },
+    {
+      "id": "mcp-launch-schema",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "191569bf318048de8ca6364a7a30bbf419f4ce8be658d10837f159e1427df619",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json"
+    },
+    {
+      "id": "mcp-launch-template",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "71a966ddc6051a33d9570e745364fe97a4af7011b2400fb2bc1e024caaae5293",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json"
+    },
+    {
+      "id": "canonical-digest-vectors",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "ce889df114c3138b60cb23ee7dcf3b53cf4246343b5c7a3a3e2549b2c6c87358",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json"
+    },
+    {
+      "id": "science-binding",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "93a8615939182c7f9897723a1f4e7a96364f55222fe68982ef945f1d11c99c2a",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json"
+    },
+    {
+      "id": "control-and-data",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "75169a703ab6d3e0ef0e95ee08aecca755c01d5ab880f1f7e2ef929016442b0d",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json"
+    },
+    {
+      "id": "admission-approval",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "7cbd97ee055a10eec2de475b9eb54d46e8c1e2c0950ca7cd1d347b5958edbb94",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json"
+    },
+    {
+      "id": "fallback-deferral",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "40be4642bf9d22f510df238bd3a92ba571e9d75edb2beef39cee38a7c26aed50",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/fallback-deferral.json"
+    },
+    {
+      "id": "samples",
+      "delivered_by": "B03",
+      "status": "delivered",
+      "sha256": "542ab8abcfda65b2ca1617bf5b718268d2f43fe2decc5083bef66888fe199456",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/samples/"
+    }
+  ],
+  "planned": [
+    {
+      "id": "shared-change-request-template",
+      "delivered_by": "B01",
+      "reason": "The template file exists (B00) and is used by A/C to request shared-file changes, but it is not a frozen wire contract: B01 may freeze it when the harness consumes it. A file existing is not delivery."
+    },
+    {
+      "id": "controller-topology",
+      "delivered_by": "B04a",
+      "reason": ""
+    }
+  ]
+}

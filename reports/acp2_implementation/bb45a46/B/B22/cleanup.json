@@ -1,0 +1,24 @@
+{
+  "b22_workspace_removed": true,
+  "cleaned_at": "2026-10-23T10:22:44Z",
+  "controller_pid": 1496628,
+  "controller_stopped": true,
+  "external_plugin_bundle_retained": true,
+  "plugin_state_removed": true,
+  "port_18783_free": true,
+  "production_port_8765_health_ok": true,
+  "production_port_8765_touched": false,
+  "production_run_root_touched": false,
+  "removed": [
+    "run_root_b22",
+    "plugin_state_b21",
+    "b22_workspace"
+  ],
+  "run_root_removed": true,
+  "schema": "acp2.b22.cleanup.v1",
+  "tasks_created_by_b22": 0,
+  "temp_wheel_artifacts_retained_for_audit": [
+    "/tmp/opencode/b22-wheel",
+    "/tmp/opencode/b22-wheel-venv"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "job_id": "20261022_210346_001_b04a-parity",
+  "controller": {
+    "attempt": 1,
+    "error": null,
+    "job_id": "20261022_210346_001_b04a-parity",
+    "project_id": "uncategorized",
+    "revision": 2,
+    "schema_version": 1,
+    "state": "completed",
+    "status": "completed",
+    "task_id": "20261022_210346_001_b04a-parity",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "20261022_210346_001_b04a-parity",
+      "task_id": "20261022_210346_001_b04a-parity"
+    },
+    "updated_at": "2026-10-22T13:03:49.241312+00:00",
+    "work_dir": "/opt/acp2-dev/data/b/run-root/uncategorized/CCO_fake",
+    "workflow": null
+  },
+  "local": {
+    "attempt": 1,
+    "error": null,
+    "job_id": "20261022_210346_001_b04a-parity",
+    "project_id": "uncategorized",
+    "revision": 2,
+    "schema_version": 1,
+    "state": "completed",
+    "status": "completed",
+    "task_id": "20261022_210346_001_b04a-parity",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "20261022_210346_001_b04a-parity",
+      "task_id": "20261022_210346_001_b04a-parity"
+    },
+    "updated_at": "2026-10-22T13:03:49.241312+00:00",
+    "work_dir": "/opt/acp2-dev/data/b/run-root/uncategorized/CCO_fake",
+    "workflow": null
+  },
+  "equal": true
+}

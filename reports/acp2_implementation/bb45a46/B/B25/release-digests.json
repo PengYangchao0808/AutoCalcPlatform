@@ -1,0 +1,48 @@
+{
+  "artifacts": [
+    {
+      "actual": "c1798bda7df1f62d4647af5afd61d635504efe6175f84cfc08d3d36cf629dec5",
+      "artifact": "acp-web-0.3.0.tar.gz",
+      "expected": "c1798bda7df1f62d4647af5afd61d635504efe6175f84cfc08d3d36cf629dec5",
+      "ok": true
+    },
+    {
+      "actual": "a3ea29ea025719e404c7f36c83d193f0e59d05d02799ba478c5555347b978acc",
+      "artifact": "acp-worker-0.3.0.tar.gz",
+      "expected": "a3ea29ea025719e404c7f36c83d193f0e59d05d02799ba478c5555347b978acc",
+      "ok": true
+    },
+    {
+      "actual": "55ecb5ea83d0fb0a4f911eb7c0d114495ee0cb8cb367eabee232248cf6907846",
+      "artifact": "acp_web-0.3.0-py3-none-any.whl",
+      "expected": "55ecb5ea83d0fb0a4f911eb7c0d114495ee0cb8cb367eabee232248cf6907846",
+      "ok": true
+    },
+    {
+      "actual": "7d93873f4db823e4bd1edaa7be34be8558d8623cfb37cf4a311368110b2fa0c3",
+      "artifact": "acp_worker-0.3.0-py3-none-any.whl",
+      "expected": "7d93873f4db823e4bd1edaa7be34be8558d8623cfb37cf4a311368110b2fa0c3",
+      "ok": true
+    },
+    {
+      "actual": "70749f7673abd40ce99702700b779f109d4d6ff57e7af2891be4f695f6654ad3",
+      "artifact": "cccp-0.3.0-py3-none-any.whl",
+      "expected": "70749f7673abd40ce99702700b779f109d4d6ff57e7af2891be4f695f6654ad3",
+      "ok": true
+    },
+    {
+      "actual": "5cb1f202dba608182be7e38a919d282faa63f3b781e1d6ea59ea0e46b3b32825",
+      "artifact": "cccp-0.3.0.tar.gz",
+      "expected": "5cb1f202dba608182be7e38a919d282faa63f3b781e1d6ea59ea0e46b3b32825",
+      "ok": true
+    }
+  ],
+  "manifest": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+  "ok": true,
+  "root_wheel": {
+    "actual": "7cba73083e444f8e2be12176eebcbe16012aa4954a4d5052606d83ea6eaf484d",
+    "expected": "7cba73083e444f8e2be12176eebcbe16012aa4954a4d5052606d83ea6eaf484d",
+    "ok": true,
+    "path": "reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl"
+  }
+}

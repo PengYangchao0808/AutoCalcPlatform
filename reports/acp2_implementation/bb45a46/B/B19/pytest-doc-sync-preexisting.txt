@@ -1,0 +1,35 @@
+.....F.....                                                              [100%]
+=================================== FAILURES ===================================
+_____________ test_migration_ledger_six_columns_and_status_tokens ______________
+
+    def test_migration_ledger_six_columns_and_status_tokens() -> None:
+        rows = _find_table(_text(LEDGER), "能力")
+        assert len(rows) >= 50, f"ledger has {len(rows)} rows — expected >= 50"
+        counts = {"CLOSED": 0, "RETAINED": 0, "OPEN": 0, "DEFERRED": 0}
+        for row in rows:
+            assert len(row) == 6, f"ledger row has {len(row)} columns: {row}"
+            assert _SRC_RE.search(row[1]), f"ledger row missing src/...py station: {row}"
+            match = _STATUS_RE.match(row[4])
+            assert match, f"ledger exit-condition cell missing status token: {row[4][:40]!r}"
+            counts[match.group(1)] += 1
+        assert counts["CLOSED"] >= 30, f"too few CLOSED rows: {counts}"
+        assert counts["RETAINED"] >= 4, f"too few RETAINED rows: {counts}"
+        assert counts["OPEN"] >= 5, f"too few OPEN rows: {counts}"
+    
+        text = _text(LEDGER)
+        for token, value in counts.items():
+            match = re.search(rf"\[{token}\][`]*\s*(\d+)", text)
+            assert match, f"ledger summary missing count for {token}"
+>           assert int(match.group(1)) == value, (
+                f"ledger summary {token}={match.group(1)} != parsed {value}"
+            )
+E           AssertionError: ledger summary CLOSED=53 != parsed 54
+E           assert 53 == 54
+E            +  where 53 = int('53')
+E            +    where '53' = <built-in method group of re.Match object at 0x7f0f065df520>(1)
+E            +      where <built-in method group of re.Match object at 0x7f0f065df520> = <re.Match object; span=(31668, 31680), match='[CLOSED]` 53'>.group
+
+tests/test_services_doc_sync.py:289: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_services_doc_sync.py::test_migration_ledger_six_columns_and_status_tokens
+1 failed, 10 passed in 0.55s

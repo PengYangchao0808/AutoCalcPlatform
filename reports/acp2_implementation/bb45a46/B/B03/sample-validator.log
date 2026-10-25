@@ -1,0 +1,77 @@
+# sample accept/reject matrix + validator run
+
+kind     contract                             expected                                       sample
+positive admission-approval.v1.json           valid                                          p1-admission-request.positive.json
+negative admission-approval.v1.json           invalid-parameter/input_invalid/unbounded_request p1-unbounded-request.negative.json
+positive admission-approval.v1.json           valid                                          p2-approval-decision.positive.json
+negative admission-approval.v1.json           authorization/access_denied/approver_identity_from_payload p2-model-approver.negative.json
+negative admission-approval.v1.json           conflict/revision_conflict/approved_plan_digest_mismatch p2-plan-digest-mismatch.negative.json
+negative application-api.v1.json              invalid-parameter/input_invalid/const          analyze-implicit.negative.json
+positive application-api.v1.json              valid                                          analyze.positive.json
+positive application-api.v1.json              valid                                          cancel.positive.json
+positive application-api.v1.json              valid                                          capabilities.positive.json
+positive application-api.v1.json              valid                                          control.positive.json
+positive application-api.v1.json              valid                                          health.positive.json
+positive application-api.v1.json              valid                                          preflight.positive.json
+negative application-api.v1.json              invalid-parameter/input_invalid/missing_required prepare-missing-purpose.negative.json
+positive application-api.v1.json              valid                                          prepare.positive.json
+negative application-api.v1.json              invalid-parameter/input_invalid/missing_required read-missing-generation.negative.json
+positive application-api.v1.json              valid                                          read.positive.json
+positive application-api.v1.json              valid                                          recover.positive.json
+negative application-api.v1.json              invalid-parameter/input_invalid/missing_required status-missing-task-ref.negative.json
+positive application-api.v1.json              valid                                          status.positive.json
+negative application-api.v1.json              unsupported/unsupported_capability/enum        submit-invalid-workflow.negative.json
+negative application-api.v1.json              invalid-parameter/input_invalid/missing_required submit-missing-plan-digest.negative.json
+negative application-api.v1.json              invalid-parameter/input_invalid/unknown_field  submit-unknown-field.negative.json
+negative application-api.v1.json              unsupported/unsupported_capability/unsupported_major_version submit-unsupported-version.negative.json
+positive application-api.v1.json              valid                                          submit.positive.json
+positive control-and-data.v1.json             valid                                          cancel.positive.json
+positive control-and-data.v1.json             valid                                          control-pause.positive.json
+negative control-and-data.v1.json             conflict/revision_conflict/idempotency_key_reuse idempotency-key-reuse.negative.json
+negative control-and-data.v1.json             invalid-parameter/input_invalid/missing_required prepare-without-purpose.negative.json
+positive control-and-data.v1.json             valid                                          prepare.positive.json
+negative control-and-data.v1.json             conflict/revision_conflict/digest_mismatch     read-digest-mismatch.negative.json
+positive control-and-data.v1.json             valid                                          read.positive.json
+negative dependencies.json                    invalid-parameter/input_invalid/cycle          cycle.negative.json
+negative dependencies.json                    invalid-parameter/input_invalid/dangling_reference dangling-reference.negative.json
+negative dependencies.json                    invalid-parameter/input_invalid/free_text_or   free-text-or.negative.json
+negative dependencies.json                    invalid-parameter/input_invalid/missing_producer missing-producer.negative.json
+negative dependencies.json                    invalid-parameter/input_invalid/acceptance_before_prerequisite stage-order.negative.json
+positive dependencies.json                    valid                                          valid.positive.json
+negative fallback-deferral.json               invalid-parameter/input_invalid/empty_structure_task_forbidden empty-structure-task.negative.json
+positive fallback-deferral.json               valid                                          unsupported-format-refusal.positive.json
+negative manifest.json                        invalid-parameter/input_invalid/delivered_missing_sha delivered-without-sha.negative.json
+negative manifest.json                        invalid-parameter/input_invalid/duplicate_contract_id duplicate-id.negative.json
+negative manifest.json                        invalid-parameter/input_invalid/invalid_owner  invalid-owner.negative.json
+positive manifest.json                        valid                                          valid.positive.json
+negative mcp-launch.schema.json               invalid-parameter/input_invalid/additional_property launch-credential.negative.json
+negative mcp-launch.schema.json               invalid-parameter/input_invalid/missing_required launch-missing-constraint.negative.json
+negative mcp-launch.schema.json               invalid-parameter/input_invalid/additional_property launch-unknown-field.negative.json
+negative mcp-launch.schema.json               unsupported/unsupported_capability/const       launch-wrong-protocol.negative.json
+positive mcp-launch.schema.json               valid                                          launch.positive.json
+negative p2-research-operations.v1.json       authorization/access_denied/approver_identity_from_payload approval-model-approver.negative.json
+positive p2-research-operations.v1.json       valid                                          proposal-create.positive.json
+negative p2-research-operations.v1.json       invalid-parameter/input_invalid/bound_exceeded wait-unbounded.negative.json
+negative science-binding.v1.json              unsupported/unsupported_capability/pending_reference reserved-reference-pending.negative.json
+positive science-binding.v1.json              valid                                          singlepoint-request.positive.json
+negative science-binding.v1.json              unsupported/unsupported_capability/unknown_task_kind singlepoint-unknown-task-kind.negative.json
+negative science-binding.v1.json              unsupported/unsupported_capability/unsupported_major_version singlepoint-unsupported-version.negative.json
+
+counts: {"admission-approval.v1.json": {"negative": 3, "positive": 2}, "application-api.v1.json": {"negative": 8, "positive": 11}, "control-and-data.v1.json": {"negative": 3, "positive": 4}, "dependencies.json": {"negative": 5, "positive": 1}, "fallback-deferral.json": {"negative": 1, "positive": 1}, "manifest.json": {"negative": 3, "positive": 1}, "mcp-launch.schema.json": {"negative": 4, "positive": 1}, "p2-research-operations.v1.json": {"negative": 2, "positive": 1}, "science-binding.v1.json": {"negative": 3, "positive": 1}}
+
+== validator run over those samples ==
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3.11
+cachedir: .pytest_cache
+rootdir: <repo>
+configfile: pyproject.toml
+plugins: anyio-4.15.1, cov-7.1.0, mock-3.15.1
+collecting ... collected 4 items
+
+tests/test_acp2_runtime_contracts.py::test_sample_index_is_complete_and_hashed PASSED [ 25%]
+tests/test_acp2_runtime_contracts.py::test_samples_accept_or_reject_exactly_as_declared PASSED [ 50%]
+tests/test_acp2_runtime_contracts.py::test_negative_samples_cover_the_required_failure_modes PASSED [ 75%]
+tests/test_acp2_runtime_contracts.py::test_dependency_negative_samples_trigger_their_rule PASSED [100%]
+
+============================== 4 passed in 0.16s ===============================
+exit=0

@@ -1,0 +1,74 @@
+usage: acp2_runtime.py [-h] [--scenario SCENARIO] [--controller CONTROLLER]
+                       [--launch LAUNCH] [--fixture FIXTURE] [--out OUT]
+                       [--timeout TIMEOUT] [--check-only PATH] [--phase PHASE]
+                       [--dry-run] [--validate-samples]
+                       [--samples-root SAMPLES_ROOT]
+
+ACP 2.0 runtime acceptance harness skeleton (acp2.acceptance.v1). Validate receipts/samples, print exact dry-run commands, or execute a registered scenario. Scenario bodies are owned by B04a..B25b.
+
+options:
+  -h, --help            show this help message and exit
+  --scenario SCENARIO   registered B scenario ID
+  --controller CONTROLLER
+                        existing Controller URL to connect to; the harness
+                        never starts one
+  --launch LAUNCH       MCP stdio launch manifest path
+  --fixture FIXTURE     scenario request/fixture JSON path
+  --out OUT             output directory for run receipt + summary
+  --timeout TIMEOUT     override the registry timeout (seconds)
+  --check-only PATH     validate an existing summary.json or receipt (tool
+                        check, not PASS)
+  --phase PHASE         registered phase for the scenario
+  --dry-run             print exact commands and create no DB/process/job
+  --validate-samples    run the deterministic acceptance sample corpus
+  --samples-root SAMPLES_ROOT
+                        sample corpus root (default: the frozen runtime
+                        samples)
+
+Registered B scenarios (15 immutable IDs):
+  env-runtime        owner=B07   phases=main  required=(none)  controller=no
+  entry-readonly     owner=B04a  phases=main, live  required=(none)  controller=yes
+  mcp-stdio          owner=B05   phases=main  required=--launch  controller=yes
+  submit-replay      owner=B08   phases=main  required=--fixture  controller=yes
+  local-singlepoint  owner=B10   phases=main, live  required=--fixture  controller=yes
+  lsf-singlepoint    owner=B11   phases=main, live  required=--fixture  controller=yes
+  three-entry        owner=B10   phases=main  required=--fixture  controller=yes
+  artifact           owner=B12   phases=main  required=--fixture  controller=yes
+  control-recovery   owner=B13   phases=main  required=--fixture  controller=yes
+  approval-budget    owner=B16   phases=approval, budget  required=--fixture  controller=yes
+  da-runtime         owner=B18   phases=da-preflight, da-submit, da-evidence, aggregate  required=--fixture  controller=yes
+  infra-plugin       owner=B21   phases=infra:install, infra:upgrade  required=--fixture  controller=no
+  multitenant        owner=B15   phases=multitenant:authz, multitenant:two-project  required=--fixture  controller=yes
+  migration          owner=B24a  phases=main  required=--fixture  controller=no
+  package-install    owner=B25b  phases=main  required=(none)  controller=no
+
+Phase registry (scenario/phase -> owner, prerequisites, timeout):
+  env-runtime/main             owner=B07   op=discover  target=local  timeout=120s  prereq=none  effects=none
+  entry-readonly/main             owner=B04a  op=discover  target=local  timeout=120s  prereq=controller  effects=none
+  entry-readonly/live             owner=B04a  op=discover  target=local  timeout=180s  prereq=controller  effects=no task submit, no page render, no science
+  mcp-stdio/main             owner=B05   op=discover  target=local  timeout=180s  prereq=controller, launch  effects=adapter process start, no task/page/science side effect
+  submit-replay/main             owner=B08   op=submit    target=local  timeout=600s  prereq=controller, fixture  effects=one task create, idempotent replay
+  local-singlepoint/main             owner=B10   op=submit    target=local  timeout=1800s  prereq=controller, fixture  effects=one local QC task
+  local-singlepoint/live             owner=B10   op=submit    target=local  timeout=1800s  prereq=controller, fixture  effects=one local QC task
+  lsf-singlepoint/main             owner=B11   op=submit    target=remote timeout=3600s  prereq=controller, fixture  effects=one LSF submission
+  lsf-singlepoint/live             owner=B11   op=submit    target=remote timeout=3600s  prereq=controller, fixture  effects=one LSF submission
+  three-entry/main             owner=B10   op=submit    target=local  timeout=900s  prereq=controller, fixture  effects=CLI/HTTP/MCP submit the same request
+  artifact/main             owner=B12   op=read      target=local  timeout=900s  prereq=controller, fixture  effects=explicit prepare, cache-only read
+  control-recovery/main             owner=B13   op=control   target=local  timeout=1800s  prereq=controller, fixture  effects=pause, unpause, cancel, controlled restart
+  approval-budget/approval         owner=B16   op=control   target=local  timeout=600s  prereq=controller, fixture  effects=approval request/decision only
+  approval-budget/budget           owner=B17   op=control   target=local  timeout=600s  prereq=controller, fixture  effects=budget reservation/settlement only
+  da-runtime/da-preflight     owner=B18   op=discover  target=local  timeout=300s  prereq=controller, fixture  effects=none
+  da-runtime/da-submit        owner=B20a  op=submit    target=local  timeout=900s  prereq=controller, fixture  effects=one task submit
+  da-runtime/da-evidence      owner=B20b  op=read      target=local  timeout=300s  prereq=controller, fixture  effects=cache-only read
+  da-runtime/aggregate        owner=B20c  op=aggregate target=local  timeout=120s  prereq=controller, fixture  effects=none
+  infra-plugin/infra:install    owner=B21   op=control   target=local  timeout=900s  prereq=fixture  effects=plugin/adapter install
+  infra-plugin/infra:upgrade    owner=B22   op=control   target=local  timeout=900s  prereq=fixture  effects=plugin/adapter upgrade
+  multitenant/multitenant:authz owner=B15   op=control   target=local  timeout=600s  prereq=controller, fixture  effects=denied requests only
+  multitenant/multitenant:two-project owner=B23   op=control   target=local  timeout=900s  prereq=controller, fixture  effects=isolated project tasks
+  migration/main             owner=B24a  op=control   target=local  timeout=1800s  prereq=fixture  effects=export, import, backup restore
+  package-install/main             owner=B25b  op=control   target=local  timeout=1800s  prereq=none  effects=clean-environment install
+
+A/C namespaced IDs: science:* (A) / experience:* (C).
+dsh-local-singlepoint is C-owned (experience:dsh-local-singlepoint), not a 16th B scenario.
+Exit codes: 0 PASS/tool check, 1 FAIL, 2 NOT_VERIFIED, 3 usage error.
+--help/--dry-run/--check-only are tool checks, never a scenario PASS.

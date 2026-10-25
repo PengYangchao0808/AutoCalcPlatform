@@ -1,0 +1,69 @@
+{
+  "command": "PYTHONPATH=src /opt/acp2-dev/venvs/b/bin/python -m pytest tests/test_acp2_runtime_event_recovery.py -v",
+  "exit_code": 0,
+  "passed": 17,
+  "receipts": [
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "replay_from_cursor",
+      "status": "PASS",
+      "test": "test_replay_from_cursor_survives_a_process_restart"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "duplicate_event_id",
+      "status": "PASS",
+      "test": "test_duplicate_event_id_is_a_noop"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "out_of_order_terminal",
+      "status": "PASS",
+      "test": "test_out_of_order_and_newer_non_terminal_cannot_revive_terminal"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "cursor_expiry",
+      "status": "PASS",
+      "test": "test_cursor_expiry_resets_to_the_snapshot"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "expired_cursor_no_second_submit",
+      "status": "PASS",
+      "test": "test_expired_cursor_does_not_cause_a_second_submit"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "lost_cursor_no_second_submit",
+      "status": "PASS",
+      "test": "test_lost_cursor_rebuilds_state_and_dispatches_once"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "revocation",
+      "status": "PASS",
+      "test": "test_revocation_stops_delivery_mid_stream"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "session_not_authority",
+      "status": "PASS",
+      "test": "test_chat_session_cannot_claim_project_authority"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "c_record_reference_only",
+      "status": "PASS",
+      "test": "test_c_research_record_refs_are_reference_only"
+    },
+    {
+      "evidence": "pytest-fixtures.txt",
+      "rule": "rph_exit",
+      "status": "PASS",
+      "test": "test_rph_exit_after_completion_does_not_wait_cancel_or_redispatch"
+    }
+  ],
+  "schema": "acp2.b19.fixture-receipts.v1",
+  "test_file": "tests/test_acp2_runtime_event_recovery.py"
+}

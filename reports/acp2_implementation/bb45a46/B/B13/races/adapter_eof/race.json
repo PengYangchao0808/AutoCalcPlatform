@@ -1,0 +1,61 @@
+{
+  "adapter_exit": 0,
+  "adapter_pid": 750142,
+  "assertions": [],
+  "attempt": 1,
+  "budget": {
+    "cleanup_seconds": 10,
+    "cores": 1,
+    "jobs": 1,
+    "max_orca": 1,
+    "max_prepare_seconds": 30,
+    "memory_mb": 1024,
+    "walltime_s": 60
+  },
+  "budget_row": {
+    "budget": {
+      "cleanup_seconds": 10,
+      "cores": 1,
+      "jobs": 1,
+      "max_orca": 1,
+      "max_prepare_seconds": 30,
+      "memory_mb": 1024,
+      "walltime_s": 60
+    },
+    "orca_pids": [
+      750272
+    ],
+    "pid": 750185,
+    "race_id": "adapter_eof",
+    "task_ref": "20261023_073417_004_singlepoint",
+    "timeout_seconds": 120
+  },
+  "evidence": "races/adapter_eof",
+  "fault": "mcp_adapter_eof_sigterm",
+  "final_status": "completed",
+  "finished_at": null,
+  "fixture": "ethanol-wb97mv-def2svp",
+  "input_sha256": "0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404",
+  "job_started_events": 1,
+  "kind": "local",
+  "method": {
+    "basis": "def2-SVP",
+    "engine": "orca",
+    "functional": "wB97M-V"
+  },
+  "orca_max_concurrent": 1,
+  "orca_pids": [
+    750272
+  ],
+  "pid": 750185,
+  "pid_alive_at_adapter_exit": true,
+  "race_id": "adapter_eof",
+  "running_at_adapter_exit": true,
+  "started_at": "2026-10-22T23:34:16.871653Z",
+  "status": "NOT_VERIFIED",
+  "task_count_after_reconnect": 21,
+  "task_count_at_running": 21,
+  "task_count_before": 20,
+  "task_ref": "20261023_073417_004_singlepoint",
+  "timeout_seconds": 120
+}

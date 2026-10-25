@@ -1,0 +1,24 @@
+{
+  "arithmetic": "1800 + 300 + 120 + 60 + 120",
+  "client_request_timeout_seconds": 2400.0,
+  "derivation_rule": "Arithmetic sum of B07 frozen maxima only; not derived from measured actuals and not a fixed 40m.",
+  "derived_seconds": 2400,
+  "effective_harness_timeout_seconds": 2400.0,
+  "fixture_id": "fx-lsf-singlepoint-v1",
+  "formula": "max_queue_wait_seconds + max_run_seconds + max_prepare_seconds + cleanup_seconds + margin_seconds",
+  "maxima": {
+    "cleanup_seconds": 60,
+    "margin_seconds": 120,
+    "max_prepare_seconds": 120,
+    "max_queue_wait_seconds": 1800,
+    "max_run_seconds": 300
+  },
+  "note": "The client request timeout is 2400 s (40m) while the harness timeout also includes max_queue_wait_seconds. A client timeout would be recorded NOT_VERIFIED, not FAIL, and must never trigger a resubmit.",
+  "registry": "reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+  "registry_lsf_timeout_seconds": 2400,
+  "registry_matches": true,
+  "registry_sha256": "4f60ca7d302e0bf05bb59f391d2130772a3442837250e5ceab852975d453e202",
+  "row_matches": true,
+  "row_scenario_timeout_seconds": 2400,
+  "schema": "acp2.b11.timeout-derivation.v1"
+}

@@ -1,0 +1,146 @@
+{
+  "artifact_count": 27,
+  "artifacts": [
+    {
+      "bytes": 11949,
+      "path": "REPORT.md",
+      "sha256": "fe4995b3d4892b3fc411c2e61fd50f877dfe17476bb442f1b666ab6a7db01c8b"
+    },
+    {
+      "bytes": 36722,
+      "path": "evidence/baseline-20261019/REPORT.md",
+      "sha256": "5b86a9ddb275772bd6099240a25970a34d1435bd8b2d616a9a936dbd98437515"
+    },
+    {
+      "bytes": 800,
+      "path": "evidence/baseline-20261019/baseline.json",
+      "sha256": "237705c132e3cfb2e6800d7355398e7285c1a49852c0b8db093f58b8004a3eaa"
+    },
+    {
+      "bytes": 2825,
+      "path": "evidence/baseline-20261019/commands.json",
+      "sha256": "24a08012e06611f29cfe8d151c6087b9c3f07b44d9cebcfefa3c7e439983423b"
+    },
+    {
+      "bytes": 2491,
+      "path": "evidence/baseline-20261019/metrics.json",
+      "sha256": "8d547342868ba224597633e420f78f24daf391403289ff71305fb83c31165eeb"
+    },
+    {
+      "bytes": 21186,
+      "path": "evidence/baseline.json",
+      "sha256": "ba6717d913c3b83591e8226d1f9390f90554d73ba6a7636af27f948cebfd25da"
+    },
+    {
+      "bytes": 10979,
+      "path": "evidence/collection.log",
+      "sha256": "0da537030bc62146635024261126a19c25a742aa0fd3fd09c087a059d272bb80"
+    },
+    {
+      "bytes": 593,
+      "path": "evidence/config-sources.log",
+      "sha256": "0f8f8b3e0440f18d1dffe7a0ae992732b83e857b4c5fa1b95a65b1237da3bcd0"
+    },
+    {
+      "bytes": 8821,
+      "path": "evidence/fixtures.log",
+      "sha256": "b47630d1da032a6d7eb74b3294684c96d6b40b131219c7796970bbae2d8a432d"
+    },
+    {
+      "bytes": 499,
+      "path": "evidence/parsers.log",
+      "sha256": "5b4f8385fd849524133ba79f4d3ea3bc82c6b5cdaeb6adc9969b6742d8440341"
+    },
+    {
+      "bytes": 399,
+      "path": "evidence/qc-discovery.log",
+      "sha256": "fc5445b8a157b6412224ce795bbfe9a7696f4295def9f715878a994ab259f0c9"
+    },
+    {
+      "bytes": 1058,
+      "path": "evidence/qc-doctor.log",
+      "sha256": "b37d44ef23280ae9db6036516651d1be47ddf3a7136bf7048c6504b768584e4d"
+    },
+    {
+      "bytes": 203,
+      "path": "evidence/report_sha256.txt",
+      "sha256": "7a975927e0dd9f2dcde3f417499773f7b382e9655831695a78c943186a97437e"
+    },
+    {
+      "bytes": 3312,
+      "path": "evidence/t39-guards.log",
+      "sha256": "c081d45009e03d027c9d6df7c5c1db3017c473457c0fa73d8b6d94a91a048c4f"
+    },
+    {
+      "bytes": 11275,
+      "path": "evidence/t39-nonslow.log",
+      "sha256": "748c64b41b776e826d9e1ccf72f6e9190e1f8eb3c443239ae24b0317ff967089"
+    },
+    {
+      "bytes": 4903,
+      "path": "evidence/verification.log",
+      "sha256": "d2a4fb6ccc8244124a55c16abae5cb134eb644684bb30504377743a3dc40b0a0"
+    },
+    {
+      "bytes": 1138,
+      "path": "evidence/versions.log",
+      "sha256": "c6d4d4ffda47d712ca760425c11045a527b09e7e9a074a1d1576d53562a72f73"
+    },
+    {
+      "bytes": 11551,
+      "path": "four_combinations/F0_S0.json",
+      "sha256": "a04a36d47f6da31967551f754b37aee4728198772140b3ba7faeef2067145faf"
+    },
+    {
+      "bytes": 11551,
+      "path": "four_combinations/F0_S1.json",
+      "sha256": "4c43ce2ac483fb3650ff97ae4547209e1db50e45fe51148462c0dcccc5392472"
+    },
+    {
+      "bytes": 11551,
+      "path": "four_combinations/F1_S0.json",
+      "sha256": "2f461aa33635f2146cb9e5efda9f3ea6c2aba8cb9e21cd0d7a4fed4e8469e543"
+    },
+    {
+      "bytes": 11551,
+      "path": "four_combinations/F1_S1.json",
+      "sha256": "cb56b400347e0a93d1483403c1317d32f409d8af8b827ce2b0d264d575993d0d"
+    },
+    {
+      "bytes": 445,
+      "path": "four_combinations/summary.json",
+      "sha256": "a119f0e18b1601efe3fc3ac3a75c4a514c0669ab0e04e9b0753f8461e579e411"
+    },
+    {
+      "bytes": 12121,
+      "path": "harness-contract.md",
+      "sha256": "f46c16526e1b20d71cd666548a9dae15310f71461665dfd390bc5e8dd89512b9"
+    },
+    {
+      "bytes": 684,
+      "path": "real_environment/lsf-singlepoint.json",
+      "sha256": "44d8a4b4b35ae81adcbea6ef34309f1f56b85bb63201c6ccfa4cc94d8483b1c4"
+    },
+    {
+      "bytes": 681,
+      "path": "real_environment/m1-singlepoint.json",
+      "sha256": "0858b9fd044ed12036f52d1c7d54aa0d05c657630fdb998b36a34fed7f9159c7"
+    },
+    {
+      "bytes": 194,
+      "path": "real_environment/summary.json",
+      "sha256": "9ea3dd7a53b41152b869d8a462708a30c35535ea055e992a2694e1a8ed719e6e"
+    },
+    {
+      "bytes": 15078,
+      "path": "support-matrix.md",
+      "sha256": "53701177b1fbfc2447383231fcaa75db77b64afdaf05b4c74f9db5fd192f1cc0"
+    }
+  ],
+  "generated_by": "task-43",
+  "generated_on": "2026-10-20T21:12:07.704903+00:00",
+  "revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
+  "schema": "acp.remediation.evidence_manifest.v1",
+  "self_excluded": true,
+  "status": "BATCH_COMPLETE_SCOPED"
+}

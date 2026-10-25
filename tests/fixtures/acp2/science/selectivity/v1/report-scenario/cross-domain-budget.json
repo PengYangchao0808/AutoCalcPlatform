@@ -1,0 +1,48 @@
+{
+  "cumulative": {
+    "qc_calls": 14,
+    "steps": 8,
+    "task_refs": 1,
+    "wall_seconds": null
+  },
+  "previous_cumulative": null,
+  "previous_run_ids": [],
+  "record_path": "cross-domain-budget.json",
+  "run_id": "constructed-run-0001",
+  "subrows": [
+    {
+      "domain": "nmr",
+      "qc_count": 0,
+      "reused": true,
+      "reused_artifacts": [
+        "A-24a:nmr-comparison:constructed"
+      ],
+      "run_id": "constructed-run-0001",
+      "step_count": 0,
+      "task_ref": "task.nmr.reused",
+      "task_ref_count": 0
+    },
+    {
+      "domain": "thermo",
+      "qc_count": 0,
+      "reused": true,
+      "reused_artifacts": [
+        "A-24b:ensemble-thermo:constructed"
+      ],
+      "run_id": "constructed-run-0001",
+      "step_count": 0,
+      "task_ref": "task.thermo.reused",
+      "task_ref_count": 0
+    },
+    {
+      "domain": "selectivity",
+      "qc_count": 14,
+      "reused": false,
+      "reused_artifacts": [],
+      "run_id": "constructed-run-0001",
+      "step_count": 8,
+      "task_ref": "task.selectivity.constructed",
+      "task_ref_count": 1
+    }
+  ]
+}

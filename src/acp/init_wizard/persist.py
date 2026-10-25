@@ -5,18 +5,25 @@ Read-modify-writes ONLY the raw target config file — never the merged
 (tmp + ``os.replace``), preceded by a timestamped ``.bak`` backup, and
 guarded by a writability pre-flight so a read-only target aborts before
 anything is touched.
+
+The I/O primitives (pre-flight, restrictive backup, atomic replace) are the
+single Services-owner implementation in
+:mod:`acp_services.contracts.config_plan`; this module keeps the wizard-facing
+YAML serialization, the ``InitAbort`` message contract and the
+``_backup_timestamp`` clock seam, and maps the structured write failure back to
+the established user-facing messages.
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from acp_services.contracts.config_plan import ConfigWriteError, write_config_file
 
 logger = logging.getLogger(__name__)
 
@@ -75,24 +82,9 @@ def _backup_timestamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def _backup_existing(path: Path) -> Path:
-    """Copy *path* to ``<name>.bak-<ts>`` (``-N`` on same-second collision).
-
-    Args:
-        path: Existing target file to back up.
-
-    Returns:
-        The backup file path actually used.
-    """
-    stamp = _backup_timestamp()
-    backup = path.with_name(f"{path.name}.bak-{stamp}")
-    counter = 0
-    while backup.exists():
-        counter += 1
-        backup = path.with_name(f"{path.name}.bak-{stamp}-{counter}")
-    shutil.copy2(path, backup)
-    logger.info("已备份 %s -> %s", path, backup)
-    return backup
+def _dump_yaml(data: dict[str, Any]) -> str:
+    """Serialise the raw target mapping in the wizard's established style."""
+    return str(yaml.dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False))
 
 
 def save_target(path: Path, data: dict[str, Any], mode: int | None = None) -> None:
@@ -118,33 +110,22 @@ def save_target(path: Path, data: dict[str, Any], mode: int | None = None) -> No
         InitAbort: On failed pre-flight, or any OSError during
             backup/tmp-write/chmod/replace (tmp file is cleaned up).
     """
-    if path.exists():
-        if not os.access(path, os.W_OK):
-            raise InitAbort(f"目标文件不可写：{path}（权限拒绝）")
-        effective_mode = mode if mode is not None else path.stat().st_mode & 0o777
-    else:
-        parent = path.parent
-        if not parent.is_dir() or not os.access(parent, os.W_OK):
-            raise InitAbort(f"目标目录不可写或不存在：{parent}")
-        effective_mode = 0o644 if mode is None else mode
-
-    text = yaml.dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False)
-    tmp_path = path.with_name(f"{path.name}.tmp-{os.getpid()}")
     try:
-        if path.exists():
-            _backup_existing(path)
-        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
-        os.chmod(tmp_path, effective_mode)
-        os.replace(tmp_path, path)
-    except OSError as exc:
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except OSError:
-            logger.warning("临时文件清理失败：%s", tmp_path)
-        raise InitAbort(f"写入配置文件失败：{path}（errno {exc.errno}: {exc.strerror}）") from exc
-    logger.info("已写入配置 %s（mode=%04o）", path, effective_mode)
+        write_config_file(
+            path,
+            data,
+            mode=mode,
+            dumps=_dump_yaml,
+            timestamp=_backup_timestamp(),
+        )
+    except ConfigWriteError as exc:
+        if exc.kind == "file_not_writable":
+            raise InitAbort(f"目标文件不可写：{path}（权限拒绝）") from exc
+        if exc.kind == "dir_not_writable":
+            raise InitAbort(f"目标目录不可写或不存在：{exc.dir_path}") from exc
+        raise InitAbort(
+            f"写入配置文件失败：{path}（errno {exc.errno}: {exc.strerror}）"
+        ) from exc
 
 
 def set_executable_path(data: dict[str, Any], name: str, path: Path) -> None:

@@ -1,0 +1,1939 @@
+{
+  "compatibility_scope": {
+    "accepted_schema_versions": [
+      1
+    ],
+    "cccp_scientific_semantics_owner": "cccp",
+    "contract_artifact_count": 14,
+    "contract_family": "acp2.science",
+    "declared_major": 1,
+    "evidence_contract_versions": [
+      1
+    ],
+    "evidence_historical_read_schema_versions": [
+      0,
+      1
+    ],
+    "historical_read": "preserve unknown fields without execution or recovery eligibility",
+    "json_structure_owner": "contract",
+    "max_reader_schema_version": 1,
+    "min_reader_schema_version": 1,
+    "new_execution_request": "reject unsupported execution fields before delegation",
+    "not_claimed": [
+      "installed, available or verified state (projections only)",
+      "platform job, queue, account or price state",
+      "receipt shape (B01-owned)",
+      "real scientific execution"
+    ],
+    "planned_fixtures": "recorded read-only; no placeholder files created",
+    "runtime_platform_constraints_owner": "runtime",
+    "unknown_major_version": "never_execute"
+  },
+  "contract_files": [
+    {
+      "field_owner": "A",
+      "fields": {
+        "capability_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when string does not match ^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "compatibility": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/compatibility)",
+          "unit": null
+        },
+        "completion_checks": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "execution_semantics": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/executionSemantics)",
+          "unit": null
+        },
+        "extensions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent",
+          "required": false,
+          "serialization_form": "object",
+          "unit": null
+        },
+        "implementation_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when string does not match ^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "input_schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/schemaReference)",
+          "unit": null
+        },
+        "limitations": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "output_schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/schemaReference)",
+          "unit": null
+        },
+        "preconditions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "projections": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/projections)",
+          "unit": null
+        },
+        "provenance_requirements": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/provenanceRequirements)",
+          "unit": null
+        },
+        "schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from \"acp2.science.capability\"",
+          "required": true,
+          "serialization_form": "const \"acp2.science.capability\"",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        },
+        "unknown_field_policy": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/unknownFieldPolicy)",
+          "unit": null
+        },
+        "validation_layers": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/validationLayers)",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+      "schema_id": "https://acp.local/acp2/science/capability.schema.json",
+      "sha256": "39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "binding_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when string does not match ^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "binding_output": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A+cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/bindingOutput)",
+          "unit": null
+        },
+        "compatibility": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/compatibility)",
+          "unit": null
+        },
+        "context_contract": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/contextContract)",
+          "unit": null
+        },
+        "delegation": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/delegation)",
+          "unit": null
+        },
+        "extensions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent",
+          "required": false,
+          "serialization_form": "object",
+          "unit": null
+        },
+        "preflight": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/preflight)",
+          "unit": null
+        },
+        "request_contract": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/requestContract)",
+          "unit": null
+        },
+        "result_contract": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/resultContract)",
+          "unit": null
+        },
+        "schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from \"acp2.science.task_binding\"",
+          "required": true,
+          "serialization_form": "const \"acp2.science.task_binding\"",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        },
+        "scientific_precondition_error": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/scientificPreconditionError)",
+          "unit": null
+        },
+        "selection": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/selection)",
+          "unit": null
+        },
+        "unknown_field_policy": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/unknownFieldPolicy)",
+          "unit": null
+        },
+        "unsupported_capability_error": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/unsupportedCapabilityError)",
+          "unit": null
+        },
+        "validation_layers": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/validationLayers)",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "schema_id": "https://acp.local/acp2/science/task-binding.schema.json",
+      "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "code": {
+          "default": null,
+          "enum_values": [
+            "unknown_major_version",
+            "duplicate_capability_id",
+            "unknown_implementation",
+            "disabled_provider",
+            "unavailable_binary",
+            "invalid_scientific_input"
+          ],
+          "enums": [
+            "unknown_major_version",
+            "duplicate_capability_id",
+            "unknown_implementation",
+            "disabled_provider",
+            "unavailable_binary",
+            "invalid_scientific_input"
+          ],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value is outside [\"unknown_major_version\", \"duplicate_capability_id\", \"unknown_implementation\", \"disabled_provider\", \"unavailable_binary\", \"invalid_scientific_input\"]",
+          "required": true,
+          "serialization_form": "enum",
+          "unit": null
+        },
+        "detail": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object",
+          "unit": null
+        },
+        "detail_required": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from true",
+          "required": true,
+          "serialization_form": "const true",
+          "unit": null
+        },
+        "layer": {
+          "default": null,
+          "enum_values": [
+            "structure",
+            "scientific",
+            "platform"
+          ],
+          "enums": [
+            "structure",
+            "scientific",
+            "platform"
+          ],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value is outside [\"structure\", \"scientific\", \"platform\"]",
+          "required": true,
+          "serialization_form": "enum",
+          "unit": null
+        },
+        "message": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent; rejected when string does not match \\S",
+          "required": false,
+          "serialization_form": "string | null",
+          "unit": null
+        },
+        "path": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent; rejected when string does not match \\S",
+          "required": false,
+          "serialization_form": "string | null",
+          "unit": null
+        },
+        "retryable": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "boolean",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+      "schema_id": "https://acp.local/acp2/science/errors.schema.json",
+      "sha256": "ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "atom_mapping": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/atom_mapping)",
+          "unit": null
+        },
+        "bond_changes": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "conditions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/conditions)",
+          "unit": null
+        },
+        "input_uncertainty": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/input_uncertainty)",
+          "unit": null
+        },
+        "left": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "reaction_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "reaction_scope": {
+          "default": null,
+          "enum_values": [
+            "net_reaction",
+            "elementary_step"
+          ],
+          "enums": [
+            "net_reaction",
+            "elementary_step"
+          ],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value is outside [\"net_reaction\", \"elementary_step\"]",
+          "required": true,
+          "serialization_form": "enum",
+          "unit": null
+        },
+        "right": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "schema_id": "https://acp.local/acp2/science/reaction.schema.json",
+      "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "claim_status_vocabulary": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from [\"supported\", \"refuted\", \"inconclusive\", \"not_evaluated\"]",
+          "required": true,
+          "serialization_form": "const [\"supported\", \"refuted\", \"inconclusive\", \"not_evaluated\"]",
+          "unit": null
+        },
+        "comparison_conditions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/comparison_conditions)",
+          "unit": null
+        },
+        "hypothesis_refs": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[string]",
+          "unit": null
+        },
+        "question_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "question_type": {
+          "default": null,
+          "enum_values": [
+            "path_connectivity",
+            "activation_energy"
+          ],
+          "enums": [
+            "path_connectivity",
+            "activation_energy"
+          ],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value is outside [\"path_connectivity\", \"activation_energy\"]",
+          "required": true,
+          "serialization_form": "enum",
+          "unit": null
+        },
+        "required_evidence_types": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/question.schema.json",
+      "schema_id": "https://acp.local/acp2/science/question.schema.json",
+      "sha256": "513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "claims": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "execution": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/ExecutionFacts)",
+          "unit": null
+        },
+        "limitations": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "provenance_digest": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent",
+          "required": false,
+          "serialization_form": "object ($ref #/$defs/Digest)",
+          "unit": null
+        },
+        "report_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        },
+        "subject": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/Subject)",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "schema_id": "https://acp.local/acp2/science/evidence.schema.json",
+      "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "conditions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/Conditions)",
+          "unit": null
+        },
+        "derivation": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object",
+          "unit": null
+        },
+        "input": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/InputIdentity)",
+          "unit": null
+        },
+        "limitations": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent; rejected when an item violates its item schema",
+          "required": false,
+          "serialization_form": "array[string]",
+          "unit": null
+        },
+        "provenance_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "result_kind": {
+          "default": null,
+          "enum_values": [
+            "electronic_structure",
+            "pure_analysis"
+          ],
+          "enums": [
+            "electronic_structure",
+            "pure_analysis"
+          ],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value is outside [\"electronic_structure\", \"pure_analysis\"]",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        },
+        "science_identity": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent; rejected when string does not match ^v2:[0-9a-f]{32}$",
+          "required": false,
+          "serialization_form": "string | null",
+          "unit": null
+        },
+        "software": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/SoftwareIdentity)",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+      "schema_id": "https://acp.local/acp2/science/provenance.schema.json",
+      "sha256": "20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "alternatives": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "applicability": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/Applicability)",
+          "unit": null
+        },
+        "edges": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "limits": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/Limits)",
+          "unit": null
+        },
+        "recipe_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        },
+        "science_identity": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent; rejected when string does not match ^v2:[0-9a-f]{32}$",
+          "required": false,
+          "serialization_form": "string | null",
+          "unit": null
+        },
+        "steps": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "title": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent",
+          "required": false,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "validators": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        }
+      },
+      "kind": "json_schema",
+      "path": "docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "schema_id": "https://acp.local/acp2/science/recipe.schema.json",
+      "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {},
+      "fields_note": "Normative contract prose; it defines semantics and rules rather than a serialized instance with top-level fields.",
+      "kind": "contract_prose",
+      "path": "docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+      "sha256": "53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {},
+      "fields_note": "Normative contract prose; it defines semantics and rules rather than a serialized instance with top-level fields.",
+      "kind": "contract_prose",
+      "path": "docs/reference/next-change/acp2-contracts/science/evidence-semantics.md",
+      "sha256": "1cc0aace3580b8ddce196f719d5c88a434b24203a11bf73cb9e7c5afa414806f",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "capability_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when string does not match ^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "compatibility": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/compatibility)",
+          "unit": null
+        },
+        "completion_checks": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "execution_semantics": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/executionSemantics)",
+          "unit": null
+        },
+        "extensions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": true,
+          "owner": "A",
+          "rejection_condition": "accepted when absent",
+          "required": false,
+          "serialization_form": "object",
+          "unit": null
+        },
+        "implementation_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when string does not match ^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "input_schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/schemaReference)",
+          "unit": null
+        },
+        "limitations": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "output_schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/schemaReference)",
+          "unit": null
+        },
+        "preconditions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when an item violates its item schema",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "projections": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/projections)",
+          "unit": null
+        },
+        "provenance_requirements": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/provenanceRequirements)",
+          "unit": null
+        },
+        "schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from \"acp2.science.capability\"",
+          "required": true,
+          "serialization_form": "const \"acp2.science.capability\"",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        },
+        "unknown_field_policy": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/unknownFieldPolicy)",
+          "unit": null
+        },
+        "validation_layers": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/validationLayers)",
+          "unit": null
+        }
+      },
+      "kind": "example_instance",
+      "path": "docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json",
+      "sha256": "8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+      "validates_against": "docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "binding_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when string does not match ^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "binding_output": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A+cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/bindingOutput)",
+          "unit": null
+        },
+        "compatibility": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/compatibility)",
+          "unit": null
+        },
+        "context_contract": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/contextContract)",
+          "unit": null
+        },
+        "delegation": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/delegation)",
+          "unit": null
+        },
+        "preflight": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/preflight)",
+          "unit": null
+        },
+        "request_contract": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/requestContract)",
+          "unit": null
+        },
+        "result_contract": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "cccp",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/resultContract)",
+          "unit": null
+        },
+        "schema": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from \"acp2.science.task_binding\"",
+          "required": true,
+          "serialization_form": "const \"acp2.science.task_binding\"",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing; rejected when value differs from 1",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        },
+        "scientific_precondition_error": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/scientificPreconditionError)",
+          "unit": null
+        },
+        "selection": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/selection)",
+          "unit": null
+        },
+        "unknown_field_policy": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/unknownFieldPolicy)",
+          "unit": null
+        },
+        "unsupported_capability_error": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/unsupportedCapabilityError)",
+          "unit": null
+        },
+        "validation_layers": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/validationLayers)",
+          "unit": null
+        }
+      },
+      "kind": "example_instance",
+      "path": "docs/reference/next-change/acp2-contracts/science/examples/task-binding-singlepoint.json",
+      "sha256": "de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+      "validates_against": "docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "atom_mapping": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/atom_mapping)",
+          "unit": null
+        },
+        "bond_changes": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "conditions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/conditions)",
+          "unit": null
+        },
+        "input_uncertainty": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/input_uncertainty)",
+          "unit": null
+        },
+        "left": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "reaction_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "reaction_scope": {
+          "default": null,
+          "enum_values": [
+            "net_reaction",
+            "elementary_step"
+          ],
+          "enums": [
+            "net_reaction",
+            "elementary_step"
+          ],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "value",
+          "unit": null
+        },
+        "right": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        }
+      },
+      "kind": "example_instance",
+      "path": "docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+      "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
+      "validates_against": "docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "version": 1
+    },
+    {
+      "field_owner": "A",
+      "fields": {
+        "claim_status_vocabulary": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "value",
+          "unit": null
+        },
+        "comparison_conditions": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "object ($ref #/$defs/comparison_conditions)",
+          "unit": null
+        },
+        "hypothesis_refs": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "question_id": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "string",
+          "unit": null
+        },
+        "question_type": {
+          "default": null,
+          "enum_values": [
+            "path_connectivity",
+            "activation_energy"
+          ],
+          "enums": [
+            "path_connectivity",
+            "activation_energy"
+          ],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "value",
+          "unit": null
+        },
+        "required_evidence_types": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "array[]",
+          "unit": null
+        },
+        "schema_version": {
+          "default": null,
+          "enum_values": [],
+          "enums": [],
+          "optional": false,
+          "owner": "A",
+          "rejection_condition": "rejected when missing",
+          "required": true,
+          "serialization_form": "integer",
+          "unit": null
+        }
+      },
+      "kind": "example_instance",
+      "path": "docs/reference/next-change/acp2-contracts/science/examples/question-activation.json",
+      "sha256": "c806d87bbd57bae2c00b3e4cdf915fdf79f53c55da30377d5482115ff1f98a62",
+      "validates_against": "docs/reference/next-change/acp2-contracts/science/question.schema.json",
+      "version": 1
+    }
+  ],
+  "contract_set": "acp2.science",
+  "generated_by": "A-01b",
+  "handoff_id": "H1",
+  "handoff_version": 1,
+  "negative_fixtures": [
+    {
+      "expected_error": "unknown_major_version",
+      "expected_result": "rejected and never executed",
+      "path": "tests/fixtures/acp2/science/contracts/capability_unknown_version.json",
+      "sha256": "8f13e9791a962b0d5bcd8c9ac31ce1b4933033aac55d1a9f97a713b09f96178b",
+      "test": "test_capability_unknown_version_is_unknown_major_version"
+    },
+    {
+      "expected_error": "duplicate_capability_id",
+      "expected_result": "registry collection conflict reported",
+      "path": "tests/fixtures/acp2/science/contracts/capability_duplicate_id.json",
+      "sha256": "69614a37f4a1b5dabbd0bdd1cc53fa9f905943bd7182aef03d3b15aca44f9b77",
+      "test": "test_capability_duplicate_id_is_duplicate_capability_id"
+    },
+    {
+      "expected_error": "unknown_implementation",
+      "expected_result": "unsupported provider rejected",
+      "path": "tests/fixtures/acp2/science/contracts/capability_unsupported_provider.json",
+      "sha256": "295fe8a8986a7de5cf302b52e343a3df880b4720b73af74d3976628d4b8d307a",
+      "test": "test_capability_unsupported_provider_is_unknown_implementation"
+    },
+    {
+      "expected_error": "unsupported_execution_field",
+      "expected_result": "rejected for execution before delegation",
+      "path": "tests/fixtures/acp2/science/contracts/capability_unknown_execution_field.json",
+      "sha256": "26b796722f8cb9d6c5c770d64271f6563d36e7465a863ef0190b362c0ac089cb",
+      "test": "test_capability_unknown_execution_field_rejected_for_execution"
+    },
+    {
+      "expected_error": null,
+      "expected_result": "readable through the historical adapter; execution_eligible=false; recovery_eligible=false",
+      "path": "tests/fixtures/acp2/science/contracts/historical_read_unknown_field.json",
+      "sha256": "56229fab273a282ef979574cbf4ba069902a369969b8238d51100c6e1f63cba0",
+      "test": "test_capability_historical_unknown_field_readable_but_not_eligible"
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_error": "missing_source_for_supported_claim",
+      "expected_result": "rejected: supported claim without a digested source",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/missing_irc_source.json",
+      "sha256": "0afb0a78238925ca8c98c4a4d06091308dbd263c686cb9424bdd06ffb82acf18",
+      "test": "test_supported_with_missing_source_is_rejected",
+      "version": 1
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_error": "digest_mismatch",
+      "expected_result": "rejected: declared digest does not match the artifact",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/digest_mismatch.json",
+      "sha256": "e0c074df029192b03f2f6b347382abf70ddc97bde01b29c6848e7031294743ec",
+      "test": "test_supported_with_digest_mismatch_is_rejected",
+      "version": 1
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_error": "partial_output_cannot_support",
+      "expected_result": "rejected: blocking partial_output check forbids support",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/partial_output.json",
+      "sha256": "fe745ab27d3eb1f80e328ad3e2578c5b4c50257345e85e89bb5533c406733d2f",
+      "test": "test_partial_output_cannot_support",
+      "version": 1
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_error": "unknown_claim_status",
+      "expected_result": "rejected: status is outside the frozen four-value enum",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/unknown_status.json",
+      "sha256": "8f85d34434391e254e3e80e3b517bd5ff0022547b5595cc893fd5e90e1715e66",
+      "test": "test_unknown_claim_status_rejected",
+      "version": 1
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_error": "model_text_is_not_a_validator",
+      "expected_result": "rejected: free prose / llm: namespace is not a validator",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/model_text_validator.json",
+      "sha256": "cd6778e0beeda2e36f23d4cc348f58dc9d6ebdc3178db5a2be078cc255a7fa13",
+      "test": "test_model_text_cannot_impersonate_validator",
+      "version": 1
+    }
+  ],
+  "planned_fixtures": [
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/reaction/atom_id_missing.json",
+      "rule": "R-01",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/reaction/atom_id_duplicate.json",
+      "rule": "R-01",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/reaction/element_mismatch.json",
+      "rule": "R-03",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/reaction/invented_stereo.json",
+      "rule": "R-04",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/reaction/uninterpretable_input.json",
+      "rule": "R-05",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/reaction/representable_not_applicable.json",
+      "rule": "R-05",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/reaction/unsupported_cdxml.json",
+      "rule": "R-07",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/question/job_status.json",
+      "rule": "R-08",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/question/role.json",
+      "rule": "R-08",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/question/cost.json",
+      "rule": "R-08",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/question/price.json",
+      "rule": "R-08",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/question/unknown_claim_status.json",
+      "rule": "R-09",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/question/missing_standard_state.json",
+      "rule": "R-10",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    },
+    {
+      "exists": false,
+      "path": "tests/fixtures/acp2/science/contracts/question/incompatible_method.json",
+      "rule": "R-10",
+      "source": "A-02b semantic-rules.md §2.1 planned fixtures",
+      "status": "planned"
+    }
+  ],
+  "positive_fixtures": [
+    {
+      "contract": "docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+      "expected_result": "accepted",
+      "path": "docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json",
+      "sha256": "8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+      "test": "test_capability_example_accepted"
+    },
+    {
+      "contract": "docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+      "expected_result": "accepted",
+      "path": "tests/fixtures/acp2/science/contracts/capability_valid.json",
+      "sha256": "8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+      "test": "test_capability_valid_fixture_accepted"
+    },
+    {
+      "contract": "docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "expected_result": "accepted",
+      "path": "docs/reference/next-change/acp2-contracts/science/examples/task-binding-singlepoint.json",
+      "sha256": "de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+      "test": "test_task_binding_singlepoint_example_valid"
+    },
+    {
+      "contract": "docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+      "expected_result": "the six error_catalog examples and the three named error records are accepted",
+      "path": "docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+      "sha256": "ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
+      "test": "test_error_records_validate_against_errors_schema"
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_result": "accepted",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/supported_valid.json",
+      "sha256": "e86d0784b22815629df3f994d962ba7c6e041a39877f29203edc6ab0d9e83add",
+      "test": "test_supported_claim_with_digested_source_accepted",
+      "version": 1
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_result": "accepted",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/completed_but_inconclusive.json",
+      "sha256": "f47f8da19a0e572af55f6ba4064acee8a04afc4b127d580ea1d6eeedfb564867",
+      "test": "test_completed_but_inconclusive_accepted",
+      "version": 1
+    },
+    {
+      "compatibility": "acp2.science schema_version 1; readers 1..1; historical evidence v0 read-only",
+      "contract": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "expected_result": "readable through the historical adapter; execution_eligible=false; recovery_eligible=false",
+      "path": "tests/fixtures/acp2/science/contracts/evidence/historical_schema_payload.json",
+      "sha256": "c51381ff773c034242452fbe897a56a1cbe04cf6dd7335e70d592038b15129ca",
+      "test": "test_historical_schema_payload_readable_without_eligibility",
+      "version": 1
+    }
+  ],
+  "receipt_protocol_gap": {
+    "deferred_samples": [
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-valid.json",
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-invalid.json"
+    ],
+    "delivery_trigger": "Deliver the two samples immediately when B01 publishes the draft schema; do not wait for B05 or A17.",
+    "missing_artifact": "acceptance-result.schema.json",
+    "missing_contract": "acp2.acceptance.v1",
+    "reason": "B01 has not published the draft receipt schema. A does not define a competing receipt schema and therefore cannot validate samples.",
+    "samples_delivered": false,
+    "status": "NOT_VERIFIED"
+  },
+  "unit_declarations": [
+    {
+      "contract": "question.schema.json",
+      "field": "comparison_conditions.energy_unit",
+      "unit": "hartree | kcal_per_mol | kj_per_mol"
+    },
+    {
+      "contract": "question.schema.json",
+      "field": "comparison_conditions.temperature_k",
+      "unit": "kelvin"
+    },
+    {
+      "contract": "question.schema.json",
+      "field": "comparison_conditions.pressure_pa",
+      "unit": "pascal"
+    },
+    {
+      "contract": "reaction.schema.json",
+      "field": "conditions.temperature_k",
+      "unit": "kelvin"
+    },
+    {
+      "contract": "reaction.schema.json",
+      "field": "conditions.pressure_pa",
+      "unit": "pascal"
+    },
+    {
+      "contract": "provenance.schema.json",
+      "field": "conditions.temperature_kelvin",
+      "unit": "kelvin"
+    },
+    {
+      "contract": "provenance.schema.json",
+      "field": "conditions.pressure_pascal",
+      "unit": "pascal"
+    },
+    {
+      "contract": "provenance.schema.json",
+      "field": "input.artifacts[].units",
+      "unit": "explicit unit string (for example hartree, kJ.mol-1, cm-1, angstrom, kelvin)"
+    },
+    {
+      "contract": "evidence.schema.json",
+      "field": "claims[].source_refs[].units",
+      "unit": "explicit unit string (for example hartree, kJ.mol-1, cm-1, angstrom, kelvin)"
+    }
+  ]
+}

@@ -1,0 +1,708 @@
+{
+  "$defs": {
+    "bindingMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "capability_id": {
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "context_serialized": {
+          "const": false
+        },
+        "delegation_target": {
+          "pattern": "^cccp\\.calculation\\.run_[a-z0-9_]+$",
+          "type": "string"
+        },
+        "implementation_id": {
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "type": "string"
+        },
+        "request_contract_ref": {
+          "const": "cccp.calculation.requests#TaskRequest"
+        },
+        "request_schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "resolved_task_kind": {
+          "$ref": "#/$defs/taskKind"
+        },
+        "result_contract_ref": {
+          "const": "cccp.calculation.results#TaskResult"
+        },
+        "result_schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "selection_mode": {
+          "enum": [
+            "capability",
+            "existing_task_kind"
+          ]
+        }
+      },
+      "required": [
+        "selection_mode",
+        "capability_id",
+        "implementation_id",
+        "resolved_task_kind",
+        "delegation_target",
+        "request_contract_ref",
+        "request_schema_version",
+        "result_contract_ref",
+        "result_schema_version",
+        "context_serialized"
+      ],
+      "type": "object"
+    },
+    "bindingOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_metadata": {
+          "$ref": "#/$defs/bindingMetadata"
+        },
+        "request": {
+          "additionalProperties": true,
+          "description": "Serialized TaskRequest (cccp.calculation.requests, schema_version 1). Its authoritative shape is defined by TaskRequest.to_dict/from_dict and is deliberately not redefined here.",
+          "type": "object"
+        },
+        "request_json_validated_by": {
+          "const": "cccp.calculation.requests.TaskRequest.from_dict"
+        }
+      },
+      "required": [
+        "binding_metadata",
+        "request",
+        "request_json_validated_by"
+      ],
+      "type": "object"
+    },
+    "compatibility": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": {
+          "const": "acp2.science.task-binding.v1"
+        },
+        "declared_major": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "existing_contract_versions": {
+          "additionalProperties": false,
+          "properties": {
+            "task_request": {
+              "const": 1,
+              "type": "integer"
+            },
+            "task_result": {
+              "const": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "task_request",
+            "task_result"
+          ],
+          "type": "object"
+        },
+        "max_reader_schema_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "min_reader_schema_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "unknown_major_error_code": {
+          "const": "unknown_major_version"
+        },
+        "unknown_major_version": {
+          "const": "reject_and_never_execute"
+        }
+      },
+      "required": [
+        "contract_version",
+        "declared_major",
+        "min_reader_schema_version",
+        "max_reader_schema_version",
+        "unknown_major_version",
+        "unknown_major_error_code",
+        "existing_contract_versions"
+      ],
+      "type": "object"
+    },
+    "contextContract": {
+      "additionalProperties": false,
+      "properties": {
+        "module": {
+          "const": "cccp.calculation.context"
+        },
+        "must_not_appear_as_field": {
+          "const": true
+        },
+        "serialization_rule": {
+          "const": "runtime_only_never_json"
+        },
+        "serialized": {
+          "const": false
+        },
+        "type": {
+          "const": "TaskContext"
+        }
+      },
+      "required": [
+        "module",
+        "type",
+        "serialized",
+        "must_not_appear_as_field",
+        "serialization_rule"
+      ],
+      "type": "object"
+    },
+    "delegation": {
+      "additionalProperties": false,
+      "properties": {
+        "entrypoint": {
+          "pattern": "^cccp\\.calculation\\.run_[a-z0-9_]+$",
+          "type": "string"
+        },
+        "entrypoint_module": {
+          "const": "cccp.calculation.tasks"
+        },
+        "max_invocations_per_binding": {
+          "maximum": 1,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "no_batch_or_chain": {
+          "const": true
+        },
+        "no_second_executor": {
+          "const": true
+        },
+        "single": {
+          "const": true
+        }
+      },
+      "required": [
+        "single",
+        "max_invocations_per_binding",
+        "entrypoint",
+        "entrypoint_module",
+        "no_second_executor",
+        "no_batch_or_chain"
+      ],
+      "type": "object"
+    },
+    "preflight": {
+      "additionalProperties": false,
+      "properties": {
+        "loads_plugins": {
+          "const": false
+        },
+        "network": {
+          "const": false
+        },
+        "outcomes": {
+          "items": {
+            "enum": [
+              "ready",
+              "not_ready",
+              "unsupported_capability"
+            ]
+          },
+          "type": "array"
+        },
+        "platform_constraint_owner": {
+          "const": "runtime"
+        },
+        "side_effect_free": {
+          "const": true
+        },
+        "starts_subprocess": {
+          "const": false
+        },
+        "validates_json_structure": {
+          "const": true
+        },
+        "validates_platform_constraints": {
+          "const": false
+        },
+        "validates_scientific_preconditions": {
+          "const": true
+        },
+        "writes_artifacts": {
+          "const": false
+        }
+      },
+      "required": [
+        "side_effect_free",
+        "starts_subprocess",
+        "writes_artifacts",
+        "loads_plugins",
+        "network",
+        "validates_json_structure",
+        "validates_scientific_preconditions",
+        "validates_platform_constraints",
+        "platform_constraint_owner",
+        "outcomes"
+      ],
+      "type": "object"
+    },
+    "requestContract": {
+      "additionalProperties": false,
+      "properties": {
+        "authoritative": {
+          "const": true
+        },
+        "execution_unknown_field_rule": {
+          "const": "reject_unsupported_execution_fields_at_binding_preflight"
+        },
+        "module": {
+          "const": "cccp.calculation.requests"
+        },
+        "parser": {
+          "const": "TaskRequest.from_dict"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "schema_version_rule": {
+          "const": "S1_reject_any_version_other_than_1"
+        },
+        "serializer": {
+          "const": "TaskRequest.to_dict"
+        },
+        "type": {
+          "const": "TaskRequest"
+        },
+        "unknown_field_read_rule": {
+          "const": "S2_ignore_unknown_fields_on_read"
+        }
+      },
+      "required": [
+        "module",
+        "type",
+        "schema_version",
+        "serializer",
+        "parser",
+        "unknown_field_read_rule",
+        "execution_unknown_field_rule",
+        "schema_version_rule",
+        "authoritative"
+      ],
+      "type": "object"
+    },
+    "resultContract": {
+      "additionalProperties": false,
+      "properties": {
+        "authoritative": {
+          "const": true
+        },
+        "module": {
+          "const": "cccp.calculation.results"
+        },
+        "parser": {
+          "const": "TaskResult.from_dict"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "schema_version_rule": {
+          "const": "S1_reject_any_version_other_than_1"
+        },
+        "serializer": {
+          "const": "TaskResult.to_dict"
+        },
+        "type": {
+          "const": "TaskResult"
+        },
+        "unknown_field_read_rule": {
+          "const": "S2_ignore_unknown_fields_on_read"
+        }
+      },
+      "required": [
+        "module",
+        "type",
+        "schema_version",
+        "serializer",
+        "parser",
+        "unknown_field_read_rule",
+        "schema_version_rule",
+        "authoritative"
+      ],
+      "type": "object"
+    },
+    "scientificPreconditionError": {
+      "additionalProperties": false,
+      "properties": {
+        "covers": {
+          "items": {
+            "enum": [
+              "charge_or_multiplicity",
+              "structure_role",
+              "method_or_basis",
+              "electronic_state",
+              "scientific_applicability"
+            ]
+          },
+          "type": "array"
+        },
+        "detail_required": {
+          "const": true
+        },
+        "error_code": {
+          "const": "invalid_scientific_input"
+        },
+        "error_schema_ref": {
+          "const": "https://acp.local/acp2/science/errors.schema.json#/$defs/errorRecord"
+        },
+        "layer": {
+          "const": "scientific"
+        },
+        "maps_from_error_kind": {
+          "const": "invalid_input"
+        },
+        "message_template": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "retryable": {
+          "const": false
+        }
+      },
+      "required": [
+        "error_code",
+        "layer",
+        "retryable",
+        "detail_required",
+        "error_schema_ref",
+        "covers",
+        "maps_from_error_kind"
+      ],
+      "type": "object"
+    },
+    "selection": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "capability_id": {
+              "type": "string"
+            },
+            "mode": {
+              "const": "capability"
+            },
+            "task_kind": {
+              "const": null
+            }
+          }
+        },
+        {
+          "properties": {
+            "capability_id": {
+              "const": null
+            },
+            "mode": {
+              "const": "existing_task_kind"
+            },
+            "task_kind": {
+              "$ref": "#/$defs/taskKind"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "capability_id": {
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "capability",
+            "existing_task_kind"
+          ]
+        },
+        "task_kind": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/taskKind"
+            },
+            {
+              "const": null
+            }
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "capability_id",
+        "task_kind"
+      ],
+      "type": "object"
+    },
+    "taskKind": {
+      "enum": [
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "casscf",
+        "thermochemistry",
+        "conformer_search",
+        "md_sampling",
+        "clustering",
+        "censo_refine",
+        "nmr_shielding",
+        "xtb_path_search",
+        "orca_gradient",
+        "xtb_constrained_opt"
+      ],
+      "type": "string"
+    },
+    "unknownFieldPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "historical_read": {
+          "const": "preserve_unknown_fields_without_execution_or_recovery_eligibility"
+        },
+        "new_execution_request": {
+          "const": "reject_unsupported_execution_fields_before_delegation"
+        },
+        "task_context": {
+          "const": "never_serialized_never_a_field"
+        },
+        "unknown_major_version": {
+          "const": "never_execute"
+        }
+      },
+      "required": [
+        "new_execution_request",
+        "historical_read",
+        "unknown_major_version",
+        "task_context"
+      ],
+      "type": "object"
+    },
+    "unsupportedCapabilityError": {
+      "additionalProperties": false,
+      "properties": {
+        "covers": {
+          "items": {
+            "enum": [
+              "capability_not_in_registry",
+              "capability_implementation_not_registered"
+            ]
+          },
+          "type": "array"
+        },
+        "detail_required": {
+          "const": true
+        },
+        "error_code": {
+          "const": "unknown_implementation"
+        },
+        "error_schema_ref": {
+          "const": "https://acp.local/acp2/science/errors.schema.json#/$defs/errorRecord"
+        },
+        "layer": {
+          "const": "scientific"
+        },
+        "maps_from_error_kind": {
+          "const": "unsupported_capability"
+        },
+        "message_template": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "retryable": {
+          "const": false
+        }
+      },
+      "required": [
+        "error_code",
+        "layer",
+        "retryable",
+        "detail_required",
+        "error_schema_ref",
+        "covers",
+        "maps_from_error_kind"
+      ],
+      "type": "object"
+    },
+    "validationLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "does_not_cover": {
+          "items": {
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "owner": {
+          "enum": [
+            "contract",
+            "cccp",
+            "runtime"
+          ]
+        }
+      },
+      "required": [
+        "owner",
+        "checks",
+        "does_not_cover"
+      ],
+      "type": "object"
+    },
+    "validationLayers": {
+      "additionalProperties": false,
+      "properties": {
+        "cccp_scientific_semantics": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validationLayer"
+            },
+            {
+              "properties": {
+                "owner": {
+                  "const": "cccp"
+                }
+              }
+            }
+          ]
+        },
+        "json_structure": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validationLayer"
+            },
+            {
+              "properties": {
+                "owner": {
+                  "const": "contract"
+                }
+              }
+            }
+          ]
+        },
+        "runtime_platform_constraints": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validationLayer"
+            },
+            {
+              "properties": {
+                "owner": {
+                  "const": "runtime"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "json_structure",
+        "cccp_scientific_semantics",
+        "runtime_platform_constraints"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://acp.local/acp2/science/task-binding.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Frozen v1 binding from a registered science capability (or an existing TaskKind) to exactly one existing CCCP task implementation. The binding references the authoritative cccp.calculation.requests TaskRequest and cccp.calculation.results TaskResult serialization contracts at schema version 1 and never redefines them. TaskContext is runtime-only: it is never serialized and must never appear as a field in any binding output, request or result. Preflight is side-effect free (no subprocess, artifact, plugin load or network access) and validates JSON structure plus CCCP scientific semantics only; Runtime platform constraints remain Runtime-owned. Delegation is single: one binding invokes at most one existing run_* implementation and creates no second executor, batch or chained execution.",
+  "properties": {
+    "binding_id": {
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+      "type": "string"
+    },
+    "binding_output": {
+      "$ref": "#/$defs/bindingOutput"
+    },
+    "compatibility": {
+      "$ref": "#/$defs/compatibility"
+    },
+    "context_contract": {
+      "$ref": "#/$defs/contextContract"
+    },
+    "delegation": {
+      "$ref": "#/$defs/delegation"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Namespaced x-acp2-<owner>-<name> extensions; never execution eligibility.",
+      "type": "object"
+    },
+    "preflight": {
+      "$ref": "#/$defs/preflight"
+    },
+    "request_contract": {
+      "$ref": "#/$defs/requestContract"
+    },
+    "result_contract": {
+      "$ref": "#/$defs/resultContract"
+    },
+    "schema": {
+      "const": "acp2.science.task_binding"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scientific_precondition_error": {
+      "$ref": "#/$defs/scientificPreconditionError"
+    },
+    "selection": {
+      "$ref": "#/$defs/selection"
+    },
+    "unknown_field_policy": {
+      "$ref": "#/$defs/unknownFieldPolicy"
+    },
+    "unsupported_capability_error": {
+      "$ref": "#/$defs/unsupportedCapabilityError"
+    },
+    "validation_layers": {
+      "$ref": "#/$defs/validationLayers"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "binding_id",
+    "selection",
+    "request_contract",
+    "result_contract",
+    "context_contract",
+    "binding_output",
+    "preflight",
+    "delegation",
+    "unsupported_capability_error",
+    "scientific_precondition_error",
+    "validation_layers",
+    "unknown_field_policy",
+    "compatibility"
+  ],
+  "schema_version": 1,
+  "title": "ACP2 Science Task Binding",
+  "type": "object"
+}

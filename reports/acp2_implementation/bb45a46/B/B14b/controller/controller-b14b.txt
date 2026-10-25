@@ -1,0 +1,116 @@
+INFO:     Started server process [1051867]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18774 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18774
+  Run root      : /opt/acp2-dev/data/b/run-root-b14b
+  Poll interval : 1s
+  Docs (Swagger): http://127.0.0.1:18774/docs
+  Reload        : off
+
+INFO:     127.0.0.1:35372 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47800 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47810 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47812 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:47824 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47832 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47836 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47838 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47852 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47854 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47856 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53658 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53672 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53686 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53702 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53716 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53732 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53748 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53758 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53770 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53776 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53784 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53790 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53802 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53804 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53814 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53824 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53826 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53842 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53854 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53868 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53876 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53882 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39028 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39036 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39042 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:39048 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39058 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39074 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39078 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39080 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39096 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39098 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39104 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39116 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39126 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39136 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48780 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48782 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48796 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48810 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48812 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48816 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48828 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48840 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48844 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48858 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48860 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48872 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48874 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48876 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48884 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48898 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48904 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48910 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48912 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48914 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48930 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48938 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48944 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48960 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49388 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45104 - "GET /api/v1/jobs/20261023_111633_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56292 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56302 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42372 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42378 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49810 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49824 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49838 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:49852 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49868 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49872 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49876 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49890 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49906 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49920 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49932 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49936 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49952 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49962 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49978 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49992 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50000 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50004 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50008 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50020 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50024 - "GET /api/v1/jobs/20261023_111946_003_frequency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50040 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48752 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48766 - "GET /api/v1/jobs/20261023_111652_002_optimize HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1051867]

@@ -31,6 +31,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -40,9 +41,9 @@ import shlex
 import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -86,6 +87,28 @@ from acp.scheduler.remote.sync import CodeSyncer, _default_state_dir, _project_r
 from acp.scheduler.runner import JobRunner, _electronic_state_cli_flags, materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
+from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
+from acp_services.runtime.execution_chain import (
+    ATTEMPT_PROTOCOL_FILENAME,
+    BINDING_FILENAME,
+    DEFAULT_ENVELOPE_WORKFLOWS,
+    ENVELOPE_FILENAME,
+    EXECUTION_ENTRY_ENVELOPE,
+    FROZEN_GROUP_DIRNAME,
+    FROZEN_GROUP_MANIFEST_FILENAME,
+    PLAN_FILENAME,
+    AttemptExecutionChoice,
+    ExecutionLaunch,
+    FrozenGroupError,
+    frozen_artifacts_present,
+    load_frozen_group,
+    read_attempt_choice,
+    resolve_attempt_choice,
+    with_attempt_choice,
+    write_attempt_choice,
+)
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
+from acp_services.runtime.worker import TASK_RESULT_RELATIVE_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +167,6 @@ class _RemoteJobState(_RemoteJobStateBase, total=False):
     cancel_sent: bool
 
 
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def _safe_timestamp_dt(value: object) -> float:
     if isinstance(value, str):
         try:
@@ -203,7 +222,7 @@ class RemoteSubmissionError(RuntimeError):
     """LSF job submission (``bsub``) failed or produced no job ID."""
 
 
-class RemoteSubmissionRejected(RemoteSubmissionError):
+class RemoteSubmissionRejected(RemoteSubmissionError):  # noqa: N818
     """Definitive submission rejection — the job never entered LSF.
 
     Never deletes the remote directory (contract A): the job goes FAILED
@@ -212,7 +231,7 @@ class RemoteSubmissionRejected(RemoteSubmissionError):
     """
 
 
-class RemoteSubmissionIndeterminate(RemoteSubmissionError):
+class RemoteSubmissionIndeterminate(RemoteSubmissionError):  # noqa: N818
     """``bsub`` outcome unknown (SSH/timeout/unparseable reply).
 
     The remote directory is kept, ``submit_state`` becomes
@@ -285,10 +304,12 @@ class RemoteJobRunner:
         cleanup: RemoteCleanup | None = None,
         stage_task_observer: StageTaskObserver | None = None,
         poll_interval: int | None = None,
+        publication: object | None = None,
     ) -> None:
         self._ssh = ssh_pool
         self._config = remote_config
         self._stager = stager or FileStager(ssh_pool)
+        self._publication = publication  # injected Data publication entry (B28a)
         self._monitor = monitor or RemoteJobMonitor(ssh_pool, self._stager)
         self._syncer = code_syncer or CodeSyncer(ssh_pool)
         self._cleanup = cleanup
@@ -834,9 +855,7 @@ class RemoteJobRunner:
         """True only when ``job.json`` is readable AND names this job/attempt."""
         for marker in ("job.json", "task.json"):
             try:
-                raw = self._stager.read_remote_file(
-                    node, posixpath.join(remote_dir, marker)
-                )
+                raw = self._stager.read_remote_file(node, posixpath.join(remote_dir, marker))
             except FileNotFoundError:
                 continue
             except (OSError, SSHExecutionError):
@@ -866,9 +885,7 @@ class RemoteJobRunner:
             return None
         for marker in (".exit_code", "state.json"):
             try:
-                content = self._stager.read_remote_file(
-                    node, posixpath.join(remote_dir, marker)
-                )
+                content = self._stager.read_remote_file(node, posixpath.join(remote_dir, marker))
             except FileNotFoundError:
                 continue
             except (OSError, SSHExecutionError):
@@ -891,9 +908,7 @@ class RemoteJobRunner:
         # a readable marker declaring another attempt is foreign evidence.
         for marker in ("job.json", "task.json"):
             try:
-                raw = self._stager.read_remote_file(
-                    node, posixpath.join(remote_dir, marker)
-                )
+                raw = self._stager.read_remote_file(node, posixpath.join(remote_dir, marker))
             except FileNotFoundError:
                 continue
             except (OSError, SSHExecutionError):
@@ -961,6 +976,7 @@ class RemoteJobRunner:
         result["command_line"] = " ".join(cli_cmd)
         record.result = result
         self._build_provenance(record, cli_cmd)
+        self._fetch_worker_artifacts(record, event_log, node, remote_job_dir)
         return RemotePollObservation(
             terminal=True,
             exit_code=exit_code,
@@ -969,6 +985,74 @@ class RemoteJobRunner:
             final_state={"result": dict(record.result or {}), "error": record.error},
             stage_events=stage_events,
         )
+
+    def _fetch_worker_artifacts(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        node: RemoteNode,
+        remote_job_dir: str,
+    ) -> None:
+        """Fetch the worker receipt + task_result for a frozen remote attempt.
+
+        The controller reads the fetched copies through the worker codec before
+        T26/T28 publication/CAS.  The named transport is
+        :class:`RemoteStructureCache.fetch` (attempt-fenced cache) over the
+        shared ``RemoteResultFetcher``; the bytes are then placed at the task
+        work dir paths the controller/runtime consume.
+        """
+        work_dir = Path(record.work_dir)
+        choice = read_attempt_choice(work_dir)
+        if (
+            choice is None
+            or choice.entry != EXECUTION_ENTRY_ENVELOPE
+            or choice.attempt != record.attempt
+        ):
+            return
+        from acp.results.remote_structure_cache import RemoteStructureCache
+        from acp.scheduler.remote.fetcher import RemoteResultFetcher
+
+        run_root = work_dir.parent.parent
+        cache = RemoteStructureCache(
+            run_root,
+            fetcher_factory=lambda _job_id: RemoteResultFetcher(
+                self._ssh, self._stager, self._config
+            ),
+        )
+        fetched: list[str] = []
+        for rel in ("execution_receipt.json", "WORK/00_RUNTIME/task_result.json"):
+            try:
+                cached = cache.fetch(record, rel, force=True, raise_errors=False)
+            except Exception:
+                logger.warning(
+                    "Remote artifact fetch failed for %s/%s",
+                    record.id,
+                    rel,
+                    exc_info=True,
+                )
+                cached = None
+            if cached is None:
+                event_log.append(
+                    "remote.worker_artifact_missing",
+                    job_id=record.id,
+                    remote_dir=remote_job_dir,
+                    relative=rel,
+                )
+                continue
+            target = work_dir / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_bytes(Path(cached).read_bytes())
+            os.replace(tmp, target)
+            fetched.append(rel)
+        if fetched:
+            event_log.append(
+                "remote.worker_artifacts_fetched",
+                job_id=record.id,
+                remote_dir=remote_job_dir,
+                files=fetched,
+                mechanism="RemoteStructureCache.fetch",
+            )
 
     def apply_terminal_side_effects(
         self,
@@ -1257,6 +1341,263 @@ class RemoteJobRunner:
     # Prepare + submit
     # ------------------------------------------------------------------ #
 
+    def _freeze_remote_attempt(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        input_path: str,
+        code_release: str | None,
+        event_log: JobEventLog,
+    ) -> None:
+        """Freeze the default-envelope attempt on the verified remote release."""
+        workflow = str(record.spec.workflow)
+        if workflow not in DEFAULT_ENVELOPE_WORKFLOWS:
+            return
+        previous = read_attempt_choice(work_dir)
+        if previous is not None and previous.attempt == record.attempt:
+            if previous.entry == EXECUTION_ENTRY_ENVELOPE and not frozen_artifacts_present(
+                work_dir, expected_attempt=record.attempt
+            ):
+                raise RemoteSubmissionRejected(
+                    f"envelope choice for attempt {record.attempt} is recorded but the local "
+                    "frozen group is missing/corrupt"
+                )
+            return
+        if not code_release:
+            raise RemoteSubmissionRejected(
+                f"job {record.id} has no verified code release for its frozen attempt"
+            )
+
+        from acp.calculations.attempt_freeze import (
+            UNVERSIONED_RELEASE_ID,
+            LocalRelease,
+            ReleaseIdentity,
+            build_freeze_spec,
+            build_local_release,
+        )
+        from acp_services.runtime.attempt_freeze import write_frozen_attempt
+
+        project_root = _project_root()
+        if code_release == _UNVERSIONED_RELEASE:
+            identity = ReleaseIdentity(
+                project_root=project_root,
+                release_id=UNVERSIONED_RELEASE_ID,
+                release_digest="",
+                files={},
+            )
+            release = LocalRelease(identity=identity, root=project_root, unversioned=True)
+        else:
+            try:
+                release = build_local_release(project_root, work_dir.parent.parent)
+            except Exception as exc:
+                raise RemoteSubmissionRejected(
+                    f"cannot materialise local release {code_release!r}: {exc}"
+                ) from exc
+            if release.release_id != code_release:
+                raise RemoteSubmissionRejected(
+                    f"verified remote release {code_release!r} != local release "
+                    f"{release.release_id!r}; refusing to freeze a mismatched tree"
+                )
+        try:
+            spec = build_freeze_spec(record, work_dir, input_path, release)
+            group = write_frozen_attempt(work_dir, spec)
+        except Exception as exc:
+            raise RemoteSubmissionRejected(
+                f"could not freeze attempt {record.attempt} of {workflow}: {exc}"
+            ) from exc
+        event_log.append(
+            "remote.attempt_frozen",
+            job_id=record.id,
+            attempt=record.attempt,
+            workflow=workflow,
+            release_id=group.manifest.release_id,
+            release_digest=group.manifest.release_digest,
+        )
+
+    def _resolve_remote_choice(self, record: JobRecord, work_dir: Path) -> AttemptExecutionChoice:
+        """Resolve + record the attempt entry via the single dispatcher (B06-3).
+
+        Envelope is selected only when the workflow closure is integrated and a
+        frozen envelope/plan pair is present for the attempt; otherwise the
+        legacy entry is selected. The recorded choice is reused verbatim for an
+        unchanged attempt (resume/reconcile never re-select).
+        """
+        previous = read_attempt_choice(work_dir)
+        remote_meta = (record.result or {}).get("remote")
+        release_id = ""
+        if isinstance(remote_meta, Mapping):
+            raw_release = remote_meta.get("code_release")
+            if isinstance(raw_release, str):
+                release_id = raw_release
+        choice = resolve_attempt_choice(
+            workflow=record.spec.workflow,
+            attempt=record.attempt,
+            remote=True,
+            envelope_available=frozen_artifacts_present(work_dir, expected_attempt=record.attempt),
+            previous=previous,
+            release_id=release_id,
+        )
+        if previous != choice:
+            write_attempt_choice(work_dir, choice)
+        record.result = with_attempt_choice(record.result, choice)
+        return choice
+
+    def _upload_frozen_envelope(
+        self,
+        node: RemoteNode,
+        remote_job_dir: str,
+        work_dir: Path,
+        event_log: JobEventLog,
+        record: JobRecord,
+    ) -> ExecutionLaunch | None:
+        """Upload the frozen group with manifest-last publication.
+
+        Members are uploaded to a remote staging directory and hash-verified
+        there.  The flat execution namespace is then populated member-first and
+        ``frozen_group.json`` is published LAST (sole commit marker).  A failed
+        or interrupted upload leaves no flat manifest, so the node-side worker
+        (which is passed ``--require-frozen-group``) cannot execute a half
+        group.
+        """
+        try:
+            group = load_frozen_group(work_dir, expected_attempt=record.attempt)
+        except FrozenGroupError as exc:
+            raise RemoteSubmissionRejected(
+                f"frozen group for attempt {record.attempt} is missing/corrupt: {exc}"
+            ) from exc
+        manifest = dict(group.manifest.to_dict())
+        members = list(manifest.get("members") or {})
+        if ENVELOPE_FILENAME not in members or PLAN_FILENAME not in members:
+            raise RemoteSubmissionRejected("frozen group manifest lacks envelope/plan members")
+        # Reject a path-bearing request that escapes the task directory before bsub.
+        try:
+            plan_payload = json.loads(group.plan_path.read_text(encoding="utf-8"))
+            task_payload = plan_payload.get("payload")
+            if isinstance(task_payload, Mapping):
+                self._assert_relative_task_paths(work_dir, task_payload)
+        except (OSError, ValueError) as exc:
+            raise RemoteSubmissionRejected(f"frozen plan is unreadable: {exc}") from exc
+
+        runtime_rel = posixpath.join("WORK", "00_RUNTIME")
+        staging = posixpath.join(
+            remote_job_dir, runtime_rel, ".frozen_staging", str(record.attempt)
+        )
+        # Staging is intentionally left for retention/reconcile cleanup: the
+        # flat frozen_group.json is the sole execution marker, so a staging
+        # directory is harmless and removing it here would record a remote
+        # directory cleanup on an indeterminate bsub.
+        self._stager.make_remote_dir(node, staging)
+        # Drop the old marker first: an interrupted re-upload must never leave
+        # a previous valid group executable.
+        self._stager.remove_file(
+            node, posixpath.join(remote_job_dir, FROZEN_GROUP_MANIFEST_FILENAME)
+        )
+        for name in members:
+            local = group.directory / name
+            remote = posixpath.join(staging, name)
+            self._stager.upload_file(node, local, remote)
+            actual = hashlib.sha256(self._stager.read_remote_file(node, remote)).hexdigest()
+            if actual != manifest["members"][name]:
+                raise RemoteSubmissionRejected(
+                    f"remote frozen member {name!r} hash {actual} != manifest "
+                    f"{manifest['members'][name]}"
+                )
+        # Manifest is staged LAST.
+        self._stager.upload_file(
+            node,
+            group.directory / FROZEN_GROUP_MANIFEST_FILENAME,
+            posixpath.join(staging, FROZEN_GROUP_MANIFEST_FILENAME),
+        )
+        staged_manifest = json.loads(
+            self._stager.read_remote_file(
+                node, posixpath.join(staging, FROZEN_GROUP_MANIFEST_FILENAME)
+            ).decode("utf-8")
+        )
+        if staged_manifest.get("members") != manifest.get("members"):
+            raise RemoteSubmissionRejected("staged frozen manifest does not match the local group")
+
+        published: list[str] = []
+        for name in members:
+            flat = posixpath.join(remote_job_dir, name)
+            self._stager.remove_file(node, flat)
+            self._stager.rename_remote(node, posixpath.join(staging, name), flat)
+            actual = hashlib.sha256(self._stager.read_remote_file(node, flat)).hexdigest()
+            if actual != manifest["members"][name]:
+                raise RemoteSubmissionRejected(
+                    f"published frozen member {name!r} failed its hash check"
+                )
+            published.append(name)
+        flat_manifest = posixpath.join(remote_job_dir, FROZEN_GROUP_MANIFEST_FILENAME)
+        self._stager.remove_file(node, flat_manifest)
+        self._stager.rename_remote(
+            node,
+            posixpath.join(staging, FROZEN_GROUP_MANIFEST_FILENAME),
+            flat_manifest,
+        )
+        # Final complete-group verification (reader and writer agree).
+        final_manifest_raw = self._stager.read_remote_file(node, flat_manifest)
+        final_manifest = json.loads(final_manifest_raw.decode("utf-8"))
+        if final_manifest.get("members") != manifest.get("members"):
+            raise RemoteSubmissionRejected("published remote frozen manifest mismatches")
+        for name in members:
+            actual = hashlib.sha256(
+                self._stager.read_remote_file(node, posixpath.join(remote_job_dir, name))
+            ).hexdigest()
+            if actual != manifest["members"][name]:
+                raise RemoteSubmissionRejected(
+                    f"published remote group member {name!r} failed final verification"
+                )
+        event_log.append(
+            "remote.frozen_group_uploaded",
+            job_id=record.id,
+            attempt=record.attempt,
+            members=published,
+            commit_marker=FROZEN_GROUP_MANIFEST_FILENAME,
+            release_id=manifest.get("release_id"),
+            release_digest=manifest.get("release_digest"),
+        )
+        binding_present = BINDING_FILENAME in members
+        return ExecutionLaunch(
+            entry=EXECUTION_ENTRY_ENVELOPE,
+            protocol="lsf",
+            closure="integrated",
+            work_dir=remote_job_dir,
+            envelope_path=posixpath.join(remote_job_dir, ENVELOPE_FILENAME),
+            plan_path=posixpath.join(remote_job_dir, PLAN_FILENAME),
+            binding_path=(
+                posixpath.join(remote_job_dir, BINDING_FILENAME) if binding_present else None
+            ),
+        )
+
+    @staticmethod
+    def _assert_relative_task_paths(work_dir: Path, payload: Mapping[str, Any]) -> None:
+        """Reject absolute/escaping path-bearing TaskRequest fields before bsub.
+
+        The reserved ``environment`` key is skipped: it is the host-level
+        configuration snapshot (executable locations, resource settings), not a
+        task artifact reference, and its absolute executable paths are resolved
+        config for the worker host — exactly what must reach the worker (R02).
+        """
+        from acp_services.runtime.worker import TASK_ENVIRONMENT_CONFIG_KEY
+
+        for key, value in payload.items():
+            if key == TASK_ENVIRONMENT_CONFIG_KEY:
+                continue
+            if key == "output_dir" or key == "path" or str(key).endswith("_path"):
+                if isinstance(value, str) and value:
+                    candidate = Path(value)
+                    if candidate.is_absolute():
+                        raise RemoteSubmissionRejected(
+                            f"frozen task field {key!r} is absolute: {value!r}"
+                        )
+                    resolved = (work_dir / candidate).resolve()
+                    if not resolved.is_relative_to(work_dir.resolve()):
+                        raise RemoteSubmissionRejected(
+                            f"frozen task field {key!r} escapes the task dir: {value!r}"
+                        )
+            elif isinstance(value, Mapping):
+                RemoteJobRunner._assert_relative_task_paths(work_dir, value)
+
     def _prepare_and_submit(
         self,
         record: JobRecord,
@@ -1298,6 +1639,8 @@ class RemoteJobRunner:
             submission_id = submission_id_for(record.id, record.attempt)
         heartbeat_submit_worker(submission_id)
 
+        execution_launch: ExecutionLaunch | None = None
+
         try:
             self._archive_remote_attempt(node, remote_job_dir, record, event_log, disposition)
 
@@ -1314,6 +1657,23 @@ class RemoteJobRunner:
             )
             is_batch_structures = str(spec.input.get("source_type") or "") == "batch_structures"
             remote_input_name = "batch_items.json" if is_batch_structures else "input.xyz"
+            # 07-C: freeze AFTER the verified release is known and BEFORE the
+            # dispatcher resolves the attempt entry.  The frozen group is then
+            # uploaded below and is the node-side executable input.
+            self._freeze_remote_attempt(
+                record,
+                work_dir,
+                str(materialized) if materialized is not None else str(work_dir / "input.xyz"),
+                code_release,
+                event_log,
+            )
+            if code_release:
+                frozen_result = dict(record.result or {})
+                frozen_meta = dict(frozen_result.get("remote") or {})
+                frozen_meta["code_release"] = code_release
+                frozen_result["remote"] = frozen_meta
+                record.result = frozen_result
+            choice = self._resolve_remote_choice(record, work_dir)
             if bond_scan_mode:
                 scan_payload = build_remote_scan_config_payload(spec) or {}
                 scan_config_local = work_dir / SCAN_CONFIG_FILENAME
@@ -1337,8 +1697,11 @@ class RemoteJobRunner:
                 # experiment set; each remote argument points at an uploaded
                 # file, including native input extensions and Bruker assets.
                 local_command = JobRunner()._build_nmr_cmd(spec, work_dir)
-                local_sources = [local_command[i + 1] for i, flag in enumerate(local_command)
-                                 if flag == "--input"]
+                local_sources = [
+                    local_command[i + 1]
+                    for i, flag in enumerate(local_command)
+                    if flag == "--input"
+                ]
                 candidates = spec.input.get("candidates")
                 candidates = candidates if isinstance(candidates, list) else [spec.input]
                 if len(local_sources) != len(candidates):
@@ -1358,8 +1721,12 @@ class RemoteJobRunner:
                 self._stager.upload_directory(
                     node, work_dir / "inputs", posixpath.join(remote_job_dir, "inputs")
                 )
-                event_log.append("remote.input_uploaded", job_id=record.id,
-                                 node=node.name, role="nmr_candidates_and_experiment")
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role="nmr_candidates_and_experiment",
+                )
             elif materialized and materialized.is_file():
                 remote_path = posixpath.join(remote_job_dir, remote_input_name)
                 self._stager.upload_file(node, materialized, remote_path)
@@ -1370,21 +1737,31 @@ class RemoteJobRunner:
                     role="input",
                 )
             else:
-                raise RemoteSubmissionRejected(
-                    f"Failed to materialise input for job {record.id}"
-                )
+                raise RemoteSubmissionRejected(f"Failed to materialise input for job {record.id}")
 
             # 3b. Scheduler-context markers (job.json + task.json): the node
             # side detects them by existence only (workflows/_helpers.py) and
             # otherwise nests products under <remote_job_dir>/<molecule>/,
             # where the flat result-fetch layer never finds them.
             self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
+            if choice.entry == EXECUTION_ENTRY_ENVELOPE:
+                execution_launch = self._upload_frozen_envelope(
+                    node, remote_job_dir, work_dir, event_log, record
+                )
+                if execution_launch is None:
+                    # Once the entry is frozen to envelope, a missing/corrupt
+                    # group is an explicit submission failure — never a silent
+                    # legacy CLI re-submit.
+                    raise RemoteSubmissionRejected(
+                        "envelope entry selected but the frozen group is missing/corrupt"
+                    )
             if spec.workflow in {"singlepoint", "optimize", "frequency", "scan"}:
                 module = electronic_state_from_method(spec.method)
                 if module:
                     _electronic_state_cli_flags(module, work_dir)
                     self._stager.upload_file(
-                        node, work_dir / "electronic_state.json",
+                        node,
+                        work_dir / "electronic_state.json",
                         posixpath.join(remote_job_dir, "electronic_state.json"),
                     )
             resume_source = work_dir / "resume_source.json"
@@ -1417,6 +1794,7 @@ class RemoteJobRunner:
                 pre_cmds=self._config.pre_cmds,
                 submission_id=submission_id,
                 code_release=script_release,
+                execution=execution_launch,
             )
             script_text = generate_lsf_script(lsf_spec)
             script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
@@ -1563,16 +1941,26 @@ class RemoteJobRunner:
                 json.dumps(record.to_dict(), indent=2, default=str), encoding="utf-8"
             )
 
-        for marker in ("job.json", "task.json"):
-            self._stager.upload_file(
-                node, work_dir / marker, posixpath.join(remote_job_dir, marker)
-            )
+        self._marker_publication().upload_markers(
+            job_id=record.id,
+            work_dir=work_dir,
+            node=node,
+            remote_job_dir=remote_job_dir,
+        )
         event_log.append(
             "remote.markers_uploaded",
             job_id=record.id,
             node=node.name,
             files=["job.json", "task.json"],
         )
+
+    def _marker_publication(self) -> Any:
+        """Return the Data publication entry used for scheduler markers."""
+        if self._publication is None:
+            from acp.services_publication_bootstrap import build_publication_data_port
+
+            self._publication = build_publication_data_port(stager=self._stager)
+        return self._publication
 
     def _resolve_remote_dir_for(
         self,
@@ -1618,9 +2006,7 @@ class RemoteJobRunner:
         def probe(candidate: str) -> bool:
             for marker in ("job.json", "task.json"):
                 try:
-                    raw = self._stager.read_remote_file(
-                        node, posixpath.join(candidate, marker)
-                    )
+                    raw = self._stager.read_remote_file(node, posixpath.join(candidate, marker))
                 except (OSError, SSHExecutionError):
                     continue
                 if not raw:
@@ -1683,6 +2069,27 @@ class RemoteJobRunner:
                 _move(entry.name, entry.name)
         runtime_rel = posixpath.join("WORK", "00_RUNTIME")
         _move(posixpath.join(runtime_rel, "run.lock"), posixpath.join(runtime_rel, "run.lock"))
+        # 07-D: attempt-scoped envelope/execution records are archived on the
+        # continue (adopt_results=True) path too.  Science (checkpoint/
+        # step_result/RESULT) stays in place below for adoption.
+        _move("execution_receipt.json", "execution_receipt.json")
+        _move(
+            posixpath.join(runtime_rel, ATTEMPT_PROTOCOL_FILENAME),
+            posixpath.join(runtime_rel, ATTEMPT_PROTOCOL_FILENAME),
+        )
+        _move(
+            posixpath.join(runtime_rel, FROZEN_GROUP_DIRNAME),
+            posixpath.join(runtime_rel, FROZEN_GROUP_DIRNAME),
+        )
+        for name in (
+            ENVELOPE_FILENAME,
+            PLAN_FILENAME,
+            BINDING_FILENAME,
+            FROZEN_GROUP_MANIFEST_FILENAME,
+            ATTEMPT_LOCK_FILENAME,
+            TASK_RESULT_RELATIVE_PATH[-1],
+        ):
+            _move(posixpath.join(runtime_rel, name), posixpath.join(runtime_rel, name))
         if adopt_results:
             if moved:
                 event_log.append(
@@ -1719,7 +2126,9 @@ class RemoteJobRunner:
             _move(entry.name, entry.name)
         work_rel = "WORK"
         try:
-            work_entries = self._stager.list_remote_dir(node, posixpath.join(remote_job_dir, work_rel))
+            work_entries = self._stager.list_remote_dir(
+                node, posixpath.join(remote_job_dir, work_rel)
+            )
         except FileNotFoundError:
             work_entries = []
         for entry in work_entries:
@@ -1752,9 +2161,7 @@ class RemoteJobRunner:
         """
         for marker in ("state.json", "job.json"):
             try:
-                raw = self._stager.read_remote_file(
-                    node, posixpath.join(remote_job_dir, marker)
-                )
+                raw = self._stager.read_remote_file(node, posixpath.join(remote_job_dir, marker))
             except (OSError, SSHExecutionError):
                 continue
             if not raw:
@@ -2370,12 +2777,9 @@ class RemoteJobRunner:
         args = " ".join(_shlex.quote(b) for b in binaries)
         # The probe imports cccp.software from the synced codebase — export
         # PYTHONPATH so it resolves exactly like the workflow will.
-        command = (
-            "bash -lc "
-            + _shlex.quote(
-                f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
-                f"{py} -c {script_arg} {args}"
-            )
+        command = "bash -lc " + _shlex.quote(
+            f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
+            f"{py} -c {script_arg} {args}"
         )
 
         try:
@@ -2426,8 +2830,7 @@ class RemoteJobRunner:
 
         if missing and self._config.require_all_binaries:
             detail = "\n".join(
-                f"  - {name}: configured={report[name].get('configured')!r}"
-                for name in missing
+                f"  - {name}: configured={report[name].get('configured')!r}" for name in missing
             )
             raise RemoteNodeUnavailableError(
                 f"Node {node.name!r} cannot resolve required binaries for "
@@ -2470,9 +2873,7 @@ class RemoteJobRunner:
         """
         cmd = f'cd "{remote_job_dir}" && bsub < "{script_remote_path}"'
         try:
-            code, out, err = self._ssh.execute(
-                node, cmd, timeout=self._config.submission_timeout
-            )
+            code, out, err = self._ssh.execute(node, cmd, timeout=self._config.submission_timeout)
         except SSHExecutionError as exc:
             raise RemoteSubmissionIndeterminate(
                 f"bsub SSH execution failed on {node.name} (outcome unknown): {exc}"
@@ -2481,12 +2882,9 @@ class RemoteJobRunner:
             detail = err.strip() or out.strip()
             if not detail:
                 raise RemoteSubmissionIndeterminate(
-                    f"bsub exited {code} on {node.name} without diagnostics "
-                    f"(outcome unknown)"
+                    f"bsub exited {code} on {node.name} without diagnostics (outcome unknown)"
                 )
-            raise RemoteSubmissionRejected(
-                f"bsub failed on {node.name} (exit={code}): {detail}"
-            )
+            raise RemoteSubmissionRejected(f"bsub failed on {node.name} (exit={code}): {detail}")
         match = _LSF_JOB_ID_RE.search(out)
         if not match:
             raise RemoteSubmissionIndeterminate(

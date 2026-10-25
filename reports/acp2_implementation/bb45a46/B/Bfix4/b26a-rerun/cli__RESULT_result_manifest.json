@@ -1,0 +1,25 @@
+{
+  "products": [
+    {
+      "id": "task_result.json",
+      "kind": "file",
+      "label": "task_result.json",
+      "metadata": {
+        "attempt": 1,
+        "job_id": "20261023_224052_001_b26a-fix4-sp2",
+        "normal_reuse": true,
+        "partial_result": false,
+        "plan_identity": "v2:686f5c2fc0c8240fd0473fbf705102d8",
+        "product_role": "normal",
+        "qualification": "complete",
+        "submission_id": "sub_6ba95cc686d63eed",
+        "task_result_digest": "sha256:7f5186bde362507282a21a20a1d25d53891879df19c896c13c6cd69dc6bdd3ed"
+      },
+      "path": "task_result.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "20261023_224052_001_b26a-fix4-sp2",
+  "version": 2,
+  "workflow": "singlepoint"
+}

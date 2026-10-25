@@ -1,0 +1,1 @@
+acceptance artifact read output

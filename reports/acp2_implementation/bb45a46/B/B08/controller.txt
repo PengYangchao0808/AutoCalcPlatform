@@ -1,0 +1,24 @@
+INFO:     Started server process [448951]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18766 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59440 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41398 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41404 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41408 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41414 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41424 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:41440 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:41452 - "GET /api/v1/jobs?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41462 - "GET /api/v1/jobs/20261023_001354_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41472 - "GET /api/v1/jobs/20261023_001354_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41482 - "GET /api/v1/jobs/20261023_001354_001_singlepoint HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47390 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47400 - "POST /api/v1/jobs HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:47404 - "POST /api/v1/projects HTTP/1.1" 201 Created
+INFO:     127.0.0.1:47418 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47420 - "POST /api/v1/jobs HTTP/1.1" 409 Conflict
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [448951]

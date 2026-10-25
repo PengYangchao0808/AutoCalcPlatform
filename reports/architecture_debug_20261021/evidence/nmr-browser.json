@@ -1,0 +1,19 @@
+{
+  "recorded_utc": "2026-10-21T10:29:00.740377+00:00",
+  "python": "/opt/acp2/venv/bin/python",
+  "chromium": "153.0.8010.12",
+  "nmr_js_sha256": "90f71c991cf8ab9b20477cb2d9a5e971d7a749cc8e4d2a3516c49ce4dc037837",
+  "facts": {
+    "before": {
+      "canvasConnected": true,
+      "disposed": false,
+      "atoms": 3
+    },
+    "after": {
+      "canvasConnected": true,
+      "disposed": false,
+      "sameRegisteredViewer": true,
+      "body": "nmr.winnercommon.nonenmr.peaks.titlenmr.linkage.clearnmr.linkage.hintnmr.peaks.no_datanewconf=?DP4\u2014DP5\u2014nmr.quality.titlenmr.quality.evidence: \u2014   \u00b7   nmr.quality.coverage: \u2014 / \u2014nmr.quality.calibrated: DP4 \u2014 (\u2014)   \u00b7   DP5 \u2014 (\u2014)nmr.quality.risk: nmr.quality.max_z \u2014   \u00b7   nmr.quality.ood_atoms 0   \u00b7   nmr.quality.loo_flips 0   \u00b7   nmr.quality.no_diagnosticsnmr.atoms.no_atomsnmr.assignmentnmr.conformersnmr.no_data"
+    }
+  }
+}

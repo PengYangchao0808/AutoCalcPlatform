@@ -1,0 +1,538 @@
+{
+  "assets": [
+    {
+      "note": "licence/notice \u2014 must never be stripped from the wheel",
+      "path": "src/cccp/analysis/nmr/model_assets/LICENSE-DP5",
+      "sha256": "55bc399b93914549e797365ac07b46527775f9aa28275ccb9fe43c4ebaf08146",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 1175
+    },
+    {
+      "note": "licence/notice \u2014 must never be stripped from the wheel",
+      "path": "src/cccp/analysis/nmr/model_assets/NOTICE.md",
+      "sha256": "f99522ae9c481ceacba628e994cdd8a958b6febaa7ae66136020849cc6925ad0",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 3204
+    },
+    {
+      "note": "NMR DP5/FCHL model asset; notice/licence obligations ride with the wheel",
+      "path": "src/cccp/analysis/nmr/model_assets/atomic_reps.gz",
+      "sha256": "bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 22171041
+    },
+    {
+      "note": "NMR DP5/FCHL model asset; notice/licence obligations ride with the wheel",
+      "path": "src/cccp/analysis/nmr/model_assets/c_w_kde_mean_s_0.025.p",
+      "sha256": "246025abffd97e32cc405d8956deaf3fd03e7426ff688e7052340135e79dc309",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 79518
+    },
+    {
+      "note": "NMR DP5/FCHL model asset; notice/licence obligations ride with the wheel",
+      "path": "src/cccp/analysis/nmr/model_assets/folded_scaled_errors.p",
+      "sha256": "c59bd8d3218b28db0e5dde3cf70911688ce530351c45f7930a4b470bd9d200dd",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 851489
+    },
+    {
+      "note": "NMR DP5/FCHL model asset; notice/licence obligations ride with the wheel",
+      "path": "src/cccp/analysis/nmr/model_assets/frag_reps.gz",
+      "sha256": "e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 18044581
+    },
+    {
+      "note": "NMR DP5/FCHL model asset; notice/licence obligations ride with the wheel",
+      "path": "src/cccp/analysis/nmr/model_assets/i_w_kde_mean_s_0.025.p",
+      "sha256": "2d523808d3859e8a48c695f5dbf8f9b9fe1fd3f02ee2dc70c8016414cf8f383e",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 24353668
+    },
+    {
+      "note": "TMS reference shieldings",
+      "path": "src/cccp/analysis/nmr/model_assets/tms_references.txt",
+      "sha256": "5ff2429aa73ade13aa6a98b3cc6433cc8eedd9d2a687c6b9fa907be03be7dcf7",
+      "ships_via": "[tool.setuptools.package-data] \"cccp.analysis.nmr\" = [\"model_assets/*\"]",
+      "size_bytes": 4578
+    },
+    {
+      "note": "empty typing marker (sha256 is the empty-file digest)",
+      "path": "src/cccp/py.typed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ships_via": "[tool.setuptools.package-data] \"cccp\" = [\"py.typed\"]",
+      "size_bytes": 0
+    },
+    {
+      "note": "root MIT licence",
+      "path": "LICENSE",
+      "sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d",
+      "ships_via": "stage_role copies LICENSE into every role stage; sdist check asserts LICENSE",
+      "size_bytes": 1066
+    }
+  ],
+  "contract_corpus": [
+    {
+      "in_package_path": "cccp/analysis/research/contracts/capability.schema.json",
+      "sha256": "39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
+      "size_bytes": 18581,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/capability.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/task-binding.schema.json",
+      "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+      "size_bytes": 18004,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/task-binding.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/errors.schema.json",
+      "sha256": "ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
+      "size_bytes": 12272,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/errors.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/reaction.schema.json",
+      "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+      "size_bytes": 15559,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/reaction.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/question.schema.json",
+      "sha256": "513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
+      "size_bytes": 7194,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/question.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/evidence.schema.json",
+      "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+      "size_bytes": 14038,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/evidence.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/provenance.schema.json",
+      "sha256": "20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
+      "size_bytes": 9814,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/provenance.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/recipe.schema.json",
+      "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+      "size_bytes": 12521,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/recipe.schema.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/semantic-rules.md",
+      "sha256": "53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
+      "size_bytes": 15194,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/semantic-rules.md"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/evidence-semantics.md",
+      "sha256": "1cc0aace3580b8ddce196f719d5c88a434b24203a11bf73cb9e7c5afa414806f",
+      "size_bytes": 23592,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/evidence-semantics.md"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/examples/capability-energy.json",
+      "sha256": "8210e6c0af0e99d721029ad8afd91f6c8e3db3f8946aa0cdaf8af516896ea846",
+      "size_bytes": 4232,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/examples/capability-energy.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/examples/task-binding-singlepoint.json",
+      "sha256": "de1c6d70cd05fac2e2fc6da640cd6cde55ce7177c6893cad2708f413ac8b07c6",
+      "size_bytes": 5594,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/examples/task-binding-singlepoint.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/examples/reaction-da.json",
+      "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
+      "size_bytes": 6035,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json"
+    },
+    {
+      "in_package_path": "cccp/analysis/research/contracts/examples/question-activation.json",
+      "sha256": "c806d87bbd57bae2c00b3e4cdf915fdf79f53c55da30377d5482115ff1f98a62",
+      "size_bytes": 1158,
+      "source_path": "docs/reference/next-change/acp2-contracts/science/examples/question-activation.json"
+    }
+  ],
+  "entries": [
+    "cccp.analysis.research",
+    "cccp.analysis.research.validators",
+    "cccp.calculation.capabilities",
+    "cccp.analysis.nmr.comparison",
+    "cccp.analysis.ensemble.science",
+    "cccp.analysis.frequency_products"
+  ],
+  "forbidden_any_level": [],
+  "forbidden_imports": [],
+  "forbidden_module_level": [],
+  "forbidden_roots": [
+    "acp",
+    "acp_services",
+    "dsh"
+  ],
+  "fresh_probe": {
+    "calculation_tasks": [],
+    "exit_code": 0,
+    "forbidden": [],
+    "ok": true,
+    "qc": [
+      "cccp.qc",
+      "cccp.qc.cluster",
+      "cccp.qc.hessian_policy",
+      "cccp.qc.interfaces",
+      "cccp.qc.interfaces.base",
+      "cccp.qc.interfaces.censo",
+      "cccp.qc.interfaces.constraints",
+      "cccp.qc.interfaces.crest",
+      "cccp.qc.interfaces.isostat",
+      "cccp.qc.interfaces.molclus",
+      "cccp.qc.interfaces.orca",
+      "cccp.qc.interfaces.orca_ts",
+      "cccp.qc.interfaces.route_render",
+      "cccp.qc.interfaces.xtb",
+      "cccp.qc.interfaces.xtb_path",
+      "cccp.qc.interfaces.xtb_scan",
+      "cccp.qc.interfaces.xtb_thermo",
+      "cccp.qc.keyword_registry",
+      "cccp.qc.method_meta",
+      "cccp.qc.runners",
+      "cccp.qc.thermo_normalize",
+      "cccp.qc.translation"
+    ]
+  },
+  "fresh_probe_research": {
+    "calculation_tasks": [],
+    "exit_code": 0,
+    "forbidden": [],
+    "ok": true,
+    "qc": []
+  },
+  "git_commit": "fd80ca2d66cd20d61975d80e957388e9f6264ccb",
+  "interpreter": {
+    "executable": "/opt/acp2-dev/envs/a-python/bin/python",
+    "version": "3.11.13"
+  },
+  "module_level_third_party_imports": {
+    "src/cccp/analysis/ensemble/assembly.py": [
+      {
+        "line": 13,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/analysis/ensemble/selection.py": [
+      {
+        "line": 14,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/analysis/nmr/assignment.py": [
+      {
+        "line": 24,
+        "target": "scipy.optimize"
+      }
+    ],
+    "src/cccp/analysis/nmr/error_model.py": [
+      {
+        "line": 32,
+        "target": "numpy"
+      },
+      {
+        "line": 33,
+        "target": "scipy.special"
+      }
+    ],
+    "src/cccp/analysis/nmr/fchl.py": [
+      {
+        "line": 52,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/analysis/nmr/iterative_assignment.py": [
+      {
+        "line": 75,
+        "target": "scipy.optimize"
+      }
+    ],
+    "src/cccp/analysis/nmr/scaling.py": [
+      {
+        "line": 21,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/analysis/nmr/spectra.py": [
+      {
+        "line": 41,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/analysis/structure/parsers.py": [
+      {
+        "line": 6,
+        "target": "numpy"
+      },
+      {
+        "line": 7,
+        "target": "numpy.typing"
+      }
+    ],
+    "src/cccp/analysis/structure/structures.py": [
+      {
+        "line": 23,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/qc/interfaces/base.py": [
+      {
+        "line": 14,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/qc/interfaces/censo.py": [
+      {
+        "line": 23,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/qc/interfaces/crest.py": [
+      {
+        "line": 15,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/qc/interfaces/isostat.py": [
+      {
+        "line": 18,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/qc/interfaces/molclus.py": [
+      {
+        "line": 18,
+        "target": "numpy"
+      },
+      {
+        "line": 19,
+        "target": "numpy.typing"
+      }
+    ],
+    "src/cccp/qc/interfaces/orca.py": [
+      {
+        "line": 25,
+        "target": "numpy"
+      },
+      {
+        "line": 26,
+        "target": "numpy.typing"
+      }
+    ],
+    "src/cccp/qc/interfaces/orca_ts.py": [
+      {
+        "line": 20,
+        "target": "numpy"
+      },
+      {
+        "line": 21,
+        "target": "numpy.typing"
+      }
+    ],
+    "src/cccp/qc/interfaces/xtb.py": [
+      {
+        "line": 16,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/qc/interfaces/xtb_scan.py": [
+      {
+        "line": 18,
+        "target": "numpy"
+      },
+      {
+        "line": 19,
+        "target": "numpy.typing"
+      }
+    ],
+    "src/cccp/qc/interfaces/xtb_thermo.py": [
+      {
+        "line": 19,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/utils/file_io.py": [
+      {
+        "line": 13,
+        "target": "numpy"
+      }
+    ],
+    "src/cccp/utils/geometry_tools.py": [
+      {
+        "line": 11,
+        "target": "numpy"
+      }
+    ]
+  },
+  "module_level_third_party_modules": [
+    "numpy",
+    "scipy"
+  ],
+  "packaging_delta": {
+    "added_package_data_key": "cccp.analysis.research",
+    "existing_role_dependencies": [
+      "numpy>=2.1.0",
+      "rdkit>=2022.09.1",
+      "pyyaml>=6.0",
+      "scipy>=1.10",
+      "matplotlib>=3.7",
+      "openpyxl>=3.1",
+      "typing-extensions>=4.1"
+    ],
+    "files": [
+      "packaging/roles/cccp/pyproject.toml"
+    ],
+    "patterns": [
+      "contracts/*.json",
+      "contracts/*.md",
+      "contracts/examples/*.json"
+    ],
+    "remote_node_floor": [
+      "numpy>=2.1.0",
+      "rdkit>=2022.09.1",
+      "pyyaml>=6.0",
+      "scipy>=1.10",
+      "matplotlib>=3.7",
+      "openpyxl>=3.1",
+      "nmrglue>=0.10",
+      "typing-extensions>=4.1"
+    ],
+    "runtime_dependency_additions": []
+  },
+  "per_entry_closure": {
+    "cccp.analysis.ensemble.science": {
+      "forbidden_any_level": [],
+      "resolved_count": 54
+    },
+    "cccp.analysis.frequency_products": {
+      "forbidden_any_level": [],
+      "resolved_count": 10
+    },
+    "cccp.analysis.nmr.comparison": {
+      "forbidden_any_level": [],
+      "resolved_count": 32
+    },
+    "cccp.analysis.research": {
+      "forbidden_any_level": [],
+      "resolved_count": 11
+    },
+    "cccp.analysis.research.validators": {
+      "forbidden_any_level": [],
+      "resolved_count": 11
+    },
+    "cccp.calculation.capabilities": {
+      "forbidden_any_level": [],
+      "resolved_count": 17
+    }
+  },
+  "python_support_range": {
+    "narrowed_by_this_request": false,
+    "role_cccp": ">=3.10",
+    "web": ">=3.10",
+    "worker": ">=3.10"
+  },
+  "resolved_count": 89,
+  "resolved_modules": [
+    "cccp",
+    "cccp.analysis",
+    "cccp.analysis.ensemble",
+    "cccp.analysis.ensemble.assembly",
+    "cccp.analysis.ensemble.inputs",
+    "cccp.analysis.ensemble.levels",
+    "cccp.analysis.ensemble.science",
+    "cccp.analysis.ensemble.selection",
+    "cccp.analysis.ensemble.solvent",
+    "cccp.analysis.ensemble.thermo",
+    "cccp.analysis.frequency_products",
+    "cccp.analysis.identity",
+    "cccp.analysis.nmr",
+    "cccp.analysis.nmr.assets",
+    "cccp.analysis.nmr.assignment",
+    "cccp.analysis.nmr.atomic_diagnostics",
+    "cccp.analysis.nmr.averaging",
+    "cccp.analysis.nmr.comparison",
+    "cccp.analysis.nmr.enumerate",
+    "cccp.analysis.nmr.equivalence",
+    "cccp.analysis.nmr.error_model",
+    "cccp.analysis.nmr.fchl",
+    "cccp.analysis.nmr.io",
+    "cccp.analysis.nmr.iterative_assignment",
+    "cccp.analysis.nmr.models",
+    "cccp.analysis.nmr.probability",
+    "cccp.analysis.nmr.protocol",
+    "cccp.analysis.nmr.reference_validation",
+    "cccp.analysis.nmr.scaling",
+    "cccp.analysis.nmr.spectra",
+    "cccp.analysis.nmr.spectra_registry",
+    "cccp.analysis.nmr.structure_map",
+    "cccp.analysis.orca_parser",
+    "cccp.analysis.research",
+    "cccp.analysis.research._common",
+    "cccp.analysis.research.artifact_manifest",
+    "cccp.analysis.research.evidence",
+    "cccp.analysis.research.provenance",
+    "cccp.analysis.research.question",
+    "cccp.analysis.research.reaction",
+    "cccp.analysis.research.selectivity",
+    "cccp.analysis.research.validators",
+    "cccp.analysis.structure",
+    "cccp.analysis.structure.embedding",
+    "cccp.analysis.structure.models",
+    "cccp.analysis.structure.parsers",
+    "cccp.analysis.structure.structures",
+    "cccp.analysis.structure.topology",
+    "cccp.calculation",
+    "cccp.calculation.capabilities",
+    "cccp.calculation.capabilities.builtin",
+    "cccp.calculation.capabilities.contracts",
+    "cccp.calculation.capabilities.domains",
+    "cccp.calculation.capabilities.registry",
+    "cccp.calculation.capabilities.task_binding",
+    "cccp.calculation.contracts",
+    "cccp.calculation.errors",
+    "cccp.calculation.frequency_parse",
+    "cccp.calculation.requests",
+    "cccp.calculation.results",
+    "cccp.qc",
+    "cccp.qc.cluster",
+    "cccp.qc.hessian_policy",
+    "cccp.qc.interfaces",
+    "cccp.qc.interfaces.base",
+    "cccp.qc.interfaces.censo",
+    "cccp.qc.interfaces.constraints",
+    "cccp.qc.interfaces.crest",
+    "cccp.qc.interfaces.isostat",
+    "cccp.qc.interfaces.molclus",
+    "cccp.qc.interfaces.orca",
+    "cccp.qc.interfaces.orca_ts",
+    "cccp.qc.interfaces.route_render",
+    "cccp.qc.interfaces.xtb",
+    "cccp.qc.interfaces.xtb_path",
+    "cccp.qc.interfaces.xtb_scan",
+    "cccp.qc.interfaces.xtb_thermo",
+    "cccp.qc.keyword_registry",
+    "cccp.qc.method_meta",
+    "cccp.qc.runners",
+    "cccp.qc.thermo_normalize",
+    "cccp.qc.translation",
+    "cccp.software",
+    "cccp.utils",
+    "cccp.utils.constants",
+    "cccp.utils.file_io",
+    "cccp.utils.geometry_tools",
+    "cccp.utils.resource_utils",
+    "cccp.utils.solvent_map"
+  ],
+  "schema": "acp2.science.packaging-audit.v1",
+  "task": "A-27a",
+  "unresolved_cccp_imports": []
+}

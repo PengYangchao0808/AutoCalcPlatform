@@ -1,0 +1,24 @@
+{
+  "argv": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/real_environment.py --scenario m1-singlepoint --out reports/acp2_implementation/bb45a46/B/B10/m1-baseline --timeout 300 --keep-temp",
+  "attempt": 1,
+  "controller_run_root": "/tmp/acp-m1-hl_kb0ye",
+  "energy_hartree": -155.001263624935,
+  "exit_code": 0,
+  "independent_of_shared_h3": true,
+  "method": {
+    "levels": {
+      "single_point": {
+        "engine": "orca",
+        "functional": "r2SCAN-3c"
+      }
+    }
+  },
+  "note": "The harness starts its own temporary Controller/DB under /tmp; it is a different run from the shared B10 task on 127.0.0.1:18768.",
+  "plan_identity": "v2:f5a1970ff626be4ffc6c4b506ea3cf6a",
+  "release_id": "98e0695545d668e6",
+  "result_digest": "sha256:6f94091f041aa41c3e92e728edcd8369e25cb26c07fbe32deb39a4a01c07aae3",
+  "scenario": "m1-singlepoint (independent baseline, not the shared H3 task)",
+  "status": "completed",
+  "submission_id": "sub_fb236317442f3f36",
+  "task_ref": "20261023_031220_001_singlepoint"
+}

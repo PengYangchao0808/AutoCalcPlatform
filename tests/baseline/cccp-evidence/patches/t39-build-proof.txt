@@ -1,0 +1,42 @@
+### 0. frozen input snapshot
+f1bb44ce23d2591d5593a4d8bfd332c82de1c2de
+0c24617eb1a6ef5970e159fccf89a211e42183ddbbf356d105be4097ff274829  <repo>/pyproject.toml
+25404ebd884066268a428948de8eb7d4cab23d22
+
+### 1. apply the requested patches in a throwaway git repo
+正在检查补丁 pyproject.toml...
+成功应用补丁 pyproject.toml。
+正在检查补丁 packaging/cccp/pyproject.toml...
+成功应用补丁 packaging/cccp/pyproject.toml。
+PATCH_APPLY_EXIT=0
+
+### 2. cccp wheel (independent science distribution)
+removing build/bdist.linux-x86_64/wheel
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+Successfully built cccp-0.2.0-py3-none-any.whl
+总用量 43496
+-rw-r--r--. 1 <user> <user> 44539846 10月 19 12:33 cccp-0.2.0-py3-none-any.whl
+2f673bb135d2a6d184f53bff584dcbd9dd9c0d09f10abb2ad3a417353b65dc52  /tmp/opencode/t39-proof/dist-cccp/cccp-0.2.0-py3-none-any.whl
+
+### 3. acp wheel (M2 ownership: no cccp/)
+removing build/bdist.linux-x86_64/wheel
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+Successfully built acp-0.2.0-py3-none-any.whl
+总用量 1452
+-rw-r--r--. 1 <user> <user> 1486160 10月 19 12:33 acp-0.2.0-py3-none-any.whl
+d2eb6eb9d3bc6fe0782dc6eb10750e0fa96ac6ed6f81de08b0ba7b2f7254aab0  /tmp/opencode/t39-proof/dist-acp/acp-0.2.0-py3-none-any.whl
+
+### 4. namelist assertions
+cccp wheel entries: 194
+cccp wheel missing: []
+cccp wheel acp* leak: []
+digest OK cccp/analysis/nmr/model_assets/atomic_reps.gz
+digest OK cccp/analysis/nmr/model_assets/frag_reps.gz
+OK: cccp wheel = 8/8 assets + py.typed; zero acp* entries
+acp wheel entries: 346
+acp wheel cccp/ leak: []
+acp wheel legacy acp/nmr/models/: []
+acp wheel has acp/__init__.py: True
+acp wheel has acp/py.typed: True
+OK: acp(M2) wheel owns acp/** + acp_services/**, zero cccp/ entries
+PROOF_EXIT=0

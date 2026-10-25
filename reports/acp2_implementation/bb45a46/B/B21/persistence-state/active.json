@@ -1,0 +1,12 @@
+{
+  "active": {
+    "acp.storage.inventory": "1.1.0",
+    "acp.storage.sideeffect": "1.0.0",
+    "platform.identity.local": "1.0.0",
+    "platform.scheduler.local": "1.0.0",
+    "platform.scheduler.lsf": "1.0.0",
+    "platform.storage.local": "1.0.0",
+    "platform.transfer.local": "1.0.0"
+  },
+  "schema": "acp2.adapter.active.v1"
+}

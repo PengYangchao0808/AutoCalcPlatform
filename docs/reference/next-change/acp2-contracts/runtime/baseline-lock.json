@@ -1,0 +1,119 @@
+{
+  "schema": "acp2.baseline-lock.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "contract_version": "1.0.0",
+  "created_at": "2026-10-22T00:00:00Z",
+  "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "candidate_label": "bb45a46",
+  "evidence_root": "reports/acp2_implementation/bb45a46",
+  "historical_debug_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+  "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
+  "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "final_debug_candidate_kind": "source_overlay_sha256",
+  "final_debug_candidate_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+  "final_debug_candidate_commit_note": "Materialized by B02 in /opt/acp2-dev/B from the frozen bundle; see materialization.",
+  "pending_fix_bundle": {
+    "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
+    "tracked_patch_sha256": "4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242",
+    "candidate_snapshot_sha256": "37dd2320cc5d97ea7eb866a2275641c0d0518801202137f08e8f84046cea1194",
+    "bundle_manifest_sha256": "8340f2e81d8f4adcfe2aa872106285468d6b2c71ccc3fcd3b9cef1bbced8f21e",
+    "verification": "partial",
+    "per_file_verification": "1906/1906 matched in clean reconstruction",
+    "digest_rule": "inherited_from_report (candidate_id derivation not reconstructable; see manifest drift)"
+  },
+  "debug_report": {
+    "path": "reports/architecture_repair_20261022/REPORT.md",
+    "sha256": "1a970c8d12885a0bd9d18d6b15c37060b69d26556157b8efc3e8b52a102a15de"
+  },
+  "revisions": {
+    "server_revision": {
+      "value": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+      "kind": "git-commit",
+      "status": "frozen"
+    },
+    "client_revision": {
+      "value": null,
+      "kind": "C-owned RPH/client",
+      "status": "not_delivered",
+      "owner": "C"
+    },
+    "harness_revision": {
+      "value": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+      "kind": "B01 acceptance harness file sha256",
+      "status": "frozen",
+      "owner": "B"
+    },
+    "deployment_revision": {
+      "value": null,
+      "kind": "deployed service revision",
+      "status": "NOT_VERIFIED",
+      "note": "No production deployment or service restart in B00."
+    }
+  },
+  "contract_digest": "61eb7eb5cb679aa7a4168e8f49d90f0a32acf8b9cffb4b0b572eec39272aeb54",
+  "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
+  "env_digest": "2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc",
+  "env_digest_status": "recorded by B07 (acceptance-env.sh sha256 at the H2 freeze)",
+  "worktree": {
+    "source_checkout": "repo-root",
+    "branch": "feat/frontend-plan1-closure",
+    "head": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "verification_worktree": "/tmp/opencode/acp-b00-candidate (detached clean reconstruction; removed after verification)",
+    "dirty_source_tree_used_as_baseline": false
+  },
+  "run_root_policy": {
+    "production_run_root": "/var/lib/acp/runs",
+    "production_run_root_forbidden": true,
+    "required_filesystem": "native (no 9p/nfs/cifs/fuse)",
+    "allocation": "B02"
+  },
+  "dirty_path_snapshot": {
+    "path": "reports/acp2_implementation/bb45a46/B/B00/git-status-snapshot.txt",
+    "count": 90,
+    "modified_tracked": 39,
+    "untracked": 51,
+    "note": "Snapshot excludes the B00 evidence directory itself. A dirty tree is never the baseline.",
+    "historical_plan_count": 24
+  },
+  "evidence_roots": {
+    "A": "reports/acp2_implementation/bb45a46/A",
+    "B": "reports/acp2_implementation/bb45a46/B",
+    "C": "reports/acp2_implementation/bb45a46/C",
+    "integration": "reports/acp2_implementation/bb45a46/integration"
+  },
+  "blocking_gates": {
+    "H0": "closed-by-B00-manifest-and-baseline-lock; B02 must materialize the commit SHA",
+    "production": "NOT_VERIFIED (no deployment in B00)"
+  },
+  "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "client_revision": null,
+  "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+  "deployment_revision": null,
+  "revision_status": {
+    "server_revision": "frozen H2 git commit",
+    "client_revision": "C-owned; not delivered at B00",
+    "harness_revision": "B01 harness file sha256 in the H2 candidate",
+    "deployment_revision": "NOT_VERIFIED; no production deployment"
+  },
+  "materialization": {
+    "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+    "materialized_at": "2026-10-22T19:34:40+08:00",
+    "base_commit": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "bundle_digest": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "bundle_digest_note": "Inherited candidate id (derivation not reconstructable); per-file evidence independent.",
+    "verification": "1906/1906",
+    "verification_detail": {
+      "checked": 1906,
+      "total": 1906,
+      "mismatches": 0,
+      "missing": 0
+    },
+    "worktree": "/opt/acp2-dev/B",
+    "apply_order": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/apply-order.md",
+    "tracked_patch_sha256": "4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242",
+    "commit_message": "fix(debug): apply frozen 2026-10-22 final debug candidate",
+    "porcelain_after_commit": "empty",
+    "env_digest": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7",
+    "env_digest_rule": "sha256 of $ACP2_DATA_ROOT/acceptance-env.sh"
+  }
+}

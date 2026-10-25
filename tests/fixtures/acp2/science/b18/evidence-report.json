@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "report_id": "report-b18-static-singlepoint",
+  "subject": {
+    "subject_id": "task-b18-static",
+    "subject_kind": "artifact_set",
+    "description": "STATIC/SIMULATED B18 evidence registration fixture; not real QC.",
+    "input_digests": [
+      {"algorithm": "sha256", "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+    ]
+  },
+  "execution": {
+    "terminal_state": "completed",
+    "argv": ["b18-static", "singlepoint"],
+    "exit_code": 0,
+    "started_at": "2026-10-23T00:00:00Z",
+    "finished_at": "2026-10-23T00:00:01Z",
+    "stdout_path": "native/stdout.txt",
+    "stderr_path": "native/stderr.txt"
+  },
+  "claims": [
+    {
+      "claim_id": "c-static-supported",
+      "statement": "A static fixture claim preserving the supported status.",
+      "status": "supported",
+      "scope": {"subject": "static_fixture", "applicability": "system_specific"},
+      "source_refs": [
+        {
+          "artifact_path": "native/stdout.txt",
+          "digest": {"algorithm": "sha256", "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+          "role": "native_output",
+          "units": null
+        }
+      ],
+      "missing_checks": []
+    },
+    {
+      "claim_id": "c-static-refuted",
+      "statement": "A static fixture claim preserving the refuted status.",
+      "status": "refuted",
+      "scope": {"subject": "static_fixture", "applicability": "system_specific"},
+      "source_refs": [
+        {
+          "artifact_path": "native/stdout.txt",
+          "digest": {"algorithm": "sha256", "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+          "role": "native_output",
+          "units": null
+        }
+      ],
+      "missing_checks": []
+    },
+    {
+      "claim_id": "c-static-inconclusive",
+      "statement": "A static fixture claim preserving the inconclusive status.",
+      "status": "inconclusive",
+      "scope": {"subject": "static_fixture", "applicability": "system_specific"},
+      "source_refs": [],
+      "missing_checks": []
+    },
+    {
+      "claim_id": "c-static-not-evaluated",
+      "statement": "A static fixture claim preserving the not_evaluated status.",
+      "status": "not_evaluated",
+      "scope": {"subject": "static_fixture", "applicability": "system_specific"},
+      "source_refs": [],
+      "missing_checks": [
+        {"check_id": "not_executed", "reason": "STATIC fixture; no real QC.", "blocking": true}
+      ]
+    }
+  ],
+  "limitations": [
+    {"limitation_id": "lim-static", "description": "STATIC/SIMULATED fixture only; no real QC execution."}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "adapter_id": "platform.scheduler.local",
+      "backend": "local",
+      "detail": "command exit=0; stdout_tail=['58 passed in 1.96s']",
+      "status": "PASS",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "platform.scheduler.lsf",
+      "backend": "lsf",
+      "detail": "no live LSF client/queue attached; descriptor only, no bsub run",
+      "status": "NOT_VERIFIED",
+      "version": "1.0.0"
+    },
+    {
+      "backend": "slurm",
+      "detail": "no real Slurm environment; submit/cancel/recover were not executed, so Slurm is not claimed",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "schema": "acp2.b21.compatibility.v1"
+}

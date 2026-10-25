@@ -1,0 +1,53 @@
+{
+  "schema": "acp2.second-controller-refusal.v1",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
+  "run_root": "/opt/acp2-dev/data/integration/controller-run-root",
+  "primary": {
+    "pid": 1002584,
+    "port": 18772
+  },
+  "second": {
+    "argv": [
+      "/opt/acp2-dev/venvs/b/bin/python",
+      "-m",
+      "acp",
+      "run",
+      "serve",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18773",
+      "--run-root",
+      "/opt/acp2-dev/data/integration/controller-run-root",
+      "--no-browser"
+    ],
+    "port": 18773,
+    "exit_code": 3
+  },
+  "refusal": "RuntimeError: run_root '/opt/acp2-dev/data/integration/controller-run-root' is already owned by another ACP server process (pid=1002584, cmdline='/opt/acp2-dev/venvs/b/bin/python -m acp run serve --host 127.0.0.1 --port 18772 --run-root /opt/acp2-dev/data/integration/controller-run-root --no-browser'); refusing to start a second instance — it would kill the owner's running jobs",
+  "traceback_resolves_inside_candidate": [
+    "/opt/acp2-dev/integration/src/acp/api/server.py",
+    "/opt/acp2-dev/integration/src/acp/scheduler/manager.py"
+  ],
+  "no_side_effects": {
+    "jobs_rows": 0,
+    "tasks_rows": 0,
+    "worker_started": false,
+    "submission_persisted": false
+  },
+  "cleanup": {
+    "primary_stopped": true,
+    "second_exited": true,
+    "ports_18772_18773_free": true,
+    "manager_lock_present": false
+  },
+  "production_8765_touched": false,
+  "evidence": {
+    "primary_log": "reports/acp2_implementation/bb45a46/B/B14/controller-primary-refreeze.log",
+    "second_log": "reports/acp2_implementation/bb45a46/B/B14/controller-second-refusal-refreeze.log",
+    "health": "reports/acp2_implementation/bb45a46/B/B14/controller-health-refreeze.json",
+    "exit": "reports/acp2_implementation/bb45a46/B/B14/second-controller-exit-refreeze.txt",
+    "ports": "reports/acp2_implementation/bb45a46/B/B14/port-check-after-stop-refreeze.txt"
+  }
+}

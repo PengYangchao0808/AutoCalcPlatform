@@ -59,7 +59,11 @@ from typing import TYPE_CHECKING, Any
 from acp.scheduler.remote.config import RemoteNode
 from acp.scheduler.remote.sftp import FileStager
 from acp.scheduler.remote.ssh import SSHConnectionPool
-from acp.scheduler.remote.sync import _project_root, build_sync_file_list
+from acp.scheduler.remote.sync import (
+    _project_root,
+    _sync_entries,
+    resolve_sync_source,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from acp.scheduler.store import JobStore
@@ -287,16 +291,17 @@ def _git_metadata(project_root: Path) -> tuple[str | None, bool]:
 def build_release_manifest(project_root: Path | str) -> ReleaseManifest:
     """Build the content manifest for the current tree at *project_root*.
 
-    The file set is exactly :func:`build_sync_file_list` (``src/acp``
-    excluding ``api``/``scheduler``, ``src/cccp``,
-    ``requirements-node.txt``, ``config/defaults.yaml``).  ``release_id``
+    The file set is exactly :func:`_sync_entries` (``src/acp`` excluding
+    ``api``/``scheduler``, ``src/acp_services``, ``src/cccp``,
+    ``requirements-node.txt``, ``config/defaults.yaml`` for a source checkout;
+    package-relative ``acp``/``acp_services``/``cccp`` keys for an installed
+    wheel).  ``release_id``
     covers the ``files`` map ONLY — git commit/dirty are recorded as
     best-effort metadata and never influence identity.
     """
     root = Path(project_root)
     files: dict[str, dict[str, str | int]] = {}
-    for path in build_sync_file_list(root):
-        rel = path.relative_to(root).as_posix()
+    for rel, path in _sync_entries(root):
         digest, size = _sha256_file(path)
         files[rel] = {"sha256": digest, "size": size}
 
@@ -672,7 +677,7 @@ def _upload_missing(
                 current = None
             if current == str(meta["sha256"]):
                 continue
-        stager.upload_file(node, project_root / rel, remote)
+        stager.upload_file(node, resolve_sync_source(project_root, rel), remote)
         uploaded += 1
     return uploaded
 

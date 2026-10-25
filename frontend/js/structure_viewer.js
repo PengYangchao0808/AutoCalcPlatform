@@ -1049,7 +1049,9 @@
     var v = _canvasViewer(canvasId);
     if (!v || typeof v.getView !== "function") return false;
     try {
-      geometryStore.cameras[canvasId] = v.getView();
+      var view = v.getView();
+      if (view === null) return false;
+      geometryStore.cameras[canvasId] = view;
       return true;
     } catch (_) {
       return false;
@@ -1067,12 +1069,14 @@
     var view = geometryStore.cameras[canvasId];
     if (!v || !view || typeof v.setView !== "function") return false;
     try {
-      v.setView(view);
-      if (typeof v.render === "function") v.render();
-      return true;
+      if (v.setView(view) === false) return false;
     } catch (_) {
       return false;
     }
+    try {
+      if (typeof v.render === "function") v.render();
+    } catch (_) { /* render is best-effort */ }
+    return true;
   }
 
   /**
@@ -1126,8 +1130,16 @@
     var view = null;
     try { if (typeof v.getView === "function") view = v.getView(); } catch (_) { view = null; }
     try { if (typeof v.removeAllModels === "function") v.removeAllModels(); } catch (_) { /* empty */ }
-    v.addModel(xyzText, "xyz");
-    if (styleSpec && typeof v.setStyle === "function") v.setStyle({}, styleSpec);
+    var model = v.addModel(xyzText, "xyz");
+    if (styleSpec) {
+      /* token styles its OWN model; viewers whose addModel returns no token
+         keep the legacy viewer-level setStyle fallback */
+      if (model && typeof model.setStyle === "function") {
+        model.setStyle({}, styleSpec);
+      } else if (typeof v.setStyle === "function") {
+        v.setStyle({}, styleSpec);
+      }
+    }
     if (view && typeof v.setView === "function") { try { v.setView(view); } catch (_) { /* keep */ } }
     try { if (typeof v.render === "function") v.render(); } catch (_) { /* keep */ }
     return true;
@@ -1465,10 +1477,20 @@
     if (md && typeof md.i === "number") {
       var baseScale = 0.25;
       try { if (typeof getCurrentSphereScale === "function") baseScale = getCurrentSphereScale(); } catch (_) { /* app helper absent */ }
+      /* Model-A highlight: instance-level addStyle targets the CURRENT model
+         (B was just added), so A is styled through its getModel(0) token.
+         Viewers without token models keep the { model: 0 } selection form. */
+      var modelA = (typeof v.getModel === "function") ? v.getModel(0) : null;
       try {
-        v.addStyle({ index: md.i, model: 0 }, {
-          sphere: { scale: baseScale + 0.14, color: "yellow", opacity: 0.6 },
-        });
+        if (modelA && typeof modelA.addStyle === "function") {
+          modelA.addStyle({ index: md.i }, {
+            sphere: { scale: baseScale + 0.14, color: "yellow", opacity: 0.6 },
+          });
+        } else {
+          v.addStyle({ index: md.i, model: 0 }, {
+            sphere: { scale: baseScale + 0.14, color: "yellow", opacity: 0.6 },
+          });
+        }
       } catch (_) { /* highlight is cosmetic */ }
     }
     try { v.render(); } catch (_) { /* render is best-effort */ }

@@ -1,0 +1,58 @@
+{
+  "version": 0,
+  "product_kind": "structure_trajectory",
+  "generator": "legacy.xtb_md_export",
+  "input_digest": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  "frames": [
+    {
+      "index": 0,
+      "symbols": [
+        "O",
+        "H",
+        "H"
+      ],
+      "coordinates": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.96,
+          0.0,
+          0.0
+        ],
+        [
+          -0.24,
+          0.93,
+          0.0
+        ]
+      ]
+    },
+    {
+      "index": 1,
+      "symbols": [
+        "O",
+        "H",
+        "H"
+      ],
+      "coordinates": [
+        [
+          0.01,
+          0.0,
+          0.0
+        ],
+        [
+          0.97,
+          0.01,
+          0.0
+        ],
+        [
+          -0.23,
+          0.94,
+          0.0
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,187 @@
+{
+  "id": "20261023_031220_001_singlepoint",
+  "spec": {
+    "workflow": "singlepoint",
+    "name": "CCO_singlepoint",
+    "input": {
+      "source_type": "smiles",
+      "source": "CCO"
+    },
+    "method": {
+      "levels": {
+        "single_point": {
+          "engine": "orca",
+          "functional": "r2SCAN-3c"
+        }
+      }
+    },
+    "resources": {
+      "nproc": 20,
+      "mem": "60GB"
+    },
+    "output_dir": null,
+    "config_path": null,
+    "tags": [],
+    "project_id": "uncategorized",
+    "input_hash": "sha256:02fea14af8ae66891a027e6ad25929a74d6e9bfa3ce200d15ce83483f3c12bf5",
+    "execution_mode": null,
+    "target_node": null,
+    "node_tags": [],
+    "molecule_name": "CCO",
+    "task_name": "singlepoint",
+    "remark": "",
+    "custom_name": null
+  },
+  "status": "completed",
+  "work_dir": "/tmp/acp-m1-hl_kb0ye/uncategorized/CCO_singlepoint",
+  "created_at": "2026-10-22T19:12:20.862567+00:00",
+  "updated_at": "2026-10-22T19:12:50.056873+00:00",
+  "started_at": "2026-10-22T19:12:20.873291+00:00",
+  "completed_at": "2026-10-22T19:12:50.056799+00:00",
+  "current_stage": null,
+  "progress": null,
+  "error": null,
+  "project_id": "uncategorized",
+  "input_hash": "sha256:02fea14af8ae66891a027e6ad25929a74d6e9bfa3ce200d15ce83483f3c12bf5",
+  "pid": 594357,
+  "exit_code": 0,
+  "remote_job_id": null,
+  "group_id": "20261023_031220_001_singlepoint",
+  "node_id": "local",
+  "host": "redacted-host",
+  "result": {
+    "admission": {
+      "reservation_id": "res_job_20261023_031220_001_singlepoint",
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "enforced": true,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "verified_project": null,
+      "multi_tenant_security": false,
+      "reason_code": "admitted"
+    },
+    "required_software": [
+      "orca"
+    ],
+    "execution_target": "local",
+    "execution_kind": "local",
+    "publication_pending": true,
+    "terminal_side_effects_done": false,
+    "receipt_state": "completed",
+    "receipt_result_digest": "sha256:6f94091f041aa41c3e92e728edcd8369e25cb26c07fbe32deb39a4a01c07aae3",
+    "receipt_written_at": "2026-10-22T19:12:27.711665+00:00",
+    "artifacts": [
+      {
+        "artifact_id": "5d1c84a9-ac85-4974-b337-e84a799ae38e",
+        "task_id": null,
+        "job_id": "20261023_031220_001_singlepoint",
+        "artifact_type": "json",
+        "file_path": "RESULT/energy/singlepoint_energy.json",
+        "checksum": "sha256:460405b7a878238c03b0872b387b95d6e227234b547c0206cbbc8e11c996ddff",
+        "size_bytes": 245,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-22T19:12:50.123044+00:00"
+      },
+      {
+        "artifact_id": "894c53fa-a584-4c98-97b5-dd44c20c1b42",
+        "task_id": null,
+        "job_id": "20261023_031220_001_singlepoint",
+        "artifact_type": "json",
+        "file_path": "RESULT/publication_state.json",
+        "checksum": "sha256:bfed011ad27b07e4429ddf20908bf48109f5d4be01e2cb66d70fa93e87dfc205",
+        "size_bytes": 102,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-22T19:12:50.125525+00:00"
+      },
+      {
+        "artifact_id": "426a631c-d853-4207-9bff-2ff6fd1b6e00",
+        "task_id": null,
+        "job_id": "20261023_031220_001_singlepoint",
+        "artifact_type": "json",
+        "file_path": "RESULT/result_manifest.json",
+        "checksum": "sha256:891d1032ba016b553df44c52516a38decbb6892b53e8c26ebe37b7a658f6aa4e",
+        "size_bytes": 1249,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-22T19:12:50.127975+00:00"
+      },
+      {
+        "artifact_id": "bea4030c-afc1-4f7a-9068-bfbfb19b1b70",
+        "task_id": null,
+        "job_id": "20261023_031220_001_singlepoint",
+        "artifact_type": "json",
+        "file_path": "RESULT/scientific_result.json",
+        "checksum": "sha256:b62ea5bf93885120eccfec85182e854df8772b429952b3af1caaf4205bc042e3",
+        "size_bytes": 919,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-22T19:12:50.130538+00:00"
+      },
+      {
+        "artifact_id": "6a5ee115-9d92-4e92-9acf-95aceafc375b",
+        "task_id": null,
+        "job_id": "20261023_031220_001_singlepoint",
+        "artifact_type": "xyz",
+        "file_path": "RESULT/structures/singlepoint_final.xyz",
+        "checksum": "sha256:80b7f52ca54e9ce18fbc434bf31545d241a4016c988d098b97d002bd1f04b897",
+        "size_bytes": 412,
+        "parser_status": "pending",
+        "mime_type": "chemical/x-xyz",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-22T19:12:50.133026+00:00"
+      },
+      {
+        "artifact_id": "8dd52f9e-fe1b-4fc4-a1c8-1a7e187db95d",
+        "task_id": null,
+        "job_id": "20261023_031220_001_singlepoint",
+        "artifact_type": "json",
+        "file_path": "RESULT/task_result.json",
+        "checksum": "sha256:fe0196b740765119ff82ebb198b6380ce5e26974dcb1dbde0fc078acac107c7c",
+        "size_bytes": 2403,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-22T19:12:50.135446+00:00"
+      }
+    ],
+    "provenance": {
+      "input_hash": "sha256:02fea14af8ae66891a027e6ad25929a74d6e9bfa3ce200d15ce83483f3c12bf5",
+      "molecule_hash": null,
+      "acp_version": "0.2.0",
+      "backend_name": "singlepoint",
+      "backend_version": "",
+      "method": "singlepoint",
+      "basis": null,
+      "solvent": null,
+      "command_line": "",
+      "hostname": "redacted-host",
+      "ncores": 20,
+      "memory_gb": 60.0,
+      "wall_time_seconds": 29.183508,
+      "routine": "singlepoint",
+      "creator": null,
+      "schema_version": "1.0"
+    }
+  },
+  "revision": 5,
+  "attempt": 1
+}

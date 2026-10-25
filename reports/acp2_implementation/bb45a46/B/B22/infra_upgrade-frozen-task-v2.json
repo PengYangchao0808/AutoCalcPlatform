@@ -1,0 +1,183 @@
+{
+  "descriptor": {
+    "adapter_id": "acp.storage.inventory",
+    "capabilities": [
+      "storage.inventory"
+    ],
+    "claims_process_isolation": false,
+    "description": "External infrastructure adapter fixture; no science parser.",
+    "descriptor_schema": "acp2.adapter.v1",
+    "entrypoint": {
+      "attribute": "run",
+      "module": "adapter"
+    },
+    "environment": [
+      "env:ACP2_B21_PLUGIN_ENV"
+    ],
+    "kind": "storage",
+    "resource_limits": {
+      "max_concurrency": 1,
+      "max_cpu_seconds": 30,
+      "max_io_bytes": 1048576,
+      "max_memory_bytes": 33554432
+    },
+    "supported_schema": [
+      "acp2.adapter.v1"
+    ],
+    "trust_level": "discover-only",
+    "verification_fixture": "verification.json",
+    "version": "1.1.0"
+  },
+  "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+  "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+  "schema": "acp2.b21.frozen-task.v1",
+  "task": {
+    "adapters": [
+      {
+        "adapter_id": "acp.storage.inventory",
+        "capabilities": [
+          "storage.inventory"
+        ],
+        "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+        "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+        "environment": [
+          "env:ACP2_B21_PLUGIN_ENV"
+        ],
+        "kind": "storage",
+        "resource_limits": {
+          "max_concurrency": 1,
+          "max_cpu_seconds": 30,
+          "max_io_bytes": 1048576,
+          "max_memory_bytes": 33554432
+        },
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/acp.storage.inventory/1.1.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "verification.json",
+        "version": "1.1.0"
+      },
+      {
+        "adapter_id": "platform.identity.local",
+        "capabilities": [
+          "identity.local"
+        ],
+        "descriptor_digest": "39eaf8e03540920ca6605a75d83608ccbcc8136f82d9a92af8892d23aa6beb4c",
+        "entrypoint_digest": null,
+        "environment": [],
+        "kind": "identity",
+        "resource_limits": {
+          "max_concurrency": 32,
+          "max_cpu_seconds": 86400,
+          "max_io_bytes": 17179869184,
+          "max_memory_bytes": 68719476736
+        },
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.identity.local/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "tests/test_services_identity_lifecycle.py",
+        "version": "1.0.0"
+      },
+      {
+        "adapter_id": "platform.scheduler.local",
+        "capabilities": [
+          "scheduler.local"
+        ],
+        "descriptor_digest": "cb53b3c33f244a04326abf1d7e4fa7ed221ca762a773df0a52ae52ecc8e61393",
+        "entrypoint_digest": null,
+        "environment": [],
+        "kind": "scheduler",
+        "resource_limits": {
+          "max_concurrency": 32,
+          "max_cpu_seconds": 86400,
+          "max_io_bytes": 17179869184,
+          "max_memory_bytes": 68719476736
+        },
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.scheduler.local/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "tests/test_services_isolation.py",
+        "version": "1.0.0"
+      },
+      {
+        "adapter_id": "platform.scheduler.lsf",
+        "capabilities": [
+          "scheduler.lsf"
+        ],
+        "descriptor_digest": "0f0e576df8075308e6bf3f502d76c69c5904ad97c677ede5267e1d680092b828",
+        "entrypoint_digest": null,
+        "environment": [],
+        "kind": "scheduler",
+        "resource_limits": {
+          "max_concurrency": 32,
+          "max_cpu_seconds": 86400,
+          "max_io_bytes": 17179869184,
+          "max_memory_bytes": 68719476736
+        },
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.scheduler.lsf/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "tests/test_acp2_runtime_lsf_scenario.py",
+        "version": "1.0.0"
+      },
+      {
+        "adapter_id": "platform.storage.local",
+        "capabilities": [
+          "storage.local"
+        ],
+        "descriptor_digest": "997423e7f010d308789f4990687f2cad7c2d2c586ee75a5ab108cca462e3a393",
+        "entrypoint_digest": null,
+        "environment": [],
+        "kind": "storage",
+        "resource_limits": {
+          "max_concurrency": 32,
+          "max_cpu_seconds": 86400,
+          "max_io_bytes": 17179869184,
+          "max_memory_bytes": 68719476736
+        },
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.storage.local/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "tests/test_services_read_root.py",
+        "version": "1.0.0"
+      },
+      {
+        "adapter_id": "platform.transfer.local",
+        "capabilities": [
+          "transfer.local"
+        ],
+        "descriptor_digest": "2906fd15a5f58d5c4e5c7a67d0b3bf47869a75f8d4d891b62f844257ff1ca84e",
+        "entrypoint_digest": null,
+        "environment": [],
+        "kind": "transfer",
+        "resource_limits": {
+          "max_concurrency": 32,
+          "max_cpu_seconds": 86400,
+          "max_io_bytes": 17179869184,
+          "max_memory_bytes": 68719476736
+        },
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.transfer.local/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "tests/test_services_transfer_verify.py",
+        "version": "1.0.0"
+      }
+    ],
+    "attempt": 1,
+    "frozen_at": "2026-10-23T10:22:21Z",
+    "process_isolation": "NOT_VERIFIED",
+    "schema": "acp2.adapter.task-freeze.v1",
+    "task_id": "b21-new-task"
+  }
+}

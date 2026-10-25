@@ -1,0 +1,64 @@
+{
+ "protocol": "2025-06-18",
+ "tools": [
+  "acp_analyze",
+  "acp_cancel",
+  "acp_capabilities",
+  "acp_preflight",
+  "acp_prepare_artifact",
+  "acp_read_artifact",
+  "acp_status",
+  "acp_submit"
+ ],
+ "result": {
+  "jsonrpc": "2.0",
+  "id": 13,
+  "result": {
+   "content": [
+    {
+     "type": "text",
+     "text": "{\"schema_version\": 1, \"operation\": \"acp_status\", \"status\": \"ok\", \"exit_code\": 0, \"dry_run\": false, \"operation_identity\": \"tenant:local-single\", \"diagnostic_ref\": null, \"data\": {\"schema_version\": 1, \"task_id\": \"<redacted>\", \"job_id\": \"<redacted>\", \"task_ref\": {\"task_id\": \"<redacted>\", \"job_id\": \"<redacted>\", \"attempt\": 1, \"release\": {\"release_id\": \"1c79785a657c6614\", \"release_digest\": \"c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1\"}}, \"state\": \"completed\", \"status\": \"completed\", \"attempt\": 1, \"revision\": 11, \"updated_at\": \"2026-10-23T18:06:37.300451+00:00\", \"workflow\": null, \"project_id\": \"uncategorized\", \"work_dir\": \"<redacted-path>\", \"error\": null, \"plan_digest\": \"v2:3825a8cc8e1a1b83f54e0661109f8c20\", \"submission_id\": \"sub_0fea781820a81666\", \"release_id\": \"1c79785a657c6614\", \"release_digest\": \"c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1\", \"reference\": \"<redacted>\"}, \"error\": null}"
+    }
+   ],
+   "structuredContent": {
+    "schema_version": 1,
+    "operation": "acp_status",
+    "status": "ok",
+    "exit_code": 0,
+    "dry_run": false,
+    "operation_identity": "tenant:local-single",
+    "diagnostic_ref": null,
+    "data": {
+     "schema_version": 1,
+     "task_id": "<redacted>",
+     "job_id": "<redacted>",
+     "task_ref": {
+      "task_id": "<redacted>",
+      "job_id": "<redacted>",
+      "attempt": 1,
+      "release": {
+       "release_id": "1c79785a657c6614",
+       "release_digest": "c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1"
+      }
+     },
+     "state": "completed",
+     "status": "completed",
+     "attempt": 1,
+     "revision": 11,
+     "updated_at": "2026-10-23T18:06:37.300451+00:00",
+     "workflow": null,
+     "project_id": "uncategorized",
+     "work_dir": "<redacted-path>",
+     "error": null,
+     "plan_digest": "v2:3825a8cc8e1a1b83f54e0661109f8c20",
+     "submission_id": "sub_0fea781820a81666",
+     "release_id": "1c79785a657c6614",
+     "release_digest": "c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1",
+     "reference": "<redacted>"
+    },
+    "error": null
+   },
+   "isError": false
+  }
+ }
+}

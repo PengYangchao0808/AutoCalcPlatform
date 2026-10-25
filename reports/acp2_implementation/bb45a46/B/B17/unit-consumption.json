@@ -1,0 +1,112 @@
+{
+  "enforced": [
+    "task_ref",
+    "attempt"
+  ],
+  "model_proxy_owner": "C (acp2_experience_budget_proxy.py, C T-13); B does not proxy tokens",
+  "model_token_enforcement": "NOT_VERIFIED",
+  "not_verified": [
+    {
+      "capability": "model_token_enforcement",
+      "reason": "model-call proxy is C-owned (acp2_experience_budget_proxy.py, C T-13)"
+    },
+    {
+      "capability": "bsub_enforcement",
+      "reason": "LSF is absent in this environment; bsub count is 0 and recorded only"
+    }
+  ],
+  "notes": {
+    "identity": "budget identity is project + proposal_ref (research round/batch); it is independent of run_id, so retries and restarts inherit the remaining batch",
+    "model_tokens": "model-token enforcement is NOT_VERIFIED; the model-call proxy is C-owned and B neither proxies tokens nor invents unified billing",
+    "publication": "A publication failure or retry never re-charges computation: usage is ingested once from the trusted receipt and publication is an independent step.",
+    "science": "budget/balance state never changes scientific behavior, TaskRequest or an algorithm result",
+    "settlement": "settlement comes from receipts/trusted usage; a duplicate receipt/event cannot charge twice because its deterministic receipt id is unique"
+  },
+  "recorded_only": [
+    "recipe_step",
+    "qc_invocation",
+    "bsub",
+    "model_request"
+  ],
+  "release_rules": {
+    "cancel_after_dispatch": {
+      "detail": "science already started; the consumed units stay charged",
+      "recharges_computation": false,
+      "release_reserved_units": false
+    },
+    "cancel_before_dispatch": {
+      "detail": "a queued reservation released before any QC invocation is refunded",
+      "recharges_computation": false,
+      "release_reserved_units": true
+    },
+    "publication_failure": {
+      "detail": "publication retries only republish; they never re-charge computation",
+      "recharges_computation": false,
+      "release_reserved_units": false
+    },
+    "publication_pending": {
+      "detail": "publication is a separate fact; pending publication keeps computation charged",
+      "recharges_computation": false,
+      "release_reserved_units": false
+    },
+    "recovery": {
+      "detail": "restart recovery replays reservations and receipts; it never resets a budget",
+      "recharges_computation": false,
+      "release_reserved_units": false
+    },
+    "replay": {
+      "detail": "a duplicate receipt/claim replay is idempotent and charges nothing new",
+      "recharges_computation": false,
+      "release_reserved_units": false
+    },
+    "science_failure": {
+      "detail": "a failed attempt that invoked QC consumes its units; a retry is a new attempt",
+      "recharges_computation": false,
+      "release_reserved_units": false
+    },
+    "submit_failed": {
+      "detail": "the claim never dispatched; its queued reservation is released",
+      "recharges_computation": false,
+      "release_reserved_units": true
+    }
+  },
+  "schema": "acp2.b17.unit-consumption.v1",
+  "unit_consumption": {
+    "attempt": {
+      "consumed_at": "accepted submit/dispatch of an attempt",
+      "failure": "consumes the failed attempt",
+      "recovery": "same attempt recovery does not consume; continue/rerun is a new attempt",
+      "replay": "does not consume a second attempt"
+    },
+    "bsub": {
+      "consumed_at": "trusted receipt per real bsub",
+      "failure": "consumes when bsub was invoked",
+      "recovery": "does not re-issue bsub",
+      "replay": "does not re-consume the same receipt"
+    },
+    "model_request": {
+      "consumed_at": "trusted receipt from the C-owned model proxy",
+      "failure": "recorded when the trusted source reports it",
+      "recovery": "does not re-request tokens",
+      "replay": "does not re-consume the same receipt"
+    },
+    "qc_invocation": {
+      "consumed_at": "trusted receipt per QC process invocation",
+      "failure": "consumes when the process was invoked",
+      "recovery": "does not re-invoke a completed step",
+      "replay": "does not re-consume the same receipt"
+    },
+    "recipe_step": {
+      "consumed_at": "trusted receipt for a dispatched step",
+      "failure": "consumes when the step was invoked",
+      "recovery": "does not re-consume a completed step",
+      "replay": "does not re-consume the same receipt"
+    },
+    "task_ref": {
+      "consumed_at": "accepted submit, before any work directory",
+      "failure": "consumes",
+      "recovery": "does not consume a new TaskRef",
+      "replay": "does not consume a second TaskRef"
+    }
+  }
+}

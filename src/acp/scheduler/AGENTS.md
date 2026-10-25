@@ -1,7 +1,7 @@
 # scheduler/ — Phase 2 Task Scheduler
 
 ## OVERVIEW
-Job queue, persistence, and background execution for ACP calculations. Receives JobSpec from CLI or API, persists to SQLite, runs as subprocess via `python -m acp.cli run <workflow>`, captures artifacts/provenance. 15 files, ~5630 lines (+ remote/ subpkg, 11 files ~3900 lines — see `remote/AGENTS.md`).
+Job queue, persistence, and background execution for ACP calculations. Receives JobSpec from CLI or API, persists to SQLite, runs as subprocess via `python -m acp.cli run <workflow>`, captures artifacts/provenance. 15 files, ~5630 lines (+ remote/ subpkg, 11 files ~3900 lines — see `remote/AGENTS.md`). Store/schema implementations moved in place to `src/acp_services/store/` (B05-7 / todo 77); `store.py` and `migrations.py` here are **identity forwarders**, not implementations.
 
 ## STRUCTURE
 ```
@@ -10,7 +10,7 @@ scheduler/
 ├── jobs.py               # Core data models: JobStatus (enum), JobSpec, JobRecord + CLI-flag helpers (378 lines)
 ├── manager.py            # JobManager — submit, cancel, list, work_dir_of, shutdown (1035 lines)
 ├── runner.py             # JobRunner — subprocess execution, stdin materialization, artifact capture (1251 lines — largest)
-├── store.py              # JobStore — SQLite CRUD: create/update/get/list/delete/counts (267 lines)
+├── store.py              # Compat forwarder → acp_services.store.store (JobStore is same object); do not re-add logic
 ├── registration.py       # register_completed_cli_job — CLI --register: bind finished CLI run dirs as COMPLETED jobs (store-layer only; never constructs JobManager)
 ├── stage_tasks.py        # StageTask store + StagePlan providers + StageTaskObserver (polls work dir) (551 lines)
 ├── provenance.py         # Provenance dataclass, ParserRegistry, compute_input_hash, audit event building (221 lines)
@@ -21,7 +21,7 @@ scheduler/
 ├── projects.py           # ProjectManager — create/get/list/update/delete projects in SQLite (209 lines)
 ├── local_cleanup.py      # Local disk-cleanup retention sweeps (763 lines)
 ├── nodes.py              # Node registry (227 lines)
-├── migrations.py         # Schema migration: migrate(), get_schema_version, column checks (179 lines)
+├── migrations.py         # Compat forwarder → acp_services.store.migrations (migrate is same object); schema migrations
 └── remote/               # Remote LSF execution — SSH/SFTP pool, code sync, bsub/bjobs, fetch, cleanup (11 files; see remote/AGENTS.md)
 ```
 
@@ -32,15 +32,15 @@ scheduler/
 | `jobs.py` helpers | `censo_preset_from_method` / `censo_solvent_from_method` / `censo_ewin_from_method` / `xtbmd_method_flags` (+ `_as_bool`) — shared CLI-flag resolution used by both `runner.py` and `remote/script_gen.py` (E7 parity; add new xtbmd flags here, not in either file; boolean method values are string-tolerant) |
 | `manager.py` | JobManager — entry point. `submit()` creates job → stores via JobStore → spawns thread. `cancel()` sets event. `_run_job()` callback invokes JobRunner. Re-queues orphaned active jobs on startup. Owns `structure_cache` (shared `RemoteStructureCache` singleton) + the `acp-catalog-prefetch` daemon worker: remote terminal transitions and a startup sweep enqueue jobs whose small catalog files are not cached yet, so `pending_fetch` resolves without any browser request. |
 | `runner.py` | JobRunner — biggest file. `run()` builds CLI cmd, spawns subprocess, monitors via `_monitor()`, observes stage state via `StageTaskObserver`, captures artifacts via `capture_stage_artifacts()`, stores provenance. `materialize_job_input()` writes SMILES/XYZ to disk. `_run_fake()` for testing. |
-| `store.py` | JobStore — SQLite persistence for JobRecord. Schema init, CRUD, project filtering, count aggregation. |
-| `store.py` CAS APIs (execution-integrity) | `transition()` — CAS single-row state UPDATE guarded by `revision` + `status` + `attempt` (stale write → `JobStateConflictError`, never a blind overwrite); `update_progress()` (progress writes cannot clobber status/spec/result); `update_execution_identity()`; `requeue_with_spec()` — one-transaction in-place rerun (new spec + `attempt=attempt+1` + QUEUED). `attempt` is 1-based and **the scheduler is its single source** — remote/state.json observations never bump it. |
+| `store.py` | Compat forwarder → `acp_services.store.store`; `JobStore is acp_services.store.store.JobStore`. SQLite persistence for JobRecord, schema init, CRUD, project filtering, count aggregation. |
+| `store.py` CAS APIs (execution-integrity) | Implementation lives in `acp_services.store.store`; forwarded names: `transition()` — CAS single-row state UPDATE guarded by `revision` + `status` + `attempt` (stale write → `JobStateConflictError`, never a blind overwrite); `update_progress()` (progress writes cannot clobber status/spec/result); `update_execution_identity()`; `requeue_with_spec()` — one-transaction in-place rerun (new spec + `attempt=attempt+1` + QUEUED). `attempt` is 1-based and **the scheduler is its single source** — remote/state.json observations never bump it. |
 | `registration.py` | `register_completed_cli_job()` — X1′-D CLI visibility: persists a finished CLI run dir (e.g. `acp run XtbPathSearch --register`) as a COMPLETED JobRecord via JobStore.create + TaskIndex.sync_from_job + ProjectManager.ensure_default_project. Binds `work_dir` to the existing `--output` dir (ANTI-PATTERN #15: job id never enters the path). Skips scheduler task dirs (already registered by submit). CLI-only path — never constructs JobManager (single-instance lock). |
 | `stage_tasks.py` | StageTask/StagePlan dataclasses, StagePlanProvider protocol, PlanCompiler (generic stage-plan compilation from METHOD_SCHEMAS), StageTaskStore (SQLite CRUD), StageTaskObserver (polls work dir for `.stage_*` files, mirrors to DB). |
 | `provenance.py` | Provenance dataclass (input_hash, command_line, wall_time, parser_results), ParserRegistry (type→callable), `compute_input_hash()`, `build_provenance_for_job()`. |
 | `artifacts.py` | Artifact (type/path/checksum/context), ArtifactRegistry (SQLite CRUD by job/task/type), `capture_stage_artifacts()` scans `.stage_*` directories, computes SHA-256 checksums. |
 | `events.py` | JobEventLog — append-only JSONL per job ID. Used by manager for audit trail. |
 | `projects.py` | ProjectManager — project metadata CRUD, `ensure_default_project()` auto-creates. Tags and settings as JSON blobs. |
-| `migrations.py` | `migrate(db_path)` runs schema version check + pending migrations. Auto-called by JobStore/ProjectManager init. |
+| `migrations.py` | Compat forwarder → `acp_services.store.migrations`; `migrate is acp_services.store.migrations.migrate`. Runs schema version check + pending migrations; auto-called by JobStore/ProjectManager init. |
 
 ## CONVENTIONS
 - **Type annotations**: PEP 604 (`X | None`) with `from __future__ import annotations` (matches `acp/` style)
@@ -60,6 +60,7 @@ scheduler/
 - **submit/cancel states**: `result["remote"]["submit_state"]`（`intent`（先于 bsub 持久化，含 `submission_id`/owner token/lease）/`submitted`/…）与 `cancel_state`（CANCELLING 只有**确认远端已停止**后才置 CANCELLED）是 job-detail/v1 recovery 矩阵的投影字段（`v1_schemas.py::JobRecovery.submit_state/cancel_state`）。
 - **poll/reconcile ownership**: poll 观测只允许"低态→高态"前进式更新且必须持锁重读 revision；提交权租约有效期间 reconcile 永不判 `not_accepted`（`remote/submission.py`）；manager 拥有控制意图（pause/cancel/rerun），runner/observer 只提案观测值。
 - **in-place rerun（契约 B）**: rerun/edit-recalculate 复用同一任务目录与远端目录，`attempt+1`（CAS 单事务），旧 attempt 回执归档至 `WORK/00_RUNTIME/attempts/<N>/`（`_archive_attempt_receipts` + `_archive_previous_resume_source`）；`_RERUN_STABLE_FILES`（`input.xyz`/`input_source.json`/`task.json`/`job.json`）跨 attempt 保留，其余清空。
+- **Runtime 用例单一 owner（B05-1，todo 25；B05-7，todo 77）**: 控制意图（submit/pause/unpause/cancel/continue/rerun/edit）**归 `JobManager` 单一 owner**；API（`src/acp/api/v1_routes.py`）与 CLI（`src/acp/cli.py`）的提交/控制入口一律经 `acp_services.runtime.commands.RuntimeCommands` 用例，每个用例经注入端口（`JobSubmissionPort`/`JobControlPort`/`JobEditPort`/`JobRegistrationPort`）**恰好转发一次**到 manager/registration，**不得**直调 store 或 manager 方法。store/schema、plan/step 契约与参数转换的实现已于 todo 77 迁入 `acp_services` 并移除对应注入；控制状态机仍由 manager 单点拥有（不是第二状态机、不双写）。`tests/test_services_runtime_usecases.py` 守护。
 
 ## ANTI-PATTERNS
 - **`_utc_now_iso()` copy-pasted**: Same 3-line helper defined in ~9 modules (`events.py`, `jobs.py`, `manager.py`, `migrations.py`, `projects.py`, `provenance.py`, `runner.py`, `stage_tasks.py`, `store.py`, `local_cleanup.py`). Candidate for `acp.core.utils`
@@ -69,3 +70,5 @@ scheduler/
 - **`__all__` drift risk**: `__init__.py` selective re-exports vs each module's own `__all__`. Easy to forget adding new exports
 - **`from __future__ import annotations` in dataclasses with `asdict()`**: Known mypy issue — `asdict()` fails on field types that are `str | None` under PEP 604. Some files use `typing.Optional[str]` workaround inconsistently
 - **No TTL/purging for jobs**: Jobs accumulate indefinitely in SQLite (local_cleanup handles run-dir disk only, not the DB)
+- **Forwarder re-implementation**: `store.py`/`migrations.py` are identity re-exports of `acp_services.store.*`; adding SQL, schema logic, or a second `JobStore` there violates root ANTI #30 and `tests/test_services_migration_equivalence.py`
+- **Deleting compatibility paths**: old `acp.scheduler.store`/`migrations` imports must stay available (callers in `public_shim_inventory.md`); do not remove them for line count

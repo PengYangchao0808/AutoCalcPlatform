@@ -1,0 +1,116 @@
+{
+  "artifacts": [
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
+      "sha256": "1c711f520112e5b6bd691624572f0df9f1cc395843a9eeae9eb9a5f95be1da0e",
+      "size_bytes": 28578
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",
+      "sha256": "7d140ea9786f0ff0aaf7e4e3b160865d9b75fd99911657aeff778e46fc378643",
+      "size_bytes": 2839
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+      "sha256": "5e3a5fb36b4afffcb5af5755c8fd4d15fb69c1ebf9e6e7910569936545a1d8f5",
+      "size_bytes": 88583
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/source.json",
+      "sha256": "e557dfb0d0d30cd404ce4e83a34ceda50f47b65e411dff70c3d3fe240e5b0063",
+      "size_bytes": 2796
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/Bfix4/summary.json",
+      "sha256": "e8306444826d9684abe4b187a2708d376e70b63929aa572498defbde1735c02f",
+      "size_bytes": 13865
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "immutable receipts aggregated; no science re-executed",
+      "name": "aggregate_only_no_rerun",
+      "status": "PASS"
+    },
+    {
+      "detail": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/LSF/DSH rows absent",
+      "name": "gate_result",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/usr/bin/python3.11",
+    "/tmp/opencode/gen_h7.py"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": ".",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "integration.gate_status": "OPEN",
+    "integration.handoff": "H7",
+    "integration.notes": [
+      "The release candidate artifacts and digests are frozen and verified, but H7 remains OPEN because A-29 and C35 signatures are absent and the B26a reproduction is same-agent, not independent.",
+      "C35 is absent and its plan does not list B26 as a prerequisite: disposition c35_absent, not C35_INPUT_CYCLE."
+    ],
+    "integration.reuse_mapping": [],
+    "integration.signatures": {
+      "A": [],
+      "B": [
+        "B"
+      ],
+      "C": []
+    }
+  },
+  "finished_at": "2026-10-23T15:51:28Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "integration",
+  "phase": "aggregate",
+  "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/LSF/DSH rows absent",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "h7-final-20261023T155128Z",
+  "scenario": "integration:h7-final",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T15:51:28Z",
+  "sub_results": [
+    {
+      "phase": "h7-release-candidate",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+      "result": "PASS"
+    },
+    {
+      "phase": "h7-b26a-reproduction",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h7-a29-signoff",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B26a/a-c-refs.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h7-c35-signoff",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B26a/a-c-refs.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h7-independent-operator",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",
+      "result": "NOT_VERIFIED"
+    }
+  ],
+  "submission_id": null
+}

@@ -1,0 +1,18 @@
+{
+  "sample_id": "reserved-reference-pending.negative",
+  "contract": "science-binding.v1.json",
+  "kind": "negative",
+  "payload": {
+    "schema_id": "acp2.science.recipe.v1",
+    "version": "1.0.0",
+    "digest": "PENDING"
+  },
+  "expected": {
+    "valid": false,
+    "class": "unsupported",
+    "code": "unsupported_capability",
+    "violation": "pending_reference",
+    "field": "digest"
+  },
+  "note": "a PENDING reserved reference is never executable"
+}

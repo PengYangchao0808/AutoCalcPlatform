@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acp-web"
+dynamic = ["version", "dependencies"]
+description = "ACP CLI and Web Workbench"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[project.scripts]
+acp = "acp.cli:main"
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}
+dependencies = {file = ["requirements-role.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["acp", "acp.*", "acp_web_assets"]
+
+[tool.setuptools.package-data]
+"acp_web_assets" = ["**/*"]

@@ -1,0 +1,29 @@
+{
+  "all_match": true,
+  "locations": [
+    {
+      "path": "src/cccp/__init__.py",
+      "sha256": "b12a25f6387d39c8fb4a029f2906eea20ced511f572aeeb20a3c1a156b086de5",
+      "version": "0.3.0"
+    },
+    {
+      "path": "src/cccp/version.py",
+      "sha256": "6ff349bfcb56d96495cd88213eb99e6c9ee4bbdebd30c48f10d504545a655a97",
+      "version": "0.3.0"
+    },
+    {
+      "path": "src/acp/__init__.py",
+      "sha256": "5c1692dc942cfbfb3243796cf02e77c788048c4c445b71e8867458e486e2b365",
+      "version": "0.3.0"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "5a1ac7393131dce929864042e107a8bd524e7869918bfa5de800f72dec8e8f6c",
+      "version": "0.3.0"
+    }
+  ],
+  "requirements_node_changed": false,
+  "requirements_node_sha256": "f21f3a327cb1d581ffaf54ee5bb2b9e1916948156e3f48e52a68269f28cc3758",
+  "schema": "acp2.b25.version-sync.v1",
+  "version": "0.3.0"
+}

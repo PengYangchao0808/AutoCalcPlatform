@@ -1,0 +1,192 @@
+{
+  "candidate_label": "bb45a46",
+  "close_condition": "All required rows PASS with a raw log and result; missing Local/LSF/DSH is NOT_VERIFIED with the exact prerequisite, never PASS.",
+  "contract_version": "1.0.0",
+  "generated_at_utc": "2026-10-22T15:32:18Z",
+  "h2_candidate": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "not_signed_by_b_rows": [
+    "c_dsh_real_handshake",
+    "c_chromium_launch",
+    "c_route_json_diagnostic",
+    "c_env_03_node_dsh",
+    "c_env_05_dsh_profile_model",
+    "c_env_08_network"
+  ],
+  "overall_reason": "Local ORCA/doctor/run-root/registry/Controller/two-adapter rows PASS. LSF, real DSH handshake, Chromium T-08, C ENV-05 and C ENV-08 remain NOT_VERIFIED, so H2/P0 cannot close.",
+  "overall_status": "OPEN",
+  "required_rows": [
+    "h2_candidate_record",
+    "local_orca_binary_and_license",
+    "local_scientific_software_inventory",
+    "acp_doctor",
+    "local_run_root",
+    "fixture_registry",
+    "controller_health_contract",
+    "local_controller_two_adapter_topology",
+    "lsf_client_queue_ssh",
+    "c_dsh_real_handshake",
+    "c_chromium_launch",
+    "c_route_json_diagnostic",
+    "c_env_03_node_dsh",
+    "c_env_05_dsh_profile_model",
+    "c_env_08_network"
+  ],
+  "rows": [
+    {
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/environment/h2-candidate.json",
+      "reason": "H2 clean commit tree equals main 5d1e970; server/client/harness/contract/env recorded",
+      "result": "PASS",
+      "row_id": "h2_candidate_record",
+      "sha256": "79b415d0797daf2b6b11b5181e27775f75bb270de973c4c35eb1aeefeccb5c5e"
+    },
+    {
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.out",
+      "reason": "/home/redacted-user/orca611/orca is ELF; ORCA 6.1.1 H2/STO-3G probe terminated normally in 0.302s (energy -1.116759307204 Ha); academic license bundle present; /usr/bin/orca explicitly excluded",
+      "result": "PASS",
+      "row_id": "local_orca_binary_and_license",
+      "supporting_logs": [
+        "reports/acp2_implementation/bb45a46/B/B07/environment/orca-facts.log",
+        "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.err",
+        "reports/acp2_implementation/bb45a46/B/B07/environment/b07-environment.json"
+      ]
+    },
+    {
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/xtb.log",
+      "reason": "ORCA 6.1.1, xTB 6.7.1, CREST 3.0.2, CENSO 3.0.8, Shermo 2.6.1, Isostat/Molclus present at configured absolute paths; doctor binary sanity PASS. PATH-only absence is not a missing install",
+      "result": "PASS",
+      "row_id": "local_scientific_software_inventory",
+      "supporting_logs": [
+        "reports/acp2_implementation/bb45a46/B/B07/environment/tool-version-probes/",
+        "reports/acp2_implementation/bb45a46/B/B07/environment/b07-environment.json"
+      ]
+    },
+    {
+      "exit_code": 0,
+      "gaps": [
+        "run_root/store are /home/redacted-user/.local/share/acp/runs, not the acceptance run root",
+        "no remote node/LSF check",
+        "binary sanity only; only ORCA has a real scientific probe",
+        "no Playwright/Chromium check"
+      ],
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/B07/doctor/acp-doctor.log",
+      "reason": "acp doctor exit 0 (10 PASS/0 FAIL/0 NOT_VERIFIED) from the controller-config cwd on the H2 candidate; four gaps explicitly recorded (run_root/store use platform default; no LSF node check; binary sanity only; no browser)",
+      "result": "PASS",
+      "row_id": "acp_doctor"
+    },
+    {
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/B07/environment/host-facts.log",
+      "reason": "/opt/acp2-dev/data/b/run-root is xfs with 47.6 GiB free; production 8765 and /var/lib/acp/runs untouched",
+      "result": "PASS",
+      "row_id": "local_run_root"
+    },
+    {
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+      "reason": "9 unique fixture rows; five maxima arithmetic exact; local singlepoint registered; LSF singlepoint/control NOT_VERIFIED; six planned rows claim no bytes; no duplicate expensive fixture",
+      "result": "PASS",
+      "row_id": "fixture_registry",
+      "sha256": "124fd16b6ea8a39871c26602acda938391617f0c09edddd07a6f4db8eb0f4dd6"
+    },
+    {
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/B07/topology/controller-health.json",
+      "reason": "H2 Controller /api/health: candidate_revision=H2, contract_version=1.1.0, contract_digest=67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+      "result": "PASS",
+      "row_id": "controller_health_contract"
+    },
+    {
+      "owner": "B07",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/B07/topology/topology-summary.json",
+      "reason": "Two stdio adapters (pids 368344/368348) ran concurrently against one Controller; entry-readonly and mcp-stdio PASS on both; task count 2->2; jobs byte-identical; Controller still serving after both closed",
+      "result": "PASS",
+      "row_id": "local_controller_two_adapter_topology",
+      "sha256": "094b0bed7e985185a73918b52eadc6188d38d1dcc277409f798372afef9d225f"
+    },
+    {
+      "owner": "B07",
+      "prerequisite": "LSF client (LSF_ENVDIR, bsub/bjobs/bhosts/bqueues) + configured test node with SSH host identity/credential, queue, remote Python/software, release root and independent remote work dir",
+      "raw_log": "reports/acp2_implementation/bb45a46/B/B07/lsf/lsf-probe.log",
+      "reason": "bsub/bjobs/bhosts/bqueues/lsid absent; LSF_ENVDIR/LSF_LIBDIR unset; acceptance cluster is local/nodes=[]; no remote job attempted. Prerequisite: install/initialize LSF client and configure a test node (SSH host identity/credential, queue, remote Python/software, release root, independent remote work dir)",
+      "remote_job_attempted": false,
+      "result": "NOT_VERIFIED",
+      "row_id": "lsf_client_queue_ssh"
+    },
+    {
+      "owner": "C",
+      "prerequisite": "C T-11/T-12 real DSH session -> MCP initialize/tools/call log against the H2 Controller",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/10-dsh-acceptance-smoke.txt",
+      "reason": "No real DSH MCP handshake log is delivered by C T-11/T-12; C node-dsh smoke only checks the wrapper/help surface. B does not sign this C-owned row",
+      "result": "NOT_VERIFIED",
+      "row_id": "c_dsh_real_handshake",
+      "sha256": "0f51dc9660b45942169a01229d41e714a356881de3a70a7cff0b95bbe2900267",
+      "signed_by_b": false
+    },
+    {
+      "owner": "C",
+      "partial_evidence": "reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T142824Z-208277/main/experience_browser-install-experience_fixture-browser-install-20261022T142824Z-208277.json",
+      "prerequisite": "C T-08 signed Chromium install/launch receipt against the H2 candidate (latest C run is NOT_VERIFIED)",
+      "raw_log": "reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T142952Z-213470/main/summary.json",
+      "reason": "C has a browser-install PASS receipt and a later negative NOT_VERIFIED receipt (empty browsers path); C T-08 is not signed and B does not sign C browser rows",
+      "result": "NOT_VERIFIED",
+      "row_id": "c_chromium_launch",
+      "signed_by_b": false
+    },
+    {
+      "owner": "C",
+      "raw_log": "reports/acp2_implementation/bb45a46/C/harness-selftest/route.json",
+      "reason": "C T-04 route.json diagnostic is present and linked, but it is explicitly non-authoritative and its routes are NOT_VERIFIED; B links it without promoting it to PASS",
+      "result": "NOT_VERIFIED",
+      "row_id": "c_route_json_diagnostic",
+      "sha256": "6b429c3bbcd55271866f3f5907233c98639257c65675bae33360f51a7d9866a0",
+      "signed_by_b": false
+    },
+    {
+      "owner": "C",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/result.json",
+      "reason": "C ENV-03 node/pnpm/DSH install evidence PASS (linked only; C-owned). Node 22.19.0, pnpm 11.28.5, DSH 0.2.1-rc.2 at /opt/acp2-tools/deepseek-harness",
+      "result": "PASS",
+      "row_id": "c_env_03_node_dsh",
+      "sha256": "8488c49e948128aa5dc764b09e9a3f2e15d09a757f3b9b37adbc834f35215ce2",
+      "signed_by_b": false,
+      "supporting_logs": [
+        "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/dsh-compatibility.json"
+      ]
+    },
+    {
+      "owner": "C",
+      "prerequisite": "C ENV-05 DSH profile/overlay/model configuration summary and a real invocation usage record (no secret values)",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/10-dsh-acceptance-smoke.txt",
+      "reason": "No C ENV-05 profile/overlay/model invocation receipt with real usage is delivered; model keys are C-owned and absent from B evidence",
+      "result": "NOT_VERIFIED",
+      "row_id": "c_env_05_dsh_profile_model",
+      "signed_by_b": false
+    },
+    {
+      "owner": "C",
+      "prerequisite": "C ENV-08 per-target connection results (no keys/proxy credentials printed)",
+      "raw_log": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/01-node-download.txt",
+      "reason": "No C network/SSH/port connection evidence for its own test targets is delivered beyond the Node download/install log",
+      "result": "NOT_VERIFIED",
+      "row_id": "c_env_08_network",
+      "signed_by_b": false
+    }
+  ],
+  "schema": "acp2.b07.p0-matrix.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "signed_by_b_rows": [
+    "h2_candidate_record",
+    "local_orca_binary_and_license",
+    "local_scientific_software_inventory",
+    "acp_doctor",
+    "local_run_root",
+    "fixture_registry",
+    "controller_health_contract",
+    "local_controller_two_adapter_topology",
+    "lsf_client_queue_ssh"
+  ]
+}

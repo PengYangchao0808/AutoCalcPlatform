@@ -1,0 +1,85 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "candidate_revision/contract_version/contract_digest present",
+      "name": "health_entry_equivalence_facts",
+      "status": "PASS"
+    },
+    {
+      "detail": "workflows/backends/limits present and exactly the eight P1 tools",
+      "name": "capabilities_workflows_backends_limits_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "would_create_task=false would_reserve=false; plan_digest is a sha256",
+      "name": "preflight_zero_side_effects",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=404 code=resource_not_ready",
+      "name": "missing_operation_is_not_prepared",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=2 after=2",
+      "name": "task_count_unchanged",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "a8417a11712f2b86da71682db72c27591376e2382c1d2b958bd4a233648399fd",
+    "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6"
+  },
+  "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "command": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "entry-readonly",
+    "--controller",
+    "http://127.0.0.1:18765",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B07/topology/entry-readonly-2",
+    "--timeout",
+    "60"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": ".",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "discover",
+    "acceptance.target": "local",
+    "b04a.candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+    "b04a.contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+    "b04a.contract_version": "1.1.0",
+    "b04a.controller": "http://127.0.0.1:18765",
+    "b04a.task_count_after": 2,
+    "b04a.task_count_before": 2,
+    "b04a.tools": 8,
+    "b04a.workflows": 15,
+    "b06.missing_operation_status": 404,
+    "b06.preflight_digest": "sha256:b9fbfbdce7d2f2ec131c0da95fbc1fbb6e390bb0551465cdd331113c23a6c9bc"
+  },
+  "finished_at": "2026-10-22T15:26:29Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261022T152629Z-368295-5b771bf6",
+  "scenario": "entry-readonly",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T15:26:29Z",
+  "submission_id": null,
+  "usage": null
+}

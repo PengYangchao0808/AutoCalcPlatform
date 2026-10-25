@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "-m",
+    "acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18783",
+    "--run-root",
+    "/opt/acp2-dev/data/b/run-root-b22",
+    "--no-browser"
+  ],
+  "bind_host": "127.0.0.1",
+  "candidate_revision": "9457e0247caf52de3949de00bad8d006a6d68424",
+  "config": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+  "cwd": "/opt/acp2-dev/data/b/controller-config",
+  "health": "controller-health.json",
+  "log": "controller.log",
+  "pid": 1496628,
+  "port": 18783,
+  "production_port": 8765,
+  "production_touched": false,
+  "pythonpath": "src",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b22",
+  "schema": "acp2.controller-start-record.v1",
+  "started_detached": "setsid --fork",
+  "stopped_by": "SIGTERM",
+  "tasks_created_by_scenario": 0
+}

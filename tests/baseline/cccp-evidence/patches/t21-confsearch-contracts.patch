@@ -1,0 +1,131 @@
+diff --git a/src/acp/confsearch/contracts.py b/src/acp/confsearch/contracts.py
+index 5366ece..bcf04c0 100644
+--- a/src/acp/confsearch/contracts.py
++++ b/src/acp/confsearch/contracts.py
+@@ -11,6 +11,13 @@ The Confsearch workflow replaces the retired ``ensemble`` / ``energy`` /
+ 
+ The orthogonal axes are ``profile`` (calculation quality inside one protocol)
+ and ``refinement_policy`` (which conformers receive the fine-DFT refinement).
++
++**T21 split**: the science-consumed symbols ``REFINEMENT_POLICIES``,
++``PURE_XTB_PROTOCOLS``, ``ConformerEntry`` and ``ProtocolOutcome`` now live in
++:mod:`cccp.analysis.confsearch.contracts` (T20 ruling + T21 amendment).  This
++module re-exports those **same objects** so every historical
++``acp.confsearch.contracts`` import path keeps resolving ``is``-identically
++(RT-CONV), and keeps the ACP orchestration surface local.
+ """
+ 
+ from __future__ import annotations
+@@ -20,6 +27,13 @@ from dataclasses import dataclass, field
+ from pathlib import Path
+ from typing import Any
+ 
++from cccp.analysis.confsearch.contracts import (
++    PURE_XTB_PROTOCOLS,
++    REFINEMENT_POLICIES,
++    ConformerEntry,
++    ProtocolOutcome,
++)
++
+ logger = logging.getLogger(__name__)
+ 
+ CONFSEARCH_SCHEMA_VERSION = "confsearch_v1"
+@@ -39,17 +53,11 @@ PROFILES: tuple[str, ...] = ("light", "default", "high")
+ """Quality knobs inside one protocol (§3.4) — must NOT change the sampling
+ mechanism."""
+ 
+-REFINEMENT_POLICIES: tuple[str, ...] = ("screen", "rank1", "cumulative-99", "all")
+-"""Fine-refinement scope (§3.3): screen = protocol screening only, rank1 =
+-lowest conformer, cumulative-99 = cumulative Boltzmann ≥99%, all = every
+-retained conformer."""
+-
+ BACKENDS: tuple[str, ...] = ("native",)
+ """``native`` is the only production backend.  The ``rph-parity`` backend
+ was retired in the 2026-08 Wave 8 refactor — attempting to use it raises
+ :class:`ValueError` at config-parsing time."""
+ 
+-PURE_XTB_PROTOCOLS: tuple[str, ...] = ("xtb-crest", "xtb-md")
+ CENSO_PROTOCOLS: tuple[str, ...] = ("censo-crest", "xtbmd-censo")
+ 
+ 
+@@ -77,44 +85,6 @@ class ConfsearchRequest:
+     config: dict[str, Any] | None = None
+ 
+ 
+-@dataclass
+-class ConformerEntry:
+-    """One conformer row of the unified manifest (§5).
+-
+-    ``conf_id`` is the manifest-local ``conf_NNNN`` identifier; the additive
+-    ``source_conf_id`` carries the original screening-table key (e.g. the
+-    CENSO ``CONF1`` id) used to join ``boltzmann_table.json``.  ``weight_source``
+-    names where the Boltzmann weight came from (``censo`` / ``xtb`` / ``dft``
+-    / ``computed``) and ``refined`` marks entries that received the fine-DFT
+-    refinement.
+-    """
+-
+-    conf_id: str
+-    geometry: str
+-    energy_hartree: float | None = None
+-    free_energy_hartree: float | None = None
+-    relative_energy_kcal: float | None = None
+-    boltzmann_weight: float | None = None
+-    rank: int = 0
+-    source_conf_id: str | None = None
+-    weight_source: str | None = None
+-    refined: bool = False
+-
+-    def to_dict(self) -> dict[str, Any]:
+-        return {
+-            "conf_id": self.conf_id,
+-            "geometry": self.geometry,
+-            "energy_hartree": self.energy_hartree,
+-            "free_energy_hartree": self.free_energy_hartree,
+-            "relative_energy_kcal": self.relative_energy_kcal,
+-            "boltzmann_weight": self.boltzmann_weight,
+-            "rank": self.rank,
+-            "source_conf_id": self.source_conf_id,
+-            "weight_source": self.weight_source,
+-            "refined": self.refined,
+-        }
+-
+-
+ @dataclass
+ class ConfsearchResult:
+     """Outcome of one Confsearch run."""
+@@ -131,35 +101,6 @@ class ConfsearchResult:
+     error: str | None = None
+ 
+ 
+-@dataclass
+-class ProtocolOutcome:
+-    """Normalized protocol output consumed by :class:`ConfsearchEngine`."""
+-
+-    records: list[dict[str, Any]]
+-    """Each row: ``conf_id``, optional ``source_conf_id`` (screening-table
+-    join key), ``symbols``, ``coordinates``, ``energy_hartree``,
+-    ``free_energy_hartree``, ``weight``, optional ``properties``."""
+-
+-    temperature_k: float = 298.15
+-    refined_conf_ids: list[str] = field(default_factory=list)
+-    sampling: dict[str, Any] = field(default_factory=dict)
+-    stages_completed: list[str] = field(default_factory=list)
+-    workflow_metadata: dict[str, Any] = field(default_factory=dict)
+-    weight_table: dict[str, float] | None = None
+-    """Authoritative screening weights keyed by ``source_conf_id``
+-    (e.g. ``{"CONF1": 0.8442}``); ``None`` keeps the recomputed path."""
+-    weight_source: str | None = None
+-    """Where the authoritative weights came from: ``censo`` / ``xtb`` /
+-    ``dft`` / ``computed`` (degraded)."""
+-    weight_method: str | None = None
+-    """Provenance method label (e.g. ``censo_table_rank1``)."""
+-    population_coverage: float | None = None
+-    """Fraction of the screening population covered by the table."""
+-    energy_kind: str | None = None
+-    """Energy model of the reported energies (e.g. ``dft`` / ``censo`` /
+-    ``xtb``)."""
+-
+-
+ def validate_request(request: ConfsearchRequest) -> None:
+     """Reject unknown protocol/profile/policy/backend values (§3, §4).
+ 

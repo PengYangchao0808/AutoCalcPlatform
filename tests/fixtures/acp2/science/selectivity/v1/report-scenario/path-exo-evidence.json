@@ -1,0 +1,146 @@
+{
+  "claims": [
+    {
+      "claim_id": "c-optimization-converged",
+      "limitations": [],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": "constructed A-25a frozen conditions",
+        "not_in_scope": [],
+        "subject": "path.exo-evidence"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/path.exo/evidence.log",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "65c7eaf9c08cfbd8ae5a5605eaccd9b93f211ea5f869ca51486a4139fc4aae6c"
+          },
+          "role": "path_evidence",
+          "units": null
+        }
+      ],
+      "statement": "The constructed path records a converged stationary-point optimization.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.optimization_convergence",
+        "validator_version": "1.0.0"
+      }
+    },
+    {
+      "claim_id": "c-ts-first-order-saddle-candidate",
+      "limitations": [],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": "constructed A-25a frozen conditions",
+        "not_in_scope": [],
+        "subject": "path.exo-evidence"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/path.exo/evidence.log",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "65c7eaf9c08cfbd8ae5a5605eaccd9b93f211ea5f869ca51486a4139fc4aae6c"
+          },
+          "role": "path_evidence",
+          "units": null
+        }
+      ],
+      "statement": "The constructed path records exactly one mapped imaginary mode.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.ts_saddle_candidate",
+        "validator_version": "1.0.0"
+      }
+    },
+    {
+      "claim_id": "c-ts-connects-intended-endpoints",
+      "limitations": [],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": "constructed A-25a frozen conditions",
+        "not_in_scope": [],
+        "subject": "path.exo-evidence"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/path.exo/evidence.log",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "65c7eaf9c08cfbd8ae5a5605eaccd9b93f211ea5f869ca51486a4139fc4aae6c"
+          },
+          "role": "path_evidence",
+          "units": null
+        }
+      ],
+      "statement": "The constructed path records bidirectional IRC endpoint connectivity.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.ts_connectivity",
+        "validator_version": "1.0.0"
+      }
+    },
+    {
+      "claim_id": "c-electronic-activation-barrier-comparable",
+      "limitations": [],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": "constructed A-25a frozen conditions",
+        "not_in_scope": [],
+        "subject": "path.exo-evidence"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/path.exo/evidence.log",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "65c7eaf9c08cfbd8ae5a5605eaccd9b93f211ea5f869ca51486a4139fc4aae6c"
+          },
+          "role": "path_evidence",
+          "units": null
+        }
+      ],
+      "statement": "The constructed path records a comparable electronic activation barrier.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.activation_energy_comparability",
+        "validator_version": "1.0.0"
+      }
+    }
+  ],
+  "execution": {
+    "argv": [
+      "constructed-b23b-path-evidence"
+    ],
+    "exit_code": 0,
+    "finished_at": null,
+    "started_at": null,
+    "stderr_path": null,
+    "stdout_path": null,
+    "terminal_state": "completed"
+  },
+  "limitations": [],
+  "report_id": "path.exo-constructed-evidence",
+  "schema_version": 1,
+  "subject": {
+    "description": "Constructed B23b path evidence for path.exo",
+    "input_digests": [
+      {
+        "algorithm": "sha256",
+        "value": "65c7eaf9c08cfbd8ae5a5605eaccd9b93f211ea5f869ca51486a4139fc4aae6c"
+      }
+    ],
+    "science_identity": null,
+    "subject_id": "path.exo",
+    "subject_kind": "calculation_result"
+  }
+}

@@ -1,0 +1,46 @@
+# B02 cleanup receipt — 2026-10-22T19:44:59+08:00
+## before
+2.6G	<acp2-dev>/data/b/package-smoke
+4.0K	<acp2-dev>/data/b/package-smoke/artifacts-check.json
+4.0K	<acp2-dev>/data/b/package-smoke/cccp-probe.json
+4.0K	<acp2-dev>/data/b/package-smoke/web-probe.json
+4.0K	<acp2-dev>/data/b/package-smoke/worker-probe.json
+43M	<acp2-dev>/data/b/package-smoke/upgrade
+46M	<acp2-dev>/data/b/package-smoke/roundtrip
+90M	<acp2-dev>/data/b/package-smoke/artifacts
+132M	<acp2-dev>/data/b/package-smoke/cccp-0.2.1-src
+507M	<acp2-dev>/data/b/package-smoke/lifecycle-env
+576M	<acp2-dev>/data/b/package-smoke/cccp-env
+580M	<acp2-dev>/data/b/package-smoke/worker-env
+638M	<acp2-dev>/data/b/package-smoke/web-env
+## removing temporary venvs/build dirs (KEEP artifacts + json/log evidence)
+removed <acp2-dev>/data/b/package-smoke/worker-env
+removed <acp2-dev>/data/b/package-smoke/web-env
+removed <acp2-dev>/data/b/package-smoke/lifecycle-env
+removed <acp2-dev>/data/b/package-smoke/cccp-env
+removed <acp2-dev>/data/b/package-smoke/roundtrip
+removed <acp2-dev>/data/b/package-smoke/upgrade
+removed <acp2-dev>/data/b/package-smoke/cccp-0.2.1-src
+removed <acp2-dev>/data/b/package-smoke/empty-bin
+absent <acp2-dev>/data/b/package-smoke/worker-env-run
+absent <acp2-dev>/data/b/package-smoke/web-env-run
+absent <acp2-dev>/data/b/package-smoke/cccp-env-run
+## after
+90M	<acp2-dev>/data/b/package-smoke
+总用量 20
+drwxr-xr-x. 3 <user> <user>  121 10月 22 19:45 .
+drwxr-xr-x. 6 <user> <user>  109 10月 22 19:43 ..
+drwxr-xr-x. 2 <user> <user> 4096 10月 22 19:39 artifacts
+-rw-r--r--. 1 <user> <user>  496 10月 22 19:39 artifacts-check.json
+-rw-r--r--. 1 <user> <user>  973 10月 22 19:43 cccp-probe.json
+-rw-r--r--. 1 <user> <user> 1008 10月 22 19:41 web-probe.json
+-rw-r--r--. 1 <user> <user> 1047 10月 22 19:40 worker-probe.json
+## lingering processes owned by this task
+4059571 /bin/bash -c export CI=true DEBIAN_FRONTEND=noninteractive GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never HOMEBREW_NO_AUTO_UPDATE=1 GIT_EDITOR=: EDITOR=: VISUAL='' GIT_SEQUENCE_EDITOR=: GIT_MERGE_AUTOEDIT=no GIT_PAGER=cat PAGER=cat npm_config_yes=true PIP_NO_INPUT=1 YARN_ENABLE_IMMUTABLE_INSTALLS=false; export CI=true; set -u; EV=<repo>/reports/acp2_implementation/bb45a46/B/B02; SM=<acp2-dev>/data/b/package-smoke; { echo "# B02 cleanup receipt — $(date -Is)" echo "## before" du -sh "$SM" 2>/dev/null; du -sh "$SM"/* 2>/dev/null | sort -h | tail -12 echo "## removing temporary venvs/build dirs (KEEP artifacts + json/log evidence)" for p in worker-env web-env lifecycle-env cccp-env roundtrip upgrade cccp-0.2.1-src empty-bin worker-env-run web-env-run cccp-env-run; do   if [ -e "$SM/$p" ]; then rm -rf "$SM/$p"; echo "removed $SM/$p"; else echo "absent $SM/$p"; fi done echo "## after" du -sh "$SM" 2>/dev/null; ls -la "$SM" echo "## lingering processes owned by this task" pgrep -af "package-smoke|release_role_probe" || echo "none" echo "## ports unchanged" /usr/sbin/ss -ltn | grep -E ':(18765|18766)\b' || echo "18765 and 18766 still free" curl -s -o /dev/null -w "production 8765 -> %{http_code}\n" --max-time 3 http://127.0.0.1:8765/ echo "## frozen worktree" git -C <acp2-dev>/B rev-parse HEAD echo "porcelain=[$(git -C <acp2-dev>/B status --porcelain)]" } 2>&1 | tee "$EV/cleanup-receipt.log"
+4059572 /bin/bash -c export CI=true DEBIAN_FRONTEND=noninteractive GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never HOMEBREW_NO_AUTO_UPDATE=1 GIT_EDITOR=: EDITOR=: VISUAL='' GIT_SEQUENCE_EDITOR=: GIT_MERGE_AUTOEDIT=no GIT_PAGER=cat PAGER=cat npm_config_yes=true PIP_NO_INPUT=1 YARN_ENABLE_IMMUTABLE_INSTALLS=false; export CI=true; set -u; EV=<repo>/reports/acp2_implementation/bb45a46/B/B02; SM=<acp2-dev>/data/b/package-smoke; { echo "# B02 cleanup receipt — $(date -Is)" echo "## before" du -sh "$SM" 2>/dev/null; du -sh "$SM"/* 2>/dev/null | sort -h | tail -12 echo "## removing temporary venvs/build dirs (KEEP artifacts + json/log evidence)" for p in worker-env web-env lifecycle-env cccp-env roundtrip upgrade cccp-0.2.1-src empty-bin worker-env-run web-env-run cccp-env-run; do   if [ -e "$SM/$p" ]; then rm -rf "$SM/$p"; echo "removed $SM/$p"; else echo "absent $SM/$p"; fi done echo "## after" du -sh "$SM" 2>/dev/null; ls -la "$SM" echo "## lingering processes owned by this task" pgrep -af "package-smoke|release_role_probe" || echo "none" echo "## ports unchanged" /usr/sbin/ss -ltn | grep -E ':(18765|18766)\b' || echo "18765 and 18766 still free" curl -s -o /dev/null -w "production 8765 -> %{http_code}\n" --max-time 3 http://127.0.0.1:8765/ echo "## frozen worktree" git -C <acp2-dev>/B rev-parse HEAD echo "porcelain=[$(git -C <acp2-dev>/B status --porcelain)]" } 2>&1 | tee "$EV/cleanup-receipt.log"
+## ports unchanged
+18765 and 18766 still free
+production 8765 -> 200
+## frozen worktree
+a0185b15c546fbd07919326d581fab13e05000fa
+porcelain=[]

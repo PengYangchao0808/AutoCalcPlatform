@@ -100,13 +100,13 @@ Unchanged workflows (PESsearch/BatchOptimize/XtbPathSearch/irc) were **not** re-
 | Component | Version | Path |
 |---|---|---|
 | Test Python | **3.11.13** | `/opt/acp/venv/bin/python` |
-| Python present | 3.11.13 (`/usr/bin/python3.11`), 3.13.9 (`/home/<user>/anaconda3/bin/python`), 3.9.25 (`/usr/bin/python3.9`, **unsupported <3.10**) | — |
-| ORCA | **6.1.1** | `/home/<user>/orca611/orca` |
-| CREST | **3.0.2** | `/home/<user>/crest/crest` |
-| xTB | **6.7.1** | `/home/<user>/xtb-dist/bin/xtb` |
-| CENSO | **3.0.8** | `/home/<user>/anaconda3/bin/censo` |
-| ISOSTAT | molclus 1.14 | `/home/<user>/molclus_1.14_Linux/isostat` |
-| Shermo | 2.6.1 | `/home/<user>/Shermo_2.6.1/Shermo` |
+| Python present | 3.11.13 (`/usr/bin/python3.11`), 3.13.9 (`/home/redacted-user/anaconda3/bin/python`), 3.9.25 (`/usr/bin/python3.9`, **unsupported <3.10**) | — |
+| ORCA | **6.1.1** | `/home/redacted-user/orca611/orca` |
+| CREST | **3.0.2** | `/home/redacted-user/crest/crest` |
+| xTB | **6.7.1** | `/home/redacted-user/xtb-dist/bin/xtb` |
+| CENSO | **3.0.8** | `/home/redacted-user/anaconda3/bin/censo` |
+| ISOSTAT | molclus 1.14 | `/home/redacted-user/molclus_1.14_Linux/isostat` |
+| Shermo | 2.6.1 | `/home/redacted-user/Shermo_2.6.1/Shermo` |
 | ruff (venv / pinned) | 0.16.6 / 0.4.0 | `/opt/acp/venv/bin/ruff` |
 
 **Environment difference vs original report:** the original report was written against the remote node Python **3.13.9**; this acceptance used the local test interpreter **3.11.13**. Local PATH resolves CREST/xTB (the original report's CREST/xTB skip no longer reproduces). No claim is made that the original skip state is reproduced.

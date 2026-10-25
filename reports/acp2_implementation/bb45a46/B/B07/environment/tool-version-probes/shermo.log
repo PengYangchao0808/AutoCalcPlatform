@@ -1,0 +1,36 @@
+argv: /home/<user>/Shermo_2.6.1/Shermo
+cwd: <repo>
+ Shermo: A general code for calculating molecular thermochemistry properties
+ Version 2.6.1  Release date: 2025-Oct-20
+ Developer: Tian Lu (sobereva@sina.com)
+ Beijing Kein Research Center for Natural Sciences (http://www.keinsci.com)
+ Official website: http://sobereva.com/soft/shermo
+ 
+  **** If this code is utilized in your work, PLEASE CITE following paper ****
+ Tian Lu, Qinxue Chen, Shermo: A general code for calculating molecular thermodynamic properties, Comput. Theor. Chem., 1200, 113249 (2021) DOI: 10.1016/j.comptc.2021.113249
+ 
+ Warning: settings.ini cannot be found in either current folder or the directory defined by Shermopath environment, thus default parameters are used!
+ 
+ Running parameters:
+ Printing individual contribution of vibration modes: No
+ Temperature:     298.150 K
+ Pressure:          1.000 atm
+ Scale factor of vibrational frequencies for ZPE:        1.0000
+ Scale factor of vibrational frequencies for U(T)-U(0):  1.0000
+ Scale factor of vibrational frequencies for S(T):       1.0000
+ Scale factor of vibrational frequencies for CV:         1.0000
+ Low frequencies treatment: Grimme's interpolation for entropy
+ Vibrational frequency threshold used in the interpolation is 100.00 cm^-1
+ 
+ Input file path, e.g. C:\lovelive\A-rise.shm
+ Output file of frequency analysis task of Gaussian/ORCA/GAMESS-US/NWChem/CP2K is also supported
+forrtl: severe (24): end-of-file during read, unit -4, file /proc/328323/fd/0
+Image              PC                Routine            Line        Source             
+Shermo             0000000000441A5B  Unknown               Unknown  Unknown
+Shermo             000000000046C4B2  Unknown               Unknown  Unknown
+Shermo             000000000041421E  Unknown               Unknown  Unknown
+Shermo             0000000000404E62  Unknown               Unknown  Unknown
+libc.so.6          00007FA2A6E2A610  Unknown               Unknown  Unknown
+libc.so.6          00007FA2A6E2A6C0  __libc_start_main     Unknown  Unknown
+Shermo             0000000000404D69  Unknown               Unknown  Unknown
+exit_code=24

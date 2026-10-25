@@ -1,0 +1,160 @@
+{
+  "id": "20261023_223703_002_b26a-fix4-http",
+  "spec": {
+    "workflow": "singlepoint",
+    "name": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02",
+    "input": {
+      "source_type": "xyz_text",
+      "source": "2\nH2\nH 0 0 0\nH 0 0 0.74\n",
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "method": {
+      "levels": {
+        "single_point": {
+          "engine": "orca",
+          "functional": "HF",
+          "basis": "STO-3G"
+        }
+      }
+    },
+    "resources": {
+      "nproc": 1,
+      "mem": "1024MB"
+    },
+    "output_dir": null,
+    "config_path": null,
+    "tags": [],
+    "project_id": "uncategorized",
+    "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
+    "execution_mode": null,
+    "target_node": null,
+    "node_tags": [],
+    "molecule_name": "2\nH2\nH 0 0 0\nH 0 0 0.74",
+    "task_name": "singlepoint",
+    "remark": "",
+    "custom_name": null
+  },
+  "status": "completed",
+  "work_dir": "/tmp/opencode/b26a-fix4/data/lab-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint__02",
+  "created_at": "2026-10-23T14:37:03.894429+00:00",
+  "updated_at": "2026-10-23T14:37:10.940097+00:00",
+  "started_at": "2026-10-23T14:37:03.908842+00:00",
+  "completed_at": "2026-10-23T14:37:10.886063+00:00",
+  "current_stage": null,
+  "progress": null,
+  "error": null,
+  "project_id": "uncategorized",
+  "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
+  "pid": 1693789,
+  "exit_code": 0,
+  "remote_job_id": null,
+  "group_id": "20261023_223703_002_b26a-fix4-http",
+  "node_id": "local",
+  "host": "redacted-host",
+  "result": {
+    "admission": {
+      "reservation_id": "res_job_20261023_223703_002_b26a-fix4-http",
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "enforced": true,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "verified_project": null,
+      "multi_tenant_security": false,
+      "reason_code": "admitted"
+    },
+    "required_software": [
+      "orca"
+    ],
+    "execution_target": "local",
+    "execution_kind": "local",
+    "publication_pending": true,
+    "terminal_side_effects_done": true,
+    "receipt_state": "completed",
+    "receipt_result_digest": "sha256:1d62d33db564344bf8d1f8d3a969947950b07a5b9581a18cc1c811d4033fd71f",
+    "receipt_written_at": "2026-10-23T14:37:06.010193+00:00",
+    "artifacts": [
+      {
+        "artifact_id": "37f1b68b-e6c5-4187-9faa-90b93b22579f",
+        "task_id": null,
+        "job_id": "20261023_223703_002_b26a-fix4-http",
+        "artifact_type": "json",
+        "file_path": "RESULT/publication_state.json",
+        "checksum": "sha256:5bb312bb9281b0d27b98ecf8c88b65b9e936821974e23eb3d21c5c9a0bfed629",
+        "size_bytes": 105,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:37:10.920876+00:00"
+      },
+      {
+        "artifact_id": "9e940835-3f9d-4282-aef2-ccf2e5e2db5a",
+        "task_id": null,
+        "job_id": "20261023_223703_002_b26a-fix4-http",
+        "artifact_type": "json",
+        "file_path": "RESULT/result_manifest.json",
+        "checksum": "sha256:32ee1e921e170c2c233933c354a1370d7683e2d6ac545968ea7512edd4903a2d",
+        "size_bytes": 736,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:37:10.923540+00:00"
+      },
+      {
+        "artifact_id": "1a2821d3-8e8d-4ae0-9bad-fcd88fd79529",
+        "task_id": null,
+        "job_id": "20261023_223703_002_b26a-fix4-http",
+        "artifact_type": "json",
+        "file_path": "RESULT/scientific_result.json",
+        "checksum": "sha256:f5d3a3a1fa0e144edef85f02a63fa82cfcf65ef8d45d33584c381106fd49c426",
+        "size_bytes": 884,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:37:10.926335+00:00"
+      },
+      {
+        "artifact_id": "31f5ee89-d953-4fa0-9539-ba996211eb16",
+        "task_id": null,
+        "job_id": "20261023_223703_002_b26a-fix4-http",
+        "artifact_type": "json",
+        "file_path": "RESULT/task_result.json",
+        "checksum": "sha256:36a1eb8fda55d4c922ee6b9a24c6ad9f61349217871ff2951f9ad925e01e79d4",
+        "size_bytes": 725,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T14:37:10.928961+00:00"
+      }
+    ],
+    "provenance": {
+      "input_hash": "sha256:a0a12371006608c01266071cc04ee3b108f04eae34fbff13c201eb5693f6f4f6",
+      "molecule_hash": null,
+      "acp_version": "0.3.0",
+      "backend_name": "singlepoint",
+      "backend_version": "",
+      "method": "singlepoint",
+      "basis": null,
+      "solvent": null,
+      "command_line": "",
+      "hostname": "redacted-host",
+      "ncores": 1,
+      "memory_gb": 1.0,
+      "wall_time_seconds": 6.977221,
+      "routine": "singlepoint",
+      "creator": null,
+      "schema_version": "1.0"
+    }
+  },
+  "revision": 6,
+  "attempt": 1
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "acp2.acceptance.cleanup.v1",
+  "controller_pid": 81900,
+  "signal": "SIGTERM",
+  "process_gone": true,
+  "port_18765_free": true,
+  "production_service_touched": false,
+  "leftover_mcp_pids": [],
+  "task_count_before": 1,
+  "task_count_after": 1,
+  "note": "B05 Controller stopped with SIGTERM and reaped; port 18765 verified free; production 8765 untouched; no MCP adapter process left.",
+  "leftover_controller_pids": [],
+  "verified_with": "ps -eo pid,args | grep -E 'python[0-9.]* .*-m acp (mcp|run) serve'"
+}

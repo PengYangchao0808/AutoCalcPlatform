@@ -1,0 +1,61 @@
+{
+  "fixture": "wrong_project",
+  "description": "Negative fixture: the read-only view snapshot belongs to proj-alpha while the ResearchRecord TaskRef claims proj-beta. view_model.project_id MUST equal every task_ref.project_id; a cross-project reference is rejected before any artifact/claim is consumed.",
+  "view_model": {
+    "snapshot_revision": 7,
+    "project_id": "proj-alpha",
+    "task_ref": {
+      "job_id": "20261022_001_PESsearch",
+      "attempt": 1,
+      "task_id": null
+    },
+    "manifest_generation": 2,
+    "artifacts": [
+      {
+        "artifact_id": "art-optimized-ts",
+        "role": "optimized_transition_state",
+        "relative_path": "RESULT/optimized_ts.xyz",
+        "availability": "readable",
+        "generation": 2,
+        "sha256": null,
+        "size_bytes": 4096,
+        "reason": null
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "claim-endo-lower",
+        "statement": "The endo path is lower in free energy for the frozen model.",
+        "status": "supported",
+        "evidence_refs": [
+          "ev-result-manifest"
+        ],
+        "reason": null
+      }
+    ],
+    "clarifications": [],
+    "provenance": {
+      "source": "results.manifest.read",
+      "producer_revision": "0123456789abcdef0123456789abcdef01234567",
+      "produced_at": "2026-10-22T12:20:00Z",
+      "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "read_only": true,
+    "not_authoritative_for_science": true
+  },
+  "task_refs": [
+    {
+      "project_id": "proj-beta",
+      "job_id": "20261022_001_PESsearch",
+      "attempt": 1,
+      "release_id": "release-2026.10.22"
+    }
+  ],
+  "expected_error": {
+    "class": "authorization",
+    "code": "access_denied",
+    "params": {
+      "rule": "project_scope_mismatch"
+    }
+  }
+}

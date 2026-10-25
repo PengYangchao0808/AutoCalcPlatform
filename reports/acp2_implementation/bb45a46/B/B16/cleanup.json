@@ -1,0 +1,16 @@
+{
+  "approval_records_retained_as_evidence": true,
+  "controller_log": "controller/controller-b16.log",
+  "controller_pid": 1204604,
+  "controller_port": 18776,
+  "leftover_processes": [],
+  "port_free": true,
+  "production_8765_processes": [],
+  "production_run_root_touched": false,
+  "production_service_8765_touched": false,
+  "run_root": "/opt/acp2-dev/data/b/run-root-b16",
+  "run_root_note": "test-only native filesystem root; never /var/lib/acp/runs",
+  "schema": "acp2.b16.cleanup.v1",
+  "stopped": true,
+  "tcp_connect_after_stop": "ConnectionRefusedError"
+}

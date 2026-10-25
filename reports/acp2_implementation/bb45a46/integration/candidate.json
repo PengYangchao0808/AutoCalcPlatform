@@ -1,0 +1,272 @@
+{
+  "schema": "acp2.integration.candidate.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "candidate_id": "acp2.p1.integration.77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "candidate_short_sha": "77ac1de",
+  "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
+  "branch": "acp2/integration-p1",
+  "worktree": "/opt/acp2-dev/integration",
+  "frozen_at": "2026-10-23T11:02:00+08:00",
+  "previous_candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
+  "refreeze_reason": "Re-freeze after the B-owned base-suite fixes (B-fix-34/35/36) and the advanced A/C heads; the previous merge procedure and ownership map were reused.",
+  "source_heads_observed_after_freeze": {
+    "a_head": "8f4d9b98a584575cf74c0ff1ba7eb693468f288b",
+    "c_head": "6905477c51c34fa1f8d53421553805ecbf88d897",
+    "note": "Observed while the re-freeze ran, after the merges. The candidate deliberately keeps the recorded changesets a=aa5e193 and c=49ddfad; these later heads are not part of the candidate and no evidence was assembled from them."
+  },
+  "candidate_parents": [
+    "bd94a7b54c278040af284ee76d7657fcaedb71fe",
+    "49ddfad860e3ba4bdd8a23e3b1d7e20919cf50bd"
+  ],
+  "merge_commits": {
+    "b_merge": "5b365e14d5f8fea52083446c2abe8ee6e591bdac",
+    "a_merge": "bd94a7b54c278040af284ee76d7657fcaedb71fe",
+    "c_merge": "77ac1de1af6a5db6b57f4f904a859305ff73042c"
+  },
+  "merge_bases": {
+    "a": "9977a106445177708e929557f9460e86914787ad",
+    "b": "a72e8db08416c882d52e1cfefbdf8b1f1b3d74d4",
+    "c": "35614fd83f616005a0546af35631c477151e7dde"
+  },
+  "historical_debug_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+  "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "a_changeset": "aa5e19399fd44a7cec0ae4e7632d9a4683151815",
+  "b_changeset": "308ef76e014e43a061d0cbffe219b2451de8feba",
+  "c_changeset": "49ddfad860e3ba4bdd8a23e3b1d7e20919cf50bd",
+  "included_tracks": [
+    "A",
+    "B",
+    "C"
+  ],
+  "excluded_tracks": [],
+  "excluded_changes": {
+    "note": "No whole track was excluded. These are dirty-worktree, stale-branch, or C-owned defects that domain ownership kept out or that remain open; they are requests/known failures, not accepted B edits.",
+    "a_uncommitted_worktree_not_included": {
+      "entries": 9,
+      "tracked_modifications": [
+        "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
+        "src/cccp/calculation/capabilities/__init__.py",
+        "src/cccp/calculation/capabilities/builtin.py",
+        "src/cccp/calculation/capabilities/task_binding.py",
+        "tests/test_acp2_science_registry.py",
+        "tests/test_acp2_science_task_binding.py"
+      ],
+      "untracked_paths": [
+        "src/cccp/analysis/nmr/comparison.py",
+        "tests/fixtures/acp2/science/cross_domain/",
+        "tests/test_acp2_science_nmr_binding.py"
+      ],
+      "note": "Only the committed A head aa5e193 is part of the candidate. The A session was still running during the re-freeze."
+    },
+    "c_owned_frontend_defect": {
+      "status": "OPEN",
+      "path": "frontend/js/workbench/features/scientific-evidence.js",
+      "test": "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
+      "detail": "A local callback variable named `token` is called as `token.fn()`, which the addModel restricted-token guard flags. C 49ddfad modified this file as C-owned content but did not remove the token.fn() call. B did not edit frontend/**.",
+      "request": "C must fix scientific-evidence.js; recorded in runtime/cross-track-requests.v1.json (added by B-fix-35)."
+    },
+    "c_owned_harness_order_dependence": {
+      "status": "OPEN",
+      "path": "scripts/acceptance/acp2_experience_scenarios.py",
+      "test": "tests/test_acp2_experience_harness.py::test_clean_live_environment_is_accepted",
+      "detail": "assert_live_environment scans sys.modules with a fake/mock/stub x backend/transport/model/client regex. A full-suite test module imports httpx._transports.mock, a legitimate third-party module that matches the regex; the file passes alone and fails when that module is imported. C-owned test/harness code; B did not edit it.",
+      "request": "C must scope the fake-module scan to project modules or exempt httpx._transports.mock."
+    },
+    "c_deletions_not_applied": [
+      "scripts/acceptance/acp2_fault_controller.py",
+      "scripts/acceptance/acp2_runtime.py",
+      "scripts/acceptance/validate_acp2_contracts.py",
+      "tests/test_acp2_runtime_acceptance_harness.py",
+      "tests/test_acp2_runtime_admission.py",
+      "tests/test_acp2_runtime_artifact.py",
+      "tests/test_acp2_runtime_contracts.py",
+      "tests/test_acp2_runtime_control_recovery.py",
+      "tests/test_acp2_runtime_controller_topology.py",
+      "tests/test_acp2_runtime_lsf_scenario.py",
+      "tests/test_acp2_runtime_mcp_backends.py",
+      "tests/test_acp2_runtime_mcp_process.py",
+      "tests/test_acp2_runtime_persistent_idempotency.py"
+    ],
+    "c_absence_of_b_files": "C's branch predates B00-B13; its absence of B-owned runtime/acceptance files was not treated as a deletion.",
+    "shared_changes_not_applied": "A/C changes to B-owned runtime/API/packaging/CI/shared acceptance files remain requests, not auto-merges. The complete record is ownership-decisions-refreeze.json."
+  },
+  "overlay_verification": {
+    "manifest_total": 1906,
+    "byte_identical": 1866,
+    "missing": 0,
+    "intentionally_evolved": 40,
+    "evolved_categories": {
+      "b00_b13_and_b_fix_runtime_tests": 17,
+      "c_frontend_experience": 12,
+      "a_science_plugin": 7,
+      "shared_api_cli_manager_contract": 4
+    }
+  },
+  "omo_tracking": {
+    "previous_candidate_tracked_paths": 27,
+    "candidate_tracked_paths": 0,
+    "files_remain_on_disk": true,
+    "rule": "B-fix-36: .omo/** is gitignored and must not be tracked."
+  },
+  "contract_manifest_digest": "sha256:cf9de34b84e5452ebd40a5ecd943a13eca29f0f5b0730caae849cccf80d40eb6",
+  "contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
+  "contract_version": "1.1.0",
+  "contract_validator": {
+    "command": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/validate_acp2_contracts.py",
+    "result": "VALID",
+    "exit_code": 0
+  },
+  "env_digest": "sha256:67ab9c869e95c3c2a6180e96e7acefbaff9882a835bfb7b4691dfcf14d8e5553",
+  "env_digest_rule": "sha256 of `env -u PYTHONPATH /opt/acp2-dev/venvs/b/bin/python -m pip freeze` stdout",
+  "env": {
+    "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
+    "python_version": "3.11.13",
+    "acceptance_env": "/opt/acp2-dev/data/b/acceptance-env.sh",
+    "run_root": "/opt/acp2-dev/data/integration/run-root",
+    "note": "The venv evolved during B tasks, so the live pip-freeze digest is authoritative for this candidate."
+  },
+  "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "client_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "harness_revision": "sha256:9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+  "harness_source_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "loaded_paths": "reports/acp2_implementation/bb45a46/B/B14/loaded-paths-refreeze.json",
+  "revision_note": "Explicit combination: the Controller and served frontend load from the integration worktree (server_revision=client_revision=candidate_sha), the harness identity is its own script sha256 with harness_source_revision=candidate_sha, and /api/health reports candidate_revision=10eb71e... because the B02 acceptance-env overrides the frozen baseline-lock code_candidate_revision=bb30913.... The four-location version/contract-lock bump is B25a's, so B14a records the mismatch instead of rewriting it.",
+  "shared_file_requests": {
+    "four_versions": {
+      "bump_performed": false,
+      "owner_of_bump": "B25a",
+      "current": {
+        "src/cccp/__init__.py": "0.2.0",
+        "src/cccp/version.py": "0.2.0",
+        "src/acp/__init__.py": "0.2.0",
+        "pyproject.toml": "0.2.0"
+      },
+      "request": "B25a applies the single release-version bump to all four locations; B14a only records the request."
+    },
+    "config_defaults": {
+      "change_requested": false,
+      "note": "No shared config default changed; Python built-in defaults remain authoritative."
+    },
+    "dependencies": {
+      "change_requested": false,
+      "note": "No shared Python dependency change. C's rph package.json/pnpm-lock are C-owned; A's plugin fixtures use local build backends. C B-req-07 (keep runtime/dependencies.json current) remains a B-internal follow-up."
+    },
+    "services_ledger": {
+      "change_requested": false,
+      "note": "No new A/C ledger row applied. C B-req-04 (ingest C harness results into the ledgers) remains open and is not claimed as done."
+    },
+    "identity_forwarders": {
+      "verified": true,
+      "checks": "acp.scheduler.{store,migrations}, acp.calculations.{contracts,step_result,step_requirements} and acp.catalog.method_levels_to_cli_flags remain identity forwarders to their acp_services objects."
+    },
+    "documents": {
+      "A": "science/requests/shared-file-requests.md, dependency-requests.md, cross-track-dependencies.json, runtime-fixture-singlepoint.md, search-contract.md, ADR-008-input.md, f4-amendment.md",
+      "C_to_B": [
+        "B-req-01",
+        "B-req-02",
+        "B-req-04",
+        "B-req-06",
+        "B-req-07",
+        "B-req-09",
+        "B-req-10",
+        "B-req-11",
+        "B-req-12",
+        "B-req-13",
+        "B-req-15",
+        "B-req-17",
+        "B-req-18"
+      ],
+      "C_to_A": [
+        "A-req-01",
+        "A-req-02",
+        "A-req-03",
+        "A-req-04"
+      ]
+    }
+  },
+  "guards": {
+    "command": "pytest tests/test_acp_services_isolation.py tests/test_architecture_invariants.py tests/test_services_injection_contracts.py tests/test_services_doc_sync.py -q",
+    "result": "PASS",
+    "counters": "78 passed, 2 warnings in 16.70s",
+    "log": "reports/acp2_implementation/bb45a46/B/B14/guard-refreeze.log"
+  },
+  "base_suite": {
+    "command": "pytest -m \"not slow\" -q",
+    "environment": {
+      "ACP_RUN_ROOT": "/opt/acp2-dev/data/integration/run-root",
+      "ACP2_RUN_ROOT": "/opt/acp2-dev/data/integration/run-root",
+      "ACP2_PROJECT_ROOT": "/opt/acp2-dev/integration",
+      "PYTHONPATH": "/opt/acp2-dev/integration/src"
+    },
+    "result": "FAIL",
+    "counters": {
+      "failed": 3,
+      "passed": 10649,
+      "skipped": 119,
+      "deselected": 95,
+      "warnings": 29,
+      "duration_seconds": 1795.32
+    },
+    "log": "reports/acp2_implementation/bb45a46/B/B14/full-suite-refreeze.log",
+    "command_file": "reports/acp2_implementation/bb45a46/B/B14/full-suite-refreeze-command.txt",
+    "exit_file": "reports/acp2_implementation/bb45a46/B/B14/full-suite-refreeze.exit",
+    "classification": "reports/acp2_implementation/bb45a46/B/B14/failure-classification-refreeze.md",
+    "remaining_failures": [
+      {
+        "test": "tests/test_acp2_experience_harness.py::test_clean_live_environment_is_accepted",
+        "owner": "C",
+        "reason": "C harness test scans sys.modules and matches third-party httpx._transports.mock; passes when the file runs alone."
+      },
+      {
+        "test": "tests/test_acp2_runtime_persistent_idempotency.py::test_crash_after_reservation_before_job_row",
+        "owner": "B",
+        "reason": "Timing flake in the 0.05s lease window; passed 3/3 reruns."
+      },
+      {
+        "test": "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
+        "owner": "C",
+        "reason": "scientific-evidence.js token.fn() collision; C-owned and unchanged by B."
+      }
+    ],
+    "b_owned_rows_now_pass": [
+      "tests/test_acp_remote_catalog_prefetch.py::test_prefetch_skipped_for_non_terminal_job",
+      "tests/test_acp_remote_catalog_prefetch.py::test_prefetch_skipped_for_local_job",
+      "tests/test_acp_remote_catalog_prefetch.py::test_v2_reads_after_terminal_prefetch_fetch_on_demand_once",
+      "tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner",
+      "tests/test_f4_scope_audit.py::test_omo_no_new_files",
+      "tests/test_f4_scope_audit.py::test_migration_scope_audit_reaches_migration_files"
+    ],
+    "clean_pass": false,
+    "h3_closure": "NOT_VERIFIED: two C-owned rows and one B timing flake remain; no failure is attributable to the domain-ownership merge."
+  },
+  "second_controller": {
+    "run_root": "/opt/acp2-dev/data/integration/controller-run-root",
+    "primary_port": 18772,
+    "second_port": 18773,
+    "second_exit_code": 3,
+    "refusal": "run_root is already owned by another ACP server process (pid=1002584); refusing to start a second instance",
+    "jobs_rows": 0,
+    "tasks_rows": 0,
+    "ports_free_after_stop": true,
+    "production_8765_touched": false,
+    "evidence": "reports/acp2_implementation/bb45a46/B/B14/second-controller-refusal-refreeze.json"
+  },
+  "evidence": [
+    "reports/acp2_implementation/bb45a46/B/B14/merge-log-refreeze.md",
+    "reports/acp2_implementation/bb45a46/B/B14/ownership-decisions-refreeze.json",
+    "reports/acp2_implementation/bb45a46/B/B14/guard-refreeze.log",
+    "reports/acp2_implementation/bb45a46/B/B14/full-suite-refreeze.log",
+    "reports/acp2_implementation/bb45a46/B/B14/full-suite-refreeze-command.txt",
+    "reports/acp2_implementation/bb45a46/B/B14/full-suite-refreeze.exit",
+    "reports/acp2_implementation/bb45a46/B/B14/failure-classification-refreeze.md",
+    "reports/acp2_implementation/bb45a46/B/B14/second-controller-refusal-refreeze.json",
+    "reports/acp2_implementation/bb45a46/B/B14/controller-start-record-refreeze.json",
+    "reports/acp2_implementation/bb45a46/B/B14/controller-primary-refreeze.log",
+    "reports/acp2_implementation/bb45a46/B/B14/controller-second-refusal-refreeze.log",
+    "reports/acp2_implementation/bb45a46/B/B14/controller-health-refreeze.json",
+    "reports/acp2_implementation/bb45a46/B/B14/loaded-paths-refreeze.json",
+    "reports/acp2_implementation/bb45a46/B/B14/second-controller-exit-refreeze.txt",
+    "reports/acp2_implementation/bb45a46/B/B14/port-check-after-stop-refreeze.txt"
+  ]
+}

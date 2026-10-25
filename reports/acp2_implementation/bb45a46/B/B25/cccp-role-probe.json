@@ -1,0 +1,20 @@
+{
+  "controlled_science": "PASS",
+  "forbidden_absent": [
+    "acp",
+    "acp_services",
+    "fastapi"
+  ],
+  "model_assets": {
+    "LICENSE-DP5": "55bc399b93914549e797365ac07b46527775f9aa28275ccb9fe43c4ebaf08146",
+    "NOTICE.md": "f99522ae9c481ceacba628e994cdd8a958b6febaa7ae66136020849cc6925ad0",
+    "atomic_reps.gz": "bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65",
+    "c_w_kde_mean_s_0.025.p": "246025abffd97e32cc405d8956deaf3fd03e7426ff688e7052340135e79dc309",
+    "folded_scaled_errors.p": "c59bd8d3218b28db0e5dde3cf70911688ce530351c45f7930a4b470bd9d200dd",
+    "frag_reps.gz": "e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64",
+    "i_w_kde_mean_s_0.025.p": "2d523808d3859e8a48c695f5dbf8f9b9fe1fd3f02ee2dc70c8016414cf8f383e",
+    "tms_references.txt": "5ff2429aa73ade13aa6a98b3cc6433cc8eedd9d2a687c6b9fa907be03be7dcf7"
+  },
+  "python": "/tmp/opencode/b25-fix-cccp-venv/bin/python",
+  "role": "cccp"
+}

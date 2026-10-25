@@ -25,7 +25,7 @@ src/cccp/   # QC 底座（four-layer ①qc → ②backends → ③calculation；
 | Task | Location | Notes |
 |------|----------|-------|
 | Config loading | `config.py` | 6-source merge see root AGENTS.md for order |
-| **Executable resolution** | **`software.py`** | **THE single resolver — `resolve_executable(name, configured_path)`; all backends/interfaces/API/catalog route through it. `resource_utils.find_executable` is superseded (unwired legacy)** |
+| **Executable resolution** | **`software.py`** | **THE single resolver — `resolve_executable(name, configured_path)`; all backends/interfaces/API/catalog route through it. Legacy `resource_utils.find_executable`/`resolve_executable_config` retired (plan-3 T37; audit evidence in `.omo/evidence/acp-parallel-plan-3-cccp/task-37-*.md`)** |
 | Version | `__init__.py` + `version.py` (+ `acp/__init__.py` + `pyproject.toml`) | **4-way sync** — see root ANTI #2 |
 | Task cores (execution) | `calculation/tasks/` | Single execution station; contracts via `calculation/{requests,results}.py` |
 | Capability backends | `backends/` | Implementation home; `acp/backends/*` are pure re-export shims |
@@ -41,3 +41,8 @@ src/cccp/   # QC 底座（four-layer ①qc → ②backends → ③calculation；
 ## ANTI-PATTERNS
 - **Version duplication**: `__version__` lives in four files across the two packages — diverges easily
 - **No CLI / no `__main__.py`**: the legacy CLI (`cli.py`, `__main__.py`) and `conformer-search` console_script were deleted in the cccp rename; `python -m cccp` does NOT work — use the unified `acp` CLI instead
+
+## INSTALLED PACKAGE (B25b, 2026-10-23)
+- `cccp` installs standalone: no `acp`, `acp_services`, `fastapi` or Controller is required for the public scientific API.
+- Wheel assets include `analysis/nmr/model_assets/{NOTICE.md,LICENSE-DP5,*.gz,*.p,*.txt}`, `cccp/py.typed`, `cccp/plugin/sdk.py` and the AGENTS docs; the controlled singlepoint sample runs from the installed venv.
+- Version stays `0.3.0` in the four repository locations; a CCCP release must not require DSH/browser dependencies.

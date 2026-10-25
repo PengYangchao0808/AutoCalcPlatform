@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "item_id": "",
+  "status": "completed",
+  "converged": true,
+  "current_cycle": 3,
+  "cycles": [
+    {
+      "cycle": 1,
+      "status": "running",
+      "atom_count": 2,
+      "geometry_ref": "cycles/cycle_0001.xyz",
+      "energy_hartree": -1.116773191779,
+      "rms_gradient": 0.0276170574,
+      "max_gradient": 0.0276170574,
+      "rms_displacement": 0.056849836,
+      "max_displacement": 0.056849836,
+      "attempt_cycle": 1
+    },
+    {
+      "cycle": 2,
+      "status": "running",
+      "atom_count": 2,
+      "geometry_ref": "cycles/cycle_0002.xyz",
+      "energy_hartree": -1.117511413206,
+      "rms_gradient": 0.0025660236,
+      "max_gradient": 0.0025660236,
+      "rms_displacement": 0.0048329929,
+      "max_displacement": 0.0048329929,
+      "attempt_cycle": 2
+    },
+    {
+      "cycle": 3,
+      "status": "converged",
+      "atom_count": 2,
+      "energy_hartree": -1.11751709882,
+      "rms_gradient": 0.0002184779,
+      "max_gradient": 0.0002184779,
+      "rms_displacement": 0.0003792069,
+      "max_displacement": 0.0003792069,
+      "geometry_ref": "cycles/cycle_0003.xyz",
+      "attempt_cycle": 3
+    }
+  ],
+  "updated_at": "2026-10-23T03:16:56+00:00",
+  "source": "ORCA final output",
+  "attempts": 1,
+  "thresholds": {
+    "max_gradient": 0.0003,
+    "rms_gradient": 0.0001,
+    "max_displacement": 0.004,
+    "rms_displacement": 0.002
+  }
+}

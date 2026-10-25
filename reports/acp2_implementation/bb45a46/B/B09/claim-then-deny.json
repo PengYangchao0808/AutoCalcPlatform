@@ -1,0 +1,82 @@
+{
+  "claim": {
+    "scope_id": "principal_local\u001fproj-a",
+    "state": "rejected"
+  },
+  "retry": [
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "code": "admission_denied",
+        "message": "request cores 4>2",
+        "params": {
+          "enforced": false,
+          "exceeded": [
+            {
+              "dimension": "cores",
+              "limit": 2,
+              "requested": 4,
+              "scope": "request"
+            }
+          ],
+          "mode": "quota-only",
+          "reason_code": "exceeds_cores"
+        },
+        "retryable": false
+      },
+      "expect": 429,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs",
+      "scenario": "claim_then_deny",
+      "status": 429
+    },
+    {
+      "after": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "before": {
+        "active_reservations": 0,
+        "claims": 0,
+        "jobs": 1,
+        "reservations": 0,
+        "usage_receipts": 0,
+        "work_dirs": 0
+      },
+      "detail": {
+        "code": "idempotency_conflict",
+        "message": "idempotency claim was rejected by admission",
+        "params": {
+          "idempotency_key": "live-over-cores"
+        },
+        "retryable": false
+      },
+      "expect": 409,
+      "method": "POST",
+      "no_side_effect": true,
+      "path": "/api/v1/jobs",
+      "scenario": "claim_then_deny_retry",
+      "status": 409
+    }
+  ]
+}

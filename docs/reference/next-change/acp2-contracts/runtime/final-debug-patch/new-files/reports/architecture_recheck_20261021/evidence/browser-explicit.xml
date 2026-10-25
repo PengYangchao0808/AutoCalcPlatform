@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="3.586" timestamp="2026-10-21T10:42:13.802008+08:00" hostname="redacted-host"><testcase classname="tests.test_acp_frontend_browser" name="test_nmr_canvas_survives_success" time="2.044"><failure message="playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot read properties of undefined (reading 'instance')&#10;    at eval (eval at evaluate (:311:30), &lt;anonymous&gt;:68:63)&#10;    at async &lt;anonymous&gt;:337:30">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2a24c6d0&gt;
+
+    def test_nmr_canvas_survives_success(frontend_page: _Harness) -&gt; None:
+        """D08/GAP-8: the live canvas survives a successful load in real Chromium."""
+        harness = frontend_page
+        page = harness.page
+        load_viewer_stack(harness)
+    
+&gt;       facts = page.evaluate(
+            """async () =&gt; {
+            const facts = {
+                vendor_loaded: typeof $3Dmol !== "undefined"
+                    &amp;&amp; typeof $3Dmol.createViewer === "function",
+                shared_loader: !!(window.ACPStructureViewer
+                    &amp;&amp; window.ACPStructureViewer.sharedLoadGeometry),
+            };
+            const c0 = document.querySelector('[data-nmr-structure-viewer="0"]');
+            const info1 = nmrEnsureViewer(0, c0);
+            facts.first_instance_created = !!(info1 &amp;&amp; info1.instance);
+            await nmrLoadCandidateGeometry({ id: "audit" }, { index: 0 }, nmrPanelState.token);
+    
+            // ── success contract ────────────────────────────────────────────
+            facts.canvas_count_after_success = c0.querySelectorAll("canvas").length;
+            const canvas1 = c0.querySelector("canvas");
+            facts.canvas_connected_after_success = canvas1 ? canvas1.isConnected : null;
+            const entry1 = nmrPanelState.viewers[0];
+            facts.atoms = entry1 ? entry1.atoms.length : -1;
+            facts.labels = entry1 ? entry1.labels : null;
+            facts.status_nodes_after_success = c0.querySelectorAll(".nmr-viewer-status").length;
+            facts.container_class_after_success = c0.className;
+    
+            // Framing settle, then PNG export through the restricted API.
+            const settleDeadline = Date.now() + 2000;
+            while (Date.now() &lt; settleDeadline
+                   &amp;&amp; !(nmrPanelState.viewers[0] &amp;&amp; nmrPanelState.viewers[0].framing
+                        &amp;&amp; nmrPanelState.viewers[0].framing.settled)) {
+                await new Promise((resolve) =&gt; requestAnimationFrame(() =&gt; resolve(null)));
+            }
+            facts.framing_settled = !!(nmrPanelState.viewers[0] &amp;&amp; nmrPanelState.viewers[0].framing
+                                       &amp;&amp; nmrPanelState.viewers[0].framing.settled);
+            const inst1 = nmrPanelState.viewers[0].instance;
+            inst1.render();
+            const uri = inst1.pngURI();
+            facts.png_is_data_url = typeof uri === "string"
+                &amp;&amp; uri.indexOf("data:image/png;base64,") === 0;
+            facts.png_bytes = facts.png_is_data_url ? atob(uri.split(",")[1]).length : 0;
+            facts.png_nonbg_pixels = 0;
+            facts.png_unique_colors = 0;
+            if (facts.png_is_data_url) {
+                const img = new Image();
+                await new Promise((resolve, reject) =&gt; {
+                    img.onload = () =&gt; resolve(null);
+                    img.onerror = () =&gt; reject(new Error("png decode failed"));
+                    img.src = uri;
+                });
+                const buf = document.createElement("canvas");
+                buf.width = img.width;
+                buf.height = img.height;
+                const ctx = buf.getContext("2d");
+                ctx.drawImage(img, 0, 0);
+                const data = ctx.getImageData(0, 0, buf.width, buf.height).data;
+                const seen = new Set();
+                let nonbg = 0;
+                for (let i = 0; i &lt; data.length; i += 4) {
+                    seen.add((data[i] &lt;&lt; 16) | (data[i + 1] &lt;&lt; 8) | data[i + 2]);
+                    // scene background is 0x0e1419
+                    if (Math.abs(data[i] - 14) &gt; 6 || Math.abs(data[i + 1] - 20) &gt; 6
+                        || Math.abs(data[i + 2] - 25) &gt; 6) nonbg += 1;
+                }
+                facts.png_nonbg_pixels = nonbg;
+                facts.png_unique_colors = seen.size;
+                facts.png_dims = [img.width, img.height];
+            }
+    
+            // ── reopen: reuse guard keeps the SAME live instance and canvas ─
+            await nmrLoadCandidateGeometry({ id: "audit" }, { index: 0 }, nmrPanelState.token);
+            facts.reopen_same_instance = nmrPanelState.viewers[0].instance === inst1;
+            facts.canvas_count_after_reopen = c0.querySelectorAll("canvas").length;
+    
+            // ── candidate/container switch: OLD instance is disposed ────────
+            const c0b = document.createElement("div");
+            c0b.setAttribute("data-nmr-structure-viewer", "0");
+            c0b.className = "nmr-structure-viewer empty";
+            c0b.style.width = "400px";
+            c0b.style.height = "300px";
+            c0.replaceWith(c0b);
+            const info2 = nmrEnsureViewer(0, c0b);
+            facts.switch_created_new_instance = !!(info2 &amp;&amp; info2.instance &amp;&amp; info2.instance !== inst1);
+            facts.old_instance_disposed_on_switch = inst1.isDisposed() === true;
+            facts.registry_size_after_switch = Object.keys(nmrPanelState.viewers).length;
+            facts.registry_holds_new_after_switch = !!(nmrPanelState.viewers[0]
+                &amp;&amp; info2 &amp;&amp; nmrPanelState.viewers[0].instance === info2.instance);
+            const canvas2 = c0b.querySelector("canvas");
+            facts.canvas_count_after_switch = c0b.querySelectorAll("canvas").length;
+            facts.canvas_connected_after_switch = canvas2 ? canvas2.isConnected : null;
+    
+            // ── dispose: every instance released, registry empty ────────────
+            const inst2 = info2.instance;
+            nmrPanelDispose();
+            facts.registry_size_after_dispose = Object.keys(nmrPanelState.viewers).length;
+            facts.first_instance_disposed = inst1.isDisposed() === true;
+            facts.new_instance_disposed = inst2.isDisposed() === true;
+            return facts;
+        }"""
+        )
+
+tests/test_acp_frontend_browser.py:359: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/redacted-user/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:9413: in evaluate
+    self._sync(
+/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:474: in evaluate
+    return await self._main_frame.evaluate(expression, arg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:346: in evaluate
+    await self._channel.send(
+/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f1a2ad40d50&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f1a2a2c2520&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot read properties of undefined (reading 'instance')
+E               at eval (eval at evaluate (:311:30), &lt;anonymous&gt;:68:63)
+E               at async &lt;anonymous&gt;:337:30
+
+/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: Error</failure></testcase><testcase classname="tests.test_acp_frontend_browser" name="test_vibration_cold_start_arrows_in_real_browser" time="0.317"><failure message="AssertionError: scene instance not created (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}&#10;assert False">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2ae28890&gt;
+
+    def test_vibration_cold_start_arrows_in_real_browser(frontend_page: _Harness) -&gt; None:
+        """D09/GAP-9: cold start (enabled=false) draws real3Dmol arrows from display intent."""
+        harness = frontend_page
+        page = harness.page
+        identity = _identity()
+    
+        setup = _setup_vibration_viewer(harness)
+        assert setup["vendor_loaded"], f"real vendor $3Dmol missing ({identity}): {setup}"
+&gt;       assert setup["instance_created"], f"scene instance not created ({identity}): {setup}"
+E       AssertionError: scene instance not created (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}
+E       assert False
+
+tests/test_acp_frontend_browser.py:857: AssertionError</failure></testcase><testcase classname="tests.test_acp_frontend_browser" name="test_vibration_animation_frames_combo_hide_remount_teardown" time="0.364"><failure message="AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}&#10;assert (False)">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2a1e3ed0&gt;
+
+    def test_vibration_animation_frames_combo_hide_remount_teardown(
+        frontend_page: _Harness,
+    ) -&gt; None:
+        """D09/GAP-9: animation changes real frames; combo shows both; hide/remount
+        restores; teardown clears every shape."""
+        harness = frontend_page
+        page = harness.page
+        identity = _identity()
+    
+        setup = _setup_vibration_viewer(harness)
+&gt;       assert setup["instance_created"] and setup["native_captured"], (
+            f"real scene instance required ({identity}): {setup}"
+        )
+E       AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}
+E       assert (False)
+
+tests/test_acp_frontend_browser.py:961: AssertionError</failure></testcase><testcase classname="tests.test_acp_frontend_browser" name="test_vibration_two_instances_do_not_share_state" time="0.372"><failure message="AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}&#10;assert (False)">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2a1d0b50&gt;
+
+    def test_vibration_two_instances_do_not_share_state(frontend_page: _Harness) -&gt; None:
+        """D09/GAP-9: two real module instances keep independent draw state."""
+        harness = frontend_page
+        page = harness.page
+        identity = _identity()
+    
+        setup = _setup_vibration_viewer(harness)
+&gt;       assert setup["instance_created"] and setup["native_captured"], (
+            f"real scene instance required ({identity}): {setup}"
+        )
+E       AssertionError: real scene instance required (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}
+E       assert (False)
+
+tests/test_acp_frontend_browser.py:1068: AssertionError</failure></testcase></testsuite></testsuites>

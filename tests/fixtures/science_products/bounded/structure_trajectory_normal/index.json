@@ -1,0 +1,120 @@
+{
+ "index_schema": "hn03_block_index",
+ "index_schema_version": 1,
+ "delivery_version": "hn-03-bounded-delivery-v1",
+ "bounded_schema_version": 1,
+ "product_schema_version": 1,
+ "delivery_state": "ok",
+ "product_kind": "structure_trajectory",
+ "manifest": {
+  "file": "manifest.json",
+  "bytes": 12349,
+  "sha256": "sha256:6b88c78525ecd3c8817c9db9f3637c96a95b0a13c15da44b9d7f9c0d84865f4d"
+ },
+ "bounded_identity": {
+  "product_kind": "structure_trajectory",
+  "schema_version": 1,
+  "generator": "cccp.analysis.bounded.chunking.chunk_trajectory_product",
+  "input_digest": "sha256:b2951693a3880303f6bf87154864912fb442969a63b9cc83345902a8c13d32f6",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:502a81b7c77efff1846ceecf2de3fba451a261798bb60ba9dd645b817e209886"
+ },
+ "base_identity": {
+  "product_kind": "structure_trajectory",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+  "input_digest": "sha256:b2951693a3880303f6bf87154864912fb442969a63b9cc83345902a8c13d32f6",
+  "algorithm": "structure_trajectory",
+  "algorithm_version": "1",
+  "params_digest": ""
+ },
+ "spec": {
+  "method": "chunk",
+  "algorithm_version": "1",
+  "resolution": 4,
+  "start": 0,
+  "end": 10,
+  "params": [
+   {
+    "name": "product_kind",
+    "value": "structure_trajectory"
+   }
+  ]
+ },
+ "display_subsampled": false,
+ "note": "",
+ "block_count": 3,
+ "max_block_size": 4,
+ "total_items": 10,
+ "covered_range": [
+  0,
+  10
+ ],
+ "blocks": [
+  {
+   "block_index": 0,
+   "start": 0,
+   "end": 4,
+   "resolution": 4,
+   "item_count": 4,
+   "file": "block_000000.json",
+   "bytes": 3594,
+   "sha256": "sha256:0c09b7a3d60b7300dc9435e62b489b7fc32d79fa8f054a79573403b26cdf817f",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:33593b6efce02665d69f4f5069cd1edc441105b262015d9d6d7dd09daf97c918",
+    "input_digest": "sha256:b2951693a3880303f6bf87154864912fb442969a63b9cc83345902a8c13d32f6"
+   }
+  },
+  {
+   "block_index": 1,
+   "start": 4,
+   "end": 8,
+   "resolution": 4,
+   "item_count": 4,
+   "file": "block_000001.json",
+   "bytes": 3594,
+   "sha256": "sha256:9c114e9e385de2ef0496e6e8f7822d17116d9e0e5c3042991d2c8e99e3577120",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:d938f291f1e655a6049b692a7daca48325644e11afe5dda35f9bed197545f9df",
+    "input_digest": "sha256:b2951693a3880303f6bf87154864912fb442969a63b9cc83345902a8c13d32f6"
+   }
+  },
+  {
+   "block_index": 2,
+   "start": 8,
+   "end": 10,
+   "resolution": 4,
+   "item_count": 2,
+   "file": "block_000002.json",
+   "bytes": 2184,
+   "sha256": "sha256:947a6b8a2735f1e9761a9657134009d81e69e5fe67c2875a5eb2366dd0ffb184",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:67419726c73c6f6cb3fa24d0564c65f076c3513b30dac734687f574d3d07bcad",
+    "input_digest": "sha256:b2951693a3880303f6bf87154864912fb442969a63b9cc83345902a8c13d32f6"
+   }
+  }
+ ],
+ "expected_consumption": {
+  "operation": "reconstruct",
+  "result_digest": "sha256:f1c9eca962b2c30c8503bba202b6884eb8398d1e8372bda9c0e588ee65e46cc7"
+ }
+}

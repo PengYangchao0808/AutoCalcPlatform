@@ -32,7 +32,14 @@ if (window.ACPClient && window.ACPClient.events) {
   // hardcodes an API prefix; the page owns API_BASE (compat/shared-state.js).
   ACPClient.events.init({ baseUrl: API_BASE });
 }
+if (window.ACPClient && window.ACPClient.systemEndpoints) {
+  // T22: single init chokepoint for the System & Resources facade. `v1` owns
+  // API_BASE (/api/v1); `direct` is the transport (literal /api/backends).
+  ACPClient.systemEndpoints.init({ v1: api, direct: apiRequest, baseUrl: API_BASE });
+}
 if (window.ACPClient && window.ACPClient.taskView) ACPClient.taskView.init({ v1: api, v2: apiV2 });
+if (window.ACPClient && window.ACPClient.research) ACPClient.research.init({ v2: apiV2 });
+if (window.ACPClient && window.ACPClient.eventInvalidation) ACPClient.eventInvalidation.init({ v1: api, v2: apiV2 });
 if (window.ACPClient && window.ACPClient.jobDetail) {
   // R1: single write point for the legacy-endpoint pin — the client decides
   // on structured err.status (404/405 only) and syncs the page global here.
@@ -164,8 +171,8 @@ function startPolling(skipInitialJobs) {
         return Promise.allSettled([pollLogTail(id), pollIrcOutputTail(id)]);
       },
       pollDiskUsage: function () { return loadDiskUsage(); },
-      pollNodes: function () { return loadNodes(); },
-      pollBackends: function () { return loadBackends(); },
+      pollNodes: function () { return ACPWorkbench.controllers.systemResources.loadNodes(); },
+      pollBackends: function () { return ACPWorkbench.controllers.systemResources.loadBackends(); },
       pollFileTree: function () { return refreshFileTreeIfActive(); },
     }, {
       isHidden: function () { return document.hidden; },

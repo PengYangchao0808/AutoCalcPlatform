@@ -1,0 +1,70 @@
+{
+  "authority": "cccp.calculation.tasks.singlepoint:184-239",
+  "complete": true,
+  "content_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "energy_hartree"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+        "path": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:6fd7589212e80ba4f043b99361a66a7b45d10f02ae09286c57c74cc177402155",
+        "path": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "energy_hartree": -1.116759307204,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {},
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "HF",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  },
+  "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "singlepoint",
+  "truth_table_row": "b",
+  "written_at": "2026-10-22T23:34:37.293057+00:00"
+}

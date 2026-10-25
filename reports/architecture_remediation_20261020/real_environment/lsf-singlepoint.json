@@ -1,0 +1,28 @@
+{
+  "artifacts": [],
+  "candidate_revision": "",
+  "cell": null,
+  "environment": {
+    "env_missing_reason": "ACP_LSF_NODE unset",
+    "env_present": {
+      "ACP_LSF_NODE": false,
+      "ACP_M1_ORCA": false
+    },
+    "python": "3.11.13",
+    "run_root": ""
+  },
+  "f0_revision": null,
+  "f1_revision": null,
+  "finished_on": "2026-10-20T21:07:03Z",
+  "harness": "real_environment.py",
+  "harness_version": "1",
+  "metrics": null,
+  "not_verified_reason": "ACP_LSF_NODE unset",
+  "result": "NOT_VERIFIED",
+  "scenario": "lsf-singlepoint",
+  "schema": "acp.acceptance.harness.v1",
+  "scope": "IN_SCOPE",
+  "skip_reason": null,
+  "started_on": "2026-10-20T21:07:03Z",
+  "steps": []
+}

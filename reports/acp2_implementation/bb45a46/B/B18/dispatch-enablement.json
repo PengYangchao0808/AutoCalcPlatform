@@ -1,0 +1,31 @@
+{
+  "rows": {
+    "frequency": {
+      "closure": "integrated",
+      "enabled": true,
+      "entry": "envelope",
+      "evidence": "HN-01 \u00a712.3",
+      "local_only": false,
+      "remote_entry": "envelope",
+      "workflow": "frequency"
+    },
+    "irc": {
+      "closure": "integrated",
+      "enabled": true,
+      "entry": "envelope",
+      "evidence": "HN-01 \u00a712.5",
+      "local_only": false,
+      "remote_entry": "envelope",
+      "workflow": "irc"
+    },
+    "tsmode": {
+      "closure": "pending",
+      "enabled": false,
+      "entry": "legacy",
+      "evidence": "HN-01 \u00a713.4",
+      "local_only": false,
+      "remote_entry": "legacy",
+      "workflow": "tsmode"
+    }
+  }
+}

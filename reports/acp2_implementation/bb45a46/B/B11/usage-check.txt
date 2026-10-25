@@ -1,0 +1,6 @@
+== missing --launch and --fixture ==
+usage error: missing required argument(s): --fixture, --launch
+exit=3
+== missing --fixture (launch present) ==
+usage error: missing required argument(s): --fixture
+exit=3

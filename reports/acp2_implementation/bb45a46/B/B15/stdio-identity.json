@@ -1,0 +1,70 @@
+{
+  "adapter_stderr_tail": [
+    "2026-10-23 12:24:54,007 [INFO] acp.services_mcp_bootstrap: MCP adapter bound to Controller http://127.0.0.1:18775 (candidate_revision=77ac1de1af6a5db6b57f4f904a859305ff73042c, contract_version=1.1.0, contract_digest=61eb7eb5cb679aa7a4168e8f49d90f0a32acf8b9cffb4b0b572eec39272aeb54)",
+    "2026-10-23 12:24:54,131 [INFO] acp.services_mcp_bootstrap: MCP stdio identity bound to principal=principal_b15_bob project=project_beta actions=['read']",
+    "2026-10-23 12:24:54,131 [INFO] __main__: MCP stdio adapter serving controller=http://127.0.0.1:18775 (candidate_revision=77ac1de1af6a5db6b57f4f904a859305ff73042c, identity_binding=api-key)",
+    "2026-10-23 12:24:54,131 [INFO] acp_services.entrypoints.mcp_stdio: mcp stdio transport ready (max_frame_bytes=1048576)",
+    "2026-10-23 12:24:54,132 [INFO] acp_services.entrypoints.mcp_stdio: MCP session initialized (protocolVersion=2025-06-18)",
+    "2026-10-23 12:24:54,148 [INFO] acp_services.entrypoints.mcp_stdio: stdin EOF; closing stdio transport"
+  ],
+  "assertions": [
+    {
+      "detail": {
+        "available_actions": [
+          "read"
+        ],
+        "binding": "server-resolved-principal",
+        "id": "acp.identity.v1",
+        "permission_scope": "stdio-api-key",
+        "principal_id": "principal_b15_bob",
+        "project_id": "project_beta",
+        "tenant_id": "acp-b15-multiuser",
+        "version": "1.0.0"
+      },
+      "name": "stdio.identity.bound",
+      "status": "PASS"
+    },
+    {
+      "detail": [
+        "read"
+      ],
+      "name": "stdio.identity.ceiling",
+      "status": "PASS"
+    },
+    {
+      "detail": "ok",
+      "name": "stdio.read_tool_allowed",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "category": "denied",
+        "code": "access_denied",
+        "diagnostic_ref": null,
+        "message": "tool 'acp_submit' requires action 'write'",
+        "params": {
+          "available": [
+            "read"
+          ],
+          "required_action": "write"
+        },
+        "retryable": false
+      },
+      "name": "stdio.write_tool_denied",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "returncode": 0
+      },
+      "name": "stdio.eof_stops_adapter",
+      "status": "PASS"
+    }
+  ],
+  "controller": "http://127.0.0.1:18775",
+  "errors": [],
+  "key_id": "9b3adb513df4b799",
+  "key_name": "bob_read",
+  "result": "PASS",
+  "schema": "acp2.b15.stdio-identity.v1"
+}

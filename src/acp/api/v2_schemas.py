@@ -194,6 +194,16 @@ class V2TaskRowModel(BaseModel):
     progress_state: str | None = None
     live_status: dict[str, Any] | None = None
     display_method: str | None = None
+    # Projection state (B03-2).  Additive: old fields above are unchanged.
+    # ``availability`` = resource prepared (ready/preparing/unavailable);
+    # ``freshness`` = projection caught up (fresh/stale/unknown);
+    # ``basis_revision`` = per-owner-dimension revision the projection was built
+    # against; ``observed_at`` = diagnostic timestamp only.
+    availability: str | None = None
+    freshness: str | None = None
+    basis_revision: dict[str, int] | None = None
+    observed_at: str | None = None
+    stale_dimensions: list[str] | None = None
 
 
 class V2TaskViewGroupModel(BaseModel):

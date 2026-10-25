@@ -1,0 +1,406 @@
+{
+  "schema": "acp2.runtime.canonical-digest-vectors.v1",
+  "contract_version": "1.0.0",
+  "frozen_at": "2026-10-22",
+  "owner": "B",
+  "status": "delivered",
+  "spec": "runtime/application-api.v1.json#canonical_digest",
+  "implementation_owner": "B16 (src/acp_services/runtime/canonical_digest.py)",
+  "purpose": "Byte-for-byte conformance vectors so B16's implementation can be reproduced exactly. B03 does not implement the runtime function.",
+  "algorithm": {
+    "signature": "canonical_digest(value: dict, *, set_fields: tuple[str, ...] = (), drop_fields: tuple[str, ...] = ()) -> str",
+    "steps": [
+      "reject a non-object root (root_not_object)",
+      "drop the top-level keys listed in drop_fields",
+      "reject JSON null anywhere (null_in_digest_input)",
+      "reject JSON float anywhere (non_canonical_number); integers are kept",
+      "treat an object whose keys are exactly {value, unit} as a quantity: convert to the dimension base unit with Decimal(precision=28, ROUND_HALF_EVEN) and emit {unit, value} with a canonical decimal string",
+      "reject a key that does not match ^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$ (non_canonical_key)",
+      "sort object keys by code point",
+      "sort a list only when its parent key is listed in set_fields, by the canonical JSON string of each element",
+      "serialize with json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) and UTF-8 encode",
+      "digest = 'sha256:' + hex(sha256(bytes))"
+    ],
+    "decimal_input_rule": "a quantity value is an integer or a plain-decimal string (no exponent, no leading zeros); trailing zeros are allowed on input and normalized away on output",
+    "decimal_output_pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]*[1-9])?$",
+    "units": {
+      "hartree": {
+        "dimension": "energy",
+        "multiplier_to_base": "1"
+      },
+      "kcal_per_mol": {
+        "dimension": "energy",
+        "multiplier_to_base": "0.0015936010974213599"
+      },
+      "angstrom": {
+        "dimension": "length",
+        "multiplier_to_base": "1"
+      },
+      "bohr": {
+        "dimension": "length",
+        "multiplier_to_base": "0.529177210903"
+      },
+      "degree": {
+        "dimension": "angle",
+        "multiplier_to_base": "1"
+      },
+      "radian": {
+        "dimension": "angle",
+        "multiplier_to_base": "57.29577951308232087679815481"
+      },
+      "kelvin": {
+        "dimension": "temperature",
+        "multiplier_to_base": "1"
+      },
+      "second": {
+        "dimension": "time",
+        "multiplier_to_base": "1"
+      },
+      "minute": {
+        "dimension": "time",
+        "multiplier_to_base": "60"
+      },
+      "hour": {
+        "dimension": "time",
+        "multiplier_to_base": "3600"
+      },
+      "cm^-1": {
+        "dimension": "frequency",
+        "multiplier_to_base": "1"
+      },
+      "dalton": {
+        "dimension": "mass",
+        "multiplier_to_base": "1"
+      },
+      "elementary_charge": {
+        "dimension": "charge",
+        "multiplier_to_base": "1"
+      },
+      "count": {
+        "dimension": "count",
+        "multiplier_to_base": "1"
+      },
+      "core": {
+        "dimension": "count",
+        "multiplier_to_base": "1"
+      },
+      "byte": {
+        "dimension": "count",
+        "multiplier_to_base": "1"
+      },
+      "kilobyte": {
+        "dimension": "count",
+        "multiplier_to_base": "1000"
+      },
+      "megabyte": {
+        "dimension": "count",
+        "multiplier_to_base": "1000000"
+      },
+      "gigabyte": {
+        "dimension": "count",
+        "multiplier_to_base": "1000000000"
+      },
+      "pascal": {
+        "dimension": "pressure",
+        "multiplier_to_base": "1"
+      },
+      "bar": {
+        "dimension": "pressure",
+        "multiplier_to_base": "100000"
+      }
+    },
+    "base_units": {
+      "energy": "hartree",
+      "length": "angstrom",
+      "angle": "degree",
+      "temperature": "kelvin",
+      "time": "second",
+      "frequency": "cm^-1",
+      "mass": "dalton",
+      "charge": "elementary_charge",
+      "pressure": "pascal",
+      "count": "count"
+    }
+  },
+  "vectors": [
+    {
+      "id": "v1-plan-minimal",
+      "kind": "plan_digest",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "charge": 0,
+        "multiplicity": 1,
+        "plan_version": 1,
+        "steps": [
+          {
+            "kind": "singlepoint",
+            "level": {
+              "basis": "def2-TZVP",
+              "method": "r2SCAN-3c"
+            },
+            "resources": {
+              "cores": 4,
+              "memory_mb": 2000
+            }
+          }
+        ]
+      },
+      "canonical_json": "{\"charge\":0,\"multiplicity\":1,\"plan_version\":1,\"steps\":[{\"kind\":\"singlepoint\",\"level\":{\"basis\":\"def2-TZVP\",\"method\":\"r2SCAN-3c\"},\"resources\":{\"cores\":4,\"memory_mb\":2000}}]}",
+      "canonical_bytes_sha256": "394ab4bf1d612ff95f1ad30a6feb8a999e44f40273e26047058eb4469261ea2a",
+      "digest": "sha256:394ab4bf1d612ff95f1ad30a6feb8a999e44f40273e26047058eb4469261ea2a",
+      "note": "minimal singlepoint plan; keys sorted, no whitespace"
+    },
+    {
+      "id": "v2a-unit-kcal",
+      "kind": "quantity_normalization",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "barrier": {
+          "value": "1.5",
+          "unit": "kcal_per_mol"
+        }
+      },
+      "canonical_json": "{\"barrier\":{\"unit\":\"hartree\",\"value\":\"0.00239040164613203985\"}}",
+      "canonical_bytes_sha256": "cdd4ed2d2d828e4326ba14e3ee97077b7f7d126ada153625865f5ecd01c47947",
+      "digest": "sha256:cdd4ed2d2d828e4326ba14e3ee97077b7f7d126ada153625865f5ecd01c47947",
+      "note": "1.5 kcal/mol",
+      "equivalent_to": "v2b-unit-hartree"
+    },
+    {
+      "id": "v2b-unit-hartree",
+      "kind": "quantity_normalization",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "barrier": {
+          "value": "0.00239040164613203985",
+          "unit": "hartree"
+        }
+      },
+      "canonical_json": "{\"barrier\":{\"unit\":\"hartree\",\"value\":\"0.00239040164613203985\"}}",
+      "canonical_bytes_sha256": "cdd4ed2d2d828e4326ba14e3ee97077b7f7d126ada153625865f5ecd01c47947",
+      "digest": "sha256:cdd4ed2d2d828e4326ba14e3ee97077b7f7d126ada153625865f5ecd01c47947",
+      "note": "same quantity in the base unit",
+      "equivalent_to": "v2a-unit-kcal"
+    },
+    {
+      "id": "v3a-array-order-a",
+      "kind": "array_order_significant",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "atoms": [
+          {
+            "symbol": "O",
+            "xyz": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "symbol": "H",
+            "xyz": [
+              0,
+              0,
+              "0.96"
+            ]
+          }
+        ]
+      },
+      "canonical_json": "{\"atoms\":[{\"symbol\":\"O\",\"xyz\":[0,0,0]},{\"symbol\":\"H\",\"xyz\":[0,0,\"0.96\"]}]}",
+      "canonical_bytes_sha256": "78b82c1dc5b950081674977c446dfd7cf47099a4c6169b778f4fd1c8272d9e05",
+      "digest": "sha256:78b82c1dc5b950081674977c446dfd7cf47099a4c6169b778f4fd1c8272d9e05",
+      "note": ""
+    },
+    {
+      "id": "v3b-array-order-b",
+      "kind": "array_order_significant",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "atoms": [
+          {
+            "symbol": "H",
+            "xyz": [
+              0,
+              0,
+              "0.96"
+            ]
+          },
+          {
+            "symbol": "O",
+            "xyz": [
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      "canonical_json": "{\"atoms\":[{\"symbol\":\"H\",\"xyz\":[0,0,\"0.96\"]},{\"symbol\":\"O\",\"xyz\":[0,0,0]}]}",
+      "canonical_bytes_sha256": "bf068de01b5a0364f64fd77deb10b96413a4a5fa07f41814ee81a9c7771ef2b7",
+      "digest": "sha256:bf068de01b5a0364f64fd77deb10b96413a4a5fa07f41814ee81a9c7771ef2b7",
+      "note": "",
+      "expect_distinct_from": "v3a-array-order-a"
+    },
+    {
+      "id": "v4-proposal-projection",
+      "kind": "proposal_digest",
+      "set_fields": [
+        "capability_ids"
+      ],
+      "drop_fields": [
+        "approval_ref",
+        "status",
+        "updated_at",
+        "revision",
+        "etag"
+      ],
+      "input": {
+        "proposal_id": "prop-1",
+        "project_id": "proj-demo",
+        "title": "DA selectivity",
+        "question": "Which path dominates?",
+        "capability_ids": [
+          "vibration.analyze",
+          "nmr.shift"
+        ],
+        "recipe_ref": {
+          "schema_id": "acp2.science.recipe.v1",
+          "version": "1.0.0",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "plan_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "budget_request": {
+          "value": "12",
+          "unit": "hour"
+        },
+        "approval_ref": "ap-1",
+        "status": "approved",
+        "updated_at": "2026-10-22T10:00:00Z",
+        "revision": 7,
+        "etag": "abc"
+      },
+      "canonical_json": "{\"budget_request\":{\"unit\":\"second\",\"value\":\"43200\"},\"capability_ids\":[\"nmr.shift\",\"vibration.analyze\"],\"plan_digest\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"project_id\":\"proj-demo\",\"proposal_id\":\"prop-1\",\"question\":\"Which path dominates?\",\"recipe_ref\":{\"digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"schema_id\":\"acp2.science.recipe.v1\",\"version\":\"1.0.0\"},\"title\":\"DA selectivity\"}",
+      "canonical_bytes_sha256": "86400a7e36dfb48cff872e8854171d8f161f2b451f277a713e87c5f7a9e1d81b",
+      "digest": "sha256:86400a7e36dfb48cff872e8854171d8f161f2b451f277a713e87c5f7a9e1d81b",
+      "note": "approval_ref/status/updated_at/revision/etag are excluded from the semantic projection"
+    },
+    {
+      "id": "v5a-set-semantics",
+      "kind": "set_semantics",
+      "set_fields": [
+        "capability_ids"
+      ],
+      "drop_fields": [],
+      "input": {
+        "capability_ids": [
+          "nmr.shift",
+          "vibration.analyze"
+        ]
+      },
+      "canonical_json": "{\"capability_ids\":[\"nmr.shift\",\"vibration.analyze\"]}",
+      "canonical_bytes_sha256": "5de80e62508e75c088dd5303845bd487b6810137be2309fcc2e8e366840233c7",
+      "digest": "sha256:5de80e62508e75c088dd5303845bd487b6810137be2309fcc2e8e366840233c7",
+      "note": ""
+    },
+    {
+      "id": "v5b-set-semantics",
+      "kind": "set_semantics",
+      "set_fields": [
+        "capability_ids"
+      ],
+      "drop_fields": [],
+      "input": {
+        "capability_ids": [
+          "vibration.analyze",
+          "nmr.shift"
+        ]
+      },
+      "canonical_json": "{\"capability_ids\":[\"nmr.shift\",\"vibration.analyze\"]}",
+      "canonical_bytes_sha256": "5de80e62508e75c088dd5303845bd487b6810137be2309fcc2e8e366840233c7",
+      "digest": "sha256:5de80e62508e75c088dd5303845bd487b6810137be2309fcc2e8e366840233c7",
+      "note": "",
+      "equivalent_to": "v5a-set-semantics"
+    },
+    {
+      "id": "v6-reject-float",
+      "kind": "rejection",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "barrier": 1.5
+      },
+      "expected_error": {
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "params": {
+          "rule": "non_canonical_number"
+        }
+      },
+      "note": "rejected, never silently rounded or coerced"
+    },
+    {
+      "id": "v7-reject-null",
+      "kind": "rejection",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "solvent": null
+      },
+      "expected_error": {
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "params": {
+          "rule": "null_in_digest_input"
+        }
+      },
+      "note": "rejected, never silently rounded or coerced"
+    },
+    {
+      "id": "v8-reject-exponent",
+      "kind": "rejection",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "barrier": {
+          "value": "1.5e-3",
+          "unit": "hartree"
+        }
+      },
+      "expected_error": {
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "params": {
+          "rule": "non_canonical_number"
+        }
+      },
+      "note": "rejected, never silently rounded or coerced"
+    },
+    {
+      "id": "v9-reject-unknown-unit",
+      "kind": "rejection",
+      "set_fields": [],
+      "drop_fields": [],
+      "input": {
+        "barrier": {
+          "value": "1",
+          "unit": "furlong"
+        }
+      },
+      "expected_error": {
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "params": {
+          "rule": "unknown_unit"
+        }
+      },
+      "note": "rejected, never silently rounded or coerced"
+    }
+  ],
+  "negative_vector_rule": "a rejected input never produces a digest; the declared error class/code/params is the only accepted outcome",
+  "verified_by": "tests/test_acp2_runtime_contracts.py"
+}

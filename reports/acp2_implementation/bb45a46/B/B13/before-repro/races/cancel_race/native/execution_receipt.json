@@ -1,0 +1,34 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404"
+      },
+      "binding_id": "local:98e0695545d668e6:9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__08",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__08",
+      "root": "/opt/acp2-dev/data/b/run-root-b13/uncategorized",
+      "tenant_id": ""
+    }
+  ],
+  "errors": [],
+  "evidence_digests": {},
+  "fencing_token": "e258c664f29567e9d44c3e4680bba362",
+  "job_id": "20261023_065051_002_singlepoint",
+  "owner": "local:redacted-host:720345:1",
+  "plan_identity": "v2:35dbd3c213a1f15d4ea8b5224a537ec9",
+  "receipt_version": 1,
+  "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+  "release_id": "98e0695545d668e6",
+  "result_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "state": "completed",
+  "step_identities": [
+    "v2:cf29f03ad12a0769e459ddfcbc8adcc7"
+  ],
+  "submission_id": "sub_db371c85e23edc64",
+  "written_at": "2026-10-22T22:50:55.776935Z"
+}

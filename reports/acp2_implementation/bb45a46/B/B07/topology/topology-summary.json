@@ -1,0 +1,187 @@
+{
+  "adapters": {
+    "concurrent": true,
+    "count": 2,
+    "exit_codes": [
+      0,
+      0
+    ],
+    "launch_manifest": "reports/acp2_implementation/bb45a46/B/B07/topology/mcp-launch-b07.json",
+    "pids": [
+      {
+        "argv": "/opt/acp2-dev/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO",
+        "pid": 368344
+      },
+      {
+        "argv": "/opt/acp2-dev/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO",
+        "pid": 368348
+      }
+    ],
+    "receipts": {
+      "mcp-stdio-1": {
+        "adapter_exit_code": 0,
+        "finished_at": "2026-10-22T15:26:30Z",
+        "receipt": "reports/acp2_implementation/bb45a46/B/B07/topology/mcp-stdio-1/mcp-stdio-main-20261022T152629Z-368297-ee405cab.json",
+        "result": "PASS",
+        "started_at": "2026-10-22T15:26:29Z",
+        "task_count_after": 2,
+        "task_count_before": 2
+      },
+      "mcp-stdio-2": {
+        "adapter_exit_code": 0,
+        "finished_at": "2026-10-22T15:26:30Z",
+        "receipt": "reports/acp2_implementation/bb45a46/B/B07/topology/mcp-stdio-2/mcp-stdio-main-20261022T152629Z-368298-856d6f02.json",
+        "result": "PASS",
+        "started_at": "2026-10-22T15:26:29Z",
+        "task_count_after": 2,
+        "task_count_before": 2
+      }
+    },
+    "remaining_after_close": []
+  },
+  "assertions": [
+    {
+      "detail": "pids=[368344, 368348]",
+      "name": "two_adapters_started_concurrently",
+      "status": "PASS"
+    },
+    {
+      "detail": "entry-readonly-1=PASS, entry-readonly-2=PASS",
+      "name": "entry_readonly_both_pass",
+      "status": "PASS"
+    },
+    {
+      "detail": "mcp-stdio-1=PASS, mcp-stdio-2=PASS",
+      "name": "mcp_stdio_both_pass",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=2 after=2",
+      "name": "task_count_unchanged",
+      "status": "PASS"
+    },
+    {
+      "detail": "jobs-before.json and jobs-after.json are byte-identical; no submitted job cancelled",
+      "name": "jobs_unchanged",
+      "status": "PASS"
+    },
+    {
+      "detail": "health status=ok candidate=58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+      "name": "controller_serving_after_adapters",
+      "status": "PASS"
+    },
+    {
+      "detail": "no acp mcp serve process matched the 18765 controller after both harness runs",
+      "name": "adapters_closed",
+      "status": "PASS"
+    }
+  ],
+  "candidate": {
+    "pythonpath": "/opt/acp2-dev/B/src",
+    "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+    "source": "/opt/acp2-dev/B/src"
+  },
+  "cleanup": {
+    "adapters": "both exited with code 0; no adapter process remains",
+    "controller": "stopped separately with SIGTERM after env-runtime; see B/B07/cleanup-receipt.json"
+  },
+  "controller": {
+    "argv": [
+      "/opt/acp2-dev/venvs/b/bin/python",
+      "-m",
+      "acp",
+      "run",
+      "serve",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18765",
+      "--run-root",
+      "/opt/acp2-dev/data/b/run-root",
+      "--no-browser",
+      "--log-level",
+      "INFO"
+    ],
+    "cwd": "/opt/acp2-dev/data/b/controller-config",
+    "health": {
+      "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+      "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+      "contract_digest_scope": "delivered-contract-set",
+      "contract_version": "1.1.0",
+      "read_only": true,
+      "schema_version": 1,
+      "started_at": "2026-10-22T15:25:54.315699Z",
+      "status": "ok"
+    },
+    "health_after_adapters_closed": {
+      "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+      "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+      "contract_digest_scope": "delivered-contract-set",
+      "contract_version": "1.1.0",
+      "read_only": true,
+      "schema_version": 1,
+      "started_at": "2026-10-22T15:25:54.315699Z",
+      "status": "ok"
+    },
+    "pid": 365514,
+    "production_8765_touched": false,
+    "run_root": "/opt/acp2-dev/data/b/run-root",
+    "still_serving_after_both_closed": true,
+    "url": "http://127.0.0.1:18765"
+  },
+  "entry_readonly": {
+    "entry-readonly-1": {
+      "finished_at": "2026-10-22T15:26:29Z",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B07/topology/entry-readonly-1/entry-readonly-main-20261022T152629Z-368294-f04c174a.json",
+      "result": "PASS",
+      "started_at": "2026-10-22T15:26:29Z",
+      "task_count_after": 2,
+      "task_count_before": 2
+    },
+    "entry-readonly-2": {
+      "finished_at": "2026-10-22T15:26:29Z",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B07/topology/entry-readonly-2/entry-readonly-main-20261022T152629Z-368295-5b771bf6.json",
+      "result": "PASS",
+      "started_at": "2026-10-22T15:26:29Z",
+      "task_count_after": 2,
+      "task_count_before": 2
+    }
+  },
+  "evidence": {
+    "adapter_pids": "reports/acp2_implementation/bb45a46/B/B07/topology/adapter-pids.txt",
+    "controller_log": "reports/acp2_implementation/bb45a46/B/B07/topology/controller.log",
+    "health_after": "reports/acp2_implementation/bb45a46/B/B07/topology/controller-health-after.json",
+    "health_before": "reports/acp2_implementation/bb45a46/B/B07/topology/controller-health.json",
+    "jobs_after": "reports/acp2_implementation/bb45a46/B/B07/topology/jobs-after.json",
+    "jobs_before": "reports/acp2_implementation/bb45a46/B/B07/topology/jobs-before.json"
+  },
+  "generated_at_utc": "2026-10-22T15:30:30Z",
+  "no_submitted_job_cancelled": true,
+  "schema": "acp2.b07.topology.v1",
+  "task_count": {
+    "after": 2,
+    "before": 2,
+    "jobs_after": [
+      [
+        "20261022_223248_001_b06-evidence",
+        "failed"
+      ],
+      [
+        "20261022_210346_001_b04a-parity",
+        "completed"
+      ]
+    ],
+    "jobs_before": [
+      [
+        "20261022_223248_001_b06-evidence",
+        "failed"
+      ],
+      [
+        "20261022_210346_001_b04a-parity",
+        "completed"
+      ]
+    ],
+    "jobs_bytes_identical": true,
+    "unchanged": true
+  }
+}

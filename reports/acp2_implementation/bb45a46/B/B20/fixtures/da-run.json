@@ -1,0 +1,83 @@
+{
+  "c24a": {
+    "evidence_roots": [
+      "/opt/acp2-dev/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+      "/opt/acp2-dev/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+    ],
+    "expected_artifact": "reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+    "owner": "C",
+    "plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
+    "plan_todo": "34. T-34 / C24a",
+    "required_fields": [
+      "proposal_digest",
+      "approval_ref",
+      "job_id",
+      "recipe_digest",
+      "budget_basis",
+      "run_spec",
+      "search_capability"
+    ]
+  },
+  "da_preflight": {
+    "expected_result": "PASS",
+    "receipt_root": "reports/acp2_implementation/bb45a46/B/B18"
+  },
+  "fixture_id": "fx-da-bounded-dag-v1",
+  "incomplete_inputs": [
+    "incomplete-input.json"
+  ],
+  "known_candidate": {
+    "not_search_evidence": true,
+    "source": "A-14 ReactionSpec example reaction-da.json",
+    "starting_geometry": "frozen source-recorded known candidate; no search performed"
+  },
+  "p2_candidate": "p2-candidate.json",
+  "payable_tasks": {
+    "agreement": "NOT_VERIFIED(c24a_absent)",
+    "scenario_cap": 12,
+    "this_submission": 1
+  },
+  "reaction": "examples/reaction-da.json",
+  "required_contracts": [
+    "reaction.schema.json",
+    "recipe.schema.json",
+    "task-binding.schema.json",
+    "evidence.schema.json"
+  ],
+  "run_spec": "run-spec.json",
+  "schema": "acp2.b20a.da-run.v1",
+  "science_root": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science",
+  "scientific_expectations": {
+    "energy": {
+      "comparability_fields": [
+        "method",
+        "basis",
+        "charge",
+        "multiplicity",
+        "electronic_state",
+        "temperature_k",
+        "pressure_pa",
+        "standard_state",
+        "unit"
+      ]
+    },
+    "irc": {
+      "bidirectional": true,
+      "endpoint_mapping": true
+    },
+    "transition_state": {
+      "mapped_mode_required": true,
+      "one_imaginary_mode": true
+    }
+  },
+  "search": {
+    "candidate_count": null,
+    "candidate_sources": null,
+    "declared_input_class": null,
+    "filtering_rejection_reasons": null,
+    "generation_steps": null,
+    "success_criteria": null,
+    "ts_seed": null,
+    "validator": null
+  }
+}

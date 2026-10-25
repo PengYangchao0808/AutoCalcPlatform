@@ -1,0 +1,64 @@
+{
+  "b19a_handoff": {
+    "path": "docs/reference/next-change/acp2-contracts/runtime/B19a-to-C.json",
+    "schema": "acp2.runtime.b19a-handoff.v1",
+    "sha256": "sha256:8ba8e0bd9a181d7477cc51280db1ddec6e762e497d24510193ad74bef45f34c1"
+  },
+  "base_revision": "3fa7e7b5329df7b6b825c895bc2924ad4ea17df3",
+  "branch": "feat/frontend-plan1-closure",
+  "candidate_revision": "sha256:253f1ea9775daf310f591d96116e58c69de327eee2cfaef218587b466c336bce",
+  "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B19 working-tree files",
+  "contract_digest": "aeecba1e9c21de16ed5c1c3a659ee88f0828225b1142bcf93a1ffbc897c9e55b",
+  "contract_version": "1.3.0",
+  "events_recovery_contract": {
+    "digest": "sha256:fe8944ded15556bd7461ab2b10036bcaabf181ae5484297a98e80c61ca83f559",
+    "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
+    "schema": "acp2.runtime.events-recovery.v1",
+    "sha256": "sha256:9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
+    "version": "1.0.0"
+  },
+  "schema": "acp2.b19.candidate.v1",
+  "source_composition": "current working tree (PYTHONPATH=src)",
+  "working_tree_files": [
+    {
+      "path": "src/acp_services/runtime/research_events.py",
+      "sha256": "7a1f0ddc09554f341db6f127143d55fd2dfd90fe8eaa70ffaeb93992f29e9e09",
+      "size_bytes": 42584
+    },
+    {
+      "path": "tests/test_acp2_runtime_event_recovery.py",
+      "sha256": "680e94aef7e56e4dcd627f6361fbea6df2ac3074d6bc467c1b25ec51c0fde4d3",
+      "size_bytes": 23382
+    },
+    {
+      "path": "scripts/acceptance/acp2_event_recovery.py",
+      "sha256": "814cb4c9cf3ba1558aa0f8cc45270877b6de7e90a0ad1cd428be8fd994683ba3",
+      "size_bytes": 30087
+    },
+    {
+      "path": "scripts/acceptance/validate_acp2_contracts.py",
+      "sha256": "dd383145994207e5bd2aa4561bc4d5a1cee8656a46c2dd180ed2e49c9d0878af",
+      "size_bytes": 20804
+    },
+    {
+      "path": "tests/test_acp2_runtime_contracts.py",
+      "sha256": "042e9acca0a7801534e70dbf663fcf74d600ae31652ca351b1b85f7dd513ef27",
+      "size_bytes": 51365
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
+      "sha256": "9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
+      "size_bytes": 11726
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/B19a-to-C.json",
+      "sha256": "8ba8e0bd9a181d7477cc51280db1ddec6e762e497d24510193ad74bef45f34c1",
+      "size_bytes": 2551
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "sha256": "9edb5e0e4c4e31cf6e07f98e5be72e5c440be5919aa4109eadc261d2a4d74f20",
+      "size_bytes": 35588
+    }
+  ]
+}

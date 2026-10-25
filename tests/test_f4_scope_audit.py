@@ -796,9 +796,7 @@ def test_amendment_i_predicates_confined_and_negatives() -> None:
     )
     issues = _amendment_i_orca_teeth(injected)
     assert any("still reaches for acp" in issue for issue in issues)
-    stripped = worktree.replace(
-        "from cccp.qc.method_meta import method_meta, scf_constraint\n", ""
-    )
+    stripped = worktree.replace("from cccp.qc.method_meta import method_meta, scf_constraint\n", "")
     issues = _amendment_i_orca_teeth(stripped)
     assert any("direct cccp.qc.method_meta import missing" in issue for issue in issues)
 
@@ -1678,8 +1676,7 @@ def _amendment_s_import_line(ln: int, txt: str, source: str, *, censo: bool = Fa
     if censo:
         expected.add("from __future__ import annotations")
     return txt.strip() in expected and any(
-        isinstance(node, ast.ImportFrom) and node.lineno == ln
-        for node in ast.parse(source).body
+        isinstance(node, ast.ImportFrom) and node.lineno == ln for node in ast.parse(source).body
     )
 
 
@@ -1696,21 +1693,28 @@ def _is_amendment_s_orca_addition(ln: int, txt: str, source: str) -> bool:
             if not isinstance(func, ast.FunctionDef) or func.name != "__init__":
                 continue
             start = next(
-                node.lineno for node in func.body
+                node.lineno
+                for node in func.body
                 if isinstance(node, ast.ImportFrom) and node.module == "cccp.config"
             )
             end = next(
-                node.end_lineno for node in func.body
+                node.end_lineno
+                for node in func.body
                 if isinstance(node, ast.Assign)
                 and any(isinstance(t, ast.Attribute) and t.attr == "maxcore" for t in node.targets)
             )
             if end is not None and start <= ln <= end:
                 return True
     renderer = _func_range(source, "_build_input_blocks", "ORCAInterface")
-    return renderer is not None and renderer[0] <= ln <= renderer[1] and txt.strip() in {
-        "maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)",
-        'blocks.append(f"%maxcore {maxcore}")',
-    }
+    return (
+        renderer is not None
+        and renderer[0] <= ln <= renderer[1]
+        and txt.strip()
+        in {
+            "maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)",
+            'blocks.append(f"%maxcore {maxcore}")',
+        }
+    )
 
 
 def _is_amendment_s_censo_addition(ln: int, txt: str, source: str) -> bool:
@@ -1720,14 +1724,20 @@ def _is_amendment_s_censo_addition(ln: int, txt: str, source: str) -> bool:
     if helper is not None and helper[0] <= ln <= helper[1]:
         return True
     refine = _func_range(source, "refine_ensemble", "CensoInterface")
-    return refine is not None and refine[0] <= ln <= refine[1] and txt.strip() == (
-        "effective_templates = self._memory_templates(preset_cfg, nproc_val, part_templates)"
+    return (
+        refine is not None
+        and refine[0] <= ln <= refine[1]
+        and txt.strip()
+        == ("effective_templates = self._memory_templates(preset_cfg, nproc_val, part_templates)")
     )
 
 
 def _is_amendment_s_orca_deletion(ln: int, txt: str, source: str) -> bool:
     if txt.strip() == "from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb":
-        return any(isinstance(node, ast.ImportFrom) and node.lineno == ln for node in ast.parse(source).body)
+        return any(
+            isinstance(node, ast.ImportFrom) and node.lineno == ln
+            for node in ast.parse(source).body
+        )
     for cls in ast.parse(source).body:
         if not isinstance(cls, ast.ClassDef) or cls.name != "ORCAInterface":
             continue
@@ -1735,12 +1745,14 @@ def _is_amendment_s_orca_deletion(ln: int, txt: str, source: str) -> bool:
             if not isinstance(func, ast.FunctionDef) or func.name != "__init__":
                 continue
             start = next(
-                node.lineno for node in func.body
+                node.lineno
+                for node in func.body
                 if isinstance(node, ast.Assign)
                 and any(isinstance(t, ast.Attribute) and t.attr == "mem_str" for t in node.targets)
             )
             end = next(
-                node.end_lineno for node in func.body
+                node.end_lineno
+                for node in func.body
                 if isinstance(node, ast.If)
                 and isinstance(node.test, ast.Compare)
                 and isinstance(node.test.left, ast.Name)
@@ -1752,17 +1764,29 @@ def _is_amendment_s_orca_deletion(ln: int, txt: str, source: str) -> bool:
 
 def _amendment_s_teeth(source: str, *, censo: bool = False) -> list[str]:
     requirements = (
-        ('resolve_orca_maxcore(', 'total-memory validation missing'),
-        ('self._memory_templates(preset_cfg, nproc_val, part_templates)', 'template wiring missing'),
-        ('lines.append(f"%maxcore {maxcore}")', 'template maxcore missing'),
-    ) if censo else (
-        ('self.maxcore = resolve_orca_maxcore(', 'total-memory validation missing'),
-        ('resolve_orca_maxcore(self.mem_mb, actual_nproc, maxcore=int(match[1]))',
-         'raw maxcore validation missing'),
-        ('maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)', 'renderer wiring missing'),
-        ('blocks.append(f"%maxcore {maxcore}")', 'single maxcore rendering missing'),
-        ('default_resources["mem"]', 'authoritative default missing'),
-        ('%maxcore {self.maxcore}\\n%pal nprocs {self.nproc} end\\n', 'IRC resources missing'),
+        (
+            ("resolve_orca_maxcore(", "total-memory validation missing"),
+            (
+                "self._memory_templates(preset_cfg, nproc_val, part_templates)",
+                "template wiring missing",
+            ),
+            ('lines.append(f"%maxcore {maxcore}")', "template maxcore missing"),
+        )
+        if censo
+        else (
+            ("self.maxcore = resolve_orca_maxcore(", "total-memory validation missing"),
+            (
+                "resolve_orca_maxcore(self.mem_mb, actual_nproc, maxcore=int(match[1]))",
+                "raw maxcore validation missing",
+            ),
+            (
+                "maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)",
+                "renderer wiring missing",
+            ),
+            ('blocks.append(f"%maxcore {maxcore}")', "single maxcore rendering missing"),
+            ('default_resources["mem"]', "authoritative default missing"),
+            ("%maxcore {self.maxcore}\\n%pal nprocs {self.nproc} end\\n", "IRC resources missing"),
+        )
     )
     return [f"  Amendment S: {message}" for text, message in requirements if text not in source]
 
@@ -1773,11 +1797,19 @@ def test_amendment_s_memory_scopes_and_negative_injections() -> None:
         ("censo", _is_amendment_s_censo_addition, True),
     ):
         source = _worktree_content(f"src/cccp/qc/interfaces/{name}.py")
-        assert not predicate(1, "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore", source)
+        assert not predicate(
+            1,
+            "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore",
+            source,
+        )
         assert not predicate(1, "unrelated_algorithm()", source)
         assert not _amendment_s_teeth(source, censo=censo)
-        assert _amendment_s_teeth(source.replace("resolve_orca_maxcore(", "unguarded_maxcore("), censo=censo)
-        assert _amendment_s_teeth(source.replace("self._memory_", "self._unwired_memory_"), censo=censo)
+        assert _amendment_s_teeth(
+            source.replace("resolve_orca_maxcore(", "unguarded_maxcore("), censo=censo
+        )
+        assert _amendment_s_teeth(
+            source.replace("self._memory_", "self._unwired_memory_"), censo=censo
+        )
     baseline = _baseline_content("src/cccp/qc/interfaces/orca.py")
     for ln, txt in enumerate(baseline.splitlines(), 1):
         if 'self.mem_str = resources.get("mem", "32GB")' in txt:
@@ -1845,7 +1877,7 @@ def _amendment_t_teeth(xtb_src: str | None = None, scan_src: str | None = None) 
         issues.append("  Amendment T: XTBInterface.constrained_optimize missing")
     else:
         body = "\n".join(xtb.splitlines()[rng[0] - 1 : rng[1]])
-        if "extra_control_text: str = \"\"" not in body:
+        if 'extra_control_text: str = ""' not in body:
             issues.append("  Amendment T: constrained_optimize must accept extra_control_text")
         if "{extra_control_text}" not in body:
             issues.append("  Amendment T: xcontrol write must insert extra_control_text")
@@ -1870,9 +1902,7 @@ def test_amendment_t_predicates_confined_and_negatives() -> None:
     scan = _worktree_content("src/cccp/qc/interfaces/xtb_scan.py")
     constrained = _func_range(xtb, "constrained_optimize", "XTBInterface")
     assert constrained is not None
-    assert _is_amendment_t_xtb_addition(
-        constrained[0], 'extra_control_text: str = "",', xtb
-    )
+    assert _is_amendment_t_xtb_addition(constrained[0], 'extra_control_text: str = "",', xtb)
     assert not _is_amendment_t_xtb_addition(1, "unrelated_algorithm()", xtb)
     assert not _is_amendment_t_xtb_addition(constrained[1] + 1, "extra_control_text = 1", xtb)
     assert not _is_amendment_t_xtb_addition(1, '"-P", str(self.nproc),', xtb)
@@ -1880,7 +1910,7 @@ def test_amendment_t_predicates_confined_and_negatives() -> None:
     for ln, txt in enumerate(baseline_xtb.splitlines(), 1):
         if txt.strip() == '"-T", str(self.nproc),':
             assert _is_amendment_t_xtb_deletion(ln, txt, baseline_xtb)
-        if txt.strip() == "self.nproc = kwargs.get(\"nproc\", 1)":
+        if txt.strip() == 'self.nproc = kwargs.get("nproc", 1)':
             assert not _is_amendment_t_xtb_deletion(ln, txt, baseline_xtb)
     scan_rng = _func_ranges(scan).get("xcontrol_constraint_block")
     assert scan_rng is not None
@@ -2239,7 +2269,8 @@ def test_deleted_lines_in_target_regions() -> None:
                 if not _is_amendment_q_deletion(ln, t, baseline_src)
             ]
             bad_entries = [
-                (ln, t) for ln, t in bad_entries
+                (ln, t)
+                for ln, t in bad_entries
                 if not _is_amendment_s_orca_deletion(ln, t, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
@@ -2466,13 +2497,27 @@ def test_batch_no_irc_invariants() -> None:
 # new path must not skip any key check.  ``_baseline_content``'s skip applies
 # only to the ① deletion-region checks on baseline-present files.
 
-MIGRATION_SCOPE = ("src/cccp/", "src/acp/")
+# Amendment S2 bis (2026-10-19): the ACP Services plan adds the new
+# ``src/acp_services/`` package as a first-class migration surface.  It is
+# included in the scope and the one-way dependency edge (``cccp``/``
+# acp_services`` must not import ``acp``) is enforced by the same AST scan that
+# guards ``src/cccp/`` — an equivalent (here, stronger-by-coverage) check, never
+# a relaxed one.  The dedicated ``tests/test_acp_services_isolation.py`` keeps
+# its deeper importlib/sys.modules/getattr defences.
+MIGRATION_SCOPE = ("src/cccp/", "src/acp/", "src/acp_services/")
 MIGRATION_STATION_PREFIXES = (
     "src/cccp/",
     "src/acp/calculations/",
     "src/acp/backends/",
     "src/acp/chem/composition.py",
     "src/acp/core/registry.py",
+    # Plan B1/M3: "init 任务保存目录生效" (tests/baseline/services-evidence/
+    # migration_ledger.md, row dated 2026-10-22) reads the persisted
+    # ``deployment.params.run_root`` through
+    # ``normalize_configured_run_root()``/``resolve_run_root()``.  1222c97
+    # canonicalized run_root resolution; 7ec3973 preserved the workspace fix.
+    # Exact file only — never widen this to ``src/acp/core/``.
+    "src/acp/core/paths.py",
     "src/acp/catalog.py",
     # Four-site version lockstep (ANTI-PATTERN #2): every release commit bumps
     # this file, so the audit must not flag it as unaudited.
@@ -2585,6 +2630,45 @@ MIGRATION_STATION_PREFIXES = (
     # auditing them.
     "src/acp/confsearch/__init__.py",
     "src/acp/confsearch/contracts.py",
+    # ── Amendment S2 bis: ACP Services plan stations (registered 2026-10-19) ──
+    # Plan: docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md
+    # (todo 66 shared-gate revision "register the revision + equivalent-or-
+    # stronger check").  Matrix / negative coverage lives in the S2-bis tests
+    # below (seam purity, singular composition root, init-wizard invariants).
+    "src/acp/services_bootstrap.py",
+    "src/acp/services_completion_bootstrap.py",
+    "src/acp/services_data_bootstrap.py",
+    "src/acp/services_events_bootstrap.py",
+    "src/acp/services_publication_bootstrap.py",
+    # ACP 2.0 Plan B B05 seam: the MCP stdio composition root
+    # (``build_mcp_runtime``) wires the Controller client into
+    # ``acp_services.entrypoints.mcp``; registered as an exact file so the
+    # R1 boundary keeps auditing it (no whole-directory exemption).
+    "src/acp/services_mcp_bootstrap.py",
+    # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
+    # station (unified answers/plan/persist + pure node validation); the
+    # package-wide module-level-paramiko ban below is the added tooth.
+    "src/acp/init_wizard/",
+    # B28a/B28b: ACP-side publication + science-product projection stations.
+    "src/acp/results/frame_candidate_store.py",
+    "src/acp/results/frames_adapter.py",
+    # todo 81 (remediation d51b024): production frame-candidate/manifest writes
+    # route through PublicationDataPort (DataResourcePort); behavior preserved.
+    "src/acp/results/frame_candidates.py",
+    # CCCP-relocation forwarders (Plan 3, lane C) that this shared gate sees.
+    # Registered as exact files (not whole dirs) so unrelated results/intake
+    # modules keep failing the boundary; each is also in MIGRATION_SHIM_PY, so
+    # R3 shim purity applies instead of a bare boundary pass.
+    "src/acp/chem/embedding.py",
+    "src/acp/intake/models.py",
+    "src/acp/confsearch/sampling.py",
+    "src/acp/confsearch/sampling_models.py",
+    "src/acp/confsearch/selection.py",
+    "src/acp/confsearch/shared/boltzmann.py",
+    "src/acp/confsearch/shared/deduplication.py",
+    # Services package (scope added above): every changed module is audited by
+    # the no-acp-import scan, not skipped.
+    "src/acp_services/",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {
@@ -2618,6 +2702,17 @@ MIGRATION_SHIM_PY = frozenset(
         "src/acp/calculations/primitives/_thermochemistry_support.py",
         "src/acp/chem/composition.py",
         "src/acp/core/registry.py",
+        # Amendment S2 bis (2026-10-19): CCCP-relocation forwarders now on the
+        # Services shared gate.  Each moved science body to ``cccp.analysis.*``
+        # and re-exports the same objects; R3 keeps them pure (no body may
+        # reappear).  ``_is_migration_shim`` semantics are unchanged.
+        "src/acp/chem/embedding.py",
+        "src/acp/intake/models.py",
+        "src/acp/confsearch/sampling.py",
+        "src/acp/confsearch/sampling_models.py",
+        "src/acp/confsearch/selection.py",
+        "src/acp/confsearch/shared/boltzmann.py",
+        "src/acp/confsearch/shared/deduplication.py",
     }
 )
 
@@ -2663,8 +2758,9 @@ def _migration_audit_issues(
 
     * R1 station boundary — a change outside a registered migration station is
       an unaudited change and FAILS;
-    * R2 new-station isolation — changed ``src/cccp/**`` files must not import
-      the acp package (AST scan: covers TYPE_CHECKING and lazy imports);
+    * R2 new-station isolation — changed ``src/cccp/**`` and
+      ``src/acp_services/**`` files must not import the acp package (AST scan:
+      covers TYPE_CHECKING and lazy imports);
     * R3 shim purity — declared compat shims stay pure re-export shells.
     * R4 workflow-station purity — the todo-28 workflow stations execute via
       the cccp task cores only; a ``get_backend``/``require_backend`` token
@@ -2678,7 +2774,7 @@ def _migration_audit_issues(
         src = (contents or {}).get(path)
         if src is None:
             src = (ROOT / path).read_text(encoding="utf-8")
-        if path.startswith("src/cccp/"):
+        if path.startswith(("src/cccp/", "src/acp_services/")):
             for node in ast.walk(ast.parse(src)):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
@@ -2778,3 +2874,227 @@ def test_migration_scope_catches_smuggled_shim_body() -> None:
         },
     )
     assert issues and "shim" in issues[0], f"shim body not detected: {issues}"
+
+
+# ── Amendment S2 bis teeth: ACP Services stations (2026-10-19) ──────────────
+# The Services plan registered new stations (see MIGRATION_* above); the checks
+# below give them equivalent-or-stronger teeth than the R1 boundary alone.
+
+SERVICES_BOOTSTRAP_STATIONS = (
+    "src/acp/services_bootstrap.py",
+    "src/acp/services_completion_bootstrap.py",
+    "src/acp/services_data_bootstrap.py",
+    "src/acp/services_events_bootstrap.py",
+    "src/acp/services_publication_bootstrap.py",
+    # ACP 2.0 Plan B B05 seam: MCP stdio composition root (wires ports, never
+    # opens SSH/runs QC or constructs a second ``ServicesPorts``).
+    "src/acp/services_mcp_bootstrap.py",
+)
+
+SERVICES_RELOCATION_SHIMS = (
+    "src/acp/chem/embedding.py",
+    "src/acp/intake/models.py",
+    "src/acp/confsearch/sampling.py",
+    "src/acp/confsearch/sampling_models.py",
+    "src/acp/confsearch/selection.py",
+    "src/acp/confsearch/shared/boltzmann.py",
+    "src/acp/confsearch/shared/deduplication.py",
+)
+
+INIT_WIZARD_SERVICES_DELEGATIONS = {
+    "src/acp/init_wizard/flows.py": "acp_services.contracts.config_validation",
+    "src/acp/init_wizard/gating.py": "acp_services.contracts.action_gating",
+}
+SERVICES_PURE_VALIDATORS = (
+    "src/acp_services/contracts/config_validation.py",
+    "src/acp_services/contracts/action_gating.py",
+)
+
+
+def _imported_modules(src: str) -> set[str]:
+    """Every module name imported anywhere in *src* (import / from-import)."""
+    modules: set[str] = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def _module_scope_imported_modules(src: str) -> set[str]:
+    """Module names imported at module scope only (excludes lazy/function imports)."""
+    modules: set[str] = set()
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def test_services_bootstrap_stations_are_pure_composition_seams() -> None:
+    """Amendment S2 bis: the four bootstrap seams stay wiring, not execution.
+
+    Each must import ``acp_services`` (it *is* the seam) and must never import
+    ``paramiko`` / ``subprocess`` / a ``cccp`` execution layer — the seam wires
+    injected ports; it never opens SSH or runs QC/compute work itself.
+    """
+    for path in SERVICES_BOOTSTRAP_STATIONS:
+        modules = _imported_modules((ROOT / path).read_text(encoding="utf-8"))
+        assert any(m == "acp_services" or m.startswith("acp_services.") for m in modules), (
+            f"{path}: registered Services seam does not import acp_services"
+        )
+        for module in modules:
+            assert module.split(".")[0] not in {"paramiko", "subprocess"}, (
+                f"{path}: Services seam imports {module} directly"
+            )
+            assert not module.startswith(("cccp.qc", "cccp.backends", "cccp.calculation")), (
+                f"{path}: Services seam reaches the execution stack via {module}"
+            )
+
+
+def test_services_composition_root_is_singular() -> None:
+    """Amendment S2 bis: only the composition root constructs ``ServicesPorts``.
+
+    A second construction site would be a second composition root — the exact
+    multi-owner drift the Services cut-over forbids.
+    """
+    construction_sites = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "src/acp").rglob("*.py")
+        if re.search(r"\bServicesPorts\s*\(", path.read_text(encoding="utf-8"))
+    }
+    assert construction_sites == {"src/acp/services_bootstrap.py"}, construction_sites
+
+
+def test_services_init_wizard_keeps_single_validation_invariants() -> None:
+    """Amendment S2 bis: the init wizard stays a thin, validation-delegating CLI.
+
+    (a) no module-scope ``paramiko`` anywhere in the package (D7: the remote
+    stack is imported lazily per flow only); (b) flows/gating delegate node
+    validation and action gating to the pure Services validators instead of
+    re-implementing them; (c) those pure validators import no paramiko/acp.
+    """
+    for path in sorted((ROOT / "src/acp/init_wizard").glob("*.py")):
+        modules = _module_scope_imported_modules(path.read_text(encoding="utf-8"))
+        assert not any(m.split(".")[0] == "paramiko" for m in modules), (
+            f"{path.name}: module-scope paramiko import breaks the lazy-remote invariant"
+        )
+    for path, target in INIT_WIZARD_SERVICES_DELEGATIONS.items():
+        modules = _imported_modules((ROOT / path).read_text(encoding="utf-8"))
+        assert target in modules, f"{path}: missing single-validation delegation to {target}"
+    for path in SERVICES_PURE_VALIDATORS:
+        roots = {m.split(".")[0] for m in _imported_modules((ROOT / path).read_text("utf-8"))}
+        assert not (roots & {"paramiko", "acp"}), f"{path}: pure validator depends on {roots}"
+
+
+def test_services_relocation_shims_stay_pure_reexports() -> None:
+    """Amendment S2 bis: the seven relocation forwarders are pure re-exports.
+
+    Registering them in ``MIGRATION_SHIM_PY`` only adds teeth if they actually
+    pass ``_is_migration_shim`` today.
+    """
+    for path in SERVICES_RELOCATION_SHIMS:
+        src = (ROOT / path).read_text(encoding="utf-8")
+        assert _is_migration_shim(src), f"{path}: registered shim has a real body"
+
+
+def _frame_candidates_publication_issues(src: str) -> list[str]:
+    """Todo 81 teeth: the production candidate/manifest writes in
+    ``save_frame_candidate`` go through ``PublicationDataPort``, while the
+    authority writer stays imported from the single store station."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as exc:
+        return [f"  frame_candidates.py does not parse: {exc}"]
+    issues: list[str] = []
+    fn = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "save_frame_candidate"
+        ),
+        None,
+    )
+    if fn is None:
+        return ["  frame_candidates.py missing save_frame_candidate"]
+    params = {arg.arg for arg in fn.args.args} | {arg.arg for arg in fn.args.kwonlyargs}
+    if "publication" not in params:
+        issues.append("  frame_candidates.py: save_frame_candidate lacks publication port")
+    port_calls = {
+        node.func.attr
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "publication"
+    }
+    for method in ("save_candidates", "publish_manifest"):
+        if method not in port_calls:
+            issues.append(f"  frame_candidates.py: production write bypasses publication.{method}")
+    store_imports = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "acp.results.frame_candidate_store"
+        for alias in node.names
+    }
+    if "write_authority" not in store_imports:
+        issues.append(
+            "  frame_candidates.py: authority writer not imported from frame_candidate_store"
+        )
+    return issues
+
+
+def test_frame_candidates_routes_production_writes_through_publication_port() -> None:
+    """Amendment S2 bis (todo 81): registering ``frame_candidates.py`` carries
+    teeth — production candidate/manifest writes use the injected port, the
+    direct writers remain fallback-only, and authority stays single-sourced."""
+    path = ROOT / "src/acp/results/frame_candidates.py"
+    src = path.read_text(encoding="utf-8")
+    issues = _frame_candidates_publication_issues(src)
+    assert issues == [], issues
+
+    mutated = src.replace(
+        "publication.save_candidates(root, authority_payload)",
+        "write_authority(root, authority_payload)",
+    )
+    assert mutated != src
+    assert _frame_candidates_publication_issues(mutated), "bypass mutation not caught"
+
+
+def test_services_amendment_keeps_unaudited_change_teeth() -> None:
+    """Amendment S2 bis negative: registering the Services stations does not
+    blunt the boundary — unregistered ``src/acp/**`` paths are still flagged,
+    near-misses on exact-file registrations are not swallowed, and a mutated
+    registered shim still fails R3."""
+    unknown = _migration_audit_issues(["src/acp/unknown_station.py"])
+    assert unknown and "unaudited" in unknown[0], unknown
+
+    near_miss = _migration_audit_issues(["src/acp/services_bootstrap_evil.py"])
+    assert near_miss and "unaudited" in near_miss[0], near_miss
+
+    rogue_results = _migration_audit_issues(["src/acp/results/rogue_station.py"])
+    assert rogue_results and "unaudited" in rogue_results[0], rogue_results
+
+    target = "src/acp/chem/embedding.py"
+    mutated = _migration_audit_issues(
+        [target],
+        {
+            target: (
+                '"""x"""\n'
+                "from cccp.analysis.structure.embedding import smiles_to_xyz\n"
+                "\n"
+                "VALUE = compute()\n"
+            )
+        },
+    )
+    assert mutated and "shim" in mutated[0], mutated
+
+
+def test_services_scope_audits_acp_services_import_discipline() -> None:
+    """Amendment S2 bis: adding ``src/acp_services/`` to the scope is not a skip
+    — an ``acp`` import smuggled into a Services module is flagged by R2."""
+    target = "src/acp_services/runtime/rogue.py"
+    issues = _migration_audit_issues([target], {target: "from acp.scheduler import jobs\n"})
+    assert issues and ("imports" in issues[0] or "from acp" in issues[0]), issues

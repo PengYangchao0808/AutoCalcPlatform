@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "d5b4a8a2ac7a9becf2f88c516ff690b4078cb555",
+  "contract_version": "1.0.0",
+  "generated_at": "2026-10-23T13:42:19Z",
+  "runs": [
+    "multitenant-multitenant_authz-20261023T134216Z-1654871-618db5b0.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

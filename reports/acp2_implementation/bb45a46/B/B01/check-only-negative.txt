@@ -1,0 +1,4 @@
+--- corrupt digest sample ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only docs/reference/next-change/acp2-contracts/runtime/samples/acceptance/negative/corrupt-digest.json
+INVALID: artifact_sha256_mismatch:artifacts/corrupt-target.txt
+exit=1

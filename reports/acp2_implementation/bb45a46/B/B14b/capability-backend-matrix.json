@@ -1,0 +1,625 @@
+{
+  "schema": "acp2.h3.capability-matrix.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at_utc": "2026-10-23T03:30:00Z",
+  "task": "B14b",
+  "candidate": {
+    "label": "bb45a46",
+    "frozen_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+    "tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
+    "source_root": "/opt/acp2-dev/integration",
+    "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+    "client_revision": "NOT_VERIFIED (C DSH/Workbench absent)",
+    "contract_version": "1.1.0",
+    "contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
+    "health_candidate_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+    "controller": {
+      "url": "http://127.0.0.1:18774",
+      "port": 18774,
+      "run_root": "/opt/acp2-dev/data/b/run-root-b14b",
+      "config": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+      "started_at": "2026-10-23T03:15:08.498141Z",
+      "production_port_8765_touched": false
+    },
+    "loaded_module_paths": {
+      "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+      "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
+      "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
+    },
+    "harness": {
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/driver.py",
+      "sha256": "sha256:077a59a6e162a50b3d044f127fd4a4b634b54f58ef7fecfb3ffc815db52a324f"
+    },
+    "mcp_launch": {
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json",
+      "sha256": "sha256:1e0c8b6ce904747ff53a57e0cb1e970707afce4bdc48852e3bade5bb742ac0f2"
+    },
+    "reuse_rule": "No B10 10eb71e result is used as a B14b PASS. singlepoint was re-executed on 77ac1de. optimize and frequency were executed on 77ac1de with their own TaskRefs."
+  },
+  "scope": "P1 claimed capabilities singlepoint, optimize and frequency, each backend separately. A Local PASS does not prove LSF and a singlepoint PASS does not prove optimize/frequency.",
+  "rows": [
+    {
+      "capability": "singlepoint",
+      "backend": "local",
+      "fixture_id": "fx-local-singlepoint-h2-sto3g-b14b-v1",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
+      "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "task_ref": "20261023_111633_001_singlepoint",
+      "attempt": 1,
+      "release_id": "28b9a5b5e038090a",
+      "result": "PASS",
+      "scientific_expectation": "H2/STO-3G HF singlepoint must terminate normally with FINAL SINGLE POINT ENERGY equal to the published task_result energy; no vibrational modes may be inferred.",
+      "observed": {
+        "status": "completed",
+        "energy_hartree": -1.116759307204,
+        "symbols": [
+          "H",
+          "H"
+        ],
+        "coordinates": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.74
+          ]
+        ],
+        "frequencies": [],
+        "n_imaginary": null,
+        "optimization_status": null,
+        "required_facts": [
+          "energy_hartree"
+        ],
+        "exit_code": 0,
+        "manifest_status": "completed",
+        "orca_terminated_normally": true,
+        "orca_energy_hartree": -1.116759307204,
+        "orca_max_concurrent": 1,
+        "assertions": [
+          "one_mcp_submission_one_task:PASS",
+          "job_completed:PASS",
+          "real_orca_process_once:PASS",
+          "orca_terminated_normally:PASS",
+          "orca_energy_matches_task_result:PASS",
+          "task_result_complete:PASS",
+          "attempt_and_release_agree:PASS",
+          "exactly_one_dispatch:PASS",
+          "capability_science:PASS"
+        ]
+      },
+      "owner": "B",
+      "evidence": "B/B14b/singlepoint/run.json + native/",
+      "open_reason": null,
+      "submitted_fixture_label": "fx-local-singlepoint-h2-sto3g-v1",
+      "execution_chain": null,
+      "release_status": null,
+      "runner_command": null
+    },
+    {
+      "capability": "singlepoint",
+      "backend": "lsf",
+      "fixture_id": "fx-lsf-singlepoint-v1",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
+      "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "task_ref": null,
+      "attempt": null,
+      "release_id": null,
+      "result": "NOT_VERIFIED",
+      "scientific_expectation": "Requires a real LSF normal-completion run; no LSF client/queue/node exists, so it cannot be inferred from Local.",
+      "observed": {
+        "submitted": false,
+        "missing_prerequisites": [
+          "bsub",
+          "bjobs",
+          "bhosts",
+          "bqueues",
+          "LSF_ENVDIR",
+          "ACP_LSF_NODE"
+        ]
+      },
+      "owner": "B",
+      "evidence": "B/B14b/lsf/singlepoint/run.json + B/B11/summary.json",
+      "open_reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+      "submitted_fixture_label": "fx-lsf-singlepoint-v1",
+      "execution_chain": null,
+      "release_status": null,
+      "runner_command": null
+    },
+    {
+      "capability": "optimize",
+      "backend": "local",
+      "fixture_id": "fx-local-optimize-h2-sto3g-v1",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+      "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "task_ref": "20261023_111652_002_optimize",
+      "attempt": 1,
+      "release_id": null,
+      "result": "PASS",
+      "scientific_expectation": "H2/STO-3G HF optimization must print ORCA THE OPTIMIZATION HAS CONVERGED, publish a converged H-H geometry and a final energy equal to the ORCA FINAL SINGLE POINT ENERGY. A singlepoint does not prove this.",
+      "observed": {
+        "status": "completed",
+        "energy_hartree": -1.11751709882,
+        "symbols": [
+          "H",
+          "H"
+        ],
+        "coordinates": [
+          [
+            0.0,
+            0.0,
+            0.013863
+          ],
+          [
+            0.0,
+            0.0,
+            0.726137
+          ]
+        ],
+        "frequencies": [],
+        "n_imaginary": null,
+        "optimization_status": "converged",
+        "required_facts": null,
+        "exit_code": null,
+        "manifest_status": "completed",
+        "execution_chain": "legacy-cli",
+        "step_result_status": "completed",
+        "step_result_present": true,
+        "orca_terminated_normally": true,
+        "orca_energy_hartree": -1.11751709882,
+        "orca_max_concurrent": 1,
+        "step_identity": "v2:b40cc5b853f6c8d086eb6dbb9c9198e9",
+        "assertions": [
+          "one_mcp_submission_one_task:PASS",
+          "job_completed:PASS",
+          "real_orca_process_once:PASS",
+          "orca_terminated_normally:PASS",
+          "orca_energy_matches_task_result:PASS",
+          "step_result_and_manifest_complete:PASS",
+          "attempt_recorded_release_not_emitted:PASS",
+          "exactly_one_dispatch:PASS",
+          "capability_science:PASS"
+        ]
+      },
+      "owner": "B",
+      "evidence": "B/B14b/optimize/run.json + native/ + WORK/03_OPT/optimize.out",
+      "open_reason": null,
+      "submitted_fixture_label": "fx-local-optimize-h2-sto3g-v1",
+      "execution_chain": "legacy-cli",
+      "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+      "runner_command": null
+    },
+    {
+      "capability": "optimize",
+      "backend": "lsf",
+      "fixture_id": "fx-lsf-optimize-h2-sto3g-v1",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
+      "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "task_ref": null,
+      "attempt": null,
+      "release_id": null,
+      "result": "NOT_VERIFIED",
+      "scientific_expectation": "Requires a real LSF optimize normal-completion run; not inferred from the Local optimize row.",
+      "observed": {
+        "submitted": false,
+        "missing_prerequisites": [
+          "bsub",
+          "bjobs",
+          "bhosts",
+          "bqueues",
+          "LSF_ENVDIR",
+          "ACP_LSF_NODE"
+        ]
+      },
+      "owner": "B",
+      "evidence": "B/B14b/lsf/optimize/run.json",
+      "open_reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+      "submitted_fixture_label": "fx-lsf-optimize-h2-sto3g-v1",
+      "execution_chain": null,
+      "release_status": null,
+      "runner_command": null
+    },
+    {
+      "capability": "frequency",
+      "backend": "local",
+      "fixture_id": "fx-local-frequency-h2-sto3g-v1",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
+      "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "task_ref": "20261023_111946_003_frequency",
+      "attempt": 1,
+      "release_id": null,
+      "result": "PASS",
+      "scientific_expectation": "H2 is linear: 3N-5 = 1 vibrational mode. ORCA frequency must terminate normally, publish one real mode with zero imaginary modes, and the H-H geometry plus energy must match the ORCA output. A singlepoint does not prove this.",
+      "observed": {
+        "status": "completed",
+        "energy_hartree": -1.116773191779,
+        "symbols": [
+          "H",
+          "H"
+        ],
+        "coordinates": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.74
+          ]
+        ],
+        "frequencies": [
+          5038.6
+        ],
+        "n_imaginary": 0,
+        "optimization_status": null,
+        "required_facts": null,
+        "exit_code": null,
+        "manifest_status": "completed",
+        "execution_chain": "legacy-cli",
+        "step_result_status": "completed",
+        "step_result_present": true,
+        "orca_terminated_normally": true,
+        "orca_energy_hartree": -1.116773191779,
+        "orca_max_concurrent": 1,
+        "step_identity": "v2:63b46f19e8ae27ee28c8185e0adbe748",
+        "assertions": [
+          "one_mcp_submission_one_task:PASS",
+          "job_completed:PASS",
+          "real_orca_process_once:PASS",
+          "orca_terminated_normally:PASS",
+          "orca_energy_matches_task_result:PASS",
+          "step_result_and_manifest_complete:PASS",
+          "attempt_recorded_release_not_emitted:PASS",
+          "exactly_one_dispatch:PASS",
+          "capability_science:PASS"
+        ]
+      },
+      "owner": "B",
+      "evidence": "B/B14b/frequency/run.json + native/ + WORK/04_FREQ/freq.out",
+      "open_reason": null,
+      "submitted_fixture_label": "fx-local-frequency-h2-sto3g-v1",
+      "execution_chain": "legacy-cli",
+      "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+      "runner_command": null
+    },
+    {
+      "capability": "frequency",
+      "backend": "lsf",
+      "fixture_id": "fx-lsf-frequency-h2-sto3g-v1",
+      "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
+      "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "task_ref": null,
+      "attempt": null,
+      "release_id": null,
+      "result": "NOT_VERIFIED",
+      "scientific_expectation": "Requires a real LSF frequency normal-completion run; not inferred from the Local frequency row.",
+      "observed": {
+        "submitted": false,
+        "missing_prerequisites": [
+          "bsub",
+          "bjobs",
+          "bhosts",
+          "bqueues",
+          "LSF_ENVDIR",
+          "ACP_LSF_NODE"
+        ]
+      },
+      "owner": "B",
+      "evidence": "B/B14b/lsf/frequency/run.json",
+      "open_reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+      "submitted_fixture_label": "fx-lsf-frequency-h2-sto3g-v1",
+      "execution_chain": null,
+      "release_status": null,
+      "runner_command": null
+    }
+  ],
+  "supporting_rows": [
+    {
+      "row_id": "B10a/local-singlepoint-facts",
+      "kind": "supporting_evidence",
+      "owned_by": "B10",
+      "candidate_sha": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "task_ref": "20261023_031453_001_singlepoint",
+      "attempt": 1,
+      "release_id": "98e0695545d668e6",
+      "result": "PASS",
+      "scientific_expectation": "B10 real H2/STO-3G ORCA singlepoint, energy readable from task_result after Controller restart.",
+      "observed": {
+        "energy_hartree": -1.116759307204,
+        "orca_processes": 1,
+        "frequencies_present": false
+      },
+      "evidence": "B/B10/local-singlepoint/ + B/B10/summary.json",
+      "open_reason": null,
+      "applicability": "Historical B10 evidence on 10eb71e. Not combined with the 77ac1de capability rows; B14b re-executed singlepoint on 77ac1de instead."
+    },
+    {
+      "row_id": "B10a/restart-reread",
+      "kind": "supporting_evidence",
+      "owned_by": "B10",
+      "candidate_sha": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "result": "PASS",
+      "scientific_expectation": "Controller restart must not change body/digests or dispatch a new task.",
+      "observed": {
+        "attempt_equal": true,
+        "energy_equal": true,
+        "frequencies_equal": true,
+        "geometry_equal": true,
+        "http_cli_equal_after": {
+          "attempt": true,
+          "job_id": true,
+          "manifest_sha256": true,
+          "plan_identity": true,
+          "release_id": true,
+          "result_digest": true
+        },
+        "manifest_sha256_equal": true,
+        "no_new_dispatch": true,
+        "no_new_task": true,
+        "plan_identity_equal": true,
+        "release_equal": true,
+        "state_files_unchanged": {
+          "event_lines": true,
+          "result_manifest_sha256": true,
+          "sp_out_sha256": true,
+          "task_result_sha256": true
+        },
+        "symbols_equal": true,
+        "task_result_sha256_equal": true
+      },
+      "evidence": "B/B10/restart-reread-comparison.json",
+      "open_reason": null,
+      "applicability": "Historical evidence on 10eb71e; separate from B14b runs."
+    },
+    {
+      "row_id": "B10b/three-entry",
+      "kind": "supporting_evidence",
+      "owned_by": "B10",
+      "candidate_sha": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "result": "NOT_VERIFIED",
+      "components": {
+        "cli": "PASS",
+        "http": "PASS",
+        "workbench": "NOT_VERIFIED"
+      },
+      "scientific_expectation": "CLI and HTTP must read the same TaskRef/attempt/release/manifest digest; the C Workbench row is a separate consumer.",
+      "observed": {
+        "task_ref": "20261023_031453_001_singlepoint",
+        "reason": "three_entry_workbench_not_verified:c_driver_absent"
+      },
+      "evidence": "B/B10/three-entry-matrix.json",
+      "open_reason": "three_entry_workbench_not_verified:c_driver_absent",
+      "applicability": "Historical evidence on 10eb71e; CLI+HTTP pass but the workbench row is C-owned and not signed by B."
+    },
+    {
+      "row_id": "B11/lsf-normal-completion",
+      "kind": "supporting_evidence",
+      "owned_by": "B11",
+      "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "result": "NOT_VERIFIED",
+      "scientific_expectation": "A real LSF singlepoint must be submitted, observed, controlled and fetched.",
+      "observed": {
+        "command_file": "live/live-command.txt",
+        "exit_code": 2,
+        "exit_file": "live/live-exit.txt",
+        "no_job_created": true,
+        "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+        "receipt": "reports/acp2_implementation/bb45a46/B/B11/live/lsf-singlepoint-live-20261022T202229Z-644324-12963006.json",
+        "remote_job_attempted": false,
+        "status": "NOT_VERIFIED"
+      },
+      "evidence": "B/B11/summary.json + B/B11/live/",
+      "open_reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials"
+    },
+    {
+      "row_id": "B13/control-recovery",
+      "kind": "supporting_evidence",
+      "owned_by": "B13",
+      "candidate_sha": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "result": "NOT_VERIFIED",
+      "components": {
+        "local_faults": "PASS",
+        "lsf_control": "NOT_VERIFIED",
+        "dsh_disconnect": "NOT_VERIFIED"
+      },
+      "scientific_expectation": "Only confirmed stop may cancel; recovery must not duplicate QC; DSH reconnect is C-owned.",
+      "observed": {
+        "race_count": 5,
+        "race_results": [
+          [
+            "mcp_adapter_eof_sigterm",
+            "PASS"
+          ],
+          [
+            "controller_restart_same_db_config_release",
+            "PASS"
+          ],
+          [
+            "publication_failure_after_real_qc",
+            "PASS"
+          ],
+          [
+            "cancel_confirmed_stop_late_receipt",
+            "PASS"
+          ],
+          [
+            "client_timeout_then_platform_cancel",
+            "PASS"
+          ]
+        ],
+        "lsf_reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+        "dsh_reason": "c_dsh_absent"
+      },
+      "evidence": "B/B13/races.json + B/B13/dsh-disconnect.json + B/B13/lsf-control-fixture.json",
+      "open_reason": "local fault rows PASS; LSF control NOT_VERIFIED; DSH disconnect NOT_VERIFIED"
+    }
+  ],
+  "aggregation_t0_t5": {
+    "source": "docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md:249-255",
+    "rows": [
+      {
+        "layer": "T0",
+        "subject": "environment/version",
+        "result": "PASS",
+        "detail": "Rocky Linux 9.8, Python 3.11.13, real ORCA 6.1.1 at /home/redacted-user/orca611/orca (sha256 d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1), contract 1.1.0; LSF absent by design.",
+        "owner": "B",
+        "evidence": [
+          "B/environment/b07-environment.json",
+          "B/B14/loaded-paths-refreeze.json",
+          "B/B14b/controller/health.json"
+        ]
+      },
+      {
+        "layer": "T1",
+        "subject": "MCP process",
+        "result": "PASS",
+        "detail": "Real stdio MCP adapter (8 tools, protocol 2025-06-18) performed the B14b acp_submit calls on 77ac1de; B05 protocol matrix and B06 entry mapping PASS.",
+        "owner": "B (C official DSH handshake separately NOT_VERIFIED)",
+        "evidence": [
+          "B/B05/summary.json",
+          "B/B06/summary.json",
+          "B/B14b/singlepoint/run.json",
+          "B/B14b/optimize/run.json",
+          "B/B14b/frequency/run.json"
+        ]
+      },
+      {
+        "layer": "T2",
+        "subject": "platform use case",
+        "result": "PASS",
+        "detail": "MCP submit -> Controller -> real Workspace/Runtime/Data Local chains produced three distinct TaskRefs; B06 entry parity and B12 artifact lifecycle PASS.",
+        "owner": "B",
+        "evidence": [
+          "B/B06/summary.json",
+          "B/B12/summary.json",
+          "B/B14b/*/run.json"
+        ]
+      },
+      {
+        "layer": "T3",
+        "subject": "DSH",
+        "result": "NOT_VERIFIED",
+        "detail": "C DSH/Workbench P1 is not present on this host; no real official-client handshake is claimed.",
+        "owner": "C",
+        "reason": "c_dsh_browser_absent",
+        "evidence": [
+          "B/B10/summary.json",
+          "B/B13/dsh-disconnect.json"
+        ]
+      },
+      {
+        "layer": "T4",
+        "subject": "science/cluster",
+        "result": "NOT_VERIFIED",
+        "detail": "Local singlepoint/optimize/frequency PASS with real ORCA; LSF normal completion is NOT_VERIFIED (no bsub/queue/node).",
+        "components": {
+          "local": "PASS",
+          "lsf": "NOT_VERIFIED"
+        },
+        "owner": "B",
+        "evidence": [
+          "B/B14b/singlepoint/run.json",
+          "B/B14b/optimize/run.json",
+          "B/B14b/frequency/run.json",
+          "B/B11/summary.json"
+        ]
+      },
+      {
+        "layer": "T5",
+        "subject": "fault/boundary",
+        "result": "NOT_VERIFIED",
+        "detail": "B13 Local fault/race rows PASS; LSF control and DSH disconnect NOT_VERIFIED.",
+        "components": {
+          "local": "PASS",
+          "lsf": "NOT_VERIFIED",
+          "dsh": "NOT_VERIFIED"
+        },
+        "owner": "B (LSF/DSH rows open)",
+        "evidence": [
+          "B/B13/races.json",
+          "B/B13/dsh-disconnect.json",
+          "B/B13/lsf-control-fixture.json"
+        ]
+      }
+    ]
+  },
+  "compatibility_guard": {
+    "name": "15-active-workflow compatibility guard",
+    "tests": [
+      "tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered",
+      "tests/test_architecture_invariants.py::test_each_active_workflow_has_dispatch_and_method_schema",
+      "tests/test_services_workflow_enablement.py::test_active_workflows_match_the_canonical_active_set",
+      "tests/test_acp_workflow_task_matrix.py::test_active_workflow_set_matches_matrix"
+    ],
+    "result": "PASS",
+    "detail": "4 passed in 0.62s on candidate 77ac1de",
+    "evidence": "B/B14b/guard/pytest-15-active-workflows.txt"
+  },
+  "historical_results": {
+    "base_suite": {
+      "result": "FAIL",
+      "detail": "3 failed, 10649 passed, 119 skipped, 95 deselected; 2 C-owned failures + 1 B timing flake passed on rerun",
+      "evidence": "B/B14/full-suite-refreeze.log + B/B14/failure-classification-refreeze.md"
+    },
+    "guard_suite": {
+      "result": "PASS",
+      "detail": "78 passed in 16.70s",
+      "evidence": "B/B14/guard-refreeze.log"
+    },
+    "b14a_freeze": {
+      "result": "PASS",
+      "detail": "candidate 77ac1de merged A/B/C and validated contracts",
+      "evidence": "B/B14/merge-log-refreeze.md"
+    }
+  },
+  "a_scientific_audit": {
+    "result": "NOT_VERIFIED",
+    "reason": "a_not_available",
+    "detail": "A published no B14b/H3 scientific audit under /opt/acp2-dev/A/** at the time of this run. B does not sign A science scope.",
+    "searched_root": "/opt/acp2-dev/A",
+    "owner": "A"
+  },
+  "c_dsh_browser": {
+    "result": "NOT_VERIFIED",
+    "reason": "c_dsh_browser_absent",
+    "detail": "No C DSH/browser session against candidate 77ac1de is present; B did not drive or sign C scope.",
+    "owner": "C",
+    "evidence": [
+      "B/B10/summary.json",
+      "B/B13/dsh-disconnect.json"
+    ]
+  },
+  "h3": {
+    "status": "OPEN",
+    "rule": "H3 stays OPEN while any required capability/backend row is FAIL or NOT_VERIFIED; LSF rows and the C/A rows are missing.",
+    "open_rows": [
+      "singlepoint/lsf",
+      "optimize/lsf",
+      "frequency/lsf",
+      "B10b/three-entry",
+      "B11/lsf-normal-completion",
+      "B13/control-recovery",
+      "A/scientific-audit",
+      "C/dsh-browser",
+      "T3",
+      "T4/lsf",
+      "T5/lsf",
+      "T5/dsh"
+    ],
+    "caveats": [
+      "optimize/local and frequency/local run on the legacy CLI chain; no execution_receipt/release_id is emitted. Their science is real (ORCA output, task_result-equivalent step_result, manifest) but release identity is NOT_EMITTED_ON_LEGACY_CHAIN.",
+      "B10b Workbench, B11 LSF normal completion, B13 LSF control and DSH rows remain NOT_VERIFIED and are listed separately, not collapsed into the capability rows."
+    ]
+  }
+}

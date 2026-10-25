@@ -1,0 +1,422 @@
+{
+  "artifacts": [
+    {
+      "path": "controller.json",
+      "sha256": "82a37b46920e5388d928343bb3a6fe64a0be4101518a331a087aa8e4343008bd",
+      "size_bytes": 132
+    },
+    {
+      "path": "overlay-identity.json",
+      "sha256": "4b1085934de4a7c89d5aeb07dd26615d87d7eaeb5c973dded02b618a25ee4c2d",
+      "size_bytes": 2596
+    },
+    {
+      "path": "dsh-effective-config.web.redacted.yml",
+      "sha256": "f10c51f439244921aab65e0886634c502ab6da98702442f3a2c673b802767bae",
+      "size_bytes": 46604
+    },
+    {
+      "path": "dump.web.json",
+      "sha256": "2eff20237988d74318324ce17b9fb1115aaf0234f0ab08b820cbe91b82f47140",
+      "size_bytes": 280
+    },
+    {
+      "path": "dsh-effective-config.headless.redacted.yml",
+      "sha256": "ac78ad502ff3aa6235b03c702f8f299f99a215aa62af5e06ad1488c333bff483",
+      "size_bytes": 13567
+    },
+    {
+      "path": "dump.headless.json",
+      "sha256": "694f0d20a9d27d61f4acd089a57e6552b9dcf4c9d782fcb0605c500ac0b1f883",
+      "size_bytes": 285
+    },
+    {
+      "path": "headless-runner-disabled.cordis.yml",
+      "sha256": "232986f15fe8bc8214fe8d59af4f3a3e3ee52b46ccf23f3a279736c24dbf86bb",
+      "size_bytes": 182
+    },
+    {
+      "path": "tool-snapshot.web.invocation.json",
+      "sha256": "179c261098e0619d820392f8301836f2e761a78f66fd814ab2a3aa549aa0def1",
+      "size_bytes": 3644
+    },
+    {
+      "path": "tool-snapshot.web.json",
+      "sha256": "88f0382cacac79a8b5f60c36acb97a3c1cedc7079bc4507e0b49845f20f64b03",
+      "size_bytes": 6560
+    },
+    {
+      "path": "tool-snapshot.headless.invocation.json",
+      "sha256": "3b2f82afb4276f6c3bf42fab90021814af913c7917e2af8052cb92c0dfde1cff",
+      "size_bytes": 3701
+    },
+    {
+      "path": "tool-snapshot.headless.json",
+      "sha256": "b7dafe55729fc4965712a256895ba186b7ad148bef8c30fc2b078eca1b53316f",
+      "size_bytes": 33509
+    },
+    {
+      "path": "registration.json",
+      "sha256": "3b5cff2b838739d6a01fee5778db7a6aa7346fd3ab038dbc3a4f8bfe053ddaff",
+      "size_bytes": 1422
+    },
+    {
+      "path": "negative/bad-command.cordis.yml",
+      "sha256": "05de7ee26b8ccdcdb253196698ea967d185d52f425248060c6338aeae365d077",
+      "size_bytes": 1147
+    },
+    {
+      "path": "negative/bad-command.invocation.json",
+      "sha256": "2ae2de00f03be04b7a82b56c6be259bae589e9bf9ebac1a15622d1917767e06a",
+      "size_bytes": 2972
+    },
+    {
+      "path": "negative/tool-snapshot.bad-command.json",
+      "sha256": "6eeebafbbed06fce307a9a028b9be7053bf71ffc0c5077ac14cc7249043a8314",
+      "size_bytes": 33031
+    },
+    {
+      "path": "negative/incompatible_protocol_stub.py",
+      "sha256": "2f0fa1bc14c7c17d019cc65f821c4af461199babc3f76def6dfda15f251f41f2",
+      "size_bytes": 1457
+    },
+    {
+      "path": "negative/incompatible-protocol.cordis.yml",
+      "sha256": "a56eb40771b2727f03b335d3598414a013c4db73878557f50d4ff663c2e85fd0",
+      "size_bytes": 1107
+    },
+    {
+      "path": "negative/incompatible-protocol.invocation.json",
+      "sha256": "d2f81555edb64a7ccb49408144be679cf9197e9dcd5bbe611f5edfd055f9ab55",
+      "size_bytes": 4134
+    },
+    {
+      "path": "negative/incompatible-protocol.wire.jsonl",
+      "sha256": "ac8caa47682050be4c161059698ca01fd72316e8e8ce424ba43f77d2556b8749",
+      "size_bytes": 879
+    },
+    {
+      "path": "negative/tool-snapshot.incompatible-protocol.json",
+      "sha256": "def02a1110005709d507fdd16408098ea8ef4e1fb4af44e1638ca54cc2d71415",
+      "size_bytes": 34127
+    },
+    {
+      "path": "f1-schema-mismatch.json",
+      "sha256": "e0a43169377c32a287302cc6a4cb1cea176266890d6749aef75451f4f86fde13",
+      "size_bytes": 870
+    },
+    {
+      "path": "cleanup.json",
+      "sha256": "ab3b11911c38bef947e72398d085b186aaf2fde61607ae65118c40ca97c8bad9",
+      "size_bytes": 364
+    },
+    {
+      "path": "dsh-discovery-summary.json",
+      "sha256": "7153344d39ab7fe5f53c11b3414e660959d00a837534e1d4e24ad80145bae20c",
+      "size_bytes": 7834
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "top-level array with an insert list",
+      "name": "overlay.web.insert_semantics",
+      "status": "PASS"
+    },
+    {
+      "detail": "@deepseek-ai/dsh-mcp-client",
+      "name": "overlay.web.plugin_name",
+      "status": "PASS"
+    },
+    {
+      "detail": "command/args/cwd/env equal",
+      "name": "overlay.web.launch_identical_to_b05",
+      "status": "PASS"
+    },
+    {
+      "detail": "disabled=['preset-cordis', 'preset-minimal', 'preset-ptc', 'preset-standard']",
+      "name": "overlay.web.exec_presets_disabled",
+      "status": "PASS"
+    },
+    {
+      "detail": "top-level array with an insert list",
+      "name": "overlay.headless.insert_semantics",
+      "status": "PASS"
+    },
+    {
+      "detail": "@deepseek-ai/dsh-mcp-client",
+      "name": "overlay.headless.plugin_name",
+      "status": "PASS"
+    },
+    {
+      "detail": "command/args/cwd/env equal",
+      "name": "overlay.headless.launch_identical_to_b05",
+      "status": "PASS"
+    },
+    {
+      "detail": "disabled=['bash-sandbox', 'pwsh-sandbox', 'tool-bash', 'tool-jobs', 'tool-pwsh']",
+      "name": "overlay.headless.exec_rows_disabled",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit_code=0 stderr=",
+      "name": "dump.web.exit_zero",
+      "status": "PASS"
+    },
+    {
+      "detail": "secret_value=False token_query=False",
+      "name": "dump.web.redacted",
+      "status": "PASS"
+    },
+    {
+      "detail": "composed entry present with failOnStartupError",
+      "name": "dump.web.inserted_entry_applied",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"args\": [\"-m\", \"acp\", \"mcp\", \"serve\", \"--transport\", \"stdio\", \"--controller\", \"http://127.0.0.1:18765\", \"--log-level\", \"INFO\"], \"command\": \"/opt/acp2-dev/venvs/b/bin/python\", \"cwd\": \"repo-root/src\", \"env\": {\"ACP2_MCP_LOG_LEVEL\": \"INFO\", \"ACP2_TOOLS\": \"/opt/acp2-dev/venvs\", \"ACP_CONFIG\": \"/opt/acp2-dev/data/b/controller-config/cccp.yaml\", \"ACP_CONTROLLER_URL\": \"http://127.0.0.1:18765\", \"ACP_RUN_ROOT\": \"/opt/acp2-dev/data/b/run-root\", \"PATH\": \"/opt/acp2-dev/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin\"}}",
+      "name": "dump.web.entry_launch_identical_to_b05",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit_code=0 stderr=",
+      "name": "dump.headless.exit_zero",
+      "status": "PASS"
+    },
+    {
+      "detail": "secret_value=False token_query=False",
+      "name": "dump.headless.redacted",
+      "status": "PASS"
+    },
+    {
+      "detail": "composed entry present with failOnStartupError",
+      "name": "dump.headless.inserted_entry_applied",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"args\": [\"-m\", \"acp\", \"mcp\", \"serve\", \"--transport\", \"stdio\", \"--controller\", \"http://127.0.0.1:18765\", \"--log-level\", \"INFO\"], \"command\": \"/opt/acp2-dev/venvs/b/bin/python\", \"cwd\": \"repo-root/src\", \"env\": {\"ACP2_MCP_LOG_LEVEL\": \"INFO\", \"ACP2_TOOLS\": \"/opt/acp2-dev/venvs\", \"ACP_CONFIG\": \"/opt/acp2-dev/data/b/controller-config/cccp.yaml\", \"ACP_CONTROLLER_URL\": \"http://127.0.0.1:18765\", \"ACP_RUN_ROOT\": \"/opt/acp2-dev/data/b/run-root\", \"PATH\": \"/opt/acp2-dev/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin\"}}",
+      "name": "dump.headless.entry_launch_identical_to_b05",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"error\": null, \"exit_code\": 0, \"stderr\": \"2026-10-23 07:41:50,375 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused\\ndsh: warning: 1 entry did not activate\\nacp-mcp-acceptance (@deepseek-ai/dsh-mcp-client): Error: mcp-client(acp): initial connection or tool synchronization failed\\n    at Object.apply (/opt/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\\n    at async Fiber._reload (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)\\nSdkError: Connection closed\\n    at Client._onclose (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:841:23)\\n    at Client._onclose (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs:4167:9)\\n    at StdioClientTransport._transport.onclose (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:792:22)\\n    at ChildProcess.<anonymous> (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/src/client/stdio.ts:159:22)\\n    at ChildProcess.emit (node:events:519:28)\\n    at maybeClose (node:internal/child_process:1101:16)\\n    at ChildProcess._handle.onexit (node:internal/child_process:304:5)\\n    at Process.callbackTrampoline (node:internal/async_hooks:130:17)\\n\"}",
+      "name": "snapshot.web.executed",
+      "status": "PASS"
+    },
+    {
+      "detail": "source=real_registration booted_via=apps/cli/src/profile-boot.ts::runProfile",
+      "name": "snapshot.web.real_registration",
+      "status": "PASS"
+    },
+    {
+      "detail": "banned=[]",
+      "name": "snapshot.web.no_exec_tool",
+      "status": "PASS"
+    },
+    {
+      "detail": "namespaces=[]",
+      "name": "snapshot.web.single_mcp_namespace",
+      "status": "PASS"
+    },
+    {
+      "detail": "tools=['working_directory', 'todo_write']",
+      "name": "snapshot.web.tool_rows_have_source",
+      "status": "PASS"
+    },
+    {
+      "detail": "bound=rph-research presets=['rph-research']",
+      "name": "snapshot.web.research_preset",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"external\": {\"address\": \"192.168.1.100\", \"error\": \"ECONNREFUSED\", \"probed\": true, \"reachable\": false}, \"loopback\": {\"reachable\": true, \"status\": 401}, \"port\": 57665}",
+      "name": "snapshot.web.loopback_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"error\": null, \"exit_code\": 0, \"stderr\": \"2026-10-23 07:41:53,695 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused\\ndsh: warning: 2 entries did not activate\\npermission (@deepseek-ai/dsh-permission-presets): pending (waiting for service: shell)\\nacp-mcp-acceptance (@deepseek-ai/dsh-mcp-client): Error: mcp-client(acp): initial connection or tool synchronization failed\\n    at Object.apply (/opt/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\\n    at async Fiber._reload (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)\\nSdkError: Connection closed\\n    at Client._onclose (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:841:23)\\n    at Client._onclose (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs:4167:9)\\n    at StdioClientTransport._transport.onclose (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:792:22)\\n    at ChildProcess.<anonymous> (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/src/client/stdio.ts:159:22)\\n    at ChildProcess.emit (node:events:519:28)\\n    at maybeClose (node:internal/child_process:1101:16)\\n    at ChildProcess._handle.onexit (node:internal/child_process:304:5)\\n\"}",
+      "name": "snapshot.headless.executed",
+      "status": "PASS"
+    },
+    {
+      "detail": "source=real_registration booted_via=apps/cli/src/profile-boot.ts::runProfile",
+      "name": "snapshot.headless.real_registration",
+      "status": "PASS"
+    },
+    {
+      "detail": "banned=[]",
+      "name": "snapshot.headless.no_exec_tool",
+      "status": "PASS"
+    },
+    {
+      "detail": "namespaces=[]",
+      "name": "snapshot.headless.single_mcp_namespace",
+      "status": "PASS"
+    },
+    {
+      "detail": "tools=['web_search', 'web_fetch', 'exit_plan_mode', 'todo_write', 'get_goal', 'create_goal', 'update_goal', 'working_directory', 'skill', 'list_agents', 'send_message', 'interrupt_agent', 'subagent', 'subagent_fork', 'glob', 'grep', 'workflow', 'read', 'write', 'edit', 'read_image']",
+      "name": "snapshot.headless.tool_rows_have_source",
+      "status": "PASS"
+    },
+    {
+      "detail": "scope=global",
+      "name": "snapshot.headless.global_is_model_view",
+      "status": "PASS"
+    },
+    {
+      "detail": "controller_unavailable: 2026-10-23 07:41:50,375 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused",
+      "name": "registration.official_plugin",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable: 2026-10-23 07:41:50,375 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused",
+      "name": "registration.eight_p1_tools",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable: 2026-10-23 07:41:50,375 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused",
+      "name": "registration.source_plugin",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "{\"disabled\": false, \"failed\": true, \"fiber_state\": 3, \"id\": \"acp-mcp-acceptance\", \"name\": \"@deepseek-ai/dsh-mcp-client\", \"pending\": false}",
+      "name": "negative.bad_command.entry_failed",
+      "status": "PASS"
+    },
+    {
+      "detail": "dsh: warning: 2 entries did not activate\npermission (@deepseek-ai/dsh-permission-presets): pending (waiting for service: shell)\nacp-mcp-acceptance (@deepseek-ai/dsh-mcp-client): Error: mcp-client(acp): initial connection or tool synchronization failed\n    at Object.apply (/opt/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Fiber._reload (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)\n    at async Fiber.await (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:706:7)\nError: spawn /nonexistent/acp2-missing-python ENOENT\n    at ChildProcess._handle.onexit (node:internal/child_process:285:19)\n    at onErrorNT (node:internal/child_process:483:16)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\nError\nmcp-client(acp): initial connection or tool synchronization failed\nError: mcp-client(acp): initial connection or tool synchronization failed\n    at Object.apply (/opt/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Fiber._reload (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)\n    at async Fiber.await (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:706:7)",
+      "name": "negative.bad_command.explicit_failure",
+      "status": "PASS"
+    },
+    {
+      "detail": "mcp=[]",
+      "name": "negative.bad_command.no_mcp_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"disabled\": false, \"failed\": true, \"fiber_state\": 3, \"id\": \"acp-mcp-acceptance\", \"name\": \"@deepseek-ai/dsh-mcp-client\", \"pending\": false}",
+      "name": "negative.incompatible_protocol.entry_failed",
+      "status": "PASS"
+    },
+    {
+      "detail": "dsh: warning: 2 entries did not activate\npermission (@deepseek-ai/dsh-permission-presets): pending (waiting for service: shell)\nacp-mcp-acceptance (@deepseek-ai/dsh-mcp-client): Error: mcp-client(acp): initial connection or tool synchronization failed\n    at Object.apply (/opt/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)\n    at async Fiber._reload (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)\n    at async Fiber.await (/opt/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:706:7)\nProtocolError: unsupported protocol version\n    at Function.fromError (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/types/errors.ts:105:16)\n    at Client._onresponse (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:1215:41)\n    at Client._onresponse (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs:4147:9)\n    at StdioClientTransport._transport.onmessage (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:806:22)\n    at StdioClientTransport.processReadBuffer (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/src/client/stdio.ts:218:22)\n    at Socket.<anonymous> (/opt/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/src/client/stdio.ts:169:26)\n    at Socket.emit (node:events:519:28)\n    at addChunk (node:internal/streams/readable:561:12)\n    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)\n    at Readable.push (",
+      "name": "negative.incompatible_protocol.explicit_failure",
+      "status": "PASS"
+    },
+    {
+      "detail": "versions=['2025-11-25'] rejections=1",
+      "name": "negative.incompatible_protocol.wire",
+      "status": "PASS"
+    },
+    {
+      "detail": "mcp=[]",
+      "name": "negative.incompatible_protocol.no_mcp_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "source=repo-root/reports/acp2_implementation/bb45a46/C/mcp-live/f3-honesty-mcp-20261022T234132Z/main/schema-drift.json matches=False",
+      "name": "f1.recorded",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "name": "no_side_effect.no_leftover_process",
+      "status": "PASS"
+    },
+    {
+      "detail": "port=57665",
+      "name": "no_side_effect.production_8765_untouched",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "35614fd83f616005a0546af35631c477151e7dde",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "35614fd83f616005a0546af35631c477151e7dde",
+  "command": [
+    "/opt/acp2-dev/venvs/integration/bin/python",
+    "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "dsh-discovery-live",
+    "--timeout",
+    "120",
+    "--out",
+    "repo-root/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "repo-root",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "experience.dsh_discovery.b05_sha256": "efa764d897c09fd42a0f4a600fac4c36a7bf5509d788d5e91a1f38831ced93eb",
+    "experience.dsh_discovery.closes_h2": false,
+    "experience.dsh_discovery.controller_reachable": false,
+    "experience.dsh_discovery.evidence_kind": "live",
+    "experience.dsh_discovery.f1_status": "OPEN",
+    "experience.dsh_discovery.headless_model_visible_tools": [
+      "create_goal",
+      "edit",
+      "exit_plan_mode",
+      "get_goal",
+      "glob",
+      "grep",
+      "interrupt_agent",
+      "list_agents",
+      "read",
+      "read_image",
+      "send_message",
+      "skill",
+      "subagent",
+      "subagent_fork",
+      "todo_write",
+      "update_goal",
+      "web_fetch",
+      "web_search",
+      "workflow",
+      "working_directory",
+      "write"
+    ],
+    "experience.dsh_discovery.negatives_ok": true,
+    "experience.dsh_discovery.not_verified_rows": [
+      "registration.official_plugin",
+      "registration.eight_p1_tools",
+      "registration.source_plugin"
+    ],
+    "experience.dsh_discovery.overlay_headless_sha256": "0825e4a85367bbd38fb49a4b70a9420230ff4ed84b6d809fe5f40bb836620c72",
+    "experience.dsh_discovery.overlay_web_sha256": "f83ffa63302714e99c128b004b6c68f1b3ee9334e68f5fc2881f14c3eacaada6",
+    "experience.dsh_discovery.registration_ok": false,
+    "experience.dsh_discovery.web_model_visible_tools": [
+      "todo_write",
+      "working_directory"
+    ],
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/opt/acp2-dev/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/opt/acp2-dev/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/opt/acp2-dev/integration/src/acp/__init__.py",
+    "experience.run_id": "f3-honesty-dsh-20261022T234142Z",
+    "experience.scenario_key": "dsh-discovery-live",
+    "experience.subcase": null,
+    "experience.test_revision": "35614fd83f616005a0546af35631c477151e7dde"
+  },
+  "finished_at": "2026-10-22T23:41:59Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:live",
+  "reason": "controller_unavailable",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "f3-honesty-dsh-20261022T234142Z",
+  "scenario": "experience:dsh-discovery-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:41:42Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "acp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Auto-Calc Platform: automated computational chemistry workflows (acp CLI) backed by the cccp (Computational Chemistry Connection Package) QC interface library"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,7 @@ dependencies = [
     # XLSX can never be silently skipped without a capability declaration.
     # Pure-python, no compiled wheels — safe on slim compute nodes too.
     "openpyxl>=3.1",
+    "typing-extensions>=4.1",
 ]
 
 [project.optional-dependencies]
@@ -63,9 +64,11 @@ dev = [
     "mypy>=1.8.0",
     "pre-commit>=3.6.0",
     "httpx>=0.27",
+    # tomllib is stdlib on 3.11+; 3.10 acceptance/tests need the backport.
+    "tomli>=2.0; python_version < '3.11'",
 ]
 browser = [
-    "playwright>=1.40",
+    "playwright==1.63.0",
 ]
 
 [project.scripts]
@@ -73,7 +76,7 @@ acp = "acp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["cccp*", "acp*"]
+include = ["cccp*", "acp*", "acp_services*"]
 
 # Ship non-.py package data. `acp/nmr/models/` is a DATA DIRECTORY (no
 # __init__.py — see src/acp/nmr/AGENTS.md): DP5/FCHL binary artifacts
@@ -84,6 +87,23 @@ include = ["cccp*", "acp*"]
 # locked by tests/test_packaging_assets.py).
 [tool.setuptools.package-data]
 "acp.nmr" = ["models/*"]
+# --- C08-s0 (T56/C39a) first-batch CCCP asset rule -------------------------
+# T55 relocates the DP5/FCHL artifacts (atomic_reps.gz, frag_reps.gz, *.p,
+# tms_references.txt, LICENSE-DP5, NOTICE.md) from `acp/nmr/models/` to the
+# single CCCP asset location `src/cccp/analysis/nmr/model_assets/`
+# (a data dir with no __init__.py). Keying package-data to the owning CCCP
+# package makes an independently-built `cccp` wheel ship them. The glob
+# matches nothing until the T55 move lands, so this hunk is safe to apply in
+# the same integration batch as T55. T39 removes the stale `acp.nmr` line
+# above once the old directory is gone.
+"cccp.analysis.nmr" = ["model_assets/*"]
+# A-27a science packaging request: the frozen contract corpus lands under
+# `src/cccp/analysis/research/contracts/` (A-owned, byte-identical to the
+# docs copy). The glob is inert until that directory lands, so applying it
+# cannot break a wheel now; it keeps the root `acp` distribution and the
+# independent `cccp` role in lockstep.
+"cccp.analysis.research" = ["contracts/*.json", "contracts/*.md", "contracts/examples/*.json"]
+"cccp" = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

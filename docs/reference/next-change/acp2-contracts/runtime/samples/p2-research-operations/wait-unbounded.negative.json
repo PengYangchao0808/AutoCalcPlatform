@@ -1,0 +1,22 @@
+{
+  "sample_id": "wait-unbounded.negative",
+  "contract": "p2-research-operations.v1.json",
+  "kind": "negative",
+  "operation": "P2-R4",
+  "payload": {
+    "tool": "acp_research_wait_v1",
+    "arguments": {
+      "kinds": [
+        "approval"
+      ],
+      "max_wait_s": 600
+    }
+  },
+  "expected": {
+    "valid": false,
+    "class": "invalid-parameter",
+    "code": "input_invalid",
+    "violation": "bound_exceeded",
+    "field": "max_wait_s"
+  }
+}

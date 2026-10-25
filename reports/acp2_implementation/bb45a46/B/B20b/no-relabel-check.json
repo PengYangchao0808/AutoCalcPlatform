@@ -1,0 +1,74 @@
+{
+  "schema": "acp2.b20b.no-relabel-check.v1",
+  "generated_at": "2026-10-23T09:17:41Z",
+  "result": "PASS",
+  "source_facts": {
+    "b20a_receipt": {
+      "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "sha256": "9f148482c6f29b5a85938e452fad8b5f14b368404d4020fd15d601f5e0dc8b18",
+      "result": "NOT_VERIFIED",
+      "reason": "c24a_absent",
+      "exit_code": 2
+    },
+    "b20a_counters": {
+      "path": "reports/acp2_implementation/bb45a46/B/B20/counters.json",
+      "sha256": "05529afc19f637c7944f6171e22d87beb146248d93c22342aeabedbf8fe63693",
+      "tasks_created": 0,
+      "submission_attempted": false
+    },
+    "b20a_run_spec": {
+      "path": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
+      "started_at": null,
+      "budgets": [
+        13380,
+        900,
+        120,
+        14400
+      ]
+    },
+    "a_h4": {
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
+      "status": "open"
+    }
+  },
+  "checks": [
+    {
+      "name": "execution_terminal_state_not_mapped_to_claim_support",
+      "result": "PASS",
+      "detail": "The B20a receipt result=NOT_VERIFIED is not used to set any claim to supported; zero propositions are supported."
+    },
+    {
+      "name": "b_execution_facts_not_rewritten",
+      "result": "PASS",
+      "detail": "handoff platform refs are all null and equal to the B20a receipt; counters match exactly."
+    },
+    {
+      "name": "b_records_facts_only",
+      "result": "PASS",
+      "detail": "b_execution_facts carries execution/release/attempt/manifest/budget data only; b_assigns_claim_status=false and b_promotes_h4=false."
+    },
+    {
+      "name": "c_record_cannot_overwrite_b_task_truth",
+      "result": "PASS",
+      "detail": "C reference has no authoritative task fields; the forbidden override list is empty in the actual record."
+    },
+    {
+      "name": "inconclusive_negative_does_not_substitute_positive",
+      "result": "PASS",
+      "detail": "H4-NEG-missing-frequency remains a constructed negative; negative_satisfies_positive_gate=false and negative_closes_h4=false."
+    },
+    {
+      "name": "single_imaginary_frequency_not_connectivity",
+      "result": "PASS",
+      "detail": "one_imaginary_frequency_proves_irc_connectivity=false; explicit forward+reverse IRC and endpoint requirements are recorded."
+    },
+    {
+      "name": "unsupported_claim_not_promoted_to_close_h4",
+      "result": "PASS",
+      "detail": "H4 gate remains open; every required row remains NOT_VERIFIED; promotions=[]; claim_status=not_evaluated."
+    }
+  ],
+  "conclusion": "B20b records references and facts only. It does not turn an absent execution into a supported claim and does not close H4."
+}

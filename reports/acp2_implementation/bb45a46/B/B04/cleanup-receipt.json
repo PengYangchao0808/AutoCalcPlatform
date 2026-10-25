@@ -1,0 +1,21 @@
+{
+  "schema": "acp2.acceptance.cleanup.v1",
+  "controller_pid": 13419,
+  "stopped_at": "2026-10-22T13:37:08Z",
+  "signal": "SIGTERM",
+  "process_gone": true,
+  "port_18765_free": true,
+  "port_18766_free": true,
+  "production_service_touched": false,
+  "leftover_pids": [],
+  "harness_created_tasks": [
+    {
+      "job_id": "20261022_210346_001_b04a-parity",
+      "workflow": "fake",
+      "status": "completed",
+      "purpose": "CLI query parity + lock-refusal probe (B04a original run; row persists in the isolated run root DB)"
+    }
+  ],
+  "leftover_temp_dirs": [],
+  "note": "Fix-pass Controller (pid 13419, release 46d5fe31b0f72dea4bdb5aaa07ef3938700e5d48) stopped with SIGTERM and reaped; ports 18765/18766 verified free by socket connect and ss; production 8765 and /var/lib/acp/runs untouched. The fake parity job is a completed task row under the isolated test run root, not a running process."
+}

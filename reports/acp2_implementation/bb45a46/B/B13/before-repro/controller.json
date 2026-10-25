@@ -1,0 +1,29 @@
+{
+  "argv": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "-m",
+    "acp2_controller_fault",
+    "--fault-file",
+    "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "--",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18771",
+    "--run-root",
+    "/opt/acp2-dev/data/b/run-root-b13",
+    "--poll-interval",
+    "1",
+    "--no-browser"
+  ],
+  "cwd": "/opt/acp2-dev/B/src",
+  "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+  "fault_seam": true,
+  "pid": 715881,
+  "run_root": "/opt/acp2-dev/data/b/run-root-b13",
+  "source_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "source_revision_matches": true,
+  "source_root": "/opt/acp2-dev/B"
+}

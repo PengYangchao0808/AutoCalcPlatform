@@ -1,0 +1,13 @@
+{
+  "cancel_response_http": 200,
+  "cancel_response_status": "cancelling",
+  "cancelled_persisted_at": "2026-10-22T23:35:12.831538+00:00",
+  "client_timeout_at": "2026-10-22T23:35:07.480642Z",
+  "pid": 751470,
+  "pid_alive_after_client_timeout": true,
+  "platform_cancel_at": "2026-10-22T23:35:08.553577Z",
+  "remaining_processes": [],
+  "status_after_client_timeout": "running",
+  "stop_observed_at": "2026-10-22T23:35:08.752873Z",
+  "task_ref": "20261023_073506_003_singlepoint"
+}

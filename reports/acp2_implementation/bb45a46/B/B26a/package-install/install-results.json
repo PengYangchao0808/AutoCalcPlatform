@@ -1,0 +1,34 @@
+[
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "cccp",
+    "venv": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/cccp",
+    "venv_exit": 0,
+    "wheel": "/tmp/opencode/b26a-clean/release/cccp-0.3.0-py3-none-any.whl"
+  },
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "worker",
+    "venv": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/worker",
+    "venv_exit": 0,
+    "wheel": "/tmp/opencode/b26a-clean/release/acp_worker-0.3.0-py3-none-any.whl"
+  },
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "web",
+    "venv": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web",
+    "venv_exit": 0,
+    "wheel": "/tmp/opencode/b26a-clean/release/acp_web-0.3.0-py3-none-any.whl"
+  },
+  {
+    "install_exit": 0,
+    "ok": true,
+    "role": "root",
+    "venv": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/root",
+    "venv_exit": 0,
+    "wheel": "/tmp/opencode/b26a-clean/root-build/acp-0.3.0-py3-none-any.whl"
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "sample_id": "control.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "control",
+  "payload": {
+    "schema_version": 1,
+    "intent": "pause",
+    "task_ref": {
+      "task_id": "20261022_001_demo",
+      "attempt": 1,
+      "release": {
+        "release_id": "rel-1",
+        "release_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "expected_revision": 3
+  },
+  "expected": {
+    "valid": true
+  }
+}

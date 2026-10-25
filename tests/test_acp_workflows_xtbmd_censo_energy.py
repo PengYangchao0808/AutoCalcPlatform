@@ -20,7 +20,9 @@ import math
 import re
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+from tests._t24_patch_compat import patch
 
 import numpy as np
 import pytest

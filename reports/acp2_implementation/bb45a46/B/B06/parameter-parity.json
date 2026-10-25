@@ -1,0 +1,28 @@
+{
+  "normalizer": "acp_services.entrypoints.application_params.normalize_submit",
+  "mcp_arguments": {
+    "workflow": "singlepoint",
+    "input": {
+      "xyz_text": "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
+    },
+    "method": {
+      "method": "r2SCAN-3c",
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "name": "b06-evidence"
+  },
+  "normalized": {
+    "schema_version": 1,
+    "workflow": "singlepoint",
+    "input": {
+      "xyz_text": "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
+    },
+    "method": {
+      "method": "r2SCAN-3c",
+      "charge": 0,
+      "multiplicity": 1
+    }
+  },
+  "note": "MCP bootstrap and the HTTP create_job route both call normalize_submit before the Controller command; response task_ref is echoed unchanged."
+}

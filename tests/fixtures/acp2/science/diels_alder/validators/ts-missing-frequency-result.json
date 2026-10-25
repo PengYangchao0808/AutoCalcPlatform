@@ -1,0 +1,154 @@
+{
+  "artifacts": [],
+  "complete": true,
+  "coordinates": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.757,
+      0.586
+    ],
+    [
+      0.0,
+      -0.757,
+      0.586
+    ]
+  ],
+  "energy_hartree": -76.419737,
+  "errors": [],
+  "frequencies": [],
+  "metadata": {},
+  "payload": {
+    "analysis": {
+      "mode_vectors": {
+        "0": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "1": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "2": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "3": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "4": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "5": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      }
+    },
+    "electronic_state": {
+      "spin_mode": "auto",
+      "state_id": "s0",
+      "state_status": "not_verified",
+      "target_multiplicity": 1
+    },
+    "n_imaginary": 0
+  },
+  "provenance": {
+    "backend": "orca",
+    "input_signature": "ts-missing-frequency.out",
+    "method": "wB97X-D4",
+    "version": "unknown"
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ],
+  "task": "frequency"
+}

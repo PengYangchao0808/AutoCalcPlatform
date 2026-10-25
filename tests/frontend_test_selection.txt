@@ -1,0 +1,17 @@
+tests/test_frontend_sync_shell.py
+tests/test_frontend_sync_queue.py
+tests/test_frontend_sync_wizard.py
+tests/test_frontend_sync_energy.py
+tests/test_frontend_sync_viewer_framing.py
+tests/test_frontend_sync_structure_viewer.py
+tests/test_frontend_sync_geometry_runtime.py
+tests/test_frontend_sync_structure_editor.py
+tests/test_frontend_sync_vibration.py
+tests/test_frontend_sync_jobs.py
+tests/test_frontend_sync_pes_scan.py
+tests/test_frontend_sync_batch.py
+tests/test_frontend_sync_nmr.py
+tests/test_frontend_integration.py
+tests/test_frontend_structure_picker.py
+tests/test_frontend_candidate_workspace.py
+tests/test_frontend_structure_viewer_instance.py

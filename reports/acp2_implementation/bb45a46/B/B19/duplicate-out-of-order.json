@@ -1,0 +1,11 @@
+{
+  "duplicate_event_id": "b19:20261023_163522_001_b19-research-recovery:started",
+  "duplicate_is_noop": true,
+  "final_terminal_status": "cancelled",
+  "newer_non_terminal_outcome": "terminal_protected",
+  "schema": "acp2.b19b.duplicate-out-of-order.v1",
+  "snapshot_count_unchanged": true,
+  "stale_apply_outcome": "stale",
+  "stale_status": "cancelled",
+  "terminal_status": "cancelled"
+}

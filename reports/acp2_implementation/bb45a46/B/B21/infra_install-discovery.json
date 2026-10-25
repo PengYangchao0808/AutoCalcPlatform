@@ -1,0 +1,356 @@
+{
+  "adapters": [
+    {
+      "adapter_id": "acp.storage.conflict",
+      "capabilities": [
+        "scheduler.local"
+      ],
+      "declared_trust_level": "discover-only",
+      "descriptor_digest": "f515f2093836b1bf456b4f9b44f6d7682fd7fffe35ea7f1edd9a60748aab820d",
+      "descriptor_path": "/opt/acp2-dev/data/b/plugins/b21/storage-conflict-1.0.0/adapter.json",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": "d0cd56d1ff894940911f4f4513b3c304466e2581c2e8ff4f13038d2c49f0e73e",
+      "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-conflict-1.0.0/adapter.py",
+      "environment": [],
+      "executed": false,
+      "kind": "storage",
+      "origin": "external",
+      "resource_limits": {
+        "max_concurrency": 1,
+        "max_cpu_seconds": 30,
+        "max_io_bytes": 1048576,
+        "max_memory_bytes": 33554432
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "verification.json",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "acp.storage.inventory",
+      "capabilities": [
+        "storage.inventory"
+      ],
+      "declared_trust_level": "discover-only",
+      "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+      "descriptor_path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.0.0/adapter.json",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+      "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.0.0/adapter.py",
+      "environment": [
+        "env:ACP2_B21_PLUGIN_ENV"
+      ],
+      "executed": false,
+      "kind": "storage",
+      "origin": "external",
+      "resource_limits": {
+        "max_concurrency": 1,
+        "max_cpu_seconds": 30,
+        "max_io_bytes": 1048576,
+        "max_memory_bytes": 33554432
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "verification.json",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "acp.storage.inventory",
+      "capabilities": [
+        "storage.inventory"
+      ],
+      "declared_trust_level": "discover-only",
+      "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+      "descriptor_path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.1.0/adapter.json",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+      "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.1.0/adapter.py",
+      "environment": [
+        "env:ACP2_B21_PLUGIN_ENV"
+      ],
+      "executed": false,
+      "kind": "storage",
+      "origin": "external",
+      "resource_limits": {
+        "max_concurrency": 1,
+        "max_cpu_seconds": 30,
+        "max_io_bytes": 1048576,
+        "max_memory_bytes": 33554432
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "verification.json",
+      "version": "1.1.0"
+    },
+    {
+      "adapter_id": "acp.storage.missing-env",
+      "capabilities": [
+        "storage.missing-env"
+      ],
+      "declared_trust_level": "discover-only",
+      "descriptor_digest": "2183bcf41914539e17509008b89430cf034ea997a15c0ef7dd225811e53ff925",
+      "descriptor_path": "/opt/acp2-dev/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.json",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": "bb21e83fab25297cf2f252ffdc0223593d4776c44ffc5541f27fb54f80eab8d8",
+      "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-missing-env-1.0.0/adapter.py",
+      "environment": [
+        "env:ACP2_B21_MISSING_ENV"
+      ],
+      "executed": false,
+      "kind": "storage",
+      "origin": "external",
+      "resource_limits": {
+        "max_concurrency": 1,
+        "max_cpu_seconds": 30,
+        "max_io_bytes": 1048576,
+        "max_memory_bytes": 33554432
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "verification.json",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "acp.storage.sideeffect",
+      "capabilities": [
+        "storage.sideeffect"
+      ],
+      "declared_trust_level": "discover-only",
+      "descriptor_digest": "a37202780e70c5284699a87f7dbda2d0ee7ca576d7bee77349b1dd6b22c825eb",
+      "descriptor_path": "/opt/acp2-dev/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.json",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": "bda60e52d1afd38ae32dd7f41edc9d602f905cee99fa7bd91b31e3f1c53fa6e7",
+      "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.py",
+      "environment": [],
+      "executed": false,
+      "kind": "storage",
+      "origin": "external",
+      "resource_limits": {
+        "max_concurrency": 1,
+        "max_cpu_seconds": 30,
+        "max_io_bytes": 1048576,
+        "max_memory_bytes": 33554432
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "verification.json",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "acp.storage.untrusted",
+      "capabilities": [
+        "storage.untrusted"
+      ],
+      "declared_trust_level": "discover-only",
+      "descriptor_digest": "c147b6efe09ebdf1595abff7b004118999701b4742043bd210db70ccf839d62e",
+      "descriptor_path": "/opt/acp2-dev/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.json",
+      "effective_trust_level": "discover-only",
+      "entrypoint_digest": "d088495e9a5072d33196757a0a2eedadf36df02165dc9ebdeb6c9bde98ed88a8",
+      "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-untrusted-1.0.0/adapter.py",
+      "environment": [],
+      "executed": false,
+      "kind": "storage",
+      "origin": "external",
+      "resource_limits": {
+        "max_concurrency": 1,
+        "max_cpu_seconds": 30,
+        "max_io_bytes": 1048576,
+        "max_memory_bytes": 33554432
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "verification.json",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "acp.storage.wrong-version",
+      "capabilities": [
+        "storage.wrong-version"
+      ],
+      "declared_trust_level": "discover-only",
+      "descriptor_digest": "54bb1a4c5fde6098a4a6b624b07329cb6be1c435fdb0254995aa0651cce8fde8",
+      "descriptor_path": "/opt/acp2-dev/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.json",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": "9b2fdcae982756edf2e60462d9ffdbd24e32af3b247474f12f38364e8e721951",
+      "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-wrong-version-2.0.0/adapter.py",
+      "environment": [],
+      "executed": false,
+      "kind": "storage",
+      "origin": "external",
+      "resource_limits": {
+        "max_concurrency": 1,
+        "max_cpu_seconds": 30,
+        "max_io_bytes": 1048576,
+        "max_memory_bytes": 33554432
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "verification.json",
+      "version": "2.0.0"
+    },
+    {
+      "adapter_id": "platform.identity.local",
+      "capabilities": [
+        "identity.local"
+      ],
+      "declared_trust_level": "trusted-explicit",
+      "descriptor_digest": "39eaf8e03540920ca6605a75d83608ccbcc8136f82d9a92af8892d23aa6beb4c",
+      "descriptor_path": "builtin",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": null,
+      "entrypoint_path": null,
+      "environment": [],
+      "executed": false,
+      "kind": "identity",
+      "origin": "builtin",
+      "resource_limits": {
+        "max_concurrency": 32,
+        "max_cpu_seconds": 86400,
+        "max_io_bytes": 17179869184,
+        "max_memory_bytes": 68719476736
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "tests/test_services_identity_lifecycle.py",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "platform.scheduler.local",
+      "capabilities": [
+        "scheduler.local"
+      ],
+      "declared_trust_level": "trusted-explicit",
+      "descriptor_digest": "cb53b3c33f244a04326abf1d7e4fa7ed221ca762a773df0a52ae52ecc8e61393",
+      "descriptor_path": "builtin",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": null,
+      "entrypoint_path": null,
+      "environment": [],
+      "executed": false,
+      "kind": "scheduler",
+      "origin": "builtin",
+      "resource_limits": {
+        "max_concurrency": 32,
+        "max_cpu_seconds": 86400,
+        "max_io_bytes": 17179869184,
+        "max_memory_bytes": 68719476736
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "tests/test_services_isolation.py",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "platform.scheduler.lsf",
+      "capabilities": [
+        "scheduler.lsf"
+      ],
+      "declared_trust_level": "trusted-explicit",
+      "descriptor_digest": "0f0e576df8075308e6bf3f502d76c69c5904ad97c677ede5267e1d680092b828",
+      "descriptor_path": "builtin",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": null,
+      "entrypoint_path": null,
+      "environment": [],
+      "executed": false,
+      "kind": "scheduler",
+      "origin": "builtin",
+      "resource_limits": {
+        "max_concurrency": 32,
+        "max_cpu_seconds": 86400,
+        "max_io_bytes": 17179869184,
+        "max_memory_bytes": 68719476736
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "tests/test_acp2_runtime_lsf_scenario.py",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "platform.storage.local",
+      "capabilities": [
+        "storage.local"
+      ],
+      "declared_trust_level": "trusted-explicit",
+      "descriptor_digest": "997423e7f010d308789f4990687f2cad7c2d2c586ee75a5ab108cca462e3a393",
+      "descriptor_path": "builtin",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": null,
+      "entrypoint_path": null,
+      "environment": [],
+      "executed": false,
+      "kind": "storage",
+      "origin": "builtin",
+      "resource_limits": {
+        "max_concurrency": 32,
+        "max_cpu_seconds": 86400,
+        "max_io_bytes": 17179869184,
+        "max_memory_bytes": 68719476736
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "tests/test_services_read_root.py",
+      "version": "1.0.0"
+    },
+    {
+      "adapter_id": "platform.transfer.local",
+      "capabilities": [
+        "transfer.local"
+      ],
+      "declared_trust_level": "trusted-explicit",
+      "descriptor_digest": "2906fd15a5f58d5c4e5c7a67d0b3bf47869a75f8d4d891b62f844257ff1ca84e",
+      "descriptor_path": "builtin",
+      "effective_trust_level": "trusted-explicit",
+      "entrypoint_digest": null,
+      "entrypoint_path": null,
+      "environment": [],
+      "executed": false,
+      "kind": "transfer",
+      "origin": "builtin",
+      "resource_limits": {
+        "max_concurrency": 32,
+        "max_cpu_seconds": 86400,
+        "max_io_bytes": 17179869184,
+        "max_memory_bytes": 68719476736
+      },
+      "supported_schema": [
+        "acp2.adapter.v1"
+      ],
+      "verification_fixture": "tests/test_services_transfer_verify.py",
+      "version": "1.0.0"
+    }
+  ],
+  "execution": "none",
+  "network": "none",
+  "plugin_modules_in_sys_modules": [],
+  "plugin_root": "/opt/acp2-dev/data/b/plugins/b21",
+  "rejected": [
+    {
+      "code": "adapter_isolation_claim_rejected",
+      "detail": "adapter_isolation_claim_rejected: an in-process adapter is not a sandbox; process/OS isolation is a separate capability and may not be claimed in metadata",
+      "path": "/opt/acp2-dev/data/b/plugins/b21/storage-isolation-claim-1.0.0/adapter.json"
+    },
+    {
+      "code": "science_capability_forbidden",
+      "detail": "science_capability_forbidden: platform adapters must not carry scientific logic; forbidden token(s): nmr, science",
+      "path": "/opt/acp2-dev/data/b/plugins/b21/storage-science-1.0.0/adapter.json"
+    }
+  ],
+  "scanned_at": "2026-10-23T09:52:32Z",
+  "schema": "acp2.adapter.discovery.v1",
+  "side_effect_marker": {
+    "exists": false,
+    "path": "/opt/acp2-dev/data/b/plugins/b21/storage-sideeffect-1.0.0/EXECUTED"
+  }
+}

@@ -15,6 +15,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from acp_services.contracts.config_validation import require_valid_node_entry
+
 __all__ = [
     "DECLARED_SOFTWARE_NAMES",
     "NodeCapabilities",
@@ -89,7 +91,7 @@ class RemoteNode:
             and to drive ``pip`` during :meth:`NodeManager.bootstrap_node`.
             Defaults to ``"python"``.  Set to ``"python3"``, an absolute
             path, or a venv interpreter (e.g.
-            ``/opt/acp/venv/bin/python``) to pin a specific runtime per
+            ``<venv>/bin/python``) to pin a specific runtime per
             node — keeps node configuration portable across hosts whose
             default ``python`` differs.
         bin_symlinks: Mapping ``{name: target}`` of symlinks created under
@@ -174,21 +176,17 @@ class RemoteNode:
         unknown ``type`` falls back to ``"lsf"`` with a warning.
 
         Raises:
-            ValueError: If a required key is missing or ``remote_work_dir``
+            ValueError: If a required key is missing, ``remote_work_dir``
                 contains a space (BSUB directives break on unquoted paths
-                with spaces — see plan P2-6).
+                with spaces — see plan P2-6), or a present ``port`` /
+                ``max_concurrent_jobs`` is not an integer.  The checks and
+                their messages come from the shared pure schema
+                (``acp_services.contracts.config_validation``), which the
+                ``acp init`` resource menu also consumes.
         """
-        for required in ("name", "host", "username", "remote_work_dir", "remote_code_dir"):
-            if required not in data:
-                raise ValueError(f"RemoteNode config missing required key: {required!r}")
+        require_valid_node_entry(data)
 
         remote_work_dir = str(data["remote_work_dir"])
-        if " " in remote_work_dir:
-            raise ValueError(
-                f"RemoteNode {data['name']!r}: remote_work_dir must not contain spaces "
-                f"(BSUB -o/-e directives break on unquoted paths): {remote_work_dir!r}"
-            )
-
         node_name = str(data["name"])
         return cls(
             name=node_name,

@@ -1,0 +1,7 @@
+MATRIX case=same outcome={"error": null, "negotiated": "2025-06-18", "requested": "2025-06-18"}
+MATRIX case=different-supported outcome={"error": null, "negotiated": "2025-06-18", "requested": "2025-03-26"}
+MATRIX case=no-common outcome={"error": "unsupported_protocol_version", "negotiated": null, "requested": "1999-01-01"}
+MATRIX case=tools-before-init outcome={"error": "not_initialized", "negotiated": null, "requested": null}
+MATRIX case=notification-eof outcome={"error": null, "exit_code": 0, "negotiated": "2025-06-18", "requested": "2025-06-18"}
+.
+1 passed, 16 deselected in 2.57s

@@ -1,0 +1,463 @@
+{
+  "artifacts": [
+    {
+      "path": "release-digests.json",
+      "sha256": "03fcd48b535a05ea888ccab5d22e834b181f6418f6dd24c6e0b89703bcedc3ca",
+      "size_bytes": 1926
+    },
+    {
+      "path": "install-results.json",
+      "sha256": "83706828ab1781c7242058b6da35ca6879529fd47d99e2f1a36c2717e60020cc",
+      "size_bytes": 1088
+    },
+    {
+      "path": "installed-probes.json",
+      "sha256": "b2878b7261cc75a01068efea50911efcc15f36905945125e9ea619d4205a3856",
+      "size_bytes": 2673
+    },
+    {
+      "path": "cccp-sample.json",
+      "sha256": "a326c39d92cbc9127ebed142e20b1c6dda0a0eceb8374a6ec74bee6867904f7c",
+      "size_bytes": 202
+    },
+    {
+      "path": "cli-and-compat.json",
+      "sha256": "ad0097b29a54d615295de67a88aa41f88aaf4d6b19fde1063e149ce2bab47797",
+      "size_bytes": 708
+    },
+    {
+      "path": "lab-health.json",
+      "sha256": "0d1218a02ba4e050155a697a9d9bf85b10fa1f2243b7585a7968fb9758926afa",
+      "size_bytes": 353
+    },
+    {
+      "path": "mcp-tools.json",
+      "sha256": "2997b76053f4bfd5f2b0c2fab06487848daa4135d1e747675d90b7cab67ef125",
+      "size_bytes": 232
+    },
+    {
+      "path": "scheduler-task/RESULT__result_manifest.json",
+      "sha256": "3483249b6b983a261efa9be13761dbb97667df9375e39aa4f74abe5ce20f062e",
+      "size_bytes": 746
+    },
+    {
+      "path": "scheduler-task/RESULT__task_result.json",
+      "sha256": "bb5b6ce4189c1b0f45825b6014733f94d2cc96f9f487dcf5d3d4faa63257adbe",
+      "size_bytes": 725
+    },
+    {
+      "path": "scheduler-task/WORK__00_RUNTIME__frozen__envelope.json",
+      "sha256": "6b442875aead5fd3acdd5b9240044aeb8677fc9d18ba70123f6769f496a71063",
+      "size_bytes": 1514
+    },
+    {
+      "path": "scheduler-task/execution_receipt.json",
+      "sha256": "7b179c7283225bda79853535ff528e079ae836dfdb781e5334f968b306957304",
+      "size_bytes": 1645
+    },
+    {
+      "path": "scheduler-task/installed-identity.json",
+      "sha256": "f51ec8460fbbd89a4edd7a490555e945f496dfb009777f2ad2a1826a1706e311",
+      "size_bytes": 785
+    },
+    {
+      "path": "scheduler-task/job.json",
+      "sha256": "e362bac62d48d36bf534688e5583bfec789945cd124feafbde473e826a40166c",
+      "size_bytes": 5332
+    },
+    {
+      "path": "scheduler-task/scheduler-task.json",
+      "sha256": "f5f1bd591358f4579465ac920cc75c227c032c0ccdb0c55f0fb8966e01be4ac6",
+      "size_bytes": 2832
+    },
+    {
+      "path": "scheduler-task/sp.inp",
+      "sha256": "9d2974939f129a7a19ec58f954d2744259e892aeed7b557b946af06628ee4629",
+      "size_bytes": 163
+    },
+    {
+      "path": "scheduler-task/sp.out",
+      "sha256": "a63ecef6c5c190d64ca398721ed0d4abc0831af75d4890735c407ced7d0723e7",
+      "size_bytes": 42206
+    },
+    {
+      "path": "assets-audit.json",
+      "sha256": "5b02437f066fd72ce6c2002e0951ed3f2649f9b3fef1f1503db4159a590a6adf",
+      "size_bytes": 1852
+    },
+    {
+      "path": "version-locations.json",
+      "sha256": "f5d902498c4b06a451948696c1b45f1780438b324c8d863b73d2241c76474eb3",
+      "size_bytes": 135
+    },
+    {
+      "path": "a-c-evidence.json",
+      "sha256": "0d5b21ca119c0b8c4ae8f22d946f7e1bbba46be961775463564271cca91e8d8a",
+      "size_bytes": 902
+    },
+    {
+      "path": "static-assets-status.json",
+      "sha256": "19b04d16a18cb41414c7b58e417418910f5e4f0332f6e70600fd461b3bcda8b3",
+      "size_bytes": 323
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "all manifest digests match",
+      "name": "b25.release_digests",
+      "status": "PASS"
+    },
+    {
+      "detail": "four fresh venvs installed",
+      "name": "b25.clean_install",
+      "status": "PASS"
+    },
+    {
+      "detail": "all modules resolve under venv site-packages at the expected version",
+      "name": "b25.installed_paths_and_versions",
+      "status": "PASS"
+    },
+    {
+      "detail": "controlled CCCP singlepoint ran without acp/acp_services",
+      "name": "b25.cccp_sample_without_controller",
+      "status": "PASS"
+    },
+    {
+      "detail": "acp --help in web and root role venvs",
+      "name": "b25.standalone_cli",
+      "status": "PASS"
+    },
+    {
+      "detail": "primitives/backends/compat.legacy import and identity forwarders hold",
+      "name": "b25.compat_imports",
+      "status": "PASS"
+    },
+    {
+      "detail": "health on 127.0.0.1:41319 isolated run root",
+      "name": "b25.lab_server",
+      "status": "PASS"
+    },
+    {
+      "detail": "initialize 2025-06-18 and eight P1 tools",
+      "name": "b25.stdio_mcp_eight_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "installed Lab completed one real H2/STO-3G singlepoint with task_result/result_manifest/receipt release identity",
+      "name": "b25.scheduler_task",
+      "status": "PASS"
+    },
+    {
+      "detail": "assets/notices/licenses/model assets/py.typed/sample config/schema/SDK/docs present",
+      "name": "b25.assets_notices_licenses_config_schema_sdk_docs",
+      "status": "PASS"
+    },
+    {
+      "detail": "four version locations == 0.3.0",
+      "name": "b25.four_version_locations",
+      "status": "PASS"
+    },
+    {
+      "detail": "raw evidence at /opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+      "name": "b25.aggregate_A-27b",
+      "status": "PASS"
+    },
+    {
+      "detail": "raw evidence at /opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+      "name": "b25.aggregate_A-28",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected path absent: /opt/acp2-dev/evidence/C/clean-install-live",
+      "name": "b25.aggregate_C33",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "expected path absent: /opt/acp2-dev/evidence/C/operator-runbook-live",
+      "name": "b25.aggregate_C34",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(c_static_assets_absent) expected docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+      "name": "b25.static_assets_mount",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "harness venvs/processes removed; production untouched",
+      "name": "b25.cleanup",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/usr/bin/python3.11",
+    "scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "package-install",
+    "--fixture",
+    "/tmp/opencode/b26a-fix4/fixtures/package-install-fix4.json",
+    "--out",
+    "/tmp/opencode/b26a-fix4/evidence/package-install-fix4",
+    "--timeout",
+    "1800"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "/tmp/opencode/b26a-fix4",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b25.a_c_evidence": [
+      {
+        "id": "A-27b",
+        "note": "raw evidence present; scientific/experience sign-off stays with its owner",
+        "path": "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+        "present": true,
+        "status": "PASS"
+      },
+      {
+        "id": "A-28",
+        "note": "raw evidence present; scientific/experience sign-off stays with its owner",
+        "path": "/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+        "present": true,
+        "status": "PASS"
+      },
+      {
+        "id": "C33",
+        "note": "evidence absent at the registered path",
+        "path": "/opt/acp2-dev/evidence/C/clean-install-live",
+        "present": false,
+        "status": "NOT_VERIFIED"
+      },
+      {
+        "id": "C34",
+        "note": "evidence absent at the registered path",
+        "path": "/opt/acp2-dev/evidence/C/operator-runbook-live",
+        "present": false,
+        "status": "NOT_VERIFIED"
+      }
+    ],
+    "b25.artifacts": [
+      {
+        "path": "release-digests.json",
+        "sha256": "77c9161e77056fde3c033df001c5e861fb840d56124562237d5fe87688a62bfd",
+        "size_bytes": 1982
+      },
+      {
+        "path": "install-results.json",
+        "sha256": "996c35f1570ea7ce6797a82ea76497981a4f4fd458dbadbd78e395971d41f470",
+        "size_bytes": 1200
+      },
+      {
+        "path": "installed-probes.json",
+        "sha256": "b2878b7261cc75a01068efea50911efcc15f36905945125e9ea619d4205a3856",
+        "size_bytes": 2673
+      },
+      {
+        "path": "cccp-sample.json",
+        "sha256": "a326c39d92cbc9127ebed142e20b1c6dda0a0eceb8374a6ec74bee6867904f7c",
+        "size_bytes": 202
+      },
+      {
+        "path": "cli-and-compat.json",
+        "sha256": "ad0097b29a54d615295de67a88aa41f88aaf4d6b19fde1063e149ce2bab47797",
+        "size_bytes": 708
+      },
+      {
+        "path": "lab-health.json",
+        "sha256": "0d1218a02ba4e050155a697a9d9bf85b10fa1f2243b7585a7968fb9758926afa",
+        "size_bytes": 353
+      },
+      {
+        "path": "mcp-tools.json",
+        "sha256": "2997b76053f4bfd5f2b0c2fab06487848daa4135d1e747675d90b7cab67ef125",
+        "size_bytes": 232
+      },
+      {
+        "path": "scheduler-task/RESULT__result_manifest.json",
+        "sha256": "3483249b6b983a261efa9be13761dbb97667df9375e39aa4f74abe5ce20f062e",
+        "size_bytes": 746
+      },
+      {
+        "path": "scheduler-task/RESULT__task_result.json",
+        "sha256": "bb5b6ce4189c1b0f45825b6014733f94d2cc96f9f487dcf5d3d4faa63257adbe",
+        "size_bytes": 725
+      },
+      {
+        "path": "scheduler-task/WORK__00_RUNTIME__frozen__envelope.json",
+        "sha256": "6b442875aead5fd3acdd5b9240044aeb8677fc9d18ba70123f6769f496a71063",
+        "size_bytes": 1512
+      },
+      {
+        "path": "scheduler-task/execution_receipt.json",
+        "sha256": "7b179c7283225bda79853535ff528e079ae836dfdb781e5334f968b306957304",
+        "size_bytes": 1643
+      },
+      {
+        "path": "scheduler-task/installed-identity.json",
+        "sha256": "f51ec8460fbbd89a4edd7a490555e945f496dfb009777f2ad2a1826a1706e311",
+        "size_bytes": 785
+      },
+      {
+        "path": "scheduler-task/job.json",
+        "sha256": "e362bac62d48d36bf534688e5583bfec789945cd124feafbde473e826a40166c",
+        "size_bytes": 5328
+      },
+      {
+        "path": "scheduler-task/scheduler-task.json",
+        "sha256": "f5f1bd591358f4579465ac920cc75c227c032c0ccdb0c55f0fb8966e01be4ac6",
+        "size_bytes": 2832
+      },
+      {
+        "path": "scheduler-task/sp.inp",
+        "sha256": "9d2974939f129a7a19ec58f954d2744259e892aeed7b557b946af06628ee4629",
+        "size_bytes": 163
+      },
+      {
+        "path": "scheduler-task/sp.out",
+        "sha256": "a63ecef6c5c190d64ca398721ed0d4abc0831af75d4890735c407ced7d0723e7",
+        "size_bytes": 42204
+      },
+      {
+        "path": "assets-audit.json",
+        "sha256": "5b02437f066fd72ce6c2002e0951ed3f2649f9b3fef1f1503db4159a590a6adf",
+        "size_bytes": 1852
+      },
+      {
+        "path": "version-locations.json",
+        "sha256": "f5d902498c4b06a451948696c1b45f1780438b324c8d863b73d2241c76474eb3",
+        "size_bytes": 135
+      },
+      {
+        "path": "a-c-evidence.json",
+        "sha256": "0d5b21ca119c0b8c4ae8f22d946f7e1bbba46be961775463564271cca91e8d8a",
+        "size_bytes": 902
+      },
+      {
+        "path": "static-assets-status.json",
+        "sha256": "19b04d16a18cb41414c7b58e417418910f5e4f0332f6e70600fd461b3bcda8b3",
+        "size_bytes": 323
+      }
+    ],
+    "b25.expected_version": "0.3.0",
+    "b25.fixture": "/tmp/opencode/b26a-fix4/fixtures/package-install-fix4.json",
+    "b25.lab_port": 41319,
+    "b25.python": "/usr/bin/python3.11",
+    "b25.release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix4",
+    "b25.scheduler_task": {
+      "artifacts": {
+        "envelope": {
+          "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+          "release_id": "2c7ffd56045b5bd5"
+        },
+        "manifest": {
+          "products": 1,
+          "status": "completed"
+        },
+        "receipt": {
+          "release_id": "2c7ffd56045b5bd5",
+          "state": "completed"
+        },
+        "release_id_matches_installed_identity": true,
+        "task_result": {
+          "complete": true,
+          "energy_hartree": -1.116759307204,
+          "status": "completed"
+        }
+      },
+      "commands": [
+        {
+          "argv": [
+            "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/bin/python",
+            "-c",
+            "local_release_identity(<runner_root>)"
+          ],
+          "exit": 0,
+          "label": "installed release identity"
+        },
+        {
+          "argv": [
+            "POST",
+            "http://127.0.0.1:41319/api/v1/jobs",
+            "{\"workflow\": \"singlepoint\", \"name\": \"b25-scheduler-smoke\", \"input\": {\"source_type\": \"xyz_text\", \"source\": \"2\\nH2\\nH 0 0 0\\nH 0 0 0.74\\n\", \"charge\": 0, \"multiplicity\": 1}, \"method\": {\"levels\": {\"single_point\": {\"engine\": \"orca\", \"functional\": \"HF\", \"basis\": \"STO-3G\"}}}, \"resources\": {\"nproc\": 1, \"mem\": \"1024MB\"}}"
+          ],
+          "exit": 201,
+          "label": "POST /api/v1/jobs"
+        },
+        {
+          "argv": [
+            "GET",
+            "http://127.0.0.1:41319/api/v1/jobs/20261023_224334_001_b25-scheduler-smoke"
+          ],
+          "exit": 0,
+          "label": "poll terminal status"
+        }
+      ],
+      "installed_identity": {
+        "contains_repo_path": false,
+        "file_count": 529,
+        "keys_are_absolute": false,
+        "modules": {
+          "acp": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+          "acp_services": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
+          "cccp": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/cccp/__init__.py"
+        },
+        "prefixes": [
+          "acp",
+          "acp_services",
+          "cccp"
+        ],
+        "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+        "release_id": "2c7ffd56045b5bd5",
+        "runner_root": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib/python3.11"
+      },
+      "installed_identity_ok": true,
+      "job": {
+        "attempt": 1,
+        "error": null,
+        "status": "completed",
+        "work_dir": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/lab-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint"
+      },
+      "ok": true,
+      "schema": "acp2.package-install.scheduler-task.v1",
+      "submit": {
+        "job_id": "20261023_224334_001_b25-scheduler-smoke",
+        "release_digest": null,
+        "release_id": null,
+        "status": 201
+      },
+      "task_ok": true
+    },
+    "b25.static_assets": {
+      "expected_path": "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+      "mount": "/experience/<release_id>/",
+      "note": "C has not published experience/static-assets.manifest.json; no mount was fabricated",
+      "status": "NOT_VERIFIED(c_static_assets_absent)"
+    }
+  },
+  "finished_at": "2026-10-23T14:44:04Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T144151Z-1697579-37cb416e",
+  "scenario": "package-install",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T14:41:51Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -1,0 +1,165 @@
+# B02 controller config review + doctor — 2026-10-22T19:37:10+08:00
+## effective merged config (cwd=<acp2-dev>/data/b/controller-config, redacted)
+{
+  "cluster": {
+    "enabled": true,
+    "execution_mode": "local",
+    "poll_interval": 15,
+    "retention_days": 180,
+    "auto_sync": true,
+    "require_all_binaries": true,
+    "type": "local",
+    "queue": "normal",
+    "walltime": "24:00",
+    "extra_flags": "",
+    "nodes": [],
+    "local": {
+      "max_jobs": 4
+    },
+    "local_retention": {
+      "enabled": true,
+      "completed_days": 30,
+      "failed_days": 90,
+      "cancelled_days": 30,
+      "db_record_days": 365,
+      "cleanup_interval_hours": 6,
+      "disk_cleanup_threshold": 90,
+      "disk_skip_threshold": 95,
+      "max_dirs_per_sweep": 200,
+      "vacuum_after_db_cleanup": false
+    }
+  },
+  "deployment": {
+    "usage": "local",
+    "tier": "local-single",
+    "components": [
+      "local-identity",
+      "local-storage",
+      "science-core"
+    ],
+    "params": {
+      "run_root": "<acp2-dev>/data/b/run-root"
+    }
+  },
+  "executables": {
+    "orca": {
+      "path": "/usr/bin/orca",
+      "nproc": 20,
+      "maxcore": null,
+      "ld_library_path": "/home/<user>/openmpi418/lib:/home/<user>/orca611"
+    },
+    "xtb": {
+      "path": "/home/<user>/xtb-dist/bin/xtb",
+      "fallback_paths": [
+        "/opt/xtb/bin/xtb",
+        "/usr/local/bin/xtb"
+      ]
+    },
+    "crest": {
+      "path": "/home/<user>/crest/crest",
+      "gfn_level": 2
+    },
+    "censo": {
+      "path": "/home/<user>/anaconda3/bin/censo"
+    },
+    "isostat": {
+      "path": "/home/<user>/molclus_1.14_Linux/isostat"
+    },
+    "shermo": {
+      "path": "/home/<user>/Shermo_2.6.1/Shermo"
+    },
+    "molclus": {
+      "path": "/home/<user>/molclus_1.14_Linux/molclus"
+    },
+    "gaussian": {
+      "path": "/home/<user>/g16/g16",
+      "use_wrapper": true,
+      "wrapper_path": "./scripts/run_g16_worker.sh"
+    }
+  }
+}
+cluster.execution_mode = local
+cluster.nodes = []
+deployment.params.run_root = <acp2-dev>/data/b/run-root
+## acp doctor
+INFO:cccp.config:Loaded defaults from: <acp2-dev>/B/config/defaults.yaml
+No remote nodes configured — running local capability checks (local/standalone deployment).
+
+Local capability report (usage=local, tier=local-single)
+  PASS（9）：
+    - software:xtb — /home/<user>/xtb-dist/bin/xtb（source=config）
+    - software:crest — /home/<user>/crest/crest（source=config）
+    - software:censo — /home/<user>/anaconda3/bin/censo（source=config）
+    - software:shermo — /home/<user>/Shermo_2.6.1/Shermo（source=config）
+    - software:isostat — /home/<user>/molclus_1.14_Linux/isostat（source=config）
+    - software:molclus — /home/<user>/molclus_1.14_Linux/molclus（source=config）
+    - run_root — <acp2-dev>/data/b/run-root — 就绪
+    - store — <acp2-dev>/data/b/run-root/acp_jobs.db
+    - config — merged configuration loaded
+  FAIL（1）：
+    - software:orca — /usr/bin/orca — GNOME Orca 屏幕阅读器（非 QC 二进制）
+  NOT_VERIFIED（0）：
+    - （无）
+
+Local doctor finished: 1 failure(s) found
+doctor_exit=1
+## acp run serve --help
+usage: acp run serve [-h] [--host HOST] [--port PORT] [--run-root RUN_ROOT]
+                     [--max-running MAX_RUNNING]
+                     [--poll-interval POLL_INTERVAL] [--reload] [--no-browser]
+                     [--log-level {DEBUG,INFO,WARNING,ERROR}]
+                     [--execution-mode {local,remote}]
+
+options:
+  -h, --help            show this help message and exit
+  --host HOST           Bind host (use 0.0.0.0 for LAN access)
+  --port PORT           Bind port (default: 8765)
+  --run-root RUN_ROOT   Root directory for job work directories and the SQLite
+                        index. Falls back to $ACP_RUN_ROOT, then the platform
+                        default (~/.local/share/acp/runs, or /var/lib/acp/runs
+                        for root). Must be on a native filesystem.
+  --max-running MAX_RUNNING
+                        (Deprecated) No longer limits concurrency — jobs are
+                        submitted immediately to the cluster. Use --poll-
+                        interval instead.
+  --poll-interval POLL_INTERVAL
+                        Seconds between status checks for running jobs
+                        (default: 30)
+  --reload              Enable auto-reload (development mode)
+  --no-browser          Do not attempt to open a browser on start
+  --log-level {DEBUG,INFO,WARNING,ERROR}
+                        Server log level (default: INFO)
+  --execution-mode {local,remote}
+                        Server default execution target for jobs that don't
+                        specify one (overrides cluster.execution_mode; per-job
+                        execution_mode/target_node win)
+
+Examples:
+  acp run serve
+  acp run serve --host 127.0.0.1 --port 8765
+  acp run serve --run-root /var/lib/acp/runs --reload
+        
+serve_help_exit=0
+# B02 doctor rerun after explicit local executable pins — 2026-10-22T19:37:33+08:00
+INFO:cccp.config:Loaded defaults from: <acp2-dev>/B/config/defaults.yaml
+No remote nodes configured — running local capability checks (local/standalone deployment).
+
+Local capability report (usage=local, tier=local-single)
+  PASS（10）：
+    - software:orca — /home/<user>/orca611/orca（source=config）
+    - software:xtb — /home/<user>/xtb-dist/bin/xtb（source=config）
+    - software:crest — /home/<user>/crest/crest（source=config）
+    - software:censo — /home/<user>/anaconda3/bin/censo（source=config）
+    - software:shermo — /home/<user>/Shermo_2.6.1/Shermo（source=config）
+    - software:isostat — /home/<user>/molclus_1.14_Linux/isostat（source=config）
+    - software:molclus — /home/<user>/molclus_1.14_Linux/molclus（source=config）
+    - run_root — <acp2-dev>/data/b/run-root — 就绪
+    - store — <acp2-dev>/data/b/run-root/acp_jobs.db
+    - config — merged configuration loaded
+  FAIL（0）：
+    - （无）
+  NOT_VERIFIED（0）：
+    - （无）
+
+Local doctor finished: all checks passed
+doctor_exit=0

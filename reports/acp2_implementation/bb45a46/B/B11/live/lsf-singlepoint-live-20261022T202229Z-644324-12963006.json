@@ -1,0 +1,218 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "server=10eb71e4bc1811054c9d19ae4fd71d974e027f8a client=NOT_VERIFIED harness=ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+      "name": "p1_candidate_record",
+      "status": "PASS"
+    },
+    {
+      "detail": "path_match=True digest_match=True digest=d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "name": "fixture_matches_registry",
+      "status": "PASS"
+    },
+    {
+      "detail": "derived=2400 effective=2400.0 matches=True",
+      "name": "harness_timeout_derived",
+      "status": "PASS"
+    },
+    {
+      "detail": "ACP_LSF_NODE is not available on the acceptance host",
+      "name": "prerequisite_ACP_LSF_NODE",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "LSF_ENVDIR is not available on the acceptance host",
+      "name": "prerequisite_LSF_ENVDIR",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "bsub is not available on the acceptance host",
+      "name": "prerequisite_bsub",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "bjobs is not available on the acceptance host",
+      "name": "prerequisite_bjobs",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "bhosts is not available on the acceptance host",
+      "name": "prerequisite_bhosts",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "bqueues is not available on the acceptance host",
+      "name": "prerequisite_bqueues",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "ssh_credentials is not available on the acceptance host",
+      "name": "prerequisite_ssh_credentials",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "f1935c19e3ed1397394b68339872a84f7d40ad130b088c5fbad7dc9f5126e89c",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "command": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "lsf-singlepoint",
+    "--phase",
+    "live",
+    "--controller",
+    "http://127.0.0.1:18769",
+    "--launch",
+    "reports/acp2_implementation/bb45a46/B/B10/mcp-launch-b10.json",
+    "--fixture",
+    "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B11/live",
+    "--timeout",
+    "2400"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": ".",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.operation_class": "submit",
+    "acceptance.target": "remote",
+    "b11.client_revision": "NOT_VERIFIED",
+    "b11.fixture": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+    "b11.fixture_input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+    "b11.fixture_registry": "reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+    "b11.fixture_row": {
+      "attempt": null,
+      "backend": "lsf",
+      "blocked_prerequisite": "LSF client/queue (bsub/bjobs/bhosts, LSF_ENVDIR) and a configured test node are absent; no remote submission attempted.",
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "status": "frozen_unallocated",
+        "walltime_s": 300
+      },
+      "cleanup_seconds": 60,
+      "evidence": "B/B11/",
+      "evidence_owner": "B11",
+      "fixture_id": "fx-lsf-singlepoint-v1",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "kind": "lsf-singlepoint",
+      "margin_seconds": 120,
+      "max_prepare_seconds": 120,
+      "max_queue_wait_seconds": 1800,
+      "max_run_seconds": 300,
+      "method": {
+        "charge": 0,
+        "method": "r2SCAN-3c",
+        "multiplicity": 1
+      },
+      "missing_prerequisites": [
+        "ACP_LSF_NODE",
+        "LSF_ENVDIR",
+        "bsub",
+        "bjobs",
+        "bhosts",
+        "bqueues",
+        "ssh_credentials"
+      ],
+      "no_remote_job_attempted": true,
+      "note": "Normal-completion LSF fixture only. B13 uses its own control fixture; this row is not reused for control races.",
+      "release": null,
+      "request_owner": "B",
+      "reusable_by": [
+        "B11",
+        "B14a",
+        "B14b"
+      ],
+      "scenario_timeout_seconds": 2400,
+      "status": "NOT_VERIFIED",
+      "submitted_once": false,
+      "task": null,
+      "task_ref": null,
+      "workflow": "singlepoint"
+    },
+    "b11.harness_revision": "f1935c19e3ed1397394b68339872a84f7d40ad130b088c5fbad7dc9f5126e89c",
+    "b11.lsf_prerequisites": {
+      "missing": [
+        "ACP_LSF_NODE",
+        "LSF_ENVDIR",
+        "bsub",
+        "bjobs",
+        "bhosts",
+        "bqueues",
+        "ssh_credentials"
+      ],
+      "observed": {
+        "ACP_LSF_NODE": null,
+        "LSF_ENVDIR": null,
+        "ssh_credentials": false,
+        "which:bhosts": null,
+        "which:bjobs": null,
+        "which:bqueues": null,
+        "which:bsub": null,
+        "which:ssh": "/usr/bin/ssh"
+      }
+    },
+    "b11.mcp_launch": "reports/acp2_implementation/bb45a46/B/B10/mcp-launch-b10.json",
+    "b11.no_job_created": true,
+    "b11.p1_candidate": "reports/acp2_implementation/bb45a46/B/environment/p1-candidate.json",
+    "b11.p1_harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+    "b11.prerequisite_missing": "ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+    "b11.reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+    "b11.server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "b11.timeout_derivation": {
+      "derived_seconds": 2400,
+      "fixture_id": "fx-lsf-singlepoint-v1",
+      "formula": "max_queue_wait_seconds + max_run_seconds + max_prepare_seconds + cleanup_seconds + margin_seconds",
+      "maxima": {
+        "cleanup_seconds": 60,
+        "margin_seconds": 120,
+        "max_prepare_seconds": 120,
+        "max_queue_wait_seconds": 1800,
+        "max_run_seconds": 300
+      },
+      "registry": "reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+      "registry_lsf_timeout_seconds": 2400,
+      "registry_matches": true,
+      "row_matches": true,
+      "row_scenario_timeout_seconds": 2400
+    },
+    "b11.timeouts": {
+      "acceptance_timeout_seconds": 2400.0,
+      "client_request_seconds": null,
+      "client_request_timeout_seconds": 2400.0,
+      "queue_wait_seconds": null,
+      "queue_wait_status": "NOT_VERIFIED",
+      "science_runtime_seconds": null,
+      "science_runtime_status": "NOT_VERIFIED"
+    }
+  },
+  "finished_at": "2026-10-22T20:22:29Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "live",
+  "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261022T202229Z-644324-12963006",
+  "scenario": "lsf-singlepoint",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T20:22:29Z",
+  "submission_id": null,
+  "usage": null
+}

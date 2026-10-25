@@ -1,0 +1,408 @@
+{
+  "completed_steps": [
+    {
+      "artifact": "ts-optimize-result.json",
+      "exit_code": 0,
+      "sha256": "a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd",
+      "step_id": "ts_optimize",
+      "task_kind": "optimize",
+      "terminal_state": "completed"
+    },
+    {
+      "artifact": "ts-frequency-result.json",
+      "exit_code": 0,
+      "sha256": "ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8",
+      "step_id": "ts_frequency",
+      "task_kind": "frequency",
+      "terminal_state": "completed"
+    },
+    {
+      "artifact": "irc/irc-result.json",
+      "exit_code": 0,
+      "inputs": [
+        {
+          "artifact": "irc/irc-reference.json",
+          "sha256": "118a9d8324e2a801d785e25cead3d2f7ff4758bef693b1fd43ded5224611cce7"
+        },
+        {
+          "artifact": "ts-optimize-result.json",
+          "sha256": "a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd"
+        },
+        {
+          "artifact": "ts-frequency-result.json",
+          "sha256": "ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8"
+        }
+      ],
+      "sha256": "c384515ed6e6dd1f93ec582db5707028d214f890e538ad8b3c33908369bde760",
+      "step_id": "irc",
+      "task_kind": "irc",
+      "terminal_state": "completed"
+    }
+  ],
+  "constructed": true,
+  "fixture_id": "diels-alder-report-digest-mismatch-constructed-a19b",
+  "limits": {
+    "failed_candidates": [
+      {
+        "candidate_id": "cand-002",
+        "reason": "rejected before submission: the frozen cap max_ts_candidates=1 is already consumed by cand-001",
+        "stage": "candidate_selection",
+        "status": "rejected"
+      },
+      {
+        "candidate_id": "cand-003",
+        "reason": "rejected before submission: the frozen cap max_candidate_paths=1 is already consumed by the declared path",
+        "stage": "candidate_selection",
+        "status": "rejected"
+      }
+    ],
+    "model_boundaries": [
+      "wB97X-D4/def2-TZVP, gas phase, restricted closed-shell singlet; no implicit solvent.",
+      "Harmonic frequencies only; no tunneling correction and no experimental comparison.",
+      "One declared candidate path and one conformation per endpoint; other paths and conformers may exist.",
+      "The saddle claim is local mode evidence; connectivity comes only from the bidirectional IRC claim.",
+      "Activation energies, when claimed, are electronic-energy differences within the frozen method/basis/state."
+    ]
+  },
+  "note": "CONSTRUCTED FIXTURE - not a platform-authorized report and not a real QC run. Claims cite constructed A-17/A-18 artifacts.",
+  "plugins": [],
+  "provenance": {
+    "conditions": {
+      "phase": "gas",
+      "pressure_pa": 100000.0,
+      "reference_state": null,
+      "solvent": null,
+      "standard_state": "1_bar_ideal_gas",
+      "temperature_kelvin": 298.15
+    },
+    "derivation": {
+      "basis": {
+        "auxiliary_basis_id": null,
+        "basis_family": null,
+        "basis_id": "def2-TZVP"
+      },
+      "electronic_state": {
+        "charge": 0,
+        "multiplicity": 1,
+        "spin_mode": "restricted",
+        "state_label": "closed-shell singlet ground state"
+      },
+      "method": {
+        "dispersion": "D4",
+        "hamiltonian": null,
+        "method_family": "dft",
+        "method_id": "wB97X-D4"
+      },
+      "model_chemistry": "wB97X-D4/def2-TZVP gas phase, restricted closed-shell singlet"
+    },
+    "input": {
+      "artifacts": [
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd"
+          },
+          "relative_path": "ts-optimize-result.json",
+          "role": "native_output",
+          "units": "hartree"
+        },
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8"
+          },
+          "relative_path": "ts-frequency-result.json",
+          "role": "frequency_output",
+          "units": "cm-1"
+        },
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c384515ed6e6dd1f93ec582db5707028d214f890e538ad8b3c33908369bde760"
+          },
+          "relative_path": "irc/irc-result.json",
+          "role": "native_output",
+          "units": null
+        },
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ddae58527d99bbc8c1b6a763b2ff5a4a98a1f8f8f783b3601d990a675e420024"
+          },
+          "relative_path": "ts-optimized.xyz",
+          "role": "optimized_structure",
+          "units": null
+        }
+      ],
+      "structure_digest": {
+        "algorithm": "sha256",
+        "value": "ddae58527d99bbc8c1b6a763b2ff5a4a98a1f8f8f783b3601d990a675e420024"
+      }
+    },
+    "limitations": [
+      "software_version is the constructed a17 label, not a real ORCA build identity",
+      "no endpoint optimization was performed; endpoints may not be minima",
+      "no external science plugin participated in this constructed report",
+      "reference_state is null because the frozen fixture declares no reference-state token"
+    ],
+    "provenance_id": "prov.diels_alder.v1.constructed.a19b",
+    "result_kind": "electronic_structure",
+    "schema_version": 1,
+    "software": {
+      "distribution": null,
+      "executable_path": null,
+      "software_id": "orca",
+      "software_version": "constructed-a17"
+    }
+  },
+  "read_root": "ts-scenario/artifacts",
+  "real_run": false,
+  "report": {
+    "claims": [
+      {
+        "claim_id": "c-ts-first-order-saddle-candidate",
+        "limitations": [
+          "lim-ts-local-mode",
+          "lim-single-conformer",
+          "lim-one-candidate-path",
+          "lim-model-scope",
+          "lim-constructed"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "wB97X-D4/def2-TZVP, gas phase, 298.15 K, one declared candidate path, one conformation per endpoint",
+          "not_in_scope": [
+            "other candidate paths",
+            "conformer search",
+            "global minimum",
+            "experimental rate"
+          ],
+          "subject": "transition_state_saddle_candidate"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "ts-frequency-result.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "quantity": "harmonic_frequencies",
+            "role": "frequency_output",
+            "units": "cm-1"
+          },
+          {
+            "artifact_path": "ts-optimize-result.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd"
+            },
+            "quantity": "energy_hartree",
+            "role": "native_output",
+            "units": "hartree"
+          }
+        ],
+        "statement": "The frequency evidence is consistent with a local first-order saddle candidate at the reported geometry.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.ts_saddle_candidate",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "c-ts-connects-intended-endpoints",
+        "limitations": [
+          "lim-endpoints-may-not-be-minima",
+          "lim-one-candidate-path",
+          "lim-model-scope",
+          "lim-constructed"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "same TS identity, bidirectional IRC, frozen atom mapping and bond topology",
+          "not_in_scope": [
+            "endpoint minima",
+            "other paths",
+            "experimental mechanism"
+          ],
+          "subject": "irc_connectivity"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "irc/irc-result.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "c384515ed6e6dd1f93ec582db5707028d214f890e538ad8b3c33908369bde760"
+            },
+            "quantity": "irc_path",
+            "role": "irc_bidirectional",
+            "units": null
+          },
+          {
+            "artifact_path": "irc/irc-reference.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "118a9d8324e2a801d785e25cead3d2f7ff4758bef693b1fd43ded5224611cce7"
+            },
+            "quantity": "endpoint_identity",
+            "role": "reaction_reference",
+            "units": null
+          }
+        ],
+        "statement": "The transition state connects the intended reactant and product (proven connectivity, not a local mode observation).",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.ts_connectivity",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "c-electronic-activation-barrier-comparable",
+        "limitations": [
+          "lim-electronic-only",
+          "lim-model-scope",
+          "lim-constructed"
+        ],
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "not_executed",
+            "reason": "reactant and product electronic energies and any thermochemistry were not part of this report; no activation barrier is computed"
+          }
+        ],
+        "scope": {
+          "applicability": "condition_specific",
+          "conditions": "wB97X-D4/def2-TZVP, gas phase, 298.15 K, 1 bar, electronic energies only",
+          "not_in_scope": [
+            "free-energy barrier",
+            "tunneling correction",
+            "experimental rate"
+          ],
+          "subject": "activation_barrier"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "ts-optimize-result.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd"
+            },
+            "quantity": "energy_hartree",
+            "role": "native_output",
+            "units": "hartree"
+          }
+        ],
+        "statement": "The electronic activation barrier is comparable across the frozen reactant, transition-state and product identities.",
+        "status": "inconclusive",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.activation_energy_comparability",
+          "validator_version": "1.0.0"
+        }
+      }
+    ],
+    "execution": {
+      "argv": [
+        "acp2-science",
+        "assemble-evidence-report",
+        "diels_alder/v1",
+        "constructed-a19b"
+      ],
+      "exit_code": 0,
+      "finished_at": "2026-10-23T00:00:10Z",
+      "started_at": "2026-10-23T00:00:00Z",
+      "stderr_path": null,
+      "stdout_path": null,
+      "terminal_state": "completed"
+    },
+    "limitations": [
+      {
+        "affected_claim_ids": [
+          "c-ts-first-order-saddle-candidate"
+        ],
+        "description": "One input conformation per endpoint; no conformer search or sampling.",
+        "limitation_id": "lim-single-conformer"
+      },
+      {
+        "affected_claim_ids": [
+          "c-ts-first-order-saddle-candidate",
+          "c-ts-connects-intended-endpoints"
+        ],
+        "description": "One declared candidate path and one transition-state candidate; other paths may exist and are not excluded.",
+        "limitation_id": "lim-one-candidate-path"
+      },
+      {
+        "affected_claim_ids": [
+          "c-ts-first-order-saddle-candidate"
+        ],
+        "description": "The saddle claim is local mode evidence at the reported geometry; connectivity requires the separate IRC claim.",
+        "limitation_id": "lim-ts-local-mode"
+      },
+      {
+        "affected_claim_ids": [
+          "c-ts-connects-intended-endpoints"
+        ],
+        "description": "No endpoint optimization was performed; both IRC endpoints may not be minima.",
+        "limitation_id": "lim-endpoints-may-not-be-minima"
+      },
+      {
+        "affected_claim_ids": [
+          "c-electronic-activation-barrier-comparable"
+        ],
+        "description": "No thermochemistry step was performed, so no free-energy barrier is reported; only an electronic barrier could be comparable.",
+        "limitation_id": "lim-electronic-only"
+      },
+      {
+        "affected_claim_ids": [
+          "c-ts-first-order-saddle-candidate",
+          "c-ts-connects-intended-endpoints",
+          "c-electronic-activation-barrier-comparable"
+        ],
+        "description": "wB97X-D4/def2-TZVP gas phase, restricted closed-shell singlet; no implicit solvent, no tunneling correction, no experimental comparison.",
+        "limitation_id": "lim-model-scope"
+      },
+      {
+        "affected_claim_ids": [
+          "c-ts-first-order-saddle-candidate"
+        ],
+        "description": "No automated transition-state search was run; the single declared candidate is the whole sampled search space.",
+        "limitation_id": "lim-search-scope"
+      },
+      {
+        "affected_claim_ids": [
+          "c-ts-first-order-saddle-candidate",
+          "c-ts-connects-intended-endpoints",
+          "c-electronic-activation-barrier-comparable"
+        ],
+        "description": "Every artifact, TaskResult, geometry and version label is constructed; this is not a real QC run and H4 remains open.",
+        "limitation_id": "lim-constructed"
+      },
+      {
+        "affected_claim_ids": [
+          "c-ts-first-order-saddle-candidate",
+          "c-ts-connects-intended-endpoints",
+          "c-electronic-activation-barrier-comparable"
+        ],
+        "description": "Natural-language text generated by a model is not evidence and is never recorded as a validated conclusion.",
+        "limitation_id": "lim-model-narrative"
+      }
+    ],
+    "provenance_digest": {
+      "algorithm": "sha256",
+      "value": "ca2b49a3beea640de580a1fa9f4cc6feca08c4a67fe9d81357e576d425443d58"
+    },
+    "report_id": "report.diels_alder.v1.digest_mismatch.a19b",
+    "schema_version": 1,
+    "subject": {
+      "description": "Constructed Diels-Alder v1 evidence report assembled from the A-17/A-18 constructed artifacts; not a real run.",
+      "science_identity": null,
+      "subject_id": "run.diels_alder.v1.constructed.a19b",
+      "subject_kind": "recipe_run"
+    }
+  },
+  "schema": "acp2.science.constructed-evidence-report",
+  "schema_version": 1
+}

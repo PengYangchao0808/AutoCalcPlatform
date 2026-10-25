@@ -102,6 +102,7 @@ def save_frame_candidate(
     now: datetime | None = None,
     item_id: str | None = None,
     frame_id: str | None = None,
+    publication: Any | None = None,
 ) -> dict[str, Any]:
     """Validate and persist a frame candidate (all-or-nothing).
 
@@ -121,6 +122,10 @@ def save_frame_candidate(
         now: Injectable timestamp (tests); defaults to local time now.
         item_id: Optional BatchOptimize item identifier; when given,
             narrows optimization trajectory lookup to the specific item.
+        publication: Production publication entry (``PublicationDataPort``,
+            duck-typed) that routes the authoritative candidate file and the
+            ``RESULT`` manifest through the todo-11 ``DataResourcePort``.  When
+            ``None`` the direct writers are used (tests / non-production callers).
 
     Returns:
         The saved candidate entry dict.
@@ -262,7 +267,10 @@ def save_frame_candidate(
         "revision": new_revision,
         "candidates": candidates_list,
     }
-    write_authority(root, authority_payload)
+    if publication is not None:
+        publication.save_candidates(root, authority_payload)
+    else:
+        write_authority(root, authority_payload)
 
     # --- Register in result_manifest.json ---
     result_dir = root / "RESULT"
@@ -289,7 +297,10 @@ def save_frame_candidate(
         },
     )
     try:
-        manifest.write(result_dir)
+        if publication is not None:
+            publication.publish_manifest(root, manifest)
+        else:
+            manifest.write(result_dir)
     except Exception:
         # Roll back authority file on manifest failure
         if existing:

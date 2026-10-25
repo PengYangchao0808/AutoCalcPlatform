@@ -1,0 +1,128 @@
+# B02 venv install — 2026-10-22T19:35:03+08:00
+venv_python=Python 3.11.13
+## pip install -e <acp2-dev>/B[dev,api,remote]
+Obtaining file://<acp2-dev>/B
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: numpy>=2.1.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (2.4.6)
+Requirement already satisfied: rdkit>=2022.09.1 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (2026.3.6)
+Requirement already satisfied: pyyaml>=6.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (6.0.3)
+Requirement already satisfied: scipy>=1.10 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (1.17.1)
+Requirement already satisfied: matplotlib>=3.7 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (3.11.1)
+Requirement already satisfied: openpyxl>=3.1 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (3.1.5)
+Requirement already satisfied: typing-extensions>=4.1 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (4.16.0)
+Requirement already satisfied: fastapi>=0.115 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (0.141.1)
+Requirement already satisfied: uvicorn>=0.30 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (0.52.4)
+Requirement already satisfied: python-multipart>=0.0.9 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (0.0.32)
+Requirement already satisfied: zipstream-ng>=1.9.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (1.9.3)
+Requirement already satisfied: paramiko>=3.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (5.0.0)
+Requirement already satisfied: pytest>=7.4.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (9.1.1)
+Requirement already satisfied: pytest-cov>=4.1.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (7.1.0)
+Requirement already satisfied: ruff>=0.4.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (0.15.22)
+Requirement already satisfied: mypy>=1.8.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (2.3.1)
+Requirement already satisfied: pre-commit>=3.6.0 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (4.6.2)
+Requirement already satisfied: httpx>=0.27 in /home/<user>/.local/lib/python3.11/site-packages (from acp==0.2.0) (0.28.1)
+Requirement already satisfied: starlette>=0.46.0 in /home/<user>/.local/lib/python3.11/site-packages (from fastapi>=0.115->acp==0.2.0) (1.6.0)
+Requirement already satisfied: pydantic>=2.9.0 in /home/<user>/.local/lib/python3.11/site-packages (from fastapi>=0.115->acp==0.2.0) (2.13.5)
+Requirement already satisfied: typing-inspection>=0.4.2 in /home/<user>/.local/lib/python3.11/site-packages (from fastapi>=0.115->acp==0.2.0) (0.4.4)
+Requirement already satisfied: annotated-doc>=0.0.2 in /home/<user>/.local/lib/python3.11/site-packages (from fastapi>=0.115->acp==0.2.0) (0.0.5)
+Requirement already satisfied: anyio in /home/<user>/.local/lib/python3.11/site-packages (from httpx>=0.27->acp==0.2.0) (4.15.1)
+Requirement already satisfied: certifi in /home/<user>/.local/lib/python3.11/site-packages (from httpx>=0.27->acp==0.2.0) (2026.7.22)
+Requirement already satisfied: httpcore==1.* in /home/<user>/.local/lib/python3.11/site-packages (from httpx>=0.27->acp==0.2.0) (1.0.9)
+Requirement already satisfied: idna in /home/<user>/.local/lib/python3.11/site-packages (from httpx>=0.27->acp==0.2.0) (3.19)
+Requirement already satisfied: h11>=0.16 in /home/<user>/.local/lib/python3.11/site-packages (from httpcore==1.*->httpx>=0.27->acp==0.2.0) (0.16.0)
+Requirement already satisfied: contourpy>=1.0.1 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (1.3.3)
+Requirement already satisfied: cycler>=0.10 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (0.12.1)
+Requirement already satisfied: fonttools>=4.28.2 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (4.64.0)
+Requirement already satisfied: kiwisolver>=1.3.1 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (1.5.1)
+Requirement already satisfied: packaging>=20.0 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (26.3)
+Requirement already satisfied: pillow>=9 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (12.3.0)
+Requirement already satisfied: pyparsing>=3 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (3.3.2)
+Requirement already satisfied: python-dateutil>=2.7 in /home/<user>/.local/lib/python3.11/site-packages (from matplotlib>=3.7->acp==0.2.0) (2.9.0.post0)
+Requirement already satisfied: mypy_extensions>=1.0.0 in /home/<user>/.local/lib/python3.11/site-packages (from mypy>=1.8.0->acp==0.2.0) (1.1.0)
+Requirement already satisfied: pathspec>=1.0.0 in /home/<user>/.local/lib/python3.11/site-packages (from mypy>=1.8.0->acp==0.2.0) (1.1.1)
+Requirement already satisfied: librt>=0.13.0 in /home/<user>/.local/lib/python3.11/site-packages (from mypy>=1.8.0->acp==0.2.0) (0.15.0)
+Requirement already satisfied: ast-serialize<1.0.0,>=0.6.0 in /home/<user>/.local/lib/python3.11/site-packages (from mypy>=1.8.0->acp==0.2.0) (0.11.0)
+Requirement already satisfied: et-xmlfile in /home/<user>/.local/lib/python3.11/site-packages (from openpyxl>=3.1->acp==0.2.0) (2.0.0)
+Requirement already satisfied: bcrypt>=3.2 in /home/<user>/.local/lib/python3.11/site-packages (from paramiko>=3.0->acp==0.2.0) (5.0.0)
+Requirement already satisfied: cryptography>=3.3 in /home/<user>/.local/lib/python3.11/site-packages (from paramiko>=3.0->acp==0.2.0) (50.0.1)
+Requirement already satisfied: invoke>=2.0 in /home/<user>/.local/lib/python3.11/site-packages (from paramiko>=3.0->acp==0.2.0) (3.0.3)
+Requirement already satisfied: pynacl>=1.5 in /home/<user>/.local/lib/python3.11/site-packages (from paramiko>=3.0->acp==0.2.0) (1.6.2)
+Requirement already satisfied: cfgv>=2.0.0 in /home/<user>/.local/lib/python3.11/site-packages (from pre-commit>=3.6.0->acp==0.2.0) (3.5.0)
+Requirement already satisfied: identify>=1.0.0 in /home/<user>/.local/lib/python3.11/site-packages (from pre-commit>=3.6.0->acp==0.2.0) (2.6.19)
+Requirement already satisfied: nodeenv>=0.11.1 in /home/<user>/.local/lib/python3.11/site-packages (from pre-commit>=3.6.0->acp==0.2.0) (1.10.0)
+Requirement already satisfied: virtualenv>=20.10.0 in /home/<user>/.local/lib/python3.11/site-packages (from pre-commit>=3.6.0->acp==0.2.0) (21.7.8)
+Requirement already satisfied: iniconfig>=1.0.1 in /home/<user>/.local/lib/python3.11/site-packages (from pytest>=7.4.0->acp==0.2.0) (2.3.0)
+Requirement already satisfied: pluggy<2,>=1.5 in /home/<user>/.local/lib/python3.11/site-packages (from pytest>=7.4.0->acp==0.2.0) (1.6.0)
+Requirement already satisfied: pygments>=2.7.2 in /home/<user>/.local/lib/python3.11/site-packages (from pytest>=7.4.0->acp==0.2.0) (2.21.0)
+Requirement already satisfied: coverage[toml]>=7.10.6 in /home/<user>/.local/lib/python3.11/site-packages (from pytest-cov>=4.1.0->acp==0.2.0) (7.16.0)
+Requirement already satisfied: click>=7.0 in /home/<user>/.local/lib/python3.11/site-packages (from uvicorn>=0.30->acp==0.2.0) (8.5.0)
+Requirement already satisfied: cffi>=2.0.0 in /home/<user>/.local/lib/python3.11/site-packages (from cryptography>=3.3->paramiko>=3.0->acp==0.2.0) (2.1.1)
+Requirement already satisfied: annotated-types>=0.6.0 in /home/<user>/.local/lib/python3.11/site-packages (from pydantic>=2.9.0->fastapi>=0.115->acp==0.2.0) (0.8.0)
+Requirement already satisfied: pydantic-core==2.46.5 in /home/<user>/.local/lib/python3.11/site-packages (from pydantic>=2.9.0->fastapi>=0.115->acp==0.2.0) (2.46.5)
+Requirement already satisfied: six>=1.5 in /home/<user>/.local/lib/python3.11/site-packages (from python-dateutil>=2.7->matplotlib>=3.7->acp==0.2.0) (1.17.0)
+Requirement already satisfied: distlib<1,>=0.3.7 in /home/<user>/.local/lib/python3.11/site-packages (from virtualenv>=20.10.0->pre-commit>=3.6.0->acp==0.2.0) (0.4.3)
+Requirement already satisfied: filelock<4,>=3.24.2 in /home/<user>/.local/lib/python3.11/site-packages (from virtualenv>=20.10.0->pre-commit>=3.6.0->acp==0.2.0) (3.32.5)
+Requirement already satisfied: platformdirs<5,>=3.9.1 in /home/<user>/.local/lib/python3.11/site-packages (from virtualenv>=20.10.0->pre-commit>=3.6.0->acp==0.2.0) (4.11.7)
+Requirement already satisfied: python-discovery>=1.6 in /home/<user>/.local/lib/python3.11/site-packages (from virtualenv>=20.10.0->pre-commit>=3.6.0->acp==0.2.0) (1.6.0)
+Requirement already satisfied: pycparser in /home/<user>/.local/lib/python3.11/site-packages (from cffi>=2.0.0->cryptography>=3.3->paramiko>=3.0->acp==0.2.0) (3.0)
+Building wheels for collected packages: acp
+  Building editable for acp (pyproject.toml): started
+  Building editable for acp (pyproject.toml): finished with status 'done'
+  Created wheel for acp: filename=acp-0.2.0-0.editable-py3-none-any.whl size=15537 sha256=de3b251a877f594b1bfd9d55a9bc3f483537c971b0b318102d6e9e1f0dc07a96
+  Stored in directory: /tmp/pip-ephem-wheel-cache-jk4nhf99/wheels/e4/d0/e9/cbf2226fc3ba8e55fa1524b4e46c20d8a933a043200ca1249a
+Successfully built acp
+Installing collected packages: acp
+  Attempting uninstall: acp
+    Found existing installation: acp 0.2.0
+    Not uninstalling acp at /home/<user>/.local/lib/python3.11/site-packages, outside environment <acp2-dev>/venvs/b
+    Can't uninstall 'acp'. No files were found to uninstall.
+Successfully installed acp-0.2.0
+install_exit=0
+## pip freeze
+pillow==12.3.0
+platformdirs==4.11.7
+playwright==1.63.0
+pluggy==1.6.0
+pre_commit==4.6.2
+pycparser==3.0
+pydantic==2.13.5
+pydantic_core==2.46.5
+pyee==13.0.1
+Pygments==2.21.0
+PyNaCl==1.6.2
+pyparsing==3.3.2
+pyproject_hooks==1.3.0
+pyright==1.1.414
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-mock==3.15.1
+python-dateutil==2.9.0.post0
+python-discovery==1.6.0
+python-multipart==0.0.32
+PyYAML==6.0.3
+rdkit==2026.3.6
+readme_renderer==46.0
+requests==2.34.2
+requests-toolbelt==1.0.0
+rfc3986==2.0.0
+rich==15.0.0
+ruff==0.15.22
+scipy==1.17.1
+SecretStorage==3.5.0
+six==1.17.0
+starlette==1.6.0
+twine==7.0.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uvicorn==0.52.4
+virtualenv==21.7.8
+zipp==4.1.0
+zipstream-ng==1.9.3

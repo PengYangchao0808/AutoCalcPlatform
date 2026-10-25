@@ -1,0 +1,46 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+      },
+      "binding_id": "local:2c7ffd56045b5bd5:2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "root": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/lab-run-root/uncategorized",
+      "tenant_id": ""
+    }
+  ],
+  "errors": [],
+  "evidence_digests": {
+    "exit_code": "0",
+    "job_status": "completed",
+    "missing_required_facts": "",
+    "normal_reuse": "true",
+    "partial_result": "false",
+    "publish": "true",
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "required_facts": "energy_hartree",
+    "task_result_digest": "sha256:e13cc7b313131aea59a9b5ce99ce4a3ecf6a27582a1f41700656af6339d583b1",
+    "truth_table_row": "b"
+  },
+  "fencing_token": "2834f88cae8594a60bb1faec2c23414a",
+  "job_id": "20261023_224334_001_b25-scheduler-smoke",
+  "owner": "local:redacted-host:1698296:1",
+  "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+  "receipt_version": 1,
+  "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+  "release_id": "2c7ffd56045b5bd5",
+  "result_digest": "sha256:988ce4b0b06a8c2d45321bfb5af8b5637a37ad0b2f2d7aa06a4313fcc4ceee8c",
+  "state": "completed",
+  "step_identities": [
+    "v2:853c5b2672a754adfa9088420fc0c126"
+  ],
+  "submission_id": "sub_035f967962d16b83",
+  "written_at": "2026-10-23T14:43:39.606507+00:00"
+}

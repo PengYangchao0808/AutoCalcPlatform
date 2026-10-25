@@ -1,0 +1,278 @@
+{
+  "cells": [
+    {
+      "after": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "before": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "cell": "F0/S0",
+      "frontend_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+      "p4_rows_preserved": true,
+      "service_ok": true,
+      "service_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83"
+    },
+    {
+      "after": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "before": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "cell": "F1/S0",
+      "frontend_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
+      "p4_rows_preserved": true,
+      "service_ok": true,
+      "service_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83"
+    },
+    {
+      "after": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "before": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "cell": "F0/S1",
+      "frontend_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+      "p4_rows_preserved": true,
+      "service_ok": true,
+      "service_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca"
+    },
+    {
+      "after": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "before": {
+        "admission_db": {
+          "admission_reservations": {
+            "count": 1,
+            "digest": "b6b072f1f4cbaaf1ddbde3d740b83b1d9a9c77cfac054798f993ee6849a77895"
+          },
+          "research_budget_events": {
+            "count": 1,
+            "digest": "65a5f64951e9922ae1588f53df8daafdbad9fad4ec590dc8c2e2c370e9efc21a"
+          },
+          "research_budget_policies": {
+            "count": 1,
+            "digest": "11844229adce8b229ef181e4d6e12e0cf9e03529c341fbef2ea5e9df6cf77c3f"
+          },
+          "research_budget_reservations": {
+            "count": 1,
+            "digest": "7bc9b26a725539913593486035327b7f073b77629f69b7eaa0be2fd2c1e973f6"
+          }
+        },
+        "jobs_db": {
+          "approval_records": {
+            "count": 2,
+            "digest": "9e38a4dc626291e0c2d02e3eb02fc930d740f7910484f4094a0e808ac741a0c0"
+          },
+          "idempotency_records": {
+            "count": 2,
+            "digest": "1b4f959c8a61ab2a95e0490b4ce7a2ca1653e7432dead562cd18b7f6f27d622d"
+          }
+        }
+      },
+      "cell": "F1/S1",
+      "frontend_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
+      "p4_rows_preserved": true,
+      "service_ok": true,
+      "service_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca"
+    }
+  ],
+  "f0_revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+  "f1_revision": "38fcba4274ede8c1cbd362857144829a4236e5ca",
+  "harness": "acp2_p4_combination.py",
+  "note": "approval/idempotency rows live in the jobs DB; research budget and admission rows live in acp_admission.db. Rows are seeded before the service opens either database and compared after start-up.",
+  "result": "PASS",
+  "schema": "acp2.p4.combination.v1"
+}

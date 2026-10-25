@@ -1,0 +1,7 @@
+clean_worktree=/tmp/opencode/bfix7/verify-final
+status_porcelain=0
+candidate_checkout=/tmp/opencode/bfix7/candidate
+candidate_revision=c134109c696e9bcb941e176bf681d45a569370b8
+candidate_tree=f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a
+candidate_status_porcelain=0
+note=Clean worktree at the docs(evidence) commit; candidate X was separately checked out clean before the B24b rerun.

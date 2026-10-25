@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acp.local/acp2/experience/research-record.schema.json",
+  "title": "ACP 2.0 ResearchRecord (minimal reference v1)",
+  "description": "Minimal reference ResearchRecord contract frozen by T-03 / C01b. A ResearchRecord is the persisted scientific/provenance evidence for one research round: the plan definition it evaluated, the materialized step identities, the platform TaskRefs that actually executed, the evidence references and the missing validations. It is NOT a DSH chat/session transcript: session_id, chat_id, messages, transcript or model-role fields are rejected by the schema's `not` clause. A chat session may propose text, but only this record (written by the owning service) is evidence. TaskRefs carry job_id/attempt/release_id plus project_id so cross-project leakage is detectable; the project must equal the containing record's project_id.",
+  "$comment": "Executable vocabulary is JSON Schema 2020-12 only. range/nullable exist solely inside ui_dialect as non-executable UI annotations with a written standard equivalent. record_revision is optimistic concurrency for the record, not a task attempt.",
+  "schema": "acp2.experience.research-record.v1",
+  "schema_version": "1.0.0",
+  "schema_dialect": "json-schema-2020-12",
+  "ui_dialect": {
+    "version": "acp2.ui-subset.v1",
+    "supported_keywords": [
+      "$schema",
+      "$id",
+      "$ref",
+      "$comment",
+      "$defs",
+      "schema",
+      "schema_version",
+      "schema_dialect",
+      "ui_dialect",
+      "title",
+      "description",
+      "type",
+      "enum",
+      "const",
+      "required",
+      "properties",
+      "additionalProperties",
+      "items",
+      "minItems",
+      "maxItems",
+      "uniqueItems",
+      "minimum",
+      "maximum",
+      "exclusiveMinimum",
+      "exclusiveMaximum",
+      "minLength",
+      "maxLength",
+      "pattern",
+      "oneOf",
+      "anyOf",
+      "allOf",
+      "not",
+      "if",
+      "then",
+      "else",
+      "dependentRequired",
+      "default",
+      "examples",
+      "format"
+    ],
+    "non_standard_keywords": {
+      "range": {
+        "standard_equivalent": "minimum and maximum",
+        "executable": false,
+        "scope": "UI annotation only; a generic 2020-12 validator must not execute it"
+      },
+      "nullable": {
+        "standard_equivalent": "type array that contains \"null\"",
+        "executable": false,
+        "scope": "UI annotation only; a generic 2020-12 validator must not execute it"
+      }
+    },
+    "rule": "Only supported_keywords are executable. range/nullable must never appear outside this ui_dialect block."
+  },
+  "type": "object",
+  "required": [
+    "research_id",
+    "project_id",
+    "round",
+    "decision",
+    "plan_definition_digest",
+    "step_identity_refs",
+    "task_refs",
+    "evidence_refs",
+    "missing_validation",
+    "human_edits",
+    "approval_ref",
+    "created_at",
+    "record_revision"
+  ],
+  "properties": {
+    "research_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^res-[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "description": "Stable research identity within the project."
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Project scope. Every task_ref.project_id must equal this value; a mismatch is rejected before any evidence is consumed."
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Research round index. Not a task attempt and not a job lifecycle state."
+    },
+    "decision": {
+      "enum": ["accept", "revise", "reject", "defer", "escalate"],
+      "description": "Research decision for this round. Deliberately disjoint from task/job status enums."
+    },
+    "plan_definition_digest": {
+      "$ref": "#/$defs/digest",
+      "description": "The exact plan_definition_digest from the proposal this round evaluated. A mismatch against the referenced proposal is a stale reference and must be rejected."
+    },
+    "step_identity_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step_identity_ref"
+      },
+      "description": "Step identities materialized before dispatch. Each identity covers actual upstream byte digests, materialized parameters and implementation version."
+    },
+    "task_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/task_ref"
+      },
+      "description": "Platform TaskRefs that actually executed. A bare string array is not a TaskRef list and is rejected."
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence_ref"
+      }
+    },
+    "missing_validation": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/missing_validation"
+      },
+      "description": "Validations that were not performed or not satisfied. A blocking entry keeps the round from being treated as complete."
+    },
+    "human_edits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/human_edit"
+      }
+    },
+    "approval_ref": {
+      "type": ["string", "null"],
+      "description": "Approval that bound this plan_definition_digest + project + budget + allowed_change_scope. Null only for a record that never dispatched."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "record_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optimistic concurrency revision of this record. A stale revision must not overwrite a newer record."
+    }
+  },
+  "not": {
+    "anyOf": [
+      {
+        "required": ["session_id"]
+      },
+      {
+        "required": ["chat_id"]
+      },
+      {
+        "required": ["messages"]
+      },
+      {
+        "required": ["transcript"]
+      },
+      {
+        "required": ["conversation"]
+      },
+      {
+        "required": ["model_role"]
+      }
+    ],
+    "description": "A DSH chat/session is not a ResearchRecord. Session/chat/transcript fields are rejected; only the persisted record is evidence."
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "step_identity_ref": {
+      "type": "object",
+      "required": [
+        "step_index",
+        "step_identity",
+        "implementation_version",
+        "upstream_digests",
+        "materialized_parameters_digest"
+      ],
+      "properties": {
+        "step_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "step_identity": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resolved cache/adoption identity for this step, materialized before dispatch."
+        },
+        "implementation_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact implementation/release version that produced the step identity."
+        },
+        "upstream_digests": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/digest"
+          },
+          "description": "Actual upstream artifact byte digests consumed by the step."
+        },
+        "materialized_parameters_digest": {
+          "$ref": "#/$defs/digest",
+          "description": "Digest of the fully materialized parameters (no unresolved defaults)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "task_ref": {
+      "type": "object",
+      "required": ["project_id", "job_id", "attempt", "release_id"],
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Must equal the containing ResearchRecord.project_id. A cross-project TaskRef is rejected."
+        },
+        "job_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "release_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Verified execution version/release the attempt ran under. A TaskRef without it is not evidence."
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["evidence_id", "kind", "sha256"],
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Evidence kind label (e.g. result_manifest, acceptance_receipt, structure)."
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "relative_path": {
+          "type": ["string", "null"],
+          "description": "Relative to the evidence root; null when the artifact is remote-only."
+        }
+      },
+      "additionalProperties": false
+    },
+    "missing_validation": {
+      "type": "object",
+      "required": ["field_path", "reason", "blocking"],
+      "properties": {
+        "field_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blocking": {
+          "type": "boolean",
+          "description": "True means this round cannot be treated as complete and its dependents stay blocked."
+        }
+      },
+      "additionalProperties": false
+    },
+    "human_edit": {
+      "type": "object",
+      "required": ["edited_at", "field_path", "editor_ref"],
+      "properties": {
+        "edited_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "field_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "editor_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

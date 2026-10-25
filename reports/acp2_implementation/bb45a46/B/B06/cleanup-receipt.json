@@ -1,0 +1,32 @@
+{
+  "schema": "acp2.acceptance.cleanup.v1",
+  "task": "B06",
+  "controllers_started": [
+    213413,
+    231679,
+    245324,
+    255506
+  ],
+  "controller_pid": 255506,
+  "controller_stopped": true,
+  "production_port": 8765,
+  "production_touched": false,
+  "port_18765_free": true,
+  "tracked_tasks": [
+    {
+      "job_id": "20261022_223248_001_b06-evidence",
+      "role": "submit-before-completion timing probe; terminal=failed after cancel",
+      "cleanup": "cancel requested immediately after timing; no ORCA process remained"
+    }
+  ],
+  "tracked_operations": [
+    {
+      "note": "prepare/projection probes on the isolated run root; data_operations rows retained as task data"
+    }
+  ],
+  "adapters": [
+    "MCP stdio subprocesses exited 0 in every mcp-stdio run"
+  ],
+  "leftover_processes": [],
+  "recorded_at": "2026-10-22T14:48:25Z"
+}

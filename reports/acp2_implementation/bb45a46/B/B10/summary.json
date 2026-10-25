@@ -1,0 +1,167 @@
+{
+  "b10a_local_singlepoint": {
+    "artifacts": [
+      {
+        "path": "native/sp.inp",
+        "sha256": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+        "size_bytes": 161
+      },
+      {
+        "path": "native/sp.out",
+        "sha256": "ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621",
+        "size_bytes": 41896
+      },
+      {
+        "path": "native/RESULT__task_result.json",
+        "sha256": "cd711c94d41831fb4235dd109b59e754aa5afe2422858c74bcc91aef068ac7e6",
+        "size_bytes": 1963
+      },
+      {
+        "path": "native/RESULT__result_manifest.json",
+        "sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+        "size_bytes": 1247
+      },
+      {
+        "path": "native/RESULT__scientific_result.json",
+        "sha256": "cc373d966a6476679bc8a4ad2ea596c94b31ab9cbfd535d5c572b73a44728bf2",
+        "size_bytes": 917
+      },
+      {
+        "path": "native/RESULT__energy__singlepoint_energy.json",
+        "sha256": "3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "size_bytes": 241
+      },
+      {
+        "path": "native/RESULT__structures__singlepoint_final.xyz",
+        "sha256": "961b92ef359b1f02e6d443f2f7480df8d7c41d7df8de055d1451ccb44f7c27fe",
+        "size_bytes": 112
+      },
+      {
+        "path": "native/execution_receipt.json",
+        "sha256": "9166bb38db9d444a3c0c9bd7ba9749b35eed0c7e098273a2048e231611413aef",
+        "size_bytes": 1697
+      },
+      {
+        "path": "native/job.json",
+        "sha256": "c5124c9f5219b65d5e4823225bf05fedf7ab51177e39b83660d8c7d558b57fb6",
+        "size_bytes": 6581
+      },
+      {
+        "path": "native/task.json",
+        "sha256": "7933ee7b525d2478e45da32f504965c79f3af15ab586d0b5f069eea4fd423f60",
+        "size_bytes": 968
+      }
+    ],
+    "attempt": 1,
+    "energy_hartree": -1.116759307204,
+    "energy_units": "hartree",
+    "exit_code": 0,
+    "frequencies": [],
+    "frequencies_present": false,
+    "geometry": {
+      "coordinates": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.74
+        ]
+      ],
+      "symbols": [
+        "H",
+        "H"
+      ]
+    },
+    "job_id": "20261023_031453_001_singlepoint",
+    "job_started_events": 1,
+    "manifest_task_result_digest": "sha256:60d22eff690b080ea38ea3462a615543601ad1c469db699516af5c83e7f376b4",
+    "orca_max_concurrent": 1,
+    "orca_processes": 1,
+    "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+    "receipt": "local-singlepoint-main-20261022T191452Z-595994-7d3fd0b6.json",
+    "release_id": "98e0695545d668e6",
+    "result": "PASS",
+    "task_count_after": 1,
+    "task_count_before": 0
+  },
+  "b10a_restart_reread": {
+    "comparison": {
+      "attempt_equal": true,
+      "energy_equal": true,
+      "frequencies_equal": true,
+      "geometry_equal": true,
+      "http_cli_equal_after": {
+        "attempt": true,
+        "job_id": true,
+        "manifest_sha256": true,
+        "plan_identity": true,
+        "release_id": true,
+        "result_digest": true
+      },
+      "manifest_sha256_equal": true,
+      "no_new_dispatch": true,
+      "no_new_task": true,
+      "plan_identity_equal": true,
+      "release_equal": true,
+      "state_files_unchanged": {
+        "event_lines": true,
+        "result_manifest_sha256": true,
+        "sp_out_sha256": true,
+        "task_result_sha256": true
+      },
+      "symbols_equal": true,
+      "task_result_sha256_equal": true
+    },
+    "evidence": "B10/restart-reread-comparison.json",
+    "result": "PASS"
+  },
+  "b10b_three_entry": {
+    "exit_code": 2,
+    "matrix": "B10/three-entry-matrix.json",
+    "reason": "three_entry_workbench_not_verified:c_driver_absent",
+    "result": "NOT_VERIFIED"
+  },
+  "candidate": {
+    "client_revision": "NOT_VERIFIED",
+    "harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+    "label": "bb45a46",
+    "server_base_revision": "400f4a7060daef336f33570b0c14c3a0662c000a",
+    "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a"
+  },
+  "fixture": {
+    "attempt": 1,
+    "evidence_owner": "B10",
+    "fixture_id": "fx-local-singlepoint-h2-sto3g-v1",
+    "method": {
+      "basis": "STO-3G",
+      "charge": 0,
+      "method": "HF",
+      "multiplicity": 1
+    },
+    "release": {
+      "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+      "release_id": "98e0695545d668e6"
+    },
+    "status": "completed",
+    "submitted_once": true,
+    "task": "20261023_031453_001_singlepoint"
+  },
+  "h3": {
+    "reason": "Local B10a facts and restart re-read pass; B10b CLI+HTTP pass but C Workbench is NOT_VERIFIED; LSF is B11/NOT_VERIFIED. H3 must not close.",
+    "status": "OPEN"
+  },
+  "independent_m1_baseline": {
+    "attempt": 1,
+    "different_run_from_shared_task": true,
+    "exit_code": 0,
+    "note": "temporary Controller/DB under /tmp; the shared B10 task is on 127.0.0.1:18768 / run-root-b10",
+    "release_id": "98e0695545d668e6",
+    "result": "PASS",
+    "task_ref": "20261023_031220_001_singlepoint"
+  },
+  "schema": "acp2.b10.summary.v1"
+}

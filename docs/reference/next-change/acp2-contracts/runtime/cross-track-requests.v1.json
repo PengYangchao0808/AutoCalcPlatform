@@ -1,0 +1,80 @@
+{
+  "schema": "acp2.runtime.cross-track-requests.v1",
+  "contract_version": "1.0.0",
+  "frozen_at": "2026-10-22",
+  "owner": "B",
+  "status": "delivered",
+  "scope": "Executable ledger of cross-track requests that land in Plan B runtime scope. A request is never silently dropped: every row names its owner, delivery status, the step that answers it, the expected outcome and concrete evidence.",
+  "vocabulary": {
+    "status": [
+      "open",
+      "satisfied",
+      "deferred",
+      "not_verified"
+    ],
+    "from": [
+      "A",
+      "B",
+      "C",
+      "integration"
+    ],
+    "rule": "open/not_verified rows keep an explicit owner and next step; satisfied rows cite executable evidence; deferred rows cite the owning plan stage and the condition that reopens them."
+  },
+  "requests": [
+    {
+      "request_id": "B-req-01",
+      "from": "C",
+      "owner": "B",
+      "status": "satisfied",
+      "step": "B06",
+      "expected": "Additive application-api v1.1.0: proposal_ref + plan_digest on research launch/submit, server-resolved project claim, budget with explicit unit and timeout_s, negotiated acp.research.v1 extension in MCP initialize, stable task_ref(job_id,attempt,release_id) in the submit result. Approval semantics remain B16 and may be null/unsupported.",
+      "evidence": [
+        "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#b_req_01",
+        "src/acp/api/v1_routes.py:create_job",
+        "src/acp_services/entrypoints/mcp.py:_initialize",
+        "tests/test_acp2_runtime_mcp_backends.py"
+      ],
+      "residual": "approval_ref may be null until B16 persists approval facts; a research launch without plan_digest is input_invalid(rule=plan_digest_required)."
+    },
+    {
+      "request_id": "B-req-07",
+      "from": "C",
+      "owner": "B",
+      "status": "satisfied",
+      "step": "B06",
+      "expected": "runtime/dependencies.json remains the B-owned executable dependency ledger with readiness and delivery_status vocabularies kept separate, explicit AND/OR edges, cross-track cycle detection and an executable validator.",
+      "evidence": [
+        "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+        "scripts/acceptance/validate_acp2_contracts.py",
+        "tests/test_acp2_runtime_contracts.py::test_dependencies_graph_is_valid"
+      ],
+      "residual": "A science/cross-track-dependencies.json is still NOT_VERIFIED(blocked_fixture); the ledger records that gap instead of fabricating A rows."
+    },
+    {
+      "request_id": "B-req-06",
+      "from": "C",
+      "owner": "B25a/B12",
+      "status": "open",
+      "step": "B25a / B12",
+      "expected": "Private rph workspace/CI job and the versioned read-only static-asset mount (digest-verified, no root package.json, no directory listing).",
+      "evidence": [
+        "docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md"
+      ],
+      "residual": "Not delivered by B06: this request is repo/CI/release publication scope, not runtime entry binding. Owner remains B25a with B12 consuming the static-asset manifest."
+    },
+    {
+      "request_id": "C-defect-scientific-evidence-token",
+      "from": "C",
+      "owner": "C",
+      "status": "open",
+      "step": "C",
+      "expected": "C-owned frontend/js/workbench/features/scientific-evidence.js must stop colliding with the B addModel token-ceiling guard: line 751 declares a local callback variable named token and calls token.fn(), which the guard's addModel-token regex flags as a token-ceiling bypass. Rename the local callback (or otherwise remove the token.fn() shape) without weakening the guard; the guard stays as-is.",
+      "evidence": [
+        "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
+        "frontend/js/workbench/features/scientific-evidence.js:751",
+        "C HEAD 35614fd83f616005a0546af35631c477151e7dde (same failure: token.fn() name collision)"
+      ],
+      "residual": "Open and C-owned; B did not edit frontend/**. The skill is recorded NOT_VERIFIED for the integration candidate until C fixes it at its own HEAD; this row is the visible cross-track request, not a PASS."
+    }
+  ]
+}

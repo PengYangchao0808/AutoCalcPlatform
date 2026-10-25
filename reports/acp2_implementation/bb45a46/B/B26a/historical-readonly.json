@@ -1,0 +1,32 @@
+{
+  "acp_file": "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+  "manifests_file": "/tmp/opencode/b26a-clean/venvs/web/lib64/python3.11/site-packages/acp/compat/legacy/manifests.py",
+  "ok": true,
+  "rows": {
+    "batch_kind": "batch_calculation_manifest",
+    "historical_v2_manifest_loaded": true,
+    "historical_v2_products": 1,
+    "reaction_definition_keys": [
+      "config_hash",
+      "confirmed_by",
+      "index_base",
+      "mapping",
+      "products",
+      "reactants",
+      "schema_version",
+      "study_id"
+    ],
+    "refinement_schema": "refinement_manifest_v1",
+    "result_summary_keys": [
+      "products",
+      "version",
+      "workflow"
+    ],
+    "s2_candidate_present": true,
+    "s2_path_schema": "s2_path_v2",
+    "s2_review_present": true,
+    "s3_workflow": "Lowconfirm",
+    "s4_workflow": "Highconfirm"
+  },
+  "schema": "acp2.b26a.historical-readonly.v1"
+}

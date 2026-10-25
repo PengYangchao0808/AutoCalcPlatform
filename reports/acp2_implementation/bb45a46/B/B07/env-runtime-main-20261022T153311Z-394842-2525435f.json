@@ -1,0 +1,61 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "missing:environment/b07-environment.json",
+      "name": "b07_records_present",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "37af66de5058608395052f8902330650e5329eb6f0965306a205b6741e00fed9",
+    "server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6"
+  },
+  "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "command": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "env-runtime",
+    "--controller",
+    "http://127.0.0.1:18765",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B07",
+    "--timeout",
+    "180"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": ".",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.operation_class": "discover",
+    "acceptance.target": "local",
+    "b07.evidence_bases": [
+      "reports/acp2_implementation/bb45a46/B"
+    ],
+    "b07.missing_records": [
+      "environment/b07-environment.json"
+    ]
+  },
+  "finished_at": "2026-10-22T15:33:11Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": "environment_record_missing:environment/b07-environment.json",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261022T153311Z-394842-2525435f",
+  "scenario": "env-runtime",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T15:33:11Z",
+  "submission_id": null,
+  "usage": null
+}

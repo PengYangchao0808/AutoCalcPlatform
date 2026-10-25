@@ -1,0 +1,46 @@
+{
+  "claims": [
+    {
+      "claim_id": "c-ts-connects-reactant",
+      "missing_checks": [
+        {
+          "blocking": true,
+          "check_id": "missing_irc",
+          "reason": "reverse IRC output is absent"
+        }
+      ],
+      "scope": {
+        "applicability": "system_specific",
+        "conditions": null,
+        "subject": "irc_connectivity"
+      },
+      "source_refs": [],
+      "statement": "The transition state connects the intended reactant and product.",
+      "status": "inconclusive"
+    }
+  ],
+  "execution": {
+    "argv": [
+      "orca",
+      "irc.inp"
+    ],
+    "exit_code": 0,
+    "terminal_state": "completed"
+  },
+  "limitations": [
+    {
+      "affected_claim_ids": [
+        "c-ts-connects-reactant"
+      ],
+      "description": "Path connectivity is not established for this fixture.",
+      "limitation_id": "lim-path-incomplete"
+    }
+  ],
+  "report_id": "report-completed-but-inconclusive",
+  "schema_version": 1,
+  "subject": {
+    "description": "Execution completed successfully while the scientific claim stays inconclusive.",
+    "subject_id": "run-fixture-completed-inconclusive",
+    "subject_kind": "calculation_result"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "candidate_label": "bb45a46",
+  "client_revision": "NOT_VERIFIED",
+  "client_revision_reason": "C P1 Workbench UI/DSH is not delivered and this host has no Chromium/DSH driver; C HEAD is recorded for identity only and is not a verified client of this P1 candidate.",
+  "executed_harness_path": "scripts/acceptance/acp2_runtime.py",
+  "executed_harness_revision": "f1935c19e3ed1397394b68339872a84f7d40ad130b088c5fbad7dc9f5126e89c",
+  "note": "B11 reuses B10's P1 candidate for the server/science identity. The executing harness hash differs from the frozen P1 harness record because B11 added the lsf-singlepoint scenario to acp2_runtime.py; the actual executing hash is recorded here as well.",
+  "p1_candidate_record": "reports/acp2_implementation/bb45a46/B/environment/p1-candidate.json",
+  "p1_candidate_sha256": "01906a4007ab0dc9ea03b3cb4fc549a4f47ff3a9d7064adac07dd0c2ae9e66ad",
+  "p1_harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+  "schema": "acp2.b11.p1-revision.v1",
+  "server_base_revision": "400f4a7060daef336f33570b0c14c3a0662c000a",
+  "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a"
+}

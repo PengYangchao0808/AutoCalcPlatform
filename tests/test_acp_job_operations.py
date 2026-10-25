@@ -421,7 +421,8 @@ def test_startup_marks_interrupted_cancelling_job_cancelled(tmp_path: Path) -> N
         rec = mgr.get("mid-cancel")
         assert rec is not None
         assert rec.status == JobStatus.CANCELLED
-        assert "[RESTART_FAILED]" in (rec.error or "")
+        assert rec.exit_code == 130
+        assert "[RESTART_FAILED]" not in (rec.error or "")
     finally:
         mgr.shutdown()
 
@@ -521,12 +522,14 @@ def test_startup_disk_probe_recovers_completed_race(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
-def test_startup_disk_probe_without_exit_code_fails_with_continue_hint(tmp_path: Path) -> None:
+def test_startup_incomplete_state_fails_with_continue_hint(tmp_path: Path) -> None:
     """A checkpoint-capable workflow gets the continue hint; the hint is
     workflow-aware (BatchOptimize etc. are pointed at rerun instead)."""
     store = JobStore(tmp_path / "jobs.db")
     work = tmp_path / "runs/j1"
-    state = {"current_stage": "opt", "stages": {"opt": {"status": "completed"}}}
+    # A still-running stage is genuinely incomplete evidence: the attempt must
+    # fail (a fully-completed stage map would instead finalize COMPLETED — F3 D1).
+    state = {"current_stage": "opt", "stages": {"opt": {"status": "running"}}}
     _seed_job(store, work, "no-exit-code", status=JobStatus.RUNNING, workflow="irc")
     (work / "state.json").write_text(json.dumps(state), encoding="utf-8")
     runtime = work / "WORK" / "00_RUNTIME"

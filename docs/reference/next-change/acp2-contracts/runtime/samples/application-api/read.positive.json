@@ -1,0 +1,21 @@
+{
+  "sample_id": "read.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "read",
+  "payload": {
+    "schema_version": 1,
+    "artifact_ref": {
+      "task_id": "20261022_001_demo",
+      "attempt": 1,
+      "artifact_id": "freq_log",
+      "generation": 1,
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "max_bytes": 4096,
+    "encoding": "identity"
+  },
+  "expected": {
+    "valid": true
+  }
+}

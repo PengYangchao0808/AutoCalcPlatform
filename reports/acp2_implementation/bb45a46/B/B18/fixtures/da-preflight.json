@@ -1,0 +1,20 @@
+{
+  "schema": "acp2.b18.da-preflight.v1",
+  "evidence_class": "STATIC/SIMULATED",
+  "real_qc": false,
+  "science_root": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science",
+  "capability": "capability-energy.json",
+  "task_binding": "task-binding-singlepoint.json",
+  "reaction": "reaction-da.json",
+  "p2_form": "p2-minimal-form.json",
+  "evidence_report": "evidence-report.json",
+  "proposal": "proposal.valid.json",
+  "research_record": "research-record.valid.json",
+  "expected_task_kind": "singlepoint",
+  "plan_identity": "v2:0123456789abcdef0123456789abcdef",
+  "release_id": "release-b18-static",
+  "native_files": [
+    {"relative_path": "native/stdout.txt", "role": "native_output", "body": "STATIC B18 stdout\n"},
+    {"relative_path": "native/stderr.txt", "role": "native_output", "body": "STATIC B18 stderr\n"}
+  ]
+}

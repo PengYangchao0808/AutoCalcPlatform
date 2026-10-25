@@ -1,0 +1,24 @@
+{
+  "counters": {
+    "bsub": 0,
+    "compute_owner": "none (da-preflight is contract-only)",
+    "http_calls": [
+      "GET /api/health",
+      "GET /api/v1/jobs?limit=1000",
+      "GET /api/v1/jobs?limit=1000"
+    ],
+    "prepare_operations": 0,
+    "qc_invocations": 0,
+    "reservations": 0,
+    "schema": "acp2.runtime.b18-counters.v1",
+    "tasks_after": 0,
+    "tasks_before": 0,
+    "tasks_created": 0
+  },
+  "path": "reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json",
+  "phase": "da-preflight",
+  "result": "PASS",
+  "scenario": "da-runtime",
+  "schema": "acp2.b20a.consumed-preflight.v1",
+  "sha256": "ec2918beb4bce513db2c05c2a2ecdb3ca8576afbb3ef8d08680fbedc31bfbd76"
+}

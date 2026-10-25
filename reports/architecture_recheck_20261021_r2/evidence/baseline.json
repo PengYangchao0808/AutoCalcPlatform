@@ -1,0 +1,124 @@
+{
+  "base_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+  "candidate_kind": "HEAD plus uncommitted worktree",
+  "patch_sha256": "44079de7ab200dfe92461a8ecc3b01e4fddb718183cf0ba79af09e4155aefe7c",
+  "files": [
+    {
+      "path": "frontend/js/module_tests/nmr_viewer.test.js",
+      "sha256": "49c6335050d0af79c283016a65cd55f4e61feef8e411f3323191baaa8cb0f207"
+    },
+    {
+      "path": "frontend/js/workbench/features/nmr.js",
+      "sha256": "90f71c991cf8ab9b20477cb2d9a5e971d7a749cc8e4d2a3516c49ce4dc037837"
+    },
+    {
+      "path": "scripts/acceptance/four_combinations.py",
+      "sha256": "e58fd62cea837067e862423f134fd8bc659250c92890848bbd27536236f55e96"
+    },
+    {
+      "path": "src/acp/calculations/attempt_freeze.py",
+      "sha256": "f999ed13c833900e2f674cba9cfd03b025b44b59c2954b79793ab3dc099da102"
+    },
+    {
+      "path": "src/acp/calculations/attempt_publication.py",
+      "sha256": "689d83c71dcd3a891bc516a852d57398cb77a7a3e644ea7d0422ca7b3aa923b0"
+    },
+    {
+      "path": "src/acp/scheduler/manager.py",
+      "sha256": "744038468f73e009e6f468028003dac1d6d010c01de56f59783c38c683bd0362"
+    },
+    {
+      "path": "src/acp/scheduler/remote/runner.py",
+      "sha256": "be641f51399730e011b50a4730dc30afd4f659cd7db5cf99702d306c08198b5e"
+    },
+    {
+      "path": "src/acp/services_data_bootstrap.py",
+      "sha256": "c3aad6da5b546ca1c3934473b5f2673d6d03c209cfcd570f13fdcd38d5ff5a18"
+    },
+    {
+      "path": "src/acp_services/data/operations.py",
+      "sha256": "963a32b5aa76a83dbc9a5f65badaec22df282d13092bd4d06f550a475525eec7"
+    },
+    {
+      "path": "src/acp_services/data/read_root.py",
+      "sha256": "b58c0a711b2500dc40e14961e1db3d6c43b449dc29d4b86c4b58427fa2642c51"
+    },
+    {
+      "path": "src/acp_services/runtime/attempt_freeze.py",
+      "sha256": "23bd69334d9bbe95f2b38506aa76aede319b400ff1c423ed503a8a99d92e59ca"
+    },
+    {
+      "path": "src/acp_services/runtime/worker.py",
+      "sha256": "5b8e5d00ecbbc8e26385f6fa9c693986f642b5ac10f416092cca0722164b68b9"
+    },
+    {
+      "path": "src/acp_services/worker_bootstrap.py",
+      "sha256": "76c5fcac7eefbdcb677678ed02bd29d2fbe3729c299db007e212252207fe6812"
+    },
+    {
+      "path": "src/cccp/analysis/bounded/identity.py",
+      "sha256": "847ea1c271a55ef93ceab1a5de6ab4caeede4d28a897e8764977d1789f11cb7c"
+    },
+    {
+      "path": "src/cccp/analysis/bounded/manifest.py",
+      "sha256": "0b2801c99e1de1c7e673ea7802acb1d9a7331a8deae4778a2688a633488655f4"
+    },
+    {
+      "path": "tests/test_services_chain_switch.py",
+      "sha256": "7fdf496072c27061b1af6b7937b9b6daabd1fe30240035b5a2603ad9289076d3"
+    },
+    {
+      "path": "tests/test_services_worker_bootstrap.py",
+      "sha256": "da38800bd5ee201ad5aa5120d7bce59baa7d565de53ec3e06ec81fe284df64e6"
+    },
+    {
+      "path": "tests/test_architecture_recheck_20261021.py",
+      "sha256": "1f2a32c3255584b44430d306232d46fc1eefee24e9d8c99ee9a87eedfe9d6e5d"
+    }
+  ],
+  "dirty_status": [
+    " M docs/ACP_Architecture_Adjustment_Plan_20261016.md",
+    " M frontend/js/module_tests/nmr_viewer.test.js",
+    " M frontend/js/workbench/features/nmr.js",
+    " M scripts/acceptance/four_combinations.py",
+    " M src/acp/calculations/attempt_freeze.py",
+    " M src/acp/calculations/attempt_publication.py",
+    " M src/acp/scheduler/manager.py",
+    " M src/acp/scheduler/remote/runner.py",
+    " M src/acp/services_data_bootstrap.py",
+    " M src/acp_services/data/operations.py",
+    " M src/acp_services/data/read_root.py",
+    " M src/acp_services/runtime/attempt_freeze.py",
+    " M src/acp_services/runtime/worker.py",
+    " M src/acp_services/worker_bootstrap.py",
+    " M src/cccp/analysis/bounded/identity.py",
+    " M src/cccp/analysis/bounded/manifest.py",
+    " M tests/baseline/refactor-evidence/e2e-task-root.txt",
+    " M tests/test_services_chain_switch.py",
+    " M tests/test_services_worker_bootstrap.py",
+    "?? docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md",
+    "?? docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md",
+    "?? docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md",
+    "?? docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md",
+    "?? docs/reference/next-change/examples/",
+    "?? reports/architecture_acceptance_20261019/",
+    "?? reports/architecture_recheck_20261021/",
+    "?? tests/test_architecture_recheck_20261021.py"
+  ]
+}

@@ -6,7 +6,7 @@
       "column": 103,
       "row": 68
     },
-    "filename": "<repo>/src/acp/api/drafts.py",
+    "filename": "src/acp/api/drafts.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -25,7 +25,7 @@
       "column": 102,
       "row": 3851
     },
-    "filename": "<repo>/src/acp/api/v1_routes.py",
+    "filename": "src/acp/api/v1_routes.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -44,7 +44,7 @@
       "column": 118,
       "row": 4692
     },
-    "filename": "<repo>/src/acp/api/v1_routes.py",
+    "filename": "src/acp/api/v1_routes.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -63,7 +63,7 @@
       "column": 126,
       "row": 4693
     },
-    "filename": "<repo>/src/acp/api/v1_routes.py",
+    "filename": "src/acp/api/v1_routes.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -82,7 +82,7 @@
       "column": 103,
       "row": 4922
     },
-    "filename": "<repo>/src/acp/api/v1_routes.py",
+    "filename": "src/acp/api/v1_routes.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -101,7 +101,7 @@
       "column": 101,
       "row": 4924
     },
-    "filename": "<repo>/src/acp/api/v1_routes.py",
+    "filename": "src/acp/api/v1_routes.py",
     "fix": null,
     "location": {
       "column": 83,
@@ -120,7 +120,7 @@
       "column": 122,
       "row": 5363
     },
-    "filename": "<repo>/src/acp/api/v1_routes.py",
+    "filename": "src/acp/api/v1_routes.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -139,7 +139,7 @@
       "column": 73,
       "row": 43
     },
-    "filename": "<repo>/src/acp/backends/__init__.py",
+    "filename": "src/acp/backends/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -174,7 +174,7 @@
       "column": 2,
       "row": 22
     },
-    "filename": "<repo>/src/acp/backends/base.py",
+    "filename": "src/acp/backends/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -209,7 +209,7 @@
       "column": 352,
       "row": 24
     },
-    "filename": "<repo>/src/acp/backends/base.py",
+    "filename": "src/acp/backends/base.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -228,7 +228,7 @@
       "column": 2,
       "row": 12
     },
-    "filename": "<repo>/src/acp/backends/capabilities.py",
+    "filename": "src/acp/backends/capabilities.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -263,7 +263,7 @@
       "column": 127,
       "row": 14
     },
-    "filename": "<repo>/src/acp/backends/capabilities.py",
+    "filename": "src/acp/backends/capabilities.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -282,7 +282,7 @@
       "column": 169,
       "row": 16
     },
-    "filename": "<repo>/src/acp/backends/censo_backend.py",
+    "filename": "src/acp/backends/censo_backend.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -301,7 +301,7 @@
       "column": 110,
       "row": 12
     },
-    "filename": "<repo>/src/acp/backends/matrix.py",
+    "filename": "src/acp/backends/matrix.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -320,7 +320,7 @@
       "column": 36,
       "row": 12
     },
-    "filename": "<repo>/src/acp/backends/orca.py",
+    "filename": "src/acp/backends/orca.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -355,7 +355,7 @@
       "column": 23,
       "row": 13
     },
-    "filename": "<repo>/src/acp/backends/orca.py",
+    "filename": "src/acp/backends/orca.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -390,7 +390,7 @@
       "column": 139,
       "row": 16
     },
-    "filename": "<repo>/src/acp/backends/orca.py",
+    "filename": "src/acp/backends/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -409,7 +409,7 @@
       "column": 104,
       "row": 13
     },
-    "filename": "<repo>/src/acp/backends/registry.py",
+    "filename": "src/acp/backends/registry.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -428,7 +428,7 @@
       "column": 102,
       "row": 607
     },
-    "filename": "<repo>/src/acp/calculations/batch/engine.py",
+    "filename": "src/acp/calculations/batch/engine.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -447,7 +447,7 @@
       "column": 161,
       "row": 1123
     },
-    "filename": "<repo>/src/acp/calculations/batch/engine.py",
+    "filename": "src/acp/calculations/batch/engine.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -466,7 +466,7 @@
       "column": 102,
       "row": 1128
     },
-    "filename": "<repo>/src/acp/calculations/batch/engine.py",
+    "filename": "src/acp/calculations/batch/engine.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -485,7 +485,7 @@
       "column": 47,
       "row": 11
     },
-    "filename": "<repo>/src/acp/calculations/batch/loaders.py",
+    "filename": "src/acp/calculations/batch/loaders.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -520,7 +520,7 @@
       "column": 109,
       "row": 102
     },
-    "filename": "<repo>/src/acp/calculations/batch/loaders.py",
+    "filename": "src/acp/calculations/batch/loaders.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -539,7 +539,7 @@
       "column": 27,
       "row": 556
     },
-    "filename": "<repo>/src/acp/calculations/pes/contracts.py",
+    "filename": "src/acp/calculations/pes/contracts.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -558,7 +558,7 @@
       "column": 16,
       "row": 558
     },
-    "filename": "<repo>/src/acp/calculations/pes/contracts.py",
+    "filename": "src/acp/calculations/pes/contracts.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -577,7 +577,7 @@
       "column": 111,
       "row": 786
     },
-    "filename": "<repo>/src/acp/calculations/pes/contracts.py",
+    "filename": "src/acp/calculations/pes/contracts.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -596,7 +596,7 @@
       "column": 114,
       "row": 796
     },
-    "filename": "<repo>/src/acp/calculations/pes/contracts.py",
+    "filename": "src/acp/calculations/pes/contracts.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -615,7 +615,7 @@
       "column": 110,
       "row": 798
     },
-    "filename": "<repo>/src/acp/calculations/pes/contracts.py",
+    "filename": "src/acp/calculations/pes/contracts.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -634,7 +634,7 @@
       "column": 128,
       "row": 346
     },
-    "filename": "<repo>/src/acp/calculations/pes/scan.py",
+    "filename": "src/acp/calculations/pes/scan.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -653,7 +653,7 @@
       "column": 130,
       "row": 967
     },
-    "filename": "<repo>/src/acp/calculations/pes/scan.py",
+    "filename": "src/acp/calculations/pes/scan.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -672,7 +672,7 @@
       "column": 14,
       "row": 1004
     },
-    "filename": "<repo>/src/acp/calculations/pes/scan.py",
+    "filename": "src/acp/calculations/pes/scan.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -707,7 +707,7 @@
       "column": 117,
       "row": 1014
     },
-    "filename": "<repo>/src/acp/calculations/pes/scan.py",
+    "filename": "src/acp/calculations/pes/scan.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -726,7 +726,7 @@
       "column": 120,
       "row": 1432
     },
-    "filename": "<repo>/src/acp/calculations/pes/scan.py",
+    "filename": "src/acp/calculations/pes/scan.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -745,7 +745,7 @@
       "column": 120,
       "row": 1788
     },
-    "filename": "<repo>/src/acp/calculations/pes/scan.py",
+    "filename": "src/acp/calculations/pes/scan.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -764,7 +764,7 @@
       "column": 172,
       "row": 184
     },
-    "filename": "<repo>/src/acp/calculations/pes/scan_snapshot.py",
+    "filename": "src/acp/calculations/pes/scan_snapshot.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -783,7 +783,7 @@
       "column": 9,
       "row": 55
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -802,7 +802,7 @@
       "column": 18,
       "row": 55
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 11,
@@ -821,7 +821,7 @@
       "column": 9,
       "row": 127
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -840,7 +840,7 @@
       "column": 18,
       "row": 127
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 11,
@@ -859,7 +859,7 @@
       "column": 9,
       "row": 405
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -878,7 +878,7 @@
       "column": 18,
       "row": 405
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 11,
@@ -897,7 +897,7 @@
       "column": 41,
       "row": 436
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 32,
@@ -916,7 +916,7 @@
       "column": 48,
       "row": 463
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 39,
@@ -935,7 +935,7 @@
       "column": 62,
       "row": 463
     },
-    "filename": "<repo>/src/acp/chem/embedding.py",
+    "filename": "src/acp/chem/embedding.py",
     "fix": null,
     "location": {
       "column": 50,
@@ -954,7 +954,7 @@
       "column": 105,
       "row": 178
     },
-    "filename": "<repo>/src/acp/compat/legacy/batch_loaders.py",
+    "filename": "src/acp/compat/legacy/batch_loaders.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -973,7 +973,7 @@
       "column": 82,
       "row": 70
     },
-    "filename": "<repo>/src/acp/core/config.py",
+    "filename": "src/acp/core/config.py",
     "fix": null,
     "location": {
       "column": 33,
@@ -992,7 +992,7 @@
       "column": 76,
       "row": 74
     },
-    "filename": "<repo>/src/acp/core/config.py",
+    "filename": "src/acp/core/config.py",
     "fix": null,
     "location": {
       "column": 33,
@@ -1011,7 +1011,7 @@
       "column": 35,
       "row": 38
     },
-    "filename": "<repo>/src/acp/core/models.py",
+    "filename": "src/acp/core/models.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -1046,7 +1046,7 @@
       "column": 32,
       "row": 635
     },
-    "filename": "<repo>/src/acp/intake/parsers.py",
+    "filename": "src/acp/intake/parsers.py",
     "fix": null,
     "location": {
       "column": 31,
@@ -1065,7 +1065,7 @@
       "column": 14,
       "row": 680
     },
-    "filename": "<repo>/src/acp/intake/parsers.py",
+    "filename": "src/acp/intake/parsers.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -1084,7 +1084,7 @@
       "column": 10,
       "row": 422
     },
-    "filename": "<repo>/src/acp/io/structures.py",
+    "filename": "src/acp/io/structures.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -1119,7 +1119,7 @@
       "column": 103,
       "row": 411
     },
-    "filename": "<repo>/src/acp/results/energy_graph.py",
+    "filename": "src/acp/results/energy_graph.py",
     "fix": null,
     "location": {
       "column": 97,
@@ -1138,7 +1138,7 @@
       "column": 108,
       "row": 765
     },
-    "filename": "<repo>/src/acp/results/energy_graph.py",
+    "filename": "src/acp/results/energy_graph.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1157,7 +1157,7 @@
       "column": 114,
       "row": 766
     },
-    "filename": "<repo>/src/acp/results/energy_graph.py",
+    "filename": "src/acp/results/energy_graph.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1176,7 +1176,7 @@
       "column": 110,
       "row": 666
     },
-    "filename": "<repo>/src/acp/results/remote_structure_cache.py",
+    "filename": "src/acp/results/remote_structure_cache.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1195,7 +1195,7 @@
       "column": 111,
       "row": 678
     },
-    "filename": "<repo>/src/acp/results/remote_structure_cache.py",
+    "filename": "src/acp/results/remote_structure_cache.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -1230,7 +1230,7 @@
       "column": 111,
       "row": 678
     },
-    "filename": "<repo>/src/acp/results/remote_structure_cache.py",
+    "filename": "src/acp/results/remote_structure_cache.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1249,7 +1249,7 @@
       "column": 112,
       "row": 684
     },
-    "filename": "<repo>/src/acp/results/remote_structure_cache.py",
+    "filename": "src/acp/results/remote_structure_cache.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1268,7 +1268,7 @@
       "column": 121,
       "row": 16
     },
-    "filename": "<repo>/src/acp/results/structure_migration.py",
+    "filename": "src/acp/results/structure_migration.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1287,7 +1287,7 @@
       "column": 108,
       "row": 41
     },
-    "filename": "<repo>/src/acp/results/structure_migration.py",
+    "filename": "src/acp/results/structure_migration.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1306,7 +1306,7 @@
       "column": 112,
       "row": 62
     },
-    "filename": "<repo>/src/acp/results/structure_migration.py",
+    "filename": "src/acp/results/structure_migration.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1325,7 +1325,7 @@
       "column": 104,
       "row": 66
     },
-    "filename": "<repo>/src/acp/results/structure_migration.py",
+    "filename": "src/acp/results/structure_migration.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1344,7 +1344,7 @@
       "column": 105,
       "row": 67
     },
-    "filename": "<repo>/src/acp/results/structure_migration.py",
+    "filename": "src/acp/results/structure_migration.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1363,7 +1363,7 @@
       "column": 111,
       "row": 68
     },
-    "filename": "<repo>/src/acp/results/structure_migration.py",
+    "filename": "src/acp/results/structure_migration.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1382,7 +1382,7 @@
       "column": 108,
       "row": 72
     },
-    "filename": "<repo>/src/acp/results/structure_migration.py",
+    "filename": "src/acp/results/structure_migration.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1401,7 +1401,7 @@
       "column": 373,
       "row": 12
     },
-    "filename": "<repo>/src/acp/results/structure_policy.py",
+    "filename": "src/acp/results/structure_policy.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1420,7 +1420,7 @@
       "column": 145,
       "row": 71
     },
-    "filename": "<repo>/src/acp/results/structure_policy.py",
+    "filename": "src/acp/results/structure_policy.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1439,7 +1439,7 @@
       "column": 64,
       "row": 8
     },
-    "filename": "<repo>/src/acp/results/structure_snapshots.py",
+    "filename": "src/acp/results/structure_snapshots.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -1474,7 +1474,7 @@
       "column": 104,
       "row": 12
     },
-    "filename": "<repo>/src/acp/results/structure_snapshots.py",
+    "filename": "src/acp/results/structure_snapshots.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1493,7 +1493,7 @@
       "column": 110,
       "row": 45
     },
-    "filename": "<repo>/src/acp/results/structure_snapshots.py",
+    "filename": "src/acp/results/structure_snapshots.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1512,7 +1512,7 @@
       "column": 111,
       "row": 65
     },
-    "filename": "<repo>/src/acp/results/structure_snapshots.py",
+    "filename": "src/acp/results/structure_snapshots.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1531,7 +1531,7 @@
       "column": 138,
       "row": 618
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1550,7 +1550,7 @@
       "column": 137,
       "row": 811
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1569,7 +1569,7 @@
       "column": 141,
       "row": 882
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1588,7 +1588,7 @@
       "column": 116,
       "row": 895
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1607,7 +1607,7 @@
       "column": 120,
       "row": 901
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1626,7 +1626,7 @@
       "column": 28,
       "row": 996
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -1661,7 +1661,7 @@
       "column": 115,
       "row": 999
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1680,7 +1680,7 @@
       "column": 104,
       "row": 1011
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1699,7 +1699,7 @@
       "column": 102,
       "row": 1012
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1718,7 +1718,7 @@
       "column": 134,
       "row": 1026
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1737,7 +1737,7 @@
       "column": 24,
       "row": 1035
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -1756,7 +1756,7 @@
       "column": 21,
       "row": 1045
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -1775,7 +1775,7 @@
       "column": 109,
       "row": 1093
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1794,7 +1794,7 @@
       "column": 136,
       "row": 1097
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1813,7 +1813,7 @@
       "column": 108,
       "row": 1144
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1832,7 +1832,7 @@
       "column": 106,
       "row": 1145
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1851,7 +1851,7 @@
       "column": 113,
       "row": 1163
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1870,7 +1870,7 @@
       "column": 147,
       "row": 1174
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1889,7 +1889,7 @@
       "column": 132,
       "row": 1198
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1908,7 +1908,7 @@
       "column": 131,
       "row": 1279
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1927,7 +1927,7 @@
       "column": 134,
       "row": 1364
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -1946,7 +1946,7 @@
       "column": 51,
       "row": 1372
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -1981,7 +1981,7 @@
       "column": 73,
       "row": 1372
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2016,7 +2016,7 @@
       "column": 108,
       "row": 1444
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2035,7 +2035,7 @@
       "column": 134,
       "row": 1457
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2054,7 +2054,7 @@
       "column": 21,
       "row": 1468
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -2073,7 +2073,7 @@
       "column": 69,
       "row": 1651
     },
-    "filename": "<repo>/src/acp/results/structure_viewer.py",
+    "filename": "src/acp/results/structure_viewer.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2108,7 +2108,7 @@
       "column": 52,
       "row": 534
     },
-    "filename": "<repo>/src/acp/scheduler/job_edit.py",
+    "filename": "src/acp/scheduler/job_edit.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2143,7 +2143,7 @@
       "column": 107,
       "row": 533
     },
-    "filename": "<repo>/src/acp/scheduler/job_edit.py",
+    "filename": "src/acp/scheduler/job_edit.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2162,7 +2162,7 @@
       "column": 106,
       "row": 546
     },
-    "filename": "<repo>/src/acp/scheduler/job_edit.py",
+    "filename": "src/acp/scheduler/job_edit.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2181,7 +2181,7 @@
       "column": 134,
       "row": 561
     },
-    "filename": "<repo>/src/acp/scheduler/job_edit.py",
+    "filename": "src/acp/scheduler/job_edit.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2200,7 +2200,7 @@
       "column": 69,
       "row": 1171
     },
-    "filename": "<repo>/src/acp/scheduler/manager.py",
+    "filename": "src/acp/scheduler/manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2235,7 +2235,7 @@
       "column": 73,
       "row": 1178
     },
-    "filename": "<repo>/src/acp/scheduler/manager.py",
+    "filename": "src/acp/scheduler/manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2270,7 +2270,7 @@
       "column": 102,
       "row": 1184
     },
-    "filename": "<repo>/src/acp/scheduler/manager.py",
+    "filename": "src/acp/scheduler/manager.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2289,7 +2289,7 @@
       "column": 42,
       "row": 4380
     },
-    "filename": "<repo>/src/acp/scheduler/manager.py",
+    "filename": "src/acp/scheduler/manager.py",
     "fix": null,
     "location": {
       "column": 13,
@@ -2308,7 +2308,7 @@
       "column": 37,
       "row": 4381
     },
-    "filename": "<repo>/src/acp/scheduler/manager.py",
+    "filename": "src/acp/scheduler/manager.py",
     "fix": null,
     "location": {
       "column": 13,
@@ -2327,7 +2327,7 @@
       "column": 32,
       "row": 16
     },
-    "filename": "<repo>/src/acp/scheduler/remote/config.py",
+    "filename": "src/acp/scheduler/remote/config.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2362,7 +2362,7 @@
       "column": 133,
       "row": 515
     },
-    "filename": "<repo>/src/acp/scheduler/remote/config.py",
+    "filename": "src/acp/scheduler/remote/config.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2381,7 +2381,7 @@
       "column": 31,
       "row": 205
     },
-    "filename": "<repo>/src/acp/scheduler/remote/runner.py",
+    "filename": "src/acp/scheduler/remote/runner.py",
     "fix": null,
     "location": {
       "column": 7,
@@ -2400,7 +2400,7 @@
       "column": 36,
       "row": 214
     },
-    "filename": "<repo>/src/acp/scheduler/remote/runner.py",
+    "filename": "src/acp/scheduler/remote/runner.py",
     "fix": null,
     "location": {
       "column": 7,
@@ -2419,7 +2419,7 @@
       "column": 58,
       "row": 29
     },
-    "filename": "<repo>/src/acp/scheduler/runner.py",
+    "filename": "src/acp/scheduler/runner.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2454,7 +2454,7 @@
       "column": 103,
       "row": 555
     },
-    "filename": "<repo>/src/acp/scheduler/stage_tasks.py",
+    "filename": "src/acp/scheduler/stage_tasks.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2473,7 +2473,7 @@
       "column": 103,
       "row": 985
     },
-    "filename": "<repo>/src/acp/scheduler/store.py",
+    "filename": "src/acp/scheduler/store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2492,7 +2492,7 @@
       "column": 128,
       "row": 188
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_indexer.py",
+    "filename": "src/acp/scheduler/structure_source_indexer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2511,7 +2511,7 @@
       "column": 108,
       "row": 192
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_indexer.py",
+    "filename": "src/acp/scheduler/structure_source_indexer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2530,7 +2530,7 @@
       "column": 70,
       "row": 233
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_indexer.py",
+    "filename": "src/acp/scheduler/structure_source_indexer.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2565,7 +2565,7 @@
       "column": 86,
       "row": 252
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_indexer.py",
+    "filename": "src/acp/scheduler/structure_source_indexer.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -2600,7 +2600,7 @@
       "column": 126,
       "row": 254
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_indexer.py",
+    "filename": "src/acp/scheduler/structure_source_indexer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2619,7 +2619,7 @@
       "column": 103,
       "row": 255
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_indexer.py",
+    "filename": "src/acp/scheduler/structure_source_indexer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2638,7 +2638,7 @@
       "column": 108,
       "row": 265
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_indexer.py",
+    "filename": "src/acp/scheduler/structure_source_indexer.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2657,7 +2657,7 @@
       "column": 117,
       "row": 394
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2676,7 +2676,7 @@
       "column": 127,
       "row": 433
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2695,7 +2695,7 @@
       "column": 107,
       "row": 464
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2714,7 +2714,7 @@
       "column": 109,
       "row": 1920
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2733,7 +2733,7 @@
       "column": 123,
       "row": 1921
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2752,7 +2752,7 @@
       "column": 112,
       "row": 1924
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2771,7 +2771,7 @@
       "column": 104,
       "row": 1927
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2790,7 +2790,7 @@
       "column": 179,
       "row": 2020
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2809,7 +2809,7 @@
       "column": 175,
       "row": 2308
     },
-    "filename": "<repo>/src/acp/scheduler/structure_source_store.py",
+    "filename": "src/acp/scheduler/structure_source_store.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2828,7 +2828,7 @@
       "column": 117,
       "row": 153
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2847,7 +2847,7 @@
       "column": 106,
       "row": 312
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2866,7 +2866,7 @@
       "column": 102,
       "row": 614
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2885,7 +2885,7 @@
       "column": 135,
       "row": 621
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2904,7 +2904,7 @@
       "column": 106,
       "row": 665
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2923,7 +2923,7 @@
       "column": 131,
       "row": 677
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2942,7 +2942,7 @@
       "column": 102,
       "row": 678
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2961,7 +2961,7 @@
       "column": 104,
       "row": 958
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2980,7 +2980,7 @@
       "column": 109,
       "row": 966
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -2999,7 +2999,7 @@
       "column": 106,
       "row": 1350
     },
-    "filename": "<repo>/src/acp/scheduler/structure_sources.py",
+    "filename": "src/acp/scheduler/structure_sources.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -3018,7 +3018,7 @@
       "column": 41,
       "row": 56
     },
-    "filename": "<repo>/src/cccp/backends/__init__.py",
+    "filename": "src/cccp/backends/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3053,7 +3053,7 @@
       "column": 63,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/backends/registry.py",
+    "filename": "src/cccp/backends/registry.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3088,7 +3088,7 @@
       "column": 105,
       "row": 496
     },
-    "filename": "<repo>/src/cccp/calculation/batch.py",
+    "filename": "src/cccp/calculation/batch.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -3107,7 +3107,7 @@
       "column": 102,
       "row": 677
     },
-    "filename": "<repo>/src/cccp/calculation/batch.py",
+    "filename": "src/cccp/calculation/batch.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -3126,7 +3126,7 @@
       "column": 60,
       "row": 46
     },
-    "filename": "<repo>/src/cccp/calculation/tasks/censo_refine.py",
+    "filename": "src/cccp/calculation/tasks/censo_refine.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3161,7 +3161,7 @@
       "column": 5,
       "row": 34
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3196,7 +3196,7 @@
       "column": 5,
       "row": 499
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3231,7 +3231,7 @@
       "column": 9,
       "row": 503
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3266,7 +3266,7 @@
       "column": 5,
       "row": 520
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3301,7 +3301,7 @@
       "column": 5,
       "row": 534
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3336,7 +3336,7 @@
       "column": 115,
       "row": 581
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -3355,7 +3355,7 @@
       "column": 5,
       "row": 589
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3390,7 +3390,7 @@
       "column": 9,
       "row": 592
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3425,7 +3425,7 @@
       "column": 109,
       "row": 650
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -3444,7 +3444,7 @@
       "column": 5,
       "row": 764
     },
-    "filename": "<repo>/src/cccp/config.py",
+    "filename": "src/cccp/config.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3479,7 +3479,7 @@
       "column": 19,
       "row": 31
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3514,7 +3514,7 @@
       "column": 52,
       "row": 30
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -3533,7 +3533,7 @@
       "column": 52,
       "row": 30
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -3552,7 +3552,7 @@
       "column": 52,
       "row": 30
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -3571,7 +3571,7 @@
       "column": 52,
       "row": 30
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3606,7 +3606,7 @@
       "column": 5,
       "row": 38
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -3641,7 +3641,7 @@
       "column": 18,
       "row": 57
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3676,7 +3676,7 @@
       "column": 32,
       "row": 60
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3711,7 +3711,7 @@
       "column": 19,
       "row": 62
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3746,7 +3746,7 @@
       "column": 34,
       "row": 63
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3781,7 +3781,7 @@
       "column": 38,
       "row": 64
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3816,7 +3816,7 @@
       "column": 34,
       "row": 65
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3851,7 +3851,7 @@
       "column": 34,
       "row": 66
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3886,7 +3886,7 @@
       "column": 29,
       "row": 67
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3921,7 +3921,7 @@
       "column": 28,
       "row": 68
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3956,7 +3956,7 @@
       "column": 38,
       "row": 69
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -3991,7 +3991,7 @@
       "column": 32,
       "row": 70
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4026,7 +4026,7 @@
       "column": 37,
       "row": 71
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4061,7 +4061,7 @@
       "column": 40,
       "row": 74
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4096,7 +4096,7 @@
       "column": 30,
       "row": 83
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4131,7 +4131,7 @@
       "column": 21,
       "row": 109
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4166,7 +4166,7 @@
       "column": 38,
       "row": 110
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4201,7 +4201,7 @@
       "column": 19,
       "row": 113
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4236,7 +4236,7 @@
       "column": 9,
       "row": 135
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4271,7 +4271,7 @@
       "column": 9,
       "row": 141
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4306,7 +4306,7 @@
       "column": 9,
       "row": 143
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4341,7 +4341,7 @@
       "column": 9,
       "row": 147
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4376,7 +4376,7 @@
       "column": 11,
       "row": 148
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -4395,7 +4395,7 @@
       "column": 9,
       "row": 151
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4430,7 +4430,7 @@
       "column": 9,
       "row": 158
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4465,7 +4465,7 @@
       "column": 13,
       "row": 161
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4500,7 +4500,7 @@
       "column": 9,
       "row": 169
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4535,7 +4535,7 @@
       "column": 9,
       "row": 171
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4570,7 +4570,7 @@
       "column": 9,
       "row": 175
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4605,7 +4605,7 @@
       "column": 9,
       "row": 179
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4640,7 +4640,7 @@
       "column": 18,
       "row": 180
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -4659,7 +4659,7 @@
       "column": 9,
       "row": 183
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4694,7 +4694,7 @@
       "column": 9,
       "row": 186
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4729,7 +4729,7 @@
       "column": 9,
       "row": 194
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4764,7 +4764,7 @@
       "column": 13,
       "row": 197
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4799,7 +4799,7 @@
       "column": 9,
       "row": 203
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4834,7 +4834,7 @@
       "column": 9,
       "row": 209
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -4869,7 +4869,7 @@
       "column": 9,
       "row": 217
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4904,7 +4904,7 @@
       "column": 13,
       "row": 220
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4939,7 +4939,7 @@
       "column": 9,
       "row": 231
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -4974,7 +4974,7 @@
       "column": 13,
       "row": 234
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -5009,7 +5009,7 @@
       "column": 9,
       "row": 240
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5044,7 +5044,7 @@
       "column": 9,
       "row": 243
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5079,7 +5079,7 @@
       "column": 9,
       "row": 251
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5114,7 +5114,7 @@
       "column": 64,
       "row": 261
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5149,7 +5149,7 @@
       "column": 63,
       "row": 268
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5184,7 +5184,7 @@
       "column": 20,
       "row": 279
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5219,7 +5219,7 @@
       "column": 36,
       "row": 280
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5254,7 +5254,7 @@
       "column": 28,
       "row": 280
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5289,7 +5289,7 @@
       "column": 38,
       "row": 281
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5324,7 +5324,7 @@
       "column": 5,
       "row": 285
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -5359,7 +5359,7 @@
       "column": 9,
       "row": 290
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -5394,7 +5394,7 @@
       "column": 5,
       "row": 295
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5429,7 +5429,7 @@
       "column": 5,
       "row": 297
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5464,7 +5464,7 @@
       "column": 13,
       "row": 302
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5499,7 +5499,7 @@
       "column": 13,
       "row": 304
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5534,7 +5534,7 @@
       "column": 5,
       "row": 318
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5569,7 +5569,7 @@
       "column": 5,
       "row": 321
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5604,7 +5604,7 @@
       "column": 5,
       "row": 325
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5639,7 +5639,7 @@
       "column": 5,
       "row": 332
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -5674,7 +5674,7 @@
       "column": 9,
       "row": 335
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -5709,7 +5709,7 @@
       "column": 5,
       "row": 360
     },
-    "filename": "<repo>/src/cccp/core/candidates.py",
+    "filename": "src/cccp/core/candidates.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5744,7 +5744,7 @@
       "column": 19,
       "row": 25
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5779,7 +5779,7 @@
       "column": 45,
       "row": 23
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -5798,7 +5798,7 @@
       "column": 45,
       "row": 23
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -5817,7 +5817,7 @@
       "column": 45,
       "row": 23
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5852,7 +5852,7 @@
       "column": 19,
       "row": 25
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5887,7 +5887,7 @@
       "column": 5,
       "row": 33
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -5922,7 +5922,7 @@
       "column": 26,
       "row": 54
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5957,7 +5957,7 @@
       "column": 53,
       "row": 56
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -5992,7 +5992,7 @@
       "column": 42,
       "row": 56
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6027,7 +6027,7 @@
       "column": 43,
       "row": 67
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6062,7 +6062,7 @@
       "column": 9,
       "row": 113
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6097,7 +6097,7 @@
       "column": 9,
       "row": 116
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6132,7 +6132,7 @@
       "column": 9,
       "row": 120
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6167,7 +6167,7 @@
       "column": 59,
       "row": 123
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6202,7 +6202,7 @@
       "column": 9,
       "row": 133
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6237,7 +6237,7 @@
       "column": 9,
       "row": 139
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6272,7 +6272,7 @@
       "column": 9,
       "row": 152
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6307,7 +6307,7 @@
       "column": 9,
       "row": 158
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6342,7 +6342,7 @@
       "column": 75,
       "row": 161
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6377,7 +6377,7 @@
       "column": 9,
       "row": 186
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6412,7 +6412,7 @@
       "column": 76,
       "row": 190
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6447,7 +6447,7 @@
       "column": 65,
       "row": 190
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6482,7 +6482,7 @@
       "column": 9,
       "row": 202
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6517,7 +6517,7 @@
       "column": 34,
       "row": 223
     },
-    "filename": "<repo>/src/cccp/core/state_manager.py",
+    "filename": "src/cccp/core/state_manager.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6552,7 +6552,7 @@
       "column": 19,
       "row": 17
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6587,7 +6587,7 @@
       "column": 59,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -6606,7 +6606,7 @@
       "column": 59,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -6625,7 +6625,7 @@
       "column": 59,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -6644,7 +6644,7 @@
       "column": 59,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6679,7 +6679,7 @@
       "column": 5,
       "row": 36
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -6714,7 +6714,7 @@
       "column": 18,
       "row": 49
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6749,7 +6749,7 @@
       "column": 32,
       "row": 53
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6784,7 +6784,7 @@
       "column": 19,
       "row": 54
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6819,7 +6819,7 @@
       "column": 9,
       "row": 60
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6854,7 +6854,7 @@
       "column": 9,
       "row": 63
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6889,7 +6889,7 @@
       "column": 5,
       "row": 79
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -6924,7 +6924,7 @@
       "column": 47,
       "row": 85
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6959,7 +6959,7 @@
       "column": 9,
       "row": 96
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -6994,7 +6994,7 @@
       "column": 9,
       "row": 99
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7029,7 +7029,7 @@
       "column": 9,
       "row": 103
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7064,7 +7064,7 @@
       "column": 9,
       "row": 105
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7099,7 +7099,7 @@
       "column": 9,
       "row": 113
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7134,7 +7134,7 @@
       "column": 9,
       "row": 120
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -7169,7 +7169,7 @@
       "column": 13,
       "row": 123
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -7204,7 +7204,7 @@
       "column": 9,
       "row": 129
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7239,7 +7239,7 @@
       "column": 9,
       "row": 132
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7274,7 +7274,7 @@
       "column": 9,
       "row": 135
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7309,7 +7309,7 @@
       "column": 33,
       "row": 141
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7344,7 +7344,7 @@
       "column": 28,
       "row": 142
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7379,7 +7379,7 @@
       "column": 30,
       "row": 143
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7414,7 +7414,7 @@
       "column": 36,
       "row": 144
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7449,7 +7449,7 @@
       "column": 9,
       "row": 160
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7484,7 +7484,7 @@
       "column": 28,
       "row": 175
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7519,7 +7519,7 @@
       "column": 30,
       "row": 176
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7554,7 +7554,7 @@
       "column": 36,
       "row": 177
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7589,7 +7589,7 @@
       "column": 9,
       "row": 199
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7624,7 +7624,7 @@
       "column": 9,
       "row": 203
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7659,7 +7659,7 @@
       "column": 9,
       "row": 205
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7694,7 +7694,7 @@
       "column": 13,
       "row": 212
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7729,7 +7729,7 @@
       "column": 9,
       "row": 217
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7764,7 +7764,7 @@
       "column": 9,
       "row": 219
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7799,7 +7799,7 @@
       "column": 9,
       "row": 225
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7834,7 +7834,7 @@
       "column": 9,
       "row": 231
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7869,7 +7869,7 @@
       "column": 9,
       "row": 237
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7904,7 +7904,7 @@
       "column": 9,
       "row": 239
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7939,7 +7939,7 @@
       "column": 28,
       "row": 253
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -7974,7 +7974,7 @@
       "column": 30,
       "row": 254
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8009,7 +8009,7 @@
       "column": 36,
       "row": 255
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8044,7 +8044,7 @@
       "column": 106,
       "row": 289
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -8063,7 +8063,7 @@
       "column": 9,
       "row": 299
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8098,7 +8098,7 @@
       "column": 28,
       "row": 314
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8133,7 +8133,7 @@
       "column": 30,
       "row": 315
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8168,7 +8168,7 @@
       "column": 36,
       "row": 316
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8203,7 +8203,7 @@
       "column": 9,
       "row": 341
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8238,7 +8238,7 @@
       "column": 28,
       "row": 356
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8273,7 +8273,7 @@
       "column": 30,
       "row": 357
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8308,7 +8308,7 @@
       "column": 36,
       "row": 358
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8343,7 +8343,7 @@
       "column": 26,
       "row": 397
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8378,7 +8378,7 @@
       "column": 32,
       "row": 398
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8413,7 +8413,7 @@
       "column": 10,
       "row": 399
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8448,7 +8448,7 @@
       "column": 5,
       "row": 402
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -8483,7 +8483,7 @@
       "column": 5,
       "row": 420
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8518,7 +8518,7 @@
       "column": 30,
       "row": 421
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8553,7 +8553,7 @@
       "column": 5,
       "row": 423
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8588,7 +8588,7 @@
       "column": 9,
       "row": 426
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8623,7 +8623,7 @@
       "column": 9,
       "row": 429
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8658,7 +8658,7 @@
       "column": 5,
       "row": 441
     },
-    "filename": "<repo>/src/cccp/io/input_handler.py",
+    "filename": "src/cccp/io/input_handler.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8693,7 +8693,7 @@
       "column": 39,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/pipeline/executor.py",
+    "filename": "src/cccp/pipeline/executor.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -8712,7 +8712,7 @@
       "column": 39,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/pipeline/executor.py",
+    "filename": "src/cccp/pipeline/executor.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8747,7 +8747,7 @@
       "column": 14,
       "row": 42
     },
-    "filename": "<repo>/src/cccp/pipeline/executor.py",
+    "filename": "src/cccp/pipeline/executor.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8782,7 +8782,7 @@
       "column": 2,
       "row": 30
     },
-    "filename": "<repo>/src/cccp/qc/__init__.py",
+    "filename": "src/cccp/qc/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8817,7 +8817,7 @@
       "column": 12,
       "row": 31
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8852,7 +8852,7 @@
       "column": 45,
       "row": 28
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -8871,7 +8871,7 @@
       "column": 45,
       "row": 28
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -8890,7 +8890,7 @@
       "column": 45,
       "row": 28
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": null,
     "location": {
       "column": 41,
@@ -8909,7 +8909,7 @@
       "column": 24,
       "row": 41
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8944,7 +8944,7 @@
       "column": 29,
       "row": 42
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -8979,7 +8979,7 @@
       "column": 27,
       "row": 43
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9014,7 +9014,7 @@
       "column": 36,
       "row": 51
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9049,7 +9049,7 @@
       "column": 24,
       "row": 65
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9084,7 +9084,7 @@
       "column": 32,
       "row": 111
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9119,7 +9119,7 @@
       "column": 36,
       "row": 133
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9154,7 +9154,7 @@
       "column": 37,
       "row": 141
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9189,7 +9189,7 @@
       "column": 24,
       "row": 147
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9224,7 +9224,7 @@
       "column": 9,
       "row": 167
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9259,7 +9259,7 @@
       "column": 13,
       "row": 175
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9294,7 +9294,7 @@
       "column": 13,
       "row": 177
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9329,7 +9329,7 @@
       "column": 13,
       "row": 179
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9364,7 +9364,7 @@
       "column": 13,
       "row": 181
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9399,7 +9399,7 @@
       "column": 9,
       "row": 204
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9434,7 +9434,7 @@
       "column": 32,
       "row": 246
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9469,7 +9469,7 @@
       "column": 9,
       "row": 260
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9504,7 +9504,7 @@
       "column": 13,
       "row": 263
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9539,7 +9539,7 @@
       "column": 13,
       "row": 266
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9574,7 +9574,7 @@
       "column": 13,
       "row": 274
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9609,7 +9609,7 @@
       "column": 36,
       "row": 285
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9644,7 +9644,7 @@
       "column": 24,
       "row": 304
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9679,7 +9679,7 @@
       "column": 9,
       "row": 318
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9714,7 +9714,7 @@
       "column": 9,
       "row": 322
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9749,7 +9749,7 @@
       "column": 13,
       "row": 331
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9784,7 +9784,7 @@
       "column": 17,
       "row": 340
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9819,7 +9819,7 @@
       "column": 24,
       "row": 349
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9854,7 +9854,7 @@
       "column": 9,
       "row": 354
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9889,7 +9889,7 @@
       "column": 9,
       "row": 369
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9924,7 +9924,7 @@
       "column": 9,
       "row": 372
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9959,7 +9959,7 @@
       "column": 9,
       "row": 376
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -9994,7 +9994,7 @@
       "column": 13,
       "row": 396
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10029,7 +10029,7 @@
       "column": 13,
       "row": 404
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10064,7 +10064,7 @@
       "column": 13,
       "row": 407
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10099,7 +10099,7 @@
       "column": 13,
       "row": 413
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10134,7 +10134,7 @@
       "column": 32,
       "row": 441
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10169,7 +10169,7 @@
       "column": 9,
       "row": 455
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10204,7 +10204,7 @@
       "column": 13,
       "row": 458
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10239,7 +10239,7 @@
       "column": 13,
       "row": 461
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10274,7 +10274,7 @@
       "column": 13,
       "row": 469
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10309,7 +10309,7 @@
       "column": 40,
       "row": 473
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10344,7 +10344,7 @@
       "column": 5,
       "row": 485
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10379,7 +10379,7 @@
       "column": 5,
       "row": 488
     },
-    "filename": "<repo>/src/cccp/qc/cluster/__init__.py",
+    "filename": "src/cccp/qc/cluster/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10414,7 +10414,7 @@
       "column": 19,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10449,7 +10449,7 @@
       "column": 45,
       "row": 13
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -10468,7 +10468,7 @@
       "column": 45,
       "row": 13
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -10487,7 +10487,7 @@
       "column": 28,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10522,7 +10522,7 @@
       "column": 38,
       "row": 22
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10557,7 +10557,7 @@
       "column": 33,
       "row": 23
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10592,7 +10592,7 @@
       "column": 27,
       "row": 23
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10627,7 +10627,7 @@
       "column": 32,
       "row": 25
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10662,7 +10662,7 @@
       "column": 29,
       "row": 26
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10697,7 +10697,7 @@
       "column": 34,
       "row": 27
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10732,7 +10732,7 @@
       "column": 33,
       "row": 28
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10767,7 +10767,7 @@
       "column": 39,
       "row": 29
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10802,7 +10802,7 @@
       "column": 31,
       "row": 29
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10837,7 +10837,7 @@
       "column": 25,
       "row": 31
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10872,7 +10872,7 @@
       "column": 30,
       "row": 32
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10907,7 +10907,7 @@
       "column": 27,
       "row": 33
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10942,7 +10942,7 @@
       "column": 29,
       "row": 34
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -10977,7 +10977,7 @@
       "column": 5,
       "row": 35
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11012,7 +11012,7 @@
       "column": 19,
       "row": 36
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11047,7 +11047,7 @@
       "column": 5,
       "row": 74
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -11082,7 +11082,7 @@
       "column": 36,
       "row": 79
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11117,7 +11117,7 @@
       "column": 9,
       "row": 90
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11152,7 +11152,7 @@
       "column": 22,
       "row": 95
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11187,7 +11187,7 @@
       "column": 22,
       "row": 121
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11222,7 +11222,7 @@
       "column": 22,
       "row": 147
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/base.py",
+    "filename": "src/cccp/qc/interfaces/base.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11257,7 +11257,7 @@
       "column": 50,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -11276,7 +11276,7 @@
       "column": 50,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -11295,7 +11295,7 @@
       "column": 50,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -11314,7 +11314,7 @@
       "column": 18,
       "row": 52
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11349,7 +11349,7 @@
       "column": 18,
       "row": 70
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11384,7 +11384,7 @@
       "column": 29,
       "row": 72
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11419,7 +11419,7 @@
       "column": 40,
       "row": 75
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11454,7 +11454,7 @@
       "column": 18,
       "row": 83
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11489,7 +11489,7 @@
       "column": 20,
       "row": 123
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11524,7 +11524,7 @@
       "column": 30,
       "row": 123
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11559,7 +11559,7 @@
       "column": 36,
       "row": 189
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11594,7 +11594,7 @@
       "column": 40,
       "row": 201
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11629,7 +11629,7 @@
       "column": 43,
       "row": 226
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11664,7 +11664,7 @@
       "column": 51,
       "row": 240
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11699,7 +11699,7 @@
       "column": 60,
       "row": 240
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11734,7 +11734,7 @@
       "column": 25,
       "row": 257
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11769,7 +11769,7 @@
       "column": 31,
       "row": 261
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11804,7 +11804,7 @@
       "column": 44,
       "row": 262
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11839,7 +11839,7 @@
       "column": 38,
       "row": 262
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11874,7 +11874,7 @@
       "column": 37,
       "row": 263
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11909,7 +11909,7 @@
       "column": 20,
       "row": 266
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11944,7 +11944,7 @@
       "column": 29,
       "row": 347
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -11979,7 +11979,7 @@
       "column": 39,
       "row": 347
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12014,7 +12014,7 @@
       "column": 25,
       "row": 420
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12049,7 +12049,7 @@
       "column": 31,
       "row": 423
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12084,7 +12084,7 @@
       "column": 29,
       "row": 424
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12119,7 +12119,7 @@
       "column": 14,
       "row": 428
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12154,7 +12154,7 @@
       "column": 69,
       "row": 470
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12189,7 +12189,7 @@
       "column": 14,
       "row": 481
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12224,7 +12224,7 @@
       "column": 22,
       "row": 504
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12259,7 +12259,7 @@
       "column": 55,
       "row": 565
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12294,7 +12294,7 @@
       "column": 21,
       "row": 567
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12329,7 +12329,7 @@
       "column": 28,
       "row": 619
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12364,7 +12364,7 @@
       "column": 30,
       "row": 660
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12399,7 +12399,7 @@
       "column": 37,
       "row": 663
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12434,7 +12434,7 @@
       "column": 31,
       "row": 664
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12469,7 +12469,7 @@
       "column": 29,
       "row": 665
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12504,7 +12504,7 @@
       "column": 29,
       "row": 667
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12539,7 +12539,7 @@
       "column": 60,
       "row": 668
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12574,7 +12574,7 @@
       "column": 38,
       "row": 668
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12609,7 +12609,7 @@
       "column": 48,
       "row": 668
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12644,7 +12644,7 @@
       "column": 33,
       "row": 669
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12679,7 +12679,7 @@
       "column": 55,
       "row": 670
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12714,7 +12714,7 @@
       "column": 38,
       "row": 670
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12749,7 +12749,7 @@
       "column": 48,
       "row": 670
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12784,7 +12784,7 @@
       "column": 37,
       "row": 671
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12819,7 +12819,7 @@
       "column": 38,
       "row": 752
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12854,7 +12854,7 @@
       "column": 27,
       "row": 752
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12889,7 +12889,7 @@
       "column": 35,
       "row": 904
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12924,7 +12924,7 @@
       "column": 27,
       "row": 957
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/censo.py",
+    "filename": "src/cccp/qc/interfaces/censo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12959,7 +12959,7 @@
       "column": 44,
       "row": 23
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/constraints.py",
+    "filename": "src/cccp/qc/interfaces/constraints.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -12994,7 +12994,7 @@
       "column": 259,
       "row": 211
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/constraints.py",
+    "filename": "src/cccp/qc/interfaces/constraints.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -13013,7 +13013,7 @@
       "column": 102,
       "row": 212
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/constraints.py",
+    "filename": "src/cccp/qc/interfaces/constraints.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -13032,7 +13032,7 @@
       "column": 197,
       "row": 213
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/constraints.py",
+    "filename": "src/cccp/qc/interfaces/constraints.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -13051,7 +13051,7 @@
       "column": 69,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13086,7 +13086,7 @@
       "column": 45,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -13105,7 +13105,7 @@
       "column": 45,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -13124,7 +13124,7 @@
       "column": 21,
       "row": 33
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13159,7 +13159,7 @@
       "column": 105,
       "row": 54
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -13178,7 +13178,7 @@
       "column": 103,
       "row": 70
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -13197,7 +13197,7 @@
       "column": 37,
       "row": 79
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13232,7 +13232,7 @@
       "column": 70,
       "row": 79
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13267,7 +13267,7 @@
       "column": 14,
       "row": 80
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13302,7 +13302,7 @@
       "column": 22,
       "row": 93
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13337,7 +13337,7 @@
       "column": 39,
       "row": 98
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13372,7 +13372,7 @@
       "column": 22,
       "row": 232
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/crest.py",
+    "filename": "src/cccp/qc/interfaces/crest.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13407,7 +13407,7 @@
       "column": 39,
       "row": 16
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -13426,7 +13426,7 @@
       "column": 39,
       "row": 34
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13461,7 +13461,7 @@
       "column": 21,
       "row": 113
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13496,7 +13496,7 @@
       "column": 36,
       "row": 114
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13531,7 +13531,7 @@
       "column": 31,
       "row": 115
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13566,7 +13566,7 @@
       "column": 40,
       "row": 135
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13601,7 +13601,7 @@
       "column": 107,
       "row": 151
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -13620,7 +13620,7 @@
       "column": 35,
       "row": 159
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13655,7 +13655,7 @@
       "column": 28,
       "row": 163
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13690,7 +13690,7 @@
       "column": 45,
       "row": 222
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13725,7 +13725,7 @@
       "column": 68,
       "row": 222
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/isostat.py",
+    "filename": "src/cccp/qc/interfaces/isostat.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13760,7 +13760,7 @@
       "column": 52,
       "row": 16
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -13779,7 +13779,7 @@
       "column": 52,
       "row": 16
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -13798,7 +13798,7 @@
       "column": 52,
       "row": 16
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -13817,7 +13817,7 @@
       "column": 19,
       "row": 30
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13852,7 +13852,7 @@
       "column": 27,
       "row": 32
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13887,7 +13887,7 @@
       "column": 45,
       "row": 40
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13922,7 +13922,7 @@
       "column": 70,
       "row": 40
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13957,7 +13957,7 @@
       "column": 41,
       "row": 57
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -13992,7 +13992,7 @@
       "column": 71,
       "row": 57
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14027,7 +14027,7 @@
       "column": 93,
       "row": 57
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14062,7 +14062,7 @@
       "column": 67,
       "row": 62
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14097,7 +14097,7 @@
       "column": 46,
       "row": 119
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14132,7 +14132,7 @@
       "column": 36,
       "row": 127
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14167,7 +14167,7 @@
       "column": 36,
       "row": 148
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14202,7 +14202,7 @@
       "column": 40,
       "row": 175
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14237,7 +14237,7 @@
       "column": 44,
       "row": 178
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14272,7 +14272,7 @@
       "column": 48,
       "row": 181
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14307,7 +14307,7 @@
       "column": 65,
       "row": 286
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14342,7 +14342,7 @@
       "column": 88,
       "row": 286
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14377,7 +14377,7 @@
       "column": 20,
       "row": 287
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14412,7 +14412,7 @@
       "column": 54,
       "row": 295
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14447,7 +14447,7 @@
       "column": 80,
       "row": 295
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14482,7 +14482,7 @@
       "column": 50,
       "row": 303
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14517,7 +14517,7 @@
       "column": 18,
       "row": 314
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14552,7 +14552,7 @@
       "column": 38,
       "row": 320
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14587,7 +14587,7 @@
       "column": 27,
       "row": 320
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14622,7 +14622,7 @@
       "column": 23,
       "row": 321
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14657,7 +14657,7 @@
       "column": 28,
       "row": 358
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14692,7 +14692,7 @@
       "column": 35,
       "row": 396
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14727,7 +14727,7 @@
       "column": 38,
       "row": 431
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14762,7 +14762,7 @@
       "column": 31,
       "row": 606
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14797,7 +14797,7 @@
       "column": 35,
       "row": 610
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/molclus.py",
+    "filename": "src/cccp/qc/interfaces/molclus.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -14832,7 +14832,7 @@
       "column": 136,
       "row": 2248
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14851,7 +14851,7 @@
       "column": 110,
       "row": 2501
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14870,7 +14870,7 @@
       "column": 113,
       "row": 2503
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14889,7 +14889,7 @@
       "column": 108,
       "row": 2507
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14908,7 +14908,7 @@
       "column": 104,
       "row": 2521
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14927,7 +14927,7 @@
       "column": 118,
       "row": 2523
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14946,7 +14946,7 @@
       "column": 124,
       "row": 2524
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14965,7 +14965,7 @@
       "column": 133,
       "row": 2525
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -14984,7 +14984,7 @@
       "column": 131,
       "row": 2552
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -15003,7 +15003,7 @@
       "column": 142,
       "row": 2578
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -15022,7 +15022,7 @@
       "column": 157,
       "row": 2633
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -15041,7 +15041,7 @@
       "column": 124,
       "row": 3323
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -15060,7 +15060,7 @@
       "column": 104,
       "row": 3453
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/orca.py",
+    "filename": "src/cccp/qc/interfaces/orca.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -15079,7 +15079,7 @@
       "column": 69,
       "row": 30
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15114,7 +15114,7 @@
       "column": 65,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15149,7 +15149,7 @@
       "column": 65,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -15168,7 +15168,7 @@
       "column": 65,
       "row": 14
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -15187,7 +15187,7 @@
       "column": 80,
       "row": 19
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15222,7 +15222,7 @@
       "column": 104,
       "row": 19
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -15241,7 +15241,7 @@
       "column": 36,
       "row": 35
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15276,7 +15276,7 @@
       "column": 21,
       "row": 58
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15311,7 +15311,7 @@
       "column": 37,
       "row": 104
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15346,7 +15346,7 @@
       "column": 70,
       "row": 104
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15381,7 +15381,7 @@
       "column": 14,
       "row": 105
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15416,7 +15416,7 @@
       "column": 22,
       "row": 118
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15451,7 +15451,7 @@
       "column": 22,
       "row": 222
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15486,7 +15486,7 @@
       "column": 33,
       "row": 228
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15521,7 +15521,7 @@
       "column": 31,
       "row": 229
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15556,7 +15556,7 @@
       "column": 22,
       "row": 334
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15591,7 +15591,7 @@
       "column": 47,
       "row": 336
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15626,7 +15626,7 @@
       "column": 33,
       "row": 341
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15661,7 +15661,7 @@
       "column": 31,
       "row": 342
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15696,7 +15696,7 @@
       "column": 34,
       "row": 343
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15731,7 +15731,7 @@
       "column": 69,
       "row": 344
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15766,7 +15766,7 @@
       "column": 21,
       "row": 387
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15801,7 +15801,7 @@
       "column": 47,
       "row": 388
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15836,7 +15836,7 @@
       "column": 104,
       "row": 437
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -15855,7 +15855,7 @@
       "column": 22,
       "row": 450
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15890,7 +15890,7 @@
       "column": 22,
       "row": 534
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15925,7 +15925,7 @@
       "column": 31,
       "row": 543
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb.py",
+    "filename": "src/cccp/qc/interfaces/xtb.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15960,7 +15960,7 @@
       "column": 43,
       "row": 16
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_scan.py",
+    "filename": "src/cccp/qc/interfaces/xtb_scan.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -15995,7 +15995,7 @@
       "column": 23,
       "row": 25
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_scan.py",
+    "filename": "src/cccp/qc/interfaces/xtb_scan.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16030,7 +16030,7 @@
       "column": 47,
       "row": 114
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_scan.py",
+    "filename": "src/cccp/qc/interfaces/xtb_scan.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16065,7 +16065,7 @@
       "column": 55,
       "row": 117
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_scan.py",
+    "filename": "src/cccp/qc/interfaces/xtb_scan.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16100,7 +16100,7 @@
       "column": 69,
       "row": 21
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16135,7 +16135,7 @@
       "column": 34,
       "row": 17
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -16154,7 +16154,7 @@
       "column": 19,
       "row": 19
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16189,7 +16189,7 @@
       "column": 26,
       "row": 38
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16224,7 +16224,7 @@
       "column": 29,
       "row": 39
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16259,7 +16259,7 @@
       "column": 25,
       "row": 41
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16294,7 +16294,7 @@
       "column": 28,
       "row": 57
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16329,7 +16329,7 @@
       "column": 27,
       "row": 118
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16364,7 +16364,7 @@
       "column": 27,
       "row": 119
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16399,7 +16399,7 @@
       "column": 14,
       "row": 160
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16434,7 +16434,7 @@
       "column": 33,
       "row": 241
     },
-    "filename": "<repo>/src/cccp/qc/interfaces/xtb_thermo.py",
+    "filename": "src/cccp/qc/interfaces/xtb_thermo.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16469,7 +16469,7 @@
       "column": 45,
       "row": 24
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -16488,7 +16488,7 @@
       "column": 45,
       "row": 24
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -16507,7 +16507,7 @@
       "column": 38,
       "row": 32
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16542,7 +16542,7 @@
       "column": 32,
       "row": 92
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16577,7 +16577,7 @@
       "column": 26,
       "row": 98
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16612,7 +16612,7 @@
       "column": 32,
       "row": 99
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16647,7 +16647,7 @@
       "column": 19,
       "row": 99
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16682,7 +16682,7 @@
       "column": 66,
       "row": 182
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16717,7 +16717,7 @@
       "column": 53,
       "row": 182
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16752,7 +16752,7 @@
       "column": 32,
       "row": 201
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16787,7 +16787,7 @@
       "column": 20,
       "row": 218
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16822,7 +16822,7 @@
       "column": 17,
       "row": 220
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16857,7 +16857,7 @@
       "column": 10,
       "row": 224
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16892,7 +16892,7 @@
       "column": 20,
       "row": 224
     },
-    "filename": "<repo>/src/cccp/qc/runners/__init__.py",
+    "filename": "src/cccp/qc/runners/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16927,7 +16927,7 @@
       "column": 2,
       "row": 59
     },
-    "filename": "<repo>/src/cccp/utils/__init__.py",
+    "filename": "src/cccp/utils/__init__.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16962,7 +16962,7 @@
       "column": 10,
       "row": 15
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -16997,7 +16997,7 @@
       "column": 52,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -17016,7 +17016,7 @@
       "column": 52,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -17035,7 +17035,7 @@
       "column": 52,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -17054,7 +17054,7 @@
       "column": 38,
       "row": 20
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17089,7 +17089,7 @@
       "column": 55,
       "row": 20
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17124,7 +17124,7 @@
       "column": 28,
       "row": 36
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17159,7 +17159,7 @@
       "column": 10,
       "row": 49
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "unsafe",
       "edits": [
@@ -17194,7 +17194,7 @@
       "column": 69,
       "row": 63
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17229,7 +17229,7 @@
       "column": 5,
       "row": 77
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17264,7 +17264,7 @@
       "column": 38,
       "row": 90
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17299,7 +17299,7 @@
       "column": 55,
       "row": 90
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17334,7 +17334,7 @@
       "column": 28,
       "row": 104
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17369,7 +17369,7 @@
       "column": 9,
       "row": 115
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17404,7 +17404,7 @@
       "column": 13,
       "row": 118
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17439,7 +17439,7 @@
       "column": 13,
       "row": 122
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17474,7 +17474,7 @@
       "column": 113,
       "row": 148
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -17493,7 +17493,7 @@
       "column": 65,
       "row": 171
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17528,7 +17528,7 @@
       "column": 28,
       "row": 186
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17563,7 +17563,7 @@
       "column": 50,
       "row": 198
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17598,7 +17598,7 @@
       "column": 67,
       "row": 198
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17633,7 +17633,7 @@
       "column": 89,
       "row": 198
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17668,7 +17668,7 @@
       "column": 5,
       "row": 211
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17703,7 +17703,7 @@
       "column": 28,
       "row": 213
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17738,7 +17738,7 @@
       "column": 5,
       "row": 215
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17773,7 +17773,7 @@
       "column": 5,
       "row": 221
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17808,7 +17808,7 @@
       "column": 26,
       "row": 225
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17843,7 +17843,7 @@
       "column": 39,
       "row": 232
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17878,7 +17878,7 @@
       "column": 29,
       "row": 236
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17913,7 +17913,7 @@
       "column": 49,
       "row": 247
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17948,7 +17948,7 @@
       "column": 66,
       "row": 247
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -17983,7 +17983,7 @@
       "column": 28,
       "row": 272
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18018,7 +18018,7 @@
       "column": 18,
       "row": 340
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18053,7 +18053,7 @@
       "column": 17,
       "row": 341
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18088,7 +18088,7 @@
       "column": 19,
       "row": 342
     },
-    "filename": "<repo>/src/cccp/utils/file_io.py",
+    "filename": "src/cccp/utils/file_io.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18123,7 +18123,7 @@
       "column": 61,
       "row": 18
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18158,7 +18158,7 @@
       "column": 52,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -18177,7 +18177,7 @@
       "column": 52,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -18196,7 +18196,7 @@
       "column": 52,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -18215,7 +18215,7 @@
       "column": 47,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18250,7 +18250,7 @@
       "column": 52,
       "row": 12
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18285,7 +18285,7 @@
       "column": 40,
       "row": 17
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18320,7 +18320,7 @@
       "column": 61,
       "row": 18
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18355,7 +18355,7 @@
       "column": 57,
       "row": 105
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18390,7 +18390,7 @@
       "column": 60,
       "row": 130
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18425,7 +18425,7 @@
       "column": 10,
       "row": 144
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18444,7 +18444,7 @@
       "column": 10,
       "row": 144
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18463,7 +18463,7 @@
       "column": 10,
       "row": 196
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18482,7 +18482,7 @@
       "column": 10,
       "row": 197
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18501,7 +18501,7 @@
       "column": 10,
       "row": 199
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18520,7 +18520,7 @@
       "column": 10,
       "row": 200
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18539,7 +18539,7 @@
       "column": 13,
       "row": 200
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 12,
@@ -18558,7 +18558,7 @@
       "column": 17,
       "row": 200
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 15,
@@ -18577,7 +18577,7 @@
       "column": 10,
       "row": 201
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18596,7 +18596,7 @@
       "column": 14,
       "row": 205
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 13,
@@ -18615,7 +18615,7 @@
       "column": 18,
       "row": 207
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": null,
     "location": {
       "column": 9,
@@ -18634,7 +18634,7 @@
       "column": 15,
       "row": 279
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18669,7 +18669,7 @@
       "column": 36,
       "row": 279
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18704,7 +18704,7 @@
       "column": 57,
       "row": 279
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18739,7 +18739,7 @@
       "column": 51,
       "row": 279
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18774,7 +18774,7 @@
       "column": 72,
       "row": 279
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18809,7 +18809,7 @@
       "column": 15,
       "row": 315
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18844,7 +18844,7 @@
       "column": 36,
       "row": 315
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18879,7 +18879,7 @@
       "column": 57,
       "row": 315
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18914,7 +18914,7 @@
       "column": 51,
       "row": 315
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18949,7 +18949,7 @@
       "column": 72,
       "row": 315
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -18984,7 +18984,7 @@
       "column": 40,
       "row": 337
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19019,7 +19019,7 @@
       "column": 15,
       "row": 361
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19054,7 +19054,7 @@
       "column": 36,
       "row": 361
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19089,7 +19089,7 @@
       "column": 57,
       "row": 361
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19124,7 +19124,7 @@
       "column": 51,
       "row": 361
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19159,7 +19159,7 @@
       "column": 72,
       "row": 361
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19194,7 +19194,7 @@
       "column": 32,
       "row": 363
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19229,7 +19229,7 @@
       "column": 15,
       "row": 371
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19264,7 +19264,7 @@
       "column": 36,
       "row": 371
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19299,7 +19299,7 @@
       "column": 57,
       "row": 371
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19334,7 +19334,7 @@
       "column": 51,
       "row": 371
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19369,7 +19369,7 @@
       "column": 72,
       "row": 371
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19404,7 +19404,7 @@
       "column": 15,
       "row": 430
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19439,7 +19439,7 @@
       "column": 36,
       "row": 430
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19474,7 +19474,7 @@
       "column": 57,
       "row": 430
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19509,7 +19509,7 @@
       "column": 51,
       "row": 430
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19544,7 +19544,7 @@
       "column": 72,
       "row": 430
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19579,7 +19579,7 @@
       "column": 32,
       "row": 432
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19614,7 +19614,7 @@
       "column": 15,
       "row": 440
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19649,7 +19649,7 @@
       "column": 36,
       "row": 440
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19684,7 +19684,7 @@
       "column": 57,
       "row": 440
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19719,7 +19719,7 @@
       "column": 51,
       "row": 440
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19754,7 +19754,7 @@
       "column": 72,
       "row": 440
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19789,7 +19789,7 @@
       "column": 85,
       "row": 512
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19824,7 +19824,7 @@
       "column": 32,
       "row": 530
     },
-    "filename": "<repo>/src/cccp/utils/geometry_tools.py",
+    "filename": "src/cccp/utils/geometry_tools.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19859,7 +19859,7 @@
       "column": 46,
       "row": 19
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -19878,7 +19878,7 @@
       "column": 46,
       "row": 19
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -19897,7 +19897,7 @@
       "column": 70,
       "row": 143
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19932,7 +19932,7 @@
       "column": 87,
       "row": 143
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -19967,7 +19967,7 @@
       "column": 102,
       "row": 143
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20002,7 +20002,7 @@
       "column": 109,
       "row": 143
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -20021,7 +20021,7 @@
       "column": 43,
       "row": 173
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20056,7 +20056,7 @@
       "column": 81,
       "row": 173
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20091,7 +20091,7 @@
       "column": 92,
       "row": 173
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20126,7 +20126,7 @@
       "column": 104,
       "row": 173
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": null,
     "location": {
       "column": 101,
@@ -20145,7 +20145,7 @@
       "column": 35,
       "row": 202
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20180,7 +20180,7 @@
       "column": 39,
       "row": 215
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20215,7 +20215,7 @@
       "column": 36,
       "row": 252
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20250,7 +20250,7 @@
       "column": 38,
       "row": 280
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20285,7 +20285,7 @@
       "column": 39,
       "row": 291
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20320,7 +20320,7 @@
       "column": 37,
       "row": 297
     },
-    "filename": "<repo>/src/cccp/utils/resource_utils.py",
+    "filename": "src/cccp/utils/resource_utils.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20355,7 +20355,7 @@
       "column": 34,
       "row": 34
     },
-    "filename": "<repo>/src/cccp/utils/solvent_map.py",
+    "filename": "src/cccp/utils/solvent_map.py",
     "fix": null,
     "location": {
       "column": 1,
@@ -20374,7 +20374,7 @@
       "column": 22,
       "row": 36
     },
-    "filename": "<repo>/src/cccp/utils/solvent_map.py",
+    "filename": "src/cccp/utils/solvent_map.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20409,7 +20409,7 @@
       "column": 38,
       "row": 173
     },
-    "filename": "<repo>/src/cccp/utils/solvent_map.py",
+    "filename": "src/cccp/utils/solvent_map.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20444,7 +20444,7 @@
       "column": 39,
       "row": 190
     },
-    "filename": "<repo>/src/cccp/utils/solvent_map.py",
+    "filename": "src/cccp/utils/solvent_map.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -20479,7 +20479,7 @@
       "column": 44,
       "row": 428
     },
-    "filename": "<repo>/src/cccp/utils/solvent_map.py",
+    "filename": "src/cccp/utils/solvent_map.py",
     "fix": {
       "applicability": "safe",
       "edits": [

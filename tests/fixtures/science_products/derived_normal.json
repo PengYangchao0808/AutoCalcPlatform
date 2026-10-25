@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "product_kind": "derived",
+  "identity": {
+    "product_kind": "derived",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.derived.build_derived_product",
+    "input_digest": "sha256:d6874403b98b11c24ec2586db42a118f4d367b3175615c3dc278b7a80e29f897",
+    "algorithm": "derived",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "available",
+  "complete": true,
+  "errors": [],
+  "payload": {
+    "sources": [
+      {
+        "source_kind": "product",
+        "artifact": "RESULT/confsearch/confsearch_manifest.json",
+        "native_index": 0
+      }
+    ],
+    "source_versions": [
+      "1"
+    ],
+    "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+    },
+    "parameters": [
+      {
+        "name": "energy_unit",
+        "unit": "kcal/mol",
+        "value": "kcal_mol"
+      }
+    ],
+    "raw_io": [
+      {
+        "name": "source_energies_hartree",
+        "role": "input",
+        "value": [
+          -114.5,
+          -114.42,
+          -114.31
+        ]
+      }
+    ]
+  }
+}

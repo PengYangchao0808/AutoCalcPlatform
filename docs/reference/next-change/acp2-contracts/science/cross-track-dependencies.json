@@ -1,0 +1,448 @@
+{
+  "allowed_evidence_state": [
+    "PASS",
+    "FAIL",
+    "NOT_VERIFIED"
+  ],
+  "allowed_phases": [
+    "main",
+    "da-evidence",
+    "experience:nmr",
+    "experience:thermo",
+    "experience:selectivity"
+  ],
+  "allowed_readiness": [
+    "contract_ready",
+    "implementation_ready",
+    "integration_ready",
+    "verified"
+  ],
+  "declared_external_artifacts": {
+    "B00:final-baseline-full-sha": "PROVISIONAL A-declared id for B00's accepted publication form 1 (a full 40-hex commit SHA). B00 has not published it; A invents no SHA. Re-point to B00's machine id when published.",
+    "B00:final-baseline-patch-manifest": "PROVISIONAL A-declared id for B00's accepted publication form 2 (reproducible patch manifest with digest). B00 has not published it; A invents no digest. Re-point when published.",
+    "B20a-ready:da-execution-interface-preflight": "PROVISIONAL A-declared id for the B20a-ready artifact (execution interface/preflight, before C T-34) from R6 section 3.1. Not an A edge - declared only so A-20's precondition chain resolves; B publishes the machine id.",
+    "C T-34:da-approved-single-submission": "PROVISIONAL A-declared id for C T-34's approved single submission consumed by B20a-exec (R6 section 3.1 / Plan B B20a 'after C24a'). Not an A edge; C/B publish the machine id.",
+    "C T-40a:selectivity-single-submission": "PROVISIONAL A-declared id for C T-40a's single selectivity research submission consumed by B23b (Plan A R4-01 chain). Not an A edge; C/B publish the machine id."
+  },
+  "declared_external_task_ids": {
+    "B00": "Plan B B00 - baseline freeze / final re-frozen debug baseline publisher",
+    "B01": "Plan B B01 - acceptance-result.schema.json (acp2.acceptance.v1) + scenario/phase registry owner",
+    "B03": "Plan B B03 - runtime/science-binding.v1.json + aggregate runtime/dependencies.json owner",
+    "B05": "Plan B B05 - mcp-stdio launch file + minimal read-only capabilities producer (H2 input)",
+    "B07": "Plan B B07 - env-runtime frozen DA deadlines / run spec producer",
+    "B08": "Plan B B08 - submit-replay crash-window evidence producer",
+    "B20a-exec": "Plan B sub-deliverable 22b - DA execution producer after C's approved submission",
+    "B20a-ready": "Plan B sub-deliverable 22a - DA execution interface/preflight before C T-34",
+    "B20a-search": "Plan B B20a-search - DA candidate-search evidence producer",
+    "B23a": "Plan B B23a - selectivity readiness (before C T-40a); declared for chain completeness",
+    "B23b": "Plan B B23b - selectivity execution/export producer (after C T-40a)",
+    "B25a": "Plan B B25a - release candidate producer (A signs H7 from it, never waits for B26/B25b)",
+    "C T-34": "Plan C research approval/single-submission step (R6 section 3.1 P2 chain)",
+    "C T-40a": "Plan C single selectivity research submission (A-25a -> C T-40a -> B23b -> A-25b -> C T-40b)",
+    "C T-40b": "Plan C selectivity presentation/signature step",
+    "C:experience:cross-domain-live": "C-owned registered scenario (owner=C, scenario=experience:cross-domain-live). Used at scenario level because Plan A publishes no C task id for the nmr/thermo edges; subcase is display metadata, never public identity."
+  },
+  "digest_rule": "digest is null unless a SHA-256 was actually computed and verified in this run; unknown digests are never invented. version is null wherever no producer-published version exists.",
+  "evidence_rule": "evidence_state is the three-state verdict for this row's own evidence: PASS only with executed evidence in this run, FAIL never downgraded, NOT_VERIFIED with the exact missing item in gap. readiness is NOT an evidence verdict and never upgrades because a name exists.",
+  "ledger_scope": "A's external edges only: every row has A as producer or consumer, one artifact per row. B owns the aggregate runtime/dependencies.json (Plan A Q08/R2-06); A submits these rows to it and never claims the total ledger. Whole B/C tasks are not modeled as one readiness bit.",
+  "owner": "A",
+  "phase_registry_gap": "B01 has not published the (owner, scenario, phase, run_id) registry or acceptance-result.schema.json. The phases used here (main, da-evidence, experience:nmr, experience:thermo, experience:selectivity) come from Plan B B01's declared enum and the R6 section 3.2 static combination check only - they are plan-declared, not registry-verified. If B01 registers different values, the registry wins and A re-points these rows before any receipt is written. No run_id is known anywhere in this ledger.",
+  "phase_semantics": "phase = the registered B01 phase under which this artifact's evidence is keyed when the edge closes, derived from the producer's scenario scope (B00/B01/B05/B08/B25a => main; frozen DA run-spec and the DA execution/search chain => da-evidence; the cross-domain-live namespaces => experience:nmr / experience:thermo / experience:selectivity). Bare fixture/live values are deliberately not used (Plan A verification strategy).",
+  "readiness_semantics": "Ladder contract_ready < implementation_ready < integration_ready < verified. contract_ready = the edge's contract (artifact identity, producer, consumer, phase, fields) is specified by the plans/registers; it does NOT mean the file exists. implementation_ready = the artifact was delivered by its producer. integration_ready = the consumer integrated the exported artifact (this is the delivered-state readiness of the B23b edge per A-25b todo 46). verified = the consumer holds evidence for this artifact (evidence_state PASS). evidence_state is a separate three-state field; readiness never implies verification.",
+  "rows": [
+    {
+      "artifact_id": "A-01a:science-contract-set",
+      "consumer": "B03",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "A-01a (todo 3/4, Wave 2-3) has not written the schemas or H1 handoff yet - this is A's own pending delivery, not a B/C publication. B03's runtime/science-binding.v1.json reserves these schema ids/version/digest without copying them.",
+      "phase": "main",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "A-01a",
+      "product": "science contract set: capability.schema.json + task-binding.schema.json + errors.schema.json + handoff-H1.json",
+      "readiness": "contract_ready",
+      "task_id": "A-01a",
+      "version": null
+    },
+    {
+      "artifact_id": "A-14b:search-contract",
+      "consumer": "B20a-search",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "A-14b (todo 28, Wave 10) has not written search-contract.md yet. B20a-search may execute only against the frozen contract; a search PASS must satisfy its success criteria (Plan A R3-11, A-20 todo 37).",
+      "phase": "da-evidence",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "A-14b",
+      "product": "science/requests/search-contract.md (input categories, candidate source/count, generation steps, screening/rejection reasons, validators, success criteria)",
+      "readiness": "contract_ready",
+      "task_id": "A-14b",
+      "version": null
+    },
+    {
+      "artifact_id": "A-15a:compiled-da-recipe",
+      "consumer": "B20a-ready",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "A-15a (todo 29, Wave 10) not executed; no compiled recipe or plan-definition digest exists. B20a-ready additionally consumes A-14-A-16 input contracts and B18's da-preflight evidence - those are B/C-owned edges and are intentionally not modeled here (A owns only A's external edges, B owns the total ledger).",
+      "phase": "da-evidence",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "A-15a",
+      "product": "compiled limited Diels-Alder recipe + OutputRef selectors + plan-definition digest",
+      "readiness": "contract_ready",
+      "task_id": "A-15a",
+      "version": null
+    },
+    {
+      "artifact_id": "A-25a:selectivity-fixture-v1",
+      "consumer": "C T-40a",
+      "digest": "sha256:197473c530d9ae926a656b398c1fe4577f3c976a507f3a22183fd801fce36b45",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "A-25a fixture is frozen and validated (constructed, real_run=false; manifest digest sha256:197473...; two endpoints distinguishable by CIP configuration and signed-volume sign; producer request selectivity-producer.md). A-25b then published selectivity-evidence-report.json from the absent-producer state (NOT_VERIFIED, H6 open). C T-40a has still not submitted and no public run_id exists, so this row's evidence_state stays NOT_VERIFIED. Chain A-25a -> C T-40a -> B23b -> A-25b -> C T-40b must keep this order; C T-40a must not submit first.",
+      "phase": "experience:selectivity",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "A-25a",
+      "product": "frozen selectivity fixture (structures, atom maps, endo/exo definitions, two-path criteria, budget) + science/requests/selectivity-producer.md",
+      "readiness": "implementation_ready",
+      "task_id": "A-25a",
+      "version": null
+    },
+    {
+      "artifact_id": "A-25b:selectivity-audit-report",
+      "consumer": "C T-40b",
+      "digest": "sha256:c192657fd6e5a1012939e63d30e0a906309785ad2b735934836c68575df78c83",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "A-25b is delivered as the bounded report docs/reference/next-change/acp2-contracts/science/selectivity-evidence-report.json (schema_version 1), built from the absent-producer state: platform_evidence_state=NOT_VERIFIED, real_run=false, constructed=true, preference=null, both path statuses not_evaluated, H6 open. It records the exact gaps: no registered (owner=C, scenario=experience:cross-domain-live, subcase=selectivity, phase=experience:selectivity) record, no B/C-issued run_id (never invented), no B23b machine artifact id for the declared edge B23b:selectivity-authorized-artifacts at integration_ready, and no B/C cross-domain budget table. C T-40b signs only after a real A-25b audit; the published file's presence does not upgrade evidence_state.",
+      "phase": "experience:selectivity",
+      "preconditions": {
+        "and": [
+          "B23b:selectivity-authorized-artifacts"
+        ],
+        "or": []
+      },
+      "producer": "A-25b",
+      "product": "bounded selectivity EvidenceReport auditing the B23b-authorized two-path artifacts",
+      "readiness": "implementation_ready",
+      "task_id": "A-25b",
+      "version": "1"
+    },
+    {
+      "artifact_id": "A-26:h6-cross-domain-handoff",
+      "consumer": "C T-40b",
+      "digest": "sha256:770223e49d440633735460842d4ec4e3013755d4a1e77ea9ae54851b98498f7a",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "A-26 delivered handoff-H6.json (schema_version 1) with h6_closure.status=open, closed=false, real_run=false and the nmr/thermo rows PASS only for static/constructed contract verification. The selectivity subcase and the C T-40b signoff row stay NOT_VERIFIED because no C T-40a submission, B23b authorized artifact, real A-25b audit or public run_id exists. C T-40b signs only after a real A-25b audit; this file's presence never upgrades evidence_state.",
+      "phase": "experience:selectivity",
+      "preconditions": {
+        "and": [
+          "A-25b:selectivity-audit-report"
+        ],
+        "or": []
+      },
+      "producer": "A-26",
+      "product": "H6 cross-domain/version applicability matrix with per-subcase rows keyed by experience:nmr/experience:thermo/experience:selectivity, the constructed budget allocation, fixture digests and producer states",
+      "readiness": "implementation_ready",
+      "task_id": "A-26",
+      "version": "1"
+    },
+    {
+      "artifact_id": "A-27b:installed-package-probe",
+      "consumer": "A-27b",
+      "digest": "sha256:36494be671404ddf3b6e41c3371e53115a090d4658bc9a058223929c21207496",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B25a has not published the release candidate wheel. A-27b verified a from-tree local candidate cccp wheel (wheel_source=local_candidate, manual_zip_from_src) in a separately recorded venv created with --without-pip; the platform B25a row stays NOT_VERIFIED. The B-owned package-data declaration for the 14-file contract corpus is still pending, so a wheel built by B before that patch omits the corpus.",
+      "phase": "main",
+      "preconditions": {
+        "and": [
+          "B25a:release-candidate"
+        ],
+        "or": []
+      },
+      "producer": "A-27b",
+      "product": "clean-environment installed-package probe (tests/test_acp2_science_installed_package.py) over the packaged 14-file science contract corpus",
+      "readiness": "implementation_ready",
+      "task_id": "A-27b",
+      "version": null
+    },
+    {
+      "artifact_id": "B00:candidate-overlay-snapshot",
+      "consumer": "A-00a",
+      "digest": "sha256:3fb835b5069f96642bf6bb889a804532bbb70b69cf796d21208a6e3364117734",
+      "evidence_state": "PASS",
+      "gap": "B00 has not published its final re-frozen baseline (see the sibling row with the OR-form precondition). This row certifies only that the 2026-10-22 repair-report overlay restored 1906/1906 snapshot files in A-00a (snapshot-verify PASS, drift 0, missing 0; tracked patch digest matched the snapshot). B00 must still ratify/route the final baseline; A never treats 3670790e... as the final baseline.",
+      "phase": "main",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "B00",
+      "product": "repair-report candidate overlay candidate-overlay.tar.gz + candidate-snapshot.json (the baseline A-00a restored)",
+      "readiness": "verified",
+      "task_id": "A-00a",
+      "version": null
+    },
+    {
+      "artifact_id": "B00:final-re-frozen-baseline",
+      "consumer": "A-00a",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B00 has published neither accepted form yet: no full 40-hex final baseline SHA and no reproducible patch manifest with digest. Both form ids are A-declared provisional ids (declared_external_artifacts) pending B00's machine ids; 3670790e... is the historical reference only (Plan A B00 prerequisite, R5-05).",
+      "phase": "main",
+      "preconditions": {
+        "and": [],
+        "or": [
+          "B00:final-baseline-full-sha",
+          "B00:final-baseline-patch-manifest"
+        ]
+      },
+      "producer": "B00",
+      "product": "B00 final re-frozen baseline in either accepted publication form (full commit SHA or reproducible patch manifest with digest)",
+      "readiness": "contract_ready",
+      "task_id": "A-00a",
+      "version": null
+    },
+    {
+      "artifact_id": "B01:acceptance-result.schema.json",
+      "consumer": "A-01b",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B01 has not published acceptance-result.schema.json. A-00/A-00b result.json records are provisional A-internal records (extensions.science) and never a competing receipt schema; canonical fields (candidate_revision, candidate{server,client,harness}_revision, evidence_kind, job_id, attempt, release_id, submission_id, negotiated_protocol, platform) keep their single B01 location. A delivers one valid + one invalid sample immediately when the draft appears (todo 4), before B05/A-17; json.tool alone is never sufficient.",
+      "phase": "main",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "B01",
+      "product": "B01 single receipt schema (root acp2.acceptance.v1) - the only three-track receipt protocol",
+      "readiness": "contract_ready",
+      "task_id": "A-01b",
+      "version": null
+    },
+    {
+      "artifact_id": "B01:phase-registry",
+      "consumer": "A-01b",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "See the top-level phase_registry_gap: B01's registry file is unpublished, so the phase values used in this ledger come from Plan B B01's declared enum and the R6 section 3.2 static combination check only. If B01 registers different values, the registry wins and A re-points these rows. run_id is unknown everywhere and stays null.",
+      "phase": "main",
+      "preconditions": {
+        "and": [
+          "B01:acceptance-result.schema.json"
+        ],
+        "or": []
+      },
+      "producer": "B01",
+      "product": "B01 (owner, scenario, phase, run_id) registry including namespaced extensions experience:nmr / experience:thermo / experience:selectivity",
+      "readiness": "contract_ready",
+      "task_id": "A-01b",
+      "version": null
+    },
+    {
+      "artifact_id": "B05:stdio-launch",
+      "consumer": "A-08",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B05 has not published the stdio launch file or the minimal read-only capabilities; H2 stays open. B04's initial close covers only the single Controller, the HTTP/CLI client and the second-Controller rejection - a premature MCP-adapter check is not H2 evidence (Plan A Q03).",
+      "phase": "main",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "B05",
+      "product": "B05 stdio launch file + minimal read-only MCP capabilities (H2 input)",
+      "readiness": "contract_ready",
+      "task_id": "A-08",
+      "version": null
+    },
+    {
+      "artifact_id": "B07:frozen-da-run-spec",
+      "consumer": "A-20",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B07 has not published the frozen deadlines. 13380/900/120 and started_at exist only as Plan B B20a prose; A-20 judges actual completed operations and the reserved evidence-export window against the frozen spec, never against plan text (Q09). An unset timeout is a usage error, never a silent default.",
+      "phase": "da-evidence",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "B07",
+      "product": "frozen DA run spec: science_deadline_seconds, export_budget_seconds, aggregate_budget_seconds, shared started_at, queue-accounting policy",
+      "readiness": "contract_ready",
+      "task_id": "A-20",
+      "version": null
+    },
+    {
+      "artifact_id": "B08:four-crash-window-evidence",
+      "consumer": "A-20",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B08 has not published the four-window evidence. A-20 therefore cannot yet assert that no duplicate directory, reservation, QC process or bsub was created, that no accepted task is permanently undispatched, or that only identity-valid complete results were reused (Plan A Q06 / todo 37).",
+      "phase": "main",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "B08",
+      "product": "platform evidence for the four crash windows: reservation before persist, persisted before submission start, submitted with lost response, restart replay",
+      "readiness": "contract_ready",
+      "task_id": "A-20",
+      "version": null
+    },
+    {
+      "artifact_id": "B20a-exec:da-execution-artifacts",
+      "consumer": "A-20",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B20a-exec runs only after C T-34's approved single submission (R6 section 3.1 chain: B20a-ready -> C T-34 -> B20a-exec -> A science audit). No step receipts or authorized artifacts exist yet; the machine artifact id and digest are published by B on execution. A-20 audits and publishes before B20b aggregates - it never waits for B20b, B20c or C25.",
+      "phase": "da-evidence",
+      "preconditions": {
+        "and": [
+          "C T-34:da-approved-single-submission"
+        ],
+        "or": []
+      },
+      "producer": "B20a-exec",
+      "product": "DA step receipts + authorized execution artifacts for the A-17/A-18/A-19 scientific audit",
+      "readiness": "contract_ready",
+      "task_id": "A-20",
+      "version": null
+    },
+    {
+      "artifact_id": "B20a-search:search-run-evidence",
+      "consumer": "A-20",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B20a-search is a separate producer from the known-candidate execution chain and has not run. Only a B20a-search PASS satisfying A-14b:search-contract may set search supported; NOT_VERIFIED, missing artifacts, or a control-loop/known-candidate PASS leave H4 open. Any deferral requires owner-ratified search_scope=DEFERRED synchronized across B/C and the main plan.",
+      "phase": "da-evidence",
+      "preconditions": {
+        "and": [
+          "A-14b:search-contract"
+        ],
+        "or": []
+      },
+      "producer": "B20a-search",
+      "product": "search execution evidence: input class/TS seed, candidate source/count, generation steps, filtering/rejection reasons, validator, success criteria",
+      "readiness": "contract_ready",
+      "task_id": "A-20",
+      "version": null
+    },
+    {
+      "artifact_id": "B23b:selectivity-authorized-artifacts",
+      "consumer": "A-25b",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B23b has not executed or exported anything - it runs after C T-40a. Delivered-state readiness for this edge is integration_ready (artifacts exported) per A-25b todo 46, never B23 whole-task verified; current readiness stays contract_ready because only the edge contract exists. The A-25b consumer (todo 46) is implemented and reads this edge at integration_ready only; with the edge absent it publishes the bounded report as NOT_VERIFIED and keeps H6 open. The exact machine id is the one B publishes (the B dependency table may show 23b) - A records that id and never infers from the numeric prefix. Either qualified path missing => inconclusive/NOT_VERIFIED, never a preference.",
+      "phase": "experience:selectivity",
+      "preconditions": {
+        "and": [
+          "C T-40a:selectivity-single-submission"
+        ],
+        "or": []
+      },
+      "producer": "B23b",
+      "product": "authorized selectivity artifacts: both qualified paths executed and exported under one TaskRef",
+      "readiness": "contract_ready",
+      "task_id": "A-25b",
+      "version": null
+    },
+    {
+      "artifact_id": "B25a:release-candidate",
+      "consumer": "A-27b",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B25a has not published the candidate. A-27b verifies it in a clean environment and A-29 signs H7 from it plus A-27b/A-28 verification; A never waits for B26 or B25b. Per R5-06 the existing three-role build (packaging/roles + scripts/build_release.py) must be audited and extended, not rebuilt - see packaging-preview.md.",
+      "phase": "main",
+      "preconditions": {
+        "and": [],
+        "or": []
+      },
+      "producer": "B25a",
+      "product": "ACP 2.0 release candidate: three role wheels/sdists + release-manifest.json built from the frozen candidate",
+      "readiness": "contract_ready",
+      "task_id": "A-27b",
+      "version": null
+    },
+    {
+      "artifact_id": "C:cross-domain-live:experience:nmr",
+      "consumer": "A-26",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "No run_id has been issued and B01's phase registry is unpublished, so the public receipt key is incomplete; version and digest are null because no record exists. The producer is recorded at scenario level because Plan A publishes no C task id for this edge. A-26 records NOT_VERIFIED rather than merging subcases or inventing a scenario, task id or key.",
+      "phase": "experience:nmr",
+      "preconditions": {
+        "and": [
+          "B01:phase-registry"
+        ],
+        "or": []
+      },
+      "producer": "C:experience:cross-domain-live",
+      "product": "cross-domain-live NMR phase record under the registered experience:nmr phase",
+      "public_key": {
+        "owner": "C",
+        "phase": "experience:nmr",
+        "run_id": null,
+        "scenario": "experience:cross-domain-live"
+      },
+      "readiness": "contract_ready",
+      "task_id": "A-26",
+      "version": null
+    },
+    {
+      "artifact_id": "C:cross-domain-live:experience:thermo",
+      "consumer": "A-26",
+      "digest": null,
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "No run_id has been issued and B01's phase registry is unpublished, so the public receipt key is incomplete; version and digest are null because no record exists. The producer is recorded at scenario level because Plan A publishes no C task id for this edge. A-26 records NOT_VERIFIED rather than merging subcases or inventing a scenario, task id or key.",
+      "phase": "experience:thermo",
+      "preconditions": {
+        "and": [
+          "B01:phase-registry"
+        ],
+        "or": []
+      },
+      "producer": "C:experience:cross-domain-live",
+      "product": "cross-domain-live ensemble-thermochemistry phase record under the registered experience:thermo phase",
+      "public_key": {
+        "owner": "C",
+        "phase": "experience:thermo",
+        "run_id": null,
+        "scenario": "experience:cross-domain-live"
+      },
+      "readiness": "contract_ready",
+      "task_id": "A-26",
+      "version": null
+    },
+    {
+      "artifact_id": "H7:science-release-handoff",
+      "consumer": "A-29",
+      "digest": "sha256:f2ea67bbf5fb574060cd8b17fefb07d71ff201cae266e578ebb87b84054ed8ea",
+      "evidence_state": "NOT_VERIFIED",
+      "gap": "B25a has not published a release-candidate wheel, and H3 real Local/LSF rows, H4 real DA/search rows and H6 selectivity/C T-40b remain NOT_VERIFIED. H7 is signed by A as its own science handoff only; release_readiness.ready is false.",
+      "phase": "main",
+      "preconditions": {
+        "and": [
+          "B25a:release-candidate"
+        ],
+        "or": []
+      },
+      "producer": "A-29",
+      "product": "science release handoff H7 (handoff-H7.json) + release note + capability support matrix + replay index",
+      "readiness": "implementation_ready",
+      "task_id": "A-29",
+      "version": "1"
+    }
+  ],
+  "schema": "acp2.science.cross-track-dependencies.v1",
+  "task_id": "A-00b"
+}

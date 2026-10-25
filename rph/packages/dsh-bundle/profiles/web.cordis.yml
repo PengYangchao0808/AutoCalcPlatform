@@ -1,0 +1,95 @@
+# RPH web profile overlay — official DSH MCP client for the ACP MCP server.
+#
+# Apply with:
+#   dsh --profile web --patch rph/packages/dsh-bundle/profiles/web.cordis.yml \
+#       --host 127.0.0.1 --port 0 --no-open
+#
+# `insert` is the Cordis patch semantic for a NEW entry. `config` replaces the
+# target row's whole config, never a field-level deep merge (see the official
+# example apps/cli/config/examples/mcp-memory/mcp-reference-memory.cordis.yml).
+#
+# command/args/cwd/env below are byte-for-byte the B05 launch descriptor
+# (sha256 07e140de13b72ef4ef5fcd87bcfb185467625d61ae20499b58ab0420ee827971).
+# They must not drift from the B-owned launch manifest.
+#
+# The model sees MCP tools as `mcp__<serverName>__<rawName>`; `serverName: acp`
+# therefore yields `mcp__acp__acp_*` exactly once.
+#
+# This profile ships ONE agent preset without a generic shell/exec/SSH tool and
+# disables the shell-bearing shipped presets, so the model-visible capability
+# set is the ACP MCP surface plus non-executing context tools only.
+
+- insert:
+    - id: acp-mcp-acceptance
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: acp
+        transport: stdio
+        command: <acp2-dev>/venvs/b/bin/python
+        args:
+          - '-m'
+          - acp
+          - mcp
+          - serve
+          - '--transport'
+          - stdio
+          - '--controller'
+          - http://127.0.0.1:18765
+          - '--log-level'
+          - INFO
+        cwd: <repo>/src
+        env:
+          ACP_RUN_ROOT: <acp2-dev>/data/b/run-root
+          ACP_CONTROLLER_URL: http://127.0.0.1:18765
+          ACP2_MCP_LOG_LEVEL: INFO
+          ACP2_TOOLS: <acp2-dev>/venvs
+          ACP_CONFIG: <acp2-dev>/data/b/controller-config/cccp.yaml
+          PATH: <acp2-dev>/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin
+        toolCallTimeoutMs: 120000
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          initialDelayMs: 500
+          maxDelayMs: 30000
+          maxAttempts: 10
+
+    # Research-only preset: no bash/pwsh, no job controls, no filesystem write,
+    # no subagent/workflow execution. The ACP MCP server is the only scientific
+    # actuator; todo/time/persona are presentation and context only.
+    - id: preset-rph-research
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: rph-research
+        name: RPH research
+        description: Computational-chemistry research surface backed by the ACP MCP server; no generic shell.
+        order: 0
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: >-
+                You are a computational-chemistry research assistant. Use only
+                the registered tools. Never request a shell, SSH, or a direct
+                scientific-software process; submit science through the ACP
+                MCP surface.
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+
+# Disable every shipped shell-bearing preset so a session cannot select one
+# and re-introduce bash/pwsh or background-job controls.
+- id: preset-standard
+  disabled: true
+- id: preset-ptc
+  disabled: true
+- id: preset-minimal
+  disabled: true
+- id: preset-cordis
+  disabled: true
+
+- id: agent-preset-registry
+  config:
+    default: rph-research

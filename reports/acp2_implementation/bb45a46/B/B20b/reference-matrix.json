@@ -1,0 +1,110 @@
+{
+  "schema": "acp2.b20b.reference-matrix.v1",
+  "generated_at": "2026-10-23T09:17:41Z",
+  "rule": "A and C references are attached by reference only. Published files carry a computed sha256; absent artifacts carry status NOT_VERIFIED(absent) and a null digest, never a fabricated digest.",
+  "references": [
+    {
+      "owner": "A",
+      "kind": "claim_status_contract",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "present": true,
+      "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+      "status": "PUBLISHED_REFERENCE_ONLY",
+      "used_for": "Frozen supported/refuted/inconclusive/not_evaluated vocabulary and source digest requirement.",
+      "schema_id": "https://acp.local/acp2/science/evidence.schema.json",
+      "schema_version": 1
+    },
+    {
+      "owner": "A",
+      "kind": "evidence_semantics",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence-semantics.md",
+      "present": true,
+      "sha256": "1cc0aace3580b8ddce196f719d5c88a434b24203a11bf73cb9e7c5afa414806f",
+      "status": "PUBLISHED_REFERENCE_ONLY",
+      "used_for": "Execution-facts versus claim-facts separation, completed-but-inconclusive and the single-imaginary-frequency rule."
+    },
+    {
+      "owner": "A",
+      "kind": "h4_audit_handoff",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "present": true,
+      "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
+      "status": "NOT_VERIFIED",
+      "status_reason": "H4 audit of real B20a-exec rows is absent; every required row is NOT_VERIFIED.",
+      "used_for": "Row ids, requirements, gaps and h4_closure.",
+      "schema_identity": "handoff document handoff_id=H4 handoff_version=1"
+    },
+    {
+      "owner": "C",
+      "kind": "research_record_contract",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "schema": "acp2.experience.research-record.v1",
+      "present": true,
+      "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+      "status": "PUBLISHED_REFERENCE_ONLY",
+      "used_for": "Required ResearchRecord fields and the rule that a chat session is not a record."
+    },
+    {
+      "owner": "C",
+      "kind": "p2_operation_map",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
+      "present": true,
+      "sha256": "5818be3b6e86b62c4f0fb421186a567223727fb6e5a8266a6354dd3f501921c4",
+      "status": "PUBLISHED_REFERENCE_ONLY",
+      "used_for": "ResearchRecord persistence via proposal create/read/update_cas; no second persistence path."
+    },
+    {
+      "owner": "C",
+      "kind": "research_record",
+      "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/research-record.json",
+      "schema": "acp2.experience.research-record.v1",
+      "present": false,
+      "sha256": null,
+      "status": "NOT_VERIFIED(absent)",
+      "used_for": "C T-35 handoff target."
+    },
+    {
+      "owner": "C",
+      "kind": "c24b_receipt",
+      "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/experience_da-research-live-da-evidence-da-research-live-r1.json",
+      "schema": "acp2.acceptance.v1",
+      "present": false,
+      "sha256": null,
+      "status": "NOT_VERIFIED(absent)",
+      "used_for": "C T-35 handoff target."
+    },
+    {
+      "owner": "C",
+      "kind": "summary",
+      "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/summary.json",
+      "schema": "acp2.acceptance.summary.v1",
+      "present": false,
+      "sha256": null,
+      "status": "NOT_VERIFIED(absent)",
+      "used_for": "C T-35 handoff target."
+    }
+  ],
+  "absent_references": [
+    {
+      "owner": "C",
+      "kind": "research_record",
+      "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/research-record.json",
+      "expected_schema": "acp2.experience.research-record.v1",
+      "status": "NOT_VERIFIED(absent)"
+    },
+    {
+      "owner": "C",
+      "kind": "c24b_receipt",
+      "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/experience_da-research-live-da-evidence-da-research-live-r1.json",
+      "expected_schema": "acp2.acceptance.v1",
+      "status": "NOT_VERIFIED(absent)"
+    },
+    {
+      "owner": "C",
+      "kind": "summary",
+      "path": "reports/acp2_implementation/bb45a46/C/da-research-live/b/summary.json",
+      "expected_schema": "acp2.acceptance.summary.v1",
+      "status": "NOT_VERIFIED(absent)"
+    }
+  ]
+}

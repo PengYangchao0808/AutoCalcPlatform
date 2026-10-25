@@ -1,0 +1,49 @@
+{
+  "candidate_sha": "31dc79a904cab47ecd4af474628f1c07a1bc94f6",
+  "cleanup_order": [
+    "stop any harness-started service only",
+    "remove detached git worktrees",
+    "remove temporary scratch workspaces outside the evidence",
+    "preserve backup + restore workspace for B24b inspection",
+    "confirm no test listener or helper process remains"
+  ],
+  "generated_at": "2026-10-23T20:00:00Z",
+  "no_test_listener": true,
+  "no_test_process": true,
+  "preserved": [
+    "/opt/acp2-dev/data/b/b24b-migration/backup/manifest.json",
+    "/opt/acp2-dev/data/b/b24b-migration/backup/acp_jobs.db",
+    "/opt/acp2-dev/data/b/b24b-migration/backup/acp_admission.db",
+    "/opt/acp2-dev/data/b/b24b-migration/backup/legacy-acp_jobs.db",
+    "/opt/acp2-dev/data/b/b24-migration"
+  ],
+  "production_port_8765_listening": true,
+  "production_port_8765_touched": false,
+  "production_run_root_touched": false,
+  "removed_transient": [
+    "/tmp/acp-four-*",
+    "/tmp/acp-debug-*",
+    "/tmp/acp-probe-*",
+    "/tmp/b24b-command-check*",
+    "/tmp/b24b-lost-fresh",
+    "/tmp/b24b-cursor-fresh",
+    "/tmp/opencode/b24b-runnable-overlay.patch",
+    "/tmp/opencode/b24b-boundary.patch",
+    "/tmp/b24b-*.log",
+    "/tmp/b24b-*.txt",
+    "/tmp/svc-*.log",
+    "/tmp/b24b-final-check",
+    "/tmp/b24b-final-lost",
+    "/tmp/b24b-final-cursor",
+    "/tmp/b24b-final-interrupted",
+    "/tmp/b24b-final-exec.log"
+  ],
+  "result": "PASS",
+  "schema": "acp2.b24b.cleanup.v1",
+  "test_listeners": [],
+  "test_processes": [],
+  "tmp_test_worktrees": [],
+  "workspace": "/opt/acp2-dev/data/b/b24b-migration",
+  "workspace_bytes": 1749137,
+  "workspace_preserved": true
+}

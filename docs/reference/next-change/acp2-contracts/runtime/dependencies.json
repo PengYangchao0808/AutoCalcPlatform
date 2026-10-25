@@ -1,0 +1,2498 @@
+{
+  "schema": "acp2.dependencies.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "contract_version": "1.0.0",
+  "created_at": "2026-10-22T00:00:00Z",
+  "source_plan": ".omo/plans/acp2-parallel-plan-b-runtime.md",
+  "source_matrix": "Dependency matrix (lines 135-173) and sub-deliverable dependency nodes note",
+  "task_count": 33,
+  "sub_deliverable_count": 10,
+  "node_count": 43,
+  "common_enums": {
+    "phase": [
+      "main",
+      "approval",
+      "budget",
+      "da-preflight",
+      "da-submit",
+      "da-evidence",
+      "fixture",
+      "live",
+      "aggregate"
+    ],
+    "readiness": [
+      "contract_ready",
+      "implementation_ready",
+      "integration_ready",
+      "verified"
+    ],
+    "readiness_aliases": {
+      "deployed": "integration_ready"
+    },
+    "delivery_status": [
+      "planned",
+      "blocked"
+    ],
+    "result": [
+      "PASS",
+      "FAIL",
+      "NOT_VERIFIED"
+    ],
+    "scope": [
+      "IN_SCOPE",
+      "DEFERRED",
+      "NOT_APPLICABLE"
+    ],
+    "evidence_kind": [
+      "fixture",
+      "live",
+      "aggregate"
+    ],
+    "phase_aliases": {
+      "preflight": "da-preflight"
+    }
+  },
+  "external_nodes": [
+    {
+      "id": "A-02",
+      "owner": "A",
+      "artifact": "science type contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-02 science type contract"
+    },
+    {
+      "id": "A-03",
+      "owner": "A",
+      "artifact": "Capability/Recipe contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-03 Capability/Recipe contract"
+    },
+    {
+      "id": "A-04",
+      "owner": "A",
+      "artifact": "positive/negative science fixtures",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-04 static science fixtures"
+    },
+    {
+      "id": "A-14",
+      "owner": "A",
+      "artifact": "ReactionSpec input contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-14 limited DA input contract"
+    },
+    {
+      "id": "A-15",
+      "owner": "A",
+      "artifact": "Recipe/DAG contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-15 science DAG and validator"
+    },
+    {
+      "id": "A-16",
+      "owner": "A",
+      "artifact": "EvidenceReport contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-16 EvidenceReport schema and criteria"
+    },
+    {
+      "id": "A-20",
+      "owner": "A",
+      "artifact": "scientific audit sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-20 DA scientific audit and H4 sign-off"
+    },
+    {
+      "id": "A-25a",
+      "owner": "A",
+      "artifact": "dual-path selectivity fixture and criteria",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-25a selectivity input and criteria"
+    },
+    {
+      "id": "A-25b",
+      "owner": "A",
+      "artifact": "selectivity scientific audit",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-25b selectivity audit"
+    },
+    {
+      "id": "A-27a",
+      "owner": "A",
+      "artifact": "science package specification",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-27a CCCP/package specification"
+    },
+    {
+      "id": "A-27b",
+      "owner": "A",
+      "artifact": "science install evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-27b independent science install facts"
+    },
+    {
+      "id": "A-28",
+      "owner": "A",
+      "artifact": "science operation evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-28 independent science operation facts"
+    },
+    {
+      "id": "A-29",
+      "owner": "A",
+      "artifact": "A-track final sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A-29 sign-off consumed by B26b"
+    },
+    {
+      "id": "A:plugin-contract",
+      "owner": "A",
+      "artifact": "science plugin contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A science-plugin contract consumed by B21"
+    },
+    {
+      "id": "A:raw-install-operation-facts",
+      "owner": "A",
+      "artifact": "raw install/operation facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A raw install/operation facts for external reproduction"
+    },
+    {
+      "id": "A:third-party-capability",
+      "owner": "A",
+      "artifact": "third-party capability recipe",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "A third-party capability fixture consumed by B22"
+    },
+    {
+      "id": "C-T08",
+      "owner": "C",
+      "artifact": "H2 browser/routing receipt",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C T-08 Chromium launch and four interpreter/source routing checks"
+    },
+    {
+      "id": "C-T18",
+      "owner": "C",
+      "artifact": "H3 DSH facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C T-18 real DSH/browser H3 facts"
+    },
+    {
+      "id": "C-T21",
+      "owner": "C",
+      "artifact": "H3 browser three-entry facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C T-21 Workbench three-entry observation"
+    },
+    {
+      "id": "C-T35",
+      "owner": "C",
+      "artifact": "evidence feedback and ResearchRecord handoff",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C T-35 consumes B20a-exec plus A-17..A-19"
+    },
+    {
+      "id": "C-T40a",
+      "owner": "C",
+      "artifact": "single cross-domain research submission",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C T-40a selectivity single submission"
+    },
+    {
+      "id": "C-T40b",
+      "owner": "C",
+      "artifact": "P4 presentation sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C T-40b presentation/H6 sign-off"
+    },
+    {
+      "id": "C01",
+      "owner": "C",
+      "artifact": "ResearchProposal/approval schema",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C01 P2 research record and approval contract"
+    },
+    {
+      "id": "C24a",
+      "owner": "C",
+      "artifact": "single approved DA submission",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C24a unique approved submission",
+      "observed_state": "blocked: C plan T-34 is [~] and no approved single submission exists",
+      "observed_plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
+      "c_t34_gates_on": "B20a-ready"
+    },
+    {
+      "id": "C25",
+      "owner": "C",
+      "artifact": "H4 experience sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C25 H4 sign-off"
+    },
+    {
+      "id": "C32",
+      "owner": "C",
+      "artifact": "RPH/static assets",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C32 client and static assets for packaging"
+    },
+    {
+      "id": "C33",
+      "owner": "C",
+      "artifact": "raw install evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C33 independent install facts"
+    },
+    {
+      "id": "C34",
+      "owner": "C",
+      "artifact": "raw operation evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C34 independent operation facts"
+    },
+    {
+      "id": "C35",
+      "owner": "C",
+      "artifact": "C-track final sign-off (authored against B25a)",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C35 sign-off consumed by B26b"
+    },
+    {
+      "id": "C:dynamic-form",
+      "owner": "C",
+      "artifact": "dynamic form/discovery fixture",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C dynamic form/discovery fixture consumed by B22"
+    },
+    {
+      "id": "C:raw-install-operation-facts",
+      "owner": "C",
+      "artifact": "raw install/operation facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "C raw install/operation facts for external reproduction"
+    },
+    {
+      "id": "C:session-recovery",
+      "owner": "C",
+      "artifact": "RPH session recovery log",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "Real DSH session termination and new-session recovery evidence"
+    },
+    {
+      "id": "H6",
+      "owner": "integration",
+      "artifact": "H6 recovery/rollback gate",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "description": "H6 reliability gate; B23 may feed it only after A-25b and C-T40b"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "B00",
+      "todo": 1,
+      "kind": "todo",
+      "title": "Freeze the baseline, path ownership and ACP 2.0 contract manifest (H0)",
+      "wave": 0,
+      "depends_on": [],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B01",
+        "B02",
+        "B02a",
+        "B02b",
+        "B03"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B00",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+        "readiness": "contract_ready",
+        "delivery_status": "planned",
+        "digest_target": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+        "contract_delivery": "delivered",
+        "delivered_contracts": [
+          "manifest.json",
+          "baseline-lock.json",
+          "lint-baseline.json",
+          "dependencies.json",
+          "final-debug-patch/"
+        ]
+      }
+    },
+    {
+      "id": "B01",
+      "todo": 2,
+      "kind": "todo",
+      "title": "Deliver the acp2.acceptance.v1 protocol and executable harness skeleton",
+      "wave": 1,
+      "depends_on": [
+        "B00"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B04a"
+      ],
+      "parallelizable_with": [
+        "B02",
+        "B03"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B01",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned",
+        "contract_delivery": "planned",
+        "note": "B01 runs concurrently; B03 verified its contract files were absent at manifest-write time and left the manifest rows planned"
+      }
+    },
+    {
+      "id": "B02",
+      "todo": 3,
+      "kind": "todo",
+      "title": "Configure the isolated Python, data root and ACP test configuration",
+      "wave": 1,
+      "depends_on": [
+        "B00"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [
+        "B01",
+        "B03"
+      ],
+      "external_dependencies": [],
+      "children": [
+        "B02a",
+        "B02b"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B02",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B03",
+      "todo": 4,
+      "kind": "todo",
+      "title": "Freeze the single application use case and science-task binding (H1)",
+      "wave": 1,
+      "depends_on": [
+        "B00"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B04a",
+        "B05",
+        "B06",
+        "B16",
+        "B18"
+      ],
+      "parallelizable_with": [
+        "B01",
+        "B02"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B03",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:a9f7e741007029638b64e069d918746f7105c2bf99c97dc1e9c3818cdcc0d4a4",
+        "readiness": "contract_ready",
+        "delivery_status": "planned",
+        "digest_target": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "contract_delivery": "delivered",
+        "delivered_contracts": [
+          "application-api.v1.json",
+          "entry-call-table.v1.md",
+          "p2-research-operations.v1.json",
+          "mcp-launch.schema.json",
+          "mcp-launch.template.json",
+          "science-binding.v1.json",
+          "control-and-data.v1.json",
+          "admission-approval.v1.json",
+          "fallback-deferral.json",
+          "canonical-digest-vectors.v1.json",
+          "samples/"
+        ],
+        "remaining_gap": "GAP-B03-01..04 are implementation gaps (B04a/B05/B06/B10a/B12), not contract gaps; the entry-call-table audit verdict is PARTIAL"
+      }
+    },
+    {
+      "id": "B04a",
+      "todo": 5,
+      "kind": "todo",
+      "title": "Deliver the test Controller start/stop and process topology (B04a)",
+      "wave": 2,
+      "depends_on": [
+        "B01",
+        "B02a",
+        "B03"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B05",
+        "B06",
+        "B07"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B04a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B05",
+      "todo": 6,
+      "kind": "todo",
+      "title": "Deliver the real launchable stdio MCP entry and protocol compatibility",
+      "wave": 2,
+      "depends_on": [
+        "B03",
+        "B04a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B06",
+        "B07",
+        "B08"
+      ],
+      "parallelizable_with": [
+        "B06"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B05",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B06",
+      "todo": 7,
+      "kind": "todo",
+      "title": "Bind MCP/HTTP/CLI to the real application and remove in-connection state authority",
+      "wave": 2,
+      "depends_on": [
+        "B03",
+        "B04a",
+        "B05"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B07",
+        "B08",
+        "B09"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B06",
+        "version": "1.1.0",
+        "digest_or_pending": "sha256:8ae24108c8b3e653b1ac48ccad8fcc18c5d09192faf6c717debdc6d0910aee8a",
+        "readiness": "implementation_ready",
+        "delivery_status": "planned",
+        "digest_target": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "contract_delivery": "delivered",
+        "delivered_contracts": [
+          "application-api.v1.json (additive 1.1.0)",
+          "entry-call-table.v1.md",
+          "mcp-launch.schema.json",
+          "mcp-launch.template.json",
+          "cross-track-requests.v1.json"
+        ],
+        "evidence_contract": {
+          "path": "docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json",
+          "sha256": "sha256:89745da73977dcc7ac8fd87d88bd194701f944d2ee4d9a365ac232e710b26d70"
+        },
+        "remaining_gap": "B08 durable idempotency, B09 admission/authorizer expansion, B10a HTTP TaskRef projection, B12 real artifact lifecycle; GAP-B03-02 re-owned to B12 and HTTP GET reads to B10a"
+      }
+    },
+    {
+      "id": "B07",
+      "todo": 8,
+      "kind": "todo",
+      "title": "Prepare the real science environment and close P0 (H2, incl. B04b)",
+      "wave": 3,
+      "depends_on": [
+        "B02a",
+        "B04a",
+        "B05",
+        "B06"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B11"
+      ],
+      "parallelizable_with": [
+        "B08",
+        "B09"
+      ],
+      "external_dependencies": [
+        "C-T08"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B07",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B08",
+      "todo": 9,
+      "kind": "todo",
+      "title": "Move idempotent submission and unknown-result reconciliation to the Controller",
+      "wave": 3,
+      "depends_on": [
+        "B05",
+        "B06"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B09",
+        "B10",
+        "B10a",
+        "B11",
+        "B13",
+        "B19",
+        "B19a"
+      ],
+      "parallelizable_with": [
+        "B09"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B08",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B09",
+      "todo": 10,
+      "kind": "todo",
+      "title": "Enforce local identity boundaries and single resource admission",
+      "wave": 3,
+      "depends_on": [
+        "B06",
+        "B08"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B10",
+        "B10a",
+        "B11",
+        "B13",
+        "B15",
+        "B17"
+      ],
+      "parallelizable_with": [
+        "B07"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B09",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B10",
+      "todo": 11,
+      "kind": "todo",
+      "title": "Run a real Local singlepoint baseline and prove three-entry references",
+      "wave": 4,
+      "depends_on": [
+        "B08",
+        "B09"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [
+        "B12"
+      ],
+      "external_dependencies": [],
+      "children": [
+        "B10a",
+        "B10b"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B10",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B11",
+      "todo": 12,
+      "kind": "todo",
+      "title": "Run real LSF execution, control, reconciliation and artifact collection",
+      "wave": 4,
+      "depends_on": [
+        "B07",
+        "B08",
+        "B09",
+        "B10a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B13"
+      ],
+      "parallelizable_with": [
+        "B12"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B11",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B12",
+      "todo": 13,
+      "kind": "todo",
+      "title": "Deliver artifact prepare/read and evidence references without implicit work",
+      "wave": 4,
+      "depends_on": [],
+      "depends_on_relation": "OR",
+      "any_of": [
+        "B10a",
+        "B11"
+      ],
+      "blocks": [
+        "B13",
+        "B19",
+        "B19a"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B12",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B13",
+      "todo": 14,
+      "kind": "todo",
+      "title": "Prove P1 cancellation, disconnection, restart and publication recovery",
+      "wave": 5,
+      "depends_on": [
+        "B08",
+        "B09",
+        "B10a",
+        "B11",
+        "B12"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B14a"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B13",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B14a",
+      "todo": 15,
+      "kind": "todo",
+      "title": "Promote the H2/P1 test candidates into a frozen P1 candidate and run base regressions",
+      "wave": 5,
+      "depends_on": [
+        "B13"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B14b"
+      ],
+      "parallelizable_with": [
+        "B15"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B14a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B14b",
+      "todo": 16,
+      "kind": "todo",
+      "title": "Publish the H3 capability x backend matrix and freeze P1",
+      "wave": 5,
+      "depends_on": [
+        "B14a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B15"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "C-T18",
+        "C-T21"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B14b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B15",
+      "todo": 17,
+      "kind": "todo",
+      "title": "Wire multi-user authorization and revocation without a second authority",
+      "wave": 6,
+      "depends_on": [
+        "B09",
+        "B14b"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B16",
+        "B17",
+        "B23",
+        "B23a"
+      ],
+      "parallelizable_with": [
+        "B14a"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B15",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B16",
+      "todo": 18,
+      "kind": "todo",
+      "title": "Add persistent proposal approvals bound to frozen scientific plans",
+      "wave": 6,
+      "depends_on": [
+        "B03",
+        "B15"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B17",
+        "B18",
+        "B19",
+        "B19a"
+      ],
+      "parallelizable_with": [
+        "B17"
+      ],
+      "external_dependencies": [
+        "C01"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B16",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B17",
+      "todo": 19,
+      "kind": "todo",
+      "title": "Persist cumulative budgets, reservations, metering and settlement",
+      "wave": 6,
+      "depends_on": [
+        "B09",
+        "B15",
+        "B16"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B18",
+        "B19",
+        "B19a",
+        "B20a",
+        "B20a-ready",
+        "B23",
+        "B23a"
+      ],
+      "parallelizable_with": [
+        "B18"
+      ],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B17",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B18",
+      "todo": 20,
+      "kind": "todo",
+      "title": "Bind A science Recipes and EvidenceReport without owning science",
+      "wave": 7,
+      "depends_on": [
+        "B03",
+        "B16",
+        "B17"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B19",
+        "B19a",
+        "B20a",
+        "B20a-ready"
+      ],
+      "parallelizable_with": [
+        "B17"
+      ],
+      "external_dependencies": [
+        "A-02",
+        "A-03",
+        "A-04",
+        "A-15",
+        "A-16",
+        "C01"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B18",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B19",
+      "todo": 21,
+      "kind": "todo",
+      "title": "Add cursor-based cross-research events and real C recovery",
+      "wave": 7,
+      "depends_on": [
+        "B08",
+        "B12",
+        "B16",
+        "B17",
+        "B18"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [
+        "B18"
+      ],
+      "external_dependencies": [],
+      "children": [
+        "B19a",
+        "B19b"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B19",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B20a",
+      "todo": 22,
+      "kind": "todo",
+      "title": "Execute the limited Diels-Alder runtime slice from a single submission",
+      "wave": 7,
+      "depends_on": [
+        "B17",
+        "B18",
+        "B19a",
+        "B20a-exec"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [
+        "B20a-ready",
+        "B20a-exec"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B20a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B20b",
+      "todo": 23,
+      "kind": "todo",
+      "title": "Record A scientific audit and C evidence/ResearchRecord handoff",
+      "wave": 8,
+      "depends_on": [
+        "B20a-exec"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B20c"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "A-20",
+        "C-T35"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B20b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B20c",
+      "todo": 24,
+      "kind": "todo",
+      "title": "Aggregate H4 and freeze the limited P2 candidate",
+      "wave": 8,
+      "depends_on": [
+        "B20b"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B21"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "A-20",
+        "C25"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B20c",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B21",
+      "todo": 25,
+      "kind": "todo",
+      "title": "Add the infrastructure adapter contract, discovery and isolation",
+      "wave": 9,
+      "depends_on": [
+        "B20c"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B22",
+        "B23",
+        "B23a"
+      ],
+      "parallelizable_with": [
+        "B23"
+      ],
+      "external_dependencies": [
+        "A:plugin-contract"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B21",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B22",
+      "todo": 26,
+      "kind": "todo",
+      "title": "Verify adapter upgrade, rollback and P3 integration (H5)",
+      "wave": 9,
+      "depends_on": [
+        "B21"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B23",
+        "B23a"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "A:third-party-capability",
+        "C:dynamic-form"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B22",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B23",
+      "todo": 27,
+      "kind": "todo",
+      "title": "Prove multi-project concurrency and cross-domain persistent consistency (P4)",
+      "wave": 9,
+      "depends_on": [
+        "B15",
+        "B17",
+        "B21",
+        "B22",
+        "B23b"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B24a"
+      ],
+      "parallelizable_with": [
+        "B22"
+      ],
+      "external_dependencies": [
+        "C-T40b",
+        "A-25b"
+      ],
+      "children": [
+        "B23a",
+        "B23b"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B23",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B24a",
+      "todo": 28,
+      "kind": "todo",
+      "title": "Migrate, back up and restore frozen data without losing identity (H6)",
+      "wave": 10,
+      "depends_on": [
+        "B23"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B24b"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B24a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B24b",
+      "todo": 29,
+      "kind": "todo",
+      "title": "Publish the recovery/rollback runbook and freeze H6",
+      "wave": 10,
+      "depends_on": [
+        "B24a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B25a"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B24b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B25a",
+      "todo": 30,
+      "kind": "todo",
+      "title": "Build the actual ACP 2.0 packages with separated roles",
+      "wave": 11,
+      "depends_on": [
+        "B24b"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B25b"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "A-27a",
+        "C32"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B25a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B25b",
+      "todo": 31,
+      "kind": "todo",
+      "title": "Validate standalone/Lab installs and publish the upgrade path",
+      "wave": 11,
+      "depends_on": [
+        "B25a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B26a"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "A-27b",
+        "A-28",
+        "C33",
+        "C34"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B25b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B26a",
+      "todo": 32,
+      "kind": "todo",
+      "title": "Run an independent external reproduction from a clean shell",
+      "wave": 12,
+      "depends_on": [
+        "B25b"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B26b"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "A:raw-install-operation-facts",
+        "C:raw-install-operation-facts"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B26a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B26b",
+      "todo": 33,
+      "kind": "todo",
+      "title": "Freeze H7 and deliver the ACP 2.0 Plan B index",
+      "wave": 12,
+      "depends_on": [
+        "B26a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "A-29",
+        "C35"
+      ],
+      "children": [],
+      "artifact": {
+        "id": "acp2:artifact:B26b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B02a",
+      "todo": 3,
+      "kind": "sub_deliverable",
+      "parent": "B02",
+      "title": "Consumable isolated environment handoff (B02a)",
+      "wave": 1,
+      "depends_on": [
+        "B00"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B04a",
+        "B07"
+      ],
+      "parallelizable_with": [
+        "B02b"
+      ],
+      "external_dependencies": [],
+      "artifact": {
+        "id": "acp2:artifact:B02a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B02b",
+      "todo": 3,
+      "kind": "sub_deliverable",
+      "parent": "B02",
+      "title": "Early minimal CCCP/worker/Web package smoke (B02b)",
+      "wave": 1,
+      "depends_on": [
+        "B00"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [
+        "B02a"
+      ],
+      "external_dependencies": [],
+      "artifact": {
+        "id": "acp2:artifact:B02b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B10a",
+      "todo": 11,
+      "kind": "sub_deliverable",
+      "parent": "B10",
+      "title": "Local execution facts: TaskRef, artifacts, receipt, attempt/release, manifest (B10a)",
+      "wave": 4,
+      "depends_on": [
+        "B08",
+        "B09"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B10b",
+        "B11",
+        "B13"
+      ],
+      "parallelizable_with": [
+        "B10b"
+      ],
+      "external_dependencies": [],
+      "artifact": {
+        "id": "acp2:artifact:B10a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B10b",
+      "todo": 11,
+      "kind": "sub_deliverable",
+      "parent": "B10",
+      "title": "Three-entry read from Workbench/CLI/HTTP (B10b, independent consumer row)",
+      "wave": 4,
+      "depends_on": [
+        "B10a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [
+        "B11"
+      ],
+      "external_dependencies": [
+        "C-T21"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B10b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B19a",
+      "todo": 21,
+      "kind": "sub_deliverable",
+      "parent": "B19",
+      "title": "Event/cursor/outbox/projection/recovery contract and fixture-level recovery (B19a)",
+      "wave": 7,
+      "depends_on": [
+        "B08",
+        "B12",
+        "B16",
+        "B17",
+        "B18"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B19b",
+        "B20a",
+        "B20a-ready"
+      ],
+      "parallelizable_with": [
+        "B19b"
+      ],
+      "external_dependencies": [],
+      "artifact": {
+        "id": "acp2:artifact:B19a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B19b",
+      "todo": 21,
+      "kind": "sub_deliverable",
+      "parent": "B19",
+      "title": "Real DSH termination -> Controller continues -> new-session recovery (B19b)",
+      "wave": 7,
+      "depends_on": [
+        "B19a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "C:session-recovery"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B19b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B20a-ready",
+      "todo": 22,
+      "kind": "sub_deliverable",
+      "parent": "B20a",
+      "title": "Expose DA execution interface/preflight without creating a task (B20a-ready)",
+      "wave": 7,
+      "depends_on": [
+        "B17",
+        "B18",
+        "B19a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B20a-exec",
+        "C24a"
+      ],
+      "parallelizable_with": [
+        "B20a-exec"
+      ],
+      "external_dependencies": [
+        "A-14",
+        "A-15",
+        "A-16"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B20a-ready",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B20a-exec",
+      "todo": 22,
+      "kind": "sub_deliverable",
+      "parent": "B20a",
+      "title": "Consume C24a approved submission and execute the DA slice (B20a-exec)",
+      "wave": 7,
+      "depends_on": [
+        "B20a-ready"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B20a",
+        "B20b"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "C24a"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B20a-exec",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B23a",
+      "todo": 27,
+      "kind": "sub_deliverable",
+      "parent": "B23",
+      "title": "P4 readiness: identity/budget/execution interface without selectivity submission (B23a)",
+      "wave": 9,
+      "depends_on": [
+        "B15",
+        "B17",
+        "B21",
+        "B22"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B23b"
+      ],
+      "parallelizable_with": [
+        "B23b"
+      ],
+      "external_dependencies": [
+        "A-25a"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B23a",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    },
+    {
+      "id": "B23b",
+      "todo": 27,
+      "kind": "sub_deliverable",
+      "parent": "B23",
+      "title": "P4 execution/export: one TaskRef, two qualified paths (B23b)",
+      "wave": 9,
+      "depends_on": [
+        "B23a"
+      ],
+      "depends_on_relation": "AND",
+      "any_of": [],
+      "blocks": [
+        "B23"
+      ],
+      "parallelizable_with": [],
+      "external_dependencies": [
+        "C-T40a"
+      ],
+      "artifact": {
+        "id": "acp2:artifact:B23b",
+        "version": "1.0.0",
+        "digest_or_pending": "PENDING",
+        "readiness": "contract_ready",
+        "delivery_status": "planned"
+      }
+    }
+  ],
+  "external_edges": [
+    {
+      "consumer": "B07",
+      "producer": "C",
+      "external_id": "C-T08",
+      "artifact": "H2 browser/routing receipt",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-08 Chromium launch and four interpreter/source routing checks"
+    },
+    {
+      "consumer": "B10b",
+      "producer": "C",
+      "external_id": "C-T21",
+      "artifact": "H3 browser three-entry facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-21 Workbench three-entry observation"
+    },
+    {
+      "consumer": "B14b",
+      "producer": "C",
+      "external_id": "C-T18",
+      "artifact": "H3 DSH facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-18 real DSH/browser H3 facts"
+    },
+    {
+      "consumer": "B14b",
+      "producer": "C",
+      "external_id": "C-T21",
+      "artifact": "H3 browser three-entry facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-21 Workbench three-entry observation"
+    },
+    {
+      "consumer": "B16",
+      "producer": "C",
+      "external_id": "C01",
+      "artifact": "ResearchProposal/approval schema",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C01 P2 research record and approval contract"
+    },
+    {
+      "consumer": "B18",
+      "producer": "A",
+      "external_id": "A-02",
+      "artifact": "science type contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-02 science type contract"
+    },
+    {
+      "consumer": "B18",
+      "producer": "A",
+      "external_id": "A-03",
+      "artifact": "Capability/Recipe contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-03 Capability/Recipe contract"
+    },
+    {
+      "consumer": "B18",
+      "producer": "A",
+      "external_id": "A-04",
+      "artifact": "positive/negative science fixtures",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-04 static science fixtures"
+    },
+    {
+      "consumer": "B18",
+      "producer": "A",
+      "external_id": "A-15",
+      "artifact": "Recipe/DAG contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-15 science DAG and validator"
+    },
+    {
+      "consumer": "B18",
+      "producer": "A",
+      "external_id": "A-16",
+      "artifact": "EvidenceReport contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-16 EvidenceReport schema and criteria"
+    },
+    {
+      "consumer": "B18",
+      "producer": "C",
+      "external_id": "C01",
+      "artifact": "ResearchProposal/approval schema",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C01 P2 research record and approval contract"
+    },
+    {
+      "consumer": "B19b",
+      "producer": "C",
+      "external_id": "C:session-recovery",
+      "artifact": "RPH session recovery log",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "Real DSH session termination and new-session recovery evidence"
+    },
+    {
+      "consumer": "B20a-exec",
+      "producer": "C",
+      "external_id": "C24a",
+      "artifact": "single approved DA submission",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C24a unique approved submission"
+    },
+    {
+      "consumer": "B20a-ready",
+      "producer": "A",
+      "external_id": "A-14",
+      "artifact": "ReactionSpec input contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-14 limited DA input contract"
+    },
+    {
+      "consumer": "B20a-ready",
+      "producer": "A",
+      "external_id": "A-15",
+      "artifact": "Recipe/DAG contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-15 science DAG and validator"
+    },
+    {
+      "consumer": "B20a-ready",
+      "producer": "A",
+      "external_id": "A-16",
+      "artifact": "EvidenceReport contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-16 EvidenceReport schema and criteria"
+    },
+    {
+      "consumer": "B20b",
+      "producer": "A",
+      "external_id": "A-20",
+      "artifact": "scientific audit sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-20 DA scientific audit and H4 sign-off"
+    },
+    {
+      "consumer": "B20b",
+      "producer": "C",
+      "external_id": "C-T35",
+      "artifact": "evidence feedback and ResearchRecord handoff",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-35 consumes B20a-exec plus A-17..A-19"
+    },
+    {
+      "consumer": "B20c",
+      "producer": "A",
+      "external_id": "A-20",
+      "artifact": "scientific audit sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-20 DA scientific audit and H4 sign-off"
+    },
+    {
+      "consumer": "B20c",
+      "producer": "C",
+      "external_id": "C25",
+      "artifact": "H4 experience sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C25 H4 sign-off"
+    },
+    {
+      "consumer": "B21",
+      "producer": "A",
+      "external_id": "A:plugin-contract",
+      "artifact": "science plugin contract",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A science-plugin contract consumed by B21"
+    },
+    {
+      "consumer": "B22",
+      "producer": "A",
+      "external_id": "A:third-party-capability",
+      "artifact": "third-party capability recipe",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A third-party capability fixture consumed by B22"
+    },
+    {
+      "consumer": "B22",
+      "producer": "C",
+      "external_id": "C:dynamic-form",
+      "artifact": "dynamic form/discovery fixture",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C dynamic form/discovery fixture consumed by B22"
+    },
+    {
+      "consumer": "B23",
+      "producer": "C",
+      "external_id": "C-T40b",
+      "artifact": "P4 presentation sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-40b presentation/H6 sign-off"
+    },
+    {
+      "consumer": "B23",
+      "producer": "A",
+      "external_id": "A-25b",
+      "artifact": "selectivity scientific audit",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-25b selectivity audit"
+    },
+    {
+      "consumer": "B23a",
+      "producer": "A",
+      "external_id": "A-25a",
+      "artifact": "dual-path selectivity fixture and criteria",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-25a selectivity input and criteria"
+    },
+    {
+      "consumer": "B23b",
+      "producer": "C",
+      "external_id": "C-T40a",
+      "artifact": "single cross-domain research submission",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-40a selectivity single submission"
+    },
+    {
+      "consumer": "B25a",
+      "producer": "A",
+      "external_id": "A-27a",
+      "artifact": "science package specification",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-27a CCCP/package specification"
+    },
+    {
+      "consumer": "B25a",
+      "producer": "C",
+      "external_id": "C32",
+      "artifact": "RPH/static assets",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C32 client and static assets for packaging"
+    },
+    {
+      "consumer": "B25b",
+      "producer": "A",
+      "external_id": "A-27b",
+      "artifact": "science install evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-27b independent science install facts"
+    },
+    {
+      "consumer": "B25b",
+      "producer": "A",
+      "external_id": "A-28",
+      "artifact": "science operation evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-28 independent science operation facts"
+    },
+    {
+      "consumer": "B25b",
+      "producer": "C",
+      "external_id": "C33",
+      "artifact": "raw install evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C33 independent install facts"
+    },
+    {
+      "consumer": "B25b",
+      "producer": "C",
+      "external_id": "C34",
+      "artifact": "raw operation evidence",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C34 independent operation facts"
+    },
+    {
+      "consumer": "B26a",
+      "producer": "A",
+      "external_id": "A:raw-install-operation-facts",
+      "artifact": "raw install/operation facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A raw install/operation facts for external reproduction"
+    },
+    {
+      "consumer": "B26a",
+      "producer": "C",
+      "external_id": "C:raw-install-operation-facts",
+      "artifact": "raw install/operation facts",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C raw install/operation facts for external reproduction"
+    },
+    {
+      "consumer": "B26b",
+      "producer": "A",
+      "external_id": "A-29",
+      "artifact": "A-track final sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-29 sign-off consumed by B26b"
+    },
+    {
+      "consumer": "B26b",
+      "producer": "C",
+      "external_id": "C35",
+      "artifact": "C-track final sign-off (authored against B25a)",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C35 sign-off consumed by B26b"
+    }
+  ],
+  "validation": {
+    "stage_order_rule": "For internal edges, consumer.todo >= producer.todo. External A/C nodes are exempt because they are handoffs.",
+    "acceptance_before_prerequisite": false,
+    "cycle_free": true,
+    "missing_references": [],
+    "dangling_references": [],
+    "multi_edge_relation_required": true,
+    "free_text_or_allowed": false,
+    "stage_order": {
+      "rule": "consumer.todo >= producer.todo for every internal edge",
+      "external_nodes_exempt": true,
+      "internal_edges_checked": 86,
+      "violations": [],
+      "status": "PASS"
+    },
+    "relations": {
+      "internal_dependency_relation_field": "depends_on_relation",
+      "external_edge_relation_field": "relation",
+      "allowed": [
+        "AND",
+        "OR"
+      ],
+      "free_text_or_allowed": false,
+      "violations": [],
+      "status": "PASS"
+    },
+    "sources_verified": {
+      "B": {
+        "status": "PASS",
+        "note": "self"
+      },
+      "C": {
+        "status": "PASS",
+        "sha256": "505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b",
+        "rows_merged": 5
+      },
+      "A": {
+        "status": "NOT_VERIFIED",
+        "reason": "blocked_fixture",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json"
+      }
+    },
+    "consumer_edge_checks": {
+      "producer_exists": "PASS",
+      "consumer_nonempty": "PASS",
+      "relation_explicit": "PASS",
+      "no_cycle": "PASS",
+      "rule": "every consumer_edges row names an existing B producer node (or a delivered B artifact path) and an explicit AND/OR relation"
+    },
+    "not_verified_references": 1,
+    "and_or": {
+      "internal": "nodes[].depends_on_relation + nodes[].any_of",
+      "external": "external_edges[].relation",
+      "consumer": "consumer_edges[].relation",
+      "free_text_or_allowed": false
+    }
+  },
+  "refreshed_by": "B06",
+  "refreshed_at": "2026-10-22T00:00:00Z",
+  "refresh_stage": "B06",
+  "delivery_status_semantics": "artifact.delivery_status tracks ACCEPTANCE delivery (planned|blocked) and stays inside the frozen manifest common_enums. Contract publication is tracked by artifact.readiness + artifact.digest_or_pending + artifact.contract_delivery. They are different questions and must not be collapsed.",
+  "sources": [
+    {
+      "track": "B",
+      "role": "base ledger (B00 skeleton)",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+      "note": "self; the B00 rows are preserved unchanged except where this refresh records a delivered artifact digest"
+    },
+    {
+      "track": "C",
+      "role": "C handoff ledger merged into consumer_edges",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/handoffs/dependencies-c.json",
+      "sha256": "505330c3883e54442728b13cdf19e59be6cee7181d6cc776a31fb21e689f252b",
+      "schema": "acp2.experience.dependencies-c.v1",
+      "generated_at": "2026-10-22T19:14:00Z",
+      "merged_rows": 5,
+      "merge_rule": "C rows describe what C consumes FROM B; they are recorded as consumer_edges (producer=B, consumer=C) and never inverted into producer edges for B"
+    },
+    {
+      "track": "A",
+      "role": "A cross-track dependency ledger",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "repo_relative_equivalent": "docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "sha256": null,
+      "status": "NOT_VERIFIED",
+      "reason": "blocked_fixture",
+      "observed_at": "2026-10-22",
+      "observed": "the file does not exist in the A worktree; A has delivered only science/baseline.md and science/path-map.md",
+      "handling": "recorded as not_verified (never fabricated); B14b/H3 closes when A publishes the file with artifact id/version/digest/readiness and AND/OR relations"
+    }
+  ],
+  "not_verified": [
+    {
+      "id": "A-CROSS-TRACK-DEPENDENCIES-ABSENT",
+      "track": "A",
+      "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "repo_relative_equivalent": "docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "status": "NOT_VERIFIED",
+      "reason": "blocked_fixture",
+      "blocks": [
+        "B03 complete A-edge validation",
+        "B14b H3 aggregate",
+        "B26b H7"
+      ],
+      "closing_owner": "A (producer) / B14b (merge)",
+      "closing_condition": "the file exists at the expected path, parses, and its rows declare producer, consumer, artifact, version, digest_or_pending, readiness and an explicit AND/OR relation",
+      "never_do": "do not invent A rows, do not copy A node ids from this plan as if A had published them"
+    }
+  ],
+  "consumer_edges": [
+    {
+      "consumer": "C/T-01 and every downstream C todo",
+      "producer": "B00",
+      "artifact": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+      "version": "1.0.0",
+      "digest_or_pending": "sha256:fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": "baseline-lock.json exists and carries candidate_id/evidence_root/final_debug_candidate",
+      "supersedes_c_row": "B00:baseline-lock"
+    },
+    {
+      "consumer": "C/T-01 and every C evidence row",
+      "producer": "B00",
+      "artifact": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": "manifest.json exists at the contract root (C's row looked for runtime/manifest.json, which was never the path)",
+      "observed_correction": "the authoritative path is docs/reference/next-change/acp2-contracts/manifest.json; runtime/manifest.json does not and will not exist",
+      "supersedes_c_row": "B00:manifest/evidence_root",
+      "digest_note": "self-referential: its digest moves on every manifest write, so the edge records PENDING and the manifest records its own rule"
+    },
+    {
+      "consumer": "C/T-04, C/T-11, C/T-12",
+      "producer": "B02a",
+      "artifact": "/opt/acp2-tools",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": {
+        "node": "/opt/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+        "pnpm": "/opt/acp2-tools/pnpm",
+        "dsh": "/opt/acp2-tools/deepseek-harness",
+        "evidence": "reports/acp2_implementation/bb45a46/B/B02/b-runtime.json"
+      },
+      "supersedes_c_row": "B02a:tools-root"
+    },
+    {
+      "consumer": "C/T-01 acceptance, C harness fixture/live routing",
+      "producer": "B02a",
+      "artifact": "role interpreters",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": {
+        "B": "/opt/acp2-dev/venvs/b/bin/python",
+        "browser": "/opt/acp2-dev/venvs/browser/bin/python",
+        "evidence": "reports/acp2_implementation/bb45a46/B/B02/role-interpreters.json"
+      },
+      "supersedes_c_row": "B02a:role-interpreters"
+    },
+    {
+      "consumer": "C/T-08, C/T-17, C/T-21, C/T-31, C/T-38",
+      "producer": "B02a",
+      "artifact": "browser venv (. [browser] extra)",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": {
+        "browser_python": "/opt/acp2-dev/venvs/browser/bin/python",
+        "chromium_launch_owner": "C T-08 (never a B02a acceptance condition)",
+        "evidence": "reports/acp2_implementation/bb45a46/B/B02/browser-env.json"
+      },
+      "supersedes_c_row": "B02a:browser-venv"
+    },
+    {
+      "consumer": "C/T-34 (C24a)",
+      "producer": "B20a-ready",
+      "artifact": "DA execution interface/preflight",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "relation": "AND",
+      "delivered": true,
+      "observed": "B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a",
+      "supersedes_c_row": "C24a:gates_on_B20a_ready"
+    }
+  ],
+  "cross_track_edges": [
+    {
+      "producer": "A-25a",
+      "consumer": "C-T40a",
+      "artifact": "dual-path selectivity fixture and criteria",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-25a fixture/criteria before C's single research submission"
+    },
+    {
+      "producer": "B23a",
+      "consumer": "C-T40a",
+      "artifact": "P4 readiness: identity/budget/execution interface",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-40 gates on B23a readiness, not the whole B23"
+    },
+    {
+      "producer": "C-T40a",
+      "consumer": "B23b",
+      "artifact": "single cross-domain research submission",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "B23b executes only after C T-40a"
+    },
+    {
+      "producer": "B23b",
+      "consumer": "A-25b",
+      "artifact": "authorized selectivity artifacts (one TaskRef, two qualified paths)",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "A-25b audits the B23b exported artifacts"
+    },
+    {
+      "producer": "A-25b",
+      "consumer": "C-T40b",
+      "artifact": "selectivity scientific audit",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "C T-40b presents only after A-25b"
+    },
+    {
+      "producer": "C-T40b",
+      "consumer": "H6",
+      "artifact": "P4 presentation sign-off",
+      "version": "1.0.0",
+      "digest_or_pending": "PENDING",
+      "readiness": "contract_ready",
+      "delivery_status": "planned",
+      "relation": "AND",
+      "precondition": "Only after A-25b and C T-40b may B23 feed H6"
+    }
+  ],
+  "cross_track_edges_note": "Plan-level P4 handoff chain. A's cross-track-dependencies.json is still absent (see not_verified), so these rows are executable ordering facts, not validated A-ledger rows.",
+  "p4_sync": {
+    "schema": "acp2.p4.sub-delivery-sync.v1",
+    "published_before_dispatch": true,
+    "published_at": "2026-10-23T10:33:41Z",
+    "owner": "B",
+    "todo": 27,
+    "identity": {
+      "scenario": "experience:cross-domain-live",
+      "phase": "experience:selectivity",
+      "subcase": "selectivity",
+      "scenario_key": "experience:cross-domain-live/selectivity"
+    },
+    "sub_deliveries": [
+      {
+        "id": "B23a",
+        "kind": "readiness",
+        "state": "implemented",
+        "owner": "B",
+        "requires": [
+          "B15",
+          "B17",
+          "B21",
+          "B22",
+          "A-25a"
+        ],
+        "creates_selectivity_submission": false,
+        "timeout_seconds": 1800
+      },
+      {
+        "id": "B23b",
+        "kind": "execution_export",
+        "state": "NOT_VERIFIED",
+        "owner": "B",
+        "requires": [
+          "B23a",
+          "C-T40a"
+        ],
+        "reason": "c_t40a_absent",
+        "creates_selectivity_submission": false,
+        "timeout_line": "selectivity_budget_row"
+      }
+    ],
+    "required_rows": [
+      "multitenant:two-project",
+      "same-name-and-key-isolation",
+      "cross-project-denials",
+      "revocation-stops-events-artifacts",
+      "cross-domain-consistency",
+      "budget.nmr",
+      "budget.thermo",
+      "budget.selectivity",
+      "measurements",
+      "dependency-edges",
+      "b23b-row"
+    ],
+    "gating": {
+      "C-T40a": "B23a",
+      "not": "B23",
+      "B23b_gap": "NOT_VERIFIED(c_t40a_absent)",
+      "H6": "not_fed"
+    },
+    "budget_lines": {
+      "multitenant": 1800,
+      "selectivity": "separate_unfrozen_row"
+    },
+    "cross_track_edges": [
+      "A-25a->C-T40a",
+      "B23a->C-T40a",
+      "C-T40a->B23b",
+      "B23b->A-25b",
+      "A-25b->C-T40b",
+      "C-T40b->H6"
+    ]
+  }
+}

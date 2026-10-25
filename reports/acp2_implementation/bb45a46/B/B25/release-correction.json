@@ -1,0 +1,25 @@
+{
+  "schema": "acp2.b25b.release-correction.v1",
+  "reason": "B25a acp_web wheel failed at Lab startup: OriginPolicy did not accept public_origin",
+  "b25a_summary_web_http": "NOT_VERIFIED(candidate_origin_policy_mismatch)",
+  "build_source_revision": "a84c4266bfc4738c8efc2988b7c5c37079a8a324",
+  "build_source_description": "clean HEAD 67f1789 + boundary.py public_origin fix committed in the temporary build worktree",
+  "original_artifacts": {
+    "acp-web-0.3.0.tar.gz": "60069ec0c5ad260bbd67afa95824f10d220f49fa885e5d99838095f9fb11ab72",
+    "acp-worker-0.3.0.tar.gz": "ceff0a603b9f4add5bd8a94ac7d840b0aaec9195cf690fd7de0bdcbeffabeac1",
+    "acp_web-0.3.0-py3-none-any.whl": "630077d1a1f30f3a885c946b7e058a88ea71aedcc69b07eac47d14b8c2b95d92",
+    "acp_worker-0.3.0-py3-none-any.whl": "59d045813012cf9a338ca6640d6e0bca09b08d43ad30130a581959e542b7eee9",
+    "cccp-0.3.0-py3-none-any.whl": "f437cf68f4038ce4de623ca7ac65292e4c65f0a30950257c018850e635d96dd3",
+    "cccp-0.3.0.tar.gz": "fbe9dd22233f230e27fbd75c978959d690755b81ae97b98e54291dc356f6d4cc"
+  },
+  "corrected_artifacts": {
+    "acp-web-0.3.0.tar.gz": "c1798bda7df1f62d4647af5afd61d635504efe6175f84cfc08d3d36cf629dec5",
+    "acp-worker-0.3.0.tar.gz": "a3ea29ea025719e404c7f36c83d193f0e59d05d02799ba478c5555347b978acc",
+    "acp_web-0.3.0-py3-none-any.whl": "55ecb5ea83d0fb0a4f911eb7c0d114495ee0cb8cb367eabee232248cf6907846",
+    "acp_worker-0.3.0-py3-none-any.whl": "7d93873f4db823e4bd1edaa7be34be8558d8623cfb37cf4a311368110b2fa0c3",
+    "cccp-0.3.0-py3-none-any.whl": "70749f7673abd40ce99702700b779f109d4d6ff57e7af2891be4f695f6654ad3",
+    "cccp-0.3.0.tar.gz": "5cb1f202dba608182be7e38a919d282faa63f3b781e1d6ea59ea0e46b3b32825"
+  },
+  "root_build": "root-build/acp-0.3.0-py3-none-any.whl",
+  "version": "0.3.0"
+}

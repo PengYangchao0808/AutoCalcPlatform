@@ -1,0 +1,24 @@
+{
+  "constructed": true,
+  "purpose": "Constructed v1/v2 pair for ACP2 plugin upgrade and historical read-only access (A-23).",
+  "real_computation": false,
+  "no_real_qc": true,
+  "notes": [
+    "Both distributions are synthetic fixtures; they validate a fixed native single-point JSON record and never run a QC program.",
+    "The wheels are built and installed only in an isolated virtual environment by tests/test_acp2_science_plugin_gate.py.",
+    "v1 and v2 keep the same distribution and capability names; v2 changes the plugin version, capability schema version, recipe reference and validator reference.",
+    "The checked-in v1 artifact under artifacts/ was produced by the v1 fixture in that isolated environment and is labelled constructed."
+  ],
+  "v1": {
+    "distribution": "acp2-upgrade-science-validator",
+    "version": "1.0.0",
+    "capability": "acp2_upgrade_native_singlepoint",
+    "capability_schema_version": 1
+  },
+  "v2": {
+    "distribution": "acp2-upgrade-science-validator",
+    "version": "2.0.0",
+    "capability": "acp2_upgrade_native_singlepoint",
+    "capability_schema_version": 2
+  }
+}

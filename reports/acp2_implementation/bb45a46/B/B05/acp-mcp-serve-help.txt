@@ -1,0 +1,18 @@
+usage: acp mcp serve [-h] [--transport {stdio}] [--controller URL]
+                     [--log-level {DEBUG,INFO,WARNING,ERROR}]
+                     [--max-frame-bytes MAX_FRAME_BYTES]
+
+options:
+  -h, --help            show this help message and exit
+  --transport {stdio}   Transport to serve (only 'stdio' is supported)
+  --controller URL      Loopback Controller URL (default: $ACP_CONTROLLER_URL)
+  --log-level {DEBUG,INFO,WARNING,ERROR}
+                        stderr log level (default: $ACP2_MCP_LOG_LEVEL or
+                        INFO)
+  --max-frame-bytes MAX_FRAME_BYTES
+                        Hard per-frame JSON-RPC byte limit (default: 1048576,
+                        minimum 1024)
+
+stdout carries protocol frames only; all diagnostics go to stderr. This
+process never starts or owns a Controller, scheduler or jobs database.
+        

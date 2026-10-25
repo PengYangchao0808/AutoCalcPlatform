@@ -1,0 +1,13 @@
+diff --git a/src/acp/results/frequencies.py b/src/acp/results/frequencies.py
+index b632868..4d82ab1 100644
+--- a/src/acp/results/frequencies.py
++++ b/src/acp/results/frequencies.py
+@@ -5,7 +5,7 @@ from __future__ import annotations
+ import math
+ from typing import Any
+ 
+-from acp.results.orca_parser import OrcaCalculation
++from cccp.analysis.orca_parser import OrcaCalculation
+ 
+ __all__ = ["build_frequency_report", "build_normal_modes_product"]
+ 

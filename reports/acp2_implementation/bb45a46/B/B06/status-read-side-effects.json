@@ -1,0 +1,14 @@
+{
+  "job_id": "20261022_210346_001_b04a-parity",
+  "before": {
+    "task_count": 2,
+    "operation_count": 0,
+    "status": "completed"
+  },
+  "after": {
+    "task_count": 2,
+    "operation_count": 0,
+    "status": "completed"
+  },
+  "unchanged": true
+}

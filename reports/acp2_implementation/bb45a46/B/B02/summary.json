@@ -1,0 +1,72 @@
+{
+  "schema": "acp2.b02-summary.v1",
+  "task": "B02 — isolated Python, data root and ACP test configuration (B02a env handoff + B02b early package smoke)",
+  "created_at": "2026-10-22T19:45:00+08:00",
+  "candidate": {
+    "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "base_commit": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+    "worktree": "/opt/acp2-dev/B",
+    "per_file_verification": "1906/1906 PASS (0 mismatches, 0 missing)",
+    "worktree_clean_after_commit": true
+  },
+  "runbook_rows": [
+    {
+      "id": "ENV-01",
+      "state": "PASS",
+      "evidence": "env-probe.log",
+      "detail": "Linux x86_64, 40 cores, Python 3.11.13; git/curl/tar/xz/sha256sum/findmnt/ssh present; ss present at /usr/sbin/ss (not on this shell's PATH). Data root xfs native, writable; 28 GiB free and 35.9M free inodes. Ports 18765/18766 free; production 8765 untouched (HTTP 200)."
+    },
+    {
+      "id": "ENV-02",
+      "state": "PASS",
+      "evidence": "venv-install.log, import-paths.log",
+      "detail": "Dedicated venv /opt/acp2-dev/venvs/b installed editable from /opt/acp2-dev/B with [dev,api,remote]; all three packages import from the frozen worktree after PYTHONPATH unset."
+    },
+    {
+      "id": "ENV-04",
+      "state": "PASS",
+      "evidence": "init-config.log, config-doctor.log",
+      "detail": "Dedicated controller cwd/config with cluster.execution_mode=local, cluster.nodes=[], isolated run root; acp doctor 10 PASS / 0 FAIL / 0 NOT_VERIFIED; acp run serve --help exit 0. No production data or remote directory is referenced."
+    },
+    {
+      "id": "ENV-09",
+      "state": "PASS",
+      "evidence": "acceptance-env.sh, acceptance-env-check.log",
+      "detail": "acceptance-env.sh (mode 0600) re-creates interpreters, PATH order, data root, evidence root, deferred fixtures and the credential-reference convention when sourced in a clean shell."
+    }
+  ],
+  "named_gaps": [
+    {
+      "item": "LSF remote execution",
+      "state": "NOT_VERIFIED",
+      "prerequisite": "No bsub/bjobs on the host; local-only configuration is intentional in B02."
+    },
+    {
+      "item": "Chromium install/launch",
+      "state": "NOT_VERIFIED",
+      "prerequisite": "C T-08 H2 owns browser launch. B02 only verifies ACP2_BROWSER_PYTHON has playwright 1.63.0 importable."
+    },
+    {
+      "item": "Functional scientific execution",
+      "state": "NOT_VERIFIED",
+      "prerequisite": "acp doctor verifies binary path/sanity only. No QC job is run in B02; real science is A/C scenario work."
+    },
+    {
+      "item": "Full release packaging delivery (B25)",
+      "state": "NOT_VERIFIED",
+      "prerequisite": "P5. B02b is the minimal P0 package smoke only."
+    },
+    {
+      "item": "C candidate convergence",
+      "state": "NOT_VERIFIED",
+      "prerequisite": "C worktree advanced while B02 ran (candidate recorded at snapshot time); no cross-plan freeze was performed here."
+    }
+  ],
+  "notes": [
+    "The default /usr/bin/orca is the GNOME Orca screen reader, not QC ORCA. Doctor rejected it; the controller config pins the real ELF ORCA at /home/redacted-user/orca611/orca.",
+    "~/.local/lib/python3.11/site-packages/__editable__.acp-0.2.0.pth points at src (the dirty checkout). The B venv's own site-packages wins on sys.path, and the role matrix asserts every module __file__; role/package tests that must be free of this leak use clean venvs.",
+    "The B venv is --system-site-packages by design (inherits numpy/rdkit/fastapi/paramiko); wheel was installed into it on demand to build the P0 package smoke.",
+    "Package lifecycle: distribution metadata upgrades 0.2.0 -> 0.2.1; cccp.__version__ stays 0.2.0 because the four-place version constant is source-owned."
+  ]
+}

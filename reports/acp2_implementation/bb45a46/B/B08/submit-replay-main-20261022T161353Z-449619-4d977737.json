@@ -1,0 +1,87 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "task_ids=['20261023_001354_001_singlepoint', '20261023_001354_001_singlepoint'] errors=['', '']",
+      "name": "two_mcp_processes_same_task_ref",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=0 after=1",
+      "name": "exactly_one_new_task",
+      "status": "PASS"
+    },
+    {
+      "detail": "job.started=1",
+      "name": "exactly_one_dispatch",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"schema_version\": 1, \"operation\": \"acp_submit\", \"status\": \"error\", \"exit_code\": 4, \"dry_run\": false, \"operation_identity\": null, \"diagnostic_ref\": null, \"data\": null, \"error\": {\"code\": \"revision_conflict\", \"category\": \"conflict\", \"message\": \"idempotency key reused with a different request payload\", \"retryable\": false, \"params\": {\"command\": \"submit\", \"idempotency_key\": \"b08-bdc4ad4041b947a3a3676b7",
+      "name": "same_key_changed_payload_conflict",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"schema_version\": 1, \"operation\": \"acp_submit\", \"status\": \"error\", \"exit_code\": 4, \"dry_run\": false, \"operation_identity\": null, \"diagnostic_ref\": null, \"data\": null, \"error\": {\"code\": \"revision_conflict\", \"category\": \"conflict\", \"message\": \"idempotency key was already used under a different verified scope\", \"retryable\": false, \"params\": {\"command\": \"submit\", \"idempotency_key\": \"b08-bdc4ad4041b94",
+      "name": "same_key_changed_scope_rejected",
+      "status": "PASS"
+    }
+  ],
+  "attempt": 1,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "642c2643c9db7bebcbe90d69ff24d6560a3f4ac1ee278e585e407ecd99c8c36f",
+    "server_revision": "b061b50f8aecf130b3e597aad41f0f18270c586d"
+  },
+  "candidate_revision": "b061b50f8aecf130b3e597aad41f0f18270c586d",
+  "command": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "submit-replay",
+    "--controller",
+    "http://127.0.0.1:18766",
+    "--launch",
+    "reports/acp2_implementation/bb45a46/B/B08/mcp-launch.json",
+    "--fixture",
+    "reports/acp2_implementation/bb45a46/B/B08/fixtures/singlepoint.xyz",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B08",
+    "--timeout",
+    "600"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": ".",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "submit",
+    "acceptance.target": "local",
+    "b08.attempt": 1,
+    "b08.fixture": "reports/acp2_implementation/bb45a46/B/B08/fixtures/singlepoint.xyz",
+    "b08.idempotency_key": "b08-bdc4ad4041b947a3a3676b7c",
+    "b08.job_started_events": 1,
+    "b08.mcp_launch": "reports/acp2_implementation/bb45a46/B/B08/mcp-launch.json",
+    "b08.task_count_after": 1,
+    "b08.task_count_before": 0,
+    "b08.task_ref": "20261023_001354_001_singlepoint"
+  },
+  "finished_at": "2026-10-22T16:13:56Z",
+  "job_id": "20261023_001354_001_singlepoint",
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261022T161353Z-449619-4d977737",
+  "scenario": "submit-replay",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T16:13:53Z",
+  "submission_id": null,
+  "usage": null
+}

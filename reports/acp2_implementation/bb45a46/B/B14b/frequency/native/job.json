@@ -1,0 +1,165 @@
+{
+  "id": "20261023_111946_003_frequency",
+  "spec": {
+    "workflow": "frequency",
+    "name": "STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency",
+    "input": {
+      "source_type": "xyz_text",
+      "source": "2\nH2 singlepoint fixture (H2/STO-3G)\nH 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000\n",
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "method": {
+      "levels": {
+        "frequency": {
+          "engine": "orca",
+          "functional": "HF",
+          "basis": "STO-3G"
+        }
+      }
+    },
+    "resources": {
+      "cores": 1,
+      "nproc": 1,
+      "mem": "1024MB"
+    },
+    "output_dir": null,
+    "config_path": null,
+    "tags": [],
+    "project_id": "uncategorized",
+    "input_hash": "sha256:fea3e2bfa7380c5ada5622dcdd6373a079b43471632a36407aa2b1abfbd0d3a5",
+    "execution_mode": null,
+    "target_node": null,
+    "node_tags": [],
+    "molecule_name": "STO-3G)\nH 0.000000 0.000000 0.000000\nH 0.000000 0.000000 0.740000",
+    "task_name": "frequency",
+    "remark": "",
+    "custom_name": null
+  },
+  "status": "completed",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency",
+  "created_at": "2026-10-23T03:19:46.132235+00:00",
+  "updated_at": "2026-10-23T03:19:49.727558+00:00",
+  "started_at": "2026-10-23T03:19:46.148223+00:00",
+  "completed_at": "2026-10-23T03:19:49.727505+00:00",
+  "current_stage": null,
+  "progress": 1.0,
+  "error": null,
+  "project_id": "uncategorized",
+  "input_hash": "sha256:fea3e2bfa7380c5ada5622dcdd6373a079b43471632a36407aa2b1abfbd0d3a5",
+  "pid": 1058141,
+  "exit_code": 0,
+  "remote_job_id": null,
+  "group_id": "20261023_111946_003_frequency",
+  "node_id": "local",
+  "host": "redacted-host",
+  "result": {
+    "admission": {
+      "reservation_id": "res_idem_0a0754cac6f34836ae1bbfb4bab2dba0",
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "enforced": true,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "verified_project": null,
+      "multi_tenant_security": false
+    },
+    "required_software": [
+      "orca"
+    ],
+    "execution_target": "local",
+    "execution_kind": "local",
+    "state": {
+      "version": "1.0",
+      "job_name": "frequency",
+      "status": "completed",
+      "current_stage": null,
+      "overall_progress": 1.0,
+      "stage_index": 1,
+      "stage_total": 1,
+      "stage_order": [
+        "frequency"
+      ],
+      "stage_progress": null,
+      "stage_detail": null,
+      "progress_state": "determinate",
+      "created_at": "2026-10-23T03:19:47.180065+00:00",
+      "updated_at": "2026-10-23T03:19:49.116103+00:00",
+      "stages": {
+        "frequency": {
+          "status": "completed",
+          "started_at": "2026-10-23T03:19:47.223364+00:00",
+          "completed_at": "2026-10-23T03:19:49.114952+00:00"
+        }
+      }
+    },
+    "terminal_side_effects_done": false,
+    "artifacts": [
+      {
+        "artifact_id": "69b8d14e-0f3a-4c0b-b424-c21faeaee1df",
+        "task_id": null,
+        "job_id": "20261023_111946_003_frequency",
+        "artifact_type": "json",
+        "file_path": "RESULT/energy/step_0_frequency.json",
+        "checksum": "sha256:d270ea74f31070e81433db05bf4305207c33fe632f2a63bf9d0a7cb3c6cd64fc",
+        "size_bytes": 252,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T03:19:49.748013+00:00"
+      },
+      {
+        "artifact_id": "aae45564-674b-46e5-b8bd-0ffe22d6be3e",
+        "task_id": null,
+        "job_id": "20261023_111946_003_frequency",
+        "artifact_type": "json",
+        "file_path": "RESULT/frequencies/normal_modes.json",
+        "checksum": "sha256:6bda7b8a296ed70d785b68ebb880dba876413fb7d7d929217176bedd65fb4b8f",
+        "size_bytes": 1739,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T03:19:49.750089+00:00"
+      },
+      {
+        "artifact_id": "23f470d7-15b3-43c9-b141-8a96b429f50f",
+        "task_id": null,
+        "job_id": "20261023_111946_003_frequency",
+        "artifact_type": "json",
+        "file_path": "RESULT/result_manifest.json",
+        "checksum": "sha256:54f9adffcb128452bcfd5ee69b22f159d5a6cd55d716da02ebfb7d283a511716",
+        "size_bytes": 1010,
+        "parser_status": "pending",
+        "mime_type": "application/json",
+        "metadata": {
+          "stage_dir": "RESULT"
+        },
+        "created_at": "2026-10-23T03:19:49.751699+00:00"
+      }
+    ],
+    "provenance": {
+      "input_hash": "sha256:fea3e2bfa7380c5ada5622dcdd6373a079b43471632a36407aa2b1abfbd0d3a5",
+      "molecule_hash": null,
+      "acp_version": "0.2.0",
+      "backend_name": "frequency",
+      "backend_version": "",
+      "method": "frequency",
+      "basis": null,
+      "solvent": null,
+      "command_line": "",
+      "hostname": "redacted-host",
+      "ncores": 1,
+      "memory_gb": 1.0,
+      "wall_time_seconds": 3.579282,
+      "routine": "frequency",
+      "creator": null,
+      "schema_version": "1.0"
+    }
+  },
+  "revision": 5,
+  "attempt": 1
+}

@@ -1,0 +1,46 @@
+{
+  "command": [
+    "/usr/bin/python3.11",
+    "-m",
+    "ruff",
+    "check",
+    "src",
+    "tests",
+    "--output-format",
+    "json",
+    "--no-cache"
+  ],
+  "cwd": "/tmp/opencode/acp-b00-candidate",
+  "ruff_version": "0.15.22",
+  "diagnostic_count": 1058,
+  "file_count": 129,
+  "rule_counts": {
+    "E402": 5,
+    "E501": 427,
+    "E712": 1,
+    "E741": 3,
+    "F401": 33,
+    "F541": 1,
+    "F811": 1,
+    "F841": 6,
+    "I001": 63,
+    "N802": 21,
+    "N806": 15,
+    "N811": 2,
+    "N815": 2,
+    "UP006": 128,
+    "UP007": 2,
+    "UP012": 2,
+    "UP015": 17,
+    "UP035": 38,
+    "UP036": 1,
+    "UP045": 148,
+    "W293": 142
+  },
+  "planning_snapshot": {
+    "count": 1065,
+    "file_count": 133,
+    "note": "Planning-time figure recorded in the plan/review. Actual ruff 0.15.22 measurement on the frozen candidate is 1058 diagnostics across 129 files. The actual array above is authoritative; the difference is recorded as manifest drift."
+  },
+  "array_location": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json#diagnostics"
+}

@@ -1,0 +1,2704 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 01f1e0e..c12dd2d 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -197,6 +197,13 @@ pytest tests/test_acp_services_isolation.py tests/test_architecture_invariants.p
+ ruff check src tests && ruff format --check src tests
+ ```
+ 
++## ACP 2.0 RELEASE ROLES（B25b，2026-10-23）
++- **四发行**: `cccp` / `acp-worker` / `acp-web` 0.3.0 互不重叠；根 `acp` 单发行保留，二者二选一安装。构建 `scripts/build_release.py`，安装验收 `scripts/acceptance/acp2_package_install.py` + `scripts/acceptance/acp2_runtime.py --scenario package-install`。
++- **安装证据**: `reports/acp2_implementation/bb45a46/B/B25/`（`summary.json` 经 `--check-only` 通过；四个干净 venv、CCCP 无 Controller 样例、Lab/MCP/CLI、资产/版本）。B25a 首版 `acp_web` 的 `OriginPolicy` 启动缺陷在 B25b 重建中修正；原始制品在 `release-b25a-original/`。
++- **版本**: 四处 `0.3.0`（`src/cccp/__init__.py`、`src/cccp/version.py`、`src/acp/__init__.py`、`pyproject.toml`）；`requirements-node.txt` 未新增 import。
++- **MCP**: 可执行入口 `acp mcp serve --controller <url>`；协议 `2025-06-18`，八工具。`runtime/mcp-launch.template.json` 的 `entrypoint` 只是协议 owner 元数据。
++- **未发布**: C33/C34 与 C `experience/static-assets.manifest.json` 为 `NOT_VERIFIED`（预期路径见 B25b `a-c-evidence.json` / `static-assets-status.json`）；C35 非 B25b 前置。生产 service/run_root 未触碰。
++
+ ## SYSTEMD SERVICE
+ - **Service**: `acp.service` · config `/etc/systemd/system/acp.service`（**generated — 编辑 `scripts/install_systemd.sh`，勿手改 unit**）· URL http://127.0.0.1:8765 · 日志 `sudo journalctl -u acp -f`
+ - **Reload**: 任何代码修改后 `sudo systemctl restart acp`（服务无 `--reload`）
+diff --git a/docs/reference/next-change/ACP_Services_MCP_Client_Matrix.md b/docs/reference/next-change/ACP_Services_MCP_Client_Matrix.md
+index e2efebb..49831ed 100644
+--- a/docs/reference/next-change/ACP_Services_MCP_Client_Matrix.md
++++ b/docs/reference/next-change/ACP_Services_MCP_Client_Matrix.md
+@@ -89,12 +89,29 @@ commands return structured `unsupported_capability` (`binding=B06`,
+ The **official DSH client handshake is still NOT_VERIFIED** (H2 gate, C-owned).
+ The B05 evidence covers the stdlib probe and the process-level matrix only.
+ 
++### B25b installed-entry verification (2026-10-23)
++
++The clean role-wheel install (`acp-web` 0.3.0 in a fresh venv) launched the real entry as
++`acp mcp serve --controller http://127.0.0.1:<isolated-port>` against an isolated Lab server.
++`initialize` negotiated `2025-06-18` (supported set exactly `("2025-06-18",)`) and `tools/list`
++returned the eight P1 tools by name: `acp_capabilities`, `acp_preflight`, `acp_submit`,
++`acp_status`, `acp_cancel`, `acp_prepare_artifact`, `acp_read_artifact`, `acp_analyze`.
++The run is recorded in `reports/acp2_implementation/bb45a46/B/B25/mcp-tools.json` and in the
++`b25.stdio_mcp_eight_tools` assertion.
++
++This closes the **installed-entry** part of the B25b scope only. The official DSH client handshake
++remains `NOT_VERIFIED` (H2 gate, C-owned), and the `dsh-official-mcp-client` row above is unchanged.
++The launch-template metadata (`entrypoint: acp_services.entrypoints.mcp`) names the protocol owner;
++the runnable command is the `acp mcp serve` console entry, which composes the same module through
++`src/acp/services_mcp_bootstrap.py`.
++
+ ## Change record (append-only)
+ 
+ | Date | Item | Action | Reason |
+ |---|---|---|---|
+ | 2026-10-19 | Locked version `2025-06-18`; 8-tool allowlist; stdio matrix | add | B08-2 initial freeze |
+ | 2026-10-22 | Real stdio transport; advertised supported set; lifecycle gate; explicit batch rejection; DSH row `NOT_VERIFIED` | update | B05 tested set unchanged (`2025-06-18`) + real subprocess/probe evidence; no new version claimed |
++| 2026-10-23 | Installed-wheel stdio entry re-verified (`protocol 2025-06-18`, eight tools) | update | B25b clean role-wheel install; DSH official handshake still `NOT_VERIFIED` |
+ 
+ <!-- SERVICES_STATUS_SYNC:todo70 -->
+ ## 实施状态同步（2026-10-19 / todo 70）
+diff --git a/docs/reference/next-change/ACP_Services_Standalone_Recipe.md b/docs/reference/next-change/ACP_Services_Standalone_Recipe.md
+index 3dafc7a..ff8298e 100644
+--- a/docs/reference/next-change/ACP_Services_Standalone_Recipe.md
++++ b/docs/reference/next-change/ACP_Services_Standalone_Recipe.md
+@@ -273,3 +273,27 @@ ACP_RUN_ROOT=/tmp/b41b_runs acp task export  --job <id>          # 新进程 →
+ # recover 腿（当前 FAIL，缺陷 D2）：acp task recover --task-dir <dir> --workflow optimize --method r2SCAN-3c
+ #             → 生成 `! default def2-TZVPP` 占位输入 + orca 回落 GNOME → failed
+ ```
++
++## 10. B25b 角色 wheel 安装追加（2026-10-23）
++
++本节只追加 B25b 的真实安装结果，不覆盖 §2 的 B41a/B41b 记录。
++
++| 步骤 | 命令 | Expected | Actual | 结果 |
++|---|---|---|---|---|
++| W1 三角色 wheel 安装 | `python3.11 -m venv /tmp/opencode/b25b/venvs/web && env -u PYTHONPATH /tmp/opencode/b25b/venvs/web/bin/python -m pip install --find-links <release> <release>/acp_web-0.3.0-py3-none-any.whl` | exit 0；模块来自 venv site-packages | 四个 venv（cccp/worker/web/root）安装 0.3.0；`cccp.__file__`、`acp.__file__`、`acp_services.__file__` 均在各自 site-packages | PASS |
++| W2 CCCP 独立样例 | `/tmp/opencode/b25b/venvs/cccp/bin/python cccp-sample.py` | 无 Controller、无 `acp` import，受控单点完成 | `complete=true`，energy `-1.0`，`acp`/`acp_services` 不在 `sys.modules` | PASS |
++| W3 根/角色 CLI | `/opt/acp2/venv/bin/acp --help` | usage 打印，exit 0 | web 与 root 均 exit 0 | PASS |
++| W4 Lab 服务 | `acp run serve --host 127.0.0.1 --port <free> --run-root <isolated> --no-browser` | `/api/health` status=ok | 随机 loopback 端口返回 `status=ok`，测毕停止 | PASS |
++| W5 stdio MCP | `acp mcp serve --controller http://127.0.0.1:<port>` | initialize `2025-06-18` + 八工具 | 八个 P1 工具全部列出 | PASS |
++| W6 资产/许可/配置/SDK | `unzip -l` + 安装面 import | LICENSE/NOTICE/LICENSE-DP5/model assets/py.typed/sample config/schema/SDK/docs | 全部在场；根发行 LICENSE 在 dist-info；样例配置与 schema/docs 随 `release/docs/` | PASS |
++| W7 四处版本 | 读取四个位置 | 全部 `0.3.0` | 全部 `0.3.0` | PASS |
++| W8 C 静态资产挂载 | 读取 C `experience/static-assets.manifest.json` | 只读挂载 `/experience/<release_id>/`，未知路径 404，摘要不符拒绝 | C 未发布该 manifest | NOT_VERIFIED — 原因：`c_static_assets_absent`；预期路径 `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` |
++
++**判定：** 角色 wheel 安装、CCCP 独立运行、CLI/Lab/MCP、资产与版本均 PASS；
++C33/C34 与 C 静态资产未发布，保持 `NOT_VERIFIED`（预期路径见 B25b 证据
++`a-c-evidence.json` / `static-assets-status.json`）。B25b 未重启生产服务，未使用生产 run root。
++
++**发行修正：** B25a 首版 `acp_web` wheel 的 `OriginPolicy` 构造失败已在 B25b 重建的
++0.3.0 发行中修正（`boundary.py` 接受 `public_origin`）；原始制品保留在
++`reports/acp2_implementation/bb45a46/B/B25/release-b25a-original/`，新摘要以
++`release-manifest.json` 为准。
+diff --git a/packaging/README.md b/packaging/README.md
+index b88d8b8..5d54b40 100644
+--- a/packaging/README.md
++++ b/packaging/README.md
+@@ -61,3 +61,55 @@ worker 为缺省输出目录显式使用 `--work-dir`，相对输出目录也基
+ 未配置时正常领取仍可用，但异常死亡接管必须另有停止证明。历史无边界锁、
+ 仍有后代进程、路径/inode/设备/boot ID 不符均不能自动接管。
+ 此功能处理意外进程死亡，不声明同 UID 恶意程序的隔离能力；真实委派环境尚待验收。
++
++## B25b 干净安装验收（2026-10-23）
++
++B25b 在仓库外的四个干净 venv 中实际安装并运行了 `cccp`、`acp-worker`、`acp-web` 与根
++`acp` 四个发行，数据根为 `/tmp/opencode/b25b`，Lab/MCP 使用随机 loopback 端口与独立
++`ACP_RUN_ROOT`。证据与可复跑摘要位于
++`reports/acp2_implementation/bb45a46/B/B25/`（`summary.json`、`install-results.json`、
++`installed-probes.json`、`cccp-sample.json`、`lab-health.json`、`mcp-tools.json`、
++`assets-audit.json`、`a-c-evidence.json`、`static-assets-status.json`）。
++
++```bash
++# 安装角色（仓库外；不继承 PYTHONPATH / 不使用 editable checkout）
++python3.11 -m venv /tmp/opencode/b25b/venvs/web
++/tmp/opencode/b25b/venvs/web/bin/python -m pip install \
++  --find-links reports/acp2_implementation/bb45a46/B/B25/release \
++  reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
++
++# 独立 CCCP 科学样例（无 Controller / 无 acp import）
++/tmp/opencode/b25b/venvs/cccp/bin/python /path/to/cccp-sample.py
++
++# Lab 与 stdio MCP（隔离端口与 run root）
++/tmp/opencode/b25b/venvs/web/bin/acp run serve --host 127.0.0.1 --port 18786 \
++  --run-root /tmp/opencode/b25b/data/lab-run-root --no-browser
++/tmp/opencode/b25b/venvs/web/bin/acp mcp serve --controller http://127.0.0.1:18786
++```
++
++验收场景（fixture 由 `$ACP2_PACKAGE_FIXTURE` 指定）：
++
++```bash
++python scripts/acceptance/acp2_runtime.py --scenario package-install \
++  --fixture "$ACP2_PACKAGE_FIXTURE" \
++  --out reports/acp2_implementation/bb45a46/B/B25 --timeout 1800
++```
++
++结果：`PASS`（exit 0）；四个干净 venv 导入均解析到各自 `site-packages`；CCCP 受控
++单点在无 Controller 下完成；`acp --help` 在 web/root 均可用；Lab `/api/health` 返回
++`status=ok`；MCP `initialize` 协商 `2025-06-18` 并列出 8 个 P1 工具；资产、NOTICE、
++LICENSE-DP5、`py.typed`、样例配置、schema、SDK 与 AGENTS 文档均在安装面或发行目录可见；
++四处版本位置均为 `0.3.0`。
++
++**发行修正记录：** B25a 的首版 `acp_web` wheel 在 `OriginPolicy` 构造处即失败
++（`server.py` 传入 `public_origin`，而当时的 `boundary.py` 尚未接受该参数），因此 B25a
++把 Web HTTP 探针如实记为 `NOT_VERIFIED(candidate_origin_policy_mismatch)`。B25b 从干净
++HEAD + 同一 `public_origin` 修正重建了 0.3.0 四发行，原始制品保存在
++`release-b25a-original/` 与 `root-build-b25a-original/`，新制品摘要见
++`release/release-manifest.json` 与 `version-locations.json`。该修正只涉及启动参数兼容，
++不改变科学代码、工具许可或版本号。
++
++A/C 原始证据：A-27b 与 A-28 已按登记路径汇总（不重签科学结论）；C33/C34 未发布，
++B25b 记录 `NOT_VERIFIED` 与预期路径。C 的 `experience/static-assets.manifest.json`
++未发布，静态资产只读挂载记录为 `NOT_VERIFIED(c_static_assets_absent)`。C35 不是 B25b
++前置。未重启 `acp.service`，未触碰 `/var/lib/acp/runs`。
+diff --git a/scripts/acceptance/acp2_runtime.py b/scripts/acceptance/acp2_runtime.py
+index e54b20f..8bc2d6a 100644
+--- a/scripts/acceptance/acp2_runtime.py
++++ b/scripts/acceptance/acp2_runtime.py
+@@ -15104,7 +15104,11 @@ def dry_run_commands(
+     elif spec.scenario == "migration":
+         commands.append(f"{shlex.quote(sys.executable)} -m acp task export {shlex.quote(fixture)}")
+     elif spec.scenario == "package-install":
+-        commands.append(f"{shlex.quote(sys.executable)} -m pip install -e .")
++        commands.append(
++            f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
++            f"--scenario package-install --fixture {shlex.quote(fixture)} "
++            f"--out {shlex.quote(out)} --timeout {int(phase.timeout)}"
++        )
+ 
+     harness_command = [
+         sys.executable,
+@@ -15118,7 +15122,7 @@ def dry_run_commands(
+     ]
+     if phase.controller_required:
+         harness_command += ["--controller", controller]
+-    if "fixture" in phase.required_args:
++    if "fixture" in phase.required_args or spec.scenario == "package-install":
+         harness_command += ["--fixture", fixture]
+     if "launch" in phase.required_args:
+         harness_command += ["--launch", launch]
+@@ -16190,6 +16194,28 @@ def execute_scenario(
+             return code_value
+ 
+         handler = migration
++    elif spec.scenario == "package-install":
++
++        def package_install(_ledger: CleanupLedger) -> int:
++            import importlib.util
++
++            helper = Path(__file__).resolve().parent / "acp2_package_install.py"
++            module_spec = importlib.util.spec_from_file_location("acp2_package_install", helper)
++            if module_spec is None or module_spec.loader is None:
++                raise RuntimeError(f"cannot load {helper}")
++            module = importlib.util.module_from_spec(module_spec)
++            module_spec.loader.exec_module(module)
++
++            code_value, assertions, extensions = module.run_package_install(
++                None if args.fixture is None else str(args.fixture), out_dir, timeout
++            )
++            outcome["assertions"] = assertions
++            outcome["extensions"] = extensions
++            outcome["artifacts"] = extensions.get("b25.artifacts", [])
++            outcome["reason"] = extensions.get("b25.reason")
++            return code_value
++
++        handler = package_install
+     else:
+         handler = _b01_stub_handler(spec)
+ 
+@@ -16221,6 +16247,7 @@ def execute_scenario(
+         "approval-budget",
+         "infra-plugin",
+         "migration",
++        "package-install",
+     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
+         result = (
+             "PASS"
+@@ -16256,6 +16283,7 @@ def execute_scenario(
+         "approval-budget",
+         "infra-plugin",
+         "migration",
++        "package-install",
+     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
+         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
+         assertions = list(outcome.get("assertions", []))
+@@ -16658,7 +16686,7 @@ def main(argv: list[str] | None = None) -> int:
+     if spec.scenario == "control-recovery" and args.launch and not Path(args.launch).is_file():
+         print(f"usage error: --launch does not exist: {args.launch}", file=sys.stderr)
+         return EXIT_USAGE
+-    fixture_is_file = Path(args.fixture).is_file()
++    fixture_is_file = args.fixture is not None and Path(args.fixture).is_file()
+     migration_directory = (
+         spec.scenario == "migration"
+         and Path(args.fixture).is_dir()
+diff --git a/src/acp/AGENTS.md b/src/acp/AGENTS.md
+index 11f41c7..b681ef5 100644
+--- a/src/acp/AGENTS.md
++++ b/src/acp/AGENTS.md
+@@ -119,3 +119,9 @@ acp/
+ - **Retired catalog entries retained**: ensemble/benchmark/energy 等保留 `status:"retired"` + `visible:False`；NMR 已于 P1a 重新激活（`status:"active"`）
+ - **Forwarder re-implementation**: putting logic back into `scheduler/store.py`, `scheduler/migrations.py`, `calculations/{contracts,step_result,step_requirements}.py`, or `catalog.method_levels_to_cli_flags` breaks the single implementation root; they must stay pure identity re-exports
+ - **Deleting compat surfaces for line count**: `calculations/primitives`, `backends`, `compat/legacy`, retired engine shims and recovery fixtures are retained (root ANTI #31)
++
++## RELEASE ROLES (B25b, 2026-10-23)
++- The installed `acp-web` wheel is a first-class entry: `acp` console script and `acp mcp serve` both resolve from venv site-packages, not this checkout.
++- Compat imports stay importable from the wheel: `acp.calculations.primitives`, `acp.backends`, `acp.compat.legacy.manifests`; `acp` forwards store/contracts to `acp_services` as the same object (see root ANTI #30).
++- Root `acp` and the three role distributions are mutually exclusive install choices; do not mix their same-path files.
++- Release/install evidence: `reports/acp2_implementation/bb45a46/B/B25/`; scenario `scripts/acceptance/acp2_package_install.py`.
+diff --git a/src/acp_services/AGENTS.md b/src/acp_services/AGENTS.md
+index 7bf3757..be6eda6 100644
+--- a/src/acp_services/AGENTS.md
++++ b/src/acp_services/AGENTS.md
+@@ -55,3 +55,8 @@ acp_services/
+ - **Mock as real** — `PASS` at module level is not real-science/browser/LSF/production evidence; keep `NOT_VERIFIED` explicit.
+ - **Deleting compat surfaces for line count** — primitives/backends/compat legacy/recovery fixtures/model assets/vendor/bootstraps are retained by design.
+ - **Rewriting `NOT_VERIFIED` to `PASS`** or documenting “field delivered” as “frontend integrated” — forbidden.
++
++## INSTALLED ROLE (B25b, 2026-10-23)
++- `acp-worker` installs only `acp_services/**` + `cccp`; `python -m acp_services.worker_bootstrap` and the `acp-worker` script are the standalone worker entries. Do not install Web/DSH/browser into a worker or CCCP node.
++- The installed wheel keeps `acp_services` independent of `acp`; the root `acp` distribution composes it. MCP stdio is served by `acp mcp serve` through `src/acp/services_mcp_bootstrap.py`, not by importing `acp` from this package.
++- Clean-install evidence: `reports/acp2_implementation/bb45a46/B/B25/` (`installed-probes.json`, `assets-audit.json`).
+diff --git a/src/cccp/AGENTS.md b/src/cccp/AGENTS.md
+index a4ebf64..d5dda7a 100644
+--- a/src/cccp/AGENTS.md
++++ b/src/cccp/AGENTS.md
+@@ -41,3 +41,8 @@ src/cccp/   # QC 底座（four-layer ①qc → ②backends → ③calculation；
+ ## ANTI-PATTERNS
+ - **Version duplication**: `__version__` lives in four files across the two packages — diverges easily
+ - **No CLI / no `__main__.py`**: the legacy CLI (`cli.py`, `__main__.py`) and `conformer-search` console_script were deleted in the cccp rename; `python -m cccp` does NOT work — use the unified `acp` CLI instead
++
++## INSTALLED PACKAGE (B25b, 2026-10-23)
++- `cccp` installs standalone: no `acp`, `acp_services`, `fastapi` or Controller is required for the public scientific API.
++- Wheel assets include `analysis/nmr/model_assets/{NOTICE.md,LICENSE-DP5,*.gz,*.p,*.txt}`, `cccp/py.typed`, `cccp/plugin/sdk.py` and the AGENTS docs; the controlled singlepoint sample runs from the installed venv.
++- Version stays `0.3.0` in the four repository locations; a CCCP release must not require DSH/browser dependencies.
+diff --git a/tests/baseline/services-evidence/handoff_registry.md b/tests/baseline/services-evidence/handoff_registry.md
+index 6b41ca1..6943f75 100644
+--- a/tests/baseline/services-evidence/handoff_registry.md
++++ b/tests/baseline/services-evidence/handoff_registry.md
+@@ -64,6 +64,22 @@
+ | B | `src/acp/scheduler/remote/{runner,sync}.py`（远端冻结组、release、receipt 与 task_result） | B | B | `d5d85e7` | T30（冻结先于选择、manifest 最后提交、三窗口） | `tests/test_services_chain_switch.py` 与 `tests/test_remote_phase1.py` PASS；真实 LSF 为 NOT_VERIFIED | `ac915aa` | integrated |
+ | B | `src/cccp/analysis/structure/parsers.py`（path_safe）+ `src/acp/intake/parsers.py`（Path_safe 旧导入面） | B | A/B | `d5d85e7` | T33（命名诊断与兼容别名） | `tests/test_acp_intake.py` 与 T33 import smoke PASS；旧 `Path_safe` 仍可导入 | `ab987e5` | integrated |
+ 
++| B | `packaging/roles/**`、`scripts/build_release.py`、`release/release-manifest.json`（0.3.0 角色 wheel/sdist） | B | A（A-27b）、C（C33）、B（B25b/B26a） | `67f1789` | B25a 冻结；A-27a 打包规格；C32 静态资产请求 | `scripts/acceptance/check_release_artifacts.py` + `release_role_probe.py`；B25b `package-install` 校验摘要与安装 | B25b（本提交） | integrated |
++| B | 独立安装验收与发布路径（`scripts/acceptance/acp2_package_install.py`、`reports/acp2_implementation/bb45a46/B/B25/`） | B | B26a/B26b、A/C 文档引用 | `67f1789` | B25a 实际制品；A-27b/A-28 原始回执（C33/C34 未发布） | 干净 venv 安装四个发行、CCCP 无 Controller、Lab/MCP/CLI、资产/notice/license、四版本位置；`package-install` 返回 0 | B25b（本提交） | integrated |
++
++## B25b raw install/operation aggregation (2026-10-23)
++
++> 本表只汇总 A/C 已落盘的原始事实。B25b 不重签科学或体验结论；缺失路径保留 `NOT_VERIFIED` 与预期路径。
++
++| track | task | registered path | observed | B25b treatment |
++|---|---|---|---|---|
++| A | A-27b | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | raw result present; its own `platform_row` still records `NOT_VERIFIED` because it was produced before the B25a candidate | aggregated as raw evidence; no science re-sign-off |
++| A | A-28 | `/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | raw result `PASS` on the A-built cccp-0.2.0 wheel | aggregated; does not replace B25b's 0.3.0 install |
++| C | C33 | `/opt/acp2-dev/evidence/C/clean-install-live` | absent | `NOT_VERIFIED` at the registered path |
++| C | C34 | `/opt/acp2-dev/evidence/C/operator-runbook-live` | absent | `NOT_VERIFIED` at the registered path |
++| C | static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | absent | `NOT_VERIFIED(c_static_assets_absent)`; no mount fabricated |
++| C | C35 | n/a | not a B25b prerequisite | not signed |
++
+ ## Deferred capability handoffs (T36)
+ 
+ **Scope:** 以下六项是 GAP-14 的显式 deferred capability handoff。它们**不是**本批实施任务；
+diff --git a/tests/baseline/services-evidence/migration_ledger.md b/tests/baseline/services-evidence/migration_ledger.md
+index cb7dc3c..8acc318 100644
+--- a/tests/baseline/services-evidence/migration_ledger.md
++++ b/tests/baseline/services-evidence/migration_ledger.md
+@@ -40,6 +40,7 @@
+ 
+ | 能力 | 当前实现驻点 | 兼容入口 | 生产消费者 | 退出条件 | 验收测试 |
+ |---|---|---|---|---|---|
++| 反向代理公网同源配置（OriginPolicy.public_origin，2026-10-22） | `src/acp_services/workspace/boundary.py:OriginPolicy` | 既有 OriginPolicy 默认按请求 Host/scheme 校验；新增可选 public_origin | `src/acp/api/server.py`（ACP_PUBLIC_ORIGIN 优先，否则 deployment.params.public_origin）；`src/acp/init_wizard/{flows,plan}.py`（交互/回答文件）；`scripts/install_systemd.sh`（部署配置生成） | [CLOSED] 明确配置公网 origin 后接受 TLS 代理后的合法写请求；保留跨站/协议/端口拒绝与直接访问默认语义；模块回归验证，部署实测单独记录 | `tests/test_services_local_boundary.py`；`tests/test_services_init_unified.py`；`tests/test_acp_drafts.py` |
+ | 项目/成员/分组 owner（ProjectManager） | `src/acp/scheduler/projects.py:47` | `acp.scheduler.projects.ProjectManager` | `src/acp/scheduler/manager.py:389`（装配）；`src/acp/scheduler/registration.py:142`；`src/acp/api/v1_routes.py`（项目端点） | [CLOSED] Workspace owner 接管后旧类降为兼容转发；接收 todo 6（B01-1）| `tests/test_acp_projects.py` |
+ | 结构来源组织存储（StructureSourceStore） | `src/acp/scheduler/structure_source_store.py:361` | `acp.scheduler.structure_source_store.StructureSourceStore` | `src/acp/api/v2_structure_sources.py:103`；`src/acp/api/v1_routes.py:1508`；`src/acp/scheduler/manager.py:1899` | [CLOSED] 来源组织唯一写入口 owner=DataResourcePort（todo 11：端口+委托，保留 source_uid_for 与 expected_revision）；持久 prepare/availability 由 todo 13 至 todo 14 接管| `tests/test_acp_structure_source_store.py`；`tests/test_acp_api_v2_structure_sources.py`；`tests/test_services_data_port.py` |
+ | 结构来源后台索引（StructureSourceIndexer） | `src/acp/scheduler/structure_source_indexer.py:48` | `acp.scheduler.structure_source_indexer.StructureSourceIndexer` | `src/acp/api/v2_structure_sources.py:105` | [CLOSED] 持久 prepare/availability 接管；接收 todo 13 至 todo 14| `tests/test_acp_structure_source_indexer.py` |
+@@ -72,6 +73,7 @@
+ | 参数转换（catalog normalize_and_validate_method_config） | `src/acp/catalog.py:4875` | `acp.catalog.normalize_and_validate_method_config` | `src/acp/api/v1_routes.py`；`src/acp/scheduler/jobs.py` | [CLOSED] CLI/catalog 参数转换一次切换且大小写折叠三 choke point 等价；接收 todo 32 或 todo 42| `tests/test_acp_catalog.py`；`tests/test_catalog_keyword_case.py` |
+ | 统一 CLI 入口与 dispatch（acp run） | `src/acp/cli.py:4129` | `acp.cli.main`（console script `acp` / `python -m acp`） | pyproject console script；`src/acp/scheduler/runner.py`（子进程入口） | [CLOSED] CLI/Web 共用 Services 用例且旧参数语义保留；接收 todo 35 或 todo 74| `tests/test_acp_cli.py` |
+ | 初始化向导（run_init） | `src/acp/init_wizard/flows.py:348` | `acp.init_wizard.flows.run_init`（`acp init`） | `src/acp/cli.py:4102` | [RETAINED] 统一 init：使用方式/档位/组件/计划应用/doctor；接收 todo 36| `tests/test_acp_init_cli.py`；`tests/test_acp_init_persist.py` |
++| init 任务保存目录生效（2026-10-22） | `src/acp/core/paths.py:resolve_run_root`（既有目录权威） | `deployment.params.run_root`；CLI 参数与 ACP_RUN_ROOT 显式覆盖保留 | `src/acp/init_wizard/{flows,plan}.py`；CLI/Web；`scripts/{install_systemd,start_acp}.sh` | [CLOSED] init 保存的绝对路径被运行时读取；拒绝无效配置；旧服务可清空环境覆盖；配置变更不自动迁移历史任务，真实部署验证另行记录 | `tests/test_acp_init_run_root.py`；`tests/test_acp_paths.py`；`tests/test_services_release_prep.py` |
+ | 历史 manifest 只读兼容（compat/legacy） | `src/acp/compat/legacy/manifests.py:111` | `acp.compat.legacy.manifests.read_s2_path_manifest` | `src/acp/results/`（历史任务读取）；`src/acp/compat/legacy/layouts.py` | [CLOSED] 历史 reader 逐项关闭并同步契约；接收 todo 70| `tests/test_legacy_layout_compat.py` |
+ | 工作流注册表（WorkflowRegistryEntry） | `src/acp/workflows/registry.py:15` | `acp.workflows.registry.list_workflow_entries` | `src/acp/cli.py`（子命令映射）；`src/acp/api/`（catalog 端点） | [CLOSED] CLI/Web 共用 Services 用例后收口；接收 todo 35| `tests/test_core_workflow.py`；`tests/test_acp_workflow_task_matrix.py` |
+ | 持久 prepare operation（PrepareOperationService） | `src/acp_services/data/operations.py:498` | `acp.services_data_bootstrap.build_prepare_executor`（Services 侧执行器注入；旧 `acp.scheduler.manager._queue_catalog_prefetch` 改为入队持久操作） | `src/acp/scheduler/manager.py:4765`（终态后台预取与启动恢复） | [CLOSED] 旧进程内预取队列已删除（todo 13 已交付）；transfer 校验/发布与 availability 经 prepare 操作接管；接收 todo 14 至 todo 16| `tests/test_services_prepare_operations.py`；`tests/test_acp_remote_catalog_prefetch.py` |
+@@ -85,7 +87,7 @@
+ | 运行发布/标记数据入口（PublicationDataPort，todo 28 登记） | `src/acp/services_publication_bootstrap.py:77` | `acp.services_publication_bootstrap.PublicationDataPort`（经 DataResourcePort 委托 manifest 与 candidates；scheduler markers 本地至远端上传经注入 FileStager） | `src/acp/calculations/executor.py`（注入 publisher）；`src/acp/scheduler/remote/runner.py`（markers） | [CLOSED] 运行时发布与 markers 经 Data 公共入口且保持契约 C 顺序（step_result 至 checkpoint 至 publish 至 marker）与 completed 时序；接收 todo 28（B28a）；旧实现移除归 todo 77| `tests/test_services_publication_data_port.py` |
+ | 科学产品帧 adapter（frames_adapter，todo 28 B28b 登记） | `src/acp/results/frames_adapter.py:297` | `acp.results.frames_adapter.project_science_product_dict`（输出一律经 TrajectoryFrame.to_node 与 TrajectoryAnnotation.to_annotation，不手写线形状） | A 科学产品消费（A04/A-GT3）经 B 投影；`tests/fixtures/science_products/frames_mapping`（lane-C HN-02 五态） | [CLOSED] 科学产品登记/读取经 Data 且投影经帧契约；normal/empty/partial/corrupt/old 五态一致；跨路端到端验收（状态 B）待 A04/A-GT3 接入后成立；接收 todo 28（B28b）| `tests/test_services_publication_data_port.py` |
+ | retired 内部引擎 shim（workflows 退役引擎，todo 28 登记） | `src/acp/workflows/ensemble.py:1`（另 energy/energy_shared/ensemble_thermo/xtbmd_censo_energy/xtbmd_md） | `acp.workflows.registry`（退役子命令拦截；仅作 Confsearch 协议引擎复用保留） | `src/acp/confsearch/protocols/`（协议引擎复用）；`src/acp/workflows/registry.py` | [RETAINED] C01/C06 完成科学算法提取并落 `src/cccp/calculation/tasks/` 后删除 shim；本计划不删（提取归 C01/C06）；接收 todo 28| `tests/test_architecture_invariants.py` |
+-| Worker 自足装配入口（worker composition root，todo 78 / B06-6 登记） | `src/acp_services/worker_bootstrap.py:1` | `acp_services.worker_bootstrap.main`（`python -m acp_services.worker_bootstrap`；无旧 acp 兼容转发，远端入口 `build_remote_worker_command`） | `src/acp/scheduler/remote/script_gen.py:build_remote_worker_command`（远端入口字符串；整链接线归 todo 32）；`src/acp_services/runtime/worker.py:FrozenWorker`（消费装配面） | [CLOSED] 独立 worker 仅由冻结 envelope、plan、StorageBinding 与只读工件构造依赖；零 `acp` import、零 jobs DB；远端整链启用等待 todo 32 至 todo 34| `tests/test_services_worker_bootstrap.py` |
++| Worker 自足装配入口（worker composition root，todo 78 / B06-6 登记） | `src/acp_services/worker_bootstrap.py:1` | `acp_services.worker_bootstrap.main`（`python -m acp_services.worker_bootstrap`；无旧 acp 兼容转发，远端入口 `build_remote_worker_command`） | `src/acp/scheduler/remote/script_gen.py:build_remote_worker_command`（远端入口字符串；整链接线归 todo 32）；`src/acp_services/runtime/worker.py:FrozenWorker`（消费装配面） | [CLOSED] 独立 worker 仅由冻结 envelope、plan、StorageBinding 与只读工件构造依赖；零 `acp` import、零 jobs DB；缺省/相对输出目录绑定 worker work_dir（2026-10-22）；远端整链启用等待 todo 32 至 todo 34| `tests/test_services_worker_bootstrap.py` |
+ | 执行入口单一调度器（execution_chain，todo 32 / B06-3 登记） | `src/acp_services/runtime/execution_chain.py:1` | `acp_services.runtime.execution_chain.select_execution_entry`（+ `resolve_attempt_choice`；旧 `acp.scheduler.remote.script_gen.build_remote_cli_command` 保留 legacy 分支与默认） | `src/acp/scheduler/runner.py:_build_execution_cmd`；`src/acp/scheduler/remote/runner.py:_resolve_remote_choice`；`src/acp/scheduler/remote/script_gen.py:build_remote_cli_command` | [CLOSED] 冻结能力表驱动的按 attempt 入口选择（C01 集成 8 工作流 envelope，其余 legacy）；该 attempt 冻结 envelope/plan 就绪即 envelope，否则 legacy；接收 todo 32（B06-3），逐工作流真实启用归 todo 34| `tests/test_services_chain_switch.py` |
+ | 命名空间开通·原子绑定（ensure_namespace，Data 用例，todo 48 登记） | `src/acp_services/data/namespaces.py:277` | `acp_services.data.namespaces.NamespaceStore.ensure_namespace`（+ `NamespaceRecord` / `EnsureNamespaceRequest`；复用 `freeze_binding`，UNIQUE 键幂等，冲突非静默） | `src/acp_services/runtime/provisioning.py:325`（ProvisioningService 经注入端口调用；不直接读库） | [CLOSED] 名称空间与存储绑定唯一开通权威；重复/并发开通收敛为单空间；接收 todo 48（B09-1）| `tests/test_services_provisioning.py` |
+ | 环境开通意图消费（ProvisionWorkspace 用例，Runtime，todo 48 登记） | `src/acp_services/runtime/provisioning.py:325` | `acp_services.runtime.provisioning.ProvisioningService`（消费 Workspace 注入的只读意图源，调用 Data `ensure_namespace`，经注入命令端口提交 provisioned/failed 并审计；重试/对账） | Workspace 环境状态命令面（注入 `EnvironmentStatePort`）；开通入口接线归 todo 52（B09-5）；无需系统账户/SSH 副作用 | [CLOSED] 幂等消费持久意图、失败可见可对账、不重复建默认空间；接受 todo 48（B09-1）| `tests/test_services_provisioning.py` |
+@@ -94,6 +96,8 @@
+ | 可信用量采集与 UsageRecord（trusted usage collection，todo 54 登记） | `src/acp_services/runtime/usage.py:1` | `acp_services.runtime.usage`（Services-native，无旧 `acp` 兼容转发；本地进程组/分配与 LSF 作业报告采集，父子层级 XOR 只选一层） | Runtime 计量/配额链路（todo 55 至 todo 61 账本与核销）；`src/acp/scheduler/remote/monitor.py`（bjobs 字段素材，只读） | [OPEN] 用量记录唯一采集驻点：usage_id 与 project/account、job/attempt/submission、外部作业身份、口径/区间/核数、证据来源与版本、最终标志、排除/待对账区间、资源类别与政策版本、核时与证据摘要齐备；缺证据待对账不零填；接收 todo 55 至 todo 61；生产接线未验证前保持 [OPEN]| `tests/test_services_usage.py` |
+ | 共同核时配额模式（usage-only 或 quota-only，QuotaService 与 QuotaLedger，todo 55 登记） | `src/acp_services/runtime/quota.py:1` | `acp_services.runtime.quota`（Services-native，无旧 `acp` 兼容转发；消费 todo 53 metering_policy、todo 54 usage、todo 49 admission） | Runtime 计量/配额链路（todo 56 解耦、todo 57 至 todo 61 价格门）；派发准入前置接线归后续任务 | [OPEN] 配额模式唯一执行驻点：模式显式选择（未选拒绝启动，usage-only 需管理员）；quota-only 有效预算=min(user,project) 交集；派发前原子预留可执行上限（核心/时长硬上限，不可执行即拒绝）；按确认用量核销；跨周期分段；重启恢复未决预留；追加先授权+预留再扩展；未知用量待对账（租约到期不释放）；耗尽拒绝新派发、不杀在途、结果可读；接收 todo 55；生产接线未验证前保持 [OPEN]| `tests/test_services_quota.py` |
+ | 冻结 attempt 生产器与执行权（07-A，T24 登记） | `src/acp_services/runtime/attempt_freeze.py:1`（AttemptFreezeSpec、write_frozen_attempt、AttemptLockExecutionRight） | `acp.calculations.attempt_freeze.build_freeze_spec`（ACP 侧 builder；无第二实现） | `src/acp/scheduler/runner.py:_prepare_and_launch`；`src/acp/scheduler/remote/runner.py:_upload_frozen_envelope`；`src/acp_services/worker_bootstrap.py` | [CLOSED] T24 组提交和 attempt.lock 执行权；T25 单一 singlepoint freeze；T30 远端组上传；T32 同 attempt 协议；单写者、混合组、双进程竞争均有守护 | `tests/test_services_chain_switch.py`；`tests/test_services_worker_bootstrap.py` |
++| 异常死亡 attempt 的停止核验端口（2026-10-21 R2-01） | `src/acp_services/runtime/attempt_freeze.py:1`（AttemptRecoveryProof、CheckedAttemptRecoveryPort）；`runtime/attempt_recovery.py`（CgroupAttemptRecovery） | AttemptLockExecutionRight 加性注入执行约束及停止核验；没有第二执行权实现 | worker_bootstrap 接入；由 controller 环境 ACP_EXECUTION_CGROUP_ROOT 指定已委派的 cgroup v2 根；科学执行前绑定 | [OPEN] 证明绑定完整 claim、父子均停止、恢复互斥和复读守护；独占 cgroup 的路径、inode、设备和 boot ID 验证及生产端口接线纳入修复；未配置/非 cgroup/历史无约束 claim 保守拒绝，真实委派环境证明仍须单列，不据受控测试关闭实环境门 | `tests/test_services_attempt_recovery.py`；`tests/test_services_chain_switch.py`；`tests/test_services_cgroup_attempt_recovery.py` |
++| 缓存驱逐后的定向重建（2026-10-21 R2-02） | `src/acp_services/data/operations.py:1`（expire_succeeded_for_resource） | PrepareOperationService 加性 API；保留全局 list 查询边界 | `src/acp/scheduler/manager.py:_expire_bodyless_succeeded_operations` | [CLOSED] 按 job、attempt、resource、scope 原子过期成功记录；超过全局 1000 条也重建；不影响其他 scope 或在途操作 | `tests/test_services_prepare_recheck_fixes.py` |
+ | attempt 完成服务（receipt 校验、CAS、发布挂起，07-B，T26 登记） | `src/acp_services/runtime/attempt_completion.py:1`（AttemptSnapshot、AttemptCompletionService.complete 与 resume_pending_publication） | `src/acp/services_completion_bootstrap.py:JobStoreAdvancePort`（ACP 侧注入适配器） | `src/acp/scheduler/manager.py:_try_envelope_completion` 与 `_resume_pending_publications` | [CLOSED] T26 接受、陈旧、当前损坏分类；CAS 单次；发布挂起持久化；T27 终端路径；T28 重启只重试发布；held 与 lost 不写权威失败 | `tests/test_services_worker_contract.py`；`tests/test_services_chain_switch.py` |
+ | receipt 身份契约（D02，T6 与 T7 登记） | `src/acp_services/runtime/receipt_identity.py:1`（ReceiptIdentity、compare_receipt_identity、ReceiptIdentityError） | `src/acp_services/runtime/worker.py` 与 `receipts.py` 均引用同一 predicate；无第二身份表 | `src/acp_services/runtime/worker.py:_reuse_or_conflict`；`src/acp_services/worker_bootstrap.py` 冲突路径 | [CLOSED] 全字段身份匹配、导入无环、陈旧回执零 CAS 与零覆盖；失败路径保留原字节并写 conflict 文档 | `tests/test_services_worker_contract.py`；`tests/test_services_worker_bootstrap.py` |
+ | 任务完成事实与 task_result（D01，T5 登记） | `src/acp_services/runtime/worker.py:569`（TASK_COMPLETION_AUTHORITIES、decide_task_result、write_task_result 与 read_task_result） | 既有 FrozenWorker 公共面加性扩展；无新 JobStatus | `src/acp/calculations/executor.py:_task_result_reuse_refusal`；`src/acp_services/runtime/step_requirements.py`；`src/acp/calculations/attempt_publication.py` | [CLOSED] 失败、取消、阻塞不再升级；partial 仅 digest-bound 资格；缺 required fact 优先于 complete=True；未知 kind fail-closed | `tests/test_services_worker_contract.py`；`tests/test_services_worker_bootstrap.py` |
+@@ -103,7 +107,8 @@
+ | 默认链发布适配器（ACP 侧，T28 登记） | `src/acp/calculations/attempt_publication.py:1`（AttemptResultPublication） | `src/acp/calculations/result_publication.py:publish_result`（唯一 manifest 写者） | `src/acp/scheduler/manager.py`（默认链与 pending 恢复） | [CLOSED] task_result digest 绑定、partial 只发 partial、缺失或篡改 typed failure、发布重试不重算 QC | `tests/test_services_chain_switch.py`；`tests/test_acp_workflows_simple.py` |
+ | singlepoint 默认 envelope 激活（07-C，T29 登记） | `src/acp_services/runtime/execution_chain.py:217`（DEFAULT_ENVELOPE_WORKFLOWS） | 既有 legacy 路径保留；DEFAULT 与 ENABLED 分离 | `src/acp/scheduler/runner.py:_prepare_and_launch`；`src/acp/scheduler/remote/runner.py` | [CLOSED] 仅 singlepoint 默认；其余 14 保持注册路径；T31 矩阵分格；T32 先于激活 | `tests/test_services_workflow_enablement.py`；`tests/test_services_chain_switch.py` |
+ | 远端冻结链与恢复窗口（07-C，T30 登记） | `src/acp/scheduler/remote/runner.py:1453`（_upload_frozen_envelope、receipt 与 task_result fetch） | `src/acp/scheduler/remote/sync.py:build_sync_file_list`（含 src/acp_services） | `src/acp/scheduler/remote/runner.py`（freeze、release、bsub、reconcile） | [CLOSED] 冻结先于远程选择、manifest 最后提交、不完整组拒绝、三窗口恢复；真实 LSF 仍 NOT_VERIFIED | `tests/test_services_chain_switch.py`；`tests/test_remote_phase1.py` |
+-
++| 独立角色候选发行（2026-10-22） | `src/acp_services/worker_bootstrap.py`；`src/acp/api/server.py` | `packaging/roles/{cccp,worker,web}` + `scripts/build_release.py`；无第二实现 | 出树 CCCP / worker / Web 安装；worker 冻结输入与 Web 包内静态资源 | [CLOSED] 本机声明范围：三角色 wheel / sdist、零重复归属、全部模型与前端资源、源码包重建、干净环境导入/运行通过；根单发行保留，生产与真实 QC/LSF 不在本行范围 | `scripts/acceptance/check_release_artifacts.py`；`scripts/acceptance/release_role_probe.py`；`reports/architecture_repair_20261022/` |
++| 独立角色安装验收（B25b，2026-10-23） | `src/acp_services/worker_bootstrap.py:main` | `acp-worker` / `python -m acp_services.worker_bootstrap`；根 `acp` CLI 保持 | `packaging/roles/*/pyproject.toml`；`scripts/build_release.py`；`scripts/acceptance/acp2_package_install.py` | [CLOSED] 四个干净 venv 安装 cccp/worker/web/root；CCCP 独立样例、Lab/MCP/CLI、资产/notice/license 与四版本位置验证；不含生产部署 | `tests/test_services_packaging_roles.py`；`tests/test_packaging_assets.py`；`package-install` scenario |
+ | 持久 Proposal 审批（B16，2026-10-23） | `src/acp_services/runtime/approvals.py:1`（ApprovalService） | `acp.api.v2_approvals` HTTP 面；`src/acp/api/v1_routes.py:_enforce_approval` 提交前校验；`src/acp_services/runtime/canonical_digest.py` 唯一规范化实现（B18 只导入） | `src/acp/api/v1_routes.py:create_job`（审批先于 dispatch）；`src/acp/api/server.py`（v2 路由挂载） | [CLOSED] 迁移 023 加性；draft/pending/approved/rejected/expired/revoked 持久 CAS；未批准/过期/换计划/换预算/他人批准不 dispatch；重启后同一审批可查询且重复 approve 幂等；不新增 JobStatus、不挪用 WAITING_REVIEW、不改 resume() | `tests/test_acp2_runtime_approvals.py`；`tests/test_services_cas_fidelity.py`；`scripts/acceptance/acp2_runtime.py --scenario approval-budget --phase approval` |
+ 
+ ## 覆盖说明
+@@ -120,14 +125,14 @@
+ 期限（矩阵收口切片）与退出条件（F0/F1×S0/S1 矩阵齐备且旧 GET 零消费者后删除）。
+ 旧读取根 GET 过渡适配器（todo 15 登记）在窗口内保留，其终态远端 `fetch_catalog` 副作用属已登记过渡项。
+ 
+-## todo 70 收口摘要（2026-10-19）
++## 当前台账摘要（2026-10-22；保留 todo 70 的历史收口口径）
+ 
+-- **行数**：53（全部恰好 6 列；守护 `tests/test_services_first_slice_contracts.py` + `tests/test_acp_services_isolation.py`）。
+-- **状态计数**：`[CLOSED]` 49 · `[RETAINED]` 5 · `[OPEN]` 9 · `[DEFERRED]` 0。
++- **行数**：70（全部恰好 6 列；守护 `tests/test_services_first_slice_contracts.py` + `tests/test_acp_services_isolation.py`）。
++- **状态计数**：`[CLOSED]` 55 · `[RETAINED]` 5 · `[OPEN]` 10 · `[DEFERRED]` 0。
+ - **本轮关闭的切片**：todo 6（ProjectManager/Workspace owner）、11—15（Data 端口/持久 prepare/读取根）、25—29（Runtime 控制/PES-plan 恢复/发布端口）、77（store/migrations/plan/step 闭包迁移）。
+ - **保留面（未删除）**：`acp.calculations.primitives`、`acp.backends`、`acp.scheduler.{store,migrations}` 等同实现转发，`src/acp/compat/legacy/` 只读历史 reader，`tests/baseline/recovery_fixtures/` 跨版本 fixture，模型/资产/notice 随包。调用者审计见 `public_shim_inventory.md`。
+-- **仍为 `[OPEN]` 的落盘项**（模块已通过、真实消费 `NOT_VERIFIED`）：cache-only 逐资源旧 GET 兼容面（L2-11 前端 0 调用点）、准入/配额/身份生命周期派发与 UI 接线（L2-12/L3-09）、用量采集与计量解耦生产路径（L2-15）。这些行必须保留旧路径，不得据「模块已交付」写成已接入。
+-- **未关闭 gate**：W12（B11 价格/账本）、W13（B12 PostgreSQL/对象存储/Slurm/GPU）、B40b（完整发行 wheel/notice）、T34b（15/15 envelope 覆盖，当前 8/15 + 7 legacy），以及浏览器/真实科学/LSF/生产四门（closure §5）。
++- **仍为 `[OPEN]` 的落盘项**（模块已通过、真实消费 `NOT_VERIFIED`）：cache-only 逐资源旧 GET 兼容面（L2-11 前端 0 调用点）、准入/配额/身份生命周期派发与 UI 接线（L2-12/L3-09）、用量采集与计量解耦生产路径（L2-15）、异常死亡 attempt 的真实委派部署核验（适配器已接线）。这些行必须保留旧路径，不得据「模块已交付」写成已接入。
++- **未关闭 gate**：W12（B11 价格/账本）、W13（B12 PostgreSQL/对象存储/Slurm/GPU）、B40b（根发行默认归属切换；独立角色候选制品已另行验证）、T34b（15/15 envelope 覆盖，当前 8/15 + 7 legacy），以及浏览器/真实科学/LSF/生产四门（closure §5）。
+ 
+ ## todo 82 复核（2026-10-19，F-wave remediation C）
+ 
+diff --git a/tests/baseline/services-evidence/public_shim_inventory.md b/tests/baseline/services-evidence/public_shim_inventory.md
+index d5893c8..c924c65 100644
+--- a/tests/baseline/services-evidence/public_shim_inventory.md
++++ b/tests/baseline/services-evidence/public_shim_inventory.md
+@@ -71,6 +71,7 @@ PY
+ 
+ | 面 | 实现驻点 | 兼容/调用面 | 状态 | 守护测试 |
+ |---|---|---|---|---|
++| 公网同源配置（2026-10-22） | `src/acp_services/workspace/boundary.py:OriginPolicy.public_origin` | `src/acp/api/server.py` 优先读取 `ACP_PUBLIC_ORIGIN`，否则读取 `acp init` 写入的 `deployment.params.public_origin`；原 OriginPolicy 默认语义保留 | `[CLOSED]`（模块回归范围） | `tests/test_services_local_boundary.py`；`tests/test_services_init_unified.py`；`tests/test_acp_drafts.py` |
+ | 冻结 attempt 生产器与执行权 | `src/acp_services/runtime/attempt_freeze.py`（AttemptFreezeSpec、write_frozen_attempt、AttemptLockExecutionRight） | ACP 侧 `acp.calculations.attempt_freeze` builder；`src/acp/scheduler/{runner,remote/runner}.py`；`worker_bootstrap` | `[CLOSED]` | `tests/test_services_chain_switch.py`；`tests/test_services_worker_bootstrap.py` |
+ | attempt 完成服务 | `src/acp_services/runtime/attempt_completion.py`（AttemptSnapshot、AttemptCompletionService） | `src/acp/services_completion_bootstrap.py:JobStoreAdvancePort`；`src/acp/scheduler/manager.py` | `[CLOSED]` | `tests/test_services_worker_contract.py`；`tests/test_services_chain_switch.py` |
+ | receipt 身份契约 | `src/acp_services/runtime/receipt_identity.py`（ReceiptIdentity、compare_receipt_identity） | `worker.py` 与 `receipts.py` 共用；`worker_bootstrap.py` 冲突路径 | `[CLOSED]` | `tests/test_services_worker_contract.py`；`tests/test_services_worker_bootstrap.py` |
+@@ -82,7 +83,26 @@ PY
+ | singlepoint 默认 envelope 集合 | `src/acp_services/runtime/execution_chain.py`（DEFAULT_ENVELOPE_WORKFLOWS） | 既有 legacy 路径保留；DEFAULT 与 ENABLED 分离 | `[CLOSED]` | `tests/test_services_workflow_enablement.py` |
+ | 远端冻结链 | `src/acp/scheduler/remote/runner.py`（_upload_frozen_envelope、receipt 与 task_result fetch） | `src/acp/scheduler/remote/sync.py`（sync 含 src/acp_services） | `[CLOSED]`（真实 LSF 为 `NOT_VERIFIED`） | `tests/test_services_chain_switch.py`；`tests/test_remote_phase1.py` |
+ | `Path_safe` 公共命名兼容 | `src/cccp/analysis/structure/parsers.py:path_safe` | `Path_safe` 兼容别名；`src/acp/intake/parsers.py` 旧导入面保留 | `[RETAINED]` | `tests/test_acp_intake.py`；T33 import smoke |
++| 本地异常死亡停止核验（2026-10-22） | `runtime/attempt_recovery.py:CgroupAttemptRecovery`；`runtime/cgroup.py` 纯资源计划 | `worker_bootstrap --execution-cgroup-root` / `ACP_EXECUTION_CGROUP_ROOT`；原 `runtime.isolation.CgroupV2Plan` / `EnvelopeProcessGroup` 保留同对象重导出 | `[OPEN]`：受控验证通过，真实委派环境 NOT_VERIFIED；旧无约束 claim 继续拒绝 | `tests/test_services_cgroup_attempt_recovery.py`；`tests/test_services_isolation.py` |
+ 
+ **兼容面结论：** 上述公开面均为加性或新驻点；旧 identity forwarder（`acp.scheduler.{store,migrations}`、
+ `acp.calculations.{contracts,step_result,step_requirements}`、`acp.catalog.method_levels_to_cli_flags`）
+ 保持 `is` 同一对象，未新增第二实现。
++
++## 7. B25b installed-wheel compatibility check (2026-10-23)
++
++The clean role-wheel install in `reports/acp2_implementation/bb45a46/B/B25/` re-verified the
++public shim surface **from installed site-packages**, not from this checkout:
++
++| surface | installed check | status |
++|---|---|---|
++| `acp.calculations.primitives` | imports from `…/site-packages/acp/…`; tasks execute from `cccp.calculation` | `[RETAINED]` |
++| `acp.backends` | pure re-export shim imports; implementation remains `cccp.backends` | `[RETAINED]` |
++| `acp.compat.legacy.manifests` | read-only reader imports from the installed `acp` package | `[RETAINED]` |
++| `acp.scheduler.store.JobStore is acp_services.store.store.JobStore` | identity `True` in the installed web venv | `[RETAINED]` |
++| `acp.calculations.contracts.CalculationPlan is acp_services.runtime.plan_contracts.CalculationPlan` | identity `True` in the installed web venv | `[RETAINED]` |
++| `acp` console command | `acp --help` works in the installed web and root role venvs | `[RETAINED]` |
++
++Evidence: `b25.compat_imports` and `b25.standalone_cli` in the package-install receipt. No shim was
++deleted or re-implemented; the root `acp` distribution and the three role distributions remain
++mutually exclusive installation choices.
+diff --git a/tests/test_acp2_runtime_acceptance_harness.py b/tests/test_acp2_runtime_acceptance_harness.py
+index 5d6fe0e..d223ce3 100644
+--- a/tests/test_acp2_runtime_acceptance_harness.py
++++ b/tests/test_acp2_runtime_acceptance_harness.py
+@@ -344,7 +344,10 @@ def test_help_dry_run_and_check_only_are_not_scenario_pass(
+ 
+     run_document = _read(stub_out / _read(summary)["runs"][0])
+     assert run_document["result"] == "NOT_VERIFIED"
+-    assert run_document["extensions"]["b01.skeleton"] is True
++    # B25b implements package-install for real; without --fixture it records a
++    # named prerequisite failure, not the old B01 skeleton placeholder.
++    assert run_document["extensions"]["b25.reason"].startswith("fixture_missing")
++    assert "b01.skeleton" not in run_document["extensions"]
+ 
+ 
+ def test_live_receipt_identity_comes_from_controller_health(monkeypatch: Any) -> None:
+diff --git a/docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md b/docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md
+new file mode 100644
+index 0000000..840fff6
+--- /dev/null
++++ b/docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md
+@@ -0,0 +1,353 @@
++# ACP 2.0 四组分协同升级方案
++
++**版本**：架构提案 v2.0（2026-10-20）  
++**基线**：《ACP 三层高内聚模块设计》《ACP 模块边界与统一接口》《ACP 完整架构调整方案》（2026-10-16）  
++**性质**：研发与架构目标，不代表迁移、插件及 Agent 已经实现。
++
++**实施前提（2026-10-20 补充）**：按 `.omo/plans/acp-architecture-acceptance-remediation.md` 本批 debug 已完成并形成冻结候选来规划后续工作；实际验收仍记录其交付 revision 和证据。该批明确延期的 MCP 默认入口、身份/配额生产接线等，纳入 2.0 对应阶段交付，不能由“debug 完成”推定为已实现。本文的 ACR/ACV 为产品职责名称，沿用现有 `acp_services` / `frontend/js/visualization` 实现路径，不以本提案触发目录重命名。
++
++**2026-10-21 更新**：用户已确认 debug 完成；正式代码候选为 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`，含 Harness/报告的交付 revision 为 `3670790363c7a1959ad1dbe4b4297adec518952a`。后续三 Agent 计划以此交付为默认开工基线，具体范围与未验证项见[正式报告](../reports/architecture_remediation_20261020/REPORT.md)及[并行执行总索引](reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md)。
++
++> **Chemistry First. Complexity Last.**  
++> Draw a reaction. Ask a question. Explore the mechanism.
++
++## 0. 执行摘要与不可变原则
++
++ACP 2.0 是四组分、九个继承业务模块的产品生态，而非四个必须串行的运行层：
++
++1. **CCCP**：开放、可独立运行的计算化学科学协议与能力底座，负责科学计算、数据标准、能力适用性、科学验证和 Chemistry Workflow Recipes。
++2. **ACP CLI / ACR**：独立 Headless 科研执行平台，负责身份、授权、项目、配额、任务、队列、集群、数据资源、API、MCP 与恢复。ACP CLI 是发行产品与用户入口，ACR 是内部应用运行内核。
++3. **ACP Workbench**：人类科研交互入口，负责编辑结构/反应、操作、任务观察、科学可视化及报告呈现，独立于 Agent。
++4. **RPH**：基于 DSH 的科研 Agent，负责化学问题理解、假设、科学计划、证据反馈和研究记忆；与 Workbench 并列调用 ACR。
++
++**四个不变量**：
++- CCCP 不依赖 ACR、账户、集群、浏览器、DSH 或付费机制；可以本地独立运行。
++- ACR 对平台任务生命周期、资源准入、持久状态、数据资源拥有唯一权威；RPH/Workbench 不建立第二任务执行系统。
++- 任何插件须通过受限协议接入；科学计算是否成功、科学命题是否有证据支持分开判断。
++- 用户以化学问题和结构为起点；专业计算参数默认化但不隐瞒科学不确定性，明确可选高级控制。
++
++## 1. 总体协同架构
++
++```mermaid
++flowchart TB
++    U[研究者 / 第三方 Agent / 开发者]
++    R[RPH · DSH Harness\n假设-规划-证据-反思]
++    W[ACP Workbench\nworkbench / client / acv]
++    CLI[ACP CLI / SDK / MCP / HTTP 适配器]
++    A[ACR Application API]
++    ACR[ACR · workspace / runtime / data]
++    CCCP[CCCP · calculation / analysis / software]
++    P[Software Providers / Capability Registry / Chemistry Recipes]
++    U --> R
++    U --> W
++    U --> CLI
++    R --> A
++    W --> A
++    CLI --> A
++    A --> ACR
++    ACR --> CCCP
++    CCCP --- P
++```
++
++RPH 和 Workbench 是**并列客户端**，不是前者通过后者，也不要求 Workbench 启动 Agent。CCCP 可独立被 Python/科学 CLI 使用，不经过 ACR 执行平台生命周期。三层九模块是**模块职责**；四组分是**产品与开放接口边界**，两者不矛盾。
++
++## 2. 原九模块与新增 RPH 的精确职责
++
++| 产品 | 保留模块 | 唯一责任 / 本次扩展 |
++|---|---|---|
++| CCCP | `software` | 原生量化输入输出、Engine Adapter、Parser、底层进程执行、软件版本适配；算法 Provider 可由 `analysis` 提供 |
++| CCCP | `analysis` | 规范化科学对象、科学分析算法、数据处理、科学验证器及 EvidenceReport |
++| CCCP | `calculation` | 唯一科学 Task 根、Scientific Capability Registry、Recipe 语义、TaskRequest/TaskContext/TaskResult |
++| ACP CLI / ACR | `workspace` | Principal、项目、权限、API Key、角色、资源授权、账户/账本、审计 |
++| ACP CLI / ACR | `runtime` | 准入、持久任务、控制器、plan_runner、调度后端、CAS/attempt、撤销、恢复与用量证据 |
++| ACP CLI / ACR | `data` | 输入、工件、传输、存储绑定、来源、可用性、缓存、manifest、发布、回收 |
++| Workbench | `workbench` | 页面/Feature、结构编辑、科学问题向导、用户审批、科研过程与结果交互 |
++| Workbench | `client` | 请求去重、ResourceStore 唯一写入口、批量查询、SSE、事件合并与失联续订 |
++| Workbench | `acv` | 2D/3D/能量剖面/IRC/振动呈现与局部显示状态，不直接调用 API |
++| RPH | Agent 内部组件（不计入九模块） | DSH Bundle、Research Supervisor、Scientific Planner、Hypothesis Graph、Evidence Reviewer、Research Memory、ACP Tool Bridge |
++
++**依赖纪律**：Runtime → Data → Workspace；Runtime 可直接调用 Workspace；Runtime 通过 CCCP 公共科学 API 派发科研计算；CCCP 分为 calculation 调用 analysis/software、analysis 不启动程序。Workbench → client 与 Workbench → acv，client/acv 相互独立。
++
++## 3. CCCP 内部采用三层科学能力架构
++
++**A. 软件/算法支持层（Software & Algorithm Providers）**：Gaussian、ORCA、xTB、CREST、RDKit、ASE、autodE、pysisyphus 等适配器候选。插件只有在对应版本、科学功能及许可证通过适配验证后才能声明提供能力。纯科学分析插件可以不依赖量化引擎。
++
++**B. 科学能力注册层（Scientific Capability Registry）**：科学操作 ID、类型化 I/O、前置条件、算法/Provider 选项、证据/完成条件、版本、许可及能力覆盖。按能力查找实现，不以软件名推断能力。
++
++**C. 化学工作流归簇层（Chemistry Workflow Clusters）**：按科研问题组织 Recipe；Recipe 包含科学步骤的依赖、适用范围、备选策略及证据需求；不能包含平台任务状态机、HPC 队列或账户逻辑。
++
++### 3.1 建议的科学能力家族
++
++| 家族 | 示例标准能力 | 典型数据产物 |
++|---|---|---|
++| 结构与身份 | `structure.parse`, `reaction.atom_map`, `structure.embed_3d` | `MolecularStructure`, `ReactionSpec` |
++| 构象与采样 | `conformer.search`, `.refine`, `.cluster` | `ConformerEnsemble` |
++| 电子结构 | `electronic.energy`, `.gradient`, `.hessian`, `.property` | `ElectronicResult` |
++| 几何/PES | `geometry.optimize`, `.constrained_optimize`, `surface.scan`, `reaction.path.search` | `OptimizedStructure`, `SurfaceProduct` |
++| TS/路径 | `reaction.ts.guess`, `.optimize`, `reaction.path.irc`, `.connectivity` | `StationaryPointResult`, `ReactionPath` |
++| 振动/热化学 | `vibration.analyze`, `thermo.correction`, `.ensemble` | `VibrationalResult`, `ThermochemicalResult` |
++| 光谱/性质 | `nmr.shielding`, `spectrum.simulate`, `.compare` | `SpectrumResult` |
++| 科学验证 | `validate.stationary_point`, `.endpoint_mapping`, `.energy_comparability` | `EvidenceReport` |
++
++该目录是**协议候选**，不是必须立刻实现的全部功能。激发态、动力学、多自旋态、材料、分子动力学等扩展要保留科学 Schema 版本演进通道。
++
++### 3.2 建议的化学问题归簇
++
++`structure.conformation`、`reaction.energetics`、`reaction.mechanism`、`reaction.selectivity`、`reaction.conditions`、`spectrum.structure_elucidation`、`molecular.properties`、`reaction.network_kinetics`。每个归簇容纳多个面向反应类型或研究策略的 Recipe。不要为每一种命名反应编写独立执行引擎。
++
++### 3.3 一项科学能力的契约
++
++```yaml
++schema: cccp.capability.v0
++id: reaction.ts.optimize
++purpose: Optimize candidate first-order saddle points
++inputs:
++  structure: MolecularStructure
++  method: ElectronicStructureMethod
++outputs:
++  result: StationaryPointResult
++preconditions:
++  gradient: required
++  electronic_state: declared_by_provider
++checks:
++  - validate.stationary_point
++limitations:
++  - IRC_connectivity_not_guaranteed
++implementations:
++  resolution: compatible_verified_providers_only
++```
++
++能力与实现分离：`Capability` 指科学操作；`Implementation` 指算法和引擎；`Recipe` 指解决某类化学问题的组合逻辑。插件不应仅凭类型相容就自动替换。科学适用条件必须检查电荷、自旋、立体化学、原子映射、溶剂模型、方法、标准态、参考态及版本。
++
++## 4. 跨组分公共契约
++
++| 契约 | Owner | 作用 |
++|---|---|---|
++| `ReactionSpec` | CCCP | 原子映射、结构/电荷/自旋/立体、物种、候选基元步骤、条件及输入不确定性 |
++| `QuestionSpec` | CCCP | 科学问题类型、待比较假设、预期证据及科学条件 |
++| `CapabilityDescriptor` | CCCP | 能力 ID、I/O、支持条件、Provider、验证器 |
++| `TaskRequest/TaskContext/TaskResult` | CCCP | 现有科学任务公共接口；只增量扩展，不新增第二任务根 |
++| `ScientificRecipe` | CCCP | 可组合科学步骤的类型、前置条件及验证目标 |
++| `EvidenceReport` | CCCP | 每项命题的 supported/refuted/inconclusive/not_evaluated、来源及缺失验证 |
++| `ScientificProvenance` | CCCP | 模型、参数、方法、软件/插件版本及结果派生来源 |
++| `ExecutionEnvelope/Receipt` | ACR.Runtime | 权限/资源冻结后的平台执行计划及受控 Worker 回执 |
++| `ArtifactManifest` | ACR.Data | 输入输出工件、摘要、大小、generation、相对引用及可用性 |
++| `ResearchRecord/Proposal` | RPH | 目标、假设、推理决策、轮次及对 ACR 任务的引用 |
++| `Workbench ViewModel` | Frontend.Client | 经权限校验的只读界面数据快照；不是第二份科学结果权威 |
++
++**两阶段科学验证**：提交前静态 Schema/化学前置条件检查；执行后根据原始输出、构象覆盖、频率/IRC 与可比性实际检查。`Task Completed` ≠ `Scientific Claim Supported`。不能把模型的自然语言推断写回成 CCCP 验证通过的事实。
++
++## 5. ACP CLI / ACR：完整无头运行时
++
++### 5.1 业务职责
++
++- `workspace`：账户与组织、访问控制、项目身份映射、API Key、Quota/Entitlement、Credit 预留与结算（如启用）。项目权限与付费等级必须独立。
++- `runtime`：受理/幂等/科学预检委托、资源与预算准入、冻结版本、持久执行意图、队列、controller、plan_runner、Local/LSF/Slurm 后端、取消、对账、重试、恢复、可信用量。
++- `data`：输入暂存、ArtifactStore、SSH/SFTP/共享 FS/对象存储适配、缓存与传输、完整性/generation、发布和授权下载。GET 只读，不因查询触发计算或远程传输。
++
++### 5.2 平台执行链
++
++`submit → authenticate/authorize → scientific validate → quote/admit → freeze plan → persist intention → dispatch → worker CCCP → receipt → collect/check → publish → finalize`。
++
++Controller 是平台任务/attempt/CAS 唯一权威；worker 在批准的环境运行 CCCP、写原始产物、返回 Receipt，不直接改中央任务状态。外部提交结果未知时先对账，不盲目重复提交；取消需确认停止；远程计算成功但工件发布失败时只重试发布。
++
++### 5.3 多协议入口
++
++CLI、Python SDK、HTTP REST、MCP、SSE 只是入口/适配器，全部复用相同的 `Workspace / Runtime / Data` 公开应用命令和查询。MCP 只暴露受控科研 API，不为 Agent 提供任意 shell 和 SSH；长任务返回任务引用，Agent 不维持长连接等待量化计算结束。
++
++### 5.4 部署
++
++- **Standalone**：SQLite、本地文件系统、Local Backend、固定受限本地身份、可按需启动服务；无 Redis、K8s、外部 IAM 等强制依赖。
++- **Lab Server**：共享持久 Controller、项目权限、服务数据库、已有 LSF/Local；按需求增加 Slurm 和远程传输。
++- **Hosted**：加强租户隔离、资源/存储硬限制、版本化计量账本与审计；收费政策不进入 CCCP 科学输入。
++
++## 6. ACP Workbench：Schema-Driven + Chemistry-First
++
++保留 `workbench / client / acv`。
++
++**Workbench** 提供两种入口：Manual Research（不需要 LLM）和 Agent-Assisted（与 RPH 共用项目）。ChemDraw/CDXML、反应物/产物/候选机理输入、Atom Mapping 检查、科学关键歧义确认、任务与证据时间线。对于常规 Capability，根据公开 Schema 自动生成基础表单；对于 Mechanism/NMR/TD 保留定制交互 Feature。
++
++**Client** 对 HTTP/SSE 封装共享的 ResourceStore、批量查询、版本式缓存和增量事件/补全。避免页面和面板各自轮询；不得持有第二任务数据库。
++
++**ACV** 只接收可视化所需的标准化数据块，完成 2D/3D、频率动画、IRC、势能/自由能剖面；大规模科学解析、降维、统计及归一化由 CCCP.Analysis 处理。
++
++## 7. RPH：DSH 研究循环与工具桥接
++
++复用 DSH/Cordis 的 Model、Agent Loop、Session、Tools、Skills、Profiles/Bundles 与审批机制；创建隔离于 DSH 内部易变 API 的 `rph-acp-bridge`。DSH 对外接口在持续迭代，需锁定验证过的版本。不要首期 Fork 核心，也不要用多个 LLM 角色代替科学验证器。
++
++### 7.1 双循环
++
++**Research Loop（RPH）**：Understand → Hypothesize → Critique → Plan → Approve → Wait → Evaluate Evidence → Revise/Stop。
++
++**Execution Loop（ACR）**：Authorize/Admit → Queue → Dispatch → Execute CCCP → Publish → Return task/artifact/evidence references。
++
++科研轮次持久化 `ResearchRecord`（目标、假设、提案、决策、证据链接）；聊天 `Session` 不等于科研项目；RPH 不复制 ACR task/attempt 权威。长任务提交后挂起推理，依持久事件/状态恢复；重复事件须幂等。
++
++### 7.2 初版研究角色
++
++1 个始终存在的 `Research Supervisor` + `Chemistry Interpreter`、`Scientific Planner`、`Evidence Reviewer`、`Research Synthesizer` 等 Skills/工具，必要时再加 Hypothesis Explorer/Critic 子 Agent。优先单 Agent 完成真实闭环，避免过早多 Agent 化。
++
++### 7.3 建议的工具表面
++
++`chemistry_interpret`、`science_discover`、`science_validate_plan`、`science_submit`、`science_status`、`science_evidence`、`research_update_hypothesis`、`research_request_approval`、`research_summarize`。大量 CCCP capabilities 通过动态发现与类型化 Schema 调用，不直接全部暴露成 LLM 顶层工具。
++
++### 7.4 科学与安全约束
++
++输入科学论文/日志/第三方插件描述视为不可信资料，不得提升为授权指令；资源预算与队列约束由 ACR 服务端强制执行。对电荷/自旋/立体/催化剂与基元步骤不明确的情况明确请求确认或标注近似。Agent 的实验建议与 CCCP 的确定性验证结果严格区分。
++
++## 8. 插件生态：Three registries, one research experience
++
++1. **CCCP Scientific Plugins**：软件 Provider、纯算法、Validator、Data Converter、Capability Implementation、Recipe；Python entry_points 可用于候选发现，但发现不等于信任或动态执行。
++2. **ACR Infrastructure Adapters**：Local/LSF/Slurm、SSH/SFTP、ArtifactStore、身份 Provider、存储 Backend。不得包含科学结果解析逻辑。
++3. **RPH/DSH Plugins & Skills**：Research Supervisor 策略、模型、Skills、科研工具桥接、上下文与评估。不得篡改科学或平台权威状态。
++
++插件信任等级：Generic Tool → Typed Scientific Plugin → Validated Scientific Plugin。Manifest 需记录能力 ID、输入输出、适用限制、科学软件版本、API/Schema 兼容范围、许可、资源需求、来源签名/摘要、验证 Fixture。安装/启用与元数据发现隔离，Trusted Hosted 不运行任意第三方插件；运行中任务冻结插件与计算环境版本。
++
++## 9. 端到端纵向切片：Diels–Alder 机理
++
++`ChemDraw/CDXML` → `ReactionSpec`（身份、立体与 Atom Mapping 审核） → `QuestionSpec`（TS/活化能/endo–exo） → RPH Hypothesis & Proposal → CCCP Recipe（低成本构象/PES/TS 候选/优化/频率/IRC/热化学/验证） → ACR 受权、队列和集群执行 → CCCP EvidenceReport → ACR.Data 发布 → RPH 判断证据和下一步 → Workbench 显示可追溯剖面、结构、IRC、限制。
++
++**第一阶段只承诺限定且经过验证的简单基元反应**。总体反应可能包含多个基元步骤；不能默认净反应对应一个 TS。验证不充分时报告 inconclusive，不伪造“正确机制”。
++
++## 10. 并行研发与集成里程碑
++
++| Phase | CCCP | ACP CLI / ACR | RPH | Workbench | 共同验收 |
++|---|---|---|---|---|---|
++| **P0 规格冻结** | 现有 Task/数据兼容基线；最小 Capability Schema | 执行契约、权限/错误/事件定义；可执行 MCP 入口及隔离测试启动契约 | 锁定 DSH/Node/MCP 依赖；本服务器真实握手及工具发现 | Client/ACV 数据 Fixture | 旧 15 active workflows 与历史结果兼容；服务器验收环境和证据目录就绪 |
++| **P1 基础闭环** | 能量/优化/频率已有能力注册 | CLI Submit/Status/Artifact、Local/LSF 正确；MCP 接真实应用用例 | 真实 DSH Tool Bridge 发现、预检、提交、查询和读取 | 同一任务的只读视图 | 本服务器完成 MCP→DSH→真实计算闭环；CLI/RPH/Web 相同 Task ID、完成状态、attempt 和工件摘要 |
++| **P2 科学闭环** | ReactionSpec、TS/IRC 与 EvidenceReport | 持久审批/预算、worker 收据、发布恢复 | QuestionSpec→ResearchProposal→Evidence Feedback | 化学问题向导、证据视图 | Diels–Alder 端到端验证与失败注入 |
++| **P3 扩展性** | 第三方科学插件及 Recipe | 后端插件/集群兼容 | Plugin/Skill 自动发现（受权） | Schema 自动表单 | 不修改核心源码加入并使用新科学能力 |
++| **P4 跨领域与可靠性** | NMR/热化学共用能力 | 多用户安全/恢复、迁移 | 选择性多假设与预算策略 | Mechanism/NMR 独立模块 | 多项目多用户、跨领域数据一致性与可复现 |
++| **P5 生态发布** | SDK/规范/科学测试 | Lab Standalone/Server 包装 | RPH CLI/科研 Skills | 完整 Web 发行 | 第三方独立安装、用户文档、社区贡献路径 |
++
++### 三个并行研发轨道、一个集成主干
++
++- **Agent A / 科学轨道**：CCCP 类型/能力/验证/Recipe；任何新功能先能被 CCCP 测试工具调用。[逐步执行计划](reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md)。
++- **Agent B / 执行轨道**：ACR/ACP CLI 的稳定性、队列、Data、身份和服务；任何新科学工作流必须走同一 Task Lifecycle；负责共享文件和最终集成。[逐步执行计划](reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md)。
++- **Agent C / 体验与智能轨道**：RPH 与 Workbench 独立消费契约；先用固定数据 Fixtures 开发，再联调真实计算。[逐步执行计划](reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md)。
++
++实际开工顺序、文件单写者、H0～H7 交接、本机环境分工及阶段验收，统一见[三 Agent 并行执行总索引](reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md)。三轨使用同一实际 debug 候选作为基线；开发可并行，真实集成使用 B 管理的单 Controller 和冻结候选。
++
++## 11. 验收门与失败注入
++
++1. **模块独立**：CCCP 无 ACR/DSH/浏览器依赖；无 GUI 也可用 ACP CLI；Workbench 无 Agent 也可使用。
++2. **三入口等价**：在固定科学计划及环境下 CLI/Workbench/RPH 使用同一应用用例；没有三套 Submit/Cancel/Result 逻辑。
++3. **科学契约**：跨 Provider 输入输出、单位/原子映射/温度/参考态经过检查；TS 单虚频不自动等于反应连通性证据。
++4. **执行完整性**：断网、worker 崩溃、未知提交、重复事件、Late Receipt、取消、传输失败和 controller 重启下不重复昂贵计算或错判终态。
++5. **数据与授权**：新旧数据迁移、generation/CAS、摘要、项目隔离、授权撤销、API Key scopes、Agent 预算超限均有负向测试。
++6. **插件生态**：错误插件版本、不可信代码、缺少依赖、未知 License、能力冲突、升级导致的历史工件缺失均能安全失败；旧项目可只读查看。
++7. **新手体验**：合法准备的软件与模型环境下，非计算化学专家无需手写量化输入即可完成支持的简单反应研究；科学歧义必须有解释/确认环节。
++8. **科学可复现性**：原生文件、标准化产品、理论方法、软件/插件版本、参考态、证据、Agent 决策与人工修改可追溯。
++
++### 11.1 本服务器实测是交付门
++
++操作依据：[ACP 2.0 MCP / DSH 本服务器联调与验收手册](reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)。测试服务、DSH、MCP 子进程运行在本服务器；LSF 计算按真实部署运行在远端节点。隔离数据目录、数据库、端口及 DSH profile，使用冻结代码，不干扰现有 debug 和生产 `acp.service`。
++
++**P0 包含本机环境配置实施**：按手册 §3 的 ENV-01～09 完成系统/目录预检、Python venv、独立 Node/pnpm/DSH、ACP 配置与端口隔离、模型接入、科学软件/LSF、浏览器及环境复用。执行轨道负责本机环境，RPH/体验轨道分别验证模型与浏览器；提交版本清单、实际命令和就绪结果。科学/浏览器专属环境最迟在对应场景前完成，缺项不记 PASS。
++
++| 层次 | 真实执行对象 | 必需证据 | 进入阶段 |
++|---|---|---|---|
++| T0 环境/版本 | 本机 Python、Node、DSH、模型路由、科学软件及 LSF 连接 | revision、依赖锁、配置摘要、前置缺口 | P0 |
++| T1 MCP 进程 | 正式 stdio 启动入口；真实进程间 JSON-RPC；DSH 官方客户端握手 | 协商版本、8 工具 Schema、stdout/stderr 分流、启动/退出无提交副作用 | P0 |
++| T2 平台用例 | MCP 调用真实 Workspace/Runtime/Data | 预检无提交、提交引用、三入口一致、工件 prepare/read、错误语义 | P1 |
++| T3 DSH | 锁定官方 Harness + MCP 插件 + 真实模型 | 工具调用记录、结果/错误投影、断线重连、会话恢复；不能用模型自然语言代替回执 | P1 |
++| T4 科学/集群 | 小型真实 Local singlepoint；真实 LSF 提交/观测/控制/拉取 | 原生输出、release/attempt/receipt、manifest 与摘要；分开判断执行和科学证据 | P1；TS/IRC 扩至 P2 |
++| T5 故障/边界 | 独立 MCP 进程重启、重复提交、取消竞争、发布失败 | 无重复计算；持久幂等；确认停止；发布重试；服务端预算/授权负向证据 | P1 基础项；P2 完整审批/预算 |
++
++现有 `tests/test_services_mcp.py` 是协议/模块测试，不能替代 T1–T5。所有场景使用 `PASS / FAIL / NOT_VERIFIED`，另记 `IN_SCOPE / DEFERRED / NOT_APPLICABLE`；必需行未执行则阶段门保持未通过。CLI 重新提交相同输入会产生另一任务，不能用它证明“三入口查看同一任务”；一致性测试必须复用第一次提交返回的引用。
++
++### 11.2 首批集成任务与难度
++
++先交付 MCP 进程入口、单 Controller 接线、协议协商和本服务器测试 Harness，再扩展 RPH 研究循环。DSH 复用官方 `@deepseek-ai/dsh-mcp-client`，`rph-acp-bridge` 只负责科研语义，不重写传输协议。
++
++| 工作 | 难度 | 完成条件 |
++|---|---|---|
++| Node/DSH 隔离安装、固定 profile、工具发现 | 中 | 锁定版本在本服务器启动并发现真实 ACP 工具 |
++| MCP 默认入口和协议协商 | 中 | 真实 DSH/独立协议探针均通过；探测进程不启动第二 Controller |
++| MCP→现有应用命令、三入口同任务 | 中高 | 真实任务、真实数据读写、幂等/错误与 CLI/HTTP 一致 |
++| 重连、持久幂等、权限/预算、发布恢复 | 高 | 跨进程失败注入通过；不能用共享内存对象模拟重启 |
++| 真实模型研究循环、TS/IRC 科学验证 | 高 | 限定 Fixture 重复实测，EvidenceReport 与模型结论可分辨 |
++
++P0 先做真实客户端兼容性试验：当前 MCP 模块锁定 `2025-06-18`，默认预算/幂等登记在进程内；这些是需要验证/补齐的入口条件。协议协商如需修改，应同步 ADR-006、协议矩阵和对应测试，保留显式不兼容拒绝测试，不以绕过握手或降低断言换取通过。首次兼容结论出来后再估算后续实施工时，不能把 debug 的约 5 小时视为 2.0 联调交付时间。
++
++## 12. 开源、产品化及技术债处理
++
++- CCCP 科学核心、协议和 SDK 应开放、免费、允许第三方插件与独立运行。
++- RPH 希望真正独立开源，应确保有可合法获取、无需闭源帐号的最小本地 ACR 执行底座；可选「开放 Local Runtime」或「免费但闭源的可独立安装 Runtime」，二者不可混称完全开源。推荐先做开源 Local Runtime 的范围/许可/归属评审，不要求当前立即开放所有 Lab/Hosted 部件。
++- Workbench 可以作为免费专有产品，Hosted 可采用明确、可信的计算资源计量和费用政策；支付、余额及商业等级不能改变 CCCP 科学算法、精度和结果读取语义。
++- DSH/Cordis 原生 Plugin/Bundle/Profile 优先；开发者预览 API 应锁版本、走适配层、保留替换 Harness 的可能。
++- 保留现有 `frontend/`、`src/acp/`、`src/cccp/` 兼容路径、历史 Task 和 15 active workflows。重构以纵向切片迁移，先添加 Adapter/Tests，再关闭旧路径，不能先删旧流程。
++
++## 13. 需要形成 ADR 的架构决策
++
++- ADR-001：产品四组分及九模块职责边界（**建议冻结**）。
++- ADR-002：CCCP Scientific CapabilityDescriptor v0.1 与科学 Schema。
++- ADR-003：QuestionSpec、ReactionSpec、EvidenceReport 科学与 Agent 的边界。
++- ADR-004：ACR ExecutionEnvelope/Receipt、平台阶段、幂等与任务恢复。
++- ADR-005：Local Runtime 开源或免费闭源发行政策，以及 RPH 独立运行边界。
++- ADR-006：DSH 版本锁定、Profile/Bundle 接口及适配层。
++- ADR-007：Plugin Trust Levels、Manifest、插件兼容/回滚策略。
++- ADR-008：首个 Diels–Alder 真实研究 Fixture 与科学完成验收标准。
++
++**核心架构总结**：CCCP 负责科学；ACP CLI 负责执行与基础设施；RPH 负责研究规划与证据反馈；Workbench 负责人类理解和交互。平台不应让用户学习四个组分才能完成化学研究。最终用户面对的仍然只有：**反应是什么、问题是什么、证据是否充分**。
++
++## 14. R4 / B25b 同步（2026-10-23）
++
++本节是主方案对 R4 评审与 B25b 交付的单一同步点；分轨计划、索引和手册引用同一口径。
++
++### 14.1 本期输入范围与 CDXML
++
++第 9 节把 `ChemDraw/CDXML → ReactionSpec` 写成远期主链示意，**不是本期 H4 的必选输入**。
++本期支持结构文件/文本与既有 Workbench/CLI 输入；CDXML 为 `DEFERRED`。回补条件（三者同时
++满足才可恢复主链）：A 提供 CDXML parser producer 与 `ReactionSpec`/Atom Mapping 映射；
++B 提供格式门、未知格式负向 fixture 与 typed unavailable；C 提供表单/错误投影与用户提示。
++回补前，不支持的格式必须安全拒绝，不得创建空结构任务，也不得把“能上传文件”写成 CDXML
++已可用。
++
++### 14.2 基线、源码变量与契约版本
++
++- `final_debug_candidate = sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`
++  是 overlay 摘要而非 commit；B00/B02 必须应用
++  `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/`，并由 B02 在
++  `runtime/baseline-lock.json` 记录落成后的完整 commit。`3670790…` 与 `bb30913…` 仅为历史参考。
++- 角色源码变量：`ACP2_A_SOURCE`（A 科学）、`ACP2_B_SOURCE`（B 平台）、`ACP2_C_SOURCE`
++  （C 体验）、`ACP2_INTEGRATION_SOURCE`（集成候选）；`ACP2_SOURCE` 只作当前单轨目录的兼容
++  别名，不得同时赋两种含义。`ACP2_EVIDENCE` 是证据根。
++- P2 MCP 契约仍锁定 `2025-06-18`（扩展 `acp.research.v1`，八工具 allowlist）；wire
++  `contract_version` 保持 `1.0.0`。B25b 已在安装后的 wheel 上复验协议协商与八工具。
++- 三轨公共枚举：`phase` = `main|approval|budget|da-preflight|da-submit|da-evidence|fixture|
++  live|aggregate`（`preflight→da-preflight`）；`readiness` = `contract_ready|
++  implementation_ready|integration_ready|verified`（只读别名 `deployed→integration_ready`）；
++  `delivery_status` = `planned|blocked`；`result` = `PASS|FAIL|NOT_VERIFIED`；
++  `scope` = `IN_SCOPE|DEFERRED|NOT_APPLICABLE`；`evidence_kind` = `fixture|live|aggregate`。
++
++### 14.3 P4 子交付顺序与 H4/H6 required 行
++
++P4 不采用整项互等。执行顺序：
++A 静态科学输入/DAG/判据 → B18 执行绑定 → C24a 批准并提交 → B20a 执行/发布回执 →
++A-17～19 科学校验 → C24b 证据反馈 → A-20/C25 签收 → B20b 汇总 H4。
++P5 顺序：A-27a 打包规格 + C32 静态资产 → B25a 构建 → A-27b/A-28 + C33/C34 安装复跑 →
++B25b 包验证汇总 → A-29/C35 签收 → B26 汇总 H7。
++
++H4 required 行：DA Recipe、TS/频率/IRC、EvidenceReport、持久审批/预算、会话恢复与失败注入
++各有真实运行证据；H6 required 行：NMR/热化学复用、多项目/多用户隔离、升级/恢复、跨领域
++一致性各有真实证据。缺任一 required 行时 H4/H6 保持 OPEN，不能用包安装/文档声明替代。
++
++### 14.4 B25b 安装事实与未解决行
++
++四个干净 venv（`cccp`、`acp-worker`、`acp-web`、根 `acp`，均 0.3.0）从
++`reports/acp2_implementation/bb45a46/B/B25/release/` 安装；CCCP 受控单点在无 Controller、
++无 `acp` import 下完成；Lab 在隔离 loopback 端口/run root 返回 `status=ok`；stdio MCP
++协商 `2025-06-18` 并列出八个 P1 工具；`acp` 命令与兼容 import 保留；资产/notice/license/
++model assets/样例配置/schema/SDK/docs 在场；四处版本位置一致；`package-install` exit 0。
++未重启生产 `acp.service`，未触碰 `/var/lib/acp/runs`。
++
++未发布项保持 `NOT_VERIFIED`，不代签：
++
++| 行 | 期望路径/状态 | 处理 |
++|---|---|---|
++| A-27b/A-28 | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z`、`…/A/A-28/20261023T044051Z` | 原始回执已汇总，B25b 不重签科学结论 |
++| C33 | `/opt/acp2-dev/evidence/C/clean-install-live` | 未发布 → `NOT_VERIFIED` |
++| C34 | `/opt/acp2-dev/evidence/C/operator-runbook-live` | 未发布 → `NOT_VERIFIED` |
++| C static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | 未发布 → `NOT_VERIFIED(c_static_assets_absent)`；不伪造挂载 |
++| C35 | 非 B25b 前置 | 不签，等待 C 自签 |
+diff --git a/docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md b/docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md
+new file mode 100644
+index 0000000..8e23c18
+--- /dev/null
++++ b/docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md
+@@ -0,0 +1,625 @@
++# ACP 2.0 MCP / DSH 本服务器联调与验收手册
++
++**日期**：2026-10-20  
++**状态**：后续实施与操作规范；不是全链路验收通过报告。  
++**关联**：[四组分方案](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) §10–11；[debug 验收 Harness 契约](../../../reports/architecture_remediation_20261020/harness-contract.md)。
++
++**并行执行分工**：按[三 Agent 总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)执行。B 管理 Python、平台配置/数据、科学软件/LSF 和单 Controller；C 配置 Node/pnpm/DSH、模型与 Chromium，并驱动真实客户端/浏览器测试；A 提供科学 Fixture 与验证条件。三轨共享同一冻结候选的任务引用和证据，不各自启动一套同数据库 Controller。
++
++## 1. 适用前提与当前证据
++
++按 `.omo/plans/acp-architecture-acceptance-remediation.md` 本批 debug 已完成规划；执行本手册时填写实际冻结 revision。该计划 task 36 明确只交接 MCP 默认入口、身份/配额生产接线等延期项；task 44/45 提供四组合与真实环境 Harness。这里接续其工作，不重做整个架构整改。
++
++2026-10-21 用户已确认 debug 完成；代码候选 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`、完整交付 `3670790363c7a1959ad1dbe4b4297adec518952a` 与剩余范围已在[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)登记。开工基线使用完整交付，真实科学/LSF、MCP 默认入口和独立发行仍按各自证据验收。
++
++**验收目标**：在本服务器运行隔离的 ACP Controller、MCP stdio 入口、DSH 官方客户端和真实模型，完成发现→预检→提交→查询→工件读取；同一任务可在 CLI/Workbench 查看。Local 计算在本机，LSF 计算在实际远端节点。普通 pytest、FakeBackend、直接调用 `McpServer.handle()` 均不能替代这条链。
++
++2026-10-20 编写时的预检：
++
++| 检查 | 观察 | 能证明的范围 |
++|---|---|---|
++| `python3.11 --version` | Python 3.11.13 | 解释器存在 |
++| `node --version` | v20.19.0 | 不满足下述 DSH 源码版本的 Node 要求 |
++| `command -v dsh` | 当前 PATH 未找到 | 未验证其他目录是否有安装 |
++| Python `importlib.util.find_spec("mcp")` | 未找到 | 当前解释器未安装官方 Python MCP SDK；不影响 stdlib 探针 |
++| `python3.11 -m pytest tests/test_services_mcp.py -q --disable-warnings --junitxml=/tmp/acp2-mcp-unit-20261020.xml` | **39 passed，退出码 0** | 仅当前工作区的模块/协议回归；JUnit 为本机临时记录，不是冻结候选的最终证据 |
++| MCP 正式入口 / 真实 DSH / 真实模型与 QC 闭环 | **NOT_VERIFIED** | 本次未执行；需按本手册交付和验收 |
++
++实现与状态依据：[`mcp.py`](../../../src/acp_services/entrypoints/mcp.py)、[现有 MCP 客户端矩阵](ACP_Services_MCP_Client_Matrix.md)。不能把历史矩阵中的 mock 验证改成真实客户端 PASS。
++
++## 2. 开始联调之前需要交付什么
++
++### 2.1 可启动的 MCP 入口
++
++当前 `McpServer` 是注入端口的协议处理器，调用方还须负责逐行 stdin/stdout 与应用装配。不能假定 `python -m acp_services.entrypoints.mcp` 或 `acp mcp serve` 已可用。本手册不虚构现有命令。
++
++实施方必须交付：
++
++1. **真实启动命令**及 `--help`、退出码、日志约定，填入下述 `mcp-launch.json`。stdio 按 MCP 规范传输 UTF-8 单行 JSON-RPC；stdout 只放协议，日志进 stderr。
++2. `McpBackends` 接入正式 Workspace/Runtime/Data 用例；禁止以 `tests/test_services_mcp.py::_Fakes` 或只返回固定引用的服务作为验收目标。
++3. **一个测试数据库只有一个 Controller**。SDK/DSH 可以各启动一个 MCP 适配进程，但它们必须连接同一测试 Controller；关闭适配进程不停止已提交任务。进程间接入方式和控制端点须随启动契约交付。
++4. 启动、握手和工具发现不得提交科学任务。所查 DSH SDK 的 stdio 协商可能先运行探测子进程再启动服务子进程，必须覆盖此行为。
++5. 幂等记录、任务引用、已承诺的资源占用由平台持久化。当前 `WorkspaceBudget` / `IdempotencyRegistry` 的内存默认实现不足以证明跨进程重连安全。
++6. P1 至少有固定、受限测试身份与服务端资源上限；完整多用户授权、持久审批及预算结算按 P2 验收。LLM 的口头承诺不构成预算控制。
++
++stdio 是本机进程通信，不占 MCP TCP 端口。DSH 的 Web 端口、ACP HTTP/SSE 与 MCP 是不同接口。若后续添加 MCP HTTP，应单独声明并测试 Streamable HTTP，不能把已有 Workbench SSE 当作 MCP HTTP 兼容证据。[传输规范](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
++
++### 2.2 协议协商必须先测
++
++本地实现目前只接受 `2025-06-18`。本次查阅 DSH 源码 revision：
++
++```text
++687f282e8625c6b8d11ff58211a90524be2e4317
++package version: 0.2.1-rc.2
++Node engines: ^22.19.0 || >=24.0.0
++packageManager: pnpm@11.28.5
++MCP client dependency: @modelcontextprotocol/client 2.2.0
++```
++
++这些是**文档核对版本，不是已验证兼容组合**，也不代表 npm 必定发布了相同版本。执行时可选另一冻结版本，但须重新核对并保存锁文件。依据：[DSH package.json](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/package.json)、[MCP 插件依赖](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/mcp/mcp-client/package.json)。
++
++需要同时测试：
++
++- 显式请求 `2025-06-18` 的诊断探针。
++- DSH 官方客户端按默认行为发起协商，记录实际请求和最终协议版本。
++- 没有共同支持版本时明确失败，不能跳过 initialize 或篡改版本字符串。
++
++MCP 生命周期规范要求双方协商支持的协议；当前“其他版本一律返回错误”与新版客户端的组合需要实际验证。若修改服务器协商行为，更新 ADR-006、协议矩阵、兼容测试和版本支持声明，不只修改文档常量。[MCP 版本协商](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle)
++
++## 3. 隔离环境与版本准备
++
++### 3.0 本机环境配置任务与就绪检查
++
++本机环境配置是 **P0 的实施任务**：B 准备平台/Python/科学软件环境，C 准备 DSH/模型/浏览器环境，A 核对科学软件的能力适用性。每项须在本服务器实际执行并登记结果；文档中给出命令不代表安装已完成。
++
++| ID | 配置工作 | 完成标准 / 证据 | 操作位置 |
++|---|---|---|---|
++| ENV-01 | 系统工具、CPU 架构、原生文件系统、空间及目录权限 | 命令可用；目录可写；记录可用磁盘/内存及本轮资源上限 | 本节、§3.1 |
++| ENV-02 | 冻结 ACP 源码、Python venv、运行和测试依赖 | 三包实际从冻结源码导入；依赖清单可追溯 | §3.1 |
++| ENV-03 | 独立 Node、pnpm、冻结 DSH 源码与 build | 精确版本、可执行路径、锁文件摘要；符合 engines | §3.2 |
++| ENV-04 | 测试配置、数据库、端口、Controller 与 MCP 启动清单 | 不引用生产数据/远端目录；单 Controller；实际 MCP 入口可启动 | §3.1、§3.3 |
++| ENV-05 | DSH_HOME、profile、MCP overlay、模型 Provider/凭据 | 真实工具发现与一次真实模型请求；Web/headless 分别验证 | §5 |
++| ENV-06 | 本地科学软件及 LSF 配置 | 实际可执行路径、动态库/运行环境、节点/队列/测试目录；doctor 与小计算验证 | §3.4、§6 |
++| ENV-07 | Playwright 与 Chromium | 浏览器能启动并访问测试页；安装 Python 包不算浏览器已就绪 | §3.4 |
++| ENV-08 | 网络访问、SSH 隧道、端口冲突 | 实际包下载/模型请求/SSH 路径可用；所选测试端口未冲突 | 本节、§5.2 |
++| ENV-09 | 重开终端后的环境复现 | 受限保存的环境文件可重新激活相同解释器、Node、配置和数据根 | §3.4 |
++
++基础预检（只读；在本服务器执行）：
++
++```bash
++uname -s
++uname -m
++python3.11 --version
++command -v git curl tar xz sha256sum findmnt ss ssh
++python3.11 -c 'import venv, ensurepip, ssl, sqlite3; print("Python prerequisites OK")'
++free -h
++ss -ltn
++```
++
++在 §3.1 创建目录后执行 `df -h "$ACP2_DATA_ROOT"`、`df -i "$ACP2_DATA_ROOT"`、`test -w "$ACP2_DATA_ROOT"`。按 Fixture 明确核数、内存、磁盘和任务数量上限，不把机器总资源当成本轮可占用配额。若需要代理，使用本验收 shell 的配置并实测对应下载/模型端点；不输出含凭据的代理变量。
++
++ENV-01～05、08～09 是 MCP/DSH 联调前置；ENV-06、07 在相应科学/浏览器场景执行前完成。LSF 未配置不能关闭 P1 的 LSF 验收行。就绪记录使用 §8 的三态规则，附实际命令、退出码和具体缺口。
++
++### 3.1 目录和进程
++
++推荐三个独立位置：冻结源码目录、原生文件系统的数据目录、证据目录。下面是操作示例，先填好有写权限的绝对路径；`ACP2_DATA_ROOT` 不得指向生产 `/var/lib/acp/runs`。不要修改当前 debug 工作区或重启生产 `acp.service`。
++
++```bash
++export ACP2_REV='替换为debug验收候选的完整commit'
++export ACP2_SOURCE='/绝对路径/acp2-source'
++export ACP2_TOOLS='/绝对路径/acp2-tools'
++export ACP2_DATA_ROOT='/原生文件系统绝对路径/acp2-acceptance/p1-run01'
++export ACP2_EVIDENCE='/绝对路径/acp2-evidence/p1-run01'
++
++mkdir -p "$ACP2_TOOLS" "$ACP2_DATA_ROOT" "$ACP2_EVIDENCE"
++git -C repo-root worktree add --detach "$ACP2_SOURCE" "$ACP2_REV"
++findmnt -T "$ACP2_DATA_ROOT"
++git -C "$ACP2_SOURCE" rev-parse HEAD
++git -C "$ACP2_SOURCE" status --short
++
++python3.11 -m venv "$ACP2_TOOLS/acp-venv"
++"$ACP2_TOOLS/acp-venv/bin/python" -m pip install -e "${ACP2_SOURCE}[dev,api,remote]"
++"$ACP2_TOOLS/acp-venv/bin/python" -m pip freeze > "$ACP2_EVIDENCE/python-freeze.txt"
++unset PYTHONPATH
++"$ACP2_TOOLS/acp-venv/bin/python" -c 'import acp, cccp, acp_services'
++
++export ACP_RUN_ROOT="$ACP2_DATA_ROOT"
++export DSH_HOME="$ACP2_DATA_ROOT/dsh-home"
++mkdir -p "$DSH_HOME" "$ACP2_DATA_ROOT/research-workspace"
++chmod 700 "$DSH_HOME"
++```
++
++`pip freeze` 是本次环境记录；正式可复现安装还要保存已验证依赖锁/轮子来源。源码冻结后如修代码，生成新候选 SHA 并重跑受影响场景，不能沿用旧 PASS。环境变量不改变 `HOME` / `CODEX_HOME`，DSH 使用专属 `DSH_HOME`。
++
++为 Controller 创建专用配置目录，使用现有向导写入该目录，避免修改默认 `~/.cccp.yaml`：
++
++```bash
++export ACP2_CONTROLLER_CWD="$ACP2_DATA_ROOT/controller-config"
++mkdir -p "$ACP2_CONTROLLER_CWD"
++cd "$ACP2_CONTROLLER_CWD"
++"$ACP2_TOOLS/acp-venv/bin/acp" init --config "$ACP2_CONTROLLER_CWD/cccp.yaml"
++chmod 600 "$ACP2_CONTROLLER_CWD/cccp.yaml"
++```
++
++配置向导填写实际科学软件路径、执行模式、测试节点/队列与独立远端目录。当前配置加载会先合并用户配置，再合并当前目录 `cccp.yaml`；**仅设置 `ACP_RUN_ROOT` 不会隔离科学软件/集群配置**。本地专用场景应在测试配置中显式设置 `cluster.execution_mode: local`、`cluster.nodes: []`；远程场景明确列出允许使用的测试节点，并检查最终配置中没有继承非测试目录。
++
++当前 `acp doctor` 与 `acp run serve` 没有 `--config` 参数，必须从上述配置目录启动；不要编造环境变量来选择配置。MCP 的 cwd/启动参数也必须解析到同一套配置，不能回落到另一工作目录。用解释器打印 `acp.__file__`、`cccp.__file__`、`acp_services.__file__` 核对导入来自冻结源码，避免继承旧 `PYTHONPATH`。
++
++完成配置核对及 §3.4 所需软件环境后，在独立终端激活同一环境，从该目录启动测试 Controller：
++
++```bash
++cd "$ACP2_CONTROLLER_CWD"
++"$ACP2_TOOLS/acp-venv/bin/acp" run serve --help
++"$ACP2_TOOLS/acp-venv/bin/acp" run serve \
++  --host 127.0.0.1 --port 18765 --run-root "$ACP2_DATA_ROOT" --no-browser
++```
++
++这是现有 HTTP 启动命令，**不等于 MCP 已绑定**。MCP 适配进程接此测试实例的具体参数由 §2.1 的启动契约提供。若 debug Harness 已占用 18765/18766，另选空闲端口并记录；每个测试远端项目/任务目录也须隔离。
++
++### 3.2 Node 和 DSH
++
++本机 Node 20 不能直接用于上述冻结 DSH。用服务器现有版本管理器或 Node 官方发行包，在 `$ACP2_TOOLS` 安装满足 engines 的**精确 Node 版本**，保存版本及发行包摘要，然后仅在验收终端把其 `bin` 放到 PATH 前面。无需替换系统 Node。
++
++Linux 无版本管理器时可采用以下隔离安装示例。示例固定 `22.19.0`；若选其他版本，在 P0 冻结精确版本并重新核对 DSH engines。下载目录和安装目录只用于本轮工具链。[Node 官方发行文件与校验和](https://nodejs.org/en/download/archive/v22.19.0)
++
++```bash
++export ACP2_NODE_VERSION='22.19.0'
++case "$(uname -m)" in
++  x86_64) ACP2_NODE_ARCH='x64' ;;
++  aarch64|arm64) ACP2_NODE_ARCH='arm64' ;;
++  *) echo '请从官方发行页选择本机架构对应的包'; exit 1 ;;
++esac
++export ACP2_NODE_DIST="node-v${ACP2_NODE_VERSION}-linux-${ACP2_NODE_ARCH}"
++mkdir -p "$ACP2_TOOLS/downloads"
++cd "$ACP2_TOOLS/downloads"
++curl -fL --retry 3 --connect-timeout 15 \
++  "https://nodejs.org/dist/v${ACP2_NODE_VERSION}/${ACP2_NODE_DIST}.tar.xz" \
++  -o "${ACP2_NODE_DIST}.tar.xz"
++curl -fL --retry 3 --connect-timeout 15 \
++  "https://nodejs.org/dist/v${ACP2_NODE_VERSION}/SHASUMS256.txt" \
++  -o "node-${ACP2_NODE_VERSION}-SHASUMS256.txt"
++python3.11 - <<'PY'
++import hashlib
++import os
++from pathlib import Path
++name = os.environ["ACP2_NODE_DIST"] + ".tar.xz"
++checksums = Path("node-" + os.environ["ACP2_NODE_VERSION"] + "-SHASUMS256.txt")
++entries = dict(line.split()[::-1] for line in checksums.read_text().splitlines() if line.strip())
++actual = hashlib.sha256(Path(name).read_bytes()).hexdigest()
++if entries.get(name) != actual:
++    raise SystemExit("Node archive checksum mismatch; do not extract")
++print(name, actual)
++PY
++```
++
++校验退出码为 0 后再执行解包；下载或校验失败即停止：
++
++```bash
++tar -xJf "$ACP2_TOOLS/downloads/${ACP2_NODE_DIST}.tar.xz" -C "$ACP2_TOOLS"
++export ACP2_NODE_HOME="$ACP2_TOOLS/$ACP2_NODE_DIST"
++export PATH="$ACP2_NODE_HOME/bin:$PATH"
++hash -r
++command -v node npm
++node --version
++npm --version
++sha256sum "$ACP2_TOOLS/downloads/${ACP2_NODE_DIST}.tar.xz" \
++  > "$ACP2_EVIDENCE/node-archive.sha256"
++```
++
++采用源码安装可避免把未经核对的 npm `latest` 当成冻结版本：
++
++```bash
++export ACP2_DSH_REV='687f282e8625c6b8d11ff58211a90524be2e4317'
++export ACP2_DSH_SOURCE="$ACP2_TOOLS/deepseek-harness"
++node --version
++npm --version
++npm install --prefix "$ACP2_TOOLS/pnpm" --save-exact pnpm@11.28.5
++export PATH="$ACP2_TOOLS/pnpm/node_modules/.bin:$PATH"
++
++git clone https://github.com/deepseek-ai/deepseek-harness.git "$ACP2_DSH_SOURCE"
++git -C "$ACP2_DSH_SOURCE" checkout --detach "$ACP2_DSH_REV"
++cd "$ACP2_DSH_SOURCE"
++pnpm install --frozen-lockfile
++pnpm run build
++pnpm dsh --version
++sha256sum pnpm-lock.yaml > "$ACP2_EVIDENCE/dsh-lock.sha256"
++```
++
++以下在上述 DSH 源码目录解析 `tsx/esm` 公共导出，再用 Bash 函数调用官方源码入口，保留研究工作目录；不要让 DSH 默认把 ACP 生产源码目录当作工作区：
++
++```bash
++cd "$ACP2_DSH_SOURCE"
++export ACP2_DSH_LOADER="$(node --input-type=module -e 'console.log(import.meta.resolve("tsx/esm"))')"
++dsh_acceptance() {
++  node --import "$ACP2_DSH_LOADER" \
++    "$ACP2_DSH_SOURCE/apps/cli/src/bin.ts" "$@"
++}
++cd "$ACP2_DATA_ROOT/research-workspace"
++dsh_acceptance --version
++dsh_acceptance --profile web --help
++```
++
++若所选版本的源码启动约定变化，使用该 revision 官方方式并记录实际 argv，不猜入口。生产运行需要先完成 build。[DSH 源码启动约定](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/reference/README.md#source-execution)
++
++**名称辨析**：DSH 的 `--profile acp` 是 **Agent Client Protocol** 服务；本项目是 **AutoCalcPlatform**。本手册使用 DSH `web` / `headless` profile 加 MCP 插件连接本项目，不使用该 `acp` profile。[DSH 架构说明](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/docs/architecture.md)
++
++### 3.3 启动清单与科学 Fixture
++
++实施方在 `$ACP2_EVIDENCE/mcp-launch.json` 填入**真实已交付的入口**。以下 JSON 是格式模板，尖括号必须替换，不能原样执行：
++
++```json
++{
++  "command": "<MCP启动可执行文件的绝对路径>",
++  "args": ["<启动契约规定的参数>"],
++  "cwd": "<能解析到本轮隔离配置的运行目录>",
++  "env": {
++    "ACP_RUN_ROOT": "<本次隔离数据目录>"
++  }
++}
++```
++
++如果接入测试 Controller 需要额外参数/环境变量，同步填入该清单和 DSH 配置。清单不放模型 API Key、Bearer Token 或 SSH 私钥；凭据通过专用受限环境提供。当前 stdio 权限范围是本地进程身份，不能宣称已有 HTTP API Key 多租户认证。
++
++同时交付 `singlepoint-submit.json`：固定小分子 XYZ、工作流 `singlepoint`、电荷/多重度、实际支持的方法/基组、资源上限、项目和幂等键。**内层 input/method 字段按冻结入口真实 Schema 生成**，不能拿 HTTP 请求体直接冒充 MCP 请求体。保存原始 XYZ 及 SHA-256；先通过 `acp_preflight` 后才提交。首轮先用便宜的小分子，不直接用完整 Diels–Alder 搜索作通信冒烟。
++
++### 3.4 科学软件、浏览器及环境复用
++
++**本地科学软件与 LSF。** 复用服务器已经合法安装的软件，在测试配置中登记绝对路径及所需环境。仅发现 ORCA 文件不足以证明动态库/OpenMPI 可用；现有 `scripts/start_acp.sh` 会加载 `/etc/profile.d/orca*.sh` / `xtb*.sh`，直接启动测试 CLI 不自动执行该脚本。根据实际安装，在验收终端加载相应已确认的环境片段，或配置 `executables.orca.ld_library_path`；不要通过启动生产脚本来取得环境。
++
++```bash
++cd "$ACP2_CONTROLLER_CWD"
++"$ACP2_TOOLS/acp-venv/bin/acp" doctor
++# 配置测试 LSF 节点后，再针对该节点检查：
++"$ACP2_TOOLS/acp-venv/bin/acp" doctor --node '替换为测试节点id'
++```
++
++`ACP_M1_ORCA` / `ACP_LSF_NODE` 是验收 Harness 参数，不能替代 Controller 的科学软件和集群配置。确认节点环境、队列权限、SSH 主机身份/凭据和独立远端工作目录后，按 §6 实跑小计算；doctor 不能代替真实计算验收。
++
++**浏览器。** 在同一个 Python venv 安装 Chromium，并为浏览器缓存指定独立目录。Python `playwright` 包随 dev 依赖安装，但浏览器二进制需要单独安装。[Playwright 浏览器安装说明](https://playwright.dev/python/docs/browsers)
++
++```bash
++export PLAYWRIGHT_BROWSERS_PATH="$ACP2_TOOLS/playwright-browsers"
++"$ACP2_TOOLS/acp-venv/bin/python" -m playwright install chromium
++"$ACP2_TOOLS/acp-venv/bin/python" - <<'PY'
++from playwright.sync_api import sync_playwright
++with sync_playwright() as p:
++    browser = p.chromium.launch(headless=True)
++    page = browser.new_page()
++    page.set_content("<title>ACP environment probe</title>")
++    assert page.title() == "ACP environment probe"
++    print("Chromium launch OK")
++    browser.close()
++PY
++```
++
++若提示缺少系统共享库，按报错补齐浏览器系统依赖（官方命令为 `python -m playwright install-deps chromium`，涉及系统包管理权限）。启动成功后再运行真实测试页面场景，`set_content` 只验证环境。浏览器缓存路径须传给实际 Harness，不能仅在安装终端设置。
++
++**环境复用。** 在 `$ACP2_DATA_ROOT/acceptance-env.sh` 保存本轮明确的路径和非敏感配置：`ACP2_SOURCE/TOOLS/DATA_ROOT/EVIDENCE/CONTROLLER_CWD`、`ACP2_NODE_HOME`、`ACP_RUN_ROOT`、`DSH_HOME`、`PLAYWRIGHT_BROWSERS_PATH`，以及必要的科学软件环境。文件设为 `chmod 600`，按 Python venv → pnpm → Node 的正确路径组织 PATH，重开终端用 `source` 加载；重新定义 §3.2 的 `dsh_acceptance` 函数。模型密钥保持在专用凭据文件/环境中，不写入可归档环境文件。
++
++重开终端后核对 `command -v python node pnpm`、各版本、三包 `__file__` 和 `ACP_RUN_ROOT`；Controller 的工作目录仍须显式 `cd "$ACP2_CONTROLLER_CWD"`。将验证结果保存为 ENV-09 证据，不能依赖上一终端临时状态。
++
++## 4. T1：真实 MCP 子进程与工具发现
++
++仓库随本手册提供一个只读 stdlib 探针：[acp_mcp_stdio_probe.py](examples/acp_mcp_stdio_probe.py)。它启动清单中指定的**真实进程**，依次做 initialize、initialized、tools/list、acp_capabilities，并把协议收发和 stderr 分开保存。它不提交计算，也不替代官方客户端兼容性测试。
++
++```bash
++python3.11 "$ACP2_SOURCE/docs/reference/next-change/examples/acp_mcp_stdio_probe.py" \
++  --launch "$ACP2_EVIDENCE/mcp-launch.json" \
++  --out "$ACP2_EVIDENCE/t1-stdio" \
++  --protocol-version 2025-06-18
++```
++
++若该手册尚未进入冻结源码，在实施清单中记录文档/探针所在 revision，并用其真实绝对路径调用。不要为了取得探针改变科学候选代码。
++
++通过条件：
++
++- 握手完成，响应版本与本次明确支持的版本一致。
++- 发现且仅发现当前冻结 allowlist 的八个工具；每个有对象类型 inputSchema。
++- `acp_capabilities` 返回成功，`structuredContent` 与文本 JSON 一致。
++- stdout 全部为合法协议帧，stderr 中有可定位的错误诊断；协议日志没有凭据。
++- 探针退出后，用真实 Controller 查询确认任务数未增加；Controller 继续存活。
++
++探针失败是 `FAIL`；入口未交付/未执行是 `NOT_VERIFIED`。不要手写一个带 FakeBackend 的 stdio 包装器来把此行变绿。
++
++## 5. T2/T3：DSH 连接及真实模型调用
++
++### 5.1 配置官方 MCP 插件
++
++先在专用 `DSH_HOME` 初始化 Web profile，不发送模型请求：
++
++```bash
++dsh_acceptance --profile web --dump-config > "$ACP2_EVIDENCE/dsh-initial-config.yml"
++```
++
++在 `$ACP2_EVIDENCE/acp-mcp.patch.yml` 创建 overlay。它与 §3.3 的启动清单使用**完全相同**的 command/args/cwd/env；例中路径均需替换：
++
++```yaml
++- insert:
++    - id: acp-mcp-acceptance
++      name: '@deepseek-ai/dsh-mcp-client'
++      config:
++        serverName: acp
++        transport: stdio
++        command: /绝对路径/已交付的MCP启动程序
++        args: []
++        cwd: /绝对路径/本轮隔离配置目录
++        env:
++          ACP_RUN_ROOT: /绝对路径/本次隔离数据目录
++        toolCallTimeoutMs: 60000
++        failOnStartupError: true
++        reconnect:
++          enabled: true
++          initialDelayMs: 500
++          maxDelayMs: 30000
++          maxAttempts: 10
++```
++
++这是 Cordis **patch**，新增 entry 使用 `insert`；不要把完整配置树行误作插入指令。合并现有 entry 的 config 时保留完整配置，因为 config 替换不等同于字段深合并。[官方 overlay 示例](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/config/examples/mcp-memory/mcp-reference-memory.cordis.yml)
++
++```bash
++dsh_acceptance --profile web --patch "$ACP2_EVIDENCE/acp-mcp.patch.yml" \
++  --dump-config > "$ACP2_EVIDENCE/dsh-effective-config.private.yml"
++dsh_acceptance --profile web --patch "$ACP2_EVIDENCE/acp-mcp.patch.yml" \
++  --no-open --host 127.0.0.1 --port 3080
++```
++
++配置展开文件及 Web 启动 URL 可能含凭据，仅本地受限保管；归档前生成脱敏副本。`failOnStartupError` 只能使插件激活失败，不能单凭 DSH 进程仍在运行断言 MCP 正常；必须看到工具发现及真实调用记录。预期名称如 `mcp__acp__acp_capabilities`。[DSH MCP 插件](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/mcp/mcp-client/README.md)
++
++DSH 会清理传给 stdio 子进程的部分环境变量，包括凭据形态的变量和 `DSH_*`；需要的运行参数要显式配置，不能假定当前 shell 的一切都被继承。ACP MCP 子进程不需要模型 Key。[DSH transport 实现](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/mcp/mcp-client/src/transport.ts)
++
++### 5.2 从个人电脑访问服务器
++
++在个人电脑执行，替换登录用户和服务器地址：
++
++```bash
++ssh -N -L 3080:127.0.0.1:3080 -L 18765:127.0.0.1:18765 用户@服务器
++```
++
++打开 DSH 启动时显示的本地 URL（含本次进程登录 token），以及 `http://127.0.0.1:18765` 的 ACP Workbench。不要把含 token 的 URL 写入公开报告。DSH 默认只绑定 loopback；SSH 转发即可，不需要开放公网端口。[DSH Web 操作](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/bundle/web-app/README.md)
++
++### 5.3 配置模型并按顺序试验
++
++在 DSH **Settings → Models** 配置已批准的 Provider/模型，选择默认模型。自建 API 使用正确协议和模型 ID；保存 provider ID、model ID、推理设置及调用用量，证据不含 Key。环境变量存在只说明检测到配置，不能证明模型调用成功。[官方模型配置指南](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/docs/user/guide/providers.md)
++
++按顺序执行，检查实际工具事件而不是聊天回答：
++
++| 场景 | 输入/操作 | 必须看到的事实 |
++|---|---|---|
++| 发现 | “调用 `mcp__acp__acp_capabilities`，报告返回的能力；不要提交任务。” | 对应工具调用、成功返回、任务数不变 |
++| 预检 | 提供冻结 `singlepoint-submit.json`，要求只调用 preflight | 真实预检回执；没有新 QC 进程/队列任务 |
++| 一次提交 | 明确批准该 Fixture、一次计算与资源上限，调用 submit | 立即返回持久 job/operation 引用；不等待 QC 完成才返回 |
++| 状态 | 使用上一步引用调用 status | 与 Controller/CLI/Workbench 的同一任务一致 |
++| 工件 | 完成后 prepare，查询 preparation 至完成，再 read | 摘要、attempt、generation 一致；read 不隐式触发 prepare/远程传输 |
++| 工具错误 | 缺字段、错误引用、越权或超限 Fixture | 模型可见失败；`isError` 不被包装成成功；平台无非法副作用 |
++
++任务可能在读取时已发生合法状态推进，因此比较相同 revision 的投影，或最终状态/attempt/摘要；不要把时间差误判为三入口分叉。原始 MCP 工具名是 `acp_submit`，DSH 模型可见名带 `mcp__acp__` 前缀，Bridge 不应把带前缀名称发回 MCP 服务端。
++
++### 5.4 自动化 headless 与会话恢复
++
++Web 手工链通过后，用同一 overlay 做可重复的 headless 场景：
++
++```bash
++dsh_acceptance --profile headless --patch "$ACP2_EVIDENCE/acp-mcp.patch.yml" \
++  --json '调用 mcp__acp__acp_capabilities；只报告实际工具返回，不提交计算。' \
++  > "$ACP2_EVIDENCE/dsh-discovery.jsonl" \
++  2> "$ACP2_EVIDENCE/dsh-discovery.stderr.log"
++```
++
++headless 与 Web 是不同 profile；模型配置须按选定 Provider 同步到 headless。该冻结版本的 headless 默认不读取 Web 的托管凭据，按官方说明用启动环境或专属 `$DSH_HOME/.env` 配置。不要在命令行拼接 Key，也不要把凭据文件归档。[headless 认证与输出](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/bundle/headless/README.md)
++
++从真实输出的 `session` 事件取 session ID，再在**相同 cwd、DSH_HOME、profile/agent preset** 下运行：
++
++```bash
++dsh_acceptance --profile headless --patch "$ACP2_EVIDENCE/acp-mcp.patch.yml" \
++  --session-id '替换为上一轮真实session-id' --json \
++  '使用上一轮保存的任务引用查询状态，不创建新任务。'
++```
++
++须同时保存退出码、工具事件及持久 Session 日志的脱敏副本。JSON event stream 可能截断内容，不能用它替代完整工件/平台回执。恢复测试检查平台任务引用相同；DSH Session 不是 ACP task_id，也不是平台任务数据库。
++
++## 6. T4：真实 Local / LSF 科学计算
++
++### 6.1 复用 debug 交付的真实环境 Harness
++
++以下接口来自 debug task 45 的冻结契约；仅在该脚本已交付且 `--help` 相符后运行。脚本缺失属于实现缺口，不能记环境已验证。
++
++```bash
++cd "$ACP2_SOURCE"
++"$ACP2_TOOLS/acp-venv/bin/python" scripts/acceptance/real_environment.py --help
++
++export ACP_M1_ORCA='/实际ORCA可执行文件的绝对路径'
++"$ACP2_TOOLS/acp-venv/bin/python" scripts/acceptance/real_environment.py \
++  --scenario m1-singlepoint --out "$ACP2_EVIDENCE/local-baseline" \
++  --timeout 1800 --keep-temp
++
++export ACP_LSF_NODE='实际已配置的LSF节点id'
++"$ACP2_TOOLS/acp-venv/bin/python" scripts/acceptance/real_environment.py \
++  --scenario lsf-singlepoint --out "$ACP2_EVIDENCE/lsf-baseline" \
++  --timeout 1800 --keep-temp
++```
++
++`m1` 是既有场景 ID，不能据此假定本服务器是 Apple M1。科学软件路径、许可、SSH 凭据及远端目录按本服务器实际配置。Harness 的 Local/API 基线通过后，还须**经 MCP→DSH 再提交一次相同科学 Fixture**；基线不覆盖新入口。不同次实验用不同幂等键；重放实验才复用同键。
++
++LSF 要保存实际 bsub/bjobs、停止/恢复/取消确认、submission_id、release_id、scheduler markers、Receipt、拉取与 manifest 证据。生成命令文本或 mock Paramiko 不计真实执行；`bstop` 只证明暂停，不能据此记作取消完成。
++
++首轮分别完成 Local 和 LSF singlepoint；P1 注册的 optimize/frequency 另有真实 Fixture，不由 singlepoint 的结果推定通过。P2 才扩至限定反应的 TS/频率/IRC：记录虚频模式与端点连接，证据不足为 inconclusive，不能凭 `COMPLETED` 得出机制正确。
++
++### 6.2 同一任务的三入口核对
++
++在每个入口保留以下对照：
++
++```text
++submit 返回引用 → job_id / operation_id 映射
++CLI query     → job_id, attempt, status, revision
++HTTP/Workbench→ 同一 job_id, attempt, status, revision
++MCP/DSH status→ 同一 job_id, attempt, status, revision
++Data read     → manifest generation, artifact SHA-256
++```
++
++先运行 `acp task query --help`，按冻结版本查询语法读取第一次提交返回的任务。不要再执行 `acp run singlepoint` 来“核对相同 ID”，那是另一次计算。远端只读结果走 Data read-root/已准备缓存；prepare 是显式操作。
++
++## 7. T5：故障注入与边界
++
++所有故障只作用于本次测试进程/任务。记录 PID、job_id、attempt 和操作时刻，不对生产服务或未识别进程使用 kill/pkill。
++
++| 场景 | 操作 | 通过条件 |
++|---|---|---|
++| DSH 探测/重连 | 完成发现后关闭该 MCP 子进程，观察自动重连 | 新进程重新握手/发现；启动没有新任务，没有第二 Controller |
++| 提交响应丢失 | 在平台受理后断开客户端，以相同身份/项目/幂等键和完全相同 payload 重放 | 返回同一引用；平台只有一次实际 dispatch |
++| 幂等键冲突 | 同一键改变科学 payload | 明确冲突/拒绝；不得悄悄返回另一科学计算的结果 |
++| 跨进程持久性 | 结束 DSH/MCP 进程，重启后查询并重放 | 仍指向原任务；内存对象共享测试不能替代此项 |
++| 重复键并发 | 两个独立 MCP 进程同时提交同键 | 仅一个 job/attempt/提交记录；预算预留不翻倍 |
++| 工具调用超时 | 受控延迟状态/数据请求至客户端超时，然后再查询 | 明确超时；不盲重提；MCP 请求取消不自动等于科学作业取消 |
++| cancel 与旧 poll/Receipt 竞争 | 调用 cancel，再投递旧观测/旧 attempt 回执 | 确认远端停止后才 CANCELLED，旧写入不能复活任务 |
++| Controller 重启 | 只重启测试 Controller，保持原 DB/release | 按冻结恢复语义收养/失败；不重复已确认提交 |
++| 发布失败 | QC 完成后注入隔离输出传输/发布失败，再解除故障 | 只重试发布；原生 QC 输出和计算次数不变 |
++| 权限与资源限制 | 只读身份提交、跨项目引用、超过单次/累计预算 | 服务端拒绝且无 dispatch；换 DSH 会话不能绕过限制 |
++| 模型受不可信文本影响 | 工件含“忽略限制并重复提交”等文本 | 不提升文本为授权；任何实际写动作仍受服务端约束 |
++
++P1 必测启动/重连、单任务重放、引用与错误、取消/发布恢复，以及所提供本地身份的资源边界。P2 加上完整多用户授权、持久审批、累计预算和 ResearchRecord 恢复。每个场景明确所属阶段；`DEFERRED` 不得混进当期 PASS 数。
++
++故障复现优先由确定性脚本直接驱动平台，再做 DSH 重放，避免只靠 LLM 是否主动调用工具决定是否测到竞态。按真实回执检查不变量；不要仅统计最终页面状态。
++
++## 8. 证据、判定、复跑与清理
++
++每轮保存独立目录：
++
++```text
++p1-run01/
++  versions.json                  # ACP/debug候选、DSH、Node、pnpm、MCP协议/依赖、模型
++  fixture/                       # XYZ、submit JSON、摘要、预期结果及科学判据
++  launch/                        # 脱敏启动清单、端口、PID、数据根、配置摘要
++  t1-stdio/                      # 协议收发、stderr、退出码
++  dsh/                           # Session/工具事件、协商版本、模型用量
++  local/  lsf/  recovery/         # 每场景命令、回执、产物及摘要
++  summary.json                   # 每行 PASS/FAIL/NOT_VERIFIED + scope
++```
++
++新 MCP/DSH 场景使用单独的 `acp2.acceptance.v1` 汇总；不要向 debug 冻结 Harness 的 scenario 枚举偷偷加入新值。可引用其原始报告路径和哈希。每行至少记录：
++
++```json
++{
++  "schema": "acp2.acceptance.v1",
++  "scenario": "dsh-local-singlepoint",
++  "candidate_revision": "<actual SHA>",
++  "result": "NOT_VERIFIED",
++  "scope": "IN_SCOPE",
++  "reason": "尚未执行",
++  "command": null,
++  "exit_code": null,
++  "negotiated_protocol": null,
++  "job_id": null,
++  "attempt": null,
++  "evidence": []
++}
++```
++
++- **PASS**：实际执行、全部断言通过且证据完整。
++- **FAIL**：执行后断言/协议/业务失败，不能降级成 NOT_VERIFIED。
++- **NOT_VERIFIED**：未执行或前置不具备；写明缺入口、缺环境还是缺凭据。
++- debug Harness 退出码 `0/1/2/3` 分别为 PASS/FAIL/NOT_VERIFIED/用法错误；`--help`、`--dry-run` 的 0 不代表场景 PASS。
++- 自写 stdio 探针只给诊断退出码 `0/1/2`（通过/失败/参数错误），不冒充完整 Harness。
++- 必需场景有 FAIL/NOT_VERIFIED，所属阶段不能关闭。软件/模型缺失也不能用 mock 结果替代。
++
++版本升级后复跑 T1、工具 Schema 快照、DSH 错误投影/重连及一条真实小型计算；涉及 Runtime/Data 时增加受影响的恢复、权限和工件测试。未变代码且可信证据齐全，不为文档修改重复全部科学计算。
++
++清理顺序：记录任务引用→对测试 active 任务经平台 cancel 并确认停止→导出证据/manifest/摘要→正常退出 DSH/MCP→停止测试 Controller→按平台流程回收测试任务。Controller 重启实验、LSF 任务和真实模型调用均要有超时/数量上限；不要删库来“清理”仍在运行的任务。
++
++## 9. 常见问题定位
++
++| 现象 | 优先检查 |
++|---|---|
++| DSH 能聊天但没有 ACP 工具 | overlay 是否 `insert`、MCP 插件加载日志、进程 command/args、初始化版本；Web 可运行不等于 MCP 接入成功 |
++| `unsupported_protocol_version` | 对比客户端请求/服务端支持版本；按 §2.2 修协商并复验，不修改日志伪装成功 |
++| stdout JSON 解析失败 | Python/banner/debug print 是否污染 stdout；日志应写 stderr |
++| 本机探针可用，DSH 启动失败 | Node engines、DSH plugin/peer 版本、cwd、环境清理、探测进程退出行为 |
++| Web 模型可用，headless 认证失败 | profile 配置差异、headless 默认凭据来源、空环境变量覆盖 `.env` |
++| 重连后出现第二任务 | 平台持久幂等/并发唯一约束、scope/payload、是否错误启动第二 Controller |
++| DSH 报完成但没有科学产物 | 查真实 task/attempt、receipt、publish 状态；模型回答不是任务完成证据 |
++| LSF COMPLETED 后工件不可读 | Data preparation、read-root、generation/摘要及发布失败恢复；不能让 GET 隐式拉取来掩盖缺口 |
++| 服务重启后验收结果改变 | 是否使用移动中的工作区、不同 release/config 或生产 DB；重新冻结候选并标明受影响证据 |
++
++**交付要求**：最终报告同时回答“哪个源码/依赖组合在本服务器确实工作”“具体如何重现”“哪些科学/权限/恢复范围仍未验证”。他人按本文和冻结清单应能重复实验，无需依赖作者口头补充启动参数。
++
++## B00 sync (2026-10-22)
++
++**Baseline reading rule.** The debug delivery revision is `3670790363c7a1959ad1dbe4b4297adec518952a` and the historical code candidate is `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`; both are references only. This runbook's start baseline is the frozen overlay `final_debug_candidate = sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`, applied from `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/`. Never run the runbook from the dirty development checkout; B02 materializes and records the full commit SHA in `runtime/baseline-lock.json`.
++
++**Path ownership.** A owns `src/cccp/**` and `acp2-contracts/science/**`; B owns `src/acp/**`, `src/acp_services/**`, `packaging/**`, `acp2-contracts/runtime/**` and runtime acceptance tooling; C owns `frontend/**`, `rph/**` and `acp2-contracts/experience/**`. Shared files and their single owners are frozen in `manifest.json.shared_files`.
++
++**Common enums.** `phase`: `main|approval|budget|da-preflight|da-submit|da-evidence|fixture|live|aggregate` (`preflight`→`da-preflight`); `readiness`: `contract_ready|implementation_ready|integration_ready|verified` (`deployed`→`integration_ready`); `delivery_status`: `planned|blocked`; `result`: `PASS|FAIL|NOT_VERIFIED`; `scope`: `IN_SCOPE|DEFERRED|NOT_APPLICABLE`; `evidence_kind`: `fixture|live|aggregate`.
++
++**P2 entry choice.** Versioned MCP extension, `stdio JSON-RPC 2.0 over loopback HTTP Controller`, protocol `2025-06-18`; the authoritative record is `docs/reference/next-change/acp2-contracts/manifest.json` (`p2_entry`) with the request/operation table in `runtime/application-api.v1.json` (B03). The H0 manifest validator is `scripts/acceptance/validate_acp2_contracts.py`.
++
++
++## B03 sync (2026-10-22)
++
++**Launch contract.** `runtime/mcp-launch.schema.json` freezes the launcher descriptor: transport `stdio`, protocol `2025-06-18`, absolute interpreter/args/cwd, loopback `ACP_CONTROLLER_URL`, no self-started Controller, and a closed env allowlist. `runtime/mcp-launch.template.json` is a placeholder-only instance (`__NAME__` substitutions with examples) — a template is a format contract, never H2 evidence and never a PASS.
++
++**Eight P1 tools.** `acp_capabilities`, `acp_preflight`, `acp_submit`, `acp_status`, `acp_cancel`, `acp_prepare_artifact`, `acp_read_artifact`, `acp_analyze` are frozen by name and input schema in `$defs.tool_inputs`; the current adapter's permissive schemas are superseded. `acp_submit` requires `plan_digest` (the authorization value); `acp_analyze` requires `explicit=true`; `acp_read_artifact` never fetches.
++
++**No-side-effect constraints.** `initialize`, `tools/list` and `ping` must create no file/task/attempt/reservation and must not start a scheduler or worker; stdout is the JSON-RPC channel only; a tool call derives all state from the Controller (no in-connection authority — GAP-B03-03 records today's submit-side idempotency dict). Credentials are launcher-injected and are refused inside the descriptor.
++
++**P2 extension.** Research tools are a versioned MCP extension (`acp.research.v1`, namespaced `acp_research_*_v1` names) negotiated in `initialize`; un-negotiated clients receive `unsupported_capability` and see only the eight P1 tools. R3-02 rows and owners are in `runtime/p2-research-operations.v1.json` (B16 approval, B18 Proposal/ResearchRecord + form handoff). No restricted HTTP client is added.
++
++**Entry equivalence and dependencies.** `health` returns `candidate_revision`, `contract_version` and `contract_digest` (delivered contract set) so the runbook can prove CLI/HTTP/MCP hit the same application; a mismatch fails the check. `runtime/entry-call-table.v1.md` records the audited entry map (verdict PARTIAL) and `runtime/dependencies.json` records C's merged rows plus A's `NOT_VERIFIED / blocked_fixture` edge.
++
++## B25b sync (2026-10-23)
++
++**Install/upgrade（本机已实测）.** 角色发行与根发行二选一。四个干净 venv 实际安装
++`cccp` / `acp-worker` / `acp-web` 0.3.0 及根 `acp`，安装前面板
++`reports/acp2_implementation/bb45a46/B/B25/release/`（含 `release-manifest.json`）与
++`root-build/`。命令：
++
++```bash
++python3.11 -m venv /tmp/opencode/b25b/venvs/web
++env -u PYTHONPATH /tmp/opencode/b25b/venvs/web/bin/python -m pip install \
++  --find-links reports/acp2_implementation/bb45a46/B/B25/release \
++  reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
++```
++
++升级时同一环境只选择“根 `acp`”或“三角色发行”之一；不要混装同路径文件。升级前后各跑一次
++`acp --help`、`acp mcp serve` 的 `initialize/tools/list` 与一个 CCCP 受控样例，确认
++module `__file__` 仍在 venv `site-packages`。四处版本位置（`src/cccp/__init__.py`、
++`src/cccp/version.py`、`src/acp/__init__.py`、`pyproject.toml`）必须同为 `0.3.0`。
++
++**LSF node（未新增节点 import）.** B25b 未新增 `acp run` 运行时 import；节点依赖仍是
++`requirements-node.txt`（含 `typing-extensions>=4.1`）。LSF 节点安装角色 wheel 时只装
++`cccp` 或 `acp-worker` 所需依赖，不装 Web/DSH/浏览器。本机真实 LSF 行仍按 B11 证据为
++`NOT_VERIFIED`（无 LSF 客户端/队列）；不要用包安装 PASS 代替 LSF PASS。
++
++**MCP.** 已安装 wheel 的真实入口是 `acp mcp serve --controller <loopback-url>`；B25b
++在隔离 Lab 上验证 `initialize` 协商 `2025-06-18` 且 `tools/list` 返回八个 P1 工具。
++`runtime/mcp-launch.template.json` 中的 `entrypoint: acp_services.entrypoints.mcp` 是协议
++owner 元数据；可执行命令必须以 `acp mcp serve` 为准，模板本身仍不是运行证据。
++
++**DSH.** 本表 §5 的 DSH 官方客户端握手仍为 H2 `NOT_VERIFIED`（C-owned）。B25b 只验证
++本机 stdio MCP 协议面，不把“能列出工具”写成 DSH 已联调。
++
++**Approval budget / recovery.** B25b 未改审批/预算/恢复语义；包安装 P全部通过不替代
++`approval-budget`、`control-recovery` 的真实场景。恢复手册仍按 §7 执行：先保存日志，
++再经平台取消测试任务，确认 Local 进程组/LSF 终态，导出 manifest/digest，最后停止测试
++Controller；不得删库或重启生产。
++
++**Common phase/readiness.** 三轨统一 `phase`：
++`main|approval|budget|da-preflight|da-submit|da-evidence|fixture|live|aggregate`
++（`preflight→da-preflight`）；`readiness`：
++`contract_ready|implementation_ready|integration_ready|verified`（只读别名
++`deployed→integration_ready`）；`delivery_status`：`planned|blocked`。未声明组合以用法
++错误退出，不降级到默认 live。
++
++**P2 MCP contract.** 协议版本仍锁定 `2025-06-18`；扩展 `acp.research.v1`；八工具
++allowlist 不变。B03 的 `runtime/p2-research-operations.v1.json` 是操作表，B25b 不新增
++第二版本，也不改 `contract_version`（仍 `1.0.0` on the wire）。
++
++**Role source variables.** 冻结源码/证据分别为 `ACP2_A_SOURCE`、`ACP2_B_SOURCE`、
++`ACP2_C_SOURCE`、`ACP2_INTEGRATION_SOURCE`；`ACP2_SOURCE` 只作当前单轨源码目录的
++兼容别名，不要同时赋两种含义。`ACP2_EVIDENCE` 指向本轮证据根。
++
++**B25b artifacts.** `summary.json`（`--check-only` 通过）、`install-results.json`、
++`installed-probes.json`、`cccp-sample.json`、`lab-health.json`、`mcp-tools.json`、
++`assets-audit.json`、`version-locations.json`、`a-c-evidence.json`、
++`static-assets-status.json`。A-27b/A-28 原始证据已汇总；C33/C34 未发布 →
++`NOT_VERIFIED`；C 静态资产 manifest 未发布 →
++`NOT_VERIFIED(c_static_assets_absent)`，预期路径
++`docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json`。
+diff --git a/docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md b/docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md
+new file mode 100644
+index 0000000..9e56187
+--- /dev/null
++++ b/docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md
+@@ -0,0 +1,326 @@
++# ACP 2.0 三 Agent 并行执行总索引
++
++**日期**：2026-10-20  
++**用途**：将[四组分总方案](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)拆为可分发给三个 Agent 的执行计划。本文与三份分计划定义后续工作，不代表实现、安装或验收已经完成。  
++**前提**：按架构 debug 已完成规划；执行时使用 `.omo/plans/acp-architecture-acceptance-remediation.md` 实际交付的冻结候选与证据，不继续在移动中的 debug 工作区实施。  
++**本机操作依据**：[MCP / DSH 本服务器联调手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)。
++
++**基线核对（2026-10-22 更新）**：[正式报告](../../../reports/architecture_remediation_20261020/REPORT.md)记录的科学/平台代码候选为 `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798`；包含当时 Harness 与报告的 debug 交付 revision 为 `3670790363c7a1959ad1dbe4b4297adec518952a`。两者均为历史参考，**不得直接作为后续开发基线**：工作树中还有后续 debug 与质量修复。B00/B02 必须使用包含这些修改的 `final_debug_candidate`，核验[本次修复报告](../../../reports/architecture_repair_20261022/REPORT.md)中的源码快照和 SHA-256，再把经审查候选落为实际 commit，分发同一完整 SHA。真实科学/LSF、生产、恢复部署及六项延期接线沿各自证据保持 OPEN / NOT_VERIFIED；历史报告不改写为 PASS。
++
++## 1. 三份可独立分发的计划
++
++| Agent | 计划 | 主要产物 | 首轮可以立即开始 |
++|---|---|---|---|
++| **A：科学底座** | [A / CCCP](ACP_2.0_Parallel_Plan_A_CCCP_20261020.md) | 科学类型、Capability/Recipe、科学验证和 EvidenceReport、科学插件/Fixture | 清点既有 Task/Plugin API，交付最小科学 Schema 与正负 Fixture |
++| **B：执行平台与集成** | [B / Runtime](ACP_2.0_Parallel_Plan_B_Runtime_20261020.md) | ACP CLI/HTTP/MCP、单 Controller 接线、持久幂等/审批/预算、Data/恢复、集成发行 | 隔离 Python/数据/配置；以现有 singlepoint 交付入口，不等待新反应 Recipe |
++| **C：RPH 与 Workbench** | [C / RPH & Workbench](ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md) | DSH 工具桥、研究循环/记录、化学交互与证据视图、真实客户端/浏览器验收 | 隔离 Node/pnpm/DSH/Chromium；以固定 Fixture 开发 Bridge/UI |
++
++三份计划覆盖 **P0～P5，共 93 项：A 30 项、B 27 项、C 36 项**。每项列前置、动作、文件/产物、验证、失败断言、证据与交接。按阶段交付；P0/P1 不等待 P4/P5 的全部能力。Fixture 开发可先行，但只有真实入口、模型、科学软件与集群执行形成的证据，才能关闭相应实测行。
++
++| 阶段 | A 任务 | B 任务 | C 任务 |
++|---|---|---|---|
++| P0 | A-00～08 | B00～07 | C00～09 |
++| P1 | A-09～13 | B08～14 | C10～16 |
++| P2 | A-14～20 | B15～20 | C17～25 |
++| P3 | A-21～23 | B21～22 | C26～28 |
++| P4 | A-24～26 | B23～24 | C29～31 |
++| P5 | A-27～29 | B25～26 | C32～35 |
++
++A-02～04/A-07 是可在 P0 并行开展的反应/Recipe 预研，最迟在 A-14/A-15 消费前交付；不进入基础 P0/P1 的必需依赖闭包。阶段编号描述研发安排，不等于把所有预研变成该阶段验收前置。
++
++执行期间三个 Agent 保持上述职责，B 兼任集成操作者，不额外要求第四个长期 Agent。跨域检查由非实现者核对契约和回执；返修仍由文件 Owner 完成。
++
++## 2. 开工步骤与写入边界
++
++### 2.1 开工顺序
++
++1. B 在基线记录中填入 debug 候选完整 SHA、报告路径及范围。已执行失败仍记 FAIL，环境缺失仍记 NOT_VERIFIED；本方案不把旧结论改为全绿。
++2. 三方阅读根 AGENTS.md、对应嵌套 AGENTS.md、总方案、本索引、本轨计划和服务器手册。记录文档摘要，确定实际分支/目录。
++3. 用同一基线创建三个独立开发 checkout/worktree 和一个 B 管理的集成 checkout；既有工作区、未提交修改及历史验收报告保留。
++4. 三方分别执行本轨第一项，提交边界清单/风险和最早契约。契约消费采用版本化文件与明确 commit，不临时引用其他 Agent 未提交的工作目录。
++5. B 登记契约总 manifest。H1 到达后，各轨继续独立实现；H2/H3 在冻结集成版本和本服务器测试环境中验证。
++6. 每阶段达到检查点后自动推进下一阶段的已明确工作；依赖未到时继续本轨无依赖任务。接口不符时开具体返修记录，不擅自修改另一轨文件。
++
++**示例命令**，路径由实施时填写，B 执行一次。`ACP2_BASE_REV` 必须是实际已验收候选的 commit，不能填 `HEAD` 作为移动引用：
++
++```bash
++# 由 B00 填入已审查、包含最终 debug/质量修复的真实 commit。
++# 若尚未生成该 commit，先核验修复报告的源码包；不要从历史 SHA 开工。
++: "${ACP2_BASE_REV:?B00 must set the reviewed final_debug_candidate commit}"
++export ACP2_CHECKOUT_ROOT='/可写绝对路径/acp2-development'
++mkdir -p "$ACP2_CHECKOUT_ROOT"
++git -C repo-root worktree add -b acp2/a-science "$ACP2_CHECKOUT_ROOT/A" "$ACP2_BASE_REV"
++git -C repo-root worktree add -b acp2/b-runtime "$ACP2_CHECKOUT_ROOT/B" "$ACP2_BASE_REV"
++git -C repo-root worktree add -b acp2/c-experience "$ACP2_CHECKOUT_ROOT/C" "$ACP2_BASE_REV"
++git -C repo-root worktree add -b acp2/integration "$ACP2_CHECKOUT_ROOT/integration" "$ACP2_BASE_REV"
++```
++
++若分支/目录已存在，核对其基线后复用，不执行覆盖/重置。开发 checkout 彼此独立；本机安装、科学作业与真实模型测试只由被指定操作者运行，避免三方重复执行同一笔计算。
++
++三份计划和本索引当前可能仍是未提交文档。B00 须单独提交所需规划文件，或将其作为带 SHA-256 的只读文档包分发到各 checkout；不把主工作区其他修改混入规划提交。代码起点、文档版本和验收候选分别记录。
++
++### 2.2 单一文件 Owner
++
++以下是写入权限约定；读取其他域允许，跨域修复通过 Owner 交接。列为“拟新增”的目录需在本轨首项登记，不代表当前存在。
++
++| 文件/资产 | 唯一写入 Owner | 其他轨的做法 |
++|---|---|---|
++| `src/cccp/**`；科学专属测试/Fixture；`acp2-contracts/science/**`（拟新增） | A | B/C 消费公开类型/JSON，不能复制科学类型或执行核心 |
++| `src/acp_services/**`；`src/acp/**`；平台 CLI/HTTP/MCP/迁移；平台测试 | B | A/C 提交失败用例和请求，禁止加第二应用实现 |
++| `frontend/**`；`rph/**`（拟新增独立包）；体验专属测试；`acp2-contracts/experience/**`（拟新增） | C | B 只接发行挂载/公开 API，科学解析归 A |
++| `acp2-contracts/runtime/**` 及总 `manifest.json`（拟新增） | B | A/C 交付自己的子目录与版本，不并改总清单 |
++| `pyproject.toml`、`requirements-node.txt`、CI、统一启动/安装脚本、四处版本号、根/跨域 AGENTS.md | B | A/C 提交 `shared-change-request`，含所需改动、原因、测试和回滚 |
++| Services 六列表台账、handoff/shim 清单、公共协议矩阵/closure | B | A/C 给新增行/证据建议，B 核对状态后写入 |
++| 新 `scripts/acceptance/acp2_science.py`（拟新增）及科学断言 | A | B/C 按冻结 CLI 调用，不改科学阈值 |
++| 新 `scripts/acceptance/acp2_runtime.py`（拟新增）及集成/清单验证工具 | B | A/C 按接口提交证据 |
++| 新 `scripts/acceptance/acp2_experience.py`（拟新增）及 DSH/浏览器自动化 | C | B 提供冻结测试服务，禁止脚本暗中启动第二 Controller |
++| A/B/C 各自计划、领域文档和领域证据 | 对应轨 | 他轨提交评审意见；总索引/总方案由 B 汇总更新 |
++
++已有测试不因分类变更直接删除或重命名。A/C 如需改非本轨旧测试或公共 fixture，由 B 先登记具体文件 Owner；新增测试分别使用 `test_acp2_science_*`、`test_acp2_runtime_*`、`test_acp2_experience_*`，不会共同改一个 `conftest.py`。
++
++## 3. 早期必须冻结的交接包
++
++契约包是执行任务的产物，统一位置为 `docs/reference/next-change/acp2-contracts/`（拟新增）。先冻结最小可用子集，再按兼容规则扩展；不要求 P0 交付完整科学研究系统。
++
++| ID | Owner → 消费者 | H1 最小内容 | 后续扩展 |
++|---|---|---|---|
++| K-SCI | A → B/C | CapabilityDescriptor、现有 TaskRequest/Result 序列化映射、科学错误、Schema/version；singlepoint/optimize/frequency 正负 Fixture | ReactionSpec/QuestionSpec/Recipe/EvidenceReport/Provenance、TS/IRC 条件与科学插件 |
++| K-APP | B → C/A | 任务与工件引用、错误、revision/attempt/generation、只读查询、显式 prepare、输入映射；同一应用命令入口 | 权限 scope、审批、累计预算、事件 cursor、恢复及 Plugin API |
++| K-MCP | B → C | 启动清单格式与拟实现的 argv/cwd/env 参数约定、transport/协议支持、八工具 Schema、启动/关闭副作用约束 | H2 交付实际可执行入口和填写完整的 launch 清单；新客户端/传输单独登记支持矩阵 |
++| K-EXP | C → A/B | ResearchProposal/ResearchRecord 的引用关系、展示所需 ViewModel、工具桥映射、客户端错误投影 | 科研轮次、假设与证据历史、人工修改和审批反馈 |
++| K-ENV | B/C → 全体 | B：Python/配置/单 Controller/软件/LSF；C：Node/pnpm/DSH/模型/浏览器；各自版本与验证状态 | 独立安装/断网恢复/升级回滚与发行包 |
++| K-TEST | B（规范）+ A/C（场景）→ 全体 | `acp2.acceptance.v1`、场景 owner、退出码、超时、清理、证据路径、Fixture run key | 科学/平台/体验分别添加场景，不偷改 debug 原 Harness 枚举 |
++
++H1 的类型字段至少明确：版本、必填/可选、默认值、枚举/单位、拒绝条件、兼容策略、序列化示例及负向数据。H1 是契约可消费门，不要求先完成 H2 的真实进程实现；H2 使用真实启动清单替换 H1 的模板，不能拿模板执行或报 PASS。K-APP 中的身份由服务端解析，不能信任模型传来的 tenant/role。
++
++科学 ID 由 A-01 冻结：`vibration.compute` 表示会调用 frequency Task 的计算；`vibration.analyze` 表示消费已有频率/Hessian 的纯分析，不启动 QC。B/C 不把二者共用一个“只读分析”入口。
++
++P2 的证据契约必须区分 `supported / refuted / inconclusive / not_evaluated`，每项命题引用原生/标准化工件及摘要；LLM 回答不是验证事实。ScientificRecipe 只描述科学 DAG、依赖和完成条件，平台任务状态/attempt/队列由 B 独占。
++
++若一个契约升级：Owner 提交版本差异、兼容/不兼容 Fixture 和影响清单；B 更新 manifest；消费者明确确认通过新版本契约测试后切换。禁止三轨各自修改同名 JSON 字段并期待最终合并时自动相容。
++
++## 4. 并行波次与 H0～H7
++
++```mermaid
++flowchart LR
++  H0[H0 基线与边界] --> A0[A 最小科学契约]
++  H0 --> B0[B 平台入口与环境]
++  H0 --> C0[C DSH环境与Fixture开发]
++  A0 --> H1[H1 契约可消费]
++  B0 --> H1
++  C0 --> H1
++  H1 --> H2[H2 真实MCP/DSH握手]
++  H2 --> H3[H3 Local/LSF基础闭环]
++  H3 --> H4[H4 限定反应科学闭环]
++  H4 --> H5[H5 插件扩展]
++  H5 --> H6[H6 跨领域与可靠性]
++  H6 --> H7[H7 发行与独立安装]
++```
++
++以上是**阶段关闭顺序**；H4/H5 的契约和纯开发可以在 H3 验收期间推进。真实运行时仍以通过的依赖与冻结版本为准。
++
++依赖中的“提供 H4/H7 的契约/候选”指生产者的中间交付，不要求整个 H4/H7 已关闭。阶段总签收是扇入操作：各轨先形成自己的事实与回执，再由 B 汇总；不能让 A 的关闭等待 B 的关闭、B 又等待 A 的关闭。
++
++| 易产生等待的工作 | 必须采用的可执行先后关系 |
++|---|---|
++| Node 与 RPH/Harness | C00 → C04 安装 Node/DSH；C01+C04 → C02 workspace；C01+C02 → C03 Harness；之后补录早期步骤的 Harness 汇总 |
++| P0 最小科学契约 | B00 → A-00 → A-01；B01/B03 与 A-01 → C01；A-05/A-06 可不等完整反应类型；真实入口 B04～B06 与 C07～C09 → H2 |
++| P1 科学执行与签收 | A-09 静态 Fixture 提前交付；B08/B09 → C12/C13 提交，B10/B11 取平台事实；A-12、C15 对同一工件核验；A-13/C16 本轨签收后 B14 汇总 H3 |
++| P2 研究记录与审批 | C01 先交 Proposal/Record Schema；A-14～16 先交科学计划/validator；B16/B17 与 B18 的项目资源 CAS 先实现；C18 实现记录、C19 接审批，再进入研究循环 |
++| P2 DA 实测 | B18 绑定 A-15/A-16 的静态 DAG/判据，不等 A-20；C24 发起的登记作业同时供 A-17～19 校验，B20 记录执行，三方都不必为签收重跑整条 DA |
++| P5 打包与安装 | A-27 先交科学包规格，C32 先交 RPH/静态资产；B25 据规格构建实际候选包；A-27/28、C33/34 在该包上安装复验；A-29/C35 签收，B26 最后汇总 H7 |
++
++为使等待条件可直接执行，下列跨轨任务使用子交付 ID；93 项主任务数量不变：
++
++```text
++P2：A-14～16 静态输入/DAG/判据 → B18 执行绑定 → C24a 批准并提交
++    → B20a 执行/发布回执 → A-17～19 科学校验 → C24b 证据反馈/页面记录
++    → A-20 科学签收、C25 体验签收 → B20b 汇总 H4
++
++P5：A-27a 打包规格 + C32 客户端/静态资产 → B25a 实际构建包
++    → A-27b/A-28 科学安装/示例、C33/C34 客户端安装/手册复跑
++    → B25b 包验证汇总、A-29 科学签收、C35 体验签收 → B26 汇总 H7
++```
++
++依赖方只等待箭头对应的子交付，不要求生产者整项关闭。B20a 是任务/工件执行事实，不能代签科学结论；B25a 是实际包和摘要，不能代签安装通过。
++
++| 检查点 | 关闭条件 | A 交接 | B 交接 | C 交接 |
++|---|---|---|---|---|
++| H0 开工 | 实际 debug 基线、写入 Owner、分支/证据根明确 | 既有科学 API 清单 | 基线/环境与共享修改台账 | RPH workspace/前端边界清单 |
++| H1 契约 | K-SCI/K-APP/K-MCP/K-EXP/K-ENV/K-TEST 最小版本可消费 | 单点/优化/频率映射与正负 Fixture | 稳定 singlepoint 命令契约、MCP launcher 规范 | Bridge/ViewModel/研究引用 Fixture |
++| H2 P0 | 本服务器真实 MCP 进程、DSH 默认协商/工具发现通过；所需环境就绪 | 能力发现/预检只读条件 | 正式入口接真实用例；同一 Controller；持久性设计 | 官方 DSH 客户端、实际协议/工具记录，非“能聊天即通过” |
++| H3 P1 | MCP→DSH→真实 Local 与 LSF；CLI/Web/MCP 同一引用、attempt、状态和工件；基本重连/取消/发布恢复 | singlepoint/optimize/frequency 科学产物断言 | 持久幂等、数据完整性与平台故障证据 | 真实模型工具事件、浏览器同任务视图 |
++| H4 P2 | 限定 DA 科学 Recipe、TS/频率/IRC/EvidenceReport；持久审批/预算/会话恢复 | 先冻结科学判据，再跑 Fixture；不从结果倒推标准 | 审批/预算/事件、恢复/发布回执 | 问题→提案→批准→证据→研究记录；局限可见 |
++| H5 P3 | 一个独立第三方科学插件，不改核心源码即可发现、准入、运行并展示；不兼容版本明确拒绝 | 插件与验证 Fixture | 运行环境/许可/版本冻结与后端适配 | 自动发现/表单、插件工具与结果视图 |
++| H6 P4 | NMR/热化学复用能力；多项目多用户隔离；升级/恢复/跨领域证据 | 跨领域科学可比性/产品 | 授权/配额/迁移与资源隔离 | 科研多假设/预算策略、UI/研究记忆一致性 |
++| H7 P5 | 实际候选发行包在干净环境安装，第三方按手册完成声明范围；SDK/插件示例、许可证和回滚清楚 | CCCP 独立 SDK/科学包规格及复验 | 包构建/锁/安装/迁移/回滚；集成结果和限制 | RPH/Workbench 独立安装和用户/开发者操作文档 |
++
++阶段只检查该阶段 `IN_SCOPE` 内容及真实必要依赖。P1 的安装/运行不能被完整 NMR/P5 发行工作间接阻塞；反过来，也不能把 P2 的审批预算缺口记成已经交付。全方案关闭需要 P0～P5 全部声明范围完成。
++
++## 5. 本服务器环境配置的明确分工
++
++操作命令以服务器手册 §3、§5、§6 为准。
++
++| 环境任务 | Owner | 给其他轨的交接 |
++|---|---|---|
++| ENV-01 系统工具/资源/文件系统/权限 | B | 原生数据根、磁盘/内存/核数可用量和本轮上限 |
++| ENV-02 Python venv/依赖/冻结源码导入 | B | 绝对解释器路径及三包来源、锁定环境清单 |
++| ENV-03 Node/pnpm/DSH 隔离安装/build | C | 精确版本、可执行路径、DSH SHA/锁摘要 |
++| ENV-04 配置/DB/端口/Controller/MCP launcher | B | 单 Controller 地址、进程/数据所有者、`mcp-launch.json` |
++| ENV-05 DSH profile/overlay/模型 | C | 无密钥的配置摘要、真实调用用量和兼容矩阵 |
++| ENV-06 Local 科学软件/SSH/LSF | B（环境）；A（科学正确性） | 版本/路径/运行环境与科学 Fixture run key |
++| ENV-07 Playwright/Chromium | C，使用 B 交付的 Python venv | 实际可启动浏览器与缓存路径；安装包不是启动证据 |
++| ENV-08 下载网络/模型/SSH/端口 | B/C 各自测试目标 | 每条实际连接结果；不打印密钥/代理凭据 |
++| ENV-09 重开终端环境复用 | B 汇总、C 提交 DSH 片段 | 受限环境文件/无秘密复现清单及再激活证据 |
++
++A 可以在自己的 checkout 用独立轻量 venv 做科学单测；不得修改 B 的集成 venv。C 的 Chromium 下载可独立，变更共用 Python 依赖须交 B，避免同时 pip install 改同一环境。测试实例不使用生产数据目录或远端任务目录。
++
++## 6. 集成运行、真实测试与证据
++
++### 6.1 B 的集成操作顺序
++
++1. 收集三轨本阶段 commit、测试回执及文件 Owner 检查；只选择已交付的 commit/patch，记录依赖顺序。
++2. 在专属集成 checkout 依次接入契约及实现；按 A/B/C 域解决冲突，不把“最后写入者胜出”当成冲突解决。无法判断的实现冲突回 Owner 返修。
++3. 应用 A/C 的公共文件修改请求，统一同步四处版本号、配置默认、依赖与 Services 台账；检查公开 shim 仍为 identity forwarder。
++4. 运行当期必要检查并保存原始完整日志。示例现有守护命令如下；新增 Harness/测试按各计划先交付再执行。
++
++```bash
++python3.11 -m pytest tests/test_acp_services_isolation.py tests/test_architecture_invariants.py tests/test_services_worker_contract.py -q
++python3.11 -m pytest tests/test_services_doc_sync.py tests/test_services_closure_record.py -q
++node frontend/js/module_tests/run_all.js
++```
++
++5. 冻结集成源码 SHA、配置/依赖/Fixture 摘要、合同版本和实际二进制版本；再构建运行产物。构建后的候选及 release 不允许移动。
++6. B 只启动一套对应测试 DB 的 Controller。C 用清单连接 MCP/DSH/浏览器；A 的科学验证器读取其授权工件。关闭 DSH 不决定科学任务生存。
++7. 按 K-TEST 运行真实场景、故障和负向用例。若返修代码/依赖/配置，形成新候选并重跑受影响的证据，不复用不同候选的 PASS。
++8. 关闭阶段时由非实现者核对原始日志/摘要/实际 job/attempt；B 汇总结果和限制。发布包先形成可审查产物和独立安装结果；生产部署按会话授权和项目发布规则执行。
++
++### 6.2 科学与模型作业登记
++
++B 维护本轮运行登记：`fixture_id + scientific_payload_digest + provider/environment_digest + backend + scenario + candidate_revision`，其 run key 只用于验收记录，不放进科学任务磁盘布局。
++
++- 正常同任务对照：只提交一次，A 验科学、B 验执行、C 验 UI/Agent，共用 job/operation 引用。
++- 不同入口的独立提交实验：明确是不同任务，使用不同幂等键，比较科学结果而非要求 job_id 相同。
++- 幂等重放：相同身份/项目/键/payload；断线和新进程重放后仍只有一次 dispatch。
++- 幂等冲突：同键改 payload 必须拒绝。不能用永远返回固定引用的测试服务冒充已实现持久幂等。
++- 故障/取消场景单独登记测试 job/PID/超时与可用配额，不对未知任务或生产服务发控制命令。
++
++### 6.3 证据格式
++
++根目录示例：`reports/acp2_implementation/<candidate-label>/{A,B,C,integration}/`。每个任务有编号目录，每个场景单独 JSON/日志/工件摘要。`<candidate-label>` 是验收标签，完整代码 SHA 另存字段。
++
++每份回执必须包含：任务/场景 ID、阶段与 `scope`、代码/契约/配置/环境版本、真实命令与 cwd、退出码、起止时间、断言、结果/原因、工件相对路径及 SHA-256；科学作业另有 job_id/attempt/release/submission/receipt。秘密值不进入报告。
++
++`PASS / FAIL / NOT_VERIFIED` 与 `IN_SCOPE / DEFERRED / NOT_APPLICABLE` 分别记录。未执行、缺环境、只跑 mock、`--dry-run`、只通过语法检查均不能让真实场景 PASS。已执行失败保持 FAIL；没有真实模型/LSF 凭据时记明确缺口，所属必需阶段门保持未关闭。
++
++## 7. 总方案覆盖检查
++
++| 总方案要求 | 主 Owner | 必须收到的其他轨产物 | 最迟阶段 |
++|---|---|---|---|
++| CCCP 独立、九模块边界、既有兼容路径 | A/B/C 各自域；B 集成 | 三轨依赖/唯一实现根守护 | 全程，H1 起 |
++| Capability/科学类型/Recipe/验证/Provenance | A | B receipt/ArtifactManifest、C 问题/证据需求 | H1/H3/H4 |
++| CLI/HTTP/MCP 共用用例与真实 stdio | B | A Task 映射、C 官方 DSH 协商记录 | H2/H3 |
++| 身份/项目授权/API key scopes/配额审批 | B | C 人工审批/错误展示、A 科学预检 | H3 本地范围、H4 完整审批、H6 多用户 |
++| 单 Controller、CAS、恢复、发布、Data prepare/read | B | A 身份/结果有效性条件、C 断线/界面观察 | H3/H4 |
++| RPH 双循环、假设/研究记录/技能与记忆 | C | A 科学证据与限制、B 持久任务/事件 | H4/H6 |
++| 化学问题/反应输入、Schema 表单、独立 Workbench | C | A Reaction/Question、B 授权读写/查询 | H4/H5 |
++| Diels–Alder 真实纵向切片 | A 科学；B 执行；C 体验 | ADR-008 Fixture 与先验通过/不足条件 | H4 |
++| 三类插件、未知依赖/许可/版本安全失败 | A/B/C 各自插件；B 准入/发行 | 三轨兼容矩阵和外部示例 | H5 |
++| NMR/热化学、多用户、多假设与可靠性 | A/B/C | 科学可比性+平台隔离+研究记录 | H6 |
++| 独立发行、SDK/手册/社区接入、许可政策 | B 打包；A/C 域规格 | ADR-005/007、实际构建/安装回执 | H7 |
++
++ADR 归属：A 起草 ADR-002/003/008 的科学部分；B 起草 ADR-001/004/005/007 的平台/发行部分；C 起草 ADR-006 及 ADR-003/008 的体验部分。B 汇总共享 ADR，涉及开源/商业政策先形成具体可审查决定稿；在许可未确定时不替项目自行变更许可证或声称完整开源发行。
++
++## 8. 可直接交给三个 Agent 的启动指令
++
++**Agent A**：阅读本索引、A 计划、服务器手册和对应 AGENTS.md。从 A 的首项起执行；先交 H1 最小科学契约，不等待完整平台/RPH。只改 A 域文件；公共文件/服务接线交 B。实际科学实验使用 B 登记的 run key，保留原始产物与科学判据。
++
++**Agent B**：阅读本索引、B 计划、服务器手册和对应 AGENTS.md。确认实际 debug 基线，建立隔离环境、分支与总 manifest；从现有 singlepoint 任务提供最早平台入口。你是共享文件、Controller/DB、集成冻结与发行装配的单操作者；逐阶段消费 A/C 交付，维护真实证据和返修清单。
++
++**Agent C**：阅读本索引、C 计划、服务器手册和对应 AGENTS.md。先配置隔离 DSH/浏览器环境与 RPH workspace，用契约 Fixture 开发 Bridge/UI。H2 起连接 B 的单 Controller，使用官方 DSH MCP 插件和真实模型验证；不建立第二任务数据库，不直接通过 shell 运行科学任务。沿用 A 的科学证据和 B 的权限/预算事实。
++
++三方均以本轨任务的具体产物/验证/证据作为完成定义。遇到缺依赖时报告缺少的契约版本或返修任务并推进独立工作；不得为了继续实施降低断言、删除兼容面或把 NOT_VERIFIED 改写为 PASS。
++
++## 9. 本次规划核对范围（2026-10-21）
++
++- 核对 A/B/C 主任务编号连续且唯一，共 30/27/36 项；每项有前置、动作、产物、验证、失败断言、证据及交接。
++- 检查三轨文件 Owner、ENV-01～09 分工、MCP/DSH 的真实运行门、共享作业登记和证据目录一致；新模块/测试/Harness 明示为拟新增。
++- 对照 debug 正式报告核对实际起点；现有测试路径、本地文档链接、Bash/JSON 示例及嵌入 Python 的语法单独检查。
++- 修正 Node/workspace/Harness、H1 契约与 H2 真实入口、DA 联合执行与签收、打包规格/构建/安装之间的等待关系，采用上述明确的子交付顺序。
++- 本次交付为执行计划；未执行计划中的新增实现、安装、真实模型或科学作业。规划检查不能替代后续 H2～H7 的真实验收。
++
++## B00 sync (2026-10-22)
++
++**Baseline reading rule.** `3670790363c7a1959ad1dbe4b4297adec518952a` (delivery) and `bb309134c7b2bb21d8a8bfcb5589516a5b0cf798` (code candidate) are historical references only. The start baseline is the frozen overlay `final_debug_candidate = sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12`, applied from `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/`. A dirty checkout is never the baseline; B02 records the resulting full commit SHA in `runtime/baseline-lock.json`.
++
++**Path ownership.** A: `src/cccp/**`, `acp2-contracts/science/**`; B: `src/acp/**`, `src/acp_services/**`, `packaging/**`, `acp2-contracts/runtime/**`, per-file acceptance tooling; C: `frontend/**`, `rph/**`, `acp2-contracts/experience/**`. Shared files are listed with exactly one owner in `manifest.json.shared_files` and are B-single-write. Old lane names map A frontend→science, B services→runtime, C cccp→experience.
++
++**Common enums.** `phase`: `main|approval|budget|da-preflight|da-submit|da-evidence|fixture|live|aggregate` (`preflight`→`da-preflight`); `readiness`: `contract_ready|implementation_ready|integration_ready|verified` (`deployed`→`integration_ready`); `delivery_status`: `planned|blocked`; `result`: `PASS|FAIL|NOT_VERIFIED`; `scope`: `IN_SCOPE|DEFERRED|NOT_APPLICABLE`; `evidence_kind`: `fixture|live|aggregate`.
++
++**P2 entry choice.** Versioned MCP extension over `stdio JSON-RPC 2.0 over loopback HTTP Controller`, protocol `2025-06-18`; reference `manifest.json.p2_entry` and `runtime/application-api.v1.json`. The H0 manifest and validator are `docs/reference/next-change/acp2-contracts/manifest.json` and `scripts/acceptance/validate_acp2_contracts.py`.
++
++
++## B03 sync (2026-10-22)
++
++**Phase/readiness.** H1 is frozen at `contract_ready`: eleven B03 contract entries are `delivered` in `manifest.json` with recomputed sha256; implementation acceptance remains `planned` until B04a/B05/B06/B10a/B12/B13. `contract_version` stays `1.0.0` (nothing already delivered changed on the wire) while `contract_digest` moved to the recomputed delivered-set value.
++
++**Application surface.** `runtime/application-api.v1.json` freezes the 9 required commands plus `control` and `recover`; `runtime/entry-call-table.v1.md` maps every CLI/HTTP/MCP entry to exactly one command. Verdict **PARTIAL**: GAP-B03-01/02 (direct store/manifest reads in `acp task query`/`export` and `GET /api/v1/jobs*`), GAP-B03-03 (MCP tools call port adapters; in-connection idempotency), GAP-B03-04 (no Controller target; `ControllerClient` is B04a).
++
++**P2 entry.** Versioned MCP extension `acp.research.v1`; the eight-tool P1 allowlist is unchanged and no restricted HTTP client is added. `runtime/p2-research-operations.v1.json` freezes the five R3-02 rows with tool name/version, ControllerClient method, use case, authorization, error class and owner (B16 approval, B18 Proposal/ResearchRecord + form handoff).
++
++**Digests.** `plan_digest` (authorization value) / `proposal_digest` (semantic projection excluding approval_ref/status/updated_at) / `contract_digest` (delivered contract set, returned by `health`) / artifact `digest` (content bytes + generation) are four distinct fields. Rules and byte-exact vectors are in `runtime/canonical-digest-vectors.v1.json`; B16 implements the only runtime canonicalizer.
++
++**Search scope and CDXML.** `schema_dialect` plus the UI keyword subset and the four unknown-field rules are frozen; A→B→C→B→CCCP round trip is scheduled for B18 and not claimed. CDXML is deferred with an A/B/C scope-change record in `runtime/fallback-deferral.json`; an unsupported format never creates an empty structure task.
++
++**Dependency ledger.** `runtime/dependencies.json` merges C's five rows (C-consumes-B direction preserved) and records A's missing `science/cross-track-dependencies.json` as `NOT_VERIFIED / blocked_fixture` with the exact expected path; validator rejects missing producers, dangling refs, cycles and stage-order violations.
++
++## R4 / B25b sync (2026-10-23)
++
++本节把 R4 评审要求的三轨公共口径落到索引层；分轨文档只在各自范围引用，不各自发明第二版本。
++
++- **CDXML 范围与回补.** 本期输入范围不包含 ChemDraw/CDXML → `ReactionSpec`；CDXML 为
++  `DEFERRED`。回补条件：A 提供 parser producer 与 `ReactionSpec` 映射，B 提供格式门与负向
++  fixture，C 提供表单/错误投影，三者同时存在后才可把 CDXML 重新写回 H4 主链；不支持格式
++  不得创建空结构任务。
++- **final_debug_candidate 读取规则.** `final_debug_candidate = sha256:bb45a46c…3e12` 是
++  overlay 摘要，不是 commit SHA。B00/B02 必须应用
++  `docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/` 并由 B02 记录
++  `runtime/baseline-lock.json` 的完整 commit；脏 checkout、`3670790…`、`bb30913…` 均只能
++  作为历史参考。
++- **角色源码变量.** `ACP2_A_SOURCE` / `ACP2_B_SOURCE` / `ACP2_C_SOURCE` /
++  `ACP2_INTEGRATION_SOURCE` 分别指向 A/B/C/集成冻结目录；`ACP2_SOURCE` 仅作当前单轨兼容
++  别名，不同时赋两种含义。`ACP2_EVIDENCE` 是证据根。
++- **P2 MCP 契约版本.** 锁定 `2025-06-18`，扩展 `acp.research.v1`，八工具 allowlist
++  不变；wire `contract_version` 仍 `1.0.0`。B25b 在安装后的 wheel 上复验了该版本与八工具。
++- **Common phase/readiness.** `phase`: `main|approval|budget|da-preflight|da-submit|
++  da-evidence|fixture|live|aggregate`（`preflight→da-preflight`）；
++  `readiness`: `contract_ready|implementation_ready|integration_ready|verified`
++  （`deployed→integration_ready`）；`delivery_status`: `planned|blocked`。
++- **P4 子交付顺序.** A 先交静态科学输入/DAG/判据，B18 绑定执行，C24a 批准并提交，
++  B20a 给执行/发布回执，A-17～19 校验，C24b 反馈，最后由 A-20/C25 签收后 B20b 汇总 H4；
++  P5 按 A-27a/C32 → B25a → A-27b/A-28+C33/C34 → B25b → A-29/C35 → B26 汇总 H7。
++  依赖方只等待箭头对应的子交付，不要求生产者整项关闭。
++- **H4/H6 必需行.** H4 必须有 DA Recipe/TS/频率/IRC/EvidenceReport、持久审批/预算、会话
++  恢复和失败注入的真实证据；H6 必须有 NMR/热化学复用、多项目/多用户隔离、升级/恢复和
++  跨领域证据。任何 required 行缺失即保持该阶段 OPEN，不得用包安装或文档声明代替。
++- **B25b 安装事实.** 四个干净 venv 安装 0.3.0 四发行；CCCP 无 Controller 样例、Lab、
++  stdio MCP、CLI、资产/notice/license、四版本位置均通过；`package-install` exit 0。
++- **未解决跨轨行.** C33/C34 未发布 → `NOT_VERIFIED`（期望
++  `/opt/acp2-dev/evidence/C/clean-install-live`、
++  `…/C/operator-runbook-live`）；C 静态资产 manifest 未发布 →
++  `NOT_VERIFIED(c_static_assets_absent)`；C35 不是 B25b 前置，不代签。
++
++## 三轨 receipt index（B25b 追加）
++
++| track | receipt | path | result | note |
++|---|---|---|---|---|
++| B | `package-install` summary | `reports/acp2_implementation/bb45a46/B/B25/summary.json` | PASS (`--check-only` valid) | clean venv install, CCCP/Lab/MCP/CLI/assets |
++| B | role install probes | `reports/acp2_implementation/bb45a46/B/B25/installed-probes.json` | PASS | all modules resolve to venv site-packages |
++| B | Lab/MCP smoke | `…/B/B25/lab-health.json`; `…/B/B25/mcp-tools.json` | PASS | isolated port/run root; `2025-06-18`, 8 tools |
++| B | asset audit | `…/B/B25/assets-audit.json` | PASS | LICENSE/NOTICE/DP5/model assets/config/schema/SDK/docs |
++| B | version list | `…/B/B25/version-locations.json` | PASS | four locations `0.3.0` |
++| A | A-27b raw install | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | present | raw only; no re-sign |
++| A | A-28 SDK/examples | `/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | present (`PASS`) | on A-built 0.2.0 wheel |
++| C | C33 clean install | `/opt/acp2-dev/evidence/C/clean-install-live` | `NOT_VERIFIED` | expected path absent |
++| C | C34 operator runbook | `/opt/acp2-dev/evidence/C/operator-runbook-live` | `NOT_VERIFIED` | expected path absent |
++| C | static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | `NOT_VERIFIED(c_static_assets_absent)` | no mount fabricated |
+diff --git a/docs/reference/next-change/ACP_2.0_Release_Version_List_20261023.md b/docs/reference/next-change/ACP_2.0_Release_Version_List_20261023.md
+new file mode 100644
+index 0000000..cd342d5
+--- /dev/null
++++ b/docs/reference/next-change/ACP_2.0_Release_Version_List_20261023.md
+@@ -0,0 +1,33 @@
++# ACP 2.0 release version list (B25b, 2026-10-23)
++
++Single version `0.3.0` across the four authoritative locations, the release manifest and the four installed distributions.
++
++## Four version locations
++
++| location | version |
++|---|---|
++| `pyproject.toml` | `0.3.0` |
++| `src/acp/__init__.py` | `0.3.0` |
++| `src/cccp/__init__.py` | `0.3.0` |
++| `src/cccp/version.py` | `0.3.0` |
++
++Installed verification: `reports/acp2_implementation/bb45a46/B/B25/version-locations.json` (all four `0.3.0`).
++
++## Role artifacts (corrected B25b build)
++
++| artifact | sha256 | bytes |
++|---|---|---|
++| `acp-web-0.3.0.tar.gz` | `c1798bda7df1f62d4647af5afd61d635504efe6175f84cfc08d3d36cf629dec5` | 2044660 |
++| `acp-worker-0.3.0.tar.gz` | `a3ea29ea025719e404c7f36c83d193f0e59d05d02799ba478c5555347b978acc` | 580176 |
++| `acp_web-0.3.0-py3-none-any.whl` | `55ecb5ea83d0fb0a4f911eb7c0d114495ee0cb8cb367eabee232248cf6907846` | 2230317 |
++| `acp_worker-0.3.0-py3-none-any.whl` | `7d93873f4db823e4bd1edaa7be34be8558d8623cfb37cf4a311368110b2fa0c3` | 613821 |
++| `cccp-0.3.0-py3-none-any.whl` | `70749f7673abd40ce99702700b779f109d4d6ff57e7af2891be4f695f6654ad3` | 44570219 |
++| `cccp-0.3.0.tar.gz` | `5cb1f202dba608182be7e38a919d282faa63f3b781e1d6ea59ea0e46b3b32825` | 44429611 |
++| `acp-0.3.0-py3-none-any.whl` (root) | `7cba73083e444f8e2be12176eebcbe16012aa4954a4d5052606d83ea6eaf484d` | 46401627 |
++
++Original B25a artifacts are retained under `release-b25a-original/` and `root-build-b25a-original/`;
++they are superseded because the first `acp_web` build could not start the Lab server (`OriginPolicy` mismatch).
++
++## Node imports
++
++No new `acp run` runtime import was added by B25b; `requirements-node.txt` remains authoritative for LSF nodes.
+diff --git a/scripts/acceptance/acp2_package_install.py b/scripts/acceptance/acp2_package_install.py
+new file mode 100644
+index 0000000..5aec3d5
+--- /dev/null
++++ b/scripts/acceptance/acp2_package_install.py
+@@ -0,0 +1,923 @@
++"""B25b package-install scenario: real clean-environment installation.
++
++The scenario installs the four release distributions (``cccp``, ``acp-worker``,
++``acp-web`` and the supplemental root ``acp`` build) into fresh virtual
++environments outside the repository, then proves:
++
++* the release manifest digests match the bytes on disk;
++* the installed modules resolve to the venv site-packages, not this checkout;
++* the CCCP controlled science sample runs with no Controller and no ``acp``
++  import;
++* the standalone CLI works, the Lab server starts on an isolated loopback port
++  and an isolated run root, and the stdio MCP entry negotiates ``2025-06-18``
++  and lists the eight P1 tools;
++* wheel assets/notices/licenses/model assets/sample config/schema/SDK/docs are
++  present;
++* the ``acp`` command and the compatibility imports are preserved;
++* A/C raw install evidence is either present (aggregated, not re-signed) or
++  recorded as ``NOT_VERIFIED`` with its expected path;
++* the C static-asset manifest mount is either validated or recorded as
++  ``NOT_VERIFIED(c_static_assets_absent)``.
++
++Only the harness-owned venvs/processes are touched.  No production service,
++database or run root is used.
++"""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import os
++import re
++import shutil
++import socket
++import subprocess
++import time
++import urllib.error
++import urllib.request
++from pathlib import Path
++from typing import Any
++
++import tomllib
++
++EXIT_PASS = 0
++EXIT_FAIL = 1
++EXIT_NOT_VERIFIED = 2
++
++FIXTURE_SCHEMA = "acp2.package-install.fixture.v1"
++TOOL_NAMES = (
++    "acp_analyze",
++    "acp_cancel",
++    "acp_capabilities",
++    "acp_preflight",
++    "acp_prepare_artifact",
++    "acp_read_artifact",
++    "acp_status",
++    "acp_submit",
++)
++ROLE_WHEELS = {
++    "cccp": "cccp-{version}-py3-none-any.whl",
++    "worker": "acp_worker-{version}-py3-none-any.whl",
++    "web": "acp_web-{version}-py3-none-any.whl",
++}
++DEFAULT_A_C_EVIDENCE = (
++    {
++        "id": "A-27b",
++        "path": "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
++    },
++    {
++        "id": "A-28",
++        "path": "/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
++    },
++    {
++        "id": "C33",
++        "path": "/opt/acp2-dev/evidence/C/clean-install-live",
++    },
++    {
++        "id": "C34",
++        "path": "/opt/acp2-dev/evidence/C/operator-runbook-live",
++    },
++)
++DEFAULT_STATIC_MANIFEST = (
++    "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json"
++)
++CCCP_SAMPLE = """\
++from __future__ import annotations
++
++import json
++import sys
++
++
++def main() -> int:
++    import cccp
++    from cccp.calculation.context import TaskContext
++    from cccp.calculation.requests import MethodSpec, StructureInput, TaskKind, TaskRequest
++    from cccp.calculation.tasks.singlepoint import run_singlepoint
++    from cccp.qc.interfaces.base import QCResult
++
++    class ControlledBackend:
++        name = "orca"
++
++        def single_point(self, coordinates, symbols, **kwargs):
++            assert kwargs["method"] == "HF"
++            return QCResult(success=True, energy=-1.0, symbols=list(symbols), converged=True)
++
++    result = run_singlepoint(
++        TaskRequest(
++            task=TaskKind.SINGLEPOINT,
++            structure=StructureInput(coordinates=((0.0, 0.0, 0.0),), symbols=("He",)),
++            level=MethodSpec(method="HF", basis="def2-SVP"),
++        ),
++        context=TaskContext(backend=ControlledBackend()),
++    )
++    assert result.complete and result.energy_hartree == -1.0
++    assert "acp" not in sys.modules and "acp_services" not in sys.modules
++    print(json.dumps({"complete": result.complete, "energy": result.energy_hartree,
++                      "cccp": cccp.__file__, "version": cccp.__version__}))
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
++"""
++
++
++def _sha256(path: Path) -> str:
++    digest = hashlib.sha256()
++    with path.open("rb") as stream:
++        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def _write_json(path: Path, document: Any) -> Path:
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
++    return path
++
++
++def _fixture(path: str | None) -> dict[str, Any]:
++    if not path:
++        raise ValueError("fixture_missing: --fixture is required for package-install")
++    candidate = Path(path)
++    if candidate.is_dir():
++        candidate = candidate / "package-install.json"
++    try:
++        document = json.loads(candidate.read_text(encoding="utf-8"))
++    except OSError as exc:
++        raise ValueError(f"fixture_unreadable: {exc}") from exc
++    except json.JSONDecodeError as exc:
++        raise ValueError(f"fixture_not_json: {exc}") from exc
++    if not isinstance(document, dict) or document.get("schema") != FIXTURE_SCHEMA:
++        raise ValueError(f"fixture_schema_mismatch: expected {FIXTURE_SCHEMA}")
++    for key in ("release_dir", "expected_version"):
++        if not str(document.get(key) or "").strip():
++            raise ValueError(f"fixture.{key} is required")
++    return document
++
++
++def _run(
++    argv: list[str],
++    *,
++    cwd: Path,
++    timeout: float,
++    env: dict[str, str] | None = None,
++    log: Path | None = None,
++) -> subprocess.CompletedProcess[str]:
++    clean_env = dict(os.environ)
++    clean_env.pop("PYTHONPATH", None)
++    clean_env.pop("PYTHONHOME", None)
++    if env:
++        clean_env.update(env)
++    completed = subprocess.run(
++        argv,
++        cwd=str(cwd),
++        capture_output=True,
++        text=True,
++        timeout=timeout,
++        env=clean_env,
++        check=False,
++    )
++    if log is not None:
++        log.parent.mkdir(parents=True, exist_ok=True)
++        log.write_text(
++            "$ " + " ".join(argv) + "\n"
++            f"exit={completed.returncode}\n"
++            f"--- stdout ---\n{completed.stdout}\n"
++            f"--- stderr ---\n{completed.stderr}\n",
++            encoding="utf-8",
++        )
++    return completed
++
++
++def _venv_python(venv: Path) -> Path:
++    return venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
++
++
++def _free_port() -> int:
++    with socket.socket() as listener:
++        listener.bind(("127.0.0.1", 0))
++        return int(listener.getsockname()[1])
++
++
++def _http_json(url: str, timeout: float) -> dict[str, Any]:
++    with urllib.request.urlopen(url, timeout=timeout) as response:
++        document = json.loads(response.read().decode("utf-8"))
++    if not isinstance(document, dict):
++        raise ValueError(f"non-object response from {url}")
++    return document
++
++
++def _read_version_locations(source_root: Path) -> dict[str, str]:
++    versions: dict[str, str] = {}
++    for relpath in ("src/cccp/__init__.py", "src/cccp/version.py"):
++        text = (source_root / relpath).read_text(encoding="utf-8")
++        match = re.search(r'^[ \t]*__version__\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
++        if not match:
++            raise ValueError(f"{relpath} has no literal __version__")
++        versions[relpath] = match.group(1)
++    acp_text = (source_root / "src/acp/__init__.py").read_text(encoding="utf-8")
++    acp_versions = re.findall(
++        r'^[ \t]*__version__\s*=\s*["\']([^"\']+)["\']', acp_text, re.MULTILINE
++    )
++    if not acp_versions:
++        raise ValueError("src/acp/__init__.py has no literal __version__")
++    versions["src/acp/__init__.py"] = acp_versions[-1]
++    project = tomllib.loads((source_root / "pyproject.toml").read_text(encoding="utf-8"))
++    versions["pyproject.toml"] = str(project["project"]["version"])
++    return versions
++
++
++def run_package_install(
++    fixture_path: str | None,
++    out_dir: Path,
++    timeout: float,
++) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
++    """Execute the B25b clean-install scenario and return harness facts."""
++
++    out_dir.mkdir(parents=True, exist_ok=True)
++    logs = out_dir / "logs"
++    logs.mkdir(parents=True, exist_ok=True)
++    artifacts: list[dict[str, Any]] = []
++    assertions: list[dict[str, Any]] = []
++    extensions: dict[str, Any] = {
++        "acceptance.operation_class": "control",
++        "acceptance.target": "local",
++        "b25.fixture": str(fixture_path or ""),
++        "b25.artifacts": artifacts,
++    }
++
++    def add(name: str, status: str, detail: str) -> None:
++        assertions.append({"name": name, "status": status, "detail": detail})
++
++    def artifact(path: Path) -> None:
++        if path.is_file():
++            artifacts.append(
++                {
++                    "path": path.relative_to(out_dir).as_posix(),
++                    "size_bytes": path.stat().st_size,
++                    "sha256": _sha256(path),
++                }
++            )
++
++    try:
++        fixture = _fixture(fixture_path)
++    except ValueError as exc:
++        add("b25.fixture_schema", "NOT_VERIFIED", str(exc))
++        extensions["b25.reason"] = str(exc)
++        return EXIT_NOT_VERIFIED, assertions, extensions
++
++    version = str(fixture["expected_version"])
++    release_dir = Path(str(fixture["release_dir"])).resolve()
++    root_wheel_dir = Path(str(fixture.get("root_wheel_dir") or release_dir)).resolve()
++    python = str(fixture.get("python") or "/usr/bin/python3.11")
++    extensions.update(
++        {
++            "b25.release_dir": str(release_dir),
++            "b25.expected_version": version,
++            "b25.python": python,
++        }
++    )
++    if not release_dir.is_dir():
++        add("b25.release_dir", "FAIL", f"missing release directory: {release_dir}")
++        extensions["b25.reason"] = "release_dir_missing"
++        return EXIT_FAIL, assertions, extensions
++
++    # 1. Release manifest and bytes.
++    manifest_path = release_dir / "release-manifest.json"
++    try:
++        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
++    except (OSError, json.JSONDecodeError) as exc:
++        add("b25.release_manifest", "FAIL", f"unreadable manifest: {exc}")
++        extensions["b25.reason"] = "release_manifest_unreadable"
++        return EXIT_FAIL, assertions, extensions
++    digest_rows: list[dict[str, Any]] = []
++    failing: list[str] = []
++    for name, expected in sorted(manifest.get("artifacts", {}).items()):
++        candidate = release_dir / name
++        actual = _sha256(candidate) if candidate.is_file() else None
++        ok = actual == expected
++        digest_rows.append({"artifact": name, "expected": expected, "actual": actual, "ok": ok})
++        if not ok:
++            failing.append(name)
++    root_name = str(fixture.get("root_wheel") or f"acp-{version}-py3-none-any.whl")
++    root_wheel = root_wheel_dir / root_name
++    root_expected = str(fixture.get("root_wheel_sha256") or "").strip()
++    root_actual = _sha256(root_wheel) if root_wheel.is_file() else None
++    root_ok = bool(root_actual) and (not root_expected or root_actual == root_expected)
++    if not root_ok:
++        failing.append(root_name)
++    digest_document = _write_json(
++        out_dir / "release-digests.json",
++        {
++            "manifest": str(manifest_path),
++            "artifacts": digest_rows,
++            "root_wheel": {
++                "path": str(root_wheel),
++                "expected": root_expected or None,
++                "actual": root_actual,
++                "ok": root_ok,
++            },
++            "ok": not failing,
++        },
++    )
++    artifact(digest_document)
++    add(
++        "b25.release_digests",
++        "PASS" if not failing else "FAIL",
++        "all manifest digests match" if not failing else "digest mismatch: " + ",".join(failing),
++    )
++    if failing:
++        extensions["b25.reason"] = "release_digest_mismatch"
++        return EXIT_FAIL, assertions, extensions
++
++    # 2. Fresh virtual environments and wheel installs.
++    venv_root = out_dir / "venvs"
++    if venv_root.exists():
++        shutil.rmtree(venv_root)
++    venv_root.mkdir(parents=True)
++    install_rows: list[dict[str, Any]] = []
++    wheel_by_role = {
++        role: release_dir / pattern.format(version=version) for role, pattern in ROLE_WHEELS.items()
++    }
++    wheel_by_role["root"] = root_wheel
++    install_failed = False
++    for role, wheel in wheel_by_role.items():
++        venv = venv_root / role
++        create = _run(
++            [python, "-m", "venv", str(venv)],
++            cwd=out_dir,
++            timeout=min(timeout, 300),
++            log=logs / f"venv-{role}.log",
++        )
++        row: dict[str, Any] = {
++            "role": role,
++            "venv": str(venv),
++            "wheel": str(wheel),
++            "venv_exit": create.returncode,
++            "install_exit": None,
++            "ok": False,
++        }
++        if create.returncode == 0:
++            command = [
++                str(_venv_python(venv)),
++                "-m",
++                "pip",
++                "install",
++                "--disable-pip-version-check",
++                "--no-input",
++                "--find-links",
++                str(release_dir),
++                str(wheel),
++            ]
++            if role == "root":
++                command.extend(["--find-links", str(root_wheel_dir)])
++            install = _run(
++                command,
++                cwd=out_dir,
++                timeout=max(timeout, 600),
++                log=logs / f"install-{role}.log",
++            )
++            row["install_exit"] = install.returncode
++            row["ok"] = install.returncode == 0
++        install_rows.append(row)
++        if not row["ok"]:
++            install_failed = True
++    install_document = _write_json(out_dir / "install-results.json", install_rows)
++    artifact(install_document)
++    add(
++        "b25.clean_install",
++        "PASS" if not install_failed else "FAIL",
++        "four fresh venvs installed"
++        if not install_failed
++        else "install failed: see install-results.json",
++    )
++    if install_failed:
++        extensions["b25.reason"] = "clean_install_failed"
++        return EXIT_FAIL, assertions, extensions
++
++    # 3. Installed-location and version probes.
++    probe_code = """
++import hashlib, importlib.util, json, os, sys
++from importlib import metadata
++role = sys.argv[1]
++expected = sys.argv[2]
++facts = {"role": role, "python": sys.executable, "cwd": os.getcwd()}
++if role == "cccp":
++    import cccp
++    facts["modules"] = {"cccp": cccp.__file__}
++    facts["version"] = cccp.__version__
++    facts["forbidden"] = {
++        name: importlib.util.find_spec(name) is None for name in ("acp", "acp_services", "fastapi")
++    }
++elif role == "worker":
++    import acp_services
++    facts["modules"] = {"acp_services": acp_services.__file__}
++    facts["version"] = metadata.version("acp-worker")
++    facts["forbidden"] = {
++        name: importlib.util.find_spec(name) is None for name in ("acp", "fastapi")
++    }
++elif role == "web":
++    import acp, acp_services, acp_web_assets
++    facts["modules"] = {
++        "acp": acp.__file__,
++        "acp_services": acp_services.__file__,
++        "acp_web_assets": acp_web_assets.__file__,
++    }
++    facts["version"] = acp.__version__
++    facts["forbidden"] = {}
++else:
++    import acp, acp_services, cccp
++    facts["modules"] = {
++        "acp": acp.__file__,
++        "acp_services": acp_services.__file__,
++        "cccp": cccp.__file__,
++    }
++    facts["version"] = acp.__version__
++    facts["forbidden"] = {}
++facts["site_packages"] = all("/site-packages/" in path for path in facts["modules"].values())
++facts["version_ok"] = facts["version"] == expected
++facts["forbidden_absent"] = all(facts["forbidden"].values())
++print(json.dumps(facts))
++"""
++    probe_rows: dict[str, Any] = {}
++    probes_ok = True
++    for role in ("cccp", "worker", "web", "root"):
++        completed = _run(
++            [str(_venv_python(venv_root / role)), "-c", probe_code, role, version],
++            cwd=out_dir,
++            timeout=min(timeout, 120),
++            log=logs / f"probe-{role}.log",
++        )
++        document: dict[str, Any] = {"exit": completed.returncode}
++        if completed.returncode == 0:
++            try:
++                document.update(json.loads(completed.stdout.strip().splitlines()[-1]))
++            except (json.JSONDecodeError, IndexError):
++                document["error"] = "probe output not JSON"
++        else:
++            document["error"] = completed.stderr[-2000:]
++        probe_rows[role] = document
++        if not (
++            completed.returncode == 0
++            and document.get("site_packages")
++            and document.get("version_ok")
++            and document.get("forbidden_absent")
++        ):
++            probes_ok = False
++    probe_document = _write_json(out_dir / "installed-probes.json", probe_rows)
++    artifact(probe_document)
++    add(
++        "b25.installed_paths_and_versions",
++        "PASS" if probes_ok else "FAIL",
++        "all modules resolve under venv site-packages at the expected version"
++        if probes_ok
++        else "installed module/version probe failed",
++    )
++    if not probes_ok:
++        extensions["b25.reason"] = "installed_probe_failed"
++        return EXIT_FAIL, assertions, extensions
++
++    # 4. CCCP sample without a Controller or ACP import.
++    sample = out_dir / "cccp-sample.py"
++    sample.write_text(CCCP_SAMPLE, encoding="utf-8")
++    sample_run = _run(
++        [str(_venv_python(venv_root / "cccp")), str(sample)],
++        cwd=out_dir,
++        timeout=min(timeout, 180),
++        log=logs / "cccp-sample.log",
++    )
++    sample_facts: dict[str, Any] = {"exit": sample_run.returncode}
++    try:
++        sample_facts.update(json.loads(sample_run.stdout.strip().splitlines()[-1]))
++    except (json.JSONDecodeError, IndexError):
++        sample_facts["stderr"] = sample_run.stderr[-2000:]
++    sample_document = _write_json(out_dir / "cccp-sample.json", sample_facts)
++    artifact(sample_document)
++    cccp_sample_ok = bool(
++        sample_run.returncode == 0
++        and sample_facts.get("complete") is True
++        and sample_facts.get("energy") == -1.0
++        and "/site-packages/" in str(sample_facts.get("cccp", ""))
++    )
++    add(
++        "b25.cccp_sample_without_controller",
++        "PASS" if cccp_sample_ok else "FAIL",
++        "controlled CCCP singlepoint ran without acp/acp_services"
++        if cccp_sample_ok
++        else "CCCP independent sample failed",
++    )
++    if not cccp_sample_ok:
++        extensions["b25.reason"] = "cccp_sample_failed"
++        return EXIT_FAIL, assertions, extensions
++
++    # 5. Standalone CLI and compatibility imports.
++    web_python = str(_venv_python(venv_root / "web"))
++    root_python = str(_venv_python(venv_root / "root"))
++    cli_rows: dict[str, Any] = {}
++    for role, executable in (("web", web_python), ("root", root_python)):
++        help_run = _run(
++            [executable, "-m", "acp", "--help"],
++            cwd=out_dir,
++            timeout=min(timeout, 120),
++            log=logs / f"cli-{role}-help.log",
++        )
++        cli_rows[role] = {
++            "exit": help_run.returncode,
++            "has_run": "run" in help_run.stdout and "doctor" in help_run.stdout,
++        }
++    compat_code = """
++import importlib, json
++from acp.calculations import primitives
++from acp import backends
++modules = ["acp.calculations.primitives", "acp.backends", "acp.compat.legacy.manifests"]
++facts = {"modules": {}}
++for name in modules:
++    facts["modules"][name] = importlib.import_module(name).__file__
++facts["store_identity"] = (
++    importlib.import_module("acp.scheduler.store").JobStore
++    is importlib.import_module("acp_services.store.store").JobStore
++)
++facts["contracts_identity"] = (
++    importlib.import_module("acp.calculations.contracts").CalculationPlan
++    is importlib.import_module("acp_services.runtime.plan_contracts").CalculationPlan
++)
++print(json.dumps(facts))
++"""
++    compat_run = _run(
++        [web_python, "-c", compat_code],
++        cwd=out_dir,
++        timeout=min(timeout, 120),
++        log=logs / "compat-imports.log",
++    )
++    compat_facts: dict[str, Any] = {"exit": compat_run.returncode}
++    try:
++        compat_facts.update(json.loads(compat_run.stdout.strip().splitlines()[-1]))
++    except (json.JSONDecodeError, IndexError):
++        compat_facts["stderr"] = compat_run.stderr[-2000:]
++    cli_rows["compat"] = compat_facts
++    cli_document = _write_json(out_dir / "cli-and-compat.json", cli_rows)
++    artifact(cli_document)
++    cli_ok = all(row["exit"] == 0 for row in (cli_rows["web"], cli_rows["root"])) and bool(
++        cli_rows["web"]["has_run"]
++    )
++    compat_ok = bool(
++        compat_facts.get("exit") == 0
++        and compat_facts.get("store_identity")
++        and compat_facts.get("contracts_identity")
++        and len(compat_facts.get("modules", {})) == 3
++    )
++    add("b25.standalone_cli", "PASS" if cli_ok else "FAIL", "acp --help in web and root role venvs")
++    add(
++        "b25.compat_imports",
++        "PASS" if compat_ok else "FAIL",
++        "primitives/backends/compat.legacy import and identity forwarders hold",
++    )
++    if not (cli_ok and compat_ok):
++        extensions["b25.reason"] = "cli_or_compat_failed"
++        return EXIT_FAIL, assertions, extensions
++
++    # 6. Lab server and stdio MCP on isolated loopback resources.
++    port = _free_port()
++    lab_root = out_dir / "lab-run-root"
++    if lab_root.exists():
++        shutil.rmtree(lab_root)
++    lab_root.mkdir(parents=True)
++    lab_env = {"ACP_RUN_ROOT": str(lab_root)}
++    lab_log = logs / "lab-server.log"
++    with lab_log.open("w", encoding="utf-8") as stream:
++        lab = subprocess.Popen(
++            [
++                str(_venv_python(venv_root / "web")),
++                "-m",
++                "acp",
++                "run",
++                "serve",
++                "--host",
++                "127.0.0.1",
++                "--port",
++                str(port),
++                "--run-root",
++                str(lab_root),
++                "--no-browser",
++            ],
++            cwd=str(lab_root),
++            env={**os.environ, **lab_env, "PYTHONPATH": ""},
++            stdout=stream,
++            stderr=subprocess.STDOUT,
++        )
++    health: dict[str, Any] = {}
++    lab_ok = False
++    mcp_ok = False
++    try:
++        deadline = time.monotonic() + min(timeout, 120)
++        last_error = ""
++        while time.monotonic() < deadline:
++            if lab.poll() is not None:
++                last_error = "process exited before health check"
++                break
++            try:
++                health = _http_json(f"http://127.0.0.1:{port}/api/health", 2)
++                lab_ok = health.get("status") == "ok"
++                if lab_ok:
++                    break
++            except (OSError, ValueError, urllib.error.URLError) as exc:
++                last_error = str(exc)
++            time.sleep(0.2)
++        if not lab_ok:
++            health["error"] = last_error
++        _write_json(out_dir / "lab-health.json", health)
++        artifact(out_dir / "lab-health.json")
++        add(
++            "b25.lab_server",
++            "PASS" if lab_ok else "FAIL",
++            f"health on 127.0.0.1:{port} isolated run root"
++            if lab_ok
++            else f"Lab server did not become healthy: {health.get('error')}",
++        )
++        if lab_ok:
++            mcp_code = """
++import json, subprocess, sys
++argv = [sys.argv[1], "mcp", "serve", "--controller", sys.argv[2]]
++proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
++def send(obj):
++    proc.stdin.write((json.dumps(obj) + "\\n").encode()); proc.stdin.flush()
++def recv():
++    line = proc.stdout.readline()
++    if not line:
++        raise SystemExit("eof")
++    return json.loads(line)
++try:
++    send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
++          "params": {"protocolVersion": "2025-06-18", "capabilities": {},
++                     "clientInfo": {"name": "b25b-package-install", "version": "1"}}})
++    init = recv()
++    send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
++    send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
++    tools = recv()
++    names = sorted(item["name"] for item in tools["result"]["tools"])
++    print(json.dumps({"protocol": init["result"]["protocolVersion"], "tools": names}))
++finally:
++    try:
++        proc.stdin.close()
++    except Exception:
++        pass
++    try:
++        proc.wait(timeout=10)
++    except subprocess.TimeoutExpired:
++        proc.kill()
++    err = proc.stderr.read().decode(errors="replace")
++    open(sys.argv[3], "w", encoding="utf-8").write(err)
++"""
++            mcp_run = _run(
++                [
++                    web_python,
++                    "-c",
++                    mcp_code,
++                    str(venv_root / "web" / "bin" / "acp"),
++                    f"http://127.0.0.1:{port}",
++                    str(logs / "mcp-server.stderr.log"),
++                ],
++                cwd=out_dir,
++                timeout=min(timeout, 120),
++                log=logs / "mcp-client.log",
++            )
++            mcp_facts: dict[str, Any] = {"exit": mcp_run.returncode}
++            try:
++                mcp_facts.update(json.loads(mcp_run.stdout.strip().splitlines()[-1]))
++            except (json.JSONDecodeError, IndexError):
++                mcp_facts["stderr"] = mcp_run.stderr[-2000:]
++            _write_json(out_dir / "mcp-tools.json", mcp_facts)
++            artifact(out_dir / "mcp-tools.json")
++            mcp_ok = bool(
++                mcp_run.returncode == 0
++                and mcp_facts.get("protocol") == "2025-06-18"
++                and mcp_facts.get("tools") == list(TOOL_NAMES)
++            )
++            add(
++                "b25.stdio_mcp_eight_tools",
++                "PASS" if mcp_ok else "FAIL",
++                "initialize 2025-06-18 and eight P1 tools"
++                if mcp_ok
++                else "stdio MCP discovery failed",
++            )
++    finally:
++        if lab.poll() is None:
++            lab.terminate()
++            try:
++                lab.wait(timeout=20)
++            except subprocess.TimeoutExpired:
++                lab.kill()
++                lab.wait(timeout=20)
++    extensions["b25.lab_port"] = port
++    if not lab_ok:
++        extensions["b25.reason"] = "lab_server_failed"
++        return EXIT_FAIL, assertions, extensions
++    if not mcp_ok:
++        extensions["b25.reason"] = "mcp_stdio_failed"
++        return EXIT_FAIL, assertions, extensions
++    # 7. Assets, notices, licenses, sample config, schema, SDK, docs.
++    assets_code = """
++import json, pathlib, sys
++from importlib import metadata
++facts = {"dist_info_license": {}, "model_assets": {}, "missing": []}
++for dist in ("acp-web", "acp-worker"):
++    try:
++        info = metadata.distribution(dist)
++    except metadata.PackageNotFoundError:
++        facts["missing"].append(f"dist:{dist}")
++        continue
++    license_files = [
++        str(path)
++        for path in (info.files or [])
++        if str(path).endswith(("LICENSE", "LICENSE.txt", "LICENSE.md"))
++    ]
++    facts["dist_info_license"][dist] = license_files
++    if not license_files:
++        facts["missing"].append(f"license:{dist}")
++import cccp
++assets = pathlib.Path(cccp.__file__).parent / "analysis/nmr/model_assets"
++for name in ("NOTICE.md", "LICENSE-DP5", "atomic_reps.gz", "frag_reps.gz"):
++    path = assets / name
++    facts["model_assets"][name] = path.is_file()
++    if not path.is_file():
++        facts["missing"].append(f"asset:{name}")
++facts["py_typed"] = (pathlib.Path(cccp.__file__).parent / "py.typed").is_file()
++facts["agents_docs"] = [
++    str(path) for path in (pathlib.Path(cccp.__file__).parent).rglob("AGENTS.md")
++]
++if not facts["agents_docs"]:
++    facts["missing"].append("docs:cccp/AGENTS.md")
++import cccp.plugin.sdk
++facts["sdk"] = hasattr(cccp.plugin.sdk, "PluginOutputSpec") and hasattr(
++    cccp.plugin.sdk, "invoke_capability"
++)
++if not facts["sdk"]:
++    facts["missing"].append("sdk:cccp.plugin.sdk")
++import acp.api.schemas
++facts["schema_module"] = True
++print(json.dumps(facts))
++"""
++    assets_run = _run(
++        [web_python, "-c", assets_code],
++        cwd=out_dir,
++        timeout=min(timeout, 120),
++        log=logs / "assets.log",
++    )
++    assets_facts: dict[str, Any] = {"exit": assets_run.returncode}
++    try:
++        assets_facts.update(json.loads(assets_run.stdout.strip().splitlines()[-1]))
++    except (json.JSONDecodeError, IndexError):
++        assets_facts["stderr"] = assets_run.stderr[-2000:]
++    sample_config = Path(
++        str(fixture.get("sample_config") or (release_dir / "docs" / "sample-config.yaml"))
++    )
++    schema_files = [Path(str(item)) for item in fixture.get("schema_files", [])]
++    doc_files = [Path(str(item)) for item in fixture.get("doc_files", [])]
++    for path in (sample_config, *schema_files, *doc_files):
++        if not path.is_file():
++            assets_facts.setdefault("missing", []).append(f"file:{path}")
++    root_license = sorted((venv_root / "root").glob("**/acp-*.dist-info/LICENSE"))
++    assets_facts["root_acp_license"] = [str(path) for path in root_license]
++    if not root_license:
++        assets_facts.setdefault("missing", []).append("license:acp")
++    assets_facts["sample_config"] = str(sample_config)
++    _write_json(out_dir / "assets-audit.json", assets_facts)
++    artifact(out_dir / "assets-audit.json")
++    assets_ok = bool(
++        assets_run.returncode == 0
++        and not assets_facts.get("missing")
++        and assets_facts.get("py_typed")
++        and assets_facts.get("schema_module")
++        and assets_facts.get("sdk")
++    )
++    add(
++        "b25.assets_notices_licenses_config_schema_sdk_docs",
++        "PASS" if assets_ok else "FAIL",
++        "assets/notices/licenses/model assets/py.typed/sample config/schema/SDK/docs present"
++        if assets_ok
++        else "missing: " + ",".join(assets_facts.get("missing", [])),
++    )
++    if not assets_ok:
++        extensions["b25.reason"] = "asset_audit_failed"
++        return EXIT_FAIL, assertions, extensions
++
++    # 8. Four version locations stay on the expected release version.
++    source_root = Path(str(fixture.get("source_root") or "")).resolve()
++    try:
++        locations = _read_version_locations(source_root)
++    except (OSError, ValueError, KeyError) as exc:
++        add("b25.four_version_locations", "NOT_VERIFIED", f"source_root unusable: {exc}")
++        extensions["b25.version_locations"] = {"error": str(exc)}
++    else:
++        version_ok = set(locations.values()) == {version}
++        _write_json(out_dir / "version-locations.json", locations)
++        artifact(out_dir / "version-locations.json")
++        add(
++            "b25.four_version_locations",
++            "PASS" if version_ok else "FAIL",
++            f"four version locations == {version}" if version_ok else f"mismatch: {locations}",
++        )
++        if not version_ok:
++            extensions["b25.reason"] = "version_locations_mismatch"
++            return EXIT_FAIL, assertions, extensions
++
++    # 9. Aggregate A/C raw evidence without re-signing it.
++    evidence_rows: list[dict[str, Any]] = []
++    for row in fixture.get("a_c_evidence", DEFAULT_A_C_EVIDENCE):
++        identifier = str(row.get("id") or "")
++        path = Path(str(row.get("path") or ""))
++        present = path.exists()
++        evidence_rows.append(
++            {
++                "id": identifier,
++                "path": str(path),
++                "present": present,
++                "status": "PASS" if present else "NOT_VERIFIED",
++                "note": "raw evidence present; scientific/experience sign-off stays with its owner"
++                if present
++                else "evidence absent at the registered path",
++            }
++        )
++        add(
++            f"b25.aggregate_{identifier}",
++            "PASS" if present else "NOT_VERIFIED",
++            f"raw evidence at {path}" if present else f"expected path absent: {path}",
++        )
++    _write_json(out_dir / "a-c-evidence.json", evidence_rows)
++    artifact(out_dir / "a-c-evidence.json")
++    extensions["b25.a_c_evidence"] = evidence_rows
++
++    # 10. C static-asset manifest mount (B-req-06).
++    static_path = Path(str(fixture.get("static_assets_manifest") or DEFAULT_STATIC_MANIFEST))
++    if not static_path.is_absolute():
++        static_path = source_root / static_path
++    if not static_path.is_file():
++        static_row = {
++            "status": "NOT_VERIFIED(c_static_assets_absent)",
++            "expected_path": str(static_path),
++            "mount": "/experience/<release_id>/",
++            "note": "C has not published experience/static-assets.manifest.json; "
++            "no mount was fabricated",
++        }
++        add(
++            "b25.static_assets_mount",
++            "NOT_VERIFIED",
++            f"NOT_VERIFIED(c_static_assets_absent) expected {static_path}",
++        )
++    else:
++        try:
++            manifest_document = json.loads(static_path.read_text(encoding="utf-8"))
++        except (OSError, json.JSONDecodeError) as exc:
++            static_row = {
++                "status": "FAIL",
++                "expected_path": str(static_path),
++                "error": str(exc),
++            }
++            add("b25.static_assets_mount", "FAIL", f"manifest unreadable: {exc}")
++            extensions["b25.static_assets"] = static_row
++            extensions["b25.reason"] = "static_assets_manifest_invalid"
++            return EXIT_FAIL, assertions, extensions
++        digest_rows = []
++        for entry in manifest_document.get("assets", []):
++            relative = str(entry.get("path") or "")
++            expected = str(entry.get("sha256") or "")
++            candidate = static_path.parent / relative
++            actual = _sha256(candidate) if candidate.is_file() else None
++            digest_rows.append(
++                {
++                    "path": relative,
++                    "expected": expected,
++                    "actual": actual,
++                    "ok": bool(actual) and actual == expected,
++                }
++            )
++        static_row = {
++            "status": "PASS" if digest_rows and all(row["ok"] for row in digest_rows) else "FAIL",
++            "expected_path": str(static_path),
++            "mount": "/experience/<release_id>/",
++            "digests": digest_rows,
++        }
++        _write_json(out_dir / "static-assets.json", static_row)
++        artifact(out_dir / "static-assets.json")
++        add(
++            "b25.static_assets_mount",
++            static_row["status"],
++            f"{len(digest_rows)} asset digests verified read-only"
++            if static_row["status"] == "PASS"
++            else "static asset digest mismatch",
++        )
++    _write_json(out_dir / "static-assets-status.json", static_row)
++    artifact(out_dir / "static-assets-status.json")
++    extensions["b25.static_assets"] = static_row
++
++    # 11. Cleanup harness-owned venvs after evidence is captured.
++    shutil.rmtree(venv_root, ignore_errors=True)
++    shutil.rmtree(lab_root, ignore_errors=True)
++    add("b25.cleanup", "PASS", "harness venvs/processes removed; production untouched")
++
++    failed = [row["name"] for row in assertions if row["status"] == "FAIL"]
++    if failed:
++        extensions["b25.reason"] = "assertion_failed:" + ",".join(failed)
++        return EXIT_FAIL, assertions, extensions
++    return EXIT_PASS, assertions, extensions

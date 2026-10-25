@@ -1,0 +1,27 @@
+{
+  "armed": false,
+  "armed_at": "2026-10-22T23:34:43.535307Z",
+  "code": "ACP2_ACCEPTANCE_PUBLICATION_FAULT",
+  "disarm_reason": "fault cleared for publication retry",
+  "disarmed_at": "2026-10-22T23:34:52.779785Z",
+  "failure": {
+    "publication_failure_event": {
+      "attempt": 1,
+      "code": "publication_failed",
+      "detail": "publication failed: OSError: ACP2_ACCEPTANCE_PUBLICATION_FAULT: publication write refused while reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json is armed",
+      "idempotency_key": "publication-pending:20261023_073443_001_singlepoint:1:publication_failed",
+      "job_id": "20261023_073443_001_singlepoint",
+      "timestamp": "2026-10-22T23:34:52.663056+00:00",
+      "type": "job.publication_pending"
+    },
+    "qc_pids_before_retry": [
+      751208
+    ],
+    "task_ref": "20261023_073443_001_singlepoint"
+  },
+  "fault": "publication_failure",
+  "schema": "acp2.b13.publication-fault.v1",
+  "seam": "register_result_manifest",
+  "task_ref": "20261023_073443_001_singlepoint",
+  "wrapper": "scripts/acceptance/acp2_fault_controller.py"
+}

@@ -1,0 +1,17 @@
+{
+  "adapter_id": "acp.storage.inventory",
+  "operation": "inventory",
+  "result": {
+    "adapter_id": "acp.storage.inventory",
+    "exists": true,
+    "kind": "storage",
+    "operation": "inventory",
+    "path": "reports/acp2_implementation/bb45a46/B/B22/workspace/inventory.txt",
+    "science": false,
+    "sha256": "a279afbc0db8860675416ecb1727092cab96588c6b1f642def1aaa8246b4fdf3",
+    "size_bytes": 34,
+    "version": "1.0.0"
+  },
+  "schema": "acp2.b21.plugin-run.v1",
+  "version": "1.0.0"
+}

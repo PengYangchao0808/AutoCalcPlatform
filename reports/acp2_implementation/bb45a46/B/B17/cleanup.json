@@ -1,0 +1,16 @@
+{
+  "controller_pid": 1288938,
+  "controller_port": 18777,
+  "jobs_terminal": true,
+  "leftover_orca_processes": [],
+  "leftover_processes": [],
+  "port_free": true,
+  "production_8765_processes": [],
+  "production_run_root_touched": false,
+  "production_service_8765_touched": false,
+  "run_root": "/opt/acp2-dev/data/b/run-root-b17",
+  "run_root_note": "test-only native filesystem root; never /var/lib/acp/runs",
+  "schema": "acp2.b17.cleanup.v1",
+  "stopped": true,
+  "tcp_connect_after_stop": "ConnectionRefusedError"
+}

@@ -1,0 +1,8 @@
+pwd: repo-root
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --check-only reports/acp2_implementation/bb45a46/integration/summary.json
+stdout:
+VALID: reports/acp2_implementation/bb45a46/integration/summary.json (tool check only; this is not a scenario PASS)
+stderr: <empty>
+exit=0
+
+Sidecars: check-only.pwd.txt, check-only.command.txt, check-only.stdout.txt, check-only.stderr.txt, check-only.exit

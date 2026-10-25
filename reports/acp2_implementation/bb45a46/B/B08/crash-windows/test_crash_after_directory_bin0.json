@@ -1,0 +1,67 @@
+{
+  "case": "test_crash_after_directory_bin0",
+  "db": "reports/acp2_implementation/bb45a46/B/B08/pytest-tmp/test_crash_after_directory_bin0/run-root/acp_jobs.db",
+  "db_exists": true,
+  "jobs_db": {
+    "jobs": [
+      {
+        "id": "20261023_001916_001_b08",
+        "workflow": "fake",
+        "name": "b08_fake",
+        "status": "completed",
+        "work_dir": "reports/acp2_implementation/bb45a46/B/B08/pytest-tmp/test_crash_after_directory_bin0/run-root/uncategorized/b08_fake",
+        "spec_json": "{\"workflow\": \"fake\", \"name\": \"b08_fake\", \"input\": {\"source\": \"C\"}, \"method\": {}, \"resources\": {}, \"output_dir\": null, \"config_path\": null, \"tags\": [], \"project_id\": \"uncategorized\", \"input_hash\": \"sha256:4f7780312c0bbc1849447dd03d1e7c28e9e4a103135549f7f569baaf568af0cf\", \"execution_mode\": null, \"target_node\": null, \"node_tags\": [], \"molecule_name\": \"\", \"task_name\": \"\", \"remark\": \"\", \"custom_name\": null}",
+        "created_at": "2026-10-22T16:19:16.422947+00:00",
+        "updated_at": "2026-10-22T16:19:19.205726+00:00",
+        "started_at": "2026-10-22T16:19:16.439072+00:00",
+        "completed_at": "2026-10-22T16:19:19.205699+00:00",
+        "project_id": "uncategorized",
+        "input_hash": "sha256:4f7780312c0bbc1849447dd03d1e7c28e9e4a103135549f7f569baaf568af0cf",
+        "current_stage": null,
+        "progress": 1.0,
+        "error": null,
+        "pid": null,
+        "exit_code": 0,
+        "remote_job_id": null,
+        "group_id": "20261023_001916_001_b08",
+        "node_id": null,
+        "host": null,
+        "result_json": null,
+        "revision": 2,
+        "attempt": 1
+      }
+    ],
+    "idempotency_records": [
+      {
+        "claim_id": "idem_3e1f7f41c9bd4446a926bf06a7a274ec",
+        "scope_id": "principal_local\u001fb08-project",
+        "action": "submit",
+        "idempotency_key": "key-crash-binding",
+        "request_digest": "sha256:9ebc64b897d4c90655eeb100ff9df944d9d4c31aa281dea6bfa55621b9495ee5",
+        "state": "committed",
+        "owner_token": "391a06a5967b47b08ef05c2ede998cd1",
+        "lease_epoch": 1,
+        "lease_expires_at": "2026-10-22T16:20:16.419112+00:00",
+        "task_id": "20261023_001916_001_b08",
+        "operation_id": null,
+        "created_at": "2026-10-22T16:19:16.339009+00:00",
+        "updated_at": "2026-10-22T16:19:16.422989+00:00"
+      }
+    ]
+  },
+  "dirs": [
+    ".staging",
+    "uncategorized",
+    "uncategorized/b08_fake",
+    "uncategorized/b08_fake/RESULT",
+    "uncategorized/b08_fake/WORK",
+    "uncategorized/b08_fake/WORK/00_RUNTIME",
+    "uncategorized/b08_fake/stage_tasks",
+    "uncategorized/b08_fake/stage_tasks/compute",
+    "uncategorized/b08_fake/stage_tasks/finalize",
+    "uncategorized/b08_fake/stage_tasks/init"
+  ],
+  "staging": [],
+  "spawn_count": [],
+  "raw_temp_note": "The raw pytest temp DB/run-root was removed after this row dump; the dump above is the crash-window receipt."
+}

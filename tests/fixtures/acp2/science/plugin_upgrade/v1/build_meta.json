@@ -1,0 +1,9 @@
+{
+  "distribution": "acp2-upgrade-science-validator",
+  "version": "1.0.0",
+  "module": "acp2_upgrade_fixture",
+  "summary": "Constructed ACP2 plugin upgrade pair: read-only native single-point validator",
+  "license": "MIT",
+  "entry_point_group": "cccp.science_plugins",
+  "entry_point_name": "acp2_upgrade_validator"
+}

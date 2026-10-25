@@ -1,0 +1,14 @@
+{
+  "artifact_id": "singlepoint_energy",
+  "attempt": 1,
+  "idempotent_replay_operation_id": "op_3557c65874904a45a2e748e5685e914e",
+  "job_id": "20261023_031453_001_singlepoint",
+  "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+  "operation_ref": {
+    "id": "op_3557c65874904a45a2e748e5685e914e",
+    "kind": "operation"
+  },
+  "prepare_status": 200,
+  "receipt": "artifact-main-20261022T212957Z-677819-c7cfdc67.json",
+  "release_id": "98e0695545d668e6"
+}

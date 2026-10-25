@@ -1,0 +1,40 @@
+{
+  "after": {
+    "attempt": 1,
+    "event_lines": 8,
+    "exit_code": 0,
+    "job_started_events": 1,
+    "manifest_sha256": "18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337",
+    "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
+    "process_starting_events": 1,
+    "publication_complete": true,
+    "release_id": "98e0695545d668e6",
+    "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
+    "revision": 6,
+    "status": "completed",
+    "submission_id": "sub_0f79f33c4c284d1c",
+    "task_count": 22,
+    "task_id": "20261023_073435_005_singlepoint",
+    "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+  },
+  "before": {
+    "attempt": 1,
+    "event_lines": 7,
+    "exit_code": 0,
+    "job_started_events": 1,
+    "manifest_sha256": "18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337",
+    "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
+    "process_starting_events": 1,
+    "publication_complete": true,
+    "release_id": "98e0695545d668e6",
+    "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
+    "revision": 5,
+    "status": "completed",
+    "submission_id": "sub_0f79f33c4c284d1c",
+    "task_count": 22,
+    "task_id": "20261023_073435_005_singlepoint",
+    "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+  }
+}

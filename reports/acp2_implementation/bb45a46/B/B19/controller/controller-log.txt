@@ -1,0 +1,50 @@
+INFO:     Started server process [1396440]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18779 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18779
+  Run root      : /opt/acp2-dev/data/b/run-root-b19
+  Poll interval : 1s
+  Docs (Swagger): http://127.0.0.1:18779/docs
+  Reload        : off
+
+INFO:     127.0.0.1:36716 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53410 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53414 - "POST /api/v1/jobs HTTP/1.1" 201 Created
+INFO:     127.0.0.1:53424 - "GET /api/v1/jobs/20261023_163322_001_b19-research-recovery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53432 - "GET /api/v1/jobs/20261023_163322_001_b19-research-recovery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53444 - "GET /api/v1/jobs/20261023_163322_001_b19-research-recovery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /api/v1/jobs/20261023_163322_001_b19-research-recovery HTTP/1.1" 200 OK
+Submission failed for job 20261023_163322_001_b19-research-recovery
+Traceback (most recent call last):
+  File "src/acp/scheduler/manager.py", line 3736, in _execute_submission_impl
+    submitted = self._submit_job(job_id)
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "src/acp/scheduler/manager.py", line 4929, in _submit_job
+    self.runner.submit(record, event_log, cancel_event)
+  File "src/acp/scheduler/runner.py", line 597, in submit
+    self._prepare_and_launch(record, work_dir, storage, event_log)
+  File "src/acp/scheduler/runner.py", line 642, in _prepare_and_launch
+    self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
+  File "src/acp/scheduler/runner.py", line 1366, in _ensure_default_frozen_attempt
+    spec = build_freeze_spec(record, work_dir, input_path, release)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "src/acp/calculations/attempt_freeze.py", line 1141, in build_freeze_spec
+    return builder(record, work_dir, input_path, release)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "src/acp/calculations/attempt_freeze.py", line 890, in build_singlepoint_freeze_spec
+    return build_simple_freeze_spec(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "src/acp/calculations/attempt_freeze.py", line 833, in build_simple_freeze_spec
+    input_file = _materialize_input(work, input_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "src/acp/calculations/attempt_freeze.py", line 623, in _materialize_input
+    raise FreezeSpecError(f"singlepoint input file not found: {source}")
+acp.calculations.attempt_freeze.FreezeSpecError: singlepoint input file not found: .
+INFO:     127.0.0.1:53464 - "POST /api/v1/jobs/20261023_163322_001_b19-research-recovery/cancel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53476 - "GET /api/v1/jobs/20261023_163322_001_b19-research-recovery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53490 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1396440]

@@ -1,0 +1,40 @@
+{
+  "all_versions_unchanged": true,
+  "created_by": "B22 (record only; B25a owns any bump)",
+  "git_status_short_path": "reports/acp2_implementation/bb45a46/B/B22/git-status-b22.txt",
+  "rows": [
+    {
+      "head_version": "0.2.0",
+      "path": "src/cccp/__init__.py",
+      "sha256": "d94f6f0feb61500d523af6208ce64aee6955a128b999996102563b76fb73bb1a",
+      "version_unchanged": true,
+      "working_version": "0.2.0"
+    },
+    {
+      "head_version": "0.2.0",
+      "path": "src/cccp/version.py",
+      "sha256": "73dd4133c2589d60bd236b2e9295c613f230557a80aafab2db4dee427efcd041",
+      "version_unchanged": true,
+      "working_version": "0.2.0"
+    },
+    {
+      "head_version": "0.2.0",
+      "path": "src/acp/__init__.py",
+      "sha256": "967fa6dac2c0a4a586859a623f1a5d72ae496b1aede5f11eb2cad28321436acd",
+      "version_unchanged": true,
+      "working_version": "0.2.0"
+    },
+    {
+      "head_version": "0.2.0",
+      "path": "pyproject.toml",
+      "sha256": "033f77c33c3c9f7839597455ff24d015549cf82abcf71ece7ad1780256396292",
+      "version_unchanged": true,
+      "working_version": "0.2.0"
+    }
+  ],
+  "schema": "acp2.b22.version-locations-check.v1",
+  "unrelated_working_tree_diffs": [
+    "pyproject.toml has a pre-existing playwright==1.63.0 pin diff owned by another parallel task; its [project].version is unchanged (0.2.0)."
+  ],
+  "version_bump_performed": false
+}

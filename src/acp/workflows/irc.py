@@ -18,9 +18,22 @@ from acp.calculations.identity import IDENTITY_SCHEMA
 from acp.calculations.plans import build_irc_request
 from acp.calculations.primitives.irc import run_irc
 from acp.calculations.progress import ProgressReporter
+from acp.calculations.result_publication import ManifestPublisher, register_result_manifest
 from acp.core.workflow import WorkflowResult
 from acp.storage.layout import TaskStorage
 from acp.storage.manifest import ProductKind, ResultManifest
+
+_DEFAULT_PUBLISHER: ManifestPublisher | None = None
+
+
+def _default_manifest_publisher() -> ManifestPublisher:
+    """Data-backed publisher for the production ``RESULT`` manifest write."""
+    global _DEFAULT_PUBLISHER
+    if _DEFAULT_PUBLISHER is None:
+        from acp.services_publication_bootstrap import default_manifest_publisher
+
+        _DEFAULT_PUBLISHER = default_manifest_publisher()
+    return _DEFAULT_PUBLISHER
 
 
 def run_irc_workflow(
@@ -194,7 +207,9 @@ def run_irc_workflow(
         path="irc/irc_report.json",
         kind=ProductKind.REPORT,
     )
-    manifest_path = manifest.write(storage.result_dir())
+    manifest_path = register_result_manifest(
+        storage.result_dir(), manifest, publisher=_default_manifest_publisher()
+    )
 
     metadata = dict(calculation.metadata)
     metadata.update(

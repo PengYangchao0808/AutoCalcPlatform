@@ -334,6 +334,31 @@
         </div>
       </section>
 
+      <section class="panel-section science-question-panel" data-panel-key="science_question" id="science-question-panel">
+        <div class="panel-head">
+          <h2 data-i18n="manual.title">手工研究</h2>
+          <span class="science-question-demo-badge" id="science-question-demo-badge" hidden>演示数据</span>
+          <button class="panel-collapse-btn" data-panel-key="science_question" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
+        </div>
+        <div class="panel-body" id="science-question-body"></div>
+      </section>
+
+      <section class="panel-section scientific-evidence-panel" data-panel-key="scientific_evidence" id="scientific-evidence-panel">
+        <div class="panel-head">
+          <h2 data-i18n="evidence.title">科学证据</h2>
+          <button class="panel-collapse-btn" data-panel-key="scientific_evidence" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
+        </div>
+        <div class="panel-body" id="scientific-evidence-body"></div>
+      </section>
+
+      <section class="panel-section research-approval-panel" data-panel-key="research_approval" id="research-approval-panel">
+        <div class="panel-head">
+          <h2 data-i18n="research.approval.title">科研审批</h2>
+          <button class="panel-collapse-btn" data-panel-key="research_approval" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
+        </div>
+        <div class="panel-body" id="research-approval-body"></div>
+      </section>
+
       <div class="v-splitter" id="v-splitter-right"></div>
 
       <section class="panel-section info-panel-section" data-panel-key="info">
@@ -484,6 +509,7 @@
               <div class="mech-change-stats" id="mech-change-stats"></div>
             </div>
             <div id="mech-reaction-body"></div>
+            <div class="mech-spec-panel" id="mech-reaction-spec"></div>
           </div>
           <div class="mech-controls" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
             <button type="button" class="btn ghost" id="mech-add-coord" data-i18n="mech.plan.add_manual">+ 添加补充机理变量</button>
@@ -1222,18 +1248,25 @@
 <script src="js/client/transport.js"></script>
 <script src="js/client/resource-store.js"></script>
 <script src="js/workbench/contracts/task_view_contract.js"></script>
+<script src="js/workbench/contracts/experience_contract.js"></script>
 <script src="js/client/task-view-query.js"></script>
 <script src="js/client/job-detail-query.js"></script>
 <script src="js/client/event-stream.js"></script>
+<script src="js/client/event-invalidation.js"></script>
 <script src="js/client/polling-strategy.js"></script>
 <script src="js/client/job-commands.js"></script>
 <script src="js/client/wizard-endpoints.js"></script>
+<script src="js/client/science-query.js"></script>
+<script src="js/client/research-query.js"></script>
+<script src="js/client/system-endpoints.js"></script>
 <script src="js/workbench/controllers/task_list_controller.js"></script>
 <script src="js/workbench/controllers/job_detail_controller.js"></script>
 <script src="js/workbench/controllers/task_session_controller.js"></script>
 <script src="js/workbench/controllers/candidate_review_controller.js"></script>
+<script src="js/workbench/controllers/system_resources_controller.js"></script>
 <script src="js/visualization/framing.js"></script>
 <script src="js/visualization/mol3d_adapter.js"></script>
+<script src="js/visualization/scene_instance.js"></script>
 <script src="js/visualization/energy_chart_renderer.js"></script>
 <script src="js/workbench/compat/shared-state.js"></script>
 <script src="js/workbench/i18n.js"></script>
@@ -1245,7 +1278,14 @@
 <script src="js/workbench/features/files-logs.js"></script>
 <script src="js/workbench/features/reaction-builder.js"></script>
 <script src="js/workbench/features/nmr.js"></script>
+<script src="js/workbench/features/wizard/upload-parse.js"></script>
+<script src="js/workbench/features/wizard/preview-validate.js"></script>
+<script src="js/workbench/features/wizard/draft-form.js"></script>
+<script src="js/workbench/features/wizard/submit-edit.js"></script>
 <script src="js/workbench/features/wizard.js"></script>
+<script src="js/workbench/features/science-question.js"></script>
+<script src="js/workbench/features/scientific-evidence.js"></script>
+<script src="js/workbench/features/research-approval.js"></script>
 <script src="js/workbench/features/scan-s2.js"></script>
 <script src="js/workbench/bootstrap.js"></script>
 </body>

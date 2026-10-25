@@ -1,0 +1,38 @@
+{
+  "contract": "events",
+  "sample_kind": "corrupt",
+  "sample_version": 1,
+  "expected_classification": "rejected",
+  "body": {
+    "events": [
+      {
+        "event_id": "e2",
+        "seq": 2,
+        "schema_version": 1,
+        "owner_type": "job",
+        "owner_id": "j1",
+        "scope": "task",
+        "event_type": "state.changed",
+        "cursor": "2",
+        "emitted_at": "2026-10-18T00:00:00Z",
+        "payload": {},
+        "dedup_key": "k1",
+        "coverage": "task"
+      },
+      {
+        "event_id": "e1",
+        "seq": 1,
+        "schema_version": 1,
+        "owner_type": "job",
+        "owner_id": "j1",
+        "scope": "task",
+        "event_type": "state.changed",
+        "cursor": "1",
+        "emitted_at": "2026-10-18T00:00:00Z",
+        "payload": {},
+        "dedup_key": "k1",
+        "coverage": "task"
+      }
+    ]
+  }
+}

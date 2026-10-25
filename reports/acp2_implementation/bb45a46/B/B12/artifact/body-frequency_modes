@@ -1,0 +1,9 @@
+{
+  "fixture": "B12 auxiliary frequency artifact (static, not a computed spectrum)",
+  "schema": "acp2.auxiliary.frequency-modes.v1",
+  "modes": [
+    {"index": 1, "frequency_cm1": 4401.2, "intensity_km_mol": 0.0},
+    {"index": 2, "frequency_cm1": 4401.2, "intensity_km_mol": 0.0}
+  ],
+  "units": "cm-1"
+}

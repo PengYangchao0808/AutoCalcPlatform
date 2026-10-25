@@ -1,0 +1,181 @@
+{
+  "task": "B06",
+  "result": "PASS",
+  "routes_added": [
+    "POST /api/v1/preflight",
+    "POST /api/v1/jobs/{job_id}/prepare",
+    "GET /api/v1/operations/{operation_id}",
+    "POST /api/v1/jobs/{job_id}/analyze"
+  ],
+  "mcp_tool_command_map": {
+    "acp_capabilities": "GET /api/capabilities",
+    "acp_preflight": "POST /api/v1/preflight",
+    "acp_submit": "POST /api/v1/jobs",
+    "acp_status": "GET /api/v1/jobs/{id} or GET /api/v1/operations/{id}",
+    "acp_cancel": "POST /api/v1/jobs/{id}/cancel",
+    "acp_prepare_artifact": "POST /api/v1/jobs/{id}/prepare",
+    "acp_read_artifact": "GET /api/v1/jobs/{id}/prepared/{r}",
+    "acp_analyze": "POST /api/v1/jobs/{id}/analyze"
+  },
+  "submit_before_completion": {
+    "job_id": "20261022_223248_001_b06-evidence",
+    "elapsed_s": 0.1868,
+    "state_at_response": "queued",
+    "task_ref": {
+      "task_id": "20261022_223248_001_b06-evidence",
+      "job_id": "20261022_223248_001_b06-evidence",
+      "attempt": 1
+    },
+    "proof": "submit returned a durable task_ref in 0.1868 s; status was non-terminal at response"
+  },
+  "status_read_side_effects": {
+    "job_id": "20261022_210346_001_b04a-parity",
+    "before": {
+      "task_count": 2,
+      "operation_count": 0,
+      "status": "completed"
+    },
+    "after": {
+      "task_count": 2,
+      "operation_count": 0,
+      "status": "completed"
+    },
+    "unchanged": true
+  },
+  "status_projection_parity": {
+    "job_id": "20261022_210346_001_b04a-parity",
+    "controller": {
+      "attempt": 1,
+      "error": null,
+      "job_id": "20261022_210346_001_b04a-parity",
+      "project_id": "uncategorized",
+      "revision": 2,
+      "schema_version": 1,
+      "state": "completed",
+      "status": "completed",
+      "task_id": "20261022_210346_001_b04a-parity",
+      "task_ref": {
+        "attempt": 1,
+        "job_id": "20261022_210346_001_b04a-parity",
+        "task_id": "20261022_210346_001_b04a-parity"
+      },
+      "updated_at": "2026-10-22T13:03:49.241312+00:00",
+      "work_dir": "/opt/acp2-dev/data/b/run-root/uncategorized/CCO_fake",
+      "workflow": null
+    },
+    "local": {
+      "attempt": 1,
+      "error": null,
+      "job_id": "20261022_210346_001_b04a-parity",
+      "project_id": "uncategorized",
+      "revision": 2,
+      "schema_version": 1,
+      "state": "completed",
+      "status": "completed",
+      "task_id": "20261022_210346_001_b04a-parity",
+      "task_ref": {
+        "attempt": 1,
+        "job_id": "20261022_210346_001_b04a-parity",
+        "task_id": "20261022_210346_001_b04a-parity"
+      },
+      "updated_at": "2026-10-22T13:03:49.241312+00:00",
+      "work_dir": "/opt/acp2-dev/data/b/run-root/uncategorized/CCO_fake",
+      "workflow": null
+    },
+    "equal": true
+  },
+  "error_matrix": [
+    {
+      "case": "preflight_unknown_workflow",
+      "class": "InvalidParameterError",
+      "code": "input_invalid",
+      "retryable": false,
+      "message": "Unsupported workflow 'not-a-workflow'"
+    },
+    {
+      "case": "operation_missing",
+      "class": "NotPreparedError",
+      "code": "resource_not_ready",
+      "retryable": true,
+      "message": "not_prepared: unknown operation 'op_b06_missing'"
+    },
+    {
+      "case": "analyze_implicit",
+      "class": "InvalidParameterError",
+      "code": "input_invalid",
+      "retryable": false,
+      "message": "analyze requires explicit=true"
+    },
+    {
+      "case": "analyze_unsupported",
+      "class": "UnsupportedError",
+      "code": "unsupported_capability",
+      "retryable": false,
+      "message": "analysis capability 'vibration.analyze' is not registered"
+    },
+    {
+      "case": "prepare_project_mismatch",
+      "class": "HTTP",
+      "code": "revision_conflict",
+      "http_status": 409
+    }
+  ],
+  "acceptance": {
+    "entry-readonly": {
+      "exit": 0,
+      "summary": "entry/summary.json"
+    },
+    "mcp-stdio": {
+      "exit": 0,
+      "summary": "mcp/summary.json"
+    }
+  },
+  "contract": {
+    "version": "1.1.0",
+    "digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4"
+  },
+  "pytest": {
+    "acceptance_command": "pytest tests/test_acp2_runtime_mcp_backends.py tests/test_services_mcp.py tests/test_services_entry_authz.py -q",
+    "acceptance_exit": 0,
+    "acceptance_passed": 111,
+    "broader_command": "pytest tests/test_acp2_runtime_mcp_backends.py tests/test_services_mcp.py tests/test_services_entry_authz.py tests/test_acp2_runtime_controller_topology.py tests/test_acp2_runtime_mcp_process.py tests/test_acp2_runtime_acceptance_harness.py tests/test_acp2_runtime_contracts.py tests/test_services_machine_output.py tests/test_acp_services_isolation.py tests/test_architecture_invariants.py -q",
+    "broader_exit": 0,
+    "broader_passed": 243
+  },
+  "ruff": {
+    "new_diagnostics": 0,
+    "result": "PASS"
+  },
+  "cleanup": {
+    "schema": "acp2.acceptance.cleanup.v1",
+    "task": "B06",
+    "controllers_started": [
+      213413,
+      231679,
+      245324,
+      255506
+    ],
+    "controller_pid": 255506,
+    "controller_stopped": true,
+    "production_port": 8765,
+    "production_touched": false,
+    "port_18765_free": true,
+    "tracked_tasks": [
+      {
+        "job_id": "20261022_223248_001_b06-evidence",
+        "role": "submit-before-completion timing probe; terminal=failed after cancel",
+        "cleanup": "cancel requested immediately after timing; no ORCA process remained"
+      }
+    ],
+    "tracked_operations": [
+      {
+        "note": "prepare/projection probes on the isolated run root; data_operations rows retained as task data"
+      }
+    ],
+    "adapters": [
+      "MCP stdio subprocesses exited 0 in every mcp-stdio run"
+    ],
+    "leftover_processes": [],
+    "recorded_at": "2026-10-22T14:48:25Z"
+  }
+}

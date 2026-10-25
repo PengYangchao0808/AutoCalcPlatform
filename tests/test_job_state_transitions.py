@@ -13,7 +13,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import acp.scheduler.manager as manager_module
-from acp.scheduler import migrations as migrations_module
+import acp.scheduler.migrations as legacy_migrations_module
+import acp_services.store.migrations as migrations_module
 from acp.scheduler.artifacts import ArtifactRegistry
 from acp.scheduler.job_edit import attempt_number, compute_source_revision
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
@@ -44,6 +45,23 @@ def _raw_row(db: Path, job_id: str) -> dict[str, object]:
         row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         assert row is not None, f"row {job_id} missing"
         return {key: row[key] for key in row.keys()}
+    finally:
+        conn.close()
+
+
+def _applied_migration_ids(db: Path) -> list[str]:
+    conn = sqlite3.connect(str(db))
+    try:
+        rows = conn.execute("SELECT id FROM _schema_migrations ORDER BY id").fetchall()
+    finally:
+        conn.close()
+    return [row[0] for row in rows]
+
+
+def _jobs_columns(db: Path) -> set[str]:
+    conn = sqlite3.connect(str(db))
+    try:
+        return {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
     finally:
         conn.close()
 
@@ -263,7 +281,9 @@ def test_requeue_with_spec_attempt_and_source_revision(tmp_path: Path) -> None:
         out.exit_code,
         out.remote_job_id,
     ) == (None, None, None, None, None, None, None, None), "runtime fields must clear"
-    assert out.result == {"attempts": 1, "remote": {"node": "n1"}}, "result_json stays unless passed"
+    assert out.result == {"attempts": 1, "remote": {"node": "n1"}}, (
+        "result_json stays unless passed"
+    )
     assert json.loads(str(_raw_row(db, "rq-1")["spec_json"])) == new_spec.to_dict()
 
     reread = store.get("rq-1")
@@ -328,22 +348,52 @@ def test_legacy_insert_without_new_columns_reads_default(tmp_path: Path) -> None
 
 
 def test_migration_backfills_legacy_attempts(tmp_path: Path) -> None:
+    """D13: the 020 attempt backfill runs at the unique migration root."""
+    assert legacy_migrations_module.migrate is migrations_module.migrate
+    assert legacy_migrations_module.get_schema_version is migrations_module.get_schema_version
+    assert migrate is migrations_module.migrate
+    assert not hasattr(legacy_migrations_module, "_MIGRATIONS"), (
+        "the migrations forwarder must not grow a private _MIGRATIONS alias"
+    )
+    assert any(m["id"] == "020" for m in migrations_module._MIGRATIONS)
+
     db = tmp_path / "backfill.db"
     pre020 = [m for m in migrations_module._MIGRATIONS if m["id"] != "020"]
     with patch.object(migrations_module, "_MIGRATIONS", pre020):
         JobStore(db)
 
-    _insert_legacy_row(db, "legacy-3", result_json=json.dumps({"attempts": 3}))
-    _insert_legacy_row(db, "legacy-bad", result_json="{not json")
-    _insert_legacy_row(db, "legacy-none", result_json=json.dumps({}))
+        # stale_state: the pre-migrate DB genuinely lacks migration 020.
+        applied_before = _applied_migration_ids(db)
+        assert "020" not in applied_before
+        assert "019" in applied_before
+
+        _insert_legacy_row(db, "legacy-3", result_json=json.dumps({"attempts": 3}))
+        _insert_legacy_row(db, "legacy-bad", result_json="{not json")
+        _insert_legacy_row(db, "legacy-none", result_json=json.dumps({}))
+        assert "attempt" not in _jobs_columns(db), "pre-020 jobs table must lack the attempt column"
 
     migrate(db)
+    applied_after = _applied_migration_ids(db)
+    assert "020" in applied_after, "migration 020 must be recorded as applied"
+    assert set(applied_after) > set(applied_before)
+    assert "attempt" in _jobs_columns(db)
+
     store = JobStore(db)
     assert store.get("legacy-3") is not None
     assert store.get("legacy-3").attempt == 3, "backfill must read result attempts=3"
     assert _raw_row(db, "legacy-bad")["attempt"] == 1, "invalid JSON must fall back to 1"
     assert store.get("legacy-none") is not None
     assert store.get("legacy-none").attempt == 1, "missing attempts must fall back to 1"
+
+    # Idempotent reopen: a second migrate and a fresh JobStore are no-ops.
+    applied_once = _applied_migration_ids(db)
+    migrate(db)
+    assert _applied_migration_ids(db) == applied_once
+    reopened = JobStore(db)
+    assert reopened.get("legacy-3").attempt == 3
+    assert _raw_row(db, "legacy-bad")["attempt"] == 1
+    assert reopened.get("legacy-none").attempt == 1
+    assert _applied_migration_ids(db).count("020") == 1
 
 
 def test_attempt_number_column_authoritative() -> None:
@@ -665,9 +715,7 @@ def test_stale_terminal_cas_registers_zero_side_effects(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
-@pytest.mark.parametrize(
-    "injection", ["after_first_artifact", "after_provenance", "before_marker"]
-)
+@pytest.mark.parametrize("injection", ["after_first_artifact", "after_provenance", "before_marker"])
 def test_terminal_side_effect_failure_injection_converges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, injection: str
 ) -> None:
@@ -693,9 +741,7 @@ def test_terminal_side_effect_failure_injection_converges(
                     raise RuntimeError("injected failure after first artifact insert")
                 return real_register(self, artifact)  # type: ignore[arg-type]
 
-            monkeypatch.setattr(
-                artifacts_module.ArtifactRegistry, "register", flaky_register
-            )
+            monkeypatch.setattr(artifacts_module.ArtifactRegistry, "register", flaky_register)
         elif injection == "after_provenance":
             real_store = mgr.runner._store_provenance
 
@@ -776,9 +822,7 @@ def test_terminal_cas_then_rerun_isolates_old_attempt(tmp_path: Path) -> None:
         assert mgr._cancel_events.get(record.id) is cancel_event, (
             "a stale attempt's retry must not drop the new attempt's cancel event"
         )
-        job_json = json.loads(
-            (Path(final.work_dir) / "job.json").read_text(encoding="utf-8")
-        )
+        job_json = json.loads((Path(final.work_dir) / "job.json").read_text(encoding="utf-8"))
         assert job_json["attempt"] == 2, "stale retry must not rewrite job.json"
         assert job_json["status"] == JobStatus.QUEUED.value
         task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
@@ -922,9 +966,7 @@ def test_manager_has_no_whole_row_update(tmp_path: Path) -> None:
         + "    manager.store.update(record)\n",
         encoding="utf-8",
     )
-    injected_hits = _whole_row_update_lines(
-        injected_path.read_text(encoding="utf-8")
-    )
+    injected_hits = _whole_row_update_lines(injected_path.read_text(encoding="utf-8"))
     assert injected_hits, "scanner must flag an injected whole-row store.update() call"
 
 

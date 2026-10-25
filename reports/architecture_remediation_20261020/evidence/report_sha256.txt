@@ -1,0 +1,3 @@
+code_candidate_sha bb309134c7b2bb21d8a8bfcb5589516a5b0cf798
+report_sha256 b79f7fdf0191760d6f8225b5d38d51a0dfef21778b4a537b2b3266f7c11bddf0
+report_path reports/architecture_remediation_20261020/REPORT.md

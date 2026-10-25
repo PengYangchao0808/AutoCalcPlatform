@@ -1,0 +1,30 @@
+{
+  "b15_files": [
+    "src/acp_services/workspace/http_identity.py",
+    "src/acp_services/workspace/{keys,identity_lifecycle,entry_authz,server_identity}.py",
+    "src/acp/api/{server,routes,v1_routes}.py",
+    "src/acp_services/entrypoints/{controller_client,mcp}.py",
+    "src/acp/services_mcp_bootstrap.py",
+    "src/acp/cli.py"
+  ],
+  "candidate_base_clean": true,
+  "candidate_base_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "candidate_base_worktree": "/opt/acp2-dev/integration",
+  "contract_digest": "61eb7eb5cb679aa7a4168e8f49d90f0a32acf8b9cffb4b0b572eec39272aeb54",
+  "contract_version": "1.1.0",
+  "controller_health": {
+    "candidate_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+    "contract_digest": "61eb7eb5cb679aa7a4168e8f49d90f0a32acf8b9cffb4b0b572eec39272aeb54",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.1.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-23T04:24:27.084852Z",
+    "status": "ok"
+  },
+  "controller_source": "/opt/acp2-dev/data/b/b15-src",
+  "controller_source_composition": "frozen integration candidate src + the B15 working-tree files only (server.py reconstructed as candidate + B15; the unrelated pre-existing public-origin delta is excluded)",
+  "fixture": "/opt/acp2-dev/data/b/fixtures/multi.json",
+  "fixture_sha256": "0075ab6c2415367c61504d4922f9ff100f907fa4e5ba0c03656bbc71895981dd",
+  "schema": "acp2.b15.candidate.v1"
+}

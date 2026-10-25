@@ -1,0 +1,81 @@
+{
+  "equal": true,
+  "job_started_events": 1,
+  "max_concurrent": 1,
+  "pids_after_retry": [
+    720518
+  ],
+  "pids_before_retry": [
+    720518
+  ],
+  "process_starting_events": 1,
+  "publication_completed_events": 1,
+  "publication_state": {
+    "complete": true,
+    "result_id": "20261023_065036_001_singlepoint:attempt1:sub_4ac3725810011ae9"
+  },
+  "published_artifacts": [
+    {
+      "path": "published/execution_receipt.json",
+      "sha256": "49276ea8ec168015eecfd8859a88a601171a832578c2614ceeb12b06cd93582d",
+      "size_bytes": 1753,
+      "source_relative": "execution_receipt.json"
+    },
+    {
+      "path": "published/sp.inp",
+      "sha256": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+      "size_bytes": 161,
+      "source_relative": "sp.inp"
+    },
+    {
+      "path": "published/sp.out",
+      "sha256": "d02824d0e48bae87b56d9f33dbff05df6c5896afcc4a886da27192cd06b6436c",
+      "size_bytes": 42092,
+      "source_relative": "sp.out"
+    },
+    {
+      "path": "published/WORK__00_RUNTIME__task_result.json",
+      "sha256": "3e8b0ae260e71dfa9547a5ffae779899f3378884162dc3ae858ecce77271376f",
+      "size_bytes": 2019,
+      "source_relative": "WORK/00_RUNTIME/task_result.json"
+    },
+    {
+      "path": "published/WORK__00_RUNTIME__frozen__envelope.json",
+      "sha256": "3ebfc27e5629590bd84c1b3b9767dc7d7d77d6ce2f0dd5d7ef36161718c2473a",
+      "size_bytes": 1622,
+      "source_relative": "WORK/00_RUNTIME/frozen/envelope.json"
+    },
+    {
+      "path": "published/WORK__00_RUNTIME__events.jsonl",
+      "sha256": "b781692bc2b4acc2a0b95b74366debec0b2ae0a33ae46eb540eac19f77b7f7c2",
+      "size_bytes": 3430,
+      "source_relative": "WORK/00_RUNTIME/events.jsonl"
+    },
+    {
+      "path": "published/RESULT__task_result.json",
+      "sha256": "3e8b0ae260e71dfa9547a5ffae779899f3378884162dc3ae858ecce77271376f",
+      "size_bytes": 2019,
+      "source_relative": "RESULT/task_result.json"
+    },
+    {
+      "path": "published/RESULT__scientific_result.json",
+      "sha256": "cea0bb5799a2bf5ba3c708710ed7cef085a4a2425ca96f9e610637606c60dcbe",
+      "size_bytes": 917,
+      "source_relative": "RESULT/scientific_result.json"
+    },
+    {
+      "path": "published/RESULT__result_manifest.json",
+      "sha256": "d7590730a7fddc006637ca40930a8aa0247b829cb5d066a510a4519a9bfd4e03",
+      "size_bytes": 1247,
+      "source_relative": "RESULT/result_manifest.json"
+    },
+    {
+      "path": "published/RESULT__publication_state.json",
+      "sha256": "73dfee07c5b0ff9a23a283a9b62768ab80c3039b40a19a61e606ffdde7d4a027",
+      "size_bytes": 102,
+      "source_relative": "RESULT/publication_state.json"
+    }
+  ],
+  "status_after": "completed",
+  "task_ref": "20261023_065036_001_singlepoint"
+}

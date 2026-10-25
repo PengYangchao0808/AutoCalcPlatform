@@ -1,0 +1,12 @@
+{
+  "asset_package": "/tmp/opencode/b25-fix-web-venv/lib64/python3.11/site-packages/acp_web_assets",
+  "asset_package_import": "PASS",
+  "file_count": 99,
+  "js_count": 82,
+  "result": "PASS",
+  "sample_js": "js/candidate_details.js",
+  "sample_js_sha256": "1b1039bec285b2c6ef63476350f3ecbf454a27ffbe8f2caacab88409e40cb7b6",
+  "schema": "acp2.b25.web_static_assets_check.v1",
+  "workbench_html": true,
+  "workbench_html_sha256": "b3dd9c0351d9f7175c06032b11f35cbf8e2ee4cce04df414649b734dc2efc27c"
+}

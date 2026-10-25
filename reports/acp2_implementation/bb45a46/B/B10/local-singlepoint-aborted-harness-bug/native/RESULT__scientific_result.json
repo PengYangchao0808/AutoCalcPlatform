@@ -1,0 +1,29 @@
+{
+  "artifacts": [
+    {
+      "path": "task_result.json",
+      "type": "task_result"
+    }
+  ],
+  "kind": "singlepoint",
+  "result_id": "20261023_031338_001_singlepoint:attempt1:sub_4cbc09b3fd40848d",
+  "summary": {
+    "attempt": 1,
+    "energy_hartree": -1.116759307204,
+    "exit_code": 0,
+    "job_id": "20261023_031338_001_singlepoint",
+    "normal_reuse": true,
+    "partial_result": false,
+    "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+    "publish": true,
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "receipt_state": "completed",
+    "release_id": "98e0695545d668e6",
+    "result_digest": "sha256:4fd07ca9e34fdc9b3f27bcf5e920e552bd540fe563b6d0fb95b6d2b81bed9545",
+    "status": "completed",
+    "submission_id": "sub_4cbc09b3fd40848d",
+    "task": "singlepoint",
+    "task_result_digest": "sha256:5b7d86b79e479739a421ccb83ccfdd6a9aae4777272472fac4bedcfdedf1453c"
+  }
+}

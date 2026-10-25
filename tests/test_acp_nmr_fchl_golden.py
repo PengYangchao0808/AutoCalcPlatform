@@ -2,8 +2,8 @@
 
 Layer-by-layer comparison against a frozen golden produced from the
 ``dp5@b6cf559007a5d13fe79654f37daf945ee1661a23`` assets checked into
-``src/acp/nmr/models/`` so a failure in one layer cannot be masked by a
-"close enough" final probability (gap §10.2: 不能为了让最终概率相近而掩盖
+``src/cccp/analysis/nmr/model_assets/`` so a failure in one layer cannot be
+masked by a "close enough" final probability (gap §10.2: 不能为了让最终概率相近而掩盖
 descriptor/kernel 层的系统差异):
 
 1. **descriptor** — :func:`acp.nmr.fchl.build_atom_representations` for a fixed
@@ -71,14 +71,14 @@ from acp.nmr.fchl import (
     load_atomic_reps,
     qml_kernel_available,
 )
+from cccp.analysis.nmr.assets import asset_dir
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
 GOLDENS_DIR = Path(__file__).resolve().parent / "baseline" / "nmr"
 GOLDEN_PATH = GOLDENS_DIR / "fchl_golden.json"
 TOLERANCES_PATH = GOLDENS_DIR / "fchl_golden_tolerances.json"
-MODELS_DIR = REPO_ROOT / "src" / "acp" / "nmr" / "models"
+MODELS_DIR = asset_dir()
 
-#: Upstream revision pinned by ``src/acp/nmr/models/NOTICE.md``.
+#: Upstream revision pinned by ``src/cccp/analysis/nmr/model_assets/NOTICE.md``.
 DP5_REVISION = "b6cf559007a5d13fe79654f37daf945ee1661a23"
 #: sha256 pins from NOTICE.md (two pinned assets) + the exact checked-in files
 #: the golden consumes (so an asset swap surfaces as a clear provenance failure

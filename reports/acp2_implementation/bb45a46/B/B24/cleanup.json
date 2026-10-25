@@ -1,0 +1,36 @@
+{
+  "backup_digests": {
+    "acp_admission.db": "9811fc9d0b6ab3acd987ecaa9817688a0c749adfd20552f00bcefd6ab8bebcea",
+    "acp_jobs.db": "e7eca4bdecd66faa857ac6b25871a49610972b9d5c4346c9d99ac7e4cc46a0a2",
+    "legacy-acp_jobs.db": "ff64b1b8a7771d4e5250ba40120bbebcc5da37ab1ee51ab42dc57277c95cdeb2"
+  },
+  "cleanup_order": [
+    "stop any harness-started service only",
+    "remove detached git worktrees",
+    "remove temporary scratch workspaces outside the evidence",
+    "preserve backup + restore workspace for B24b inspection",
+    "confirm no test listener or helper process remains"
+  ],
+  "generated_at": "2026-10-23T11:19:30Z",
+  "no_test_listener": true,
+  "no_test_process": true,
+  "preserved": [
+    "/opt/acp2-dev/data/b/b24-migration/backup/manifest.json",
+    "/opt/acp2-dev/data/b/b24-migration/backup/acp_jobs.db",
+    "/opt/acp2-dev/data/b/b24-migration/backup/acp_admission.db",
+    "/opt/acp2-dev/data/b/b24-migration/backup/legacy-acp_jobs.db"
+  ],
+  "production_port_8765_touched": false,
+  "production_run_root_touched": false,
+  "removed_transient": [
+    "/tmp/opencode/wt",
+    "/tmp/opencode/b24-test",
+    "/tmp/opencode/b24-test2"
+  ],
+  "schema": "acp2.b24.cleanup.v1",
+  "test_listeners": [],
+  "test_processes": [],
+  "workspace": "/opt/acp2-dev/data/b/b24-migration",
+  "workspace_bytes": 1749125,
+  "workspace_preserved": true
+}

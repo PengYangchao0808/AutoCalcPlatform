@@ -1,0 +1,705 @@
+{
+  "schema": "acp2.runtime.science-binding.v1",
+  "contract_version": "1.1.0",
+  "frozen_at": "2026-10-22",
+  "owner": "B",
+  "status": "delivered",
+  "scope": "The binding between one ACP application submit and the cccp task request that actually executes. Proof that the platform carries scientific intent without rewriting it.",
+  "ownership_rule": "A owns science semantics (what a capability means, which method/charge/spin is valid, which thresholds apply). B owns the envelope mapping and the execution identity. B NEVER invents, rewrites or 'repairs' a scientific default; empty values are filled only by cccp's translation layer from the single method metadata source.",
+  "singlepoint": {
+    "workflow": "singlepoint",
+    "task_kind": "singlepoint",
+    "task_kind_source": "cccp.calculation.requests.TaskKind.SINGLEPOINT",
+    "plan": {
+      "contract": "acp_services.runtime.plan_contracts.CalculationPlan",
+      "builder": "acp.calculations.plans.build_simple_plan",
+      "workflow": "singlepoint",
+      "profile": "default",
+      "items": "exactly one StructureArtifact (validate_plan rejects more than one)",
+      "steps": [
+        {
+          "kind": "singlepoint",
+          "mode": "unconstrained",
+          "spec": null
+        }
+      ],
+      "validate": "acp_services.runtime.plan_contracts.validate_plan"
+    },
+    "task_request": {
+      "contract": "cccp.calculation.requests.TaskRequest",
+      "schema_version": 1,
+      "schema_version_source": "cccp.calculation.requests.TASK_REQUEST_SCHEMA_VERSION",
+      "adapter": "acp.calculations.legacy_adapters.to_task_request",
+      "execution_entry": "cccp.calculation.run_singlepoint(request, context=...)",
+      "unknown_field_rule": "TaskRequest.from_dict ignores unknown inner fields (rule S2) while the application envelope rejects unknown envelope fields (application-api U1)"
+    },
+    "field_map": [
+      {
+        "source": "application submit.input.xyz_text|smiles|path",
+        "target": "TaskRequest.structure",
+        "target_type": "StructureInput",
+        "required": true,
+        "default": null,
+        "unit": "none",
+        "authority": "A produces the structure; B passes the reference through",
+        "rule": "an inline geometry overrides a file when both are present (existing load_inputs precedence)"
+      },
+      {
+        "source": "application submit.method.method",
+        "target": "TaskRequest.level.method",
+        "target_type": "string",
+        "required": false,
+        "default": "\"\" (translation layer fills from cccp method metadata)",
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.method.basis",
+        "target": "TaskRequest.level.basis",
+        "target_type": "string",
+        "required": false,
+        "default": "\"\" (translation layer fills)",
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.method.dispersion",
+        "target": "TaskRequest.level.dispersion",
+        "target_type": "string|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.method.solvent",
+        "target": "TaskRequest.level.solvent",
+        "target_type": "string|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.method.solvent_model",
+        "target": "TaskRequest.level.solvent_model",
+        "target_type": "string|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.method.integration_grid",
+        "target": "TaskRequest.level.integration_grid",
+        "target_type": "string|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.method.scf",
+        "target": "TaskRequest.level.scf",
+        "target_type": "string|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.charge",
+        "target": "TaskRequest.charge",
+        "target_type": "integer",
+        "required": false,
+        "default": 0,
+        "unit": "elementary_charge",
+        "authority": "A",
+        "rule": "never inferred from a backend or a guessed valence"
+      },
+      {
+        "source": "application submit.multiplicity",
+        "target": "TaskRequest.multiplicity",
+        "target_type": "integer",
+        "required": false,
+        "default": 1,
+        "unit": "count (2S+1)",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.backend",
+        "target": "TaskRequest.backend",
+        "target_type": "string|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A capability registry decides availability; B only forwards"
+      },
+      {
+        "source": "application submit.method.electronic_state",
+        "target": "TaskRequest.electronic_state",
+        "target_type": "ElectronicStateSpec|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A (cccp electronic-state contract)"
+      },
+      {
+        "source": "application submit.method.singlepoint_options.stability_check",
+        "target": "TaskRequest.options[SinglePointOptions].stability_check",
+        "target_type": "boolean|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "A"
+      },
+      {
+        "source": "application submit.resources.cores",
+        "target": "TaskRequest.resources.nproc",
+        "target_type": "integer|null",
+        "required": false,
+        "default": null,
+        "unit": "core",
+        "authority": "B maps the reservation; A executes"
+      },
+      {
+        "source": "application submit.resources.memory_mb",
+        "target": "TaskRequest.resources.mem",
+        "target_type": "integer|null",
+        "required": false,
+        "default": null,
+        "unit": "megabyte",
+        "authority": "B"
+      },
+      {
+        "source": "application submit.resources.walltime_s",
+        "target": "TaskRequest.resources.timeout_s",
+        "target_type": "number|null",
+        "required": false,
+        "default": null,
+        "unit": "second",
+        "authority": "B"
+      },
+      {
+        "source": "application submit.output_dir (server-resolved task work dir)",
+        "target": "TaskRequest.output_dir",
+        "target_type": "path|null",
+        "required": false,
+        "default": null,
+        "unit": "none",
+        "authority": "B",
+        "rule": "resolved from the run root and the task dir name; never a client absolute path"
+      }
+    ],
+    "envelope_only_fields": [
+      {
+        "field": "plan_digest",
+        "owner": "B",
+        "note": "execution identity, not science; never written into TaskRequest"
+      },
+      {
+        "field": "proposal_digest",
+        "owner": "B",
+        "note": "research record projection; never written into TaskRequest"
+      },
+      {
+        "field": "idempotency_key",
+        "owner": "B",
+        "note": "submission deduplication only"
+      },
+      {
+        "field": "project_id",
+        "owner": "B",
+        "note": "workspace placement only"
+      }
+    ],
+    "units": {
+      "energy": "hartree (reported)",
+      "length": "angstrom",
+      "angle": "degree",
+      "frequency": "cm^-1",
+      "temperature": "kelvin",
+      "time": "second",
+      "memory": "megabyte",
+      "spin": "multiplicity 2S+1"
+    },
+    "rejections": [
+      {
+        "condition": "plan has more than one item",
+        "error": {
+          "class": "invalid-parameter",
+          "code": "input_invalid"
+        },
+        "source_rule": "validate_plan cardinality"
+      },
+      {
+        "condition": "thermochemistry step without preceding frequency+singlepoint",
+        "error": {
+          "class": "invalid-parameter",
+          "code": "input_invalid"
+        },
+        "source_rule": "validate_plan ordering"
+      },
+      {
+        "condition": "unknown task kind",
+        "error": {
+          "class": "unsupported",
+          "code": "unsupported_capability"
+        },
+        "source_rule": "TaskKind enum"
+      },
+      {
+        "condition": "unknown TaskRequest schema_version",
+        "error": {
+          "class": "unsupported",
+          "code": "unsupported_capability"
+        },
+        "source_rule": "TaskRequest.from_dict S1"
+      },
+      {
+        "condition": "structure missing",
+        "error": {
+          "class": "invalid-parameter",
+          "code": "input_invalid"
+        },
+        "source_rule": "TaskRequest validation"
+      },
+      {
+        "condition": "non-finite number in a task payload",
+        "error": {
+          "class": "invalid-parameter",
+          "code": "input_invalid"
+        },
+        "source_rule": "ensure_finite_payload (rule S4)"
+      }
+    ],
+    "step_requirements": {
+      "singlepoint": {
+        "requires_geometry": true,
+        "required_upstream": []
+      },
+      "source": "acp_services.runtime.step_requirements.STEP_REQUIREMENTS"
+    },
+    "serialization_sample": {
+      "schema_version": 1,
+      "task": "singlepoint",
+      "charge": 0,
+      "multiplicity": 1,
+      "level": {
+        "method": "r2SCAN-3c",
+        "basis": "def2-mTZVPP"
+      },
+      "resources": {
+        "nproc": 4,
+        "mem": 2000
+      },
+      "structure": {
+        "role": "minimum",
+        "source": "xyz",
+        "path": "input.xyz"
+      }
+    },
+    "science_defaults_are_not_platform_defaults": "The sample above is an illustration of the wire shape. The effective method/basis for a submit come from A's method metadata via the translation layer; a platform-side table of scientific defaults is forbidden."
+  },
+  "reserved_science_contracts": {
+    "rule": "B03 reserves the reference slots (schema id, version, digest) so the binding has a stable shape before A delivers. B never copies A's type definitions and never declares A's fields. When A delivers, B18 imports the id/version/digest and fills the digest; a renamed id is a versioned reference update, never a silent rename.",
+    "consumers": [
+      "B18 (Recipe/EvidenceReport binding)",
+      "B20a (DA input contract)",
+      "B21/B22 (plugin contract)"
+    ],
+    "entries": [
+      {
+        "schema_id": "acp2.science.capability.v1",
+        "owner": "A",
+        "producer_task": "A-03",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.recipe.v1",
+        "owner": "A",
+        "producer_task": "A-06/A-15",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.evidence-report.v1",
+        "owner": "A",
+        "producer_task": "A-16",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.reaction-spec.v1",
+        "owner": "A",
+        "producer_task": "A-14",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.provenance.v1",
+        "owner": "A",
+        "producer_task": "A-11/A-12",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.task-binding.v1",
+        "owner": "A",
+        "producer_task": "A-04",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.question.v1",
+        "owner": "A",
+        "producer_task": "A-02",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.errors.v1",
+        "owner": "A",
+        "producer_task": "A-04",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+        "status": "delivered",
+        "types_copied": false
+      },
+      {
+        "schema_id": "acp2.science.semantic-rules.v1",
+        "owner": "A",
+        "producer_task": "A-02a",
+        "version": "1.0.0",
+        "digest_or_pending": "sha256:53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
+        "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+        "status": "delivered",
+        "types_copied": false
+      }
+    ],
+    "reference_shape": {
+      "required": [
+        "schema_id",
+        "version",
+        "digest"
+      ],
+      "fields": {
+        "schema_id": {
+          "type": "string",
+          "pattern": "^acp2\\.science\\.[a-z0-9.-]+\\.v[0-9]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "A's schema document digest; PENDING until A delivers, and a PENDING reference is never executable"
+        }
+      }
+    },
+    "note": "Superseded by science_contracts at B18a. Retained for readers that still resolve this key; every entry is delivered with a real digest."
+  },
+  "compatibility": {
+    "task_request_schema": 1,
+    "rule": "a TaskRequest schema change is A's call; B follows with a binding version bump and a re-recorded mapping table",
+    "binding_version": "1.0.0",
+    "breaking_change_requires": [
+      "new binding version",
+      "updated field_map",
+      "a positive and a negative sample",
+      "a consumer confirmation note"
+    ],
+    "sample": "runtime/samples/science-binding/singlepoint-request.positive.json"
+  },
+  "science_contracts": {
+    "contract_set": "acp2.science",
+    "version": "1.0.0",
+    "rule": "B18a reads these published A files and records id/version/byte digest. No A type, field list or parser is copied; PENDING is never executable.",
+    "source_root": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science",
+    "entries": [
+      {
+        "schema_id": "acp2.science.capability.v1",
+        "owner": "A",
+        "producer_task": "A-03",
+        "version": "1.0.0",
+        "digest": "sha256:39d4300f5623ca88463f17c04f1bfbb0cb4886d3de3bfd0a9724bf5133bbb1f7",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/capability.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.recipe.v1",
+        "owner": "A",
+        "producer_task": "A-06/A-15",
+        "version": "1.0.0",
+        "digest": "sha256:0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.evidence-report.v1",
+        "owner": "A",
+        "producer_task": "A-16",
+        "version": "1.0.0",
+        "digest": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.reaction-spec.v1",
+        "owner": "A",
+        "producer_task": "A-14",
+        "version": "1.0.0",
+        "digest": "sha256:3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.provenance.v1",
+        "owner": "A",
+        "producer_task": "A-11/A-12",
+        "version": "1.0.0",
+        "digest": "sha256:20aa696cf3e02c764ad3a1fc439351460d9177db2b3a21836ba00138afcff9f6",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/provenance.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.task-binding.v1",
+        "owner": "A",
+        "producer_task": "A-04",
+        "version": "1.0.0",
+        "digest": "sha256:a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.question.v1",
+        "owner": "A",
+        "producer_task": "A-02",
+        "version": "1.0.0",
+        "digest": "sha256:513dff11feb08421a7af246f876714f73e6d8934616a163e5894c602f4a7f1a1",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/question.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.errors.v1",
+        "owner": "A",
+        "producer_task": "A-04",
+        "version": "1.0.0",
+        "digest": "sha256:ebe07c30a67f072f6296d7191a3b342dc25b6c029fbc8fc02cc4b74e2bfd0d55",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/errors.schema.json",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": 1
+      },
+      {
+        "schema_id": "acp2.science.semantic-rules.v1",
+        "owner": "A",
+        "producer_task": "A-02a",
+        "version": "1.0.0",
+        "digest": "sha256:53a809c93e827137227f8cb993151849a1284665ebf54a05d33187a478fcab5c",
+        "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/semantic-rules.md",
+        "status": "delivered",
+        "types_copied": false,
+        "schema_version": null
+      }
+    ]
+  },
+  "b18": {
+    "owner": "B",
+    "split": {
+      "B18a": "contract conversion (separately consumable by C18)",
+      "B18b": "execution wiring (one TaskRef, persistent bounded steps)",
+      "B18c": "recovery/publication verification (static/simulated)"
+    },
+    "a_contract_conversion": {
+      "schema": "acp2.runtime.science-binding.a-conversion.v1",
+      "consumes": "science_contracts.entries",
+      "roundtrip_schema": "acp2.runtime.science-roundtrip.v1",
+      "c_form_producer": "C T-17 (model-free manual research form)",
+      "c_form_fixture": "runtime/samples/science-binding/b18/p2-minimal-form.json",
+      "full_dynamic_form": "C T-38/H5; never a B18 gate",
+      "does_not_copy_parsers": true,
+      "preserves": [
+        "structure reference",
+        "method",
+        "basis",
+        "solvent",
+        "charge",
+        "multiplicity",
+        "atom-mapping identity",
+        "resources"
+      ],
+      "negative": "atom_mapping_mismatch (rejected before adoption)"
+    },
+    "step_dag": {
+      "schema": "acp2.runtime.step-dag.v1",
+      "representation": "one_platform_task_multiple_persistent_steps",
+      "task_ref_rule": "exactly one TaskRef for the whole bounded DAG",
+      "bounded_acyclic_only": true,
+      "arbitrary_branching": false,
+      "second_orchestrator": false,
+      "max_steps_default": 8,
+      "max_consumers_per_step_default": 1,
+      "step_kinds": [
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "irc"
+      ],
+      "irc": {
+        "bounded_step_kind": true,
+        "task_kind_source": "cccp.calculation.requests.TaskKind.IRC",
+        "entrypoint": "cccp.calculation.run_irc",
+        "legacy_independent_irc_path_preserved": true
+      },
+      "execution_unit": {
+        "loop_owner": "acp_services.runtime.step_dag.BoundedStepDagExecutor",
+        "compute_owner": "cccp.calculation.tasks"
+      },
+      "output_ref": [
+        "from_step",
+        "product_kind",
+        "expected_digest",
+        "required"
+      ],
+      "step_fields": [
+        "step_id",
+        "ScienceStepKind",
+        "capability",
+        "input types (consumes OutputRef)",
+        "output types (produces OutputRef)",
+        "structure_role",
+        "implementation_version",
+        "parameters",
+        "max_attempts",
+        "qc_invocations",
+        "bsub"
+      ],
+      "step_states": [
+        "pending",
+        "ready",
+        "running",
+        "completed",
+        "blocked",
+        "upstream_failed",
+        "failed",
+        "cancelled"
+      ],
+      "publish_states": [
+        "not_published",
+        "published",
+        "failed"
+      ],
+      "control": [
+        "pause",
+        "continue",
+        "cancel"
+      ],
+      "control_rule": "cancel never dispatches a new step; pause stops new dispatch; continue resumes unfinished steps",
+      "recovery_rule": "only unfinished steps reset; completed (including publication-failed), failed, blocked and cancelled are preserved",
+      "budget_units": [
+        "task_refs",
+        "steps",
+        "qc_invocations",
+        "attempts",
+        "bsub"
+      ],
+      "identity_chain": [
+        "plan_identity",
+        "step_identity",
+        "worker receipt/result"
+      ]
+    },
+    "evidence_manifest": {
+      "schema": "acp2.runtime.evidence-manifest.v1",
+      "owner": "B18 (registration mapping)",
+      "storage_owner": "B12 (ArtifactStore prepare/read)",
+      "stores": [
+        "EvidenceReport bytes",
+        "native files",
+        "provenance digest",
+        "limitations"
+      ],
+      "claim_statuses": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "claim_interpretation": "not_interpreted",
+      "execution_separation": "task_execution_completed != claim_supported"
+    },
+    "research_resources": {
+      "schema": "acp2.data.research-resource.v1",
+      "owner": "B Data",
+      "documents": [
+        "acp2.experience.proposal.v1",
+        "acp2.experience.research-record.v1"
+      ],
+      "operations": [
+        "create",
+        "read",
+        "compare_and_swap",
+        "revoke",
+        "versions"
+      ],
+      "fields": [
+        "resource_id",
+        "schema",
+        "revision",
+        "digest",
+        "authorization",
+        "conflict",
+        "revocation"
+      ],
+      "not_a_task_table": true,
+      "no_research_decisions": true
+    },
+    "platform_boundary": {
+      "data": "authorization, frozen input snapshot and export",
+      "a_harness": "verifies the platform binding",
+      "cccp": "validates only content/role/structure/method/units/atom-mapping scientific identity",
+      "platform_fields_to_cccp": "opaque provenance, never permission inference",
+      "revocation_negatives": "proved by B boundary tests"
+    }
+  }
+}

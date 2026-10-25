@@ -1,0 +1,40 @@
+{
+  "products": [
+    {
+      "id": "step_0_frequency_normal_modes",
+      "kind": "frequency_modes",
+      "label": "frequency (step 0) \u2014 normal modes",
+      "metadata": {
+        "geometry_fingerprint": "",
+        "geometry_product_id": null,
+        "geometry_ref": null
+      },
+      "path": "frequencies/normal_modes.json"
+    },
+    {
+      "id": "step_0_frequency_output",
+      "kind": "file",
+      "label": "frequency (step 0) \u2014 output",
+      "path": "WORK/04_FREQ/freq.inp"
+    },
+    {
+      "id": "step_0_frequency_log",
+      "kind": "file",
+      "label": "frequency (step 0) \u2014 log",
+      "path": "WORK/04_FREQ/freq.out"
+    },
+    {
+      "id": "step_0_frequency_energy",
+      "kind": "energy_report",
+      "label": "frequency (step 0) \u2014 energy",
+      "metadata": {
+        "energy_hartree": -1.116773191779
+      },
+      "path": "energy/step_0_frequency.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "executor",
+  "version": 2,
+  "workflow": "frequency"
+}

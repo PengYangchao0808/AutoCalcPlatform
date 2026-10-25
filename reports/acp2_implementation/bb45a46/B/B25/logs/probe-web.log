@@ -1,0 +1,49 @@
+$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
+import hashlib, importlib.util, json, os, sys
+from importlib import metadata
+role = sys.argv[1]
+expected = sys.argv[2]
+facts = {"role": role, "python": sys.executable, "cwd": os.getcwd()}
+if role == "cccp":
+    import cccp
+    facts["modules"] = {"cccp": cccp.__file__}
+    facts["version"] = cccp.__version__
+    facts["forbidden"] = {
+        name: importlib.util.find_spec(name) is None for name in ("acp", "acp_services", "fastapi")
+    }
+elif role == "worker":
+    import acp_services
+    facts["modules"] = {"acp_services": acp_services.__file__}
+    facts["version"] = metadata.version("acp-worker")
+    facts["forbidden"] = {
+        name: importlib.util.find_spec(name) is None for name in ("acp", "fastapi")
+    }
+elif role == "web":
+    import acp, acp_services, acp_web_assets
+    facts["modules"] = {
+        "acp": acp.__file__,
+        "acp_services": acp_services.__file__,
+        "acp_web_assets": acp_web_assets.__file__,
+    }
+    facts["version"] = acp.__version__
+    facts["forbidden"] = {}
+else:
+    import acp, acp_services, cccp
+    facts["modules"] = {
+        "acp": acp.__file__,
+        "acp_services": acp_services.__file__,
+        "cccp": cccp.__file__,
+    }
+    facts["version"] = acp.__version__
+    facts["forbidden"] = {}
+facts["site_packages"] = all("/site-packages/" in path for path in facts["modules"].values())
+facts["version_ok"] = facts["version"] == expected
+facts["forbidden_absent"] = all(facts["forbidden"].values())
+print(json.dumps(facts))
+ web 0.3.0
+exit=0
+--- stdout ---
+{"role": "web", "python": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python", "cwd": "<repo>/reports/acp2_implementation/bb45a46/B/B25", "modules": {"acp": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/__init__.py", "acp_services": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py", "acp_web_assets": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp_web_assets/__init__.py"}, "version": "0.3.0", "forbidden": {}, "site_packages": true, "version_ok": true, "forbidden_absent": true}
+
+--- stderr ---
+

@@ -23,7 +23,6 @@ if [[ ! -x "$VENV_DIR/bin/uvicorn" ]]; then
 fi
 
 export PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
-export ACP_RUN_ROOT="${ACP_RUN_ROOT:-/var/lib/acp/runs}"
 export ACP_HOST="${ACP_HOST:-0.0.0.0}"
 export ACP_PORT="${ACP_PORT:-8765}"
 
@@ -34,7 +33,7 @@ for profile_snippet in /etc/profile.d/orca*.sh /etc/profile.d/xtb*.sh; do
   [[ -f "$profile_snippet" ]] && source "$profile_snippet"
 done
 
-echo "ACP run root : ${ACP_RUN_ROOT}"
+echo "ACP run root : ${ACP_RUN_ROOT:-from acp init config or platform default}"
 
 exec uvicorn acp.api.server:app \
   --host "$ACP_HOST" \

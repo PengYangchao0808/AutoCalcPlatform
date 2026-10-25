@@ -1,0 +1,87 @@
+{
+  "allowed_job": "20261023_021632_002_fake",
+  "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "capabilities_admission": {
+    "enforcement": "local-single-enforced",
+    "limits": {
+      "default_walltime_s": 86400,
+      "max_cores": 2,
+      "max_memory_mb": 1048576,
+      "max_storage_bytes": 10995116277760,
+      "max_tasks": 4,
+      "max_walltime_s": 2592000,
+      "policy_version": "local-single-v1"
+    },
+    "mode": "quota-only",
+    "model_token_enforcement": "NOT_VERIFIED",
+    "multi_tenant_security": false,
+    "occupancy": {
+      "by_state": {},
+      "concurrency": 0,
+      "cores": 0,
+      "memory_mb": 0,
+      "reservations": 0,
+      "storage_bytes": 0
+    },
+    "policy_version": "local-single-v1",
+    "principal_id": "principal_local",
+    "quota_enforced": true,
+    "recorded_only": false,
+    "usage": {
+      "core_hours": "0",
+      "core_seconds": 0,
+      "receipts": 0
+    },
+    "verified_project": "proj-a"
+  },
+  "claim_then_deny_status": 429,
+  "controller": "http://127.0.0.1:18767",
+  "cross_project_statuses": {
+    "cross_project_cancel": 404,
+    "cross_project_prepare": 404,
+    "cross_project_read": 404
+  },
+  "over_cores_status": 429,
+  "over_jobs_status": 429,
+  "replay": {
+    "admission": {
+      "enforced": true,
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "multi_tenant_security": false,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "reservation_id": "res_idem_4afcf472e44d43e0892596329858e1ae",
+      "verified_project": "proj-a"
+    },
+    "counts": {
+      "active_reservations": 0,
+      "claims": 1,
+      "jobs": 2,
+      "reservations": 1,
+      "usage_receipts": 1,
+      "work_dirs": 1
+    },
+    "idempotent_replay": true,
+    "job_status": "completed",
+    "same_job": true,
+    "status": 201
+  },
+  "retry_status": 409,
+  "run_root": "/opt/acp2-dev/data/b/run-root-b09",
+  "usage_proof": {
+    "after": {
+      "core_hours": "2.000556",
+      "core_seconds": 7202,
+      "receipts": 2
+    },
+    "before": {
+      "core_hours": "0.000556",
+      "core_seconds": 2,
+      "receipts": 1
+    },
+    "first_inserted": true,
+    "second_inserted": false
+  },
+  "widen_status": 403
+}

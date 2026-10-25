@@ -1,0 +1,114 @@
+{
+  "schema": "acp2.b20b.validation-log.v1",
+  "generated_at": "2026-10-23T09:17:41Z",
+  "result": "PASS",
+  "artifacts": {
+    "science-handoff.json": {
+      "sha256": "29dd99a4dc0d806ae20216d4acbe33d5d3fa8721f9435e46f034915f99db1803",
+      "schema": "acp2.b20b.science-handoff.v1"
+    },
+    "h4-ledger.json": {
+      "sha256": "2931c8432c28e138dcdcc77af8a2b2e4e707292713e4eafe9a9b4641d3b4f77b",
+      "schema": "acp2.b20b.h4-ledger.v1"
+    },
+    "reference-matrix.json": {
+      "sha256": "3e89176f8f4c488be64abac8bf6519448a2487f8fdae124fe29344f9b5b4d2fe",
+      "schema": "acp2.b20b.reference-matrix.v1"
+    }
+  },
+  "test_command": "PYTHONPATH=src:. /usr/bin/python3.11 -m pytest tests/test_acp2_runtime_science_handoff.py -q",
+  "test_result": "14 passed",
+  "ruff_commands": [
+    "/home/redacted-user/.local/bin/ruff check tests/test_acp2_runtime_science_handoff.py",
+    "/home/redacted-user/.local/bin/ruff format --check tests/test_acp2_runtime_science_handoff.py"
+  ],
+  "ruff_result": "All checks passed; 1 file already formatted",
+  "checks": [
+    {
+      "name": "json_parse",
+      "result": "PASS",
+      "detail": "science-handoff.json, h4-ledger.json and reference-matrix.json parse as JSON."
+    },
+    {
+      "name": "handoff_schema",
+      "result": "PASS",
+      "detail": "schema=acp2.b20b.science-handoff.v1; required top-level fields present."
+    },
+    {
+      "name": "claim_status_vocabulary",
+      "result": "PASS",
+      "detail": "statuses=['inconclusive', 'not_evaluated']; all within supported/refuted/inconclusive/not_evaluated."
+    },
+    {
+      "name": "zero_supported_rows",
+      "result": "PASS",
+      "detail": "supported=0; supported_without_artifact_or_digest=0."
+    },
+    {
+      "name": "three_axes_separate",
+      "result": "PASS",
+      "detail": "scenario_result=NOT_VERIFIED, claim_status=not_evaluated, h4_gate=open are independent fields."
+    },
+    {
+      "name": "run_spec_matches_b20a",
+      "result": "PASS",
+      "detail": "sha256=40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b; partition=13380+900+120=14400; started_at=null; no clock reset."
+    },
+    {
+      "name": "b_execution_facts_match_receipt",
+      "result": "PASS",
+      "detail": "all platform refs null and equal to receipt=True; receipt result=NOT_VERIFIED reason=c24a_absent."
+    },
+    {
+      "name": "b_counters_match",
+      "result": "PASS",
+      "detail": "tasks_created=0, prepare_operations=0, qc_invocations=0, reservations=0, bsub=0, submission_attempted=false; match=True."
+    },
+    {
+      "name": "a_reference_by_reference",
+      "result": "PASS",
+      "detail": "A handoff present with sha256=37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b; A status stays NOT_VERIFIED."
+    },
+    {
+      "name": "c_reference_absent_no_fabrication",
+      "result": "PASS",
+      "detail": "C T-35 artifacts absent; digest=null; three expected paths/schemas recorded; fabricated_receipt=false."
+    },
+    {
+      "name": "h4_ledger_no_promotion",
+      "result": "PASS",
+      "detail": "rows=['H4-01', 'H4-02', 'H4-03', 'H4-04', 'H4-search']; all status=NOT_VERIFIED; promoted=false; promotions=0."
+    },
+    {
+      "name": "negative_rule_recorded",
+      "result": "PASS",
+      "detail": "Correctly-inconclusive negative may PASS a scenario but cannot satisfy the positive TS/IRC/comparable-energy gate."
+    },
+    {
+      "name": "imaginary_frequency_rule_recorded",
+      "result": "PASS",
+      "detail": "One imaginary frequency proves a first-order-saddle candidate only; IRC connectivity requires forward+reverse IRC and endpoint mapping."
+    },
+    {
+      "name": "reference_matrix_digests",
+      "result": "PASS",
+      "detail": "published A/C files carry computed sha256; absent C T-35 artifacts carry null sha256; references=8."
+    },
+    {
+      "name": "c_cannot_overwrite_b_task_truth",
+      "result": "PASS",
+      "detail": "c_t35_ref carries none of job_id/attempt/release_id/submission_id/manifest_generation/task_ref/execution_result; B remains authoritative."
+    },
+    {
+      "name": "evidence_records_are_current",
+      "result": "PASS",
+      "detail": "validation-log artifact digests and no-relabel source-fact digests match the current handoff/ledger/matrix and B20a files."
+    }
+  ],
+  "non_promotion": {
+    "supported_rows": 0,
+    "promoted_h4_rows": 0,
+    "claim_status": "not_evaluated",
+    "h4_gate": "open"
+  }
+}

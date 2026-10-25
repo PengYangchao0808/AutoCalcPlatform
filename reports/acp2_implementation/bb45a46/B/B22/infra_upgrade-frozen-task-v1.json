@@ -1,0 +1,69 @@
+{
+  "descriptor": {
+    "adapter_id": "acp.storage.inventory",
+    "capabilities": [
+      "storage.inventory"
+    ],
+    "claims_process_isolation": false,
+    "description": "External infrastructure adapter fixture; no science parser.",
+    "descriptor_schema": "acp2.adapter.v1",
+    "entrypoint": {
+      "attribute": "run",
+      "module": "adapter"
+    },
+    "environment": [
+      "env:ACP2_B21_PLUGIN_ENV"
+    ],
+    "kind": "storage",
+    "resource_limits": {
+      "max_concurrency": 1,
+      "max_cpu_seconds": 30,
+      "max_io_bytes": 1048576,
+      "max_memory_bytes": 33554432
+    },
+    "supported_schema": [
+      "acp2.adapter.v1"
+    ],
+    "trust_level": "discover-only",
+    "verification_fixture": "verification.json",
+    "version": "1.0.0"
+  },
+  "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+  "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+  "installed_descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+  "schema": "acp2.b21.frozen-task.v1",
+  "task": {
+    "adapters": [
+      {
+        "adapter_id": "acp.storage.inventory",
+        "capabilities": [
+          "storage.inventory"
+        ],
+        "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+        "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+        "environment": [
+          "env:ACP2_B21_PLUGIN_ENV"
+        ],
+        "kind": "storage",
+        "resource_limits": {
+          "max_concurrency": 1,
+          "max_cpu_seconds": 30,
+          "max_io_bytes": 1048576,
+          "max_memory_bytes": 33554432
+        },
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "trusted-explicit",
+        "verification_fixture": "verification.json",
+        "version": "1.0.0"
+      }
+    ],
+    "attempt": 1,
+    "frozen_at": "2026-10-23T10:22:21Z",
+    "process_isolation": "NOT_VERIFIED",
+    "schema": "acp2.adapter.task-freeze.v1",
+    "task_id": "b21-old-task"
+  }
+}

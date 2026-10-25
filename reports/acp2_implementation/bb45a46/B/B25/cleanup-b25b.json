@@ -1,0 +1,9 @@
+{
+  "production_service_restarted": false,
+  "production_run_root_touched": false,
+  "lab_port_18786_in_use": false,
+  "mcp_processes_left": 0,
+  "harness_venvs_removed": true,
+  "inspection_venvs": "/tmp/opencode/b25b/venvs (removed after evidence capture)",
+  "result": "PASS"
+}

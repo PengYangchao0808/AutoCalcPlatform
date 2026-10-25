@@ -1,0 +1,1 @@
+/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18784 --run-root /opt/acp2-dev/data/b/run-root-b23 --poll-interval 1 --no-browser

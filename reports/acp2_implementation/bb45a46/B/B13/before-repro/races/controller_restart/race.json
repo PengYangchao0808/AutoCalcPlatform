@@ -1,0 +1,136 @@
+{
+  "after_restart": {
+    "attempt": 1,
+    "event_lines": 8,
+    "exit_code": 0,
+    "job_started_events": 1,
+    "manifest_sha256": "6cdb82e2254cda66b98f44de448c636e94024b6188645438c9fb647399b98276",
+    "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
+    "process_starting_events": 1,
+    "publication_complete": true,
+    "release_id": "98e0695545d668e6",
+    "result_digest": "sha256:2f79ac74911f05af439ad8c9d31e93a147558a0512ec76a5c4abe07d51e31f53",
+    "revision": 6,
+    "status": "completed",
+    "submission_id": "sub_d2f8abfa367fd6ce",
+    "task_count": 12,
+    "task_id": "20261023_065027_005_singlepoint",
+    "task_result_digest": "sha256:76376f68646b49ab68524e26cf47ee991ce8051ec0c3a8a35927949fb2a5ceac",
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05"
+  },
+  "assertions": [],
+  "attempt": 1,
+  "before_restart": {
+    "attempt": 1,
+    "event_lines": 7,
+    "exit_code": 0,
+    "job_started_events": 1,
+    "manifest_sha256": "6cdb82e2254cda66b98f44de448c636e94024b6188645438c9fb647399b98276",
+    "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
+    "process_starting_events": 1,
+    "publication_complete": true,
+    "release_id": "98e0695545d668e6",
+    "result_digest": "sha256:2f79ac74911f05af439ad8c9d31e93a147558a0512ec76a5c4abe07d51e31f53",
+    "revision": 5,
+    "status": "completed",
+    "submission_id": "sub_d2f8abfa367fd6ce",
+    "task_count": 12,
+    "task_id": "20261023_065027_005_singlepoint",
+    "task_result_digest": "sha256:76376f68646b49ab68524e26cf47ee991ce8051ec0c3a8a35927949fb2a5ceac",
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__05"
+  },
+  "budget": {
+    "cleanup_seconds": 10,
+    "cores": 1,
+    "jobs": 1,
+    "max_orca": 1,
+    "max_prepare_seconds": 30,
+    "memory_mb": 1024,
+    "walltime_s": 60
+  },
+  "budget_row": {
+    "budget": {
+      "cleanup_seconds": 10,
+      "cores": 1,
+      "jobs": 1,
+      "max_orca": 1,
+      "max_prepare_seconds": 30,
+      "memory_mb": 1024,
+      "walltime_s": 60
+    },
+    "orca_pids": [
+      720338
+    ],
+    "pid": 720257,
+    "race_id": "controller_restart",
+    "task_ref": "20261023_065027_005_singlepoint",
+    "timeout_seconds": 120
+  },
+  "evidence": "races/controller_restart",
+  "fault": "controller_restart_same_db_config_release",
+  "finished_at": null,
+  "fixture": "h2-hf-sto3g",
+  "input_sha256": "7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe",
+  "kind": "local",
+  "method": {
+    "basis": "STO-3G",
+    "engine": "orca",
+    "functional": "HF"
+  },
+  "orca_pids": [
+    720338
+  ],
+  "pid": 720257,
+  "race_id": "controller_restart",
+  "release_id": "98e0695545d668e6",
+  "restart": {
+    "command_before": [
+      "/opt/acp2-dev/venvs/b/bin/python",
+      "-m",
+      "acp2_controller_fault",
+      "--fault-file",
+      "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "--",
+      "run",
+      "serve",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18771",
+      "--run-root",
+      "/opt/acp2-dev/data/b/run-root-b13",
+      "--poll-interval",
+      "1",
+      "--no-browser"
+    ],
+    "cwd_before": "/opt/acp2-dev/B/src",
+    "health_after": {
+      "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+      "contract_digest_scope": "delivered-contract-set",
+      "contract_version": "1.1.0",
+      "read_only": true,
+      "schema_version": 1,
+      "started_at": "2026-10-22T22:50:34.660769Z",
+      "status": "ok"
+    },
+    "log": "controller/controller-restart-1792709433.log",
+    "parsed_before": {
+      "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "fault_seam": true,
+      "module": "acp2_controller_fault",
+      "port": 18771,
+      "run_root": "/opt/acp2-dev/data/b/run-root-b13"
+    },
+    "pid_after": 720345,
+    "pid_before": 715881,
+    "port": 18771,
+    "stopped": true
+  },
+  "started_at": "2026-10-22T22:50:27.405688Z",
+  "status": "NOT_VERIFIED",
+  "submission_id": "sub_d2f8abfa367fd6ce",
+  "task_count_before": 11,
+  "task_ref": "20261023_065027_005_singlepoint",
+  "timeout_seconds": 120
+}

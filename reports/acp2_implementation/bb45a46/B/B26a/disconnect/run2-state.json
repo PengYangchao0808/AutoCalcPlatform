@@ -1,0 +1,31 @@
+{
+  "create_status": 201,
+  "health": {
+    "host": "127.0.0.1",
+    "port": 18787,
+    "python": "3.11.13",
+    "queue": {
+      "cancelled": 0,
+      "completed": 0,
+      "failed": 1,
+      "paused": 0,
+      "pending": 0,
+      "queued": 0,
+      "running": 0
+    },
+    "run_root": "/tmp/opencode/b26a-clean/data/lab-run-root",
+    "service": "ACP Workbench",
+    "status": "ok",
+    "uptime_seconds": 20.2,
+    "version": "0.3.0",
+    "wsl": false
+  },
+  "job_id": "20261023_214510_001_b26a-disconnect-probe-1792763110",
+  "job_status": "starting",
+  "phase": "before",
+  "record_status": 200,
+  "schema": "acp2.b26a.disconnect.v1",
+  "stream_frames": [
+    "retry: 3000"
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "cross_domain_non_mixing": {
+    "claim_namespaces": [
+      "nmr.*",
+      "thermochemistry.*"
+    ],
+    "no_ppm_to_hartree_conversion": true,
+    "shared_shape": [
+      "task_ref",
+      "artifact",
+      "provenance",
+      "budget"
+    ]
+  },
+  "identity": {
+    "phase": "experience:selectivity",
+    "scenario": "experience:cross-domain-live",
+    "scenario_key": "experience:cross-domain-live/selectivity",
+    "subcase": "selectivity"
+  },
+  "missing_metrics": {
+    "nmr_experimental_spectrum_acquired": null,
+    "reason": "constructed fixtures reused; no new QC was launched and no spectrum was acquired",
+    "thermochemistry_real_qc_energy": null
+  },
+  "rows": [
+    {
+      "artifact": {
+        "path": "/opt/acp2-dev/A/tests/fixtures/acp2/science/cross_domain/nmr_shielding_constructed.json",
+        "sha256": "5039a86d40968edb8c7b8a5237815c94f8d160debe2876516c6acf6215d52b78",
+        "size_bytes": 2670
+      },
+      "budget": {
+        "new_qc_calls": 0,
+        "new_task_refs": 0
+      },
+      "constructed": true,
+      "domain": "nmr",
+      "fixture_id": "nmr-shielding-constructed-ethanol",
+      "new_qc_calls": 0,
+      "new_task_refs": 0,
+      "provenance": {
+        "basis": "6-311G(d)",
+        "error_model": "goodman-legacy",
+        "method": "mPW1PW91",
+        "reference_source": "goodman-tmsdata",
+        "required_nuclei": [
+          "1H",
+          "13C"
+        ],
+        "scaling_mode": "goodman",
+        "schema": "acp2.science.provenance.v1",
+        "solvent": "chloroform",
+        "solvent_model": "cpcm",
+        "temperature_kelvin": 298.15
+      },
+      "real_run": false,
+      "result": "PASS",
+      "schema": "acp2.science.domain-fixture",
+      "schema_version": 1,
+      "task_ref": null,
+      "task_ref_reason": "reused_a25a_constructed_fixture_no_new_task_ref",
+      "units": {
+        "chemical_shift": "ppm",
+        "isotropic_shielding": "ppm",
+        "temperature": "K"
+      }
+    },
+    {
+      "artifact": {
+        "path": "/opt/acp2-dev/A/tests/fixtures/acp2/science/cross_domain/thermochemistry_weights_constructed.json",
+        "sha256": "b76e07e9c241886130f556ebc8dcb880c807ae10dfc82329601012cc0a11ded3",
+        "size_bytes": 1015
+      },
+      "budget": {
+        "new_qc_calls": 0,
+        "new_task_refs": 0
+      },
+      "constructed": true,
+      "domain": "thermochemistry",
+      "fixture_id": "ensemble-thermochemistry-weights-constructed",
+      "new_qc_calls": 0,
+      "new_task_refs": 0,
+      "provenance": {
+        "schema": "acp2.science.provenance.v1",
+        "standard_state": "1atm",
+        "temperature_kelvin": 298.15,
+        "weight_tolerance": 1e-09,
+        "weights_mode": "raw",
+        "weights_sum_supplied": 0.8
+      },
+      "real_run": false,
+      "result": "PASS",
+      "schema": "acp2.science.domain-fixture",
+      "schema_version": 1,
+      "task_ref": null,
+      "task_ref_reason": "reused_a25a_constructed_fixture_no_new_task_ref",
+      "units": {
+        "derived_energy_unit": "kcal_per_mol",
+        "gibbs_energy": "hartree",
+        "mixing_entropy": "kcal/(mol*K)",
+        "t_s_mix": "kcal/mol",
+        "temperature": "K"
+      }
+    }
+  ],
+  "schema": "acp2.b23.cross-domain-consistency.v1"
+}

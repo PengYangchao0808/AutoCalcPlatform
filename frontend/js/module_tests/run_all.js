@@ -70,5 +70,10 @@ async function main() {
   for (const f of files) await runFile(path.join(dir, f), filter);
   console.log("\n" + passed + " passed, " + failed + " failed");
   if (failed) { failures.forEach((f) => console.log("FAILED: " + f.name)); process.exit(1); }
+  // Misleading-success guard: 0 tests executed (empty/unregistered filter) is a rejection, not a pass.
+  if (passed === 0) {
+    console.log("REJECTED: no tests executed (empty or unregistered module run)");
+    process.exit(2);
+  }
 }
 main();

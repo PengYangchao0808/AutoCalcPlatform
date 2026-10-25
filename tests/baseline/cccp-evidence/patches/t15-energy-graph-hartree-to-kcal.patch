@@ -1,0 +1,17 @@
+diff --git a/src/acp/results/energy_graph.py b/src/acp/results/energy_graph.py
+index 6586892..79fc005 100644
+--- a/src/acp/results/energy_graph.py
++++ b/src/acp/results/energy_graph.py
+@@ -18,11 +18,10 @@ from pathlib import Path
+ from typing import Any
+ 
+ from acp.results.frames import VIEW_REGISTRY, TrajectoryAnnotation, TrajectoryFrame
++from cccp.utils.constants import HARTREE_TO_KCAL
+ 
+ logger = logging.getLogger(__name__)
+ 
+-HARTREE_TO_KCAL = 627.5094740631
+-
+ __all__ = [
+     "build_conformer_energy_graph",
+     "build_energy_graph_from_job",

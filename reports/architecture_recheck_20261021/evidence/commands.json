@@ -1,0 +1,34 @@
+{
+  "contracts": {
+    "command": "timeout 180s python3.11 -m pytest -p no:cacheprovider tests/test_services_worker_contract.py tests/test_services_worker_bootstrap.py tests/test_cccp_bounded_products.py tests/test_frontend_sync_vibration.py tests/test_acp_xtbmd_platform_phase5.py tests/test_job_state_transitions.py -q --disable-warnings --junitxml=/tmp/acp-review-20261021-contracts.xml",
+    "exit_code": 0,
+    "log": "evidence/contracts-tests.log"
+  },
+  "integration": {
+    "command": "timeout 600s python3.11 -m pytest -p no:cacheprovider tests/test_services_chain_switch.py tests/test_services_submission_fidelity.py tests/test_services_workflow_enablement.py tests/test_acp_services_isolation.py tests/test_architecture_invariants.py tests/test_services_prepare_operations.py tests/test_services_read_root.py tests/test_services_transfer_verify.py tests/test_services_cache_only_switch.py tests/test_acp_api_v1.py::test_v1_attempt_and_revision_follow_rerun tests/test_acp_api_v1.py::test_v1_execution_identity_ignores_name_revision tests/test_acp_frontend_browser.py -q --disable-warnings --junitxml=/tmp/acp-review-20261021-outside.xml",
+    "execution": "outside sandbox, approved temporary local tests",
+    "exit_code": 1,
+    "log": "evidence/integration-tests.log"
+  },
+  "browser_explicit": {
+    "command": "PYTHONPATH=src:. python3.11 reports/architecture_recheck_20261021/reproductions/run_browser_explicit.py",
+    "exit_code": 1,
+    "log": "evidence/browser-explicit.log"
+  },
+  "node": {
+    "command": "node frontend/js/module_tests/run_all.js",
+    "exit_code": 0,
+    "execution": "outside sandbox after Node spawnSync restriction",
+    "log": "evidence/node.log"
+  },
+  "diagnostics": {
+    "commands": [
+      "PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 python3.11 reports/architecture_recheck_20261021/reproductions/controller.py",
+      "PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 python3.11 reports/architecture_recheck_20261021/reproductions/worker_claim_and_bootstrap.py",
+      "PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 python3.11 reports/architecture_recheck_20261021/reproductions/worker_lost_write.py",
+      "PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 python3.11 reports/architecture_recheck_20261021/reproductions/data.py",
+      "PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 python3.11 reports/architecture_recheck_20261021/reproductions/frontend_science.py"
+    ],
+    "note": "Diagnostic output demonstrates reproduced defects; an exit code 0 is NOT a product PASS. frontend_science.py was independently run with /opt/acp2/venv/bin/python and real Chromium outside sandbox."
+  }
+}

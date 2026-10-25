@@ -1,0 +1,147 @@
+{
+  "artifacts": {
+    "acp-web-0.3.0.tar.gz": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-web-0.3.0.tar.gz",
+      "sha256": "3186b347377599c1e71514bdccc52d1ebf2811eb73b6d802d18b2141a8c927a7",
+      "size_bytes": 2046926
+    },
+    "acp-worker-0.3.0.tar.gz": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp-worker-0.3.0.tar.gz",
+      "sha256": "223fd6aec2760c35d5346f56edf5b17a3dc0376481e5ea4b48348d36493358b5",
+      "size_bytes": 580783
+    },
+    "acp_web-0.3.0-py3-none-any.whl": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_web-0.3.0-py3-none-any.whl",
+      "sha256": "d055e869de602cf1a257d4542243849806b3e3ebe805b78c70a412e8e5a2b210",
+      "size_bytes": 2233023
+    },
+    "acp_worker-0.3.0-py3-none-any.whl": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/acp_worker-0.3.0-py3-none-any.whl",
+      "sha256": "edd849a75b28f58bba54d8613ec14e1ecae46a325d51d3874967fc683c6ec949",
+      "size_bytes": 614654
+    },
+    "cccp-0.3.0-py3-none-any.whl": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0-py3-none-any.whl",
+      "sha256": "b505413147e3c3a07c9b405631e3ee244d0dc9f7a8f699a45ec112ec692c559c",
+      "size_bytes": 44570492
+    },
+    "cccp-0.3.0.tar.gz": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/cccp-0.3.0.tar.gz",
+      "sha256": "31631e2f5c131ccba6e08ffac23035feb7670d226b0349cb6816c23959aea425",
+      "size_bytes": 44429877
+    },
+    "root-build/acp-0.3.0-py3-none-any.whl": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/root-build/acp-0.3.0-py3-none-any.whl",
+      "sha256": "64548f8f25e6251532b8b551067f6a0c432a2668bfc20edd310ed2fcb7e4c56a",
+      "size_bytes": 46404596
+    },
+    "root-build/acp-0.3.0.tar.gz": {
+      "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/root-build/acp-0.3.0.tar.gz",
+      "sha256": "f449f77d4c89476847a610ef3577a13ce6c1efb30dc77cdc8a5a522411b28987",
+      "size_bytes": 46062358
+    }
+  },
+  "artifacts_note": "Six role artifacts are in release-manifest.json; the two root-build artifacts are the supplemental root distribution digests recorded by B-fix-5 in release-fix5/source.json. All eight digests were recomputed from disk.",
+  "digests_verified": true,
+  "generated_at": "2026-10-23T18:40:00Z",
+  "index": "reports/acp2_implementation/bb45a46/integration/h7-index.json",
+  "installed_validation": {
+    "authorization": "PASS",
+    "bare_root_cli_singlepoint": "PASS",
+    "cccp_without_controller_sample": "PASS",
+    "cross_entry_release_projection": "PASS",
+    "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/summary.json",
+    "installed_lab": "PASS",
+    "installed_release_manifest": "PASS",
+    "installed_scheduler_task": "PASS",
+    "lsf_normal_singlepoint": "PASS",
+    "package_install": "PASS",
+    "package_install_candidate_identity": "PASS"
+  },
+  "installed_validation_detail": {
+    "bare_root": {
+      "energy_hartree": -1.116773191779,
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/bare-root/singlepoint.log",
+      "exit_code": 0,
+      "note": "Root wheel with no extras ran `acp run singlepoint` without paramiko."
+    },
+    "cross_entry": {
+      "all_equal": true,
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/three-entry-compare.json",
+      "fields": [
+        "release_id",
+        "release_digest",
+        "plan_digest",
+        "submission_id"
+      ],
+      "note": "HTTP GET /api/v1/jobs/{id}, CLI query and MCP status expose identical values."
+    },
+    "installed_release_manifest": {
+      "evidence": "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json",
+      "file_count": 510,
+      "local_identity_match": true,
+      "project_root": "/tmp/opencode/fix5-qa/venvs/root/lib/python3.11/site-packages",
+      "release_id": "1c79785a657c6614"
+    },
+    "lsf_normal": {
+      "energy_hartree": -1.116759307204,
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/remote/facts.json"
+      ],
+      "job_id": "1765",
+      "orca_version": "6.1.1",
+      "release_digest": "c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1",
+      "release_id": "1c79785a657c6614",
+      "state": "completed",
+      "submission_id": "sub_0fea781820a81666"
+    },
+    "package_install_candidate_identity": {
+      "candidate_revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/summary.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json"
+      ],
+      "note": "Derived from release_manifest.source.revision; installed Lab health matches."
+    }
+  },
+  "known_gaps": [
+    "A-29 and C35 signatures absent; H7 remains OPEN.",
+    "C33/C34 install evidence, C DSH/model scope and C static-asset manifest absent.",
+    "No independent external operator: B26a is self-reproduction.",
+    "C DSH/browser handshake and running-task disconnect recovery remain NOT_VERIFIED.",
+    "H4 (limited Diels-Alder) and H6 (selectivity/real-DA, A/C readability) remain OPEN.",
+    "ADR-005 licensing/open-source boundary remains a user decision; no license change was made."
+  ],
+  "production_deployed": false,
+  "production_service_restarted": false,
+  "release_artifact_count": 8,
+  "release_candidate_id": "acp2.plan-b.h7.release-fix5",
+  "release_manifest": {
+    "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+    "sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
+    "size_bytes": 88578
+  },
+  "release_source": {
+    "path": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
+    "sha256": "e2ee1096e0a7ec05efe86ffb35c4e6772d65021c1c50d8643c099780ced436df",
+    "size_bytes": 2612
+  },
+  "schema": "acp2.release.candidate.v1",
+  "source_candidate": {
+    "base_release_source_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+    "label": "release-fix5",
+    "landed_head": "c134109c696e9bcb941e176bf681d45a569370b8",
+    "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
+    "revision": "5e2898acc386335ee1cb11ac9170650bb23d501d",
+    "tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
+  },
+  "version": "0.3.0",
+  "version_locations": {
+    "pyproject.toml": "0.3.0",
+    "src/acp/__init__.py": "0.3.0",
+    "src/cccp/__init__.py": "0.3.0",
+    "src/cccp/version.py": "0.3.0"
+  }
+}

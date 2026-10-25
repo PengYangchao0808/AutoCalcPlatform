@@ -1,0 +1,40 @@
+=== python3.11 --version ===
+Python 3.11.13
+exit=0
+=== python3.11 -c sys.version/executable ===
+3.11.13 (main, Jun  1 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]
+/usr/bin/python3.11
+Linux-5.14.0-687.56.1.el9_8.x86_64-x86_64-with-glibc2.34
+exit=0
+=== node --version ===
+v20.19.0
+exit=0
+=== pip --version (python3.11 -m pip) ===
+pip 22.3.1 from /usr/lib/python3.11/site-packages/pip (python 3.11)
+exit=0
+=== declared extras (pyproject [project.optional-dependencies]) ===
+api: 4 packages -> fastapi>=0.115, uvicorn>=0.30, python-multipart>=0.0.9, zipstream-ng>=1.9.0
+browser: 1 packages -> playwright>=1.40
+dev: 6 packages -> pytest>=7.4.0, pytest-cov>=4.1.0, ruff>=0.4.0, mypy>=1.8.0, pre-commit>=3.6.0, httpx>=0.27
+nmr: 3 packages -> nmrglue>=0.10, openbabel>=3.1, qml>=0.4
+remote: 1 packages -> paramiko>=3.0
+requires-python: >=3.10
+exit=0
+=== pip list (key packages) ===
+acp==0.2.0
+anyio==4.15.1
+fastapi==0.141.1
+httpx==0.28.1
+mypy==2.3.1
+numpy==2.4.6
+paramiko==5.0.0
+playwright==1.63.0
+pydantic==2.13.5
+pytest==9.1.1
+PyYAML==6.0.3
+rdkit==2026.3.6
+ruff==0.15.22
+starlette==1.6.0
+uvicorn==0.52.4
+=== pip list count ===
+102

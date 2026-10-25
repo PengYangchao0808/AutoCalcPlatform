@@ -1,0 +1,368 @@
+.F.FF....F....................F...F............                          [100%]
+=================================== FAILURES ===================================
+_______________ test_concurrent_lifespan_race_exactly_one_owner ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_concurrent_lifespan_race_0')
+
+    def test_concurrent_lifespan_race_exactly_one_owner(tmp_path: Path) -> None:
+        from acp.api.server import create_app
+    
+        run_root = tmp_path / "runs"
+        barrier = threading.Barrier(2)
+        release = threading.Event()
+        outcomes: list[str] = []
+        outcomes_lock = threading.Lock()
+    
+        def run(app) -> None:
+            try:
+                barrier.wait(timeout=15)
+                with TestClient(app) as client:
+                    assert client.get("/api/status").status_code == 200
+                    with outcomes_lock:
+                        outcomes.append("ok")
+                    release.wait(timeout=15)
+            except RuntimeError as exc:
+                with outcomes_lock:
+                    outcomes.append(f"refused:{exc}")
+    
+        apps = [create_app(run_root=run_root), create_app(run_root=run_root)]
+        threads = [threading.Thread(target=run, args=(app,)) for app in apps]
+        for thread in threads:
+            thread.start()
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            with outcomes_lock:
+                if outcomes:
+                    break
+            time.sleep(0.02)
+        release.set()
+        for thread in threads:
+            thread.join(timeout=30)
+    
+        assert outcomes.count("ok") == 1, outcomes
+>       assert sum(1 for outcome in outcomes if outcome.startswith("refused:")) == 1, outcomes
+E       AssertionError: ['ok']
+E       assert 0 == 1
+E        +  where 0 = sum(<generator object test_concurrent_lifespan_race_exactly_one_owner.<locals>.<genexpr> at 0x7fa2e8f8a420>)
+
+tests/test_acp_lifespan_ownership.py:120: AssertionError
+__________________ test_prefetch_skipped_for_non_terminal_job __________________
+
+manager = <acp.scheduler.manager.JobManager object at 0x7fa2e8f3e710>
+tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_prefetch_skipped_for_non_0')
+
+    def test_prefetch_skipped_for_non_terminal_job(manager: JobManager, tmp_path: Path) -> None:
+        """A running remote job is never prefetched (partial manifests must not cache)."""
+        fetcher = FakeFetcher()
+        manager._remote_fetcher = fetcher  # type: ignore[assignment]
+        _seed_remote_job(manager, tmp_path, "running-job")
+    
+>       manager._prefetch_remote_catalog("running-job")
+
+tests/test_acp_remote_catalog_prefetch.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <acp.scheduler.manager.JobManager object at 0x7fa2e8f3e710>
+job_id = 'running-job'
+
+    def _prefetch_remote_catalog(self, job_id: str) -> None:
+        """Pull one terminal remote job's small catalog files into the cache.
+    
+        The backend owns this sync so that ``availability`` flips from
+        ``pending_fetch`` to ``ready`` without depending on a browser issuing
+        ``?fetch=1`` (cached workbench JS may lack the terminal retry).  Geometry
+        stays lazy; failures are logged and never propagate.  The real fetch is
+        delegated to the injected executor so the worker and this entry point
+        share one implementation.
+        """
+>       result = self._prepare_executor.prefetch(job_id)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: '_CompositePrepareExecutor' object has no attribute 'prefetch'
+
+src/acp/scheduler/manager.py:5484: AttributeError
+_____________________ test_prefetch_skipped_for_local_job ______________________
+
+manager = <acp.scheduler.manager.JobManager object at 0x7fa2f128ce90>
+tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_prefetch_skipped_for_loca0')
+
+    def test_prefetch_skipped_for_local_job(manager: JobManager, tmp_path: Path) -> None:
+        """Local jobs keep using their own work dir; no remote cache fetch."""
+        fetcher = FakeFetcher()
+        manager._remote_fetcher = fetcher  # type: ignore[assignment]
+        _seed_remote_job(manager, tmp_path, "local-job", status=JobStatus.COMPLETED, remote=False)
+    
+>       manager._prefetch_remote_catalog("local-job")
+
+tests/test_acp_remote_catalog_prefetch.py:147: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <acp.scheduler.manager.JobManager object at 0x7fa2f128ce90>
+job_id = 'local-job'
+
+    def _prefetch_remote_catalog(self, job_id: str) -> None:
+        """Pull one terminal remote job's small catalog files into the cache.
+    
+        The backend owns this sync so that ``availability`` flips from
+        ``pending_fetch`` to ``ready`` without depending on a browser issuing
+        ``?fetch=1`` (cached workbench JS may lack the terminal retry).  Geometry
+        stays lazy; failures are logged and never propagate.  The real fetch is
+        delegated to the injected executor so the worker and this entry point
+        share one implementation.
+        """
+>       result = self._prepare_executor.prefetch(job_id)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: '_CompositePrepareExecutor' object has no attribute 'prefetch'
+
+src/acp/scheduler/manager.py:5484: AttributeError
+__________ test_v2_reads_after_terminal_prefetch_fetch_on_demand_once __________
+
+tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_v2_reads_after_terminal_p0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa2e8f92090>
+
+    def test_v2_reads_after_terminal_prefetch_fetch_on_demand_once(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Terminal prefetch warms the singleton cache; v2 reads consume it (todo 6).
+    
+        The manifest arrives via the backend-owned prefetch (no browser
+        ``?fetch=1``), ``/api/v2/results`` serves it from the cache, and a
+        structure still cold on the node is fetched on demand exactly once —
+        repeat downloads hit the same manager-owned singleton cache.
+        """
+        from acp.api.server import create_app
+        from acp.storage.manifest import ResultManifest
+    
+        manifest = ResultManifest(task_id="pv2_remote", workflow="optimize", status="completed")
+        manifest.add_product(
+            id="optimized",
+            label="optimized structure",
+            path="simple/optimized.xyz",
+            kind="structure",
+        )
+    
+        class OptimizeFetcher:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, str]] = []
+    
+            def read_file(self, record: Any, filename: str) -> bytes:
+                self.calls.append((str(record.id), filename))
+                if filename == "RESULT/result_manifest.json":
+                    return json.dumps(manifest.to_dict()).encode("utf-8")
+                if filename == "RESULT/simple/optimized.xyz":
+                    return b"2\nprefetched structure\nH 0 0 0\n"
+                raise FileNotFoundError(filename)
+    
+        monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
+        with TestClient(create_app(run_root=tmp_path, max_running=1)) as client:
+            mgr = client.app.state.job_manager
+            work_dir = tmp_path / "pv2_task"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            record = JobRecord(
+                id="pv2_remote",
+                spec=JobSpec(workflow="optimize", name="pv2_task"),
+                status=JobStatus.COMPLETED,
+                work_dir=str(work_dir),
+                remote_job_id="11",
+                result={"node": "node1", "remote_dir": "/remote/pv2_task"},
+            )
+            mgr.store.create(record)
+            fetcher = OptimizeFetcher()
+            mgr._remote_fetcher = fetcher  # type: ignore[attr-defined]
+    
+>           mgr._prefetch_remote_catalog("pv2_remote")
+
+tests/test_acp_remote_catalog_prefetch.py:264: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <acp.scheduler.manager.JobManager object at 0x7fa2e85a2b50>
+job_id = 'pv2_remote'
+
+    def _prefetch_remote_catalog(self, job_id: str) -> None:
+        """Pull one terminal remote job's small catalog files into the cache.
+    
+        The backend owns this sync so that ``availability`` flips from
+        ``pending_fetch`` to ``ready`` without depending on a browser issuing
+        ``?fetch=1`` (cached workbench JS may lack the terminal retry).  Geometry
+        stays lazy; failures are logged and never propagate.  The real fetch is
+        delegated to the injected executor so the worker and this entry point
+        share one implementation.
+        """
+>       result = self._prepare_executor.prefetch(job_id)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: '_CompositePrepareExecutor' object has no attribute 'prefetch'
+
+src/acp/scheduler/manager.py:5484: AttributeError
+____________________________ test_omo_no_new_files _____________________________
+
+    def test_omo_no_new_files() -> None:
+        """③ ``.omo/`` must not be tracked by git.
+    
+        Checks the current index instead of ``--diff-filter=A`` history: past
+        branches did commit ``.omo/`` artifacts before the ignore rule existed,
+        and rewriting that history is not worth a force-push.
+        """
+>       assert not _git("ls-files", "--", ".omo/").strip()
+E       AssertionError: assert not '.omo/evidence/task-10-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-11-acp2-parallel-plan-b-runtime.md\n.omo/ev...runtime.md\n.omo/evidence/task-8-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-9-acp2-parallel-plan-b-runtime.md'
+E        +  where '.omo/evidence/task-10-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-11-acp2-parallel-plan-b-runtime.md\n.omo/ev...runtime.md\n.omo/evidence/task-8-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-9-acp2-parallel-plan-b-runtime.md' = <built-in method strip of str object at 0x7fa2e9077d70>()
+E        +    where <built-in method strip of str object at 0x7fa2e9077d70> = '.omo/evidence/task-10-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-11-acp2-parallel-plan-b-runtime.md\n.omo/ev...ntime.md\n.omo/evidence/task-8-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-9-acp2-parallel-plan-b-runtime.md\n'.strip
+E        +      where '.omo/evidence/task-10-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-11-acp2-parallel-plan-b-runtime.md\n.omo/ev...ntime.md\n.omo/evidence/task-8-acp2-parallel-plan-b-runtime.md\n.omo/evidence/task-9-acp2-parallel-plan-b-runtime.md\n' = _git('ls-files', '--', '.omo/')
+
+tests/test_f4_scope_audit.py:2442: AssertionError
+______________ test_migration_scope_audit_reaches_migration_files ______________
+
+    def test_migration_scope_audit_reaches_migration_files() -> None:
+        """⑥ The audit actually processes the migration files — no vacuous skip.
+    
+        Key migration files changed since *BASELINE* and several of them do NOT
+        exist at the baseline at all (created by the migration); the checks must
+        still run for them.
+        """
+        changed = _changed_migration_files()
+        expected = {
+            "src/cccp/calculation/errors.py",
+            "src/cccp/backends/orca.py",
+            "src/acp/calculations/contracts.py",
+            "src/acp/calculations/result_publication.py",
+        }
+        assert expected <= changed, f"migration audit scope lost files: {sorted(expected - changed)}"
+        post_baseline = {path for path in expected if not _in_baseline(path)}
+        assert post_baseline, "expected post-baseline files in the audited set (coverage proof)"
+>       assert _migration_audit_issues(changed) == [], "migration stations must be clean"
+E       AssertionError: migration stations must be clean
+E       assert ['  src/acp/s... (unaudited)'] == []
+E         
+E         Left contains one more item: '  src/acp/services_mcp_bootstrap.py: changed outside registered migration stations (unaudited)'
+E         Use -v to get more diff
+
+tests/test_f4_scope_audit.py:2812: AssertionError
+=============================== warnings summary ===============================
+../../../home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+../../../home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53
+  /home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner
+  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-1 (run)
+  
+  Traceback (most recent call last):
+    File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "/usr/lib64/python3.11/threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "/tmp/b14/wt-2a57/tests/test_acp_lifespan_ownership.py", line 96, in run
+      with TestClient(app) as client:
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 698, in __enter__
+      portal.call(self.wait_startup)
+    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 340, in call
+      return cast(T_Retval, self.start_task_soon(func, *args).result())
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 456, in result
+      return self.__get_result()
+             ^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+      raise self._exception
+    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+      retval = await retval_or_awaitable
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 733, in wait_startup
+      await receive()
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 724, in receive
+      self.task.result()
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 449, in result
+      return self.__get_result()
+             ^^^^^^^^^^^^^^^^^^^
+    File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+      raise self._exception
+    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+      retval = await retval_or_awaitable
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 714, in lifespan
+      await self.app(scope, self.stream_receive.receive, self.stream_send.send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
+      await super().__call__(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
+      await self.middleware_stack(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 151, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 49, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+      await self.app(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
+      await self.middleware_stack(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 2726, in app
+      await self.lifespan(scope, receive, send)
+    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 648, in lifespan
+      async with self.lifespan_context(app) as maybe_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+      async with original_context(app) as maybe_original_state:
+    File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+      return await anext(self.gen)
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/b14/wt-2a57/src/acp/api/server.py", line 269, in lifespan
+      admission = build_local_admission(
+                  ^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/b14/wt-2a57/src/acp_services/runtime/local_admission.py", line 538, in build_local_admission
+      return LocalAdmission.build(
+             ^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/b14/wt-2a57/src/acp_services/runtime/local_admission.py", line 358, in build
+      ledger = ReservationLedger(str(db_path))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/tmp/b14/wt-2a57/src/acp_services/runtime/admission.py", line 861, in __init__
+      self._init_schema()
+    File "/tmp/b14/wt-2a57/src/acp_services/runtime/admission.py", line 875, in _init_schema
+      conn.execute("PRAGMA journal_mode=WAL;")
+  sqlite3.OperationalError: database is locked
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner
+FAILED tests/test_acp_remote_catalog_prefetch.py::test_prefetch_skipped_for_non_terminal_job
+FAILED tests/test_acp_remote_catalog_prefetch.py::test_prefetch_skipped_for_local_job
+FAILED tests/test_acp_remote_catalog_prefetch.py::test_v2_reads_after_terminal_prefetch_fetch_on_demand_once
+FAILED tests/test_f4_scope_audit.py::test_omo_no_new_files - AssertionError: ...
+FAILED tests/test_f4_scope_audit.py::test_migration_scope_audit_reaches_migration_files
+6 failed, 41 passed, 3 warnings in 176.60s (0:02:56)
+exit_code=1

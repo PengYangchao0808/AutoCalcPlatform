@@ -1,0 +1,30 @@
+argv: /home/<user>/anaconda3/bin/censo --version
+cwd: <repo>
+
+               ______________________________________________________________
+              |                                                              |
+              |                                                              |
+              |                   CENSO - Commandline ENSO                   |
+              |                           v 3.0.8                            |
+              |          energetic sorting of Conformer Rotamer Ensembles    |
+              |                    University of Bonn, MCTC                  |
+              |                           Oct 2024                           |
+              |                 based on ENSO version 2.0.1                  |
+              |             L. M. Seidler, F. Bohle and S. Grimme            |
+              |                                                              |
+              |______________________________________________________________|
+
+              Please cite:
+              (TBA)
+              S. Grimme, F. Bohle, A. Hansen, P. Pracht, S. Spicher, and M. Stahn
+              J. Phys. Chem. A 2021, 125, 19, 4039-4054.
+              DOI: https://doi.org/10.1021/acs.jpca.1c00971
+
+              This program is distributed in the hope that it will be useful,
+              but WITHOUT ANY WARRANTY; without even the implied warranty of
+              MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+
+CALL: /home/<user>/anaconda3/bin/censo --version
+3.0.8
+exit_code=0

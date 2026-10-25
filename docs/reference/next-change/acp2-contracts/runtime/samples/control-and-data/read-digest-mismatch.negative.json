@@ -1,0 +1,23 @@
+{
+  "sample_id": "read-digest-mismatch.negative",
+  "contract": "control-and-data.v1.json",
+  "kind": "negative",
+  "operation": "read",
+  "payload": {
+    "artifact_ref": {
+      "task_id": "20261022_001_demo",
+      "attempt": 1,
+      "artifact_id": "freq_log",
+      "generation": 1,
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "served_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected": {
+    "valid": false,
+    "class": "conflict",
+    "code": "revision_conflict",
+    "violation": "digest_mismatch",
+    "field": "artifact_ref.digest"
+  }
+}

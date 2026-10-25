@@ -1,0 +1,87 @@
+{
+  "attempt": 1,
+  "cancel_issued_at": "2026-10-22T23:34:59.136781Z",
+  "cancel_response_http": 200,
+  "cancel_response_status": "cancelling",
+  "cancelled_at_wallclock": "2026-10-22T23:35:02.662537+00:00",
+  "cancelled_persisted_at": "2026-10-22T23:35:02.662537+00:00",
+  "controller_restart": {
+    "deferred_to": "b13.fault.controller_restart",
+    "reason": "a restart advances terminal side-effect markers; isolation stays in the dedicated row"
+  },
+  "events": {
+    "job.cancelled": 1,
+    "job.cancelling": 1,
+    "job.started": 1
+  },
+  "gate": {
+    "cas": {
+      "detail": "job 20261023_073458_002_singlepoint state conflict: expected {'revision': 4, 'status': 'cancelling', 'attempt': 1}, actual {'status': 'cancelled', 'revision': 7, 'attempt': 1}",
+      "error": "JobStateConflictError",
+      "rejected": true
+    },
+    "exit_code": 0,
+    "old_attempt": {
+      "accepted": false,
+      "code": "stale_attempt"
+    },
+    "proof": "acp2.b13.receipt_cas_gate.v1",
+    "row": {
+      "attempt": 1,
+      "revision": 7,
+      "status": "cancelled"
+    },
+    "same_attempt": {
+      "accepted": true,
+      "code": ""
+    }
+  },
+  "late_receipt": {
+    "attempt": 1,
+    "data_bindings": [
+      {
+        "artifact_digests": {
+          "input.xyz": "sha256:0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404"
+        },
+        "binding_id": "local:98e0695545d668e6:9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__14",
+        "endpoint": "local",
+        "kind": "local",
+        "mapping_version": 1,
+        "project_id": "",
+        "relative_path": "9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__14",
+        "root": "/opt/acp2-dev/data/b/run-root-b13/uncategorized",
+        "tenant_id": ""
+      }
+    ],
+    "errors": [],
+    "evidence_digests": {},
+    "fencing_token": "cd5da85fa1e00512a4044a044a50ae83",
+    "job_id": "20261023_073458_002_singlepoint",
+    "owner": "local:redacted-host:750900:1",
+    "plan_identity": "v2:35dbd3c213a1f15d4ea8b5224a537ec9",
+    "receipt_version": 1,
+    "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+    "release_id": "98e0695545d668e6",
+    "result_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "state": "completed",
+    "step_identities": [
+      "v2:cf29f03ad12a0769e459ddfcbc8adcc7"
+    ],
+    "submission_id": "sub_2c6656fce10f3349",
+    "written_at": "2026-10-22T23:35:02.901032Z"
+  },
+  "monotonic": {
+    "cancel_issued": 416106.965612252,
+    "terminal_observed": 416110.511715533
+  },
+  "pid": 751343,
+  "pid_alive_at_cancel": true,
+  "remaining_processes_after_terminal": [],
+  "revision_after_late_receipt": 7,
+  "revision_before_cancel": 4,
+  "revision_settled_after_terminal": 7,
+  "status_after_late_receipt": "cancelled",
+  "stop_observed_at": "2026-10-22T23:34:59.303088Z",
+  "task_processes_at_stop": [],
+  "task_ref": "20261023_073458_002_singlepoint"
+}

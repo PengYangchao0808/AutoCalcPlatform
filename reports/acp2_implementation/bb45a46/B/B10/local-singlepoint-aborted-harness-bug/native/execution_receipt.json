@@ -1,0 +1,46 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0"
+      },
+      "binding_id": "local:98e0695545d668e6:STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
+      "root": "/opt/acp2-dev/data/b/run-root-b10/uncategorized",
+      "tenant_id": ""
+    }
+  ],
+  "errors": [],
+  "evidence_digests": {
+    "exit_code": "0",
+    "job_status": "completed",
+    "missing_required_facts": "",
+    "normal_reuse": "true",
+    "partial_result": "false",
+    "publish": "true",
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "required_facts": "energy_hartree",
+    "task_result_digest": "sha256:5b7d86b79e479739a421ccb83ccfdd6a9aae4777272472fac4bedcfdedf1453c",
+    "truth_table_row": "b"
+  },
+  "fencing_token": "8690400d19d8e46fb0276e2b68607e11",
+  "job_id": "20261023_031338_001_singlepoint",
+  "owner": "local:redacted-host:594969:1",
+  "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+  "receipt_version": 1,
+  "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+  "release_id": "98e0695545d668e6",
+  "result_digest": "sha256:4fd07ca9e34fdc9b3f27bcf5e920e552bd540fe563b6d0fb95b6d2b81bed9545",
+  "state": "completed",
+  "step_identities": [
+    "v2:6bef768c801ad53fcb7cfbecacf08853"
+  ],
+  "submission_id": "sub_4cbc09b3fd40848d",
+  "written_at": "2026-10-22T19:13:41.337458+00:00"
+}

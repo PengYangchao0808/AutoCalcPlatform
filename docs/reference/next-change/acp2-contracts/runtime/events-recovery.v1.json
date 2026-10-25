@@ -1,0 +1,245 @@
+{
+  "schema": "acp2.runtime.events-recovery.v1",
+  "contract_version": "1.0.0",
+  "frozen_at": "2026-10-23",
+  "owner": "B",
+  "status": "delivered",
+  "scope": "Cross-research-session delivery and recovery for a project-scoped research stream. The durable per-task event log plus the current snapshot are the recovery basis; a chat/DSH WebSocket message is never authority.",
+  "authority": {
+    "business_authority": "B CAS stores (task/approval/budget) remain authoritative; the event log is a replayable projection.",
+    "research_record_authority": "C owns the ResearchRecord question/proposal/round/task references; B never writes them.",
+    "session_authority": "A chat/DSH session id is a client identity only. It carries a cursor and can never set project scope or business state.",
+    "snapshot_rule": "replay(cursor) delivers durable facts after the cursor; reset=true additionally delivers the full current snapshot, which the consumer uses to rebuild the projection."
+  },
+  "event": {
+    "envelope": "acp_services.contracts.events.EventEnvelope (frozen twelve-field wire contract)",
+    "payload_version": 1,
+    "identity_fields": [
+      "event_id",
+      "seq",
+      "cursor",
+      "event_type",
+      "task_id",
+      "attempt",
+      "project_id",
+      "revision",
+      "payload_version",
+      "owner",
+      "terminal",
+      "emitted_at",
+      "payload",
+      "dedup_key"
+    ],
+    "identity_rules": {
+      "event_id": "stable, non-empty; the dedup identity of one fact",
+      "dedup_key": "stable across retries/restarts/outbox redelivery; equal dedup_key is a no-op",
+      "seq": "per-owner monotonic integer; a regression is a corrupt stream and is rejected",
+      "revision": "monotonic business-projection revision per task/attempt; a stale revision is ignored",
+      "task_id": "the owning task; an event for another task never enters this projection",
+      "attempt": "the execution attempt; an older attempt is stale and a newer attempt requires its own projection",
+      "project_id": "server-resolved project scope; a fact for another project is rejected",
+      "payload_version": "integer version of the event payload; a newer version is not consumed",
+      "owner": "B (task/approval/budget state) or C (reference-only research facts)",
+      "terminal": "derived from event_type; never caller-asserted"
+    },
+    "owner_components": {
+      "B": [
+        "task.queued",
+        "task.started",
+        "task.progress",
+        "task.paused",
+        "task.resumed",
+        "task.completed",
+        "task.failed",
+        "task.cancelled",
+        "task.submitted",
+        "approval.requested",
+        "approval.approved",
+        "approval.rejected",
+        "approval.revoked",
+        "approval.expired",
+        "approval.task_bound",
+        "budget.reserved",
+        "budget.settled",
+        "budget.released",
+        "budget.denied"
+      ],
+      "C": [
+        "research.question.referenced",
+        "research.proposal.referenced",
+        "research.round.referenced",
+        "research.task_ref.referenced"
+      ]
+    },
+    "business_state_ownership": {
+      "B": "task/approval/budget",
+      "C": "ResearchRecord question/proposal/round/task references",
+      "double_write_rule": "neither side writes the other side's business state; C reference facts never mutate B status, and B rejects a C fact that carries B state"
+    },
+    "event_types": [
+      "task.queued",
+      "task.started",
+      "task.progress",
+      "task.paused",
+      "task.resumed",
+      "task.completed",
+      "task.failed",
+      "task.cancelled",
+      "task.submitted",
+      "approval.requested",
+      "approval.approved",
+      "approval.rejected",
+      "approval.revoked",
+      "approval.expired",
+      "approval.task_bound",
+      "budget.reserved",
+      "budget.settled",
+      "budget.released",
+      "budget.denied",
+      "research.question.referenced",
+      "research.proposal.referenced",
+      "research.round.referenced",
+      "research.task_ref.referenced"
+    ],
+    "terminal_event_types": [
+      "approval.expired",
+      "approval.rejected",
+      "approval.revoked",
+      "budget.denied",
+      "budget.released",
+      "budget.settled",
+      "task.cancelled",
+      "task.completed",
+      "task.failed"
+    ],
+    "additive_event_types": [
+      "task.submitted",
+      "approval.task_bound",
+      "research.question.referenced",
+      "research.proposal.referenced",
+      "research.round.referenced",
+      "research.task_ref.referenced"
+    ]
+  },
+  "event_types": {
+    "task": [
+      "task.queued",
+      "task.started",
+      "task.progress",
+      "task.paused",
+      "task.resumed",
+      "task.completed",
+      "task.failed",
+      "task.cancelled",
+      "task.submitted"
+    ],
+    "approval": [
+      "approval.requested",
+      "approval.approved",
+      "approval.rejected",
+      "approval.revoked",
+      "approval.expired",
+      "approval.task_bound"
+    ],
+    "budget": [
+      "budget.reserved",
+      "budget.settled",
+      "budget.released",
+      "budget.denied"
+    ],
+    "c_reference": [
+      "research.question.referenced",
+      "research.proposal.referenced",
+      "research.round.referenced",
+      "research.task_ref.referenced"
+    ]
+  },
+  "cursor": {
+    "wire": "opaque",
+    "format": "r1.<base64url(seq:issued_at_epoch)>",
+    "consumer_rule": "treat the cursor as an opaque token; never parse it, never derive authority from it",
+    "max_age_s": 3600,
+    "expiry_rule": "a cursor whose issued_at is older than max_age_s is expired; replay returns reset=true with reason cursor_expired",
+    "reset_reasons": [
+      "cursor_expired",
+      "cursor_missing",
+      "cursor_invalid",
+      "cursor_ahead",
+      "retention_gap",
+      "permission_changed",
+      "service_restart",
+      "subscription_changed"
+    ],
+    "snapshot": {
+      "required_on_reset": true,
+      "content": "every durable event for this owner in sequence order",
+      "rule": "reset is always explicit (reset=true + reason + snapshot); a lost cursor is never an empty-but-silent success"
+    },
+    "expiry_reset": {
+      "on": "cursor_expired",
+      "action": "discard the cursor, rebuild the projection from the snapshot, then reconcile idempotently",
+      "duplicate_dispatch": "forbidden; the action ledger returns replay for the same idempotency key"
+    }
+  },
+  "task_attempt_revision": {
+    "projection_key": "(project_id, task_id, attempt)",
+    "attempt_rule": "an event from an older attempt is stale; an event from a different newer attempt requires a new projection and is never mixed",
+    "revision_rule": "apply only revision > projection.revision; equal-revision additive facts are accepted; equal-revision status facts are out_of_order",
+    "out_of_order_rule": "a lower revision never overwrites a newer projection; the event is recorded as stale and has no effect"
+  },
+  "project_scope": {
+    "source": "server-resolved project id, never a chat session or a client payload",
+    "rule": "append and replay reject an event whose project_id differs from the stream's project scope",
+    "cross_project": "a cursor from another project/principal is refused, not reinterpreted"
+  },
+  "rules": {
+    "replay": "cursor-addressed durable replay plus the current snapshot; WebSocket/live messages are notifications only, never authority. A fresh subscriber may start from cursor=0 and read the durable log.",
+    "out_of_order": "events are applied in durable seq order; a lower business revision is stale and ignored; an equal-revision status fact is out_of_order and cannot change status; a newer non-terminal fact cannot revive a terminal projection.",
+    "duplicate": "equal event_id or dedup_key is a no-op; the durable log appends nothing and the projection reports duplicate.",
+    "idempotent_consumer": "the consumer applies facts idempotently, and every externally visible action (approval request, submit, dispatch) is claimed through the persistent (action, idempotency_key) ledger; a replay returns the original TaskRef and never dispatches twice.",
+    "terminal_projection": "once a task/approval/budget target is terminal, its terminal state is write-once for that projection: a stale or newer status event cannot overwrite it. Additive facts (task_ref/submit reference) may still be attached.",
+    "revocation": "authorization is re-evaluated on the live stream; a revocation closes delivery immediately, the next poll returns reset=true with permission_changed and no events, and new connections are refused. A cursor does not preserve permission.",
+    "rph_exit_after_task_completion": "an RPH/session exit is not a task cancellation. If the task is terminal the session stops immediately (no LLM wait, no new dispatch); if non-terminal the task continues and the consumer returns without blocking, re-reading the cursor/snapshot on reattach.",
+    "lost_cursor": "a missing, invalid, ahead-of-tail, expired or retention-gap cursor forces an explicit snapshot reset; the consumer rebuilds projection state and reconciles actions through the idempotency ledger, so a lost cursor cannot cause a duplicate submit or dispatch.",
+    "session_is_not_authority": "a chat/DSH session id, its claimed project id and any temporary server message are never project authority; only the durable projection and the verified server scope decide the project.",
+    "stale_event": "a stale event cannot overwrite a terminal projection or a newer revision; it is recorded as stale/out_of_order/terminal_protected with no state change."
+  },
+  "recovery": {
+    "inputs": [
+      "cursor (opaque, optional)",
+      "durable per-owner event log",
+      "current snapshot",
+      "persistent action ledger"
+    ],
+    "steps": [
+      "decode and age-check the cursor",
+      "if missing/invalid/expired/ahead/retention-gap: discard it and rebuild from the snapshot",
+      "otherwise replay durable events after the cursor",
+      "apply events idempotently in seq order (duplicate/stale/out-of-order/terminal-protected are no-ops)",
+      "decide the next action from the authoritative projection",
+      "claim any approval/submit action through the persistent idempotency ledger",
+      "publish the committed action fact with a stable dedup key"
+    ],
+    "no_duplicate_dispatch": "a reset rebuilds submitted/terminal state from the snapshot, and the ledger's committed row returns the original TaskRef; no second submit is created",
+    "cross_process": "the cursor is a durable seq + issue time, so a new process resumes from the same log without a live client"
+  },
+  "session_lifecycle": {
+    "attach": "a session provides a cursor only; the server resolves project/task/attempt",
+    "detach": "recording a detached session never changes task/approval/budget state",
+    "rph_exit": "see rules.rph_exit_after_task_completion",
+    "reconnect": "replay from the last cursor; on reset rebuild from the snapshot"
+  },
+  "compatibility": {
+    "legacy_event_log": "old records without the _research payload block remain readable (task_id=owner_id, attempt=1, revision=seq, owner=B)",
+    "legacy_cursor": "the integer after_seq remains valid for the legacy SSE endpoint; the research cursor is an additive opaque token",
+    "contract_version": "1.0.0",
+    "breaking_change_requires": [
+      "new contract version",
+      "new cursor/payload version",
+      "positive and negative samples",
+      "C consumer confirmation"
+    ]
+  },
+  "digest_rule": "sha256 of canonical compact JSON (sort_keys=True, separators=(',', ':'), ensure_ascii=False) with this field set to the empty string",
+  "digest": "sha256:fe8944ded15556bd7461ab2b10036bcaabf181ae5484297a98e80c61ca83f559"
+}

@@ -1,0 +1,81 @@
+{
+  "base_revision": "37354b9a91a072a026e355cc11b443027ba3eba7",
+  "base_revision_short": "37354b9",
+  "branch": "feat/frontend-plan1-closure",
+  "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
+  "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B16 working-tree files (the harness schema accepts a source-overlay sha256)",
+  "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+  "contract_version": "1.1.0",
+  "controller_command": "/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18776 --run-root /opt/acp2-dev/data/b/run-root-b16 --poll-interval 1 --no-browser",
+  "controller_health": {
+    "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
+    "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.1.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-23T05:03:23.170199Z",
+    "status": "ok"
+  },
+  "fixture": "/opt/acp2-dev/data/b/fixtures/approval.json",
+  "fixture_sha256": "67a35f1eaff4cb61b727e5c528e4fc767839ad712e299d681969f5fb98d55157",
+  "schema": "acp2.b16.candidate.v1",
+  "server_revision": "37354b9 + B16 working-tree files",
+  "source_checkout": "repo-root",
+  "source_composition": "current working tree (PYTHONPATH=src) because B16 adds code; not the frozen integration candidate",
+  "working_tree_files": [
+    {
+      "path": "src/acp_services/runtime/canonical_digest.py",
+      "sha256": "1438c9b336107157f886600b858ff2329377a7b439ac8421330ffb221e53b146"
+    },
+    {
+      "path": "src/acp_services/runtime/approvals.py",
+      "sha256": "0de61e24f859ffc6a80fecbdfda9a84c87f0106f75e689286746fc7384f974e2"
+    },
+    {
+      "path": "src/acp_services/store/migrations.py",
+      "sha256": "76ef303516489dfde08651c08d9480b048edfa104911b7b6c90b749c91385306"
+    },
+    {
+      "path": "src/acp/api/v2_approvals.py",
+      "sha256": "b674b3d5c2b63844ad17c0b493d5e86ac51d0fd5dbdcda1400ae1ef5a3144480"
+    },
+    {
+      "path": "src/acp/api/v1_routes.py",
+      "sha256": "d976ca8012d35e66620844dba8a1204bb246a31a1880ccfd0f7fa4ea3cad211f"
+    },
+    {
+      "path": "src/acp/api/server.py",
+      "sha256": "afa3fef977e5647bf92390e777356f706f6401d2330e2d9dad32a973fd606f5b"
+    },
+    {
+      "path": "scripts/acceptance/acp2_runtime.py",
+      "sha256": "81023137624bddcc6582451e3ad5018f2585fc9b485ff87371766eb32a614ea6"
+    },
+    {
+      "path": "tests/test_acp2_runtime_approvals.py",
+      "sha256": "fe3975147bc6b9889dfe46e413d08c75cfd7c8efa142aba948d170fc030229d3"
+    },
+    {
+      "path": "tests/test_acp2_runtime_contracts.py",
+      "sha256": "1d60798b9cbaddac8bd59dc1e381ddbbddc46b8dab6e806c56d281c298be0148"
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+      "sha256": "dbe0f1cf303fdbf26d8722be6dbb877536c6cb232432255711f3a4a63300986b"
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+      "sha256": "10f2ad63c4fdb6471bb8c56fd025a9460eb054b7afc17db7b1f2e57e7904fa04"
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+      "sha256": "0708c6bb4048ad8544c2c480a0e5c4e36312b5a0c0155f22f4f10afaa45cfa62"
+    },
+    {
+      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "sha256": "f5144c58b29f783d33c589e8a7ed96237eafca87fd307d7d59129cbe89e45bea"
+    }
+  ],
+  "working_tree_overlay_sha256": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23"
+}

@@ -1752,3 +1752,75 @@ Antigravity 提交行数分布、原符号→新文件/依赖地图、测试迁�
 | 任务前端兼容重构状态 | **COMPLETED** | R0—R6 全要素落地，网络与共享缓存收拢至 Client，用户会话与交互决策归 Workbench controller，图形边界归 Visualization |
 | 真实远端科学执行状态 | **INDEPENDENT** | 见 42.5 节规范，真实集群/科学计算作业执行状态保持独立维护，不受前端重构解耦影响 |
 | 后续服务能力接入状态 | **TRACKED** | 契约遵循既有 FastAPI v1/v2，为未来持久化事件与 prepare API 预留标准接入点 |
+
+## 44. 当前完成情况核查与三路并行派发（2026-10-18）
+
+基于干净工作区 `f410ac9dae035eb424c40c599692500fdea457cc` 重新核查代码及历史实施记录，形成[完成情况与并行索引](reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md)。本文保留前述历史记录；本次后续派发以该索引核实的状态为准，不将历史 PASS 自动视为当前 revision 已复验。
+
+当前结论：HTML/CSS/JS 拆分与主要 Client/任务 controller 已实现并接入；实际会话模块为 `task_session_controller.js`。R5 的 `scene_instance.js` 尚未加载到默认页，业务仍持有原生 viewer/model，wizard 四片等 R6 余项仍在。因此前述“42.7”的 R0—R6 全部 COMPLETED、`job_session_controller.js` 与 `mol3d.createInstance()` 描述不作为当前完成证据。Services 独立包、持久 prepare/全量 cache-only、独立 worker 与 CCCP Analysis 等目标尚未完成，真实浏览器/科学/远端/生产按版本与范围分别验收。
+
+三份清单是原工作包的职责派发附件，继续沿用 M0—M4、P/PR/MU/OS/CQ/IN 索引，不另设相互竞争的实施顺序：
+
+1. [Frontend：收口与真实能力接入](reference/next-change/ACP_Parallel_Plan_1_Frontend_20261018.md)：现有 S0 上完成实例/表单/用例和浏览器验收，再消费真实新接口。
+2. [Services：平台服务与交付](reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md)：Workspace/Runtime/Data、CLI/init/worker、项目包/MCP、隔离/核时与按需托管。
+3. [CCCP：科学闭包、Analysis 与独立发行](reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md)：唯一科学实现、规范产品、Software、模型/报告、插件与独立科学包。
+
+三路可同时开发首片，契约逐片冻结、共享文件单写者接入；独立 worker 等待必要科学闭包，前端新能力等待真实服务，收费/多租户等待各自发布门。本次只交付核查与计划文档，未执行开发、测试、服务重启或生产发布。
+
+## 45. ACP Services 实施记录（2026-10-19）
+
+本节按 §41—§44 的「实施状态记录、不改前文方案」体例追加。计划与证据：
+`.omo/plans/acp-parallel-plan-2-services.md`（todo 1—78 + F1—F5）；分层收口
+[ACP_Services_Closure_20261019](reference/current/ACP_Services_Closure_20261019.md)；
+四组合 [ACP_Services_Four_Combination_Acceptance](reference/current/ACP_Services_Four_Combination_Acceptance.md)。
+
+### 45.1 已交付范围（模块 + 已接入默认入口）
+
+| 切片 | 实现落点 | 状态 |
+|---|---|---|
+| Workspace/访问边界/身份/管理面 | `src/acp_services/workspace/{projects,admin,entry_authz,identity_lifecycle,identity_mapping,keys,boundary}.py` | 模块 PASS（L1-06）；HTTP/UI 接线 `NOT_VERIFIED` |
+| Data prepare/read、传输校验、StorageBinding、命名空间、归档导入 | `src/acp_services/data/{contracts,operations,transfer,resource_read,read_root,storage_binding,namespaces,archive,import_,budget}.py` | 模块 PASS（L1-01/L1-08/L1-14）；旧 GET 保留 |
+| Runtime 用例/执行链/worker/回执/恢复/计划与步骤契约 | `src/acp_services/runtime/{commands,execution_chain,worker,receipts,recovery,plan_contracts,step_result,step_requirements,...}.py` | 模块 PASS（L1-13）；8/15 envelope 启用，7 legacy |
+| 持久 store/schema 与 CAS | `src/acp_services/store/{store,migrations,record(s),layout,naming,legacy_method,molecule_groups}.py` | 模块 PASS（L1-04）；已迁入实现（todo 77） |
+| 事件/outbox/投影/freshness | `src/acp_services/runtime/{events,outbox,projections,freshness}.py` + `events.py` | 模块 PASS（L1-02）；A04 前端 `DEFERRED` |
+| 准入/配额/用量/计量政策 | `src/acp_services/runtime/{admission,quota,usage,metering_policy,metering_decoupling}.py` | 模块 PASS（L1-07）；派发/生产接线 `NOT_VERIFIED` |
+| CLI/init/standalone/MCP/诊断 | `src/acp/cli.py`（`acp task`）、`src/acp/init_wizard/**`、`src/acp_services/entrypoints/{diagnostics,machine_output,mcp}.py` | L2-01/L2-09 PASS；MCP 默认入口 `NOT_VERIFIED` |
+| 默认入口接入 | `acp task`、`/api/v1/jobs/{id}/availability`、`/prepared/{resource}`、`JobManager` prepare/outbox 装配、发布端口、执行链、lineage | 后端 10 项 PASS（L2-01—L2-10） |
+
+### 45.2 兼容面与 identity forwarder（未删除）
+
+- **公开 shim 保留**：`acp.calculations.primitives`（→ `src/cccp/calculation/tasks/`）、`acp.backends`（→ `src/cccp/backends/`）。
+- **旧 scheduler/契约路径保留**：`acp.scheduler.{store,migrations}`、`acp.calculations.{contracts,step_result,step_requirements}`、`acp.catalog.method_levels_to_cli_flags` 与 `acp_services` 对应对象 **`is` 同一对象**；禁止在 `acp` 侧重加实现（root ANTI #29—#30）。
+- **历史只读保留**：`src/acp/compat/legacy/`（manifests/layouts/batch_loaders）只读；新代码走 `results/manifest` v2。
+- **资产/fixture 保留**：`tests/baseline/recovery_fixtures/`（未改动）、`src/cccp/analysis/nmr/model_assets/`（含 `NOTICE.md`/`LICENSE-DP5`，package-data 随包）、`frontend/js/vendor/`、退役工作流内部引擎 shim。
+- **调用者审计**：[public_shim_inventory.md](../tests/baseline/services-evidence/public_shim_inventory.md)；逐符号台账 [migration_ledger.md](../tests/baseline/services-evidence/migration_ledger.md)（53 行，6 列，状态 token 在退出条件列首：CLOSED 39 / RETAINED 5 / OPEN 9）。
+
+### 45.3 护栏与验证（真实执行）
+
+- 模块：`python3.11 -m pytest tests/test_services_*.py -q` → **1348 passed, 1 failed**；唯一失败 `F-3`（`tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access`，DB-backed runtime 模块导入 `sqlite3`）**如实保留，未放宽/删除护栏**。
+- 共享护栏：架构/隔离/frames/markers/发布/执行完整性/恢复 **127 passed**；F4 `35 passed`（`99b5ee2` amendment，等效门加强）。
+- 文档一致性：本记录新增 `tests/test_services_doc_sync.py`（路径/符号存在、ledger 6 列与状态、closure 三态不矛盾、shim 清单、recipe/closure 未被注入）。
+- **三分层状态**：L1 模块验证除 F-3 外 PASS；L2 后端入口 10 项 PASS；L3 本地闭环/恢复/备份为 `in_repo` PASS（FakeBackend，不声明真实科学）。浏览器（A05）、真实科学软件（C10）、LSF（C10/B）、生产（B）、科学等价（C10）**逐项 `NOT_VERIFIED`**。
+
+### 45.4 延期/未关闭门（不得写成完成）
+
+| 项 | 状态 | 保留的旧能力 |
+|---|---|---|
+| W12 B11 价格/账本 | `DEFERRED`（价格政策门） | usage-only / quota-only 可交付；不宣称收费可用 |
+| W13 B12 PostgreSQL/对象存储/Slurm/GPU | `DEFERRED`（需求 + PoC gate） | SQLite/本地目录/本地+LSF 路径不变 |
+| B40b 完整发行（独立 CCCP wheel/notice/extras） | `gate OPEN` | 单 wheel M1 态；资产/notice 已随包 |
+| T34b 15/15 envelope 覆盖 | `NOT_VERIFIED`（当前 8/15 + 7 legacy） | 7 项 legacy 走旧路径，不声称独立 |
+| F0/F1×S0/S1 的浏览器/科学/远端/生产项 | `NOT_VERIFIED` | 旧 GET、旧 worker、旧 release 兼容窗口保留 |
+| 前端 cache-only 消费 / A04 / Lab UI / MCP 默认入口 / 归档 CLI-API / 计量解耦 | `NOT_VERIFIED` | 旧路径全部保持可用（closure §7.4） |
+
+### 45.5 边界声明
+
+本轮为**文档/台账收口**：未删除任何活跃 compat 面、fixture、模型/资产/notice；未为缩行数删实现；未重启服务、未改 unit、未改生产 DB/配置；实际发布与冒烟归 todo 76（F1—F4 APPROVE 后）。`NOT_VERIFIED` 不因文档同步升级为 PASS，`已交付字段` 不写成 `前端已接入`。
+
+## 46. 验收缺陷整改计划（2026-10-20）
+
+对提交 `d5d85e7c804878edd0cedb6bce1d32af2d92ad83` 的[验收报告](../reports/architecture_acceptance_20261019/REPORT.md)判定整体 FAIL，列出 12 项业务/契约或测试缺陷，以及 D07 默认执行链交付缺口。此前实施记录仅代表各自提交与范围，不能代替本次正确性和默认闭环验收。
+
+后续按[架构调整验收整改计划](reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md)执行：先恢复有效守护并修复五项 P1，再完成 Data 与可视化闭环，补齐普通提交到 worker 回执/CAS/发布的默认链路，最后在固定候选上复验发行、兼容与真实功能。该附件沿用 D01—D13 和本方案工作包，分别规定修改驻点、依赖、回归、关闭门与延期能力接入条件，不改变既有架构及兼容约束。
+
+**当前仅完成整改计划编写，尚未实施修复或重新验收；原验收 FAIL 与各项 OPEN/NOT_VERIFIED 保持原意，未发布或重启服务。**

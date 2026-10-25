@@ -1,0 +1,43 @@
+{
+  "argv": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_fault_controller.py",
+    "--source",
+    "/opt/acp2-dev/B/src",
+    "--fault-file",
+    "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "--config",
+    "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+    "--candidate-revision",
+    "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "--orca",
+    "/home/redacted-user/orca611/orca",
+    "--orca-ld-library-path",
+    "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+    "--",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18771",
+    "--run-root",
+    "/opt/acp2-dev/data/b/run-root-b13",
+    "--poll-interval",
+    "1",
+    "--no-browser"
+  ],
+  "cwd": ".",
+  "health": {
+    "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.1.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-22T23:34:41.660743Z",
+    "status": "ok"
+  },
+  "pid": 750900,
+  "run_root": "/opt/acp2-dev/data/b/run-root-b13"
+}

@@ -1,0 +1,15 @@
+{
+  "controller_pid": 1162171,
+  "controller_port": 18775,
+  "credentials_file_mode": "0600",
+  "integration_worktree_modified": false,
+  "leftover_processes": [],
+  "port_after_stop_record": "controller/ss-after-stop.txt",
+  "port_free": true,
+  "production_run_root_touched": false,
+  "production_service_8765_touched": false,
+  "run_root": "/opt/acp2-dev/data/b/run-root-b15",
+  "schema": "acp2.b15.cleanup.v1",
+  "secrets_location": "/opt/acp2-dev/data/b/run-root-b15/secrets/b15-credentials.json (outside the repository; fixture holds only the file reference)",
+  "tcp_connect_after_stop": "ConnectionRefusedError"
+}

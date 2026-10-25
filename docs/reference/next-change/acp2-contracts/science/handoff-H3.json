@@ -1,0 +1,325 @@
+{
+  "active_workflow_contract": {
+    "active_workflow_ids": [
+      "singlepoint",
+      "optimize",
+      "frequency",
+      "scan",
+      "irc",
+      "tsmode",
+      "casscf",
+      "xtb_optimize",
+      "nmr",
+      "Confsearch",
+      "PESsearch",
+      "BatchOptimize",
+      "XtbPathSearch",
+      "OrcaGradient",
+      "XtbConstrainedOpt"
+    ],
+    "expected_active_count": 15,
+    "guard_evidence": {
+      "commands": [
+        "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_architecture_invariants.py -q",
+        "/opt/acp2-dev/envs/a-python/bin/python -m pytest tests/test_acp2_science_handoff.py -q"
+      ],
+      "summary": "The fifteen active workflow ids are unchanged from the frozen catalog order. tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered asserts the exact ordered tuple and the count of 15; tests/test_architecture_invariants.py::test_each_active_workflow_has_dispatch_and_method_schema asserts every active id has a CLI dispatch entry and a method schema; tests/test_acp2_science_handoff.py::test_task_compatibility_matrix_has_fifteen_rows asserts the task-compatibility matrix still lists exactly the fifteen TaskKinds. No active workflow, compatibility shim, or retired-workflow guard was edited by A-13.",
+      "tests": [
+        "tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered",
+        "tests/test_architecture_invariants.py::test_each_active_workflow_has_dispatch_and_method_schema",
+        "tests/test_architecture_invariants.py::test_retired_workflows_not_in_active_catalog",
+        "tests/test_acp2_science_handoff.py::test_task_compatibility_matrix_has_fifteen_rows"
+      ]
+    },
+    "intact": true,
+    "inventory_source": "src/acp/catalog.py::WORKFLOW_CATALOG rows with status == \"active\"",
+    "reference": "docs/reference/next-change/acp2-contracts/science/task-compatibility-matrix.md"
+  },
+  "combinations": [
+    {
+      "attempt": null,
+      "entry": "cli",
+      "environment": "local",
+      "evidence": {
+        "artifacts": [],
+        "commands": [],
+        "summary": "No executed evidence exists: B10 has not published the shared Local singlepoint task or its three-entry sample, and A has no authorized Local artifact manifest for this same-task cell. The cell is recorded as NOT_VERIFIED rather than inferred from B10 plan text.",
+        "tests": []
+      },
+      "executed": false,
+      "gap": "missing platform evidence: B10 three-entry Local sample (one first-submit task id, its attempt, CLI read) and the authorized Local artifact manifest are unpublished; no bsub/Local run record or LSF receipt exists",
+      "status": "NOT_VERIFIED",
+      "task_id": null
+    },
+    {
+      "attempt": null,
+      "entry": "cli",
+      "environment": "lsf",
+      "evidence": {
+        "artifacts": [],
+        "commands": [],
+        "summary": "No executed evidence exists: no LSF bsub/bjobs submission, receipt, submission_id, or authorized LSF artifact manifest has been published. The cell is NOT_VERIFIED and cannot be upgraded by the Local row or by any plan statement.",
+        "tests": []
+      },
+      "executed": false,
+      "gap": "missing platform evidence: LSF bsub/bjobs/submission_id/receipt and the authorized LSF artifact manifest are unpublished; B07 frozen deadlines are also unpublished, so no LSF run could be reconciled",
+      "status": "NOT_VERIFIED",
+      "task_id": null
+    },
+    {
+      "attempt": null,
+      "entry": "http_workbench",
+      "environment": "local",
+      "evidence": {
+        "artifacts": [],
+        "commands": [],
+        "summary": "No executed evidence exists: C15 has not published the same-task-browser-live record proving the Workbench/HTTP view reads the first-submit task and attempt. The cell is NOT_VERIFIED.",
+        "tests": []
+      },
+      "executed": false,
+      "gap": "missing experience evidence: C15 same-task-browser-live record and the HTTP/Workbench read of the B10 first-submit task id/attempt are unpublished; no Local artifact manifest exists",
+      "status": "NOT_VERIFIED",
+      "task_id": null
+    },
+    {
+      "attempt": null,
+      "entry": "http_workbench",
+      "environment": "lsf",
+      "evidence": {
+        "artifacts": [],
+        "commands": [],
+        "summary": "No executed evidence exists: neither the Workbench/HTTP same-task record nor an LSF submission/receipt has been published. The cell is NOT_VERIFIED.",
+        "tests": []
+      },
+      "executed": false,
+      "gap": "missing experience and platform evidence: C15 same-task-browser-live record and the LSF bsub/bjobs/submission/receipt are unpublished; no LSF artifact manifest exists",
+      "status": "NOT_VERIFIED",
+      "task_id": null
+    },
+    {
+      "attempt": null,
+      "entry": "mcp_dsh",
+      "environment": "local",
+      "evidence": {
+        "artifacts": [],
+        "commands": [],
+        "summary": "No executed evidence exists: the MCP/DSH read of the first-submit task has not been recorded, and B05's stdio launch file remains unpublished (as already recorded in H2). The cell is NOT_VERIFIED.",
+        "tests": []
+      },
+      "executed": false,
+      "gap": "missing platform/experience evidence: B05 stdio launch file (H2 gap), B10 three-entry MCP read record and C15 same-task-browser-live MCP tool event are unpublished; no Local artifact manifest exists",
+      "status": "NOT_VERIFIED",
+      "task_id": null
+    },
+    {
+      "attempt": null,
+      "entry": "mcp_dsh",
+      "environment": "lsf",
+      "evidence": {
+        "artifacts": [],
+        "commands": [],
+        "summary": "No executed evidence exists: no MCP/DSH LSF observation, LSF receipt, or authorized LSF artifact manifest has been published. The cell is NOT_VERIFIED.",
+        "tests": []
+      },
+      "executed": false,
+      "gap": "missing platform/experience evidence: B05 stdio launch file (H2 gap), LSF bsub/bjobs/submission/receipt, and the MCP/DSH same-task read record are unpublished",
+      "status": "NOT_VERIFIED",
+      "task_id": null
+    }
+  ],
+  "compatibility_notes": [
+    "H3 is a gate ledger: it records the P1 same-task science evidence state and never upgrades an unexecuted combination to PASS. A scenario result, a scientific claim status, and H3 closure remain three separate records (Q09).",
+    "The same-task matrix has exactly one logical row set (CLI, HTTP/Workbench, MCP/DSH) and every entry must resolve to the one first-submit task id and attempt. A fresh submit through any entry that yields a second task id is a hard failure, not an alternate observation.",
+    "The product schema, manifest generation, manifest digest, task result and scientific validation are shared fields: if any entry reads a different value the matrix is rejected even when the task id and attempt match.",
+    "Every combination cell uses only PASS|FAIL|NOT_VERIFIED. With the platform Local/LSF records, B07 deadlines, B10 three-entry sample and C15 same-task-browser-live absent, all six cells are NOT_VERIFIED with the exact missing item.",
+    "Active workflows are checked against the frozen catalog order and the fifteen-row task-compatibility matrix; A-13 edits no src/acp, src/acp_services, workflow, CI, version or pyproject file.",
+    "B01's acp2.acceptance.v1 receipt protocol is still unpublished; this handoff keeps its own receipt_protocol_gap and does not invent a platform, experience, attempt, generation, digest or LSF receipt."
+  ],
+  "contract_set": "acp2.science",
+  "contract_set_frozen": true,
+  "contract_set_version": 1,
+  "contract_version_basis": {
+    "handoff_h2": "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
+    "handoff_h2_sha256": "5096c24aec4216695842f5ab660806977e9b2c75e78fef9da832e2589f1b0d31",
+    "handoff_h2_version": 1,
+    "rule": "H3 closes P1 on the exact H2 bytes it was built from. It adds no contract field and widens no enum; a new semantic requires the next contract version."
+  },
+  "external_evidence": {
+    "b01_receipt_protocol": {
+      "missing_artifact": "acceptance-result.schema.json",
+      "missing_contract": "acp2.acceptance.v1",
+      "reason": "B01 has not published the receipt schema, so no A record can carry platform job_id/attempt/release_id/submission_id/negotiated_protocol fields and no receipt is claimed. A defines no competing receipt schema.",
+      "result": "NOT_VERIFIED"
+    },
+    "b07_frozen_deadlines": {
+      "missing_artifact": "frozen LSF/DA deadlines: max_queue_wait_seconds, max_run_seconds, max_prepare_seconds, cleanup_seconds",
+      "reason": "B07 has not published the frozen deadline values. The LSF combination cells therefore cannot reconcile a real wait/run/prepare/cleanup budget and stay NOT_VERIFIED.",
+      "result": "NOT_VERIFIED"
+    },
+    "b10_three_entry": {
+      "missing_artifact": "B10 Local singlepoint first-submit task record and three-entry (CLI/HTTP/MCP) read sample",
+      "reason": "B10 has not published the shared task row or the real ORCA output, TaskResult, receipt, attempt/release and manifest digest. The same-task matrix has no task id or attempt to reference.",
+      "result": "NOT_VERIFIED"
+    },
+    "b13_publication_recovery": {
+      "missing_artifact": "B13 publication/recovery evidence for the same task",
+      "reason": "B13 has not published publication-recovery evidence. H3 does not require B13 to sign P1, but no recovery claim is made here.",
+      "result": "NOT_VERIFIED"
+    },
+    "c15_same_task_browser_live": {
+      "missing_artifact": "C15 same-task-browser-live record and real MCP tool events",
+      "reason": "C15 has not published the browser same-task view or the real model tool event. The HTTP/Workbench and MCP/DSH entries cannot cite a real cross-entry observation.",
+      "result": "NOT_VERIFIED"
+    },
+    "client_revision": null,
+    "client_revision_gap": "No MCP/DSH client revision is published by B or C; no negotiated protocol transcript exists, so no client revision is recorded.",
+    "harness_revision": null,
+    "harness_revision_gap": "No platform acceptance-harness revision is published for this P1 row. A's own harness source is not a platform/experience revision and is not substituted here.",
+    "server_revision": null,
+    "server_revision_gap": "No real MCP server revision is published (B05 stdio launch remains absent per H2); no launch or handshake exists to identify one."
+  },
+  "frozen_at": "2026-10-22T17:30:00Z",
+  "gate_command": [
+    "/opt/acp2-dev/envs/a-python/bin/python",
+    "-m",
+    "pytest",
+    "tests/test_acp2_science_artifact_validation.py",
+    "tests/test_acp2_science_task_binding.py",
+    "tests/test_architecture_invariants.py",
+    "tests/test_acp2_science_p1_gate.py",
+    "-q"
+  ],
+  "generated_by": "A-13",
+  "handoff_id": "H3",
+  "handoff_version": 1,
+  "negative_checks": [
+    {
+      "case_id": "completed-but-missing-energy",
+      "evidence": {
+        "summary": "tests/test_acp2_science_p1_gate.py::test_completed_but_missing_energy_is_rejected feeds a synthetic COMPLETED task row with no parsed energy and asserts the validator raises; a COMPLETED status alone is never accepted as P1 science evidence.",
+        "tests": [
+          "tests/test_acp2_science_p1_gate.py::test_completed_but_missing_energy_is_rejected"
+        ]
+      },
+      "expected": "reject",
+      "live_result": "NOT_VERIFIED",
+      "rejected": true,
+      "rejection_rule": "A COMPLETED task result is rejected when the scientific product carries no parsed energy with an explicit unit; completion is an execution fact and cannot stand in for a science product."
+    },
+    {
+      "case_id": "old-attempt",
+      "evidence": {
+        "summary": "tests/test_acp2_science_p1_gate.py::test_old_attempt_is_rejected feeds a row whose attempt differs from the first-submit attempt and asserts rejection; the matrix accepts only the first-submit attempt.",
+        "tests": [
+          "tests/test_acp2_science_p1_gate.py::test_old_attempt_is_rejected"
+        ]
+      },
+      "expected": "reject",
+      "live_result": "NOT_VERIFIED",
+      "rejected": true,
+      "rejection_rule": "An observation whose attempt is not the first-submit attempt is rejected: result reuse must bind to the same attempt, never to a later or earlier attempt directory."
+    },
+    {
+      "case_id": "old-generation",
+      "evidence": {
+        "summary": "tests/test_acp2_science_p1_gate.py::test_old_generation_is_rejected feeds a manifest generation different from the shared generation and asserts rejection; the matrix accepts only the shared generation/digest pair.",
+        "tests": [
+          "tests/test_acp2_science_p1_gate.py::test_old_generation_is_rejected"
+        ]
+      },
+      "expected": "reject",
+      "live_result": "NOT_VERIFIED",
+      "rejected": true,
+      "rejection_rule": "An observation whose manifest generation differs from the shared generation is rejected even when the task id and attempt match; a cross-generation manifest digest is never accepted."
+    }
+  ],
+  "real_computation": {
+    "command": [],
+    "not_run": [
+      "real Local singlepoint first submit through CLI / HTTP-Workbench / MCP-DSH",
+      "real LSF bsub/bjobs submission, receipt and artifact reconciliation",
+      "cross-entry (three-entry) same-task observation at the platform boundary",
+      "same-task Workbench browser view and real DSH tool event"
+    ],
+    "reason": "P1 closure requires platform Local/LSF run records and the C15 browser record, none of which exist for track A. No job, controller, QC subprocess, SSH session or production run root was touched; every combination cell is NOT_VERIFIED with its exact gap.",
+    "result": "NOT_RUN",
+    "run_spec": null
+  },
+  "receipt_protocol_gap": {
+    "deferred_samples": [
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-valid.json",
+      "docs/reference/next-change/acp2-contracts/science/examples/receipt-invalid.json"
+    ],
+    "delivery_trigger": "Deliver one valid and one invalid A sample immediately when B01 publishes the draft schema, before B05 or A-17.",
+    "missing_artifact": "acceptance-result.schema.json",
+    "missing_contract": "acp2.acceptance.v1",
+    "reason": "B01 has not published the draft receipt schema. A adds only an extensions.science area when B01 exists and never invents a second receipt schema or sample set.",
+    "samples_delivered": false,
+    "status": "NOT_VERIFIED"
+  },
+  "same_task_matrix": {
+    "entries": [
+      {
+        "attempt": null,
+        "entry": "cli",
+        "first_submit_ref": "first-submit",
+        "gap": "B10 has not published the CLI read of a shared Local or LSF first-submit task; no task id, attempt, result, product schema, manifest generation or digest exists to compare.",
+        "manifest_digest": null,
+        "manifest_generation": null,
+        "product_schema": null,
+        "result": null,
+        "scientific_validation": null,
+        "task_id": null
+      },
+      {
+        "attempt": null,
+        "entry": "http_workbench",
+        "first_submit_ref": "first-submit",
+        "gap": "C15 has not published same-task-browser-live and the Workbench/HTTP read of a first-submit task; no task id, attempt, result, product schema, manifest generation or digest exists to compare.",
+        "manifest_digest": null,
+        "manifest_generation": null,
+        "product_schema": null,
+        "result": null,
+        "scientific_validation": null,
+        "task_id": null
+      },
+      {
+        "attempt": null,
+        "entry": "mcp_dsh",
+        "first_submit_ref": "first-submit",
+        "gap": "B05 stdio launch is unpublished (H2 gap) and no real MCP/DSH read exists, so there is no task id, attempt, result, product schema, manifest generation or digest to compare.",
+        "manifest_digest": null,
+        "manifest_generation": null,
+        "product_schema": null,
+        "result": null,
+        "scientific_validation": null,
+        "task_id": null
+      }
+    ],
+    "first_submit": {
+      "attempt": null,
+      "gap": "No platform first submit exists for track A: B10 has not published a shared task row, so the first-submit task id and attempt are null. They are never invented from plan text, a display name or an A-local run.",
+      "manifest_digest": null,
+      "manifest_generation": null,
+      "product_schema": null,
+      "result": null,
+      "scientific_validation": null,
+      "task_id": null
+    },
+    "rule": "All three entries must reference this one first-submit task id and attempt and must report an identical task result, product schema, manifest generation and manifest digest; a second task id produced by a fresh CLI submit is a hard rejection. When the platform has not submitted, every field is null with an exact gap and the matrix stays NOT_VERIFIED.",
+    "shared": {
+      "gap": "No shared result/product schema/manifest generation/digest/scientific validation exists because no platform first submit exists; the combination cells inherit this gap.",
+      "manifest_digest": null,
+      "manifest_generation": null,
+      "product_schema": null,
+      "result": null,
+      "scientific_validation": null
+    }
+  },
+  "source": {
+    "branch": "acp2/a-science",
+    "pre_delivery_commit": "5f8df59d0eca0d7663f8ae3deadece1f0fa5e42d",
+    "python": "/opt/acp2-dev/envs/a-python/bin/python",
+    "worktree": "/opt/acp2-dev/A"
+  }
+}

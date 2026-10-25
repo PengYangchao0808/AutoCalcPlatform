@@ -1,0 +1,185 @@
+{
+  "a_contracts": [
+    {
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "role": "reaction",
+      "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+      "size_bytes": 15559
+    },
+    {
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "role": "recipe",
+      "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+      "size_bytes": 12521
+    },
+    {
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "role": "task_binding",
+      "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+      "size_bytes": 18004
+    },
+    {
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "role": "evidence",
+      "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+      "size_bytes": 14038
+    },
+    {
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+      "role": "reaction_example",
+      "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
+      "size_bytes": 6035
+    },
+    {
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "role": "h4_handoff",
+      "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
+      "size_bytes": 58068
+    }
+  ],
+  "a_head": "dcf7084999e00ecc8b6a5154ca02c4684785ee5d",
+  "base_revision": "c3040007cd360af2373b6d1710c763634377761f",
+  "base_revision_role": "P2 wave base (B19 commit); the frozen candidate is the later committed state B00-B20b at 1ffb76d",
+  "c_contracts": [
+    {
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
+      "role": "proposal",
+      "sha256": "4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
+      "size_bytes": 16781
+    },
+    {
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "role": "research_record",
+      "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+      "size_bytes": 9943
+    },
+    {
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
+      "role": "p2_operation_map",
+      "sha256": "5818be3b6e86b62c4f0fb421186a567223727fb6e5a8266a6354dd3f501921c4",
+      "size_bytes": 10826
+    },
+    {
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+      "role": "plan_identity",
+      "sha256": "79bb1c226a6f23af65eb1f2a1a4af27a3ea26dfead0299d40d4bd94ac9a8dd9d",
+      "size_bytes": 12558
+    }
+  ],
+  "c_head": "6905477c51c34fa1f8d53421553805ecbf88d897",
+  "candidate_files_manifest": {
+    "file_count": 2907,
+    "path": "reports/acp2_implementation/bb45a46/B/B20c/candidate-files.sha256",
+    "rule": "sha256 of every file in the immutable overlay, sorted by path",
+    "sha256": "662356063b9506d21476d5d0e554ea603db4ccae55aa6df756dba3d78752d569"
+  },
+  "candidate_label": "b20c-1ffb76d",
+  "candidate_revision": "sha256:c415d71598e43ac5de1046616b5fbc4c1b808881eebe56c0731642027788932e",
+  "candidate_revision_rule": "sha256 over sorted git ls-tree -r lines '<mode> <type> <blob>\\t<path>'",
+  "candidate_sha": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
+  "candidate_tree": "041706226619a403256a2ea206d05ad30a509033",
+  "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
+  "client_revision_status": "C HEAD read for P2 contracts; C24a/C25 artifacts are absent",
+  "content_scope": "B00-B20b committed state + A/C P2 contracts by reference (contracts are not vendored)",
+  "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
+  "contract_version": "1.3.0",
+  "dirty_repo_note": "The source checkout is intentionally dirty with unrelated changes; the freeze is the verified immutable overlay, not the live worktree.",
+  "env_digest": "d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6",
+  "env_path": "/opt/acp2-dev/data/b/acceptance-env.sh",
+  "freeze_kind": "verified_immutable_overlay",
+  "generated_at": "2026-10-23T09:32:36Z",
+  "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
+  "integration_worktree_touched": false,
+  "moving_worktree_claimed": false,
+  "overlay_method": "git archive 1ffb76d extracted into a fresh directory; no working-tree file was copied",
+  "overlay_root": "/opt/acp2-dev/data/b/b20-candidate",
+  "overlay_verification": {
+    "committed_files": 2907,
+    "extra_files": [],
+    "mismatches": [],
+    "result": "PASS",
+    "rule": "every overlay file must hash to its committed git blob; no extra file may exist",
+    "tree_digest": "c415d71598e43ac5de1046616b5fbc4c1b808881eebe56c0731642027788932e",
+    "tree_entries": 2907,
+    "verified_files": 2907
+  },
+  "owner": "B",
+  "p1_candidate": {
+    "modified": false,
+    "rule": "the frozen P1 candidate is not reused or modified by P2",
+    "sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c"
+  },
+  "parent_revision": "e0ae07b4f1e9f6bce697e5e7676c58595060c90b",
+  "per_file_digests": [
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/scripts/acceptance/acp2_runtime.py",
+      "role": "harness",
+      "sha256": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
+      "size_bytes": 482763
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+      "role": "receipt_schema",
+      "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e",
+      "size_bytes": 11264
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+      "role": "dependency_graph",
+      "sha256": "7fcda6d28eb60f51cf11281fd7757786ae5d3f4332a7eb3f3a6fb71f316c3047",
+      "size_bytes": 65263
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/manifest.json",
+      "role": "contract_manifest",
+      "sha256": "f83a5736b0a191883e24032ce94294cea80c9703b622e7f0fc4300ba2a8181dd",
+      "size_bytes": 35588
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/tests/test_acp2_runtime_contracts.py",
+      "role": "contract_tests",
+      "sha256": "ae4c75499930328e3e398f48cf9ef87292ddb682182b26d86bc9e9c5612f648d",
+      "size_bytes": 51575
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/tests/test_acp2_runtime_science_handoff.py",
+      "role": "handoff_tests",
+      "sha256": "7031fe219a003aa60ec16d962df0d374b476eba3c461d96f6a34d08bce730ccd",
+      "size_bytes": 15441
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json",
+      "role": "b20_candidate_record",
+      "sha256": "5b4b65f3aff2dd663e2357a6a7d7d78c3be8a38c068bf201e72264f75676e353",
+      "size_bytes": 5280
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "role": "run_spec",
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
+      "size_bytes": 3680
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "role": "h4_ledger",
+      "sha256": "2e51cb70b2465060a608d136e480f04172a04b373345e7cd8736d72d0cdec624",
+      "size_bytes": 4854
+    },
+    {
+      "path": "/opt/acp2-dev/data/b/b20-candidate/reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
+      "role": "science_handoff",
+      "sha256": "ccb112b6c535e33f3388a643d2c8fae040dbf8915c298ab9a71a7903ca03d400",
+      "size_bytes": 19206
+    }
+  ],
+  "schema": "acp2.b20c.p2-candidate.v1",
+  "server_revision": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
+  "todo": "24 / B20c",
+  "validator_command": [
+    "/usr/bin/python3.11",
+    "scripts/acceptance/validate_acp2_contracts.py",
+    "--manifest",
+    "docs/reference/next-change/acp2-contracts/manifest.json"
+  ],
+  "validator_result": "VALID"
+}

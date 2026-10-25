@@ -9,10 +9,14 @@ and result file manifest.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sys
 import time
 from collections.abc import AsyncIterator, Iterator
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, cast
 
 import anyio
@@ -137,6 +141,206 @@ def get_status(request: Request) -> StatusResponse:
         uptime_seconds=round(time.time() - _START_TIME, 1),
         queue=queue,
     )
+
+
+# ---------------------------------------------------------------------------
+# ACP 2.0 Controller discovery endpoints (B04a)
+# ---------------------------------------------------------------------------
+#
+# These are the minimal read-only commands the loopback ControllerClient (and
+# the B05 stdio probe) need: ``health`` proves every entry talks to the same
+# application + frozen contract set, and ``capabilities`` reports the active
+# workflows/backends/limits without creating a task.  Both are side-effect free.
+
+_CONTRACT_MANIFEST_RELATIVE = "docs/reference/next-change/acp2-contracts/manifest.json"
+_MCP_PROTOCOL_VERSION = "2025-06-18"
+_MCP_TOOLS: tuple[str, ...] = (
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_submit",
+    "acp_status",
+    "acp_cancel",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_analyze",
+)
+#: Bounded discovery limits (application-api.v1 ``capabilities.limits``).
+_CONTROLLER_LIMITS: dict[str, int] = {
+    "max_artifact_bytes": 8 * 1024 * 1024,
+    "max_read_bytes": 1 << 20,
+    "max_walltime_s": 7 * 24 * 60 * 60,
+    "max_cores": 64,
+}
+
+
+def _contract_manifest_path() -> Path | None:
+    """Resolve the contract manifest without assuming an installed layout."""
+    override = os.environ.get("ACP_CONTRACT_MANIFEST")
+    if override:
+        candidate = Path(override)
+        return candidate if candidate.is_file() else None
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / _CONTRACT_MANIFEST_RELATIVE
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _contract_facts() -> tuple[str, str, str]:
+    """Return ``(candidate_revision, contract_version, contract_digest)``.
+
+    The Controller is the single authority for these facts: every entry reads
+    them from this one endpoint rather than re-deriving a contract identity.
+    """
+    candidate_revision = (
+        os.environ.get("ACP_CANDIDATE_REVISION") or os.environ.get("ACP2_REV") or "unknown"
+    )
+    contract_version = "1.0.0"
+    contract_digest = hashlib.sha256(b"acp2-contract-manifest-unavailable").hexdigest()
+    manifest_path = _contract_manifest_path()
+    if manifest_path is not None:
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+        if isinstance(manifest, dict):
+            baseline = manifest.get("baseline")
+            if candidate_revision == "unknown" and isinstance(baseline, dict):
+                recorded = baseline.get("code_candidate_revision")
+                if isinstance(recorded, str) and recorded:
+                    candidate_revision = recorded
+            version = manifest.get("contract_version")
+            if isinstance(version, str) and version:
+                contract_version = version
+            digest = manifest.get("contract_digest")
+            if isinstance(digest, str) and digest:
+                contract_digest = digest
+    return candidate_revision, contract_version, contract_digest
+
+
+@router.get("/health")
+def get_health() -> dict[str, Any]:
+    """Entry-equivalence probe (``health`` application command)."""
+    candidate_revision, contract_version, contract_digest = _contract_facts()
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "candidate_revision": candidate_revision,
+        "contract_version": contract_version,
+        "contract_digest": contract_digest,
+        "contract_digest_scope": "delivered-contract-set",
+        "read_only": True,
+        "started_at": datetime.fromtimestamp(_START_TIME, tz=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
+
+
+def _active_workflows() -> list[str]:
+    try:
+        from acp.scheduler.jobs import PUBLIC_WORKFLOWS
+
+        return list(PUBLIC_WORKFLOWS)
+    except ImportError:
+        return []
+
+
+def _task_kinds() -> list[str]:
+    try:
+        from cccp.calculation.requests import TaskKind
+
+        return sorted(kind.value for kind in TaskKind)
+    except ImportError:
+        return []
+
+
+def _backend_capability_summary() -> list[dict[str, Any]]:
+    try:
+        from acp.backends import backend_status, list_backends
+    except ImportError:
+        return []
+    summaries: list[dict[str, Any]] = []
+    for name in list_backends():
+        try:
+            status = cast(dict[str, Any], backend_status(name))
+        except (KeyError, OSError, ValueError):
+            summaries.append({"name": name, "available": False})
+            continue
+        summaries.append({"name": name, "available": bool(status.get("is_available"))})
+    return summaries
+
+
+@router.get("/capabilities")
+def get_capabilities(request: Request) -> dict[str, Any]:
+    """Read-only discovery (``capabilities`` application command)."""
+    from acp_services.workspace.http_identity import (
+        IdentityMode,
+        remote_identity_providers,
+        stdio_identity_binding,
+    )
+
+    admission = getattr(request.app.state, "admission", None)
+    identity = getattr(request.app.state, "server_identity", None)
+    identity_mode = getattr(request.app.state, "identity_mode", IdentityMode.LOCAL_SINGLE)
+    if admission is not None:
+        admission_snapshot = admission.snapshot()
+    else:
+        admission_snapshot = {
+            "enforcement": "not-verified",
+            "mode": "usage-only",
+            "quota_enforced": False,
+            "recorded_only": True,
+            "model_token_enforcement": "NOT_VERIFIED",
+            "multi_tenant_security": False,
+        }
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "task_kinds": _task_kinds(),
+        "workflows": _active_workflows(),
+        "backends": _backend_capability_summary(),
+        "capability_descriptors": None,
+        "limits": dict(_CONTROLLER_LIMITS),
+        "tools": list(_MCP_TOOLS),
+        "protocol_version": _MCP_PROTOCOL_VERSION,
+        "admission": admission_snapshot,
+        "admission_enforcement": admission_snapshot["enforcement"],
+        "model_token_enforcement": "NOT_VERIFIED",
+        "multi_tenant_security": (
+            False if identity_mode == IdentityMode.LOCAL_SINGLE else "api-key-scoped"
+        ),
+        "identity_mode": identity_mode,
+        "identity_profiles": [IdentityMode.LOCAL_SINGLE, IdentityMode.API_KEY],
+        "remote_identity_providers": remote_identity_providers(),
+        "stdio_identity_binding": stdio_identity_binding(),
+    }
+    if identity_mode == IdentityMode.LOCAL_SINGLE and identity is not None:
+        payload["identity"] = identity.to_dict()
+    elif identity_mode != IdentityMode.LOCAL_SINGLE:
+        payload["identity"] = {
+            "mode": identity_mode,
+            "principal_resolution": "api-key-verified-by-controller",
+            "project_hint_policy": "narrow-only",
+            "multi_tenant_security": "api-key-scoped",
+        }
+    return payload
+
+
+@router.get("/identity")
+def get_identity(request: Request) -> dict[str, Any]:
+    """Return the server-resolved principal for this request's credential."""
+    from acp_services.workspace.http_identity import IdentityMode
+
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return resolved.to_dict()
+    identity = getattr(request.app.state, "server_identity", None)
+    identity_mode = getattr(request.app.state, "identity_mode", IdentityMode.LOCAL_SINGLE)
+    if identity is None:
+        raise HTTPException(status_code=503, detail="identity is not initialized")
+    payload = identity.to_dict()
+    payload["schema_version"] = 1
+    payload["mode"] = identity_mode
+    return payload
 
 
 def _load_executables() -> dict[str, Any]:
@@ -372,6 +576,32 @@ def download_job_file(job_id: str, file_path: str, request: Request) -> FileResp
     return FileResponse(str(resolved), filename=resolved.name)
 
 
+def _legacy_stream_still_authorized(request: Request, job_id: str) -> bool:
+    """Re-resolve the credential on every poll of an already-open SSE stream.
+
+    A subscription started before revocation must stop at the next delivery, so
+    the in-process ``app.state`` authorizer alone is never trusted here.
+    """
+    boundary = getattr(request.app.state, "identity_boundary", None)
+    if boundary is None or not boundary.enabled:
+        return True
+    from acp_services.workspace.http_identity import credential_from_headers
+
+    resolved, denial = boundary.resolve(credential_from_headers(dict(request.headers)))
+    if denial is not None or resolved is None:
+        return False
+    manager = getattr(request.app.state, "job_manager", None)
+    record = manager.get(job_id) if manager is not None else None
+    if record is None:
+        return False
+    decision = resolved.server_identity.authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action="read",
+        job_id=job_id,
+    )
+    return bool(decision.allowed)
+
+
 @router.get("/jobs/{job_id}/events")
 async def stream_job_events(
     job_id: str,
@@ -518,6 +748,10 @@ async def stream_job_events(
             if await request.is_disconnected():
                 break
 
+            if not _legacy_stream_still_authorized(request, job_id):
+                yield 'event: reset\ndata: {"reason": "permission_changed"}\n\n'
+                break
+
             try:
                 seq, byte_offset, frames, needs_resync = _read_tail(seq, byte_offset)
             except OSError:
@@ -568,6 +802,296 @@ async def stream_job_events(
                 break
 
             await anyio.sleep(5.0)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+# ---------------------------------------------------------------------- #
+# One authorized, reusable stream per (principal, scope)
+# ---------------------------------------------------------------------- #
+#
+# One connection multiplexes every owner in the requested scope.  Authorization
+# is re-checked on every poll (revocation closes the live connection), and
+# cursor expiry / permission change / restart emit an explicit snapshot-reset
+# frame.  Coverage is declared in the A04 contract document; whether a consumer
+# may stop polling is that consumer's decision.
+
+
+class _EntryStreamAuthorizer:
+    """Adapt the per-entry authorization gate to the Services stream port."""
+
+    def __init__(self, authorizer: Any) -> None:
+        self._authorizer = authorizer
+
+    def authorize_stream(self, *, principal_id: str, scope: Any, job_id: str = ""):
+        from acp_services.contracts.events import EventScope
+        from acp_services.runtime.events import StreamAuthorization
+        from acp_services.workspace.entry_authz import EntryClass
+
+        decision = self._authorizer.authorize(EntryClass.EVENT_STREAM, job_id=job_id)
+        resolved_scope = scope if isinstance(scope, EventScope) else EventScope(scope)
+        return StreamAuthorization(
+            allowed=bool(decision.allowed),
+            principal_id=decision.principal_id,
+            scope=resolved_scope,
+            reason_code=decision.reason_code,
+            detail=decision.detail,
+        )
+
+
+class _ReauthorizingStreamAuthorizer:
+    """Re-resolve the API-key credential on every poll of a scope stream.
+
+    The stream registry already re-checks its authorizer each cycle; binding a
+    resolver that reads the key/account rows is what makes revocation effective
+    on a subscription that was opened *before* the revocation.
+    """
+
+    def __init__(self, boundary: Any, credential: str | None, manager: Any) -> None:
+        self._boundary = boundary
+        self._credential = credential
+        self._manager = manager
+
+    def authorize_stream(self, *, principal_id: str, scope: Any, job_id: str = ""):
+        from acp_services.contracts.events import EventScope
+        from acp_services.runtime.events import StreamAuthorization
+
+        resolved_scope = scope if isinstance(scope, EventScope) else EventScope(scope)
+        resolved, denial = self._boundary.resolve(self._credential)
+        if denial is not None or resolved is None:
+            return StreamAuthorization(
+                allowed=False,
+                principal_id=principal_id,
+                scope=resolved_scope,
+                reason_code="revoked",
+                detail="credential is no longer valid",
+            )
+        if principal_id and resolved.principal.principal_id != principal_id:
+            return StreamAuthorization(
+                allowed=False,
+                principal_id=resolved.principal.principal_id,
+                scope=resolved_scope,
+                reason_code="permission_changed",
+                detail="stream principal changed",
+            )
+        record = self._manager.get(job_id) if job_id else None
+        project = None
+        if record is not None:
+            project = record.project_id or record.spec.project_id
+        decision = resolved.server_identity.authorize_job_project(
+            project,
+            action="read",
+            job_id=job_id,
+        )
+        return StreamAuthorization(
+            allowed=bool(decision.allowed),
+            principal_id=resolved.principal.principal_id,
+            scope=resolved_scope,
+            reason_code=decision.reason_code,
+            detail=decision.detail,
+        )
+
+
+def _scope_stream_registry(request: Request):
+    from acp_services.runtime.events import AuthorizedStreamRegistry
+
+    registry = getattr(request.app.state, "authorized_event_streams", None)
+    if registry is None:
+        registry = AuthorizedStreamRegistry()
+        request.app.state.authorized_event_streams = registry
+    return registry
+
+
+def _parse_stream_cursors(raw: str) -> dict[str, int]:
+    cursors: dict[str, int] = {}
+    for item in raw.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        owner, _, seq = token.rpartition(":")
+        if not owner:
+            continue
+        try:
+            cursors[owner] = max(0, int(seq))
+        except ValueError:
+            continue
+    return cursors
+
+
+def _scope_event_frame(event: Any) -> str:
+    payload = json.dumps(event.to_dict(), default=str)
+    return f"id: {event.owner_id}:{event.seq}\nevent: {event.event_type}\ndata: {payload}\n\n"
+
+
+def _scope_reset_frame(reason: str, scope: Any, principal_id: str, **extra: Any) -> str:
+    payload = {
+        "reason": reason,
+        "scope": scope.value,
+        "principal_id": principal_id,
+        **extra,
+    }
+    return f"event: reset\ndata: {json.dumps(payload, default=str)}\n\n"
+
+
+@router.get("/events/stream")
+async def stream_scope_events(
+    request: Request,
+    scope: str = Query(default="task"),
+    job_ids: str = Query(default="", description="Comma-separated owners in this scope"),
+    after: str = Query(default="", description="Composite cursor: job_id:seq,job_id:seq"),
+    epoch: str = Query(default="", description="Client's last service epoch"),
+) -> StreamingResponse:
+    """One authorized stream per ``(principal, scope)``; many tasks, one connection."""
+    from acp_services.contracts.events import EventScope
+    from acp_services.runtime.events import (
+        RESET_CURSOR_EXPIRED,
+        RESET_PERMISSION_CHANGED,
+        RESET_SERVICE_RESTART,
+        StreamAuthorizationError,
+        StreamCursor,
+    )
+    from acp_services.workspace.entry_authz import default_entry_authorizer
+
+    manager = _manager(request)
+    try:
+        resolved_scope = EventScope(scope)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Unknown event scope: {scope}") from exc
+
+    owners = [item.strip() for item in job_ids.split(",") if item.strip()]
+    if not owners:
+        raise HTTPException(status_code=422, detail="job_ids must name at least one owner")
+
+    resolved_request = getattr(request.state, "request_identity", None)
+    for owner in owners:
+        record = manager.get(owner)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Job not found: {owner}")
+        if resolved_request is not None:
+            decision = resolved_request.server_identity.authorize_job_project(
+                record.project_id or record.spec.project_id,
+                action="read",
+                job_id=owner,
+            )
+            if not decision.allowed:
+                raise HTTPException(status_code=404, detail=f"Job not found: {owner}")
+
+    boundary = getattr(request.app.state, "identity_boundary", None)
+    authorizer = getattr(request.app.state, "entry_authorizer", None)
+    if resolved_request is not None and boundary is not None and boundary.enabled:
+        from acp_services.workspace.http_identity import credential_from_headers
+
+        guard = _ReauthorizingStreamAuthorizer(
+            boundary,
+            credential_from_headers(dict(request.headers)),
+            manager,
+        )
+    else:
+        guard = _EntryStreamAuthorizer(
+            authorizer if authorizer is not None else default_entry_authorizer()
+        )
+    probe = guard.authorize_stream(principal_id="", scope=resolved_scope, job_id=owners[0])
+    if probe.denied:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": probe.reason_code, "message": probe.detail or "event stream denied"},
+        )
+
+    registry = _scope_stream_registry(request)
+    try:
+        stream = registry.open(
+            principal_id=probe.principal_id,
+            scope=resolved_scope,
+            service_epoch=_START_TIME,
+            log_for=manager.event_log,
+            job_ids=owners,
+            authorizer=guard,
+        )
+    except StreamAuthorizationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": RESET_PERMISSION_CHANGED, "message": str(exc)},
+        ) from exc
+
+    initial_cursors = _parse_stream_cursors(after)
+    client_epoch = epoch or str(_START_TIME)
+
+    def _cursors(values: dict[str, int]) -> list[Any]:
+        return [
+            StreamCursor(
+                principal_id=stream.principal_id,
+                scope=stream.scope,
+                job_id=owner,
+                after_seq=values.get(owner, 0),
+                service_epoch=client_epoch,
+            )
+            for owner in owners
+        ]
+
+    async def event_generator() -> AsyncIterator[str]:
+        yield "retry: 3000\n\n"
+        cursors = _cursors(initial_cursors)
+        last_heartbeat = anyio.current_time()
+
+        while True:
+            if await request.is_disconnected():
+                break
+
+            if not stream.check_authorization(guard, job_ids=owners):
+                yield _scope_reset_frame(
+                    RESET_PERMISSION_CHANGED, stream.scope, stream.principal_id
+                )
+                break
+
+            batch = stream.poll(cursors)
+            if batch.reset:
+                yield _scope_reset_frame(
+                    batch.reset_reason or RESET_CURSOR_EXPIRED,
+                    stream.scope,
+                    stream.principal_id,
+                    earliest_seq=dict(batch.earliest_seq),
+                    latest_seq=dict(batch.latest_seq),
+                )
+                snapshot = stream.snapshot()
+                for event in snapshot.events:
+                    yield _scope_event_frame(event)
+                cursors = _cursors(dict(snapshot.cursors))
+                if batch.reset_reason in (RESET_SERVICE_RESTART, RESET_PERMISSION_CHANGED):
+                    break
+            else:
+                for event in batch.events:
+                    yield _scope_event_frame(event)
+                cursors = _cursors(dict(batch.cursors))
+
+            records = [manager.get(owner) for owner in owners]
+            if all(record is not None and record.status.is_terminal for record in records):
+                for owner, record in zip(owners, records):
+                    done_payload = json.dumps(
+                        {
+                            "job_id": owner,
+                            "status": record.status.value,
+                            "progress": record.progress,
+                            "current_stage": record.current_stage,
+                            "completed_at": record.completed_at,
+                        },
+                        default=str,
+                    )
+                    yield f"event: done\ndata: {done_payload}\n\n"
+                break
+
+            now = anyio.current_time()
+            if now - last_heartbeat >= 15.0:
+                yield ": heartbeat\n\n"
+                last_heartbeat = now
+            await anyio.sleep(1.0)
 
     return StreamingResponse(
         event_generator(),

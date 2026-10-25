@@ -1,0 +1,11 @@
+{
+ "fixture": "curve_scatter_corrupt",
+ "operation": "reject",
+ "result_digest": null,
+ "checks": {},
+ "expected_rejection": {
+  "manifest.json": "cccp.analysis.bounded.errors.BoundedSchemaError",
+  "block_000000.json": "cccp.calculation.products.contracts.ProductSchemaError",
+  "block_000001.json": "json.JSONDecodeError"
+ }
+}

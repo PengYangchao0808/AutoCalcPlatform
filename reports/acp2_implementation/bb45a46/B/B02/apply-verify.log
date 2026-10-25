@@ -1,0 +1,158 @@
+# B02 materialize candidate — 2026-10-22T19:34:34+08:00
+## bundle digests
+4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242  <repo>/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/tracked-changes.patch
+95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181  <repo>/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json
+33861de7d5578a8cfa5b48bcde27e7bd2b25ac3427c4dacb47c4eca921ae872c  <repo>/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/candidate-snapshot.json
+## worktree add
+准备工作区（分离头指针 096cdff）
+HEAD 现在位于 096cdff docs(reports): re-issue scoped A/B/C and gate verdicts on the frozen candidate
+HEAD=096cdffe9a3817d8ee443d824830d87ec6e07bc2
+porcelain_before=[]
+base HEAD OK
+clean base OK
+## stage1 tracked patch
+patch applied
+## stage2 new files
+new-files copied
+## stage3 verify
+{
+  "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "total": 1906,
+  "checked": 1906,
+  "missing": [],
+  "mismatches": [],
+  "result": "PASS"
+}
+verify_exit=0
+## status before commit (count)
+75
+## e2e marker state
+-rw-r--r--. 1 <user> <user> 41 10月 22 19:34 <acp2-dev>/B/tests/baseline/refactor-evidence/e2e-task-root.txt
+## commit
+[分离头指针 a0185b1] fix(debug): apply frozen 2026-10-22 final debug candidate
+ 150 files changed, 34502 insertions(+), 241 deletions(-)
+ create mode 100644 docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Plan_A_CCCP_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R2_20261021.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md
+ create mode 100644 docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R4_20261022.md
+ create mode 100644 docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Plan_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md
+ create mode 100644 docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md
+ create mode 100644 docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md
+ create mode 100644 docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md
+ create mode 100644 docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md
+ create mode 100644 docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md
+ create mode 100644 docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md
+ create mode 100644 docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md
+ create mode 100644 docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md
+ create mode 100644 docs/reference/next-change/examples/acp_mcp_stdio_probe.py
+ create mode 100644 packaging/README.md
+ create mode 100644 packaging/roles/cccp/pyproject.toml
+ create mode 100644 packaging/roles/web/pyproject.toml
+ create mode 100644 packaging/roles/worker/pyproject.toml
+ create mode 100644 reports/architecture_acceptance_20261019/REPORT.md
+ create mode 100644 reports/architecture_acceptance_20261019/browser_probe.py
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/baseline.json
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/commands.json
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/defects.xml
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/e2e-task-root.test-output.txt
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/guards.xml
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/metrics.json
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/nonslow-unrestricted.xml
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/ruff.json
+ create mode 100644 reports/architecture_acceptance_20261019/evidence/wheel-check.json
+ create mode 100644 reports/architecture_acceptance_20261019/evidence_manifest.json
+ create mode 100644 reports/architecture_acceptance_20261019/reproduce_defects.py
+ create mode 100644 reports/architecture_debug_20261021/REPORT.md
+ create mode 100644 reports/architecture_debug_20261021/SHA256SUMS
+ create mode 100644 reports/architecture_debug_20261021/evidence/batch.xml
+ create mode 100644 reports/architecture_debug_20261021/evidence/bounded-after.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/browser-live.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/browser-tests.xml
+ create mode 100644 reports/architecture_debug_20261021/evidence/candidate-source.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/candidate-source.patch
+ create mode 100644 reports/architecture_debug_20261021/evidence/data-after.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/four-combinations/F0_S0.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/four-combinations/F0_S1.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/four-combinations/F1_S0.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/four-combinations/F1_S1.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/four-combinations/summary.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/harness.xml
+ create mode 100644 reports/architecture_debug_20261021/evidence/integration-final.xml
+ create mode 100644 reports/architecture_debug_20261021/evidence/nmr-browser.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/ordinary-legacy.xml
+ create mode 100644 reports/architecture_debug_20261021/evidence/orphan-after.json
+ create mode 100644 reports/architecture_debug_20261021/evidence/verification-summary.json
+ create mode 100644 reports/architecture_quality_review_20261022/REPORT.md
+ create mode 100644 reports/architecture_quality_review_20261022/SHA256SUMS
+ create mode 100644 reports/architecture_quality_review_20261022/evidence/candidate-snapshot.json
+ create mode 100644 reports/architecture_quality_review_20261022/evidence/nonslow.xml
+ create mode 100644 reports/architecture_quality_review_20261022/evidence/verification-summary.json
+ create mode 100644 reports/architecture_quality_review_20261022/evidence/xlsx.xml
+ create mode 100644 reports/architecture_recheck_20261021/REPORT.md
+ create mode 100644 reports/architecture_recheck_20261021/evidence/baseline.json
+ create mode 100644 reports/architecture_recheck_20261021/evidence/browser-explicit.xml
+ create mode 100644 reports/architecture_recheck_20261021/evidence/commands.json
+ create mode 100644 reports/architecture_recheck_20261021/evidence/contracts-tests.xml
+ create mode 100644 reports/architecture_recheck_20261021/evidence/data.json
+ create mode 100644 reports/architecture_recheck_20261021/evidence/frontend_science.json
+ create mode 100644 reports/architecture_recheck_20261021/evidence/integration-tests.xml
+ create mode 100644 reports/architecture_recheck_20261021/evidence/test_runs.json
+ create mode 100644 reports/architecture_recheck_20261021/evidence_manifest.json
+ create mode 100644 reports/architecture_recheck_20261021/reproductions/README.md
+ create mode 100644 reports/architecture_recheck_20261021/reproductions/controller.py
+ create mode 100644 reports/architecture_recheck_20261021/reproductions/data.py
+ create mode 100644 reports/architecture_recheck_20261021/reproductions/frontend_science.py
+ create mode 100644 reports/architecture_recheck_20261021/reproductions/run_browser_explicit.py
+ create mode 100644 reports/architecture_recheck_20261021/reproductions/worker_claim_and_bootstrap.py
+ create mode 100644 reports/architecture_recheck_20261021/reproductions/worker_lost_write.py
+ create mode 100644 reports/architecture_recheck_20261021_r2/REPORT.md
+ create mode 100644 reports/architecture_recheck_20261021_r2/SHA256SUMS
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/acp-review-r2-20261021-browser-setup.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/acp-review-r2-20261021-pytest-browser-diagnostic.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/acp_review_browser_plugin.py
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/baseline.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/browser-tests.xml
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/candidate.patch
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/data.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/harness-inspection.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/nmr-browser.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/nmr-browser.stderr
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/orphan-claim.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/root-tests.xml
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/ui-checks.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/evidence/verification-summary.json
+ create mode 100644 reports/architecture_recheck_20261021_r2/reproductions/bounded_params.py
+ create mode 100644 reports/architecture_recheck_20261021_r2/reproductions/data.py
+ create mode 100644 reports/architecture_recheck_20261021_r2/reproductions/harness_inspection.py
+ create mode 100644 reports/architecture_recheck_20261021_r2/reproductions/nmr_late_response.py
+ create mode 100644 reports/architecture_recheck_20261021_r2/reproductions/orphan_claim.py
+ create mode 100644 scripts/acceptance/browser_runtime.py
+ create mode 100644 scripts/acceptance/check_release_artifacts.py
+ create mode 100644 scripts/acceptance/compatibility_checks.py
+ create mode 100644 scripts/acceptance/ordinary_legacy_cli.py
+ create mode 100644 scripts/acceptance/release_role_probe.py
+ create mode 100644 scripts/build_release.py
+ create mode 100644 src/acp_services/runtime/attempt_recovery.py
+ create mode 100644 src/acp_services/runtime/cgroup.py
+ create mode 100644 tests/test_acceptance_compatibility_checks.py
+ create mode 100644 tests/test_acceptance_ordinary_legacy_cli.py
+ create mode 100644 tests/test_architecture_recheck_20261021.py
+ create mode 100644 tests/test_batch_cli_method_forwarding.py
+ create mode 100644 tests/test_cccp_bounded_multiresolution_identity.py
+ create mode 100644 tests/test_services_attempt_recovery.py
+ create mode 100644 tests/test_services_cgroup_attempt_recovery.py
+ create mode 100644 tests/test_services_prepare_recheck_fixes.py
+ create mode 100644 tests/test_services_worker_artifact_root.py
+FINAL_SHA=a0185b15c546fbd07919326d581fab13e05000fa
+porcelain_after=[]
+commit_count_on_top=1

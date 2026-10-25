@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+  "contract_digest_scope": "delivered-contract-set",
+  "contract_version": "1.1.0",
+  "read_only": true,
+  "schema_version": 1,
+  "started_at": "2026-10-22T19:16:55.807035Z",
+  "status": "ok"
+}

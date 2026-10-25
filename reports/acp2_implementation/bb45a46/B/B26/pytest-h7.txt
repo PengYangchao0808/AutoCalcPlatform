@@ -1,0 +1,4 @@
+command: /usr/bin/python3.11 -m pytest tests/test_acp2_runtime_h7_index.py -q
+........                                                                 [100%]
+8 passed in 0.71s
+exit=0

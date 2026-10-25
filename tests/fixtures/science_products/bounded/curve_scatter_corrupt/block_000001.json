@@ -1,0 +1,8 @@
+{
+ "schema_version": 1,
+ "product_kind": "curve_scatter",
+ "identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c"

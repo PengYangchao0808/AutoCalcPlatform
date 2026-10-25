@@ -1,0 +1,5 @@
+2026-10-23 21:39:01,780 [INFO] cccp.config: Loaded explicit config from: /tmp/opencode/b26a-clean/work/orca/cccp.yaml
+2026-10-23 21:39:02,019 [INFO] acp.calculations.executor: step 0: running singlepoint
+2026-10-23 21:39:02,424 [INFO] acp.calculations.executor: step 0 (singlepoint) completed
+2026-10-23 21:39:02,428 [INFO] acp.cli: Single-point calculation completed
+2026-10-23 21:39:02,428 [INFO] acp.cli:   Energy: -1.158631359838 Hartree

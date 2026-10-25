@@ -1,0 +1,5 @@
+{
+  "revision": "d5d85e7c804878edd0cedb6bce1d32af2d92ad83",
+  "status": " M tests/baseline/refactor-evidence/e2e-task-root.txt\n?? docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md\n?? docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md\n?? docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md\n?? docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md\n?? docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md\n?? docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md\n?? docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md\n?? docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md\n",
+  "e2e_sha256": "f6b0d31c0a15a5fc9022bf53ccedecc3f8a2472b53dc2d39bd36a0560ded754e"
+}

@@ -1,0 +1,231 @@
+{
+  "artifacts": [
+    {
+      "path": "canonical-vectors.json",
+      "sha256": "68490e0a3cccc9f8914684e460ad5cd42090cbc777f2f4b7e272a679552616f4",
+      "size_bytes": 3604
+    },
+    {
+      "path": "restart.json",
+      "sha256": "5db06470c663c902a12d3c6b2095970134ad61371f7913fec3c30d673292b2e0",
+      "size_bytes": 4780
+    },
+    {
+      "path": "invalidation-matrix.json",
+      "sha256": "b748b475ddd8dfee750c6847e0c09fe839c501d68c3a6b585e04f1e0faeba8c9",
+      "size_bytes": 3122
+    },
+    {
+      "path": "unapproved-no-dispatch.json",
+      "sha256": "b82d6ca9c7871107bfd5b65bab53baa6d45c5d2bbbc167fad5a056d2c5a5f782",
+      "size_bytes": 480
+    },
+    {
+      "path": "approval-events.json",
+      "sha256": "5466c1639b607bfa4c72a20d0a17cefedfe2ca8d057ea251994117c68ae5374d",
+      "size_bytes": 10295
+    },
+    {
+      "path": "approval-rows.json",
+      "sha256": "7cced4f4980d37c480dab57977c954ce2d2f4db3734b46028035ed60f76a80d4",
+      "size_bytes": 7169
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "12/12",
+      "name": "b16.canonical_vectors",
+      "status": "PASS"
+    },
+    {
+      "detail": "201 {\"allowed_change_range\": {}, \"approval_ref\": \"ap_610f54c9a14b46218e433c954e8970e5\", \"approver_ref\": null, \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v1\", \"version\": \"1.0.0\"}, \"created_at\": \"2026-10-23T05:03:20.799545+00:00\", \"decided",
+      "name": "b16.request",
+      "status": "PASS"
+    },
+    {
+      "detail": "201 {\"allowed_change_range\": {}, \"approval_ref\": \"ap_610f54c9a14b46218e433c954e8970e5\", \"approver_ref\": null, \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v1\", \"version\": \"1.0.0\"}, \"created_at\": \"2026-10-23T05:03:20.799545+00:00\", \"decided",
+      "name": "b16.replay_and_display_name",
+      "status": "PASS"
+    },
+    {
+      "detail": "200 {\"approvals\": [{\"allowed_change_range\": {}, \"approval_ref\": \"ap_610f54c9a14b46218e433c954e8970e5\", \"approver_ref\": null, \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v1\", \"version\": \"1.0.0\"}, \"created_at\": \"2026-10-23T05:03:20.799545+0",
+      "name": "b16.query",
+      "status": "PASS"
+    },
+    {
+      "detail": "200 {\"allowed_change_range\": {}, \"approval_ref\": \"ap_610f54c9a14b46218e433c954e8970e5\", \"approver_ref\": \"principal_b16_bob\", \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v1\", \"version\": \"1.0.0\"}, \"created_at\": \"2026-10-23T05:03:20.799545+0",
+      "name": "b16.approve_verified_principal",
+      "status": "PASS"
+    },
+    {
+      "detail": "200 {\"allowed_change_range\": {}, \"approval_ref\": \"ap_610f54c9a14b46218e433c954e8970e5\", \"approver_ref\": \"principal_b16_bob\", \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v1\", \"version\": \"1.0.0\"}, \"created_at\": \"2026-10-23T05:03:20.799545+0",
+      "name": "b16.repeat_approve_idempotent",
+      "status": "PASS"
+    },
+    {
+      "detail": "403 access_denied approver_identity_from_payload",
+      "name": "b16.approver_identity_from_payload",
+      "status": "PASS"
+    },
+    {
+      "detail": "pid=1204376 port=18776",
+      "name": "b13.restart.controller_pid_found",
+      "status": "PASS"
+    },
+    {
+      "detail": "old_pid=1204376 alive=False",
+      "name": "b13.restart.controller_stopped",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"candidate_revision\": \"sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23\", \"contract_digest\": \"8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209\", \"contract_digest_scope\": \"delivered-contract-set\", \"contract_version\": \"1.1.0\", \"read_only\": true, \"schema_version\": 1, \"started_at\": \"2026-10-23T05:03:23.170199Z\", \"status\": \"ok\"}",
+      "name": "b13.restart.health_restored",
+      "status": "PASS"
+    },
+    {
+      "detail": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23 -> sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
+      "name": "b13.restart.same_candidate_revision",
+      "status": "PASS"
+    },
+    {
+      "detail": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209 -> 8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+      "name": "b13.restart.same_contract_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "old=1204376 new=1204604",
+      "name": "b13.restart.new_process_same_argv",
+      "status": "PASS"
+    },
+    {
+      "detail": "200 {\"allowed_change_range\": {}, \"approval_ref\": \"ap_610f54c9a14b46218e433c954e8970e5\", \"approver_ref\": \"principal_b16_bob\", \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v1\", \"version\": \"1.0.0\"}, \"created_at\": \"2026-10-23T05:03:20.799545+0",
+      "name": "b16.restart_same_approval",
+      "status": "PASS"
+    },
+    {
+      "detail": "200 {\"allowed_change_range\": {}, \"approval_ref\": \"ap_610f54c9a14b46218e433c954e8970e5\", \"approver_ref\": \"principal_b16_bob\", \"budget\": {\"count\": 1, \"timeout_s\": 60, \"unit\": \"task_count\"}, \"budget_digest\": \"sha256:c30b0f0fbb0fa94d4e376aa5147892bd44d2d7b754c4bf7c23f64ccd52c4d097\", \"canonical_digest\": {\"spec_id\": \"acp2.canonical-digest.v1\", \"version\": \"1.0.0\"}, \"created_at\": \"2026-10-23T05:03:20.799545+0",
+      "name": "b16.repeat_approve_after_restart",
+      "status": "PASS"
+    },
+    {
+      "detail": "201 jobs 0->1 work=['B16_Alpha']",
+      "name": "b16.approved_submit_dispatches",
+      "status": "PASS"
+    },
+    {
+      "detail": "[]",
+      "name": "b16.invalidation_matrix",
+      "status": "PASS"
+    },
+    {
+      "detail": "12 events, unique=True, types=['approval.approved', 'approval.expired', 'approval.rejected', 'approval.requested', 'approval.revoked', 'approval.task_bound']",
+      "name": "b16.events_single_store",
+      "status": "PASS"
+    },
+    {
+      "detail": "['approved', 'expired', 'pending', 'rejected', 'revoked']",
+      "name": "b16.record_states",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "81023137624bddcc6582451e3ad5018f2585fc9b485ff87371766eb32a614ea6",
+    "server_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23"
+  },
+  "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
+  "command": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "approval-budget",
+    "--phase",
+    "approval",
+    "--controller",
+    "http://127.0.0.1:18776",
+    "--fixture",
+    "/opt/acp2-dev/data/b/fixtures/approval.json",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B16",
+    "--timeout",
+    "600"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": ".",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b16.approval_ref": "ap_610f54c9a14b46218e433c954e8970e5",
+    "b16.approved_task_ref": "20261023_130324_001_b16-approved-display-name",
+    "b16.artifacts": [
+      {
+        "path": "canonical-vectors.json",
+        "sha256": "68490e0a3cccc9f8914684e460ad5cd42090cbc777f2f4b7e272a679552616f4",
+        "size_bytes": 3604
+      },
+      {
+        "path": "restart.json",
+        "sha256": "f932c774d023e8840c89ae522b77f1ec9f27ab3343e2f0de2b9bdeefa7127d2d",
+        "size_bytes": 4836
+      },
+      {
+        "path": "invalidation-matrix.json",
+        "sha256": "b748b475ddd8dfee750c6847e0c09fe839c501d68c3a6b585e04f1e0faeba8c9",
+        "size_bytes": 3122
+      },
+      {
+        "path": "unapproved-no-dispatch.json",
+        "sha256": "b82d6ca9c7871107bfd5b65bab53baa6d45c5d2bbbc167fad5a056d2c5a5f782",
+        "size_bytes": 480
+      },
+      {
+        "path": "approval-events.json",
+        "sha256": "5466c1639b607bfa4c72a20d0a17cefedfe2ca8d057ea251994117c68ae5374d",
+        "size_bytes": 10295
+      },
+      {
+        "path": "approval-rows.json",
+        "sha256": "7cced4f4980d37c480dab57977c954ce2d2f4db3734b46028035ed60f76a80d4",
+        "size_bytes": 7169
+      }
+    ],
+    "b16.controller": "http://127.0.0.1:18776",
+    "b16.event_approvals": [
+      "ap_610f54c9a14b46218e433c954e8970e5",
+      "ap_7164dd041edc43e386139c4aa6081c3c",
+      "ap_cf5fe0d8bc624920a47ab674c6c958e4"
+    ],
+    "b16.events": 12,
+    "b16.fixture": "/opt/acp2-dev/data/b/fixtures/approval.json",
+    "b16.fixture_projects": {
+      "created": [],
+      "jobs_database": "/opt/acp2-dev/data/b/run-root-b16/acp_jobs.db",
+      "run_root": "/opt/acp2-dev/data/b/run-root-b16"
+    },
+    "b16.invalidation_rows": 10,
+    "b16.phase": "approval",
+    "b16.plan_digest": "sha256:ad37b641c2361751bf6d4402a43fb6ae60fc83471196be1efe57667e91714fcd",
+    "b16.proposal_digest": "sha256:104d6bfbd977820565ca8f8c7e196083b9c463d35c0a9833bddabf49e6415f09"
+  },
+  "finished_at": "2026-10-23T05:03:32Z",
+  "job_id": "20261023_130324_001_b16-approved-display-name",
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "approval",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T050319Z-1204547-eedb842d",
+  "scenario": "approval-budget",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T05:03:19Z",
+  "submission_id": null,
+  "usage": null
+}

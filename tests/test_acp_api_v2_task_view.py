@@ -444,16 +444,19 @@ def test_legacy_project_tasks_endpoint_unchanged(client: TestClient) -> None:
 # ── ⑧ active-row enrichment ───────────────────────────────────────────
 
 
-def test_active_row_enrichment(client: TestClient) -> None:
-    """Real-path enrichment: flip job to RUNNING, write state.json, verify enrichment fields."""
+def _mark_running_with_state(
+    client: TestClient,
+    *,
+    molecule_name: str,
+    task_name: str,
+    state: dict[str, Any],
+) -> tuple[str, Any]:
     import time
 
     from acp.scheduler.jobs import JobStatus
 
-    pid = _default_project_id(client)
-    task = _create_task(client, molecule_name="ethanol", task_name="opt")
+    task = _create_task(client, molecule_name=molecule_name, task_name=task_name)
     task_id = task["task_id"]
-
     manager = client.app.state.job_manager
 
     for _ in range(50):
@@ -466,33 +469,68 @@ def test_active_row_enrichment(client: TestClient) -> None:
     assert record is not None
     record.status = JobStatus.RUNNING
     manager.store.update(record)
-
     manager.tasks.update_status(task_id, "running")
 
     r_detail = client.get(f"/api/v2/tasks/{task_id}")
     assert r_detail.status_code == 200
     work_dir = Path(r_detail.json()["work_dir"])
+    _write_state_json(work_dir, state)
+    return task_id, manager
 
-    _write_state_json(
-        work_dir,
-        {
-            "stage_index": 2,
-            "stage_total": 5,
-            "stage_detail": "probe",
-        },
-    )
 
+def _find_task_view_row(client: TestClient, task_id: str) -> dict[str, Any]:
+    pid = _default_project_id(client)
     r = client.get(f"/api/v2/task-view?project_id={pid}")
     assert r.status_code == 200
-    found = False
     for g in r.json()["groups"]:
         for j in g["jobs"]:
             if j["id"] == task_id:
-                assert j["stage_index"] == 2
-                assert j["stage_total"] == 5
-                assert j["stage_detail"] == "probe"
-                found = True
-    assert found, f"task {task_id} not found in task-view groups"
+                return j
+    raise AssertionError(f"task {task_id} not found in task-view groups")
+
+
+def test_active_row_enrichment(client: TestClient) -> None:
+    """IS-5 default: prepared snapshot enriches; an uncovered row shows base facts."""
+    from acp.api import v2_routes
+
+    task_id, manager = _mark_running_with_state(
+        client,
+        molecule_name="ethanol",
+        task_name="opt",
+        state={"stage_index": 2, "stage_total": 5, "stage_detail": "probe"},
+    )
+
+    store = v2_routes.install_task_projection(manager, auto_refresh=False)
+
+    uncovered = _find_task_view_row(client, task_id)
+    assert uncovered["stage_index"] is None, "uncovered row must show jobs base facts"
+
+    assert store.refresh([task_id]) == 1
+    prepared = _find_task_view_row(client, task_id)
+    assert prepared["stage_index"] == 2
+    assert prepared["stage_total"] == 5
+    assert prepared["stage_detail"] == "probe"
+
+
+def test_active_row_enrichment_compat_branch(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Transitional compat branch enriches uncovered rows only when explicitly enabled."""
+    from acp.api import v2_routes
+
+    task_id, manager = _mark_running_with_state(
+        client,
+        molecule_name="ethanol",
+        task_name="opt",
+        state={"stage_index": 2, "stage_total": 5, "stage_detail": "probe"},
+    )
+    v2_routes.install_task_projection(manager, auto_refresh=False)
+    monkeypatch.setattr(v2_routes, "_ENRICH_ACTIVE_ROWS_COMPAT", True)
+
+    row = _find_task_view_row(client, task_id)
+    assert row["stage_index"] == 2
+    assert row["stage_total"] == 5
+    assert row["stage_detail"] == "probe"
 
 
 # ── edge: empty project ────────────────────────────────────────────────

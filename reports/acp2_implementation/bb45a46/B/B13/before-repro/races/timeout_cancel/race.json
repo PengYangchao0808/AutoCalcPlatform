@@ -1,0 +1,53 @@
+{
+  "assertions": [],
+  "attempt": 1,
+  "budget": {
+    "cleanup_seconds": 10,
+    "cores": 1,
+    "jobs": 1,
+    "max_orca": 1,
+    "max_prepare_seconds": 30,
+    "memory_mb": 1024,
+    "walltime_s": 60
+  },
+  "budget_row": {
+    "budget": {
+      "cleanup_seconds": 10,
+      "cores": 1,
+      "jobs": 1,
+      "max_orca": 1,
+      "max_prepare_seconds": 30,
+      "memory_mb": 1024,
+      "walltime_s": 60
+    },
+    "orca_pids": [],
+    "pid": 720795,
+    "race_id": "timeout_cancel",
+    "task_ref": "20261023_065059_003_singlepoint",
+    "timeout_seconds": 150
+  },
+  "cancelled_persisted_at": "2026-10-22T22:51:05.697431+00:00",
+  "client_timeout_at": "2026-10-22T22:51:00.251418Z",
+  "evidence": "races/timeout_cancel",
+  "fault": "client_timeout_then_platform_cancel",
+  "finished_at": null,
+  "fixture": "ethanol-wb97mv-def2svp",
+  "input_sha256": "0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404",
+  "kind": "local",
+  "method": {
+    "basis": "def2-SVP",
+    "engine": "orca",
+    "functional": "wB97M-V"
+  },
+  "orca_pids": [],
+  "pid": 720795,
+  "platform_cancel_at": "2026-10-22T22:51:01.323309Z",
+  "race_id": "timeout_cancel",
+  "started_at": "2026-10-22T22:50:59.144686Z",
+  "status": "NOT_VERIFIED",
+  "status_after_client_timeout": "running",
+  "stop_observed_at": "2026-10-22T22:51:01.532550Z",
+  "task_count_before": 14,
+  "task_ref": "20261023_065059_003_singlepoint",
+  "timeout_seconds": 150
+}

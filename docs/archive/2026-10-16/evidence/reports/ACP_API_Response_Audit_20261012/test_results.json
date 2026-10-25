@@ -56,7 +56,7 @@
     }
   },
   "deployment_interpreter_metadata_readonly": {
-    "path": "<venv>/bin/python",
+    "path": "/opt/acp2/venv/bin/python",
     "python": "3.11.13",
     "fastapi": "0.141.1",
     "starlette": "1.6.0",

@@ -1,0 +1,98 @@
+{
+  "schema": "acp2.baseline-lock.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "contract_version": "1.0.0",
+  "created_at": "2026-10-22T00:00:00Z",
+  "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "candidate_label": "bb45a46",
+  "evidence_root": "reports/acp2_implementation/bb45a46",
+  "historical_debug_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+  "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
+  "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "final_debug_candidate_kind": "source_overlay_sha256",
+  "final_debug_candidate_commit": null,
+  "final_debug_candidate_commit_note": "B02 applies the frozen bundle in a clean worktree, commits it and records the resulting full SHA here.",
+  "pending_fix_bundle": {
+    "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
+    "tracked_patch_sha256": "4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242",
+    "candidate_snapshot_sha256": "37dd2320cc5d97ea7eb866a2275641c0d0518801202137f08e8f84046cea1194",
+    "bundle_manifest_sha256": "8340f2e81d8f4adcfe2aa872106285468d6b2c71ccc3fcd3b9cef1bbced8f21e",
+    "verification": "partial",
+    "per_file_verification": "1906/1906 matched in clean reconstruction",
+    "digest_rule": "inherited_from_report (candidate_id derivation not reconstructable; see manifest drift)"
+  },
+  "debug_report": {
+    "path": "reports/architecture_repair_20261022/REPORT.md",
+    "sha256": "1a970c8d12885a0bd9d18d6b15c37060b69d26556157b8efc3e8b52a102a15de"
+  },
+  "revisions": {
+    "server_revision": {
+      "value": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+      "kind": "source_candidate",
+      "status": "frozen"
+    },
+    "client_revision": {
+      "value": null,
+      "kind": "C-owned RPH/client",
+      "status": "not_delivered",
+      "owner": "C"
+    },
+    "harness_revision": {
+      "value": null,
+      "kind": "B01 acceptance harness",
+      "status": "not_delivered",
+      "owner": "B"
+    },
+    "deployment_revision": {
+      "value": null,
+      "kind": "deployed service revision",
+      "status": "NOT_VERIFIED",
+      "note": "No production deployment or service restart in B00."
+    }
+  },
+  "contract_digest": "556d38a3c3f25a78694ee456b175d616d491abc1a0790b1c0d4312e7c82db9ac",
+  "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
+  "env_digest": null,
+  "env_digest_status": "pending B02 environment handoff",
+  "worktree": {
+    "source_checkout": "repo-root",
+    "branch": "feat/frontend-plan1-closure",
+    "head": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "verification_worktree": "/tmp/opencode/acp-b00-candidate (detached clean reconstruction; removed after verification)",
+    "dirty_source_tree_used_as_baseline": false
+  },
+  "run_root_policy": {
+    "production_run_root": "/var/lib/acp/runs",
+    "production_run_root_forbidden": true,
+    "required_filesystem": "native (no 9p/nfs/cifs/fuse)",
+    "allocation": "B02"
+  },
+  "dirty_path_snapshot": {
+    "path": "reports/acp2_implementation/bb45a46/B/B00/git-status-snapshot.txt",
+    "count": 90,
+    "modified_tracked": 39,
+    "untracked": 51,
+    "note": "Snapshot excludes the B00 evidence directory itself. A dirty tree is never the baseline.",
+    "historical_plan_count": 24
+  },
+  "evidence_roots": {
+    "A": "reports/acp2_implementation/bb45a46/A",
+    "B": "reports/acp2_implementation/bb45a46/B",
+    "C": "reports/acp2_implementation/bb45a46/C",
+    "integration": "reports/acp2_implementation/bb45a46/integration"
+  },
+  "blocking_gates": {
+    "H0": "closed-by-B00-manifest-and-baseline-lock; B02 must materialize the commit SHA",
+    "production": "NOT_VERIFIED (no deployment in B00)"
+  },
+  "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "client_revision": null,
+  "harness_revision": null,
+  "deployment_revision": null,
+  "revision_status": {
+    "server_revision": "frozen source candidate (sha256 overlay)",
+    "client_revision": "C-owned; not delivered at B00",
+    "harness_revision": "B01; not delivered at B00",
+    "deployment_revision": "NOT_VERIFIED; no production deployment"
+  }
+}

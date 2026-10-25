@@ -1,0 +1,262 @@
+{
+  "behaviour_checks": {
+    "deterministic_same_metadata_same_digest": true,
+    "product_scope_without_capability": "PluginContractViolationError: PRODUCT identity requires an explicit capability"
+  },
+  "examples": {
+    "orca_readonly_parser": {
+      "digest": "f5d152c78870c82e66ecc117de25c36eaa9952e10e61ccb80b6a3e9f07f525ae",
+      "identity_product": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_capability": "readonly_parser",
+        "plugin_capability_schema": "orca_calculation",
+        "plugin_capability_schema_version": 1,
+        "plugin_dependencies": [],
+        "plugin_digest": "f5d152c78870c82e66ecc117de25c36eaa9952e10e61ccb80b6a3e9f07f525ae",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "cccp",
+        "plugin_identity_scope": "product",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "orca_readonly_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "0.2.0"
+      },
+      "identity_release": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_dependencies": [],
+        "plugin_digest": "f5d152c78870c82e66ecc117de25c36eaa9952e10e61ccb80b6a3e9f07f525ae",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "cccp",
+        "plugin_identity_scope": "release",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "orca_readonly_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "0.2.0"
+      },
+      "identity_step": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_capability": "readonly_parser",
+        "plugin_capability_schema": "orca_calculation",
+        "plugin_capability_schema_version": 1,
+        "plugin_dependencies": [],
+        "plugin_digest": "f5d152c78870c82e66ecc117de25c36eaa9952e10e61ccb80b6a3e9f07f525ae",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "cccp",
+        "plugin_identity_scope": "step",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "orca_readonly_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "0.2.0"
+      },
+      "lock": {
+        "api_version": 1,
+        "capabilities": [
+          {
+            "name": "readonly_parser",
+            "schema": "orca_calculation",
+            "schema_version": 1
+          }
+        ],
+        "compatible_range": ">=1,<2",
+        "declared_dependencies": [],
+        "digest": "f5d152c78870c82e66ecc117de25c36eaa9952e10e61ccb80b6a3e9f07f525ae",
+        "digest_schema_version": 1,
+        "distribution": "cccp",
+        "name": "orca_readonly_parser",
+        "plugin_version": "0.2.0",
+        "resolved_dependencies": [],
+        "schema_version": 1,
+        "science_software": [
+          {
+            "software": "orca",
+            "verified": false,
+            "version_range": ">=5.0,<7"
+          }
+        ]
+      }
+    },
+    "vendor.sample_parser_deps": {
+      "digest": "2f7253158de4ee12e549cc6da6b91fe25e17b369edd7b21ab1b885fb9031157b",
+      "identity_product": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_capability": "sample_parse",
+        "plugin_capability_schema": "sample",
+        "plugin_capability_schema_version": 2,
+        "plugin_dependencies": [
+          {
+            "name": "numpy",
+            "source": "distribution",
+            "version": "2.4.6"
+          },
+          {
+            "name": "math",
+            "source": "stdlib",
+            "version": "python-3.11"
+          }
+        ],
+        "plugin_digest": "2f7253158de4ee12e549cc6da6b91fe25e17b369edd7b21ab1b885fb9031157b",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "sample-dist",
+        "plugin_identity_scope": "product",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "vendor.sample_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "1.3.0"
+      },
+      "identity_release_no_capability": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_dependencies": [
+          {
+            "name": "numpy",
+            "source": "distribution",
+            "version": "2.4.6"
+          },
+          {
+            "name": "math",
+            "source": "stdlib",
+            "version": "python-3.11"
+          }
+        ],
+        "plugin_digest": "2f7253158de4ee12e549cc6da6b91fe25e17b369edd7b21ab1b885fb9031157b",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "sample-dist",
+        "plugin_identity_scope": "release",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "vendor.sample_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "1.3.0"
+      },
+      "lock": {
+        "api_version": 1,
+        "capabilities": [
+          {
+            "name": "sample_parse",
+            "schema": "sample",
+            "schema_version": 2
+          }
+        ],
+        "compatible_range": ">=1,<2",
+        "declared_dependencies": [
+          "numpy",
+          "math"
+        ],
+        "digest": "2f7253158de4ee12e549cc6da6b91fe25e17b369edd7b21ab1b885fb9031157b",
+        "digest_schema_version": 1,
+        "distribution": "sample-dist",
+        "name": "vendor.sample_parser",
+        "plugin_version": "1.3.0",
+        "resolved_dependencies": [
+          {
+            "name": "numpy",
+            "source": "distribution",
+            "version": "2.4.6"
+          },
+          {
+            "name": "math",
+            "source": "stdlib",
+            "version": "python-3.11"
+          }
+        ],
+        "schema_version": 1,
+        "science_software": []
+      },
+      "note": "Constructed metadata (deps numpy=distribution, math=stdlib) to demonstrate resolved-dependency rows in the digest."
+    },
+    "vendor.sample_parser_provided": {
+      "digest": "b72b549221c470a7665ccbcf6ca4953db3a82989e0f98bcd379c42426dddcb3f",
+      "digest_differs_from_env_resolution": true,
+      "note": "Same metadata locked via lock_plugin(resolved_dependencies=...) \u2014 source=provided, digest differs from environment resolution.",
+      "resolved_dependencies": [
+        {
+          "name": "math",
+          "source": "provided",
+          "version": "python-3.11"
+        },
+        {
+          "name": "numpy",
+          "source": "provided",
+          "version": "2.4.6"
+        }
+      ]
+    },
+    "xyz_readonly_parser": {
+      "digest": "7564e154cde3bdc97cc7e4e8befd3dc2d782b13a9cad99ef92928215d115bf6a",
+      "identity_product": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_capability": "xyz_readonly_parser",
+        "plugin_capability_schema": "xyz_structure",
+        "plugin_capability_schema_version": 1,
+        "plugin_dependencies": [],
+        "plugin_digest": "7564e154cde3bdc97cc7e4e8befd3dc2d782b13a9cad99ef92928215d115bf6a",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "cccp",
+        "plugin_identity_scope": "product",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "xyz_readonly_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "0.2.0"
+      },
+      "identity_release": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_dependencies": [],
+        "plugin_digest": "7564e154cde3bdc97cc7e4e8befd3dc2d782b13a9cad99ef92928215d115bf6a",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "cccp",
+        "plugin_identity_scope": "release",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "xyz_readonly_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "0.2.0"
+      },
+      "identity_step": {
+        "plugin_api_compatibility": ">=1,<2",
+        "plugin_api_version": 1,
+        "plugin_capability": "xyz_readonly_parser",
+        "plugin_capability_schema": "xyz_structure",
+        "plugin_capability_schema_version": 1,
+        "plugin_dependencies": [],
+        "plugin_digest": "7564e154cde3bdc97cc7e4e8befd3dc2d782b13a9cad99ef92928215d115bf6a",
+        "plugin_digest_schema_version": 1,
+        "plugin_distribution": "cccp",
+        "plugin_identity_scope": "step",
+        "plugin_identity_scope_version": 1,
+        "plugin_name": "xyz_readonly_parser",
+        "plugin_schema_version": 1,
+        "plugin_version": "0.2.0"
+      },
+      "lock": {
+        "api_version": 1,
+        "capabilities": [
+          {
+            "name": "xyz_readonly_parser",
+            "schema": "xyz_structure",
+            "schema_version": 1
+          }
+        ],
+        "compatible_range": ">=1,<2",
+        "declared_dependencies": [],
+        "digest": "7564e154cde3bdc97cc7e4e8befd3dc2d782b13a9cad99ef92928215d115bf6a",
+        "digest_schema_version": 1,
+        "distribution": "cccp",
+        "name": "xyz_readonly_parser",
+        "plugin_version": "0.2.0",
+        "resolved_dependencies": [],
+        "schema_version": 1,
+        "science_software": []
+      }
+    }
+  },
+  "generator": {
+    "cccp_version": "0.2.0",
+    "command": "PYTHONPATH=src /usr/bin/python3.11 (heredoc recorded in HN-06-version-digest.md section 5)",
+    "note": "All values below are real SDK output (lock_plugin + identity_fields), not hand-written.",
+    "python": "3.11.13"
+  }
+}

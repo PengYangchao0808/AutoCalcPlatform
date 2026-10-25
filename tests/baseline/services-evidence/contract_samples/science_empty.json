@@ -1,0 +1,39 @@
+{
+  "contract": "science",
+  "sample_kind": "empty",
+  "sample_version": 1,
+  "expected_classification": "accepted",
+  "body": {
+    "manifest": {
+      "version": 2,
+      "task_id": "t1",
+      "workflow": "optimize",
+      "status": "completed",
+      "products": []
+    },
+    "frame": {
+      "frame_id": "f0",
+      "label": "step 0",
+      "frame_index": 0,
+      "x": 0.0,
+      "energy": -155.0,
+      "status": "ok",
+      "geometry_ref": "structures/final.xyz",
+      "metadata": {
+        "step": 0
+      }
+    },
+    "annotation": {
+      "id": "a1",
+      "type": "minimum",
+      "label": "MIN-01",
+      "frame_index": 0,
+      "x": 0.0,
+      "y": -155.0,
+      "status": "",
+      "geometry_ref": "structures/final.xyz",
+      "selected": false,
+      "metadata": {}
+    }
+  }
+}

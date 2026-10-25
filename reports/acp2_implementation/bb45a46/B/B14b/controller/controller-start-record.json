@@ -1,0 +1,57 @@
+{
+  "schema": "acp2.controller-start-record.v1",
+  "task": "B14b",
+  "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+  "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
+  "pid": 1051867,
+  "argv": [
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "-m",
+    "acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18774",
+    "--run-root",
+    "/opt/acp2-dev/data/b/run-root-b14b",
+    "--poll-interval",
+    "1",
+    "--no-browser"
+  ],
+  "cwd": "/opt/acp2-dev/data/b/controller-config",
+  "pythonpath": "/opt/acp2-dev/integration/src",
+  "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
+  "environment": {
+    "PYTHONPATH": "/opt/acp2-dev/integration/src",
+    "ACP_CONFIG": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+    "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root-b14b",
+    "ACP_CANDIDATE_REVISION": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+    "CONFSEARCH_ORCA_PATH": "/home/redacted-user/orca611/orca",
+    "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+    "LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611"
+  },
+  "config": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b14b",
+  "bind_host": "127.0.0.1",
+  "port": 18774,
+  "production_port": 8765,
+  "production_touched": false,
+  "health": {
+    "schema_version": 1,
+    "status": "ok",
+    "candidate_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+    "contract_version": "1.1.0",
+    "contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
+    "contract_digest_scope": "delivered-contract-set",
+    "read_only": true,
+    "started_at": "2026-10-23T03:15:08.498141Z"
+  },
+  "loaded_module_paths": {
+    "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+    "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
+    "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
+  },
+  "note": "The Controller was started from the frozen candidate source via PYTHONPATH; ACP_CANDIDATE_REVISION was exported to the candidate SHA so /api/health matches the source actually loaded. The B02 acceptance-env.sh H2 value was not edited."
+}

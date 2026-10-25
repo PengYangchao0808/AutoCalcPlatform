@@ -1,0 +1,11 @@
+{
+  "all_pass": true,
+  "scenarios": [
+    {
+      "result": "PASS",
+      "scenario": "m1-singlepoint",
+      "skip_reason": null
+    }
+  ],
+  "schema": "acp.acceptance.summary.v1"
+}

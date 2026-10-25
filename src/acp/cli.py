@@ -23,11 +23,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import sys
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Mapping
+from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any, Final
 
@@ -35,13 +38,34 @@ from acp.core.keywords import make_case_insensitive_type
 
 logger = logging.getLogger(__name__)
 
+_MCP_EXIT_OK: Final[int] = 0
+_MCP_EXIT_USAGE: Final[int] = 2
+_MCP_EXIT_CONTROLLER_UNAVAILABLE: Final[int] = 3
+_MCP_EXIT_STARTUP_ERROR: Final[int] = 4
+
 # ---------------------------------------------------------------------------
 # Logging helpers
 # ---------------------------------------------------------------------------
 
 
-def setup_logging(level: str = "INFO") -> None:
-    """Configure root logger with the given level."""
+def setup_logging(level: str = "INFO", *, structured: bool | None = None) -> None:
+    """Configure the root logger with the given level.
+
+    The legacy text format is preserved by default.  Structured (JSON-line,
+    redacted) logging is opt-in via ``ACP_LOG_FORMAT=json`` or an explicit
+    ``structured=True``; it writes to stderr so machine JSON envelopes on stdout
+    stay clean (B08-6 / todo 47).  Logging is observation only — never a
+    settlement or recovery authority.
+    """
+    if structured is None:
+        from acp_services.entrypoints.diagnostics import structured_logging_enabled
+
+        structured = structured_logging_enabled()
+    if structured:
+        from acp_services.entrypoints.diagnostics import configure_structured_logging
+
+        configure_structured_logging(level=level)
+        return
     numeric_level = getattr(logging, level.upper(), logging.INFO)
     logging.basicConfig(
         level=numeric_level,
@@ -473,6 +497,22 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             ),
         )
 
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit a machine-readable JSON result envelope on stdout (additive mode).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help=(
+            "Plan/validate/estimate only: emit a JSON envelope without launching "
+            "any scientific program, transfer or core-hour metering."
+        ),
+    )
+
 
 def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
     """Add arguments for the xTB optimization subcommand."""
@@ -849,7 +889,9 @@ Geometry non-convergence is reported in the evidence, not silently accepted.
             "(or an inline JSON string)"
         ),
     )
-    xtb_constopt.add_argument("--output", "-o", default="./xtb_constopt_out", help="Output directory")
+    xtb_constopt.add_argument(
+        "--output", "-o", default="./xtb_constopt_out", help="Output directory"
+    )
     xtb_constopt.add_argument("--nproc", type=int, help="Number of CPU cores")
     xtb_constopt.add_argument(
         "--mem",
@@ -2066,6 +2108,1021 @@ def _handle_xtb_constrained_opt(args: argparse.Namespace) -> int:
     return 0
 
 
+def job_runtime_commands(manager: Any | None = None) -> Any:
+    """Return the Runtime command surface for CLI job submit/control entries.
+
+    CLI job submit/control entries must go through this single boundary and
+    never call the legacy ``JobManager``/store directly (single execution owner,
+    todo 25). The composition root injects adapters over the live manager; with
+    no manager (the ``--register`` path, which must not start the scheduler) the
+    completed-job registration port stays wired while control/submit/edit are
+    unattached placeholders.
+    """
+    from acp.services_bootstrap import build_runtime_commands
+
+    return build_runtime_commands(manager)
+
+
+def job_control_command(
+    command: str,
+    job_id: str,
+    *,
+    manager: Any | None = None,
+    project_id: str | None = None,
+    target_node: str | None = None,
+) -> Any:
+    """Route one local job-control verb through the shared Runtime use case.
+
+    The CLI and the Web API must not each grow their own task state machine:
+    both enter the *same* :class:`~acp_services.runtime.commands.RuntimeCommands`
+    surface (todo 25), which forwards exactly once to the injected scheduler
+    port. ``command`` is one of ``pause`` / ``unpause`` / ``cancel`` /
+    ``continue`` / ``rerun``; the port's outcome is returned untouched.
+
+    This is the shared control entry prepared for the public CLI subcommands.
+    Wiring those subparsers to it is todo 74 (the full-CLI entry owner) and is
+    deliberately **not** done in this equivalence-only slice, so no argument
+    surface changes here.
+    """
+    commands = job_runtime_commands(manager)
+    verb = command.strip().lower()
+    if verb == "pause":
+        return commands.pause(job_id)
+    if verb == "unpause":
+        return commands.unpause(job_id)
+    if verb == "cancel":
+        return commands.cancel(job_id)
+    if verb == "continue":
+        return commands.continue_job(job_id, target_node=target_node)
+    if verb == "rerun":
+        return commands.rerun(job_id, project_id=project_id)
+    raise ValueError(
+        f"unknown job control command {command!r}; expected one of: "
+        "pause, unpause, cancel, continue, rerun"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public local task management (B07-8 / todo 74)
+# ---------------------------------------------------------------------------
+# Reuse the Services use cases (RuntimeCommands / RuntimeRecovery) and the
+# persistent run_root store so a fresh process finds and controls the original
+# task; never a browser/Web path or a second task implementation.
+
+_TASK_STEP_KINDS: Final[dict[str, str]] = {
+    "singlepoint": "singlepoint",
+    "optimize": "optimize",
+    "frequency": "frequency",
+    "scan": "scan",
+    "casscf": "casscf",
+}
+
+_TASK_CONTROL_VERBS: Final[tuple[str, ...]] = (
+    "pause",
+    "unpause",
+    "continue",
+    "cancel",
+    "rerun",
+)
+
+
+def _add_task_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Register ``acp task`` subcommands (persistent controller/worker entry)."""
+    task_parser = subparsers.add_parser(
+        "task",
+        help="Local task management against the persistent run_root store",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp task ingest --xyz-text "3\\nwater\\nO 0 0 0\\nH 0 0 0.96\\nH 0 0.93 -0.24" --task-dir ./t
+  acp task execute --workflow fake --input "CCO" --name demo
+  acp task query --job 20261019_001_demo
+  acp task pause --job 20261019_001_demo
+  acp task export --job 20261019_001_demo
+        """,
+    )
+    task_sub = task_parser.add_subparsers(dest="task_command", required=True)
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--run-root", default=None, help="Data run root (default: ACP_RUN_ROOT)")
+    common.add_argument(
+        "--controller",
+        default=None,
+        metavar="URL",
+        help=(
+            "Target an already-running ACP Controller (e.g. http://127.0.0.1:18765) "
+            "instead of the local store/manager; never starts a Controller"
+        ),
+    )
+    common.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    ingest = task_sub.add_parser("ingest", parents=[common], help="Parse an input structure")
+    ingest.add_argument("--input", "-i", default=None, help="Structure file (XYZ/GJF/COM/... )")
+    ingest.add_argument("--smiles", default=None, help="SMILES string")
+    ingest.add_argument("--xyz-text", default=None, help="Inline XYZ text")
+    ingest.add_argument("--task-dir", required=True, help="Task directory to write input.xyz into")
+    ingest.add_argument("--name", default=None, help="Molecule name")
+
+    plan = task_sub.add_parser("plan", parents=[common], help="Build a calculation plan")
+    plan.add_argument("--task-dir", required=True, help="Task directory holding input.xyz")
+    plan.add_argument(
+        "--workflow", "-w", default="singlepoint", help="Workflow (default: singlepoint)"
+    )
+    plan.add_argument("--method", default="r2SCAN-3c", help="Method (default: r2SCAN-3c)")
+    plan.add_argument("--profile", default="default", help="Plan profile (default: default)")
+    plan.add_argument(
+        "--config", default=None, help="Explicit config file (merged over user/project)"
+    )
+
+    execute = task_sub.add_parser(
+        "execute", parents=[common], help="Submit a job to the local scheduler"
+    )
+    execute.add_argument(
+        "--workflow", "-w", required=True, help="Workflow id (e.g. fake, singlepoint)"
+    )
+    execute.add_argument("--input", "-i", required=True, help="Input source (SMILES or file path)")
+    execute.add_argument("--name", default=None, help="Task/molecule name")
+    execute.add_argument("--method", default="", help="Method override")
+    execute.add_argument(
+        "--follow",
+        action="store_true",
+        help="Wait for the job to reach a terminal state (default: return once the worker starts)",
+    )
+
+    query = task_sub.add_parser("query", parents=[common], help="Query persisted job records")
+    query.add_argument("--job", default=None, help="Single job id")
+    query.add_argument("--status", default=None, help="Filter by status")
+    query.add_argument("--limit", type=int, default=50, help="Max rows (default: 50)")
+
+    for verb in _TASK_CONTROL_VERBS:
+        control = task_sub.add_parser(verb, parents=[common], help=f"{verb} a persisted job")
+        control.add_argument("--job", required=True, help="Job id")
+        control.add_argument("--project", default=None, help="Project id (rerun only)")
+        control.add_argument(
+            "--target-node", default=None, help="Execution node override (continue)"
+        )
+
+    recover = task_sub.add_parser(
+        "recover", parents=[common], help="Reuse valid results for a task"
+    )
+    recover.add_argument("--task-dir", required=True, help="Task directory holding input.xyz")
+    recover.add_argument(
+        "--workflow",
+        "-w",
+        default=None,
+        help="Workflow (default: persisted job workflow, else singlepoint)",
+    )
+    recover.add_argument(
+        "--method",
+        default=None,
+        help="Method override (default: persisted job method, else r2SCAN-3c)",
+    )
+    recover.add_argument("--profile", default="default", help="Plan profile (default: default)")
+    recover.add_argument(
+        "--config",
+        default=None,
+        help="Explicit config file (merged over user/project config)",
+    )
+
+    export = task_sub.add_parser("export", parents=[common], help="Read the task result manifest")
+    export.add_argument("--job", default=None, help="Job id (resolves the task dir)")
+    export.add_argument("--task-dir", default=None, help="Task directory (alternative to --job)")
+
+
+def _add_mcp_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Register ``acp mcp serve`` (B05 stdio adapter, one existing Controller)."""
+    mcp_parser = subparsers.add_parser(
+        "mcp",
+        help="MCP adapter entrypoints (stdio; never starts a Controller)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp mcp serve --transport stdio --controller http://127.0.0.1:18765
+  acp mcp serve --help
+
+Exit codes:
+  0  clean EOF or SIGTERM/SIGINT shutdown
+  2  usage error (bad transport/frame limit, missing controller)
+  3  Controller unreachable or unhealthy at startup
+  4  unexpected adapter startup failure
+        """,
+    )
+    mcp_sub = mcp_parser.add_subparsers(dest="mcp_command", required=True)
+    serve = mcp_sub.add_parser(
+        "serve",
+        help="Serve the MCP adapter over newline-delimited JSON-RPC stdio",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+stdout carries protocol frames only; all diagnostics go to stderr. This
+process never starts or owns a Controller, scheduler or jobs database.
+        """,
+    )
+    serve.add_argument(
+        "--transport",
+        choices=("stdio",),
+        default="stdio",
+        help="Transport to serve (only 'stdio' is supported)",
+    )
+    serve.add_argument(
+        "--controller",
+        default=None,
+        metavar="URL",
+        help="Loopback Controller URL (default: $ACP_CONTROLLER_URL)",
+    )
+    serve.add_argument(
+        "--log-level",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+        default=None,
+        help="stderr log level (default: $ACP2_MCP_LOG_LEVEL or INFO)",
+    )
+    serve.add_argument(
+        "--max-frame-bytes",
+        type=int,
+        default=None,
+        help="Hard per-frame JSON-RPC byte limit (default: 1048576, minimum 1024)",
+    )
+
+
+def _configure_mcp_logging(level: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, level, logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[logging.StreamHandler(sys.stderr)],
+        force=True,
+    )
+    logger.setLevel(getattr(logging, level, logging.INFO))
+
+
+def _handle_mcp_serve(args: argparse.Namespace) -> int:
+    controller = (
+        args.controller
+        or os.environ.get("ACP_CONTROLLER_URL")
+        or os.environ.get("ACP2_CONTROLLER")
+        or ""
+    ).strip()
+    if not controller:
+        print(
+            "acp mcp serve: --controller (or ACP_CONTROLLER_URL) is required",
+            file=sys.stderr,
+        )
+        return _MCP_EXIT_USAGE
+
+    log_level = (args.log_level or os.environ.get("ACP2_MCP_LOG_LEVEL") or "INFO").upper()
+    if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+        print(f"acp mcp serve: invalid log level {log_level!r}", file=sys.stderr)
+        return _MCP_EXIT_USAGE
+
+    from acp_services.entrypoints.mcp_stdio import (
+        MAX_FRAME_BYTES,
+        configure_stdio_logging,
+        run_stdio,
+    )
+
+    max_frame_bytes = MAX_FRAME_BYTES if args.max_frame_bytes is None else args.max_frame_bytes
+    if max_frame_bytes < 1024:
+        print(
+            "acp mcp serve: --max-frame-bytes must be at least 1024",
+            file=sys.stderr,
+        )
+        return _MCP_EXIT_USAGE
+
+    _configure_mcp_logging(log_level)
+    configure_stdio_logging(log_level)
+
+    from acp.services_mcp_bootstrap import build_mcp_runtime
+    from acp_services.entrypoints.controller_client import ControllerClientError
+
+    api_key = (os.environ.get("ACP_API_KEY") or "").strip() or None
+    try:
+        runtime = build_mcp_runtime(controller, api_key=api_key)
+    except ControllerClientError as exc:
+        logger.error("Controller unavailable at %s: %s", controller, exc.message)
+        return _MCP_EXIT_CONTROLLER_UNAVAILABLE
+    except Exception:
+        logger.exception("MCP adapter startup failed")
+        return _MCP_EXIT_STARTUP_ERROR
+
+    logger.info(
+        "MCP stdio adapter serving controller=%s (candidate_revision=%s, identity_binding=%s)",
+        controller,
+        runtime.health.candidate_revision,
+        "api-key" if api_key else "local-single",
+    )
+    return run_stdio(
+        runtime.server,
+        max_frame_bytes=max_frame_bytes,
+        log_level=log_level,
+    )
+
+
+def _dispatch_mcp(args: argparse.Namespace) -> int:
+    if getattr(args, "mcp_command", None) == "serve":
+        return _handle_mcp_serve(args)
+    return _MCP_EXIT_USAGE
+
+
+def job_submit_command(spec: Any, *, manager: Any | None = None) -> Any:
+    """Submit a job through the shared Runtime use case (single execution owner)."""
+    commands = job_runtime_commands(manager)
+    return commands.submit(spec)
+
+
+def _task_run_root(args: argparse.Namespace) -> Path:
+    from acp.core.paths import resolve_run_root
+
+    return resolve_run_root(getattr(args, "run_root", None))
+
+
+def _task_manager(run_root: Path) -> Any:
+    from acp.scheduler.manager import JobManager
+
+    run_root.mkdir(parents=True, exist_ok=True)
+    return JobManager(run_root=run_root, reconnect_local_workers=True)
+
+
+def _task_store(run_root: Path) -> Any:
+    from acp_services.store.store import JobStore
+
+    return JobStore(run_root / "acp_jobs.db")
+
+
+def _live_controller_pid(run_root: Path) -> int | None:
+    """Return the PID of a live Controller owning *run_root*, else ``None``.
+
+    Reuses the existing ``.manager.lock`` ownership record and the existing
+    liveness/identity check (``pid_is_alive`` + ACP/uvicorn cmdline) — there is
+    no second lock.  A stale lock never blocks a local command.
+    """
+    lock_path = run_root / ".manager.lock"
+    try:
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    owner = payload.get("pid") if isinstance(payload, dict) else None
+    if not isinstance(owner, int) or owner <= 0:
+        return None
+    from acp.scheduler.processctl import pid_is_alive, read_cmdline
+
+    if not pid_is_alive(owner):
+        return None
+    cmdline = read_cmdline(owner).lower()
+    if "acp" not in cmdline and "uvicorn" not in cmdline:
+        return None
+    return owner
+
+
+def _refuse_local_ownership(args: argparse.Namespace, run_root: Path) -> int | None:
+    """Refuse a local manager when a live Controller already owns the run root."""
+    owner = _live_controller_pid(run_root)
+    if owner is None:
+        return None
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": "failed",
+            "error": "controller_running_use_--controller",
+            "reason": "controller_running_use_--controller",
+            "controller_pid": owner,
+        }
+    )
+    return 1
+
+
+def _task_controller_client(controller_url: str) -> Any:
+    from acp_services.entrypoints.controller_client import ControllerClient
+
+    return ControllerClient(controller_url)
+
+
+def _emit_task(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, sort_keys=True, default=str))
+
+
+def _task_structure_elements(xyz_text: str) -> list[str]:
+    elements: list[str] = []
+    for line in xyz_text.splitlines()[2:]:
+        parts = line.split()
+        if len(parts) >= 4:
+            elements.append(parts[0])
+    return elements
+
+
+def _task_config(args: argparse.Namespace) -> dict[str, Any]:
+    """Load the full merged configuration for a ``task`` subcommand."""
+    from cccp.config import load_config
+
+    overrides: dict[str, Any] = {}
+    if getattr(args, "nproc", None) is not None:
+        overrides.setdefault("resources", {})["nproc"] = args.nproc
+        overrides.setdefault("executables", {}).setdefault("orca", {})["nproc"] = args.nproc
+    if getattr(args, "mem", None) is not None:
+        overrides.setdefault("resources", {})["mem"] = args.mem
+    config_path = getattr(args, "config", None)
+    return load_config(
+        config_path=Path(config_path) if config_path else None,
+        overrides=overrides or None,
+    )
+
+
+def _persisted_task_spec(task_dir: Path) -> dict[str, Any]:
+    """Read the original workflow/method/resources from a persisted task."""
+    spec: dict[str, Any] = {}
+    for name in ("job.json", "task.json"):
+        path = task_dir / name
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        raw_spec = payload.get("spec")
+        if isinstance(raw_spec, dict):
+            workflow = raw_spec.get("workflow")
+            if isinstance(workflow, str) and workflow:
+                spec.setdefault("workflow", workflow)
+            method = raw_spec.get("method")
+            if isinstance(method, dict):
+                spec.setdefault("method", dict(method))
+            resources = raw_spec.get("resources")
+            if isinstance(resources, dict):
+                spec.setdefault("resources", dict(resources))
+            config_path = raw_spec.get("config_path")
+            if config_path:
+                spec.setdefault("config_path", str(config_path))
+        workflow = payload.get("workflow")
+        if isinstance(workflow, str) and workflow:
+            spec.setdefault("workflow", workflow)
+    return spec
+
+
+def _build_task_plan(
+    task_dir: Path,
+    workflow: str,
+    method: str,
+    profile: str,
+    *,
+    config: Mapping[str, Any] | None = None,
+    resources: Mapping[str, Any] | None = None,
+    method_flags: Mapping[str, Any] | None = None,
+) -> Any:
+    from acp.calculations.contracts import (
+        CalculationPlan,
+        CalculationRequest,
+        CalculationStep,
+        StepKind,
+        StructureArtifact,
+        StructureRole,
+    )
+    from acp.calculations.plans import build_simple_plan
+
+    kind_value = _TASK_STEP_KINDS.get(workflow)
+    if kind_value is None:
+        raise ValueError(
+            f"workflow {workflow!r} has no simple plan; supported: {sorted(_TASK_STEP_KINDS)}"
+        )
+    input_path = task_dir / "input.xyz"
+    if not input_path.is_file():
+        raise FileNotFoundError(f"missing {input_path}; run `acp task ingest` first")
+    xyz_text = input_path.read_text(encoding="utf-8")
+    artifact = StructureArtifact(
+        path=input_path,
+        elements=_task_structure_elements(xyz_text),
+        role=StructureRole.MINIMUM,
+        source="cli-task",
+    )
+    output_dir = task_dir / "WORK" / f"05_{kind_value.upper()}"
+    if config is None:
+        from cccp.config import load_config
+
+        config = load_config()
+    step_resources: dict[str, Any] = dict(resources or {})
+    step_resources["output_dir"] = str(output_dir)
+    step_resources["config"] = dict(config)
+    step_spec = dict(step_resources)
+    step_spec.update(method_flags or {})
+    step_spec["method"] = method
+    request = CalculationRequest(
+        input_artifact=artifact,
+        method=method,
+        resources=step_resources,
+        workflow=workflow,
+        profile=profile,
+    )
+    base_plan = build_simple_plan(StepKind(kind_value), request)
+    first_step = next(step for step in base_plan.steps if isinstance(step, CalculationStep))
+    return CalculationPlan(
+        workflow=base_plan.workflow,
+        profile=base_plan.profile,
+        items=list(base_plan.items),
+        steps=[CalculationStep(kind=first_step.kind, mode=first_step.mode, spec=step_spec)],
+    )
+
+
+def _task_input_payload(source: str) -> dict[str, Any]:
+    candidate = Path(source)
+    if candidate.is_file():
+        return {"source": str(candidate), "source_type": "file"}
+    return {"source": source, "source_type": "smiles"}
+
+
+def _wait_for_task(
+    manager: Any,
+    job_id: str,
+    *,
+    terminal: bool,
+    timeout: float = 120.0,
+) -> Any:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        record = manager.store.get(job_id)
+        if record is None:
+            return None
+        if record.status.is_terminal:
+            return record
+        if not terminal:
+            proc = manager.runner._processes.get(job_id)
+            if proc is not None and proc.poll() is None:
+                return record
+        time.sleep(0.1)
+    return manager.store.get(job_id)
+
+
+def _handle_task_ingest(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    task_dir = Path(args.task_dir)
+    task_dir.mkdir(parents=True, exist_ok=True)
+    from acp.intake import detect_and_parse
+
+    if args.input:
+        source_path = Path(args.input)
+        text = source_path.read_text(encoding="utf-8")
+        filename = source_path.name
+    elif args.xyz_text:
+        text = args.xyz_text
+        filename = "input.xyz"
+    elif args.smiles:
+        text = args.smiles
+        filename = "input.xyz"
+    else:
+        _emit_task(
+            {
+                "command": "ingest",
+                "status": "failed",
+                "error": "one of --input/--smiles/--xyz-text required",
+            }
+        )
+        return 2
+    fmt, parsed = detect_and_parse(text, filename=filename)
+    if not parsed.ok or not parsed.structures:
+        _emit_task({"command": "ingest", "status": "failed", "errors": parsed.errors})
+        return 2
+    asset = parsed.structures[0]
+    xyz_out = text if fmt == "xyz" else (asset.xyz or text)
+    (task_dir / "input.xyz").write_text(xyz_out, encoding="utf-8")
+    _emit_task(
+        {
+            "command": "ingest",
+            "status": "ok",
+            "format": fmt,
+            "atom_count": asset.atom_count,
+            "formula": asset.formula,
+            "task_dir": str(task_dir),
+        }
+    )
+    return 0
+
+
+def _handle_task_plan(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    try:
+        plan = _build_task_plan(
+            Path(args.task_dir),
+            args.workflow,
+            args.method,
+            args.profile,
+            config=_task_config(args),
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _emit_task({"command": "plan", "status": "failed", "error": str(exc)})
+        return 2
+    _emit_task(
+        {
+            "command": "plan",
+            "status": "ok",
+            "workflow": plan.workflow,
+            "steps": [step.kind.value for step in plan.steps],
+            "task_dir": str(Path(args.task_dir)),
+        }
+    )
+    return 0
+
+
+def _handle_task_execute(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    refusal = _refuse_local_ownership(args, run_root)
+    if refusal is not None:
+        return refusal
+    from acp.scheduler.jobs import JobSpec
+
+    method: dict[str, Any] = {}
+    if args.method:
+        method["method"] = args.method
+    spec = JobSpec(
+        workflow=args.workflow,
+        name=args.name or "",
+        input=_task_input_payload(args.input),
+        method=method,
+    )
+    manager = _task_manager(run_root)
+    try:
+        record = job_submit_command(spec, manager=manager)
+        follow = bool(args.follow) or args.workflow == "fake"
+        fresh = _wait_for_task(manager, record.id, terminal=follow)
+        if fresh is None:
+            _emit_task({"command": "execute", "status": "failed", "error": "job vanished"})
+            return 1
+        _emit_task(
+            {
+                "command": "execute",
+                "status": fresh.status.value,
+                "job_id": fresh.id,
+                "work_dir": fresh.work_dir,
+                "task_ref": {
+                    "task_id": fresh.id,
+                    "job_id": fresh.id,
+                    "attempt": fresh.attempt,
+                },
+            }
+        )
+        return 0 if not fresh.status.is_terminal or fresh.status.value == "completed" else 1
+    except (ValueError, RuntimeError) as exc:
+        _emit_task({"command": "execute", "status": "failed", "error": str(exc)})
+        return 1
+    finally:
+        manager.shutdown()
+
+
+def _handle_task_query(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    store = _task_store(run_root)
+    from acp_services.entrypoints.status_projection import project_task_status
+
+    if args.job:
+        record = store.get(args.job)
+        if record is None:
+            _emit_task({"command": "query", "status": "not_found", "job_id": args.job})
+            return 1
+        raw = record.to_dict()
+        _emit_task(
+            {
+                "command": "query",
+                "status": "ok",
+                "job": raw,
+                "projection": project_task_status(raw, fallback_task_id=record.id),
+            }
+        )
+        return 0
+    records = store.list(status=args.status, limit=args.limit)
+    _emit_task(
+        {
+            "command": "query",
+            "status": "ok",
+            "count": len(records),
+            "jobs": [
+                {
+                    "id": row.id,
+                    "status": row.status.value,
+                    "workflow": row.spec.workflow,
+                    "work_dir": row.work_dir,
+                    "attempt": row.attempt,
+                }
+                for row in records
+            ],
+            "projections": [
+                project_task_status(row.to_dict(), fallback_task_id=row.id) for row in records
+            ],
+        }
+    )
+    return 0
+
+
+def _handle_task_control(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    refusal = _refuse_local_ownership(args, run_root)
+    if refusal is not None:
+        return refusal
+    manager = _task_manager(run_root)
+    try:
+        record = job_control_command(
+            args.task_command,
+            args.job,
+            manager=manager,
+            project_id=getattr(args, "project", None),
+            target_node=getattr(args, "target_node", None),
+        )
+    except (KeyError, ValueError, RuntimeError) as exc:
+        _emit_task({"command": args.task_command, "status": "failed", "error": str(exc)})
+        return 1
+    finally:
+        manager.shutdown()
+    if record is None:
+        _emit_task({"command": args.task_command, "status": "not_found", "job_id": args.job})
+        return 1
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": record.status.value,
+            "job_id": record.id,
+            "attempt": record.attempt,
+        }
+    )
+    return 0
+
+
+def _handle_task_recover(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    run_root.mkdir(parents=True, exist_ok=True)
+    task_dir = Path(args.task_dir)
+    persisted = _persisted_task_spec(task_dir)
+    workflow = args.workflow or str(persisted.get("workflow") or "singlepoint")
+    persisted_method = persisted.get("method") or {}
+    method_flags = dict(persisted_method) if isinstance(persisted_method, Mapping) else {}
+    method = args.method or str(method_flags.get("method") or "r2SCAN-3c")
+    method_flags["method"] = method
+    resources = persisted.get("resources") or {}
+    try:
+        config_path = (
+            Path(args.config)
+            if getattr(args, "config", None)
+            else (Path(persisted["config_path"]) if persisted.get("config_path") else None)
+        )
+        from cccp.config import load_config
+
+        config = load_config(config_path=config_path)
+        plan = _build_task_plan(
+            task_dir,
+            workflow,
+            method,
+            args.profile,
+            config=config,
+            resources=resources if isinstance(resources, Mapping) else None,
+            method_flags=method_flags,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        _emit_task({"command": "recover", "status": "failed", "error": str(exc)})
+        return 2
+    from acp.services_bootstrap import build_runtime_recovery
+
+    recovery = build_runtime_recovery(run_root)
+    result = recovery.execute(plan, task_root=task_dir)
+    completed = bool(getattr(result, "is_completed", False))
+    _emit_task(
+        {
+            "command": "recover",
+            "status": getattr(result, "status", "unknown"),
+            "completed": completed,
+            "workflow": workflow,
+            "method": method,
+            "task_dir": str(task_dir),
+        }
+    )
+    return 0 if completed else 1
+
+
+def _handle_task_export(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    task_dir: Path | None = Path(args.task_dir) if args.task_dir else None
+    if task_dir is None and args.job:
+        record = _task_store(run_root).get(args.job)
+        if record is None:
+            _emit_task({"command": "export", "status": "not_found", "job_id": args.job})
+            return 1
+        task_dir = Path(record.work_dir)
+    if task_dir is None:
+        _emit_task(
+            {"command": "export", "status": "failed", "error": "--job or --task-dir required"}
+        )
+        return 2
+    result_dir = task_dir / "RESULT"
+    if not result_dir.is_dir():
+        _emit_task({"command": "export", "status": "no_result", "task_dir": str(task_dir)})
+        return 1
+    from acp.storage.manifest import MANIFEST_FILENAME, ResultManifest
+
+    if not (result_dir / MANIFEST_FILENAME).is_file():
+        _emit_task({"command": "export", "status": "no_result", "task_dir": str(task_dir)})
+        return 1
+    manifest = ResultManifest.read(result_dir)
+    _emit_task(
+        {
+            "command": "export",
+            "status": manifest.status,
+            "task_dir": str(task_dir),
+            "products": len(manifest.products or []),
+        }
+    )
+    return 0
+
+
+def _controller_error(args: argparse.Namespace, exc: Any) -> int:
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": "failed",
+            "error": str(exc),
+            "code": getattr(exc, "code", "unknown_error"),
+            "retryable": bool(getattr(exc, "retryable", False)),
+        }
+    )
+    return 1
+
+
+def _handle_task_query_controller(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    from acp_services.entrypoints.controller_client import ControllerClientError
+    from acp_services.entrypoints.status_projection import project_task_status
+
+    client = _task_controller_client(args.controller)
+    try:
+        if args.job:
+            snapshot = client.status(args.job)
+            raw = dict(snapshot.raw)
+            _emit_task(
+                {
+                    "command": "query",
+                    "status": "ok",
+                    "job": raw,
+                    "projection": project_task_status(raw, fallback_task_id=snapshot.task_id),
+                }
+            )
+            return 0
+        payload = client.list_tasks(status=args.status, limit=args.limit)
+    except ControllerClientError as exc:
+        return _controller_error(args, exc)
+    jobs = payload.get("jobs") if isinstance(payload, Mapping) else None
+    rows = jobs if isinstance(jobs, list) else []
+    row_maps = [row for row in rows if isinstance(row, Mapping)]
+    _emit_task(
+        {
+            "command": "query",
+            "status": "ok",
+            "count": len(rows),
+            "jobs": [
+                {
+                    "id": row.get("id") or row.get("task_id"),
+                    "status": row.get("status") or row.get("state"),
+                    "workflow": row.get("workflow"),
+                    "work_dir": row.get("work_dir"),
+                    "attempt": row.get("attempt"),
+                }
+                for row in row_maps
+            ],
+            "projections": [project_task_status(row) for row in row_maps],
+        }
+    )
+    return 0
+
+
+def _handle_task_execute_controller(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    from acp_services.entrypoints.controller_client import ControllerClientError
+
+    client = _task_controller_client(args.controller)
+    method: dict[str, Any] = {}
+    if args.method:
+        method["method"] = args.method
+    request = {
+        "workflow": args.workflow,
+        "name": args.name or "",
+        "input": _task_input_payload(args.input),
+        "method": method,
+    }
+    try:
+        record = client.submit(request)
+        job_id = str(record.get("job_id") or record.get("task_id") or "")
+        if not job_id:
+            _emit_task(
+                {
+                    "command": "execute",
+                    "status": "failed",
+                    "error": "Controller returned no task id",
+                }
+            )
+            return 1
+        state = str(record.get("status") or record.get("state") or "queued")
+        if args.follow:
+            deadline = time.monotonic() + 120.0
+            while time.monotonic() < deadline:
+                snapshot = client.status(job_id)
+                state = snapshot.state
+                if state in {"completed", "failed", "cancelled"}:
+                    break
+                time.sleep(0.2)
+    except ControllerClientError as exc:
+        return _controller_error(args, exc)
+    _emit_task(
+        {
+            "command": "execute",
+            "status": state,
+            "job_id": job_id,
+            "work_dir": record.get("work_dir"),
+            "task_ref": record.get("task_ref")
+            or {
+                "task_id": job_id,
+                "job_id": job_id,
+                "attempt": record.get("attempt", 1),
+            },
+            "plan_digest": record.get("plan_digest"),
+        }
+    )
+    return 0 if state in {"queued", "pending", "starting", "running", "completed"} else 1
+
+
+def _handle_task_control_controller(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    from acp_services.entrypoints.controller_client import ControllerClientError
+
+    client = _task_controller_client(args.controller)
+    task_ref = {"task_id": args.job, "attempt": 1}
+    try:
+        if args.task_command == "cancel":
+            record = client.cancel(task_ref)
+        else:
+            record = client.control(
+                args.task_command,
+                task_ref,
+                project_id=getattr(args, "project", None),
+                target_node=getattr(args, "target_node", None),
+            )
+    except ControllerClientError as exc:
+        return _controller_error(args, exc)
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": str(record.get("status") or record.get("state") or "unknown"),
+            "job_id": str(record.get("id") or record.get("task_id") or args.job),
+            "attempt": record.get("attempt"),
+        }
+    )
+    return 0
+
+
+_TASK_CONTROLLER_HANDLERS: Final[dict[str, Callable[[argparse.Namespace], int]]] = {
+    "query": _handle_task_query_controller,
+    "execute": _handle_task_execute_controller,
+    "pause": _handle_task_control_controller,
+    "unpause": _handle_task_control_controller,
+    "continue": _handle_task_control_controller,
+    "cancel": _handle_task_control_controller,
+    "rerun": _handle_task_control_controller,
+}
+
+
+_TASK_HANDLERS: Final[dict[str, Callable[[argparse.Namespace], int]]] = {
+    "ingest": _handle_task_ingest,
+    "plan": _handle_task_plan,
+    "execute": _handle_task_execute,
+    "query": _handle_task_query,
+    "pause": _handle_task_control,
+    "unpause": _handle_task_control,
+    "continue": _handle_task_control,
+    "cancel": _handle_task_control,
+    "rerun": _handle_task_control,
+    "recover": _handle_task_recover,
+    "export": _handle_task_export,
+}
+
+
+def _dispatch_task(args: argparse.Namespace) -> int:
+    if getattr(args, "controller", None):
+        controller_handler = _TASK_CONTROLLER_HANDLERS.get(args.task_command)
+        if controller_handler is None:
+            _emit_task(
+                {
+                    "command": args.task_command,
+                    "status": "failed",
+                    "error": "unsupported_controller_command",
+                    "reason": "unsupported_controller_command",
+                }
+            )
+            return 2
+        return controller_handler(args)
+    handler = _TASK_HANDLERS.get(args.task_command)
+    if handler is None:
+        return 1
+    return handler(args)
+
+
 def _register_xtb_path_cli_job(
     args: argparse.Namespace,
     output_dir: Path,
@@ -2085,10 +3142,7 @@ def _register_xtb_path_cli_job(
         ``0`` when registered (or intentionally skipped), ``1`` when
         ``--register`` was requested but registration failed.
     """
-    from acp.scheduler.registration import (
-        CliJobRegistrationError,
-        register_completed_cli_job,
-    )
+    from acp.scheduler.registration import CliJobRegistrationError
     from acp.workflows._helpers import is_scheduler_task_dir
 
     if is_scheduler_task_dir(output_dir):
@@ -2105,7 +3159,7 @@ def _register_xtb_path_cli_job(
         resources["mem"] = args.mem
     metadata = dict(getattr(result, "metadata", None) or {})
     try:
-        record = register_completed_cli_job(
+        record = job_runtime_commands().register_completed_job(
             workflow="XtbPathSearch",
             work_dir=output_dir,
             input_payload={"path_request": path_request},
@@ -2212,10 +3266,7 @@ def _register_orca_gradient_cli_job(
         ``0`` when registered (or intentionally skipped), ``1`` when
         ``--register`` was requested but registration failed.
     """
-    from acp.scheduler.registration import (
-        CliJobRegistrationError,
-        register_completed_cli_job,
-    )
+    from acp.scheduler.registration import CliJobRegistrationError
     from acp.workflows._helpers import is_scheduler_task_dir
 
     if is_scheduler_task_dir(output_dir):
@@ -2232,7 +3283,7 @@ def _register_orca_gradient_cli_job(
         resources["mem"] = args.mem
     metadata = dict(getattr(result, "metadata", None) or {})
     try:
-        record = register_completed_cli_job(
+        record = job_runtime_commands().register_completed_job(
             workflow="OrcaGradient",
             work_dir=output_dir,
             input_payload={"gradient_request": gradient_request},
@@ -2316,13 +3367,24 @@ Examples:
 
     init_parser = subparsers.add_parser(
         "init",
-        help="Interactive setup wizard for the user config (local software + remote nodes)",
+        help="Interactive setup wizard for the user config (software, remote nodes, web access)",
     )
     init_parser.add_argument(
         "--config",
         type=Path,
         default=Path.home() / ".cccp.yaml",
         help="target user config file to create/update (default ~/.cccp.yaml)",
+    )
+    init_parser.add_argument(
+        "--answers",
+        type=Path,
+        default=None,
+        help="non-interactive answer file (versioned schema); runs without prompts",
+    )
+    init_parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="render the initialization plan only; do not apply it",
     )
     init_parser.add_argument(
         "--log-level",
@@ -3044,7 +4106,8 @@ Examples:
         default=None,
         help=(
             "Root directory for job work directories and the SQLite index. "
-            "Falls back to $ACP_RUN_ROOT, then the platform default "
+            "Falls back to $ACP_RUN_ROOT, then deployment.params.run_root "
+            "saved by acp init, then the platform default "
             "(~/.local/share/acp/runs, or /var/lib/acp/runs for root). "
             "Must be on a native filesystem."
         ),
@@ -3086,6 +4149,9 @@ Examples:
         help="Server default execution target for jobs that don't specify one "
         "(overrides cluster.execution_mode; per-job execution_mode/target_node win)",
     )
+
+    _add_task_parser(subparsers)
+    _add_mcp_parser(subparsers)
 
     _normalize_string_choices(parser)
 
@@ -3838,8 +4904,11 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         except json.JSONDecodeError as exc:
             logger.error("Invalid NMR candidate metadata: %s", exc)
             return 1
-        if (not isinstance(candidate_metadata, list) or len(candidate_metadata) != len(args.input)
-                or not all(isinstance(item, dict) for item in candidate_metadata)):
+        if (
+            not isinstance(candidate_metadata, list)
+            or len(candidate_metadata) != len(args.input)
+            or not all(isinstance(item, dict) for item in candidate_metadata)
+        ):
             logger.error("NMR candidate metadata must contain one object per input")
             return 1
 
@@ -4017,14 +5086,142 @@ def _preflight_workflow(workflow: str) -> None:
             )
 
 
-def _handle_doctor(args: argparse.Namespace) -> int:
-    """``acp doctor`` — deployment self-check for remote compute nodes.
+def _doctor_binary_sanity(name: str, path: Path) -> str | None:
+    """Return a rejection reason when *path* is not a plausible QC binary."""
+    try:
+        head = Path(path).read_bytes()[:4096]
+    except OSError as exc:
+        return f"不可读取：{exc}"
+    if not head:
+        return "空文件"
+    lowered = head.lower()
+    if b"igalia" in lowered or b"screen reader" in lowered:
+        return "GNOME Orca 屏幕阅读器（非 QC 二进制）"
+    if head.startswith(b"\x7fELF"):
+        return None
+    if head.startswith(b"#!"):
+        first_line = head.split(b"\n", 1)[0].decode("utf-8", "replace").lower()
+        if name == "orca" and "python" in first_line:
+            return f"Python 脚本，不是 QC ORCA（{first_line.strip()}）"
+        return None
+    if name == "orca":
+        return "不是 QC ORCA 二进制（缺少 ELF 文件头）"
+    return None
 
-    Probes each node's Python interpreter and resolves every known QC
-    binary with the same centralized resolver the workflows use, so a
-    freshly configured cluster can be validated before any job is
-    submitted.  Exits non-zero when a node is unreachable or a binary is
-    missing.
+
+def _doctor_software_checks(cfg: Mapping[str, Any]) -> list[tuple[str, str, str]]:
+    """Resolve every QC binary without ever hiding a configured-but-invalid pin."""
+    from cccp.software import EXECUTABLES, resolve_executable_with_source
+
+    executables = cfg.get("executables")
+    if not isinstance(executables, Mapping):
+        executables = {}
+    checks: list[tuple[str, str, str]] = []
+    for name in EXECUTABLES:
+        entry = executables.get(name)
+        configured: str | None = None
+        if isinstance(entry, Mapping):
+            raw_path = entry.get("path")
+            if raw_path is not None and not isinstance(raw_path, bool):
+                text = str(raw_path).strip()
+                if text:
+                    configured = text
+        resolved, source = resolve_executable_with_source(name, configured_path=configured)
+        label = f"software:{name}"
+        if configured is not None and source != "config":
+            checks.append(
+                (
+                    label,
+                    "FAIL",
+                    f"已配置路径不可用：{configured}（拒绝 PATH 回落：{resolved}）",
+                )
+            )
+            continue
+        if resolved is None:
+            if configured is not None:
+                checks.append((label, "FAIL", f"已配置路径不可用：{configured}"))
+            else:
+                checks.append((label, "NOT_VERIFIED", "未配置；PATH 中未找到，科学能力尚未验证"))
+            continue
+        reason = _doctor_binary_sanity(name, resolved)
+        if reason is not None:
+            state = "FAIL" if configured is not None else "NOT_VERIFIED"
+            checks.append((label, state, f"{resolved} — {reason}"))
+            continue
+        checks.append((label, "PASS", f"{resolved}（source={source}）"))
+    return checks
+
+
+def _is_local_deployment(cfg: Mapping[str, Any]) -> bool:
+    deployment = cfg.get("deployment")
+    if not isinstance(deployment, Mapping):
+        return False
+    usage = str(deployment.get("usage") or "").strip().lower()
+    tier = str(deployment.get("tier") or "").strip().lower()
+    return usage == "local" or tier in {"local-single", "standalone", "local"}
+
+
+def _run_local_doctor(cfg: Mapping[str, Any]) -> int:
+    """Report local capability (PASS/FAIL/NOT_VERIFIED) for a local tier."""
+    from acp.core.paths import check_run_root_safety, resolve_run_root
+
+    deployment = cfg.get("deployment")
+    deployment_map = deployment if isinstance(deployment, Mapping) else {}
+    checks = _doctor_software_checks(cfg)
+    root: Path | None = None
+    try:
+        root = resolve_run_root(None)
+        warnings = check_run_root_safety(root)
+        target = root if root.exists() else root.parent
+        if root.exists() and not root.is_dir():
+            checks.append(("run_root", "FAIL", f"{root} 不是目录"))
+        elif not os.access(target, os.W_OK):
+            checks.append(("run_root", "FAIL", f"{root} 不可写"))
+        else:
+            detail = "；".join(warnings) if warnings else "就绪"
+            checks.append(("run_root", "PASS", f"{root} — {detail}"))
+    except (OSError, ValueError) as exc:
+        checks.append(("run_root", "FAIL", str(exc)))
+    if root is not None:
+        try:
+            from acp_services.store.store import JobStore
+
+            db_path = root / "acp_jobs.db"
+            JobStore(db_path)
+            checks.append(("store", "PASS", str(db_path)))
+        except (OSError, RuntimeError, ValueError) as exc:
+            checks.append(("store", "FAIL", str(exc)))
+    checks.append(("config", "PASS", "merged configuration loaded"))
+
+    print(
+        "\nLocal capability report "
+        f"(usage={deployment_map.get('usage', '?')}, tier={deployment_map.get('tier', '?')})"
+    )
+    failures = 0
+    for state in ("PASS", "FAIL", "NOT_VERIFIED"):
+        entries = [check for check in checks if check[1] == state]
+        print(f"  {state}（{len(entries)}）：")
+        if not entries:
+            print("    - （无）")
+        for name, _state, detail in entries:
+            if state == "FAIL":
+                failures += 1
+            print(f"    - {name} — {detail}")
+    print(
+        "\nLocal doctor finished: "
+        + ("all checks passed" if failures == 0 else f"{failures} failure(s) found")
+    )
+    return 1 if failures else 0
+
+
+def _handle_doctor(args: argparse.Namespace) -> int:
+    """``acp doctor`` — deployment self-check for remote nodes and local tiers.
+
+    Remote clusters keep the existing node/binary self-check.  A local
+    (standalone) deployment with zero remote nodes reports local capability
+    instead of failing solely because ``cluster.nodes`` is empty; an
+    explicitly configured-but-invalid executable is always FAIL, never a
+    silent PATH fallback PASS.
     """
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
 
@@ -4033,10 +5230,20 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     from acp.scheduler.remote.ssh import SSHConnectionPool
     from cccp.config import load_config
 
-    cfg = load_config()
+    try:
+        cfg = load_config()
+    except ValueError as exc:
+        print(f"FAIL config — {exc}")
+        return 1
     cluster = cfg.get("cluster") or {}
     remote_cfg = RemoteExecutionConfig.from_config_dict(cluster)
     if not remote_cfg.nodes:
+        if args.node is None and _is_local_deployment(cfg):
+            print(
+                "No remote nodes configured — running local capability checks "
+                "(local/standalone deployment)."
+            )
+            return _run_local_doctor(cfg)
         print("No remote nodes configured (cluster.nodes is empty).")
         return 1
 
@@ -4091,17 +5298,110 @@ def _handle_doctor(args: argparse.Namespace) -> int:
 
 
 def _handle_init(args: argparse.Namespace) -> int:
-    """``acp init`` — interactive setup wizard for the user config.
+    """``acp init`` — unified setup wizard for the user config.
 
     Delegates to :func:`acp.init_wizard.flows.run_init` (exit-code mapping
     stays in the CLI layer; the wizard module itself stays import-safe on
-    core-only installs — remote-stack imports live inside its flows).
+    core-only installs — remote-stack imports live inside its flows).  The
+    default call keeps the single-argument signature for compatibility.
     """
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
 
     from acp.init_wizard.flows import run_init
 
+    answers_path = getattr(args, "answers", None)
+    plan_only = bool(getattr(args, "plan", False))
+    if answers_path is not None or plan_only:
+        return run_init(Path(args.config), answers_path=answers_path, plan_only=plan_only)
     return run_init(Path(args.config))
+
+
+# ---------------------------------------------------------------------------
+# Unified machine output (B08-1 / todo 42) — additive ``--json`` / ``--dry-run``
+# ---------------------------------------------------------------------------
+
+#: Simple workflows that expose the machine-output flags (added by
+#: ``_add_simple_workflow_args``).  Text mode for every workflow is unchanged.
+_MACHINE_OUTPUT_WORKFLOWS: Final[frozenset[str]] = frozenset(
+    {"singlepoint", "optimize", "frequency", "scan", "casscf"}
+)
+
+#: Dry-run step names per workflow (planning only — never executed).
+_DRY_RUN_STEPS: Final[dict[str, tuple[str, ...]]] = {
+    "singlepoint": ("single_point",),
+    "optimize": ("optimize",),
+    "frequency": ("frequency",),
+    "scan": ("scan",),
+    "casscf": ("casscf",),
+}
+
+
+def _machine_output_requested(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "json", False) or getattr(args, "dry_run", False))
+
+
+def _dry_run_plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Build the dry-run plan/estimate from parsed args only (zero side effects).
+
+    Nothing here touches the filesystem, launches ``cccp.calculation.run_*`` or
+    reserves core-hours; the identity is a pure hash of the non-path plan
+    fields so it is host-independent.
+    """
+    workflow = str(args.workflow)
+    plan: dict[str, Any] = {
+        "workflow": workflow,
+        "steps": list(_DRY_RUN_STEPS.get(workflow, (workflow,))),
+        "method": getattr(args, "method", None) or None,
+        "basis": getattr(args, "basis", None) or None,
+        "charge": getattr(args, "charge", None),
+        "multiplicity": getattr(args, "multiplicity", None),
+        "output_dir": str(getattr(args, "output", "") or ""),
+    }
+    identity_material = {key: value for key, value in plan.items() if key != "output_dir"}
+    digest = hashlib.sha256(
+        json.dumps(identity_material, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:32]
+    estimate: dict[str, Any] = {
+        "requested_nproc": getattr(args, "nproc", None),
+        "requested_mem": getattr(args, "mem", None),
+        "executes_science": False,
+        "consumes_core_hours": False,
+    }
+    return plan, estimate, f"v2:{digest}"
+
+
+def _dispatch_machine_output(
+    args: argparse.Namespace, handler: Callable[[argparse.Namespace], int]
+) -> int:
+    """Emit the unified JSON envelope for ``--json`` / ``--dry-run``.
+
+    ``--dry-run`` never calls *handler* (no science, no transfer, no metering).
+    ``--json`` runs the handler with stdout redirected to stderr so stdout
+    carries only the envelope; the handler's exit code is preserved.
+    """
+    from acp_services.entrypoints import machine_output as mo
+
+    operation = str(getattr(args, "workflow", "unknown"))
+    if bool(getattr(args, "dry_run", False)):
+        plan, estimate, identity = _dry_run_plan(args)
+        result = mo.dry_run_result(
+            operation, plan=plan, estimate=estimate, operation_identity=identity
+        )
+        print(result.to_json(indent=2))
+        return int(result.exit_code)
+    with redirect_stdout(sys.stderr):
+        exit_code = int(handler(args))
+    if exit_code == mo.ExitCode.OK:
+        result = mo.MachineResult(operation=operation, status="ok", exit_code=exit_code)
+    else:
+        result = mo.MachineResult(
+            operation=operation,
+            status="error",
+            exit_code=exit_code,
+            error=mo.default_error_for_exit(exit_code),
+        )
+    print(result.to_json(indent=2))
+    return exit_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -4151,6 +5451,8 @@ def main(argv: list[str] | None = None) -> int:
         if handler is None:
             parser.print_help()
             return 1
+        if _machine_output_requested(args) and args.workflow in _MACHINE_OUTPUT_WORKFLOWS:
+            return _dispatch_machine_output(args, handler)
         _preflight_workflow(args.workflow)
         return handler(args)
 
@@ -4159,6 +5461,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         return _handle_init(args)
+
+    if args.command == "task":
+        return _dispatch_task(args)
+
+    if args.command == "mcp":
+        return _dispatch_mcp(args)
 
     if args.command != "run":
         parser.print_help()

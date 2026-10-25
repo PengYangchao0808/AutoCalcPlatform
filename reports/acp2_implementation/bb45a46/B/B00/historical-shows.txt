@@ -1,0 +1,11 @@
+commit 3670790363c7a1959ad1dbe4b4297adec518952a
+Author: XieningKe1 <275504158+XieningKe1@users.noreply.github.com>
+Date:   Wed Oct 21 05:12:30 2026 +0800
+
+    docs(reports): re-issue scoped A/B/C and gate verdicts on the frozen candidate
+
+commit bb309134c7b2bb21d8a8bfcb5589516a5b0cf798
+Author: XieningKe1 <275504158+XieningKe1@users.noreply.github.com>
+Date:   Wed Oct 21 04:23:15 2026 +0800
+
+    fix(remote): leave frozen staging for retention; register completion seam

@@ -1,0 +1,261 @@
+{
+  "schema": "acp2.controller-topology.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "contract_version": "1.0.0",
+  "created_at": "2026-10-22T13:02:05Z",
+  "owner": "B",
+  "status": "delivered",
+  "scope": "B04a closes Controller exclusivity, the loopback HTTP client, the acp task --controller entry and minimal read-only capabilities. Business bindings, MCP stdio transport and the two-adapter start/exit check are later tasks.",
+  "single_controller_rule": {
+    "statement": "Exactly one ACP Controller owns one resolved run root and one jobs database. No adapter, discovery path, MCP process or CLI invocation may construct a JobManager or start a second Controller.",
+    "identity": "resolved run_root (src/acp/core/paths.py::resolve_run_root)",
+    "database": "<run_root>/acp_jobs.db",
+    "enforcement": [
+      "src/acp/scheduler/manager.py::JobManager._claim_run_root (in-process registry keyed by resolved run root)",
+      "src/acp/scheduler/manager.py::JobManager._acquire_instance_lock (cross-process .manager.lock)"
+    ]
+  },
+  "ownership": {
+    "lock_name": ".manager.lock",
+    "lock_path": "<run_root>/.manager.lock",
+    "lock_record_fields": [
+      "pid",
+      "cmdline",
+      "acquired_at",
+      "run_root",
+      "token"
+    ],
+    "in_process_claim": {
+      "implementation": "src/acp/scheduler/manager.py::_RUN_ROOT_CLAIMS",
+      "rule": "A second JobManager for the same resolved run root raises before it opens the store or starts a worker thread."
+    },
+    "stale_lock": {
+      "rule": "A lock whose recorded owner is dead, unreadable or a non-ACP process is stolen; a stale lock never falsely blocks.",
+      "liveness_check": "src/acp/scheduler/processctl.py::pid_is_alive + read_cmdline (ACP/uvicorn identity)"
+    },
+    "acquisition_order": [
+      "claim the in-process run-root registry",
+      "acquire .manager.lock",
+      "open the jobs store",
+      "start background threads"
+    ],
+    "release_order": [
+      "stop and join background workers",
+      "remove .manager.lock only when pid+token still belong to this Controller",
+      "release the in-process run-root claim"
+    ]
+  },
+  "second_controller_refusal": {
+    "trigger": "A second Controller is started with the same run root (same jobs database).",
+    "before": [
+      "no worker thread is started",
+      "no job row is created",
+      "no submission is persisted"
+    ],
+    "error": "run_root '<path>' is already owned by another ACP server process (pid=<pid>, cmdline=<cmdline>); refusing to start a second instance — it would kill the owner's running jobs",
+    "exit": "non-zero (uvicorn application startup failure)",
+    "evidence": "reports/acp2_implementation/bb45a46/B/B04/second-controller-refusal.log"
+  },
+  "adapter_rule": {
+    "adapter_never_owns_manager": true,
+    "statement": "An adapter (CLI --controller, MCP stdio, discovery) talks to the Controller only through src/acp_services/entrypoints/controller_client.py. It imports no acp module, builds no JobManager, opens no jobs database and spawns no thread.",
+    "client_path": "src/acp_services/entrypoints/controller_client.py",
+    "client_dependencies": [
+      "urllib.request",
+      "urllib.error",
+      "urllib.parse",
+      "json"
+    ],
+    "forbidden_in_client": [
+      "import acp",
+      "JobManager",
+      "sqlite3 / jobs database",
+      "threading"
+    ]
+  },
+  "endpoints": [
+    {
+      "command": "health",
+      "method": "GET",
+      "path": "/api/health",
+      "authorization": "none (loopback liveness only; no tenant data)",
+      "side_effects": "none",
+      "bound_by": "B04a"
+    },
+    {
+      "command": "capabilities",
+      "method": "GET",
+      "path": "/api/capabilities",
+      "authorization": "scope read",
+      "side_effects": "none",
+      "bound_by": "B04a"
+    },
+    {
+      "command": "status",
+      "method": "GET",
+      "path": "/api/v1/jobs/{task_id}",
+      "authorization": "scope read",
+      "side_effects": "none",
+      "bound_by": "B04a (legacy read route reused; B06 binds the status command)"
+    },
+    {
+      "command": "preflight",
+      "method": "POST",
+      "path": "/api/v1/preflight",
+      "authorization": "scope read",
+      "side_effects": "none",
+      "bound_by": "B06"
+    },
+    {
+      "command": "submit",
+      "method": "POST",
+      "path": "/api/v1/jobs",
+      "authorization": "scope write + plan_digest",
+      "side_effects": "at most one task + attempt + submission",
+      "bound_by": "B06 (legacy route reused until then)"
+    },
+    {
+      "command": "cancel",
+      "method": "POST",
+      "path": "/api/v1/jobs/{task_id}/cancel",
+      "authorization": "scope control",
+      "side_effects": "one control intent",
+      "bound_by": "B06"
+    },
+    {
+      "command": "control",
+      "method": "POST",
+      "path": "/api/v1/jobs/{task_id}/{pause|unpause|continue|rerun|edit}",
+      "authorization": "scope control",
+      "side_effects": "one control intent",
+      "bound_by": "B06"
+    },
+    {
+      "command": "prepare",
+      "method": "POST",
+      "path": "/api/v1/jobs/{task_id}/prepare",
+      "authorization": "scope write",
+      "side_effects": "one idempotent prepare operation",
+      "bound_by": "B06"
+    },
+    {
+      "command": "read",
+      "method": "GET",
+      "path": "/api/v1/jobs/{task_id}/prepared/{artifact_id}",
+      "authorization": "scope read",
+      "side_effects": "none (no implicit fetch)",
+      "bound_by": "B06"
+    },
+    {
+      "command": "analyze",
+      "method": "POST",
+      "path": "/api/v1/jobs/{task_id}/analyze",
+      "authorization": "scope write (explicit=true)",
+      "side_effects": "one analysis or one frequency task",
+      "bound_by": "B06"
+    },
+    {
+      "command": "recover",
+      "client_method": "ControllerClient.recover",
+      "status": "not_delivered",
+      "transport_binding": "none",
+      "method": null,
+      "path": null,
+      "authorization": "scope write",
+      "side_effects": "reuse/recompute; never a second executor",
+      "bound_by": "none (no Controller route is registered; the client raises unsupported_capability)",
+      "local_entry": "cli:acp task recover -> acp.services_bootstrap.build_runtime_recovery -> acp_services.runtime.recovery",
+      "note": "HTTP recovery is not delivered in this contract version; the local CLI path above is the only recovery entry."
+    }
+  ],
+  "ports": {
+    "bind_host": "127.0.0.1",
+    "test_controller": 18765,
+    "second_controller_probe": 18766,
+    "production_controller": 8765,
+    "production_forbidden": true,
+    "production_run_root": "/var/lib/acp/runs",
+    "production_run_root_forbidden": true
+  },
+  "test_controller_record": {
+    "argv": [
+      "/opt/acp2-dev/venvs/b/bin/python",
+      "-m",
+      "acp",
+      "run",
+      "serve",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18765",
+      "--run-root",
+      "/opt/acp2-dev/data/b/run-root",
+      "--no-browser"
+    ],
+    "cwd": "/opt/acp2-dev/data/b/controller-config",
+    "db_path": "/opt/acp2-dev/data/b/run-root/acp_jobs.db",
+    "run_root": "/opt/acp2-dev/data/b/run-root",
+    "release": "a84aa493b3d9d42a89393923f7575c88c66f1915",
+    "release_source": "git rev-parse HEAD of repo-root (B04a working tree; frozen B candidate a0185b1 remains the acceptance baseline)",
+    "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
+    "pythonpath": "src",
+    "config": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+    "endpoints_probed": [
+      "http://127.0.0.1:18765/api/health",
+      "http://127.0.0.1:18765/api/capabilities",
+      "http://127.0.0.1:18765/api/v1/jobs"
+    ],
+    "start_record": "reports/acp2_implementation/bb45a46/B/B04/controller-start-record.json"
+  },
+  "cli_target": {
+    "spelling": "--controller",
+    "scope": "shared acp task parser (all subcommands)",
+    "supported_commands": [
+      "query",
+      "execute",
+      "pause",
+      "unpause",
+      "continue",
+      "cancel",
+      "rerun"
+    ],
+    "lock_refusal": {
+      "condition": "a live Controller owns the resolved run root and --controller is absent",
+      "applies_to": [
+        "execute",
+        "pause",
+        "unpause",
+        "continue",
+        "cancel",
+        "rerun"
+      ],
+      "reason": "controller_running_use_--controller",
+      "read_only_exception": "query may read the store without claiming run-root ownership"
+    }
+  },
+  "b04b_boundary": {
+    "owner": "B07/H2 (B04b)",
+    "not_closed_by_b04a": [
+      "two MCP adapters start and exit against one Controller",
+      "MCP stdio transport and handshake",
+      "task count unchanged across adapter start/exit"
+    ],
+    "closed_by_b04a": [
+      "one Controller per run root",
+      "second Controller refused before any worker/submission",
+      "loopback ControllerClient read-only surface",
+      "acp task --controller query/control/execute targeting",
+      "live entry-readonly discovery receipt"
+    ]
+  },
+  "gaps_closed": [
+    "GAP-B03-04 (Controller target and ControllerClient)"
+  ],
+  "references": {
+    "application_api": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+    "acceptance_harness": "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md",
+    "manager_lock": "src/acp/scheduler/manager.py",
+    "composition_root": "src/acp/api/server.py::create_app",
+    "evidence": "reports/acp2_implementation/bb45a46/B/B04/"
+  }
+}

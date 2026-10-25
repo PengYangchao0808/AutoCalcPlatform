@@ -1,0 +1,34 @@
+{
+  "key": "b08-restart-1e7641e7904f498cb41c",
+  "controller_port": 18766,
+  "run_root": "reports/acp2_implementation/bb45a46/B/B08/restart-run-root",
+  "first_task_ref": "20261023_002746_001_singlepoint",
+  "first_job_count": 1,
+  "health_before_restart": {
+    "schema_version": 1,
+    "status": "ok",
+    "candidate_revision": "b061b50f8aecf130b3e597aad41f0f18270c586d",
+    "contract_version": "1.1.0",
+    "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+    "contract_digest_scope": "delivered-contract-set",
+    "read_only": true,
+    "started_at": "2026-10-22T16:27:44.837790Z"
+  },
+  "port_free_after_stop": true,
+  "replay_task_ref": "20261023_002746_001_singlepoint",
+  "replay_job_count": 1,
+  "health_after_restart": {
+    "schema_version": 1,
+    "status": "ok",
+    "candidate_revision": "b061b50f8aecf130b3e597aad41f0f18270c586d",
+    "contract_version": "1.1.0",
+    "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+    "contract_digest_scope": "delivered-contract-set",
+    "read_only": true,
+    "started_at": "2026-10-22T16:27:49.396872Z"
+  },
+  "same_task_ref": true,
+  "same_job_count": true,
+  "idempotent_replay_flag": true,
+  "port_free_after_final_stop": true
+}

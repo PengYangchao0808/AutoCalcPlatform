@@ -1,0 +1,29 @@
+{
+  "at_cap": {
+    "at_cap": true,
+    "detail": "within cap",
+    "missing_operations": [],
+    "over_cap": {},
+    "status": "PASS"
+  },
+  "expected_rejection_negative_pass": true,
+  "missing_operation": {
+    "at_cap": true,
+    "detail": "required operations are missing",
+    "missing_operations": [
+      "qc_invocation"
+    ],
+    "over_cap": {},
+    "status": "FAIL"
+  },
+  "over_cap": {
+    "at_cap": false,
+    "detail": "consumed units exceed the frozen cap",
+    "missing_operations": [],
+    "over_cap": {
+      "task_ref": 1
+    },
+    "status": "FAIL"
+  },
+  "schema": "acp2.b17.boundary.v1"
+}

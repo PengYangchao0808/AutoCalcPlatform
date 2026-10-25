@@ -1,0 +1,23 @@
+qa_root=/tmp/acp2-b01-cli.HPrJgk
+--- missing_controller ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario entry-readonly --out /tmp/acp2-b01-cli.HPrJgk/missing-controller
+NOT_VERIFIED: missing_controller
+exit=2
+--- mcp_without_launch ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario mcp-stdio --out /tmp/acp2-b01-cli.HPrJgk/no-launch
+usage error: missing required argument(s): --launch
+exit=3
+--- mcp_launch_without_controller ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario mcp-stdio --launch /tmp/acp2-b01-cli.HPrJgk/launch.json --out /tmp/acp2-b01-cli.HPrJgk/mcp-no-controller
+NOT_VERIFIED: missing_controller
+exit=2
+--- unknown_scenario ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario not-a-scenario --out /tmp/acp2-b01-cli.HPrJgk/unknown
+usage error: unknown scenario 'not-a-scenario'
+exit=3
+--- undeclared_phase ---
+command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario env-runtime --phase approval --out /tmp/acp2-b01-cli.HPrJgk/phase
+usage error: undeclared scenario/phase combination env-runtime/approval
+exit=3
+--- job_files_created ---
+job_file_count=0

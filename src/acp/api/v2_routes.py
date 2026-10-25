@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import posixpath
 import re
 import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -78,6 +80,10 @@ from acp.storage.backend import (
 )
 from acp.storage.layout import TaskLayout
 from acp.storage.manifest import ResultManifest
+from acp_services.contracts.access import AccessAction
+from acp_services.runtime.freshness import AVAILABILITY_READY
+from acp_services.runtime.lineage import TaskEvidenceBuilder
+from acp_services.runtime.projections import TaskProjectionStore, TaskRowProjection
 
 logger = logging.getLogger(__name__)
 
@@ -130,11 +136,55 @@ def _task_detail(record: JobRecord) -> V2TaskDetail:
     )
 
 
-def _task_or_404(request: Request, task_id: str) -> JobRecord:
+def _verified_project(request: Request) -> str | None:
+    """Verified project of the resolved credential (``None`` in local-single)."""
+    resolved = getattr(request.state, "request_identity", None)
+    return getattr(resolved, "verified_project", None) if resolved is not None else None
+
+
+def _authorize_record(
+    request: Request,
+    record: JobRecord,
+    *,
+    action: str = AccessAction.READ,
+) -> None:
+    """Deny a task entry outside the credential's verified project.
+
+    The denial is the same not-found shape as an unknown task so a foreign
+    task's existence never leaks (B15/B23 contract).  Inert when no credential
+    was resolved (default ``local-single`` tier).
+    """
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is None:
+        return
+    decision = resolved.server_identity.authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=action,
+        job_id=record.id,
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=404, detail=f"Task not found: {record.id}")
+
+
+def _task_or_404(
+    request: Request,
+    task_id: str,
+    *,
+    action: str = AccessAction.READ,
+) -> JobRecord:
     record = _manager(request).store.get(task_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+    _authorize_record(request, record, action=action)
     return record
+
+
+def _scoped_project_or_404(request: Request, project_id: str) -> str:
+    """Return *project_id* only when it is inside the verified project scope."""
+    verified = _verified_project(request)
+    if verified is not None and str(project_id) != verified:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return str(project_id)
 
 
 _ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset(
@@ -142,12 +192,143 @@ _ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset(
 )
 _ENRICHMENT_CAP = 200
 
+#: Transitional per-row detail-fetch budget for the retained compatibility
+#: branch (``_enrich_active_rows``).  The authoritative list path reads the
+#: prepared projection and performs zero per-row detail reads; the compat branch
+#: is only reached for rows an unprepared snapshot does not cover, and is hard
+#: capped here so a cold/uncovered list can never fan out one detail read per
+#: row.  Deletion of the branch is gated on A-lane A04 "zero consumers" evidence
+#: (plan todo 19); B03-3 pins the cap so a future change can only shrink it.
+_LIST_DETAIL_FETCH_BUDGET: int = _ENRICHMENT_CAP
+
+#: Compatibility switch for the pre-projection enrichment path.  The plan
+#: (``acp-parallel-plan-2-services`` todo 19 / F4-B1) keeps ``_enrich_active_rows``
+#: as a retained compatibility branch — deletion requires A-lane A04 "zero
+#: consumers" evidence in ``.omo/evidence/``.  It now defaults **off** (IS-5):
+#: the prepared projection is authoritative, so a query never scans/parses
+#: ``state.json`` and a row the snapshot does not cover simply shows its jobs
+#: base facts.  Set ``ACP_TASK_VIEW_ENRICH_COMPAT=1`` to re-enable the legacy
+#: per-request enrichment during the transition (bounded by
+#: ``_LIST_DETAIL_FETCH_BUDGET``).
+_ENRICH_ACTIVE_ROWS_COMPAT: bool = os.environ.get(
+    "ACP_TASK_VIEW_ENRICH_COMPAT", "0"
+).strip().lower() in ("1", "true", "yes")
+
+
+class _ManagerTaskProjectionSource:
+    """Legacy-side :class:`TaskProjectionSourcePort` over a live ``JobManager``.
+
+    This adapter is the *only* place the v2 query surface reads ``state.json``
+    for task rows, and it is invoked exclusively by the projection store's
+    background/synchronous *refresh* — never by a request handler.  It reuses the
+    existing v1 enrichment helpers so the prepared projection is field-for-field
+    identical to the old per-request enrichment.
+    """
+
+    def __init__(self, manager: JobManager) -> None:
+        self._manager = manager
+
+    def collect(self, task_ids: Sequence[str]) -> list[TaskRowProjection]:
+        """Collect authoritative enrichment facts for *task_ids* (bounded)."""
+        from acp.api.v1_routes import _enrich_job_snapshot, _record_to_v1_model
+
+        records = self._manager.store.get_many([task_id for task_id in task_ids if task_id])
+        projections: list[TaskRowProjection] = []
+        for job_id, record in records.items():
+            model = _record_to_v1_model(record)
+            enriched = _enrich_job_snapshot(record, model, include_event=False)
+            fields: dict[str, Any] = {}
+            for field in (
+                "stage_index",
+                "stage_total",
+                "stage_detail",
+                "progress_state",
+                "display_method",
+            ):
+                value = getattr(enriched, field, None)
+                if value is not None:
+                    fields[field] = value
+            live = getattr(enriched, "live_status", None)
+            if live is not None:
+                fields["live_status"] = live.model_dump() if hasattr(live, "model_dump") else live
+            projections.append(
+                TaskRowProjection(
+                    task_id=job_id,
+                    fields=fields,
+                    basis_revision=int(getattr(record, "revision", 0) or 0),
+                    basis_revisions=self._basis_revisions(record, job_id),
+                    availability=AVAILABILITY_READY,
+                )
+            )
+        return projections
+
+    def _basis_revisions(self, record: JobRecord, job_id: str) -> dict[str, int]:
+        """Per-owner-dimension revisions this projection was built against.
+
+        Sourced from the same per-dimension authorities the query side compares
+        against (independent; no substitution).  ``organization`` has no distinct
+        task-index column yet, so it stays 0 until one exists.
+        """
+        from acp.scheduler.task_views import owner_revisions_for_row
+
+        task_row = self._manager.tasks.get(job_id) or {}
+        return owner_revisions_for_row(
+            {
+                "revision": getattr(record, "revision", 0),
+                "attempt": getattr(record, "attempt", 1),
+                "name_revision": task_row.get("name_revision", 0),
+            }
+        )
+
+
+def _projection_store(manager: JobManager) -> TaskProjectionStore:
+    """Return the manager's task-projection store, installing it on first use.
+
+    The store is created lazily and attached to the manager so every v2 query
+    for this manager shares one prepared snapshot.  Background refresh is on, so
+    the projection converges without a request ever scanning ``state.json``.
+    """
+    store = getattr(manager, "task_projection", None)
+    if isinstance(store, TaskProjectionStore):
+        return store
+    return install_task_projection(manager)
+
+
+def install_task_projection(
+    manager: JobManager,
+    *,
+    auto_refresh: bool = True,
+) -> TaskProjectionStore:
+    """Install (and return) the manager-owned task-projection store.
+
+    Args:
+        manager: The live scheduler manager whose jobs feed the projection.
+        auto_refresh: When ``False`` the store never updates on its own; a caller
+            must invoke :meth:`TaskProjectionStore.refresh` explicitly.  Tests
+            that assert the query path does zero synchronous scans use this to
+            keep the snapshot deterministic.
+    """
+    store = TaskProjectionStore(
+        source=_ManagerTaskProjectionSource(manager),
+        auto_refresh=auto_refresh,
+        max_batch=_ENRICHMENT_CAP,
+    )
+    manager.task_projection = store
+    return store
+
 
 def _enrich_active_rows(
     request: Request,
     rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Enrich active-row dicts with live stage/progress fields from state.json."""
+    """Compatibility branch: enrich active rows from ``state.json`` per request.
+
+    Retained for callers that have not yet moved to the prepared projection
+    (plan todo 19 keeps it until A-lane A04 records zero consumers).  It is the
+    *synchronous scan/parse* the projection path removes, so it is only reached
+    for rows the prepared snapshot does not cover and only while
+    ``_ENRICH_ACTIVE_ROWS_COMPAT`` is enabled.
+    """
     from acp.api.v1_routes import _enrich_job_snapshot, _record_to_v1_model
 
     manager = _manager(request)
@@ -155,7 +336,7 @@ def _enrich_active_rows(
         dict.fromkeys(
             row["id"] for row in rows if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
         )
-    )[:_ENRICHMENT_CAP]
+    )[:_LIST_DETAIL_FETCH_BUDGET]
     records = manager.store.get_many(active_ids)
     snapshots = {}
     for job_id, record in records.items():
@@ -360,9 +541,12 @@ def _remote_tree_entries(request: Request, record: JobRecord, area: str) -> list
 def list_projects(request: Request) -> list[V2ProjectSummary]:
     """List projects with their task counts (§12)."""
     manager = _manager(request)
+    verified = _verified_project(request)
     summaries: list[V2ProjectSummary] = []
     for project in manager.projects.list_projects():
         project_id = str(project.get("project_id", ""))
+        if verified is not None and project_id != verified:
+            continue
         n_tasks = len(manager.store.list_by_project(project_id, limit=_COUNT_LIMIT))
         summaries.append(
             V2ProjectSummary(
@@ -386,6 +570,7 @@ def list_project_tasks(
 ) -> list[V2TaskSummary]:
     """List a project's tasks (= jobs), newest first (§12)."""
     manager = _manager(request)
+    project_id = _scoped_project_or_404(request, project_id)
     if manager.projects.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     records = manager.store.list_by_project(project_id, limit=limit)
@@ -418,16 +603,34 @@ def get_task_view(
     offset: int = Query(default=0, ge=0),
     include_facets: bool = True,
 ) -> V2TaskViewResponse:
-    """Grouped task view with filters, facets, and counts (T3)."""
+    """Grouped task view with filters, facets, and counts (T3).
+
+    The list path is a single bounded query: ``query_project_tasks`` builds one
+    SELECT per request from the resolved project scope + filters + pagination
+    (fixed SQL budget, no per-row detail fetch).  Rows are then enriched from the
+    prepared projection snapshot in memory; the retained compatibility branch is
+    the only per-row detail reader and is hard-capped at
+    ``_LIST_DETAIL_FETCH_BUDGET``.  ``total``/``counts``/``facets`` stay
+    whole-scope and ``offset``/``next_offset`` pagination is preserved.
+    """
     from acp.scheduler.task_views import (
         ArchivedFilter,
         GroupBy,
         TaskSort,
         TaskViewQuery,
+        owner_revisions_for_row,
         query_project_tasks,
     )
 
     manager = _manager(request)
+    verified = _verified_project(request)
+    if verified is not None:
+        # A credential-scoped read has exactly one project.  No project hint
+        # narrows to the verified project; a foreign hint is a not-found.
+        if project_id is None:
+            project_id = verified
+        elif project_id != verified:
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     if project_id is not None and manager.projects.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -456,9 +659,32 @@ def get_task_view(
     )
     result = query_project_tasks(manager.tasks, q)
 
-    # Enrich active rows with live stage/progress fields
-    _enrich_active_rows(
-        request, [row for group in result.get("groups", []) for row in group.get("jobs", [])]
+    # Projection-first enrichment: the query only reads the prepared snapshot and
+    # schedules a background refresh; it never scans/parses ``state.json`` itself.
+    # Rows the snapshot does not cover keep their jobs-authoritative base facts,
+    # except while the retained compatibility branch is enabled.
+    rows = [row for group in result.get("groups", []) for row in group.get("jobs", [])]
+    projection = _projection_store(manager)
+    projection.enrich_rows(rows)
+    projection.request_refresh(
+        row["id"] for row in rows if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
+    )
+    freshly_enriched: set[str] = set()
+    if _ENRICH_ACTIVE_ROWS_COMPAT:
+        uncovered = [row for row in rows if not projection.covers(row["id"])]
+        if uncovered:
+            _enrich_active_rows(request, uncovered)
+            freshly_enriched = {
+                row["id"]
+                for row in uncovered
+                if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
+            }
+
+    current_revisions = {row["id"]: owner_revisions_for_row(row) for row in rows if row.get("id")}
+    projection.annotate_rows(
+        rows,
+        current_revisions=current_revisions,
+        freshly_enriched_ids=freshly_enriched,
     )
 
     facets_raw = result.get("facets", {})
@@ -507,7 +733,15 @@ def list_orphan_tasks(request: Request) -> dict[str, Any]:
     ``POST /api/v2/tasks/orphans/purge`` to repair.
     """
     manager = _manager(request)
-    return {"orphans": manager.find_orphan_tasks()}
+    orphans = manager.find_orphan_tasks()
+    verified = _verified_project(request)
+    if verified is not None:
+        orphans = [
+            task_id
+            for task_id in orphans
+            if str((manager.tasks.get(task_id) or {}).get("project_id") or "") == verified
+        ]
+    return {"orphans": orphans}
 
 
 @router.get("/tasks/{task_id}", response_model=V2TaskDetail)
@@ -536,6 +770,7 @@ def patch_task(task_id: str, body: V2TaskPatchRequest, request: Request) -> dict
     legacy field updates so both can coexist in one request.
     """
     manager = _manager(request)
+    _task_or_404(request, task_id, action=AccessAction.WRITE)
     existing = manager.tasks.get(task_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
@@ -739,11 +974,26 @@ def create_task_batch(req: V2TaskBatchRequest, request: Request) -> V2TaskBatchR
     item resources (when absent) so the task view can group them.
     """
     manager = _manager(request)
+    verified = _verified_project(request)
+    request_project = req.project_id
+    if verified is not None:
+        if request_project is not None and request_project != verified:
+            raise HTTPException(status_code=403, detail="Project outside verified scope")
+        request_project = verified
     req_batch_id = "batch_" + uuid4().hex[:12]
     created: list[V2TaskSummary] = []
     failed: list[dict[str, Any]] = []
     for item in req.tasks:
-        outcome = _submit_batch_item(manager, item, req.project_id, req_batch_id)
+        if verified is not None and item.project_id is not None and item.project_id != verified:
+            failed.append(
+                {
+                    "molecule_name": item.molecule_name,
+                    "task_name": item.task_name,
+                    "error": "Project outside verified scope",
+                }
+            )
+            continue
+        outcome = _submit_batch_item(manager, item, request_project, req_batch_id)
         if isinstance(outcome, V2TaskSummary):
             created.append(outcome)
         else:
@@ -980,13 +1230,31 @@ def batch_ops(body: V2BatchOpsRequest, request: Request) -> V2BatchOpsResult:
         raise HTTPException(status_code=422, detail=f"Unsupported op: {body.op}")
 
     manager = _manager(request)
+    verified = _verified_project(request)
+    allowed_ids: list[str] = []
+    foreign_ids: set[str] = set()
+    for task_id in body.task_ids:
+        record = manager.store.get(task_id)
+        if (
+            verified is not None
+            and record is not None
+            and str(record.project_id or record.spec.project_id or "") != verified
+        ):
+            foreign_ids.add(task_id)
+        else:
+            allowed_ids.append(task_id)
 
     if body.op == "archive":
-        _validate_archive_targets(manager, body.task_ids)
+        _validate_archive_targets(manager, allowed_ids)
 
     results: list[V2BatchOpItemResult] = []
     updated_count = 0
     for task_id in body.task_ids:
+        if task_id in foreign_ids:
+            results.append(
+                V2BatchOpItemResult(task_id=task_id, ok=False, error=f"Task not found: {task_id}")
+            )
+            continue
         try:
             changed = _execute_batch_op(manager, task_id, body.op, body.payload)
             results.append(V2BatchOpItemResult(task_id=task_id, ok=True))
@@ -1509,6 +1777,70 @@ def get_task_lineage(task_id: str, request: Request) -> V2LineageResponse:
         upstream=upstream,
         downstream=downstream,
     )
+
+
+# ── Task evidence projection endpoint (B08-5) ──────────────────────────
+
+
+def _local_manifest_products(work_dir: str) -> list[Any]:
+    """Read a task's local ``RESULT/result_manifest.json`` products (read-only).
+
+    Best-effort: a remote or unreadable task simply yields no products so the
+    projection degrades to its input edges instead of raising on the query path.
+    """
+    if not work_dir:
+        return []
+    try:
+        from acp.results.manifest import load_result_manifest
+
+        manifest = load_result_manifest(Path(work_dir))
+        return list(manifest.products) if manifest is not None else []
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        logger.warning("lineage projection: manifest read skipped for %s", work_dir)
+        return []
+
+
+@router.get("/tasks/{task_id}/lineage/projection")
+def get_task_lineage_projection(task_id: str, request: Request) -> dict[str, Any]:
+    """Return the read-only research evidence projection for a task (B08-5).
+
+    Additive to the T12 lineage endpoint: the platform-side projection models the
+    five provenance edge types (uses / produces / derives / revision / reuses),
+    preserves atom/frame/mode mappings and carries the documented C02 derived
+    field map.  Strictly read-only — it never writes a scientific result, never
+    advances job state and constructs no second state machine.
+    """
+    manager = _manager(request)
+    try:
+        record = manager.store.get(task_id)
+    except (json.JSONDecodeError, sqlite3.Error, ValueError, TypeError):
+        logger.warning("lineage projection: unreadable task %s, returning empty", task_id)
+        return TaskEvidenceBuilder(task_id).build().to_dict()
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+
+    builder = TaskEvidenceBuilder(task_id)
+    builder.add_node(task_id, kind="task", label=record.spec.task_name)
+
+    spec_input = record.spec.input
+    if isinstance(spec_input, dict):
+        for ref_id, relation in _extract_upstream_refs(spec_input):
+            builder.add_use(task_id, ref_id, relation=relation)
+
+    for product in _local_manifest_products(record.work_dir):
+        kind = getattr(product.kind, "value", str(product.kind))
+        metadata = getattr(product, "metadata", None)
+        evidence: dict[str, Any] = {"product_id": product.id, "label": product.label}
+        if metadata:
+            evidence["metadata"] = dict(metadata)
+        builder.add_produce(
+            task_id,
+            product.path or product.id,
+            role=kind,
+            evidence=evidence,
+        )
+
+    return builder.build().to_dict()
 
 
 @router.post("/tasks/orphans/purge")

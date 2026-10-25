@@ -1,0 +1,61 @@
+INFO:     Started server process [1003115]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 648, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "<acp2-dev>/integration/src/acp/api/server.py", line 278, in lifespan
+    manager = JobManager(
+              ^^^^^^^^^^^
+  File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 351, in _wrapped
+    init(self, *args, **kwargs)
+  File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 423, in __init__
+    self._acquire_instance_lock()
+  File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 658, in _acquire_instance_lock
+    raise RuntimeError(
+RuntimeError: run_root '<acp2-dev>/data/integration/controller-run-root' is already owned by another ACP server process (pid=1002584, cmdline='<acp2-dev>/venvs/b/bin/python -m acp run serve --host 127.0.0.1 --port 18772 --run-root <acp2-dev>/data/integration/controller-run-root --no-browser'); refusing to start a second instance — it would kill the owner's running jobs
+
+ERROR:    Application startup failed. Exiting.
+ACP Workbench starting at http://127.0.0.1:18773
+  Run root      : <acp2-dev>/data/integration/controller-run-root
+  Poll interval : 30s
+  Docs (Swagger): http://127.0.0.1:18773/docs
+  Reload        : off
+

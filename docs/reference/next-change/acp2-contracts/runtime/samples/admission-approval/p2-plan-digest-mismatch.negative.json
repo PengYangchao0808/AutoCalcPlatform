@@ -1,0 +1,20 @@
+{
+  "sample_id": "p2-plan-digest-mismatch.negative",
+  "contract": "admission-approval.v1.json",
+  "kind": "negative",
+  "payload": {
+    "approval_ref": "ap_0001",
+    "proposal_ref": "prop-1",
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "approved",
+    "revision": 2,
+    "approved_plan_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "expected": {
+    "valid": false,
+    "class": "conflict",
+    "code": "revision_conflict",
+    "violation": "approved_plan_digest_mismatch",
+    "field": "plan_digest"
+  }
+}

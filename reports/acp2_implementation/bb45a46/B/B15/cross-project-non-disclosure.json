@@ -1,0 +1,21 @@
+{
+  "alice_read_beta": 404,
+  "bob_cancel_alpha": 404,
+  "bob_prepare_alpha": 404,
+  "bob_read_alpha": [
+    404,
+    {
+      "detail": "Job not found: b15-alpha-paused-v1"
+    }
+  ],
+  "bob_read_missing": [
+    404,
+    {
+      "detail": "Job not found: b15-does-not-exist"
+    }
+  ],
+  "missing_task": "b15-does-not-exist",
+  "note": "A job from another verified project returns the same 404 {detail} shape as an unknown task id; no task fields or existence signal are returned.",
+  "same_shape": true,
+  "schema": "acp2.b15.cross-project-non-disclosure.v1"
+}

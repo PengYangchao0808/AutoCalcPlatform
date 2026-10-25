@@ -159,8 +159,11 @@ class TestLaunchGate:
         enforce_launch_gate(resolution, require_verified=False, orca_version=None)
 
     def test_verified_version_matrix_allows(self, bundle, monkeypatch):
+        # T23: the mapping science (and the verified-version matrix it reads)
+        # now lives in cccp; the ACP path is a same-object re-export shim, so
+        # the override must target the implementation module.
         monkeypatch.setattr(
-            "acp.calculations.tsmode.mode_mapping.TS_MODE_MAPPING_VERIFIED_VERSIONS",
+            "cccp.analysis.tsmode.mode_mapping.TS_MODE_MAPPING_VERIFIED_VERSIONS",
             frozenset({"6.0"}),
         )
         resolution = resolve_target_mode(

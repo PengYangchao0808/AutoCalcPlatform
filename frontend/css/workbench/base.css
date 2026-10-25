@@ -67,3 +67,16 @@ textarea {
 button { cursor: pointer; }
 a { color: var(--accent); }
 
+
+/* prefers-reduced-motion: kill decorative motion (WCAG 2.3.3). Animation-driven
+   product behavior (vibration autoplay) additionally checks this in JS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

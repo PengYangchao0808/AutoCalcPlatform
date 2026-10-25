@@ -1,0 +1,11 @@
+{
+  "candidate_revision": "a1562e10a3e3bac8ef62db9fe7ad692c1effd41c",
+  "contract_version": "1.3.0",
+  "generated_at": "2026-10-23T09:52:38Z",
+  "runs": [
+    "infra-plugin-infra_install-20261023T095232Z-1473106-2ad9c3e9.json",
+    "infra-plugin-infra_upgrade-20261023T095235Z-1473166-a9c2023a.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

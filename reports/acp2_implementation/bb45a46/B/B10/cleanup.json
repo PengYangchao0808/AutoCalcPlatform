@@ -1,0 +1,16 @@
+{
+  "controller_pid": 597670,
+  "controller_stopped": true,
+  "hitl_or_production_touched": false,
+  "job_rows_in_db": 1,
+  "mcp_adapter_processes": 0,
+  "notes": [
+    "Only the B10 test Controller on 127.0.0.1:18768 was stopped. The production 8765 Controller and /var/lib/acp/runs were never touched.",
+    "The m1 baseline temporary run root was removed after copying its evidence."
+  ],
+  "orca_processes": 0,
+  "port_18768_busy": false,
+  "run_root": "/opt/acp2-dev/data/b/run-root-b10",
+  "run_root_preserved_for_evidence": true,
+  "schema": "acp2.b10.cleanup.v1"
+}

@@ -1,0 +1,19 @@
+{
+  "cccp_file": "/tmp/opencode/b25-fix-cccp-venv/lib64/python3.11/site-packages/cccp/__init__.py",
+  "cccp_version": "0.3.0",
+  "cwd": "/tmp",
+  "forbidden_absent": [
+    "acp",
+    "acp_services",
+    "fastapi",
+    "playwright"
+  ],
+  "present": {
+    "acp": false,
+    "acp_services": false,
+    "cccp": true,
+    "fastapi": false,
+    "playwright": false
+  },
+  "python": "/tmp/opencode/b25-fix-cccp-venv/bin/python"
+}

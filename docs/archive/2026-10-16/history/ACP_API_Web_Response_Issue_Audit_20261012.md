@@ -18,7 +18,7 @@
 
 运行环境：Python 3.11.13、FastAPI 0.141.1、Starlette 1.6.0、AnyIO 4.15.1、HTTPX 0.28.1、Paramiko 5.0.0、Playwright 1.63.0、Chromium 153.0.8010.12。
 
-另只读核对本机 unit 指定的 `<venv>/bin/python`：Python、FastAPI、Starlette、AnyIO、Paramiko 版本与测试环境一致。没有连接生产HTTP端点，反向代理及真实负载差异仍不在上述验证范围内。
+另只读核对本机 unit 指定的 `/opt/acp2/venv/bin/python`：Python、FastAPI、Starlette、AnyIO、Paramiko 版本与测试环境一致。没有连接生产HTTP端点，反向代理及真实负载差异仍不在上述验证范围内。
 
 证据文件：
 

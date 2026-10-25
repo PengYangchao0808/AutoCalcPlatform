@@ -1,0 +1,22 @@
+{
+  "sample_id": "singlepoint-unsupported-version.negative",
+  "contract": "science-binding.v1.json",
+  "kind": "negative",
+  "payload": {
+    "schema_version": 2,
+    "task": "singlepoint",
+    "charge": 0,
+    "multiplicity": 1,
+    "level": {
+      "method": "r2SCAN-3c",
+      "basis": ""
+    }
+  },
+  "expected": {
+    "valid": false,
+    "class": "unsupported",
+    "code": "unsupported_capability",
+    "violation": "unsupported_major_version",
+    "field": "schema_version"
+  }
+}

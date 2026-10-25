@@ -1,0 +1,209 @@
+{
+  "candidate_sha": "1ffb76da3b5d36ef6b9e67e93b004a74bfe1a000",
+  "generated_at": "2026-10-23T09:32:36Z",
+  "not_reusable": [
+    {
+      "kind": "a_scientific_signoff",
+      "status": "NOT_VERIFIED(a20_absent)"
+    },
+    {
+      "kind": "c_experience_signoff",
+      "status": "NOT_VERIFIED(c25_absent)"
+    },
+    {
+      "kind": "real_da_chain",
+      "status": "NOT_VERIFIED(c24a_absent)"
+    },
+    {
+      "kind": "search_evidence",
+      "status": "NOT_VERIFIED(search_not_declared)"
+    },
+    {
+      "kind": "user_approval",
+      "status": "NOT_VERIFIED(c24a_absent)"
+    },
+    {
+      "kind": "supported_science_claims",
+      "status": "none"
+    },
+    {
+      "kind": "mechanism_conclusion",
+      "status": "not_claimed"
+    }
+  ],
+  "owner": "B",
+  "reusable": [
+    {
+      "kind": "p2_candidate",
+      "limits": "Freeze identity only; it does not imply any scientific PASS.",
+      "ref": "reports/acp2_implementation/bb45a46/B/B20c/p2-candidate.json",
+      "reusable_for": [
+        "B21",
+        "B22",
+        "B23",
+        "B24a",
+        "B24b",
+        "B25",
+        "B26b"
+      ],
+      "sha256": "882237dedc6372f92ea3b813abb0f80a5e0852f33e0105404046f57ddbd558dc"
+    },
+    {
+      "kind": "execution_facts",
+      "limits": "NOT_VERIFIED execution; not scientific evidence.",
+      "ref": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "reusable_for": [
+        "provenance of zero-side-effect readiness and the c24a_absent gap"
+      ],
+      "sha256": "ab78a728127031ab1dd6f431ccd11e5bbf9068f81a35b2c7a8740c6140e21ee7"
+    },
+    {
+      "kind": "readiness_facts",
+      "limits": "A readiness PASS is not B20a-exec and not search capability.",
+      "ref": "reports/acp2_implementation/bb45a46/B/B20/b20a-ready.json",
+      "reusable_for": [
+        "interface/preflight consumption",
+        "zero-side-effect assertion"
+      ],
+      "sha256": "14cb09bff6497c335cc2ec8681c7d899af564b402e056ae4c81d63faa282a199"
+    },
+    {
+      "kind": "contracts",
+      "limits": "A/C contract files are referenced by digest, never copied as editable truth.",
+      "refs": [
+        {
+          "path": "reports/acp2_implementation/bb45a46/B/B20c/p2-candidate.json",
+          "role": "candidate_record",
+          "sha256": "882237dedc6372f92ea3b813abb0f80a5e0852f33e0105404046f57ddbd558dc",
+          "size_bytes": 8646
+        },
+        {
+          "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/manifest.json",
+          "sha256": "f83a5736b0a191883e24032ce94294cea80c9703b622e7f0fc4300ba2a8181dd"
+        },
+        {
+          "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+          "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e"
+        },
+        {
+          "path": "/opt/acp2-dev/data/b/b20-candidate/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+          "sha256": "7fcda6d28eb60f51cf11281fd7757786ae5d3f4332a7eb3f3a6fb71f316c3047"
+        }
+      ],
+      "reusable_for": [
+        "contract references and digests"
+      ]
+    },
+    {
+      "kind": "events_recovery",
+      "limits": "The DSH real-session row stays NOT_VERIFIED(c_dsh_absent).",
+      "refs": [
+        {
+          "path": "reports/acp2_implementation/bb45a46/B/B19/contract-digest.json",
+          "role": "b19_contract_digest",
+          "sha256": "7135914c79a09e62f5a55a02afef9292d6f2e4521c93d84ffaabbcf39555eec5",
+          "size_bytes": 755
+        },
+        {
+          "path": "reports/acp2_implementation/bb45a46/B/B19/summary.json",
+          "role": "b19_summary",
+          "sha256": "0c3e935d4930b9f9b0c0ce4456c9a3ffe4019288c3531898bce61f5e99ba9f44",
+          "size_bytes": 3524
+        }
+      ],
+      "reusable_for": [
+        "cursor/recovery contract and fixture facts"
+      ]
+    },
+    {
+      "kind": "science_contracts",
+      "limits": "No A scientific conclusion is implied or reusable.",
+      "refs": [
+        {
+          "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+          "role": "reaction",
+          "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+          "size_bytes": 15559
+        },
+        {
+          "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+          "role": "recipe",
+          "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+          "size_bytes": 12521
+        },
+        {
+          "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+          "role": "task_binding",
+          "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+          "size_bytes": 18004
+        },
+        {
+          "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+          "role": "evidence",
+          "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+          "size_bytes": 14038
+        },
+        {
+          "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+          "role": "reaction_example",
+          "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
+          "size_bytes": 6035
+        },
+        {
+          "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+          "role": "h4_handoff",
+          "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
+          "size_bytes": 58068
+        }
+      ],
+      "reusable_for": [
+        "A science schema references for P3/P4 planning"
+      ]
+    },
+    {
+      "kind": "experience_contracts",
+      "limits": "No C experience sign-off is implied or reusable.",
+      "refs": [
+        {
+          "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
+          "role": "proposal",
+          "sha256": "4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
+          "size_bytes": 16781
+        },
+        {
+          "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+          "role": "research_record",
+          "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+          "size_bytes": 9943
+        },
+        {
+          "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
+          "role": "p2_operation_map",
+          "sha256": "5818be3b6e86b62c4f0fb421186a567223727fb6e5a8266a6354dd3f501921c4",
+          "size_bytes": 10826
+        },
+        {
+          "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+          "role": "plan_identity",
+          "sha256": "79bb1c226a6f23af65eb1f2a1a4af27a3ea26dfead0299d40d4bd94ac9a8dd9d",
+          "size_bytes": 12558
+        }
+      ],
+      "reusable_for": [
+        "C experience schema references for P3/P4 planning"
+      ]
+    },
+    {
+      "kind": "run_spec",
+      "limits": "started_at stays null until a real C24a-approved submit.",
+      "ref": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json",
+      "reusable_for": [
+        "shared 13380/900/120/14400 DA budget partition"
+      ],
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b"
+    }
+  ],
+  "rule": "Reusable means a verified reference can be consumed; it never means a scientific or experience fact is accepted.",
+  "schema": "acp2.b20c.reusable-research-records.v1",
+  "todo": "24 / B20c"
+}

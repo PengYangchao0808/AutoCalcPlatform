@@ -1,0 +1,22 @@
+{
+  "sample_id": "submit-unsupported-version.negative",
+  "contract": "application-api.v1.json",
+  "kind": "negative",
+  "operation": "submit",
+  "payload": {
+    "schema_version": 2,
+    "workflow": "singlepoint",
+    "input": {
+      "smiles": "CCO"
+    },
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected": {
+    "valid": false,
+    "class": "unsupported",
+    "code": "unsupported_capability",
+    "violation": "unsupported_major_version",
+    "field": "schema_version"
+  },
+  "note": "an unknown major version executes nothing"
+}

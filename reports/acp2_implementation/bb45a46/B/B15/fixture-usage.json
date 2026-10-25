@@ -1,0 +1,21 @@
+{
+  "credentials_file": "/opt/acp2-dev/data/b/run-root-b15/secrets/b15-credentials.json (0600, outside the repo)",
+  "fixture": "/opt/acp2-dev/data/b/fixtures/multi.json",
+  "fixture_kind": "multitenant",
+  "keys": [
+    "alice_write (read/write/control, project_alpha)",
+    "bob_write (read/write/control, project_beta)",
+    "bob_read (read, project_beta)"
+  ],
+  "projects": [
+    "project_alpha",
+    "project_beta"
+  ],
+  "registration": "reports/acp2_implementation/bb45a46/B/fixture-runs.json -> fixture_id fx-multi-singlepoint-v1, kind multitenant",
+  "schema": "acp2.b15.fixture-usage.v1",
+  "tasks": "two paused fixture task rows (project_alpha/project_beta) created by the scenario; no QC and no submit in the authz path",
+  "users": [
+    "principal_b15_alice (member)",
+    "principal_b15_bob (member)"
+  ]
+}

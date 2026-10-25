@@ -1,0 +1,242 @@
+{
+  "corrupt_digest": {
+    "body": {
+      "detail": {
+        "code": "revision_conflict",
+        "message": "requested digest does not match the committed digest",
+        "params": {
+          "committed": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+          "requested": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "rule": "digest_mismatch"
+        }
+      }
+    },
+    "status": 409
+  },
+  "corrupt_prepare": {
+    "operation": {
+      "artifact_ref": {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 6,
+          "principal_id": "principal_local",
+          "project_id": "uncategorized",
+          "scope": "local-single"
+        },
+        "availability": "absent",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "generation": 1,
+        "job_id": "20261023_031453_001_singlepoint",
+        "media_type": "application/json",
+        "operation_id": "op_a2e3353c5cc4413496e7a23584d72018",
+        "relative_path": "RESULT/energy/singlepoint_energy.json",
+        "resource_id": "b12_corrupt_digest",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 0,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      },
+      "attempt": 1,
+      "availability": "absent",
+      "basis_revision": 1,
+      "bytes": null,
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "error": {
+        "code": "digest_mismatch",
+        "message": "digest_mismatch:artifact body does not match the expected digest/size"
+      },
+      "expected_revision": 1,
+      "freshness": "unknown",
+      "generation": 1,
+      "idempotency_key": "op_84caeb311b450a25565f3efe866ab25b",
+      "idempotent_replay": false,
+      "job_id": "20261023_031453_001_singlepoint",
+      "observed_at": "2026-10-22T21:29:57Z",
+      "operation_id": "op_a2e3353c5cc4413496e7a23584d72018",
+      "operation_ref": {
+        "id": "op_a2e3353c5cc4413496e7a23584d72018",
+        "kind": "operation"
+      },
+      "purpose": "artifact",
+      "resource": {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 6,
+          "principal_id": "principal_local",
+          "project_id": "uncategorized",
+          "scope": "local-single"
+        },
+        "availability": "absent",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "generation": 1,
+        "job_id": "20261023_031453_001_singlepoint",
+        "media_type": "application/json",
+        "operation_id": "op_a2e3353c5cc4413496e7a23584d72018",
+        "relative_path": "RESULT/energy/singlepoint_energy.json",
+        "resource_id": "b12_corrupt_digest",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 0,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      },
+      "resource_id": "b12_corrupt_digest",
+      "resource_kind": "artifact",
+      "schema": "acp2.artifact-ref.v1",
+      "schema_version": 1,
+      "sha256": null,
+      "size_bytes": 0,
+      "source_refs": [],
+      "source_schema": "",
+      "state": "failed",
+      "updated_at": "2026-10-22T21:29:57Z",
+      "version": 1
+    },
+    "prepare": 200
+  },
+  "eviction_rebuild": {
+    "bodies_removed": 1,
+    "cold_read": {
+      "body": {
+        "detail": {
+          "code": "resource_not_ready",
+          "message": "not_prepared: artifact_body_missing",
+          "params": {
+            "reason": "artifact_body_missing"
+          },
+          "retryable": true
+        }
+      },
+      "status": 409
+    },
+    "first_operation": "op_4838b2b1fdf7460f8d694d674092e1a8",
+    "rebuilt_read": {
+      "body": {
+        "artifact_ref": {
+          "attempt": 1,
+          "authorization": {
+            "action": "read",
+            "allowed": true,
+            "authorization_version": 6,
+            "principal_id": "principal_local",
+            "project_id": "uncategorized",
+            "scope": "local-single"
+          },
+          "availability": "ready",
+          "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+          "generation": 1,
+          "job_id": "20261023_031453_001_singlepoint",
+          "media_type": "application/json",
+          "operation_id": "op_3f5a28f5a2944b0080862012044f4652",
+          "relative_path": "RESULT/energy/singlepoint_energy.json",
+          "resource_id": "b12_eviction",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 241,
+          "source_refs": [],
+          "source_schema": "",
+          "version": 1
+        },
+        "availability": "ready",
+        "body": "{\n  \"energy\": -1.116759307204,\n  \"energy_hartree\": -1.116759307204,\n  \"method\": \"\",\n  \"schema_version\": \"acp_energy_product_v1\",\n  \"source\": \"task_result.json\",\n  \"step_id\": \"singlepoint\",\n  \"step_kind\": \"singlepoint\",\n  \"unit\": \"hartree\"\n}\n",
+        "body_ref": null,
+        "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+        "encoding": "identity",
+        "generation": 1,
+        "media_type": "application/json",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 241,
+        "source_refs": [],
+        "source_schema": "",
+        "truncated": false,
+        "version": 1
+      },
+      "status": 200
+    },
+    "reprepare_operation": "op_3f5a28f5a2944b0080862012044f4652"
+  },
+  "not_prepared": {
+    "body": {
+      "detail": {
+        "code": "resource_not_ready",
+        "message": "not_prepared: no_operation",
+        "params": {
+          "reason": "no_operation"
+        },
+        "retryable": true
+      }
+    },
+    "status": 409
+  },
+  "old_generation": {
+    "generation_1": {
+      "operation_id": "op_93990badf30249fb8049f1a077c0771e"
+    },
+    "generation_2": {
+      "operation_id": "op_d192afd9798f4db2abbd84aeec4e42d5"
+    },
+    "read": {
+      "body": {
+        "detail": {
+          "code": "revision_conflict",
+          "message": "artifact generation is stale",
+          "params": {
+            "current_generation": 2,
+            "requested_generation": 1,
+            "rule": "generation_stale"
+          }
+        }
+      },
+      "status": 409
+    }
+  },
+  "path_traversal": {
+    "body": {
+      "detail": {
+        "code": "input_invalid",
+        "message": "unsafe artifact relative_path: '../../b12-escape-proof.json'",
+        "params": {
+          "field": "relative_path",
+          "rule": "path_traversal"
+        }
+      }
+    },
+    "status": 400
+  },
+  "rows": [
+    {
+      "detail": "status=409 repeat=409 code=resource_not_ready",
+      "row": "not_prepared",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=409 body_keys=['detail']",
+      "row": "corrupt_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "prepare=200 state=failed error={'code': 'digest_mismatch', 'message': 'digest_mismatch:artifact body does not match the expected digest/size'}",
+      "row": "corrupt_prepare",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=409 detail={'code': 'revision_conflict', 'message': 'artifact generation is stale', 'params': {'rule': 'generation_stale', 'requested_generation': 1, 'current_generation': 2}}",
+      "row": "old_generation",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=400 sentinel_exists=False",
+      "row": "path_traversal",
+      "status": "PASS"
+    },
+    {
+      "detail": "first=op_4838b2b1fdf7460f8d694d674092e1a8 cold=409 reprepare=op_3f5a28f5a2944b0080862012044f4652 rebuilt=200 bodies_removed=1",
+      "row": "eviction_rebuild",
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+WALK fixture=curve_scatter_partial
+  expected.json bytes=658 sha256=sha256:0752ace08a21850a031d886d1340f37310fd688e005495cb7da5d362bbb4086e
+  STEP1 index.json bytes=3689 sha256=sha256:55947ac277d30dbf37fa0cabc7413a4810ed8290f8deff9f8da93fcfd33d3296
+  STEP2 header ok: hn03_block_index v1 delivery=hn-03-bounded-delivery-v1 bounded_schema=1 product_schema=1 state=ok kind=curve_scatter
+  STEP3 manifest bytes=7489 sha256=sha256:33f8f0cc9ead973209b1a84d7e565bd001558a9804b5ab0d0407734cc65a2c40 matches_index=True
+  STEP4 manifest decode ok: blocks=3 display_subsampled=False spec.method=chunk resolution=5 range=[0,12]
+  STEP5 block[0] file=block_000000.json bytes=2038 sha256=sha256:a22d556866876c62... decode=curve_scatter state=available complete=False items=5 range=[0,5) metadata_match=True
+  STEP5 block[1] file=block_000001.json bytes=2039 sha256=sha256:2249d2f8eab4da89... decode=curve_scatter state=available complete=True items=5 range=[5,10) metadata_match=True
+  STEP5 block[2] file=block_000002.json bytes=1350 sha256=sha256:0d6d13da3d35e836... decode=curve_scatter state=available complete=True items=2 range=[10,12) metadata_match=True
+  STEP6 index re-derivation: MATCH fields=12 (manifest+blocks -> index)
+  STEP7 consumption op=reconstruct
+  STEP7a reconstruct from block files: n_points=12 first=curve_scatter:series:scan_energy:point:0 last=curve_scatter:series:scan_energy:point:11
+  STEP7b reconstruct_curve_series(manifest) digest agrees: sha256:91dccc3ff99022ce...
+  STEP7c result_digest=sha256:91dccc3ff99022ce267931f244fe1ac9ecb65d86e29529888b3dfd95a4a6885f matches expected.json AND index.expected_consumption
+  STEP7d missing items preserved (never zero-filled): [{'native_index': 3, 'point_id': 'curve_scatter:series:scan_energy:point:3', 'reason': 'missing_point_values'}]
+WALK RESULT: PASS fixture=curve_scatter_partial op=reconstruct blocks=3 total_items=12 digest=sha256:91dccc3ff99022ce...
+SUMMARY fixtures=1 failures=0

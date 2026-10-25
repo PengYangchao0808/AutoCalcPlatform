@@ -1,0 +1,8 @@
+{
+  "client_revision": "NOT_VERIFIED",
+  "detail": "C DSH/Workbench is not delivered on this host (B10 P1 records client_revision=NOT_VERIFIED); no DSH process is started, so a re-handshake cannot be claimed.",
+  "fault": "dsh_disconnect",
+  "kind": "client",
+  "reason": "c_dsh_absent",
+  "status": "NOT_VERIFIED"
+}

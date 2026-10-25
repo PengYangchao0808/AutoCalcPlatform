@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "operation": "singlepoint",
+  "status": "ok",
+  "exit_code": 0,
+  "dry_run": false,
+  "operation_identity": null,
+  "diagnostic_ref": null,
+  "data": null,
+  "error": null
+}

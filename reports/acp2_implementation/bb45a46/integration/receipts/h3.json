@@ -1,0 +1,106 @@
+{
+  "artifacts": [
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
+      "sha256": "a6bb5842308ad951ea3cbc85a071f6b524af8361e5703b7a39d89f40654f13da",
+      "size_bytes": 9682
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/rerun-index.json",
+      "sha256": "c679b80788124b95edfcf40aab8ece82a78d00ca9ff47e53793abb17149dbb65",
+      "size_bytes": 8891
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B11/summary.json",
+      "sha256": "f69d94ded13db0def9e84b25f0be718b64fe708de6beb68f05bbde11e84e5b71",
+      "size_bytes": 2765
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/B/B10/summary.json",
+      "sha256": "b516e0023f02f0b5579a9ad119775462a6e3543244ce8af8c296792b92b328a8",
+      "size_bytes": 5171
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "immutable receipts aggregated; no science re-executed",
+      "name": "aggregate_only_no_rerun",
+      "status": "PASS"
+    },
+    {
+      "detail": "lsf_prerequisite_missing;c_dsh_browser_absent;a_scientific_audit_absent",
+      "name": "gate_result",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "6905477c51c34fa1f8d53421553805ecbf88d897",
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/usr/bin/python3.11",
+    "/tmp/opencode/gen_h7.py"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": ".",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "integration.gate_status": "OPEN",
+    "integration.handoff": "H3",
+    "integration.notes": [
+      "h3_status is OPEN in the frozen H3 receipt. Local singlepoint/optimize/frequency PASS; LSF, C DSH/Workbench and A audit are NOT_VERIFIED.",
+      "The three local PASS rows are not promoted to H3 closure."
+    ],
+    "integration.reuse_mapping": [],
+    "integration.signatures": {
+      "A": [],
+      "B": [
+        "B"
+      ],
+      "C": []
+    }
+  },
+  "finished_at": "2026-10-23T15:51:28Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "integration",
+  "phase": "aggregate",
+  "reason": "lsf_prerequisite_missing;c_dsh_browser_absent;a_scientific_audit_absent",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "h3-final-20261023T155128Z",
+  "scenario": "integration:h3-final",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T15:51:28Z",
+  "sub_results": [
+    {
+      "phase": "h3-local-singlepoint",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
+      "result": "PASS"
+    },
+    {
+      "phase": "h3-lsf",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B11/summary.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h3-c-dsh-browser",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B10/summary.json",
+      "result": "NOT_VERIFIED"
+    },
+    {
+      "phase": "h3-a-audit",
+      "receipt": "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
+      "result": "NOT_VERIFIED"
+    }
+  ],
+  "submission_id": null
+}

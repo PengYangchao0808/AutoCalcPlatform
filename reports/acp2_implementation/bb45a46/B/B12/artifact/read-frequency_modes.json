@@ -1,0 +1,39 @@
+{
+  "artifact_ref": {
+    "attempt": 1,
+    "authorization": {
+      "action": "read",
+      "allowed": true,
+      "authorization_version": 6,
+      "principal_id": "principal_local",
+      "project_id": "uncategorized",
+      "scope": "local-single"
+    },
+    "availability": "ready",
+    "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+    "generation": 1,
+    "job_id": "20261023_031453_001_singlepoint",
+    "media_type": "application/json",
+    "operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+    "relative_path": "RESULT/frequencies/normal_modes.json",
+    "resource_id": "frequency_modes",
+    "schema": "acp2.artifact-ref.v1",
+    "size_bytes": 307,
+    "source_refs": [],
+    "source_schema": "",
+    "version": 1
+  },
+  "availability": "ready",
+  "body": "{\n  \"fixture\": \"B12 auxiliary frequency artifact (static, not a computed spectrum)\",\n  \"schema\": \"acp2.auxiliary.frequency-modes.v1\",\n  \"modes\": [\n    {\"index\": 1, \"frequency_cm1\": 4401.2, \"intensity_km_mol\": 0.0},\n    {\"index\": 2, \"frequency_cm1\": 4401.2, \"intensity_km_mol\": 0.0}\n  ],\n  \"units\": \"cm-1\"\n}\n",
+  "body_ref": null,
+  "digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+  "encoding": "identity",
+  "generation": 1,
+  "media_type": "application/json",
+  "schema": "acp2.artifact-ref.v1",
+  "size_bytes": 307,
+  "source_refs": [],
+  "source_schema": "",
+  "truncated": false,
+  "version": 1
+}

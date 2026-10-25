@@ -1,0 +1,18 @@
+{
+  "sample_id": "idempotency-key-reuse.negative",
+  "contract": "control-and-data.v1.json",
+  "kind": "negative",
+  "operation": "submit",
+  "payload": {
+    "idempotency_key": "idem-0001",
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "existing_plan_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "expected": {
+    "valid": false,
+    "class": "conflict",
+    "code": "revision_conflict",
+    "violation": "idempotency_key_reuse",
+    "field": "idempotency_key"
+  }
+}

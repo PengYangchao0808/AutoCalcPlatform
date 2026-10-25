@@ -1,0 +1,131 @@
+{
+  "admission": {
+    "enforcement": "local-single-enforced",
+    "limits": {
+      "default_walltime_s": 86400,
+      "max_cores": 2,
+      "max_memory_mb": 1048576,
+      "max_storage_bytes": 10995116277760,
+      "max_tasks": 4,
+      "max_walltime_s": 2592000,
+      "policy_version": "local-single-v1"
+    },
+    "mode": "quota-only",
+    "model_token_enforcement": "NOT_VERIFIED",
+    "multi_tenant_security": false,
+    "occupancy": {
+      "by_state": {},
+      "concurrency": 0,
+      "cores": 0,
+      "memory_mb": 0,
+      "reservations": 0,
+      "storage_bytes": 0
+    },
+    "policy_version": "local-single-v1",
+    "principal_id": "principal_local",
+    "quota_enforced": true,
+    "recorded_only": false,
+    "usage": {
+      "core_hours": "0",
+      "core_seconds": 0,
+      "receipts": 0
+    },
+    "verified_project": "proj-a"
+  },
+  "admission_enforcement": "local-single-enforced",
+  "backends": [
+    {
+      "available": false,
+      "name": "censo"
+    },
+    {
+      "available": false,
+      "name": "crest"
+    },
+    {
+      "available": false,
+      "name": "external"
+    },
+    {
+      "available": false,
+      "name": "isostat"
+    },
+    {
+      "available": false,
+      "name": "molclus"
+    },
+    {
+      "available": true,
+      "name": "orca"
+    },
+    {
+      "available": false,
+      "name": "xtb"
+    }
+  ],
+  "capability_descriptors": null,
+  "identity": {
+    "deployment_tier": "local-single",
+    "issuer": "local",
+    "multi_tenant_security": false,
+    "principal_id": "principal_local",
+    "project_hint_policy": "narrow-only",
+    "subject": "principal_local",
+    "tenant_id": "local-single",
+    "verified_project": "proj-a"
+  },
+  "limits": {
+    "max_artifact_bytes": 8388608,
+    "max_cores": 64,
+    "max_read_bytes": 1048576,
+    "max_walltime_s": 604800
+  },
+  "model_token_enforcement": "NOT_VERIFIED",
+  "multi_tenant_security": false,
+  "protocol_version": "2025-06-18",
+  "schema_version": 1,
+  "task_kinds": [
+    "casscf",
+    "censo_refine",
+    "clustering",
+    "conformer_search",
+    "frequency",
+    "irc",
+    "md_sampling",
+    "nmr_shielding",
+    "optimize",
+    "orca_gradient",
+    "scan",
+    "singlepoint",
+    "thermochemistry",
+    "xtb_constrained_opt",
+    "xtb_path_search"
+  ],
+  "tools": [
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_submit",
+    "acp_status",
+    "acp_cancel",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_analyze"
+  ],
+  "workflows": [
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "scan",
+    "irc",
+    "tsmode",
+    "casscf",
+    "xtb_optimize",
+    "nmr",
+    "Confsearch",
+    "PESsearch",
+    "BatchOptimize",
+    "XtbPathSearch",
+    "OrcaGradient",
+    "XtbConstrainedOpt"
+  ]
+}
