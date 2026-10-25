@@ -278,12 +278,23 @@ def test_cross_user_distinct_uid_requires_restrictive_mode(tmp_path: Path) -> No
     open_dir = tmp_path / "open"
     open_dir.mkdir(mode=0o777)
     open_dir.chmod(0o777)
-    assert iso.audit_cross_user_access(open_dir, owner_uid=1000, other_uid=2000).isolated is False
+    real_uid = open_dir.stat().st_uid
+    assert (
+        iso.audit_cross_user_access(
+            open_dir, owner_uid=real_uid, other_uid=real_uid + 1
+        ).isolated
+        is False
+    )
 
     closed_dir = tmp_path / "closed"
     closed_dir.mkdir(mode=0o700)
     closed_dir.chmod(0o700)
-    assert iso.audit_cross_user_access(closed_dir, owner_uid=1000, other_uid=2000).isolated is True
+    assert (
+        iso.audit_cross_user_access(
+            closed_dir, owner_uid=real_uid, other_uid=real_uid + 1
+        ).isolated
+        is True
+    )
 
 
 def test_minimal_mounts_reject_broad_and_secret_sources() -> None:
