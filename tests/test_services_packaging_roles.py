@@ -46,7 +46,7 @@ ROLE_MATRIX: dict[str, set[str]] = {
     "api": {"fastapi", "uvicorn", "python-multipart", "zipstream-ng"},
     "remote": {"paramiko"},
     "nmr": {"nmrglue", "openbabel", "qml"},
-    "dev": {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "httpx"},
+    "dev": {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "httpx", "tomli"},
     "browser": {"playwright"},
 }
 #: scientific minimal install — must hold in core deps

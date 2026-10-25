@@ -51,7 +51,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
 
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_ROOT = REPO_ROOT / "docs/reference/next-change/acp2-contracts"
