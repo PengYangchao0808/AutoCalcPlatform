@@ -1,24 +1,24 @@
 {
   "artifacts": [
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B07/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B07/summary.json",
       "sha256": "37e8a93f1d5aca81057ba9faea21ab59f53218fbe4a3731b56119f1e1b6f20bb",
       "size_bytes": 456
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
-      "sha256": "d2921531965cffd2480aa00fa0546708a4b8538e2a496f43e72625aadbf872e9",
-      "size_bytes": 10343
+      "path": "reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
+      "sha256": "ba5d3324426ca5c7560bbed653bcb0835d633b23ac7fefc9b39d177412d92c92",
+      "size_bytes": 10301
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B13/dsh-disconnect.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B13/dsh-disconnect.json",
       "sha256": "28887aa273316adefb70653413b7315a1854e35fa5610099c54f1492af160c5a",
       "size_bytes": 317
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
-      "sha256": "3b038d7cafa0db2caa525326ccfbe089ce9c3ade2cf32578d27f585d71cc5b0d",
-      "size_bytes": 22701
+      "path": "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json",
+      "sha256": "a2f7ca1a925400c1819a7442e7769b70063db7fcefb0bdff0564111cdfd4813c",
+      "size_bytes": 22241
     }
   ],
   "assertions": [
@@ -45,7 +45,7 @@
     "/tmp/opencode/gen_h7.py"
   ],
   "contract_version": "1.3.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "aggregate",
   "exit_code": 2,
   "extensions": {

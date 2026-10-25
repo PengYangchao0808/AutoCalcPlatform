@@ -17,8 +17,8 @@ ACP 初始化计划 v1
   deployment.params.run_root: {} → /tmp/opencode/b26a-clean/data/init-run-root
   deployment.tier: {} → local-single
   deployment.usage: {} → local
-  executables.orca.path: {} → /home/<user>/orca611/orca
-  executables.xtb.path: {} → /home/<user>/xtb-dist/bin/xtb
+  executables.orca.path: {} → /home/redacted-user/orca611/orca
+  executables.xtb.path: {} → /home/redacted-user/xtb-dist/bin/xtb
 已应用计划并写入 /tmp/opencode/b26a-clean/work/init/cccp.yaml
 
 == 验证（doctor） ==
@@ -26,8 +26,8 @@ doctor 能力报告（PASS / FAIL / NOT_VERIFIED 分列）
   PASS（7）：
     - deployment-tier — local-single
     - run_root — /tmp/opencode/b26a-clean/data/init-run-root — 就绪
-    - software:orca — /home/<user>/orca611/orca
-    - software:xtb — /home/<user>/xtb-dist/bin/xtb
+    - software:orca — /home/redacted-user/orca611/orca
+    - software:xtb — /home/redacted-user/xtb-dist/bin/xtb
     - component:local-identity — 本地身份（单用户）
     - component:local-storage — 本地存储（run_root）
     - component:science-core — 科学核心（本地摄入/计划/执行/导出）

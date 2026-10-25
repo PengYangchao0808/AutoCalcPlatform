@@ -84,7 +84,7 @@
       "submitted_at": "2026-10-23T18:06:15.145435+00:00"
     },
     "node": "node-157",
-    "remote_dir": "/home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c",
+    "remote_dir": "/home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c",
     "execution": {
       "schema": 1,
       "attempt": 1,
@@ -95,7 +95,7 @@
       "release_id": "1c79785a657c6614"
     },
     "lsf_job_id": "1765",
-    "command_line": "/home/<user>/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
+    "command_line": "/home/redacted-user/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
     "host": "192.168.1.100",
     "exit_code": 0,
     "provenance": {
@@ -107,7 +107,7 @@
       "method": "singlepoint",
       "basis": null,
       "solvent": null,
-      "command_line": "/home/<user>/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/<user>/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
+      "command_line": "/home/redacted-user/anaconda3/bin/python -m acp_services.worker_bootstrap --envelope /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/envelope.json --plan /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/plan.json --work-dir /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c --binding /home/redacted-user/acp_jobs/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint_fix5c/binding.json --require-frozen-group",
       "hostname": "192.168.1.100",
       "ncores": 1,
       "memory_gb": 1.0,

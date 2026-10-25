@@ -2,13 +2,13 @@
   "a_readability": {
     "contract_handoff": {
       "parsed": true,
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
       "present": true,
       "schema": null,
-      "sha256": "f690e7e993125b509e4f5a55ce9465323292346dddfdabc0beacb4e4533b0bd0",
+      "sha256": "3d56f030cecf82df20ccc040876a80db6127fe5c6120e6a7343ffa147e644357",
       "size_bytes": 26991
     },
-    "expected_readability_receipt": "<repo>/reports/acp2_implementation/bb45a46/A/A-26/result.json",
+    "expected_readability_receipt": "reports/acp2_implementation/bb45a46/A/A-26/result.json",
     "owner": "A",
     "readability_receipt_present": false,
     "reason": "A published handoff-H6.json (readable, parsed here) but no A-26 result/readability receipt that verifies B data remains readable at f32c670. B does not sign A scope.",
@@ -62,10 +62,10 @@
     }
   ],
   "c_readability": {
-    "expected_readability_receipt": "<repo>/reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
+    "expected_readability_receipt": "reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
     "manifest_extension_schema": {
       "parsed": true,
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/manifest-extension.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/manifest-extension.schema.json",
       "present": true,
       "schema": "acp2.experience.manifest-extension.v1",
       "sha256": "6552b04d33f5bc84d2415a4fe6f68912fb73bc65a44b5e50eaebc1e384c5f5ed",
@@ -76,7 +76,7 @@
     "reason": "C contract schemas are readable (parsed, digests recorded) but C has published no H6 readability receipt and no cross-domain-live/selectivity record; B does not sign C scope.",
     "research_record_schema": {
       "parsed": true,
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
       "present": true,
       "schema": "acp2.experience.research-record.v1",
       "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
@@ -85,7 +85,7 @@
     "result": "NOT_VERIFIED(c_readability_absent)",
     "view_model_schema": {
       "parsed": true,
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/view-model.schema.json",
       "present": true,
       "schema": "acp2.experience.view-model.v1",
       "sha256": "b9502bfbef42ab18d515fea44ab50a6ddd824a3da5851f0be796c4fdaf0d4b9b",
@@ -118,7 +118,7 @@
       "/usr/bin/python3.11",
       "scripts/acceptance/four_combinations.py",
       "--out",
-      "<repo>/reports/acp2_implementation/bb45a46/B/B24b/four-combination",
+      "reports/acp2_implementation/bb45a46/B/B24b/four-combination",
       "--f1-revision",
       "493790709830eac4ce347b5fb81414050f7a1e21",
       "--cells",
@@ -196,7 +196,7 @@
     "result": "PASS",
     "summary": "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json",
     "target_schema": 23,
-    "workspace": "<acp2-dev>/data/b/b24b-migration"
+    "workspace": "/opt/acp2-dev/data/b/b24b-migration"
   },
   "note": "H6 remains OPEN. B signs only B-owned runtime/recovery facts; A and C rows are unsigned. B-fix-7 re-runs four-combination/legacy readers from a clean checkout at X and commits the reviewed options overlay; B-fix-8 keeps the B24 S0 FAIL visible (FAIL + NOT_APPLICABLE scope, no S0 closure). No production release, production restart, LSF, DSH, real DA or selectivity sign-off is claimed.",
   "open_rows": [
@@ -215,7 +215,7 @@
       "status": "NOT_VERIFIED(c_dsh_h6_absent)"
     },
     {
-      "expected_path": "<repo>/reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
+      "expected_path": "reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
       "owner": "C",
       "reason": "C research-record/view-model/manifest-extension schemas are readable, but no C H6 readability receipt or experience:cross-domain-live record exists.",
       "row_id": "H6-C-readability",
@@ -223,7 +223,7 @@
       "status": "NOT_VERIFIED(c_readability_absent)"
     },
     {
-      "expected_path": "<repo>/reports/acp2_implementation/bb45a46/A/A-26/result.json",
+      "expected_path": "reports/acp2_implementation/bb45a46/A/A-26/result.json",
       "owner": "A",
       "reason": "A handoff-H6.json is readable (parsed; h6_closure.closed=false), but no A-26 readability receipt for B data exists.",
       "row_id": "H6-A-readability",

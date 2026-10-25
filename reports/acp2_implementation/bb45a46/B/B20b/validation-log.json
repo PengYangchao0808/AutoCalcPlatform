@@ -4,23 +4,23 @@
   "result": "PASS",
   "artifacts": {
     "science-handoff.json": {
-      "sha256": "83a30a6e9e531dea8c229fc729cc8ac2f193e040e94173e0049a1f2afa2b06fc",
+      "sha256": "73a3ff747dcd4c735a97d9e2ddd3b00d7c675346caea96b0451f7160e7970091",
       "schema": "acp2.b20b.science-handoff.v1"
     },
     "h4-ledger.json": {
-      "sha256": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b",
+      "sha256": "2931c8432c28e138dcdcc77af8a2b2e4e707292713e4eafe9a9b4641d3b4f77b",
       "schema": "acp2.b20b.h4-ledger.v1"
     },
     "reference-matrix.json": {
-      "sha256": "adc88364267bc7961a2d31a37655b6273ddc4d7a3a3a6423e5021d8c209f750e",
+      "sha256": "3e89176f8f4c488be64abac8bf6519448a2487f8fdae124fe29344f9b5b4d2fe",
       "schema": "acp2.b20b.reference-matrix.v1"
     }
   },
   "test_command": "PYTHONPATH=src:. /usr/bin/python3.11 -m pytest tests/test_acp2_runtime_science_handoff.py -q",
   "test_result": "14 passed",
   "ruff_commands": [
-    "/home/<user>/.local/bin/ruff check tests/test_acp2_runtime_science_handoff.py",
-    "/home/<user>/.local/bin/ruff format --check tests/test_acp2_runtime_science_handoff.py"
+    "/home/redacted-user/.local/bin/ruff check tests/test_acp2_runtime_science_handoff.py",
+    "/home/redacted-user/.local/bin/ruff format --check tests/test_acp2_runtime_science_handoff.py"
   ],
   "ruff_result": "All checks passed; 1 file already formatted",
   "checks": [
@@ -52,7 +52,7 @@
     {
       "name": "run_spec_matches_b20a",
       "result": "PASS",
-      "detail": "sha256=8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9; partition=13380+900+120=14400; started_at=null; no clock reset."
+      "detail": "sha256=40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b; partition=13380+900+120=14400; started_at=null; no clock reset."
     },
     {
       "name": "b_execution_facts_match_receipt",
@@ -67,7 +67,7 @@
     {
       "name": "a_reference_by_reference",
       "result": "PASS",
-      "detail": "A handoff present with sha256=3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c; A status stays NOT_VERIFIED."
+      "detail": "A handoff present with sha256=37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b; A status stays NOT_VERIFIED."
     },
     {
       "name": "c_reference_absent_no_fabrication",

@@ -20,7 +20,7 @@
     "--fixture",
     "samples/dsh-local-singlepoint-request.json"
   ],
-  "cwd": "<acp2-dev>/C",
+  "cwd": "/opt/acp2-dev/C",
   "started_at": "2026-10-22T12:10:00Z",
   "finished_at": "2026-10-22T12:10:02Z",
   "result": "PASS",

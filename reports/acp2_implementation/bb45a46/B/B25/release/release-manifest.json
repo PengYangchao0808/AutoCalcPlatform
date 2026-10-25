@@ -598,7 +598,7 @@
         "src/acp/scheduler/remote/AGENTS.md": "46a40b31cb72753b7e82fb7e216906f72ee1e14f4dd006aca1f079a7246ecdf5",
         "src/acp/scheduler/remote/__init__.py": "8ee939ec28eb1aa7b74f9788befde13d686ba4e718abde05bda4bd0eb26390a4",
         "src/acp/scheduler/remote/cleanup.py": "6b4f3feb93663c4d929e0d9a9d6cafc45e80a2e25e35953b6d0e6ac33fafa95f",
-        "src/acp/scheduler/remote/config.py": "2cba1b0c153d0cc7ccd8ed268581755f9c9e6936bd89e520a91cc0b51908ce89",
+        "src/acp/scheduler/remote/config.py": "80717ab4ad0bd8d48ed016f8bfc79e0d134cb195d91ed6ca491e57693ffa8ebd",
         "src/acp/scheduler/remote/fetcher.py": "0a171f726431f9e29787cb6e18710be2921559a44765fdd4601d8682bab0268f",
         "src/acp/scheduler/remote/monitor.py": "43eec952e227fdfd9a0fb071e66a3d2960d4462f7986a5c5dc2e7ed870d32795",
         "src/acp/scheduler/remote/node_manager.py": "1285692c002cdc2daf6d6b4358e1e9a7d2e5efc303df0968d2667fab8e4dfa9b",

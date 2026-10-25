@@ -8,7 +8,7 @@
     },
     {
       "path": "WORK/04_FREQ/freq.out",
-      "sha256": "9d9481826c79759bbfbe4fd3e161553ea40cffe5bc25ef230630d70df131e916",
+      "sha256": "1218c014726cc50e4a97ee3b47f5f7edbd2545dc484f17250d38dc2a8bf4b5d4",
       "source": "orca",
       "type": "log"
     },
@@ -48,7 +48,7 @@
   },
   "provenance": {
     "backend": "orca",
-    "input_signature": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/input.xyz",
+    "input_signature": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/input.xyz",
     "method": "HF",
     "profile": "",
     "version": "unknown"

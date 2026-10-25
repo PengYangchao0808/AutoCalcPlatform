@@ -29,10 +29,10 @@
       "row_id": "H4-01-valid-ts",
       "signature_required_from": "A",
       "signed_by": [],
-      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_artifact": "reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+        "value": "2e51cb70b2465060a608d136e480f04172a04b373345e7cd8736d72d0cdec624"
       },
       "status": "NOT_VERIFIED"
     },
@@ -47,10 +47,10 @@
       "row_id": "H4-02-bidirectional-irc",
       "signature_required_from": "A",
       "signed_by": [],
-      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_artifact": "reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+        "value": "2e51cb70b2465060a608d136e480f04172a04b373345e7cd8736d72d0cdec624"
       },
       "status": "NOT_VERIFIED"
     },
@@ -65,10 +65,10 @@
       "row_id": "H4-03-endpoint-connectivity",
       "signature_required_from": "A",
       "signed_by": [],
-      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_artifact": "reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+        "value": "2e51cb70b2465060a608d136e480f04172a04b373345e7cd8736d72d0cdec624"
       },
       "status": "NOT_VERIFIED"
     },
@@ -83,10 +83,10 @@
       "row_id": "H4-04-comparable-energy",
       "signature_required_from": "A",
       "signed_by": [],
-      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_artifact": "reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+        "value": "2e51cb70b2465060a608d136e480f04172a04b373345e7cd8736d72d0cdec624"
       },
       "status": "NOT_VERIFIED"
     },
@@ -101,24 +101,24 @@
       "row_id": "H4-search",
       "signature_required_from": "A",
       "signed_by": [],
-      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
+      "source_artifact": "reports/acp2_implementation/bb45a46/B/B20b/h4-ledger.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "53dfc8cd1ab69a8b02c726eccba168b7d50c7e2d911c408cd00606b466bce62b"
+        "value": "2e51cb70b2465060a608d136e480f04172a04b373345e7cd8736d72d0cdec624"
       },
       "status": "NOT_VERIFIED(search_not_declared)"
     },
     {
       "accepted_path_patterns": [
-        "<repo>/reports/acp2_implementation/bb45a46/A/A-20/result.json",
-        "<repo>/reports/acp2_implementation/bb45a46/A/A-20/run-id/result.json"
+        "reports/acp2_implementation/bb45a46/A/A-20/result.json",
+        "reports/acp2_implementation/bb45a46/A/A-20/run-id/result.json"
       ],
       "b_evidence_owner": "B",
       "claim_status": "not_evaluated",
       "digest": null,
-      "expected_handoff_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "expected_handoff_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "expected_handoff_schema": "handoff_id=H4, handoff_version=1 (contract_set=acp2.science v1)",
-      "expected_path": "<repo>/reports/acp2_implementation/bb45a46/A/A-20/result.json",
+      "expected_path": "reports/acp2_implementation/bb45a46/A/A-20/result.json",
       "expected_schema": "acp2.acceptance.v1",
       "fabricated_digest": false,
       "label": "A-20",
@@ -136,8 +136,8 @@
       "b_evidence_owner": "B",
       "claim_status": "not_evaluated",
       "digest": null,
-      "expected_path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
-      "expected_receipt_root": "<repo>/reports/acp2_implementation/bb45a46/C/p2-closeout",
+      "expected_path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
+      "expected_receipt_root": "reports/acp2_implementation/bb45a46/C/p2-closeout",
       "expected_receipt_schema": "acp2.acceptance.v1",
       "expected_schema": "acp2.experience.handoff.v1 (H2-shaped; no explicit schema field in the H2 precedent)",
       "fabricated_digest": false,

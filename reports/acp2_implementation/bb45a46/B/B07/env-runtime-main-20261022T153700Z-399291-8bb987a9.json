@@ -7,7 +7,7 @@
       "status": "PASS"
     },
     {
-      "detail": "path=/home/<user>/orca611/orca sha256=d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1",
+      "detail": "path=/home/redacted-user/orca611/orca sha256=d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1",
       "name": "local_orca_real_binary",
       "status": "PASS"
     },
@@ -27,7 +27,7 @@
       "status": "PASS"
     },
     {
-      "detail": "run_root=<acp2-dev>/data/b/run-root fstype=xfs cores=40 memory=66796507136",
+      "detail": "run_root=/opt/acp2-dev/data/b/run-root fstype=xfs cores=40 memory=66796507136",
       "name": "local_run_root",
       "status": "PASS"
     },
@@ -52,7 +52,7 @@
       "status": "PASS"
     },
     {
-      "detail": "env_server=58d81ec5ec528577692e6c1aa300c46fbf3b43c6 env_digest=2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc file=<acp2-dev>/data/b/acceptance-env.sh",
+      "detail": "env_server=58d81ec5ec528577692e6c1aa300c46fbf3b43c6 env_digest=2e6daea64a7999925e1dde9b5396a8249a837fb7c2b0fe24ffc0af7d69dcaebc file=/opt/acp2-dev/data/b/acceptance-env.sh",
       "name": "h2_candidate_environment_binding",
       "status": "PASS"
     },
@@ -75,19 +75,19 @@
   },
   "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
   "command": [
-    "<acp2-dev>/venvs/b/bin/python",
-    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "env-runtime",
     "--controller",
     "http://127.0.0.1:18765",
     "--out",
-    "<repo>/reports/acp2_implementation/bb45a46/B/B07",
+    "reports/acp2_implementation/bb45a46/B/B07",
     "--timeout",
     "180"
   ],
   "contract_version": "1.1.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {
@@ -107,18 +107,18 @@
       "task_count_after": 2,
       "task_count_before": 2
     },
-    "b07.doctor_log": "<repo>/reports/acp2_implementation/bb45a46/B/B07/doctor/acp-doctor.log",
-    "b07.environment_record": "<repo>/reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
+    "b07.doctor_log": "reports/acp2_implementation/bb45a46/B/B07/doctor/acp-doctor.log",
+    "b07.environment_record": "reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
     "b07.evidence_bases": [
-      "<repo>/reports/acp2_implementation/bb45a46/B"
+      "reports/acp2_implementation/bb45a46/B"
     ],
     "b07.fixture_rows": 9,
-    "b07.fixture_runs": "<repo>/reports/acp2_implementation/bb45a46/B/fixture-runs.json",
-    "b07.h2_candidate_record": "<repo>/reports/acp2_implementation/bb45a46/B/environment/h2-candidate.json",
-    "b07.lsf_log": "<repo>/reports/acp2_implementation/bb45a46/B/B07/lsf/lsf-probe.log",
+    "b07.fixture_runs": "reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+    "b07.h2_candidate_record": "reports/acp2_implementation/bb45a46/B/environment/h2-candidate.json",
+    "b07.lsf_log": "reports/acp2_implementation/bb45a46/B/B07/lsf/lsf-probe.log",
     "b07.lsf_timeout_seconds": 2400,
-    "b07.orca_probe": "<repo>/reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.out",
-    "b07.p0_matrix": "<repo>/reports/acp2_implementation/bb45a46/B/B07/p0-matrix.json"
+    "b07.orca_probe": "reports/acp2_implementation/bb45a46/B/B07/environment/orca-h2-probe/h2.out",
+    "b07.p0_matrix": "reports/acp2_implementation/bb45a46/B/B07/p0-matrix.json"
   },
   "finished_at": "2026-10-22T15:37:00Z",
   "job_id": null,

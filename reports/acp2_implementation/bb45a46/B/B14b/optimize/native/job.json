@@ -37,7 +37,7 @@
     "custom_name": null
   },
   "status": "completed",
-  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
   "created_at": "2026-10-23T03:16:52.686365+00:00",
   "updated_at": "2026-10-23T03:16:59.469267+00:00",
   "started_at": "2026-10-23T03:16:52.697662+00:00",

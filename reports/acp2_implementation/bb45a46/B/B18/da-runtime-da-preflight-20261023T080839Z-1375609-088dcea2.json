@@ -2,8 +2,8 @@
   "artifacts": [
     {
       "path": "science-contracts.json",
-      "sha256": "d686b08b36e9efdca37b6699e6957fa2d3cf5d5fee915822e784b7a855ed279d",
-      "size_bytes": 3126
+      "sha256": "37eebac6e3dfa7cbae826775238b97ba4aaea601155feb498f4734c9a3161a67",
+      "size_bytes": 3000
     },
     {
       "path": "a-roundtrip.json",
@@ -12,8 +12,8 @@
     },
     {
       "path": "B18a-to-C18.json",
-      "sha256": "9703cce2ffe235c068d943d449a3219b1f8d443a95799c04e8aa9b65dfc319d3",
-      "size_bytes": 4421
+      "sha256": "a0596cf922779346efe1f0783611ba2183991e00dcb2c2436aeb1c2294df1d51",
+      "size_bytes": 4267
     },
     {
       "path": "step-dag.json",
@@ -126,8 +126,8 @@
   },
   "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "command": [
-    "<acp2-dev>/venvs/b/bin/python",
-    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "da-runtime",
     "--phase",
@@ -142,7 +142,7 @@
     "300"
   ],
   "contract_version": "1.2.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "fixture",
   "exit_code": 0,
   "extensions": {
@@ -151,7 +151,7 @@
     "b18.artifacts": [
       {
         "path": "science-contracts.json",
-        "sha256": "d686b08b36e9efdca37b6699e6957fa2d3cf5d5fee915822e784b7a855ed279d",
+        "sha256": "41e8176c4f6a9574cd4925aa8e50294434f13b0589d6e1937ebe7e5d9e4748da",
         "size_bytes": 3126
       },
       {
@@ -161,7 +161,7 @@
       },
       {
         "path": "B18a-to-C18.json",
-        "sha256": "9703cce2ffe235c068d943d449a3219b1f8d443a95799c04e8aa9b65dfc319d3",
+        "sha256": "4c1d73a653b201a90260fe1a42b0de5c5de87eeecfba668ca75f80c4fafdab4b",
         "size_bytes": 4421
       },
       {

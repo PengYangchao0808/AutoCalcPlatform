@@ -59,7 +59,7 @@ def main() -> int:
         {
             "ACP_API_KEY": key,
             "ACP_CONTROLLER_URL": args.controller,
-            "PYTHONPATH": "<acp2-dev>/data/b/b15-src",
+            "PYTHONPATH": "/opt/acp2-dev/data/b/b15-src",
         }
     )
     process = subprocess.Popen(

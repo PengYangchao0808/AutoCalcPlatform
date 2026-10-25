@@ -24,7 +24,7 @@ Do not mix both releases in the same environment.
 python3.11 -m venv /opt/acp-0.3.0
 /opt/acp-0.3.0/bin/python -m pip install -U pip setuptools wheel
 /opt/acp-0.3.0/bin/python -m pip install \
-  --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5 \
+  --find-links reports/acp2_implementation/bb45a46/B/B25/release-fix5 \
   'cccp==0.3.0' 'acp-worker==0.3.0' 'acp-web==0.3.0'
 ```
 
@@ -62,7 +62,7 @@ at production `/var/lib/acp/runs`.
 2. Install the new role set into a fresh venv (preferred) or upgrade in place:
    ```bash
    /opt/acp-0.2.x/bin/python -m pip install --upgrade \
-     --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release-fix5 \
+     --find-links reports/acp2_implementation/bb45a46/B/B25/release-fix5 \
      'cccp==0.3.0' 'acp-worker==0.3.0' 'acp-web==0.3.0'
    ```
 3. Run the schema/backup path before serving:

@@ -8,8 +8,8 @@
     {
       "id": "A-27a/packaging.md",
       "owner": "A",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.md",
-      "sha256": "6a83a285b574f4b2348abeacdaae8cb1fc90008402fbe60d9c08f697386937c3",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.md",
+      "sha256": "f02386bc95562f7171ed82d20a5ce7c65e770616fd7a7fd2e068c825aa361d5b",
       "decision": "applied-with-gap",
       "applied_to": [
         "packaging/roles/cccp/pyproject.toml [tool.setuptools.package-data].cccp.analysis.research",
@@ -21,7 +21,7 @@
     {
       "id": "A-27a/packaging.patch",
       "owner": "A",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/packaging.patch",
       "sha256": "e7c3186ac03ef565b4d0380bf04c4a185b39fd730db03831a10432fd216c07b8",
       "decision": "applied",
       "detail": "The one-hunk patch is reproduced in packaging/roles/cccp/pyproject.toml and mirrored in the root distribution. No test assertion was changed or relaxed."
@@ -29,7 +29,7 @@
     {
       "id": "A-27a/dependency-requests.md",
       "owner": "A",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/dependency-requests.md",
       "sha256": "5082907a836caf09a3b86dad448d6c1cbad05f7d4feeb029de6c5004124657fa",
       "decision": "applied",
       "detail": "No new runtime dependency was requested or added; requirements-node.txt is unchanged. The B25a release candidate is built for A-27b/A-28/A-29 consumption."
@@ -37,7 +37,7 @@
     {
       "id": "A-08/shared-file-requests.md",
       "owner": "A",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/shared-file-requests.md",
       "sha256": "d64a887a53f601675dfb1f0f1e9e3af949a93c8a384be821c944fea0c2a48692",
       "decision": "queued",
       "owner_after_b25a": "B docs / B25b",
@@ -46,14 +46,14 @@
     {
       "id": "A-21a/ADR-007-input.md",
       "owner": "A",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/requests/ADR-007-input.md",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/requests/ADR-007-input.md",
       "decision": "not-applied",
       "detail": "The cccp.science_plugins entry-point group/version remains an ADR decision. B25a adds no entry-point group and no loader; the existing console-script set is unchanged."
     },
     {
       "id": "C/B-req-06",
       "owner": "C",
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md",
       "sha256": "e16267ff713a2d7cd984add8340e38f0a61b2bab9dbf05f79b94531aad471d33",
       "decision": "applied-partial",
       "applied_to": [
@@ -65,8 +65,8 @@
     {
       "id": "C/B-req-12",
       "owner": "C",
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md",
-      "sha256": "c79f504dacd2efe8d431e2ee1e3ec01dffd298bfd7c823f12361a8bc0a76c2f3",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md",
+      "sha256": "20d27c5882fbaa46a43f25821a92b4b34a7f3a9cfdf10bde863fe0db08b8f3f3",
       "decision": "queued",
       "owner_after_b25a": "B25b / B02b",
       "detail": "B25a built the packages and ran the role probes; full clean-install acceptance is B25b. The environment and package-smoke rows are not merged into one PASS."

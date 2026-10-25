@@ -37,7 +37,7 @@
     "custom_name": null
   },
   "status": "completed",
-  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
   "created_at": "2026-10-23T03:16:33.594546+00:00",
   "updated_at": "2026-10-23T03:16:39.338818+00:00",
   "started_at": "2026-10-23T03:16:33.609541+00:00",
@@ -156,7 +156,7 @@
         "job_id": "20261023_111633_001_singlepoint",
         "artifact_type": "json",
         "file_path": "RESULT/task_result.json",
-        "checksum": "sha256:4df24be5efd501dcabb446160b056c29d48d2d26e904f12d3b6fc9064038a1cf",
+        "checksum": "sha256:42a140e79ffd0bebdfa3e096ed8350078ab50e2673c1121ce8c6ae4ceeffc022",
         "size_bytes": 1965,
         "parser_status": "pending",
         "mime_type": "application/json",

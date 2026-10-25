@@ -18,7 +18,7 @@
 
 **1. 高优先级：C-T54 的发布前后定位相互矛盾**
 
-证据：[C-T54](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:788) 要求 B 应用构建补丁、候选源码冻结后，对合并版本重新构建和安装，并明确 `Blocks: B release`。但 [最终验收说明](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:824) 将它排除在 F1–F4 前置之外，认定为发布结果核对；[IS-10](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:854) 也写成发布后证据。
+证据：[C-T54](.omo/plans/acp-parallel-plan-3-cccp.md:788) 要求 B 应用构建补丁、候选源码冻结后，对合并版本重新构建和安装，并明确 `Blocks: B release`。但 [最终验收说明](.omo/plans/acp-parallel-plan-3-cccp.md:824) 将它排除在 F1–F4 前置之外，认定为发布结果核对；[IS-10](.omo/plans/acp-parallel-plan-3-cccp.md:854) 也写成发布后证据。
 
 影响：按任务头执行，发布必须等待 T54；按终验说明执行，候选包尚未安装验证就可能通过发布前终验。C-T51 又等待“全部”任务，若其完整交接结果被 B 收口流程消费，还会产生发布前后相互等待的解释。
 
@@ -42,11 +42,11 @@ B 应用补丁到集成候选 → 冻结源码/构建输入
 
 **2. 高优先级：B-T32 尚未等待独立装配，T77 的退出条件又提前消费了 T78 的能力**
 
-证据：[B-T32](<repo>/.omo/plans/acp-parallel-plan-2-services.md:494) 仅等待 T30–T31 与对应 C01 闭包；[B-T78](<repo>/.omo/plans/acp-parallel-plan-2-services.md:521) 才负责从冻结数据启动独立 worker，却只列为终验与发布的前置。按任务头明确的本路数字依赖计算，T32 的前置闭包为 `{1, 2, 3, 30, 31, 72}`，没有 T77/T78。
+证据：[B-T32](.omo/plans/acp-parallel-plan-2-services.md:494) 仅等待 T30–T31 与对应 C01 闭包；[B-T78](.omo/plans/acp-parallel-plan-2-services.md:521) 才负责从冻结数据启动独立 worker，却只列为终验与发布的前置。按任务头明确的本路数字依赖计算，T32 的前置闭包为 `{1, 2, 3, 30, 31, 72}`，没有 T77/T78。
 
 影响：实际 runner/script_gen 可以在旧实现迁移和独立启动验证尚未完成时切换。T32 要求的独立入口验收也会提前消费 T78 的产物。
 
-本轮补充核对：[T77](<repo>/.omo/plans/acp-parallel-plan-2-services.md:460) 已要求独立子进程执行 Envelope 成功与失败路径，而 T78 又依赖 T77。虽然任务头没有这条反向边，但若将 T77 的全部验收当成 T78 的入场条件，会要求在装配入口尚未实现时先证明它可用。
+本轮补充核对：[T77](.omo/plans/acp-parallel-plan-2-services.md:460) 已要求独立子进程执行 Envelope 成功与失败路径，而 T78 又依赖 T77。虽然任务头没有这条反向边，但若将 T77 的全部验收当成 T78 的入场条件，会要求在装配入口尚未实现时先证明它可用。
 
 建议把职责和退出条件明确为：
 
@@ -66,7 +66,7 @@ B 应用补丁到集成候选 → 冻结源码/构建输入
 
 **3. 中优先级：B 计划仍未实际接收科学产品 adapter 的实现责任**
 
-证据：[C-T13](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:335) 要求 B 提供产品到 frames/annotation 的适配；[A-GT3](<repo>/.omo/plans/acp-parallel-plan-1-frontend.md:74) 等待这个 adapter。当前 [B-T28](<repo>/.omo/plans/acp-parallel-plan-2-services.md:439) 只收敛已有工件发布、markers 和 manifest。B-T3 负责契约样例；B-T46 负责研究溯源边投影，两者也没有承担科学产品到帧视图的实现。
+证据：[C-T13](.omo/plans/acp-parallel-plan-3-cccp.md:335) 要求 B 提供产品到 frames/annotation 的适配；[A-GT3](.omo/plans/acp-parallel-plan-1-frontend.md:74) 等待这个 adapter。当前 [B-T28](.omo/plans/acp-parallel-plan-2-services.md:439) 只收敛已有工件发布、markers 和 manifest。B-T3 负责契约样例；B-T46 负责研究溯源边投影，两者也没有承担科学产品到帧视图的实现。
 
 影响：C 可以交付 schema，A 可以准备消费者，但中间没有明确任务负责将实际产品接到现行视图契约。后续交接表填写任务号，无法替代接收任务本身的范围、前置和验收。
 
@@ -99,4 +99,4 @@ B 应用补丁到集成候选 → 冻结源码/构建输入
 | B | `3677e5b6674ef028e37f76000b1f0601cff2f1024f5c9dcca205426992309b15` |
 | C | `4d42b1a29eb3705660dd17f250bad9d504eb3cf0ad060044431d647f3e8600c9` |
 
-上轮记录：[R3](<repo>/docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md)。本轮保持其三项主要结论，进一步明确 T77/T78 的验收顺序与 C-T13 交接可消费状态。
+上轮记录：[R3](docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md)。本轮保持其三项主要结论，进一步明确 T77/T78 的验收顺序与 C-T13 交接可消费状态。

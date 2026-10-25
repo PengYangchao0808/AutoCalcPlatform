@@ -50,7 +50,7 @@
           "max_io_bytes": 1048576,
           "max_memory_bytes": 33554432
         },
-        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/acp.storage.inventory/1.1.0",
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/acp.storage.inventory/1.1.0",
         "supported_schema": [
           "acp2.adapter.v1"
         ],
@@ -73,7 +73,7 @@
           "max_io_bytes": 17179869184,
           "max_memory_bytes": 68719476736
         },
-        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.identity.local/1.0.0",
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.identity.local/1.0.0",
         "supported_schema": [
           "acp2.adapter.v1"
         ],
@@ -96,7 +96,7 @@
           "max_io_bytes": 17179869184,
           "max_memory_bytes": 68719476736
         },
-        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.scheduler.local/1.0.0",
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.scheduler.local/1.0.0",
         "supported_schema": [
           "acp2.adapter.v1"
         ],
@@ -119,7 +119,7 @@
           "max_io_bytes": 17179869184,
           "max_memory_bytes": 68719476736
         },
-        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.scheduler.lsf/1.0.0",
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.scheduler.lsf/1.0.0",
         "supported_schema": [
           "acp2.adapter.v1"
         ],
@@ -142,7 +142,7 @@
           "max_io_bytes": 17179869184,
           "max_memory_bytes": 68719476736
         },
-        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.storage.local/1.0.0",
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.storage.local/1.0.0",
         "supported_schema": [
           "acp2.adapter.v1"
         ],
@@ -165,7 +165,7 @@
           "max_io_bytes": 17179869184,
           "max_memory_bytes": 68719476736
         },
-        "snapshot_dir": "<acp2-dev>/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.transfer.local/1.0.0",
+        "snapshot_dir": "/opt/acp2-dev/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/platform.transfer.local/1.0.0",
         "supported_schema": [
           "acp2.adapter.v1"
         ],

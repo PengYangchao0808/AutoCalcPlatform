@@ -91,11 +91,11 @@
 在仓库根目录复现：
 
 ```bash
-PYTHONPATH=src:. <venv>/bin/python reports/architecture_recheck_20261021_r2/reproductions/orphan_claim.py
-PYTHONPATH=src:. <venv>/bin/python reports/architecture_recheck_20261021_r2/reproductions/data.py
-PYTHONPATH=src:. <venv>/bin/python reports/architecture_recheck_20261021_r2/reproductions/bounded_params.py
-PYTHONPATH=src:. <venv>/bin/python reports/architecture_recheck_20261021_r2/reproductions/nmr_late_response.py
-PYTHONPATH=src:. <venv>/bin/python reports/architecture_recheck_20261021_r2/reproductions/harness_inspection.py
+PYTHONPATH=src:. /opt/acp2/venv/bin/python reports/architecture_recheck_20261021_r2/reproductions/orphan_claim.py
+PYTHONPATH=src:. /opt/acp2/venv/bin/python reports/architecture_recheck_20261021_r2/reproductions/data.py
+PYTHONPATH=src:. /opt/acp2/venv/bin/python reports/architecture_recheck_20261021_r2/reproductions/bounded_params.py
+PYTHONPATH=src:. /opt/acp2/venv/bin/python reports/architecture_recheck_20261021_r2/reproductions/nmr_late_response.py
+PYTHONPATH=src:. /opt/acp2/venv/bin/python reports/architecture_recheck_20261021_r2/reproductions/harness_inspection.py
 ```
 
 所有归档文件的 SHA256 见 [SHA256SUMS](SHA256SUMS)。

@@ -32,14 +32,14 @@ All release-manifest digests matched; root wheel digest recorded in `release-dig
 
 ## A/C raw evidence aggregate
 
-- A-27b: `PASS` — `<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` (raw evidence present; scientific/experience sign-off stays with its owner).
-- A-28: `PASS` — `<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` (raw evidence present; scientific/experience sign-off stays with its owner).
-- C33: `NOT_VERIFIED` — `<acp2-dev>/evidence/C/clean-install-live` (evidence absent at the registered path).
-- C34: `NOT_VERIFIED` — `<acp2-dev>/evidence/C/operator-runbook-live` (evidence absent at the registered path).
+- A-27b: `PASS` — `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` (raw evidence present; scientific/experience sign-off stays with its owner).
+- A-28: `PASS` — `/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` (raw evidence present; scientific/experience sign-off stays with its owner).
+- C33: `NOT_VERIFIED` — `/opt/acp2-dev/evidence/C/clean-install-live` (evidence absent at the registered path).
+- C34: `NOT_VERIFIED` — `/opt/acp2-dev/evidence/C/operator-runbook-live` (evidence absent at the registered path).
 
 ## Static-asset mount (B-req-06)
 
-- `NOT_VERIFIED(c_static_assets_absent)`; expected manifest `<repo>/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json`; mount `/experience/<release_id>/`.
+- `NOT_VERIFIED(c_static_assets_absent)`; expected manifest `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json`; mount `/experience/<release_id>/`.
 - No mount, directory listing or digest behaviour was fabricated because C has not published the manifest.
 
 ## Release correction

@@ -11,11 +11,11 @@
   ],
   "databases": {
     "admission": {
-      "path": "<acp2-dev>/data/b/b24-migration/backup/acp_admission.db",
+      "path": "/opt/acp2-dev/data/b/b24-migration/backup/acp_admission.db",
       "sha256": "9811fc9d0b6ab3acd987ecaa9817688a0c749adfd20552f00bcefd6ab8bebcea"
     },
     "jobs": {
-      "path": "<acp2-dev>/data/b/b24-migration/backup/acp_jobs.db",
+      "path": "/opt/acp2-dev/data/b/b24-migration/backup/acp_jobs.db",
       "sha256": "e7eca4bdecd66faa857ac6b25871a49610972b9d5c4346c9d99ac7e4cc46a0a2"
     }
   },

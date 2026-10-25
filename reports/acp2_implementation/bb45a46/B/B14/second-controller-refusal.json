@@ -1,14 +1,14 @@
 {
   "schema": "acp2.second-controller-refusal.v1",
   "candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
-  "run_root": "<acp2-dev>/data/integration/controller-run-root",
+  "run_root": "/opt/acp2-dev/data/integration/controller-run-root",
   "primary": {
     "pid": 827185,
     "port": 18772
   },
   "second": {
     "argv": [
-      "<acp2-dev>/venvs/b/bin/python",
+      "/opt/acp2-dev/venvs/b/bin/python",
       "-m",
       "acp",
       "run",
@@ -18,13 +18,13 @@
       "--port",
       "18773",
       "--run-root",
-      "<acp2-dev>/data/integration/controller-run-root",
+      "/opt/acp2-dev/data/integration/controller-run-root",
       "--no-browser"
     ],
     "port": 18773,
     "exit_code": 3
   },
-  "refusal": "run_root '<acp2-dev>/data/integration/controller-run-root' is already owned by another ACP server process (pid=827185, cmdline='... --port 18772 ...'); refusing to start a second instance \u2014 it would kill the owner's running jobs",
+  "refusal": "run_root '/opt/acp2-dev/data/integration/controller-run-root' is already owned by another ACP server process (pid=827185, cmdline='... --port 18772 ...'); refusing to start a second instance \u2014 it would kill the owner's running jobs",
   "no_side_effects": {
     "jobs_rows": 0,
     "tasks_rows": 0,

@@ -29,7 +29,7 @@
 完整回归命令：
 
 ```bash
-PYTHONPATH=src:. <venv>/bin/python -m pytest -m 'not slow' -q --disable-warnings \
+PYTHONPATH=src:. /opt/acp2/venv/bin/python -m pytest -m 'not slow' -q --disable-warnings \
   --junitxml=/tmp/acp-architecture-assessment-20261022-nonslow-normalized.xml
 ```
 

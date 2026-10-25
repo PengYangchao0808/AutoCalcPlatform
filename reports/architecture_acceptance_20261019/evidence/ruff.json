@@ -6,7 +6,7 @@
       "column": 9,
       "row": 55
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -25,7 +25,7 @@
       "column": 18,
       "row": 55
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 11,
@@ -44,7 +44,7 @@
       "column": 9,
       "row": 127
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -63,7 +63,7 @@
       "column": 18,
       "row": 127
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 11,
@@ -82,7 +82,7 @@
       "column": 9,
       "row": 405
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -101,7 +101,7 @@
       "column": 18,
       "row": 405
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 11,
@@ -120,7 +120,7 @@
       "column": 41,
       "row": 436
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 32,
@@ -139,7 +139,7 @@
       "column": 48,
       "row": 463
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 39,
@@ -158,7 +158,7 @@
       "column": 62,
       "row": 463
     },
-    "filename": "<repo>/src/cccp/analysis/structure/embedding.py",
+    "filename": "src/cccp/analysis/structure/embedding.py",
     "fix": null,
     "location": {
       "column": 50,
@@ -177,7 +177,7 @@
       "column": 32,
       "row": 635
     },
-    "filename": "<repo>/src/cccp/analysis/structure/parsers.py",
+    "filename": "src/cccp/analysis/structure/parsers.py",
     "fix": null,
     "location": {
       "column": 31,
@@ -196,7 +196,7 @@
       "column": 14,
       "row": 680
     },
-    "filename": "<repo>/src/cccp/analysis/structure/parsers.py",
+    "filename": "src/cccp/analysis/structure/parsers.py",
     "fix": null,
     "location": {
       "column": 5,
@@ -215,7 +215,7 @@
       "column": 33,
       "row": 16
     },
-    "filename": "<repo>/src/cccp/analysis/xtbmd/energy_filter.py",
+    "filename": "src/cccp/analysis/xtbmd/energy_filter.py",
     "fix": {
       "applicability": "safe",
       "edits": [
@@ -250,7 +250,7 @@
       "column": 18,
       "row": 19
     },
-    "filename": "<repo>/src/cccp/analysis/xtbmd/energy_filter.py",
+    "filename": "src/cccp/analysis/xtbmd/energy_filter.py",
     "fix": {
       "applicability": "safe",
       "edits": [

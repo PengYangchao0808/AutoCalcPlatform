@@ -32,7 +32,7 @@
   "effective_trust_level": "trusted-explicit",
   "enabled": true,
   "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
-  "entrypoint_path": "<acp2-dev>/data/b/plugins/b21/storage-inventory-1.1.0/adapter.py",
+  "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-inventory-1.1.0/adapter.py",
   "installed_at": "2026-10-23T09:52:35Z",
   "installed_by": "controller",
   "schema": "acp2.adapter.installed.v1"

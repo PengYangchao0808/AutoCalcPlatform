@@ -22,7 +22,7 @@
       "workflow": "singlepoint",
       "name": "2_H2_H_0.0_0.0_0.0_H_0.0_0.0_0.74_singlepoint",
       "status": "completed",
-      "work_dir": "<acp2-dev>/data/b/run-root-b08/uncategorized/2_H2_H_0.0_0.0_0.0_H_0.0_0.0_0.74_singlepoint",
+      "work_dir": "/opt/acp2-dev/data/b/run-root-b08/uncategorized/2_H2_H_0.0_0.0_0.0_H_0.0_0.0_0.74_singlepoint",
       "attempt": 1,
       "group_id": "20261023_001354_001_singlepoint",
       "revision": 7,

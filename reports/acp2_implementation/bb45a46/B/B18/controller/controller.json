@@ -1,6 +1,6 @@
 {
   "argv": [
-    "<acp2-dev>/venvs/b/bin/python",
+    "/opt/acp2-dev/venvs/b/bin/python",
     "-m",
     "acp.cli",
     "run",
@@ -10,12 +10,12 @@
     "--port",
     "18778",
     "--run-root",
-    "<acp2-dev>/data/b/run-root-b18",
+    "/opt/acp2-dev/data/b/run-root-b18",
     "--poll-interval",
     "1",
     "--no-browser"
   ],
-  "cwd": "<acp2-dev>/data/b/controller-config",
+  "cwd": "/opt/acp2-dev/data/b/controller-config",
   "health": {
     "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
     "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
@@ -29,6 +29,6 @@
   "pid": 1374511,
   "port": 18778,
   "port_free_after_stop": true,
-  "run_root": "<acp2-dev>/data/b/run-root-b18",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b18",
   "stopped_with": "SIGTERM"
 }

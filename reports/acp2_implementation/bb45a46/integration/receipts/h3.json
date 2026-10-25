@@ -1,23 +1,23 @@
 {
   "artifacts": [
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
-      "sha256": "5c59082214294dabf91e64135af56f4790fcb0ad37ff57531ef2aed3d5339d46",
-      "size_bytes": 9720
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
+      "sha256": "a6bb5842308ad951ea3cbc85a071f6b524af8361e5703b7a39d89f40654f13da",
+      "size_bytes": 9682
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B14b/rerun-index.json",
-      "sha256": "ddd6deb10791549a6af8ce2449de7857e16080556b026d92b2ab9f5ee4f4353e",
-      "size_bytes": 9975
+      "path": "reports/acp2_implementation/bb45a46/B/B14b/rerun-index.json",
+      "sha256": "c679b80788124b95edfcf40aab8ece82a78d00ca9ff47e53793abb17149dbb65",
+      "size_bytes": 8891
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B11/summary.json",
-      "sha256": "d53fc8fce428070baf3df1736b9d52203ffe6b4e46e4acc83446294b89a1ed88",
-      "size_bytes": 2779
+      "path": "reports/acp2_implementation/bb45a46/B/B11/summary.json",
+      "sha256": "f69d94ded13db0def9e84b25f0be718b64fe708de6beb68f05bbde11e84e5b71",
+      "size_bytes": 2765
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B10/summary.json",
-      "sha256": "607823be186201256098e80845832d27f74c2209ed963c0cf54c2bbbb11943f2",
+      "path": "reports/acp2_implementation/bb45a46/B/B10/summary.json",
+      "sha256": "f4e64d528eb9c4984b5550d7358c8dd5188441f23f58db5ac592fc36ed2ddefc",
       "size_bytes": 5171
     }
   ],
@@ -45,7 +45,7 @@
     "/tmp/opencode/gen_h7.py"
   ],
   "contract_version": "1.3.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "aggregate",
   "exit_code": 2,
   "extensions": {

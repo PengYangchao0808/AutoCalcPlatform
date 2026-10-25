@@ -1,6 +1,6 @@
 {
   "recorded_utc": "2026-10-21T10:29:00.740377+00:00",
-  "python": "<venv>/bin/python",
+  "python": "/opt/acp2/venv/bin/python",
   "chromium": "153.0.8010.12",
   "nmr_js_sha256": "90f71c991cf8ab9b20477cb2d9a5e971d7a749cc8e4d2a3516c49ce4dc037837",
   "facts": {

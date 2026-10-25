@@ -2,7 +2,7 @@
   "cli": {
     "attempt": 1,
     "command": [
-      "<acp2-dev>/venvs/b/bin/python",
+      "/opt/acp2-dev/venvs/b/bin/python",
       "-m",
       "acp",
       "task",
@@ -31,7 +31,7 @@
       "qualification": "complete",
       "status": "completed"
     },
-    "work_dir": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
   },
   "health": {
     "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
@@ -79,8 +79,8 @@
       "qualification": "complete",
       "status": "completed"
     },
-    "task_result_sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
-    "work_dir": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
+    "task_result_sha256": "cd711c94d41831fb4235dd109b59e754aa5afe2422858c74bcc91aef068ac7e6",
+    "work_dir": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
   },
   "http_cli_equal": {
     "attempt": true,
@@ -94,13 +94,13 @@
     "artifacts": [
       {
         "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
-        "path": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp",
+        "path": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp",
         "source": "orca",
         "type": "output"
       },
       {
-        "checksum": "sha256:b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
-        "path": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+        "checksum": "sha256:ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621",
+        "path": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
         "source": "orca",
         "type": "log"
       }

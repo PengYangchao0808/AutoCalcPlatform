@@ -4,8 +4,8 @@
   "backend": "lsf",
   "result": "NOT_VERIFIED",
   "fixture_id": "fx-lsf-optimize-h2-sto3g-v1",
-  "fixture_path": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
-  "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
+  "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
+  "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "missing_prerequisites": [
     "bsub",

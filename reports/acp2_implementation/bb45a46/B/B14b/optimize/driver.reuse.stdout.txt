@@ -4,10 +4,10 @@
   "backend": "local",
   "result": "PASS",
   "fixture_id": "fx-local-optimize-h2-sto3g-v1",
-  "fixture_path": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+  "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
   "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
-  "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
-  "reuse_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300 --reuse-task 20261023_111652_002_optimize --prior-run <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize/run-initial-strict.json",
+  "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+  "reuse_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300 --reuse-task 20261023_111652_002_optimize --prior-run reports/acp2_implementation/bb45a46/B/B14b/optimize/run-initial-strict.json",
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "controller": "http://127.0.0.1:18774",
   "task_ref": "20261023_111652_002_optimize",
@@ -21,9 +21,9 @@
   "result_digest": "",
   "step_identity": "v2:b40cc5b853f6c8d086eb6dbb9c9198e9",
   "result_manifest_digest": "sha256:d0766a4d0f220d6a1ed37faeded7fa872b5208d19ac5289e3a8a37497d355ff1",
-  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
-  "orca_binary": "/home/<user>/orca611/orca",
-  "orca_output": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.out",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize",
+  "orca_binary": "/home/redacted-user/orca611/orca",
+  "orca_output": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.out",
   "orca_terminated_normally": true,
   "orca_energy_hartree": -1.11751709882,
   "orca_pids": [
@@ -82,7 +82,7 @@
     {
       "name": "orca_terminated_normally",
       "status": "PASS",
-      "detail": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.out"
+      "detail": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.out"
     },
     {
       "name": "orca_energy_matches_task_result",
@@ -119,17 +119,17 @@
     {
       "path": "native/job.json",
       "size_bytes": 5805,
-      "sha256": "b84b5e66ba9bb735ffe22f935b0e624fe11f05bfc7605f3eada11d2ce9ac884e"
+      "sha256": "e764d6b92dc4c8cb714ad9ef86ca9db48c7deaef27b22dcee63fb8ad369d8d00"
     },
     {
       "path": "native/task.json",
       "size_bytes": 951,
-      "sha256": "01a9935e53c675db11bdccf21f4258e75521847d16b9e05f4e45aa2c58129e5d"
+      "sha256": "46d26e9873e78a157a1ecc30ac4cff11f160f5487b2e78c8f7b688952ccb52d3"
     },
     {
       "path": "native/WORK__03_OPT__optimize.out",
       "size_bytes": 132321,
-      "sha256": "a4f7784444b52aba028b1130fac9994aebe3f6a121c3c70bd6755b7afca68806"
+      "sha256": "d0cdf32826ff4b594e7528fcc5d978f28da9f177f9692f262ee8a119b8d2e033"
     },
     {
       "path": "native/WORK__03_OPT__optimize.inp",
@@ -139,7 +139,7 @@
     {
       "path": "native/WORK__03_OPT__step_result.json",
       "size_bytes": 1341,
-      "sha256": "5361af4b1c09d6fee0e18c212d22f1a745df2d27a06870a02dbf5e914c81f478"
+      "sha256": "43ec77805655e61c909fc97bfa8c37c66e9d63df0aaba4d8e66c5ba6d1dfddbb"
     },
     {
       "path": "native/WORK__03_OPT__scientific_result.json",
@@ -159,12 +159,12 @@
     {
       "path": "native/WORK__03_OPT__optimize.xyz",
       "size_bytes": 355,
-      "sha256": "099b2045cf2b22680331cf63104785bbb48a1ac0a32ec3eb1a5edff4f0860c9d"
+      "sha256": "9aa2ac36df2a36035bbe148b6ed9b0eb2796a16b712ca1637a1540dca50c436d"
     },
     {
       "path": "native/WORK__03_OPT__optimize_trj.xyz",
       "size_bytes": 1196,
-      "sha256": "d6f9024c66f4db69b85aae28a98053c51f39fb441ba662798b970a3a4f3180bd"
+      "sha256": "95cb793c0c6bb40ae1546f17249d17f92e63b0b514cfbe9525f97ce45bd5bcc4"
     },
     {
       "path": "native/WORK__03_OPT__optimize.opt",

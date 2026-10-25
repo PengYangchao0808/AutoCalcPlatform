@@ -59,7 +59,7 @@
 
 ### P0-1 · B-T76 与最终验收存在闭环
 
-**位置：** [B-T76](<repo>/.omo/plans/acp-parallel-plan-2-services.md:918)、[Final verification wave](<repo>/.omo/plans/acp-parallel-plan-2-services.md:928)、Success criteria 的 IS-1/IS-11。
+**位置：** [B-T76](.omo/plans/acp-parallel-plan-2-services.md:918)、[Final verification wave](.omo/plans/acp-parallel-plan-2-services.md:928)、Success criteria 的 IS-1/IS-11。
 
 T76 必须等 F1–F4 APPROVE 才执行；但 F-wave 前言仍要求在 **ALL todos** 后运行，F1 要核对每项 Acceptance 的执行证据，IS-11 又把 T76 发布记录列为 F4 的证明。因此按完整验收条件执行时，F-wave 要等 T76，T76 又要等 F-wave。只在 T76 写“序在终验之后”不足以消除 F1/F4 的反向要求。
 
@@ -74,7 +74,7 @@ T76 必须等 F1–F4 APPROVE 才执行；但 F-wave 前言仍要求在 **ALL to
 
 ### P0-2 · C-T25 已经消费 TMS 资产，切换点仍然太晚
 
-**位置：** [C-T25](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:464)、T26/T28/T30；源码 [models.py](<repo>/src/acp/nmr/models.py:35)、[reference_validation.py](<repo>/src/acp/nmr/reference_validation.py:673)。
+**位置：** [C-T25](.omo/plans/acp-parallel-plan-3-cccp.md:464)、T26/T28/T30；源码 [models.py](src/acp/nmr/models.py:35)、[reference_validation.py](src/acp/nmr/reference_validation.py:673)。
 
 目前计划把 `models.py` 和 TMS 查表在 T25 迁到 CCCP，同时明确本片不迁资产。实际 `_load_tms_table()` 按 `Path(__file__).parent / "models" / "tms_references.txt"` 读取；搬到新包后该目录不存在，`lookup_tms_shieldings()` 会返回 `(None, None)`。这发生在 T26 的模型/loader 切换之前，可能改变默认引用值和科学输出。
 
@@ -91,7 +91,7 @@ T76 必须等 F1–F4 APPROVE 才执行；但 F-wave 前言仍要求在 **ALL to
 
 ### P0-3 · 滚动打包写入了正文，前置依赖仍在完整 C08 之后
 
-**位置：** [B-T40](<repo>/.omo/plans/acp-parallel-plan-2-services.md:556)、[C-T39](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:618)、C-T26/T30。
+**位置：** [B-T40](.omo/plans/acp-parallel-plan-2-services.md:556)、[C-T39](.omo/plans/acp-parallel-plan-3-cccp.md:618)、C-T26/T30。
 
 T26 要求同批取得 B 的 package-data/打包测试补丁并做 wheel 验证；但提供该滚动维护的 B-T40 仍依赖 B-T35–37、输入整个 C08。C-T39 又依赖 T30/T33/T38，而 T30 在 T26 之后。正文允许“滚动”，按现有任务调度却不能在 T26 前取得一个已满足前置条件的打包交付。
 
@@ -111,7 +111,7 @@ T26 要求同批取得 B 的 package-data/打包测试补丁并做 wheel 验证�
 
 ### P0-4 · T72 解决了过渡装配，尚未解决独立实现和 worker 装配
 
-**位置：** [B-T72](<repo>/.omo/plans/acp-parallel-plan-2-services.md:194)、T6/T11/T25、[B-T31](<repo>/.omo/plans/acp-parallel-plan-2-services.md:464)、IS-3。
+**位置：** [B-T72](.omo/plans/acp-parallel-plan-2-services.md:194)、T6/T11/T25、[B-T31](.omo/plans/acp-parallel-plan-2-services.md:464)、IS-3。
 
 T72 对旧实现注入的规定是有效的迁移策略，但后续任务仍主要是委托和行为保真，没有列出全部被注入实现实际迁入 Services 的任务。IS-3 仍要求 Services 成为唯一实现驻点，Success criteria 却用只证明过渡注入的 T72 证明独立性。
 
@@ -130,7 +130,7 @@ T72 对旧实现注入的规定是有效的迁移策略，但后续任务仍主�
 
 ### P1-1 · T29 拆分测试后，T30 必须运行新的完整测试集合
 
-**位置：** [A-T29](<repo>/.omo/plans/acp-parallel-plan-1-frontend.md:430)、T30、Verification strategy。
+**位置：** [A-T29](.omo/plans/acp-parallel-plan-1-frontend.md:430)、T30、Verification strategy。
 
 T29 已增加旧→新 node ID 与 fixture 映射，这是有效改进。但 T30 和验证策略仍要求“前端四 pytest”，命令固定旧的四个测试文件。新拆出来的测试文件不一定会被这些命令收集，可能出现拆分前的用例全部保留、最终回归却只跑残留旧文件的问题。
 
@@ -140,7 +140,7 @@ T29 已增加旧→新 node ID 与 fixture 映射，这是有效改进。但 T30
 
 ### P1-2 · A04/A06 条件任务需要明确的激活规则
 
-**位置：** [A 条件任务表](<repo>/.omo/plans/acp-parallel-plan-1-frontend.md:67)、Must NOT、T34/Success criteria。
+**位置：** [A 条件任务表](.omo/plans/acp-parallel-plan-1-frontend.md:67)、Must NOT、T34/Success criteria。
 
 条件表已经列出 owner、交付物和退出条件，但 Must NOT 仍无条件禁止实现 A04/A06；表也没有编号、Blocked by 和交付证据任务，34 项全关闭仍不包含其实现。执行者可能据其中一处启动新能力，据另一处判定越界。
 
@@ -152,7 +152,7 @@ T29 已增加旧→新 node ID 与 fixture 映射，这是有效改进。但 T30
 
 ### P2-1 · T1 的 worktree 与环境命令应能在新环境直接执行
 
-**位置：** [A-T1](<repo>/.omo/plans/acp-parallel-plan-1-frontend.md:150)。
+**位置：** [A-T1](.omo/plans/acp-parallel-plan-1-frontend.md:150)。
 
 计划支持独立 worktree，但又直接引用 `.git/refs/heads/main`；linked worktree 的 `.git` 通常是文件，直接读取该路径不成立，main 也可能在并行期间推进。改为冻结基线提交及文件摘要，并通过 Git 命令解析引用；记录任务分支，不要求它始终等于实时 main。
 
@@ -182,7 +182,7 @@ T29 已增加旧→新 node ID 与 fixture 映射，这是有效改进。但 T30
 
 ### P1-4 · T69/T75 的验收责任和顺序需要统一
 
-**位置：** B Verification strategy 末条、[B-T69/T75](<repo>/.omo/plans/acp-parallel-plan-2-services.md:878)。
+**位置：** B Verification strategy 末条、[B-T69/T75](.omo/plans/acp-parallel-plan-2-services.md:878)。
 
 T69/T75 已明确由 B 运行 A 的黑盒浏览器测试，补上了上一轮责任缺口。但验证策略仍写“前端测试不在此计划执行，只引用不重跑”。T69 又要求组织运行组合并生成收口报告，T75 则在 T69 后才真正运行组合，导致收口先于实际验收，且两个任务职责重复。
 
@@ -214,7 +214,7 @@ T69/T75 已明确由 B 运行 A 的黑盒浏览器测试，补上了上一轮责
 
 ### P1-6 · T14 必须定义缺少预期摘要的历史工件如何接纳
 
-**位置：** B-T11/T14/T16、源码 [Product](<repo>/src/acp/storage/manifest.py:41)。
+**位置：** B-T11/T14/T16、源码 [Product](src/acp/storage/manifest.py:41)。
 
 T14 新要求摘要来自冻结的源 manifest/完成回执，这比下载后自算更有依据。但现有 v2 Product 的基本字段是 id/label/path/kind，metadata 可选，并不保证有内容摘要；历史任务也不一定有新回执。科学 step_result 能覆盖一部分文件，不能默认覆盖 catalog、全部产品及历史任务。
 
@@ -226,7 +226,7 @@ mutable 的日志、候选与组织文件另以 revision/generation/range 协议
 
 ### P1-7 · outbox 必须进入现有 CAS 的同一个连接，故障预期也要修正
 
-**位置：** [B-T23](<repo>/.omo/plans/acp-parallel-plan-2-services.md:380)、源码 [JobStore.transition](<repo>/src/acp/scheduler/store.py:194)。
+**位置：** [B-T23](.omo/plans/acp-parallel-plan-2-services.md:380)、源码 [JobStore.transition](src/acp/scheduler/store.py:194)。
 
 事务 outbox 的方案已补齐。但当前 `transition()` 在自身连接中更新、`conn.commit()` 后返回；外层再插入 outbox 仍然是两个事务。T23 应明确扩展 owner repository 的事务边界，不能只在 Runtime facade 外包一层调用。
 
@@ -243,7 +243,7 @@ T23 的 QA 又要求“CAS 与 outbox 之间崩溃→重启补齐事件”。如
 
 ### P1-8 · availability 与 freshness 要有不同的语义
 
-**位置：** [B-T20](<repo>/.omo/plans/acp-parallel-plan-2-services.md:350)、B-T15/T22、A 条件任务表。
+**位置：** [B-T20](.omo/plans/acp-parallel-plan-2-services.md:350)、B-T15/T22、A 条件任务表。
 
 T20 一方面新增 freshness，另一方面又用 `availability=stale/absent` 表达缺投影，并用 observed_at 与 revision 更新时间比较作为单调性断言。资源可读取性、投影是否跟上权威状态、科学结果是否完整是不同维度；它们共用模糊枚举会使 A 的 prepare 和刷新策略产生分歧。
 
@@ -271,7 +271,7 @@ C-T11/T12 已要求定义生成函数和时机，但 Acceptance 仍主要检查 
 
 ### P1-10 · C-T13/T39/T42 的关键交接物不能等最终总结才入仓
 
-**位置：** [C-T13](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:332)、T39/T42、T51、共同证据规则。
+**位置：** [C-T13](.omo/plans/acp-parallel-plan-3-cccp.md:332)、T39/T42、T51、共同证据规则。
 
 C-T10/T33/T51 的 tracked 修改已生效，但 T13 仍写 `Commit: N（handoff 在 .omo；如需入库由 B 决定）`，与共同规则冲突。T39/T42 的精确打包/节点请求也未明确受控交付路径。A/B 在独立 worktree 消费这些材料时不能等待整路完成后的 T51 汇总。
 

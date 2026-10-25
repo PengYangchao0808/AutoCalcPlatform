@@ -2,28 +2,28 @@
   "artifacts": [
     {
       "path": "p2-candidate.json",
-      "sha256": "f089b9bc766de552976689721d1e38055ed797f9765ed15e4dc317a421646b13",
-      "size_bytes": 5280
+      "sha256": "3aaeac6db6833c8822905f6e372ed89af6badcdc48bd94f163475cd2708cd9e0",
+      "size_bytes": 5098
     },
     {
       "path": "run-spec.json",
-      "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+      "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
       "size_bytes": 3680
     },
     {
       "path": "dependency-edges.json",
-      "sha256": "b37f11987add32faaf33416fa8faf5fe7b1529ddee17dff840f835787834f411",
-      "size_bytes": 1498
+      "sha256": "d4fd96b083e83ff3059580236a884cac0d2f9db154c96587faf20de3b4b7828e",
+      "size_bytes": 1470
     },
     {
       "path": "b20a-ready.json",
-      "sha256": "1817799d9247e2614f81347e69839a52d4026e4ae411f7c4fc9d7348a16e4949",
-      "size_bytes": 13175
+      "sha256": "c67bcaf0e55944ceb13d9f35556f5855b9557cba1030172aa509692eaa47ff62",
+      "size_bytes": 12811
     },
     {
       "path": "c24a-gap.json",
-      "sha256": "a39996ec788805ab775a21f2c32c2270cfc25a5a796547339706d23cab99c86c",
-      "size_bytes": 1331
+      "sha256": "f22b1138a9df1d823f213709896636ad15508c0f305fc9e73522a6323095fa0d",
+      "size_bytes": 1219
     },
     {
       "path": "search-gap.json",
@@ -32,13 +32,13 @@
     },
     {
       "path": "incomplete-input-negative.json",
-      "sha256": "64f6949cdb5362d293978f8a6d0c19c3f2a52d7fce997cb544e7953ca9f72c13",
-      "size_bytes": 945
+      "sha256": "c591f11713e1c6e71204cb51fd0128d244f1ef7ef54162f704089c696f0f2b33",
+      "size_bytes": 931
     },
     {
       "path": "consumed-preflight.json",
-      "sha256": "9124bfcda5cce18f41c1449f3b115e3284d9515e5855be6d0ed0d921e1a0dc51",
-      "size_bytes": 764
+      "sha256": "9d80eb811f5cd97b018816c4f79a18b964ae5425a85e1305aac3a9f57d673e0b",
+      "size_bytes": 736
     },
     {
       "path": "counters.json",
@@ -63,17 +63,17 @@
       "status": "PASS"
     },
     {
-      "detail": "reaction=<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json errors=[]",
+      "detail": "reaction=/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json errors=[]",
       "name": "b20a.input_complete",
       "status": "PASS"
     },
     {
-      "detail": "cases=1 failures=[] rows=[{'case_id': 'missing-atom-mapping', 'fixture': '<acp2-dev>/data/b/fixtures/da/incomplete-input.json', 'fixture_sha256': 'bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba', 'expected_error': 'incomplete_scientific_input:atom_mapping_incomplete', 'rejected_before_dispatch': True, 'errors': [\"incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']\", \"incomplete_scientific_input:unmapped_left:['ethene:et_h4']\", \"incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']\"], 'dispatched': False}]",
+      "detail": "cases=1 failures=[] rows=[{'case_id': 'missing-atom-mapping', 'fixture': '/opt/acp2-dev/data/b/fixtures/da/incomplete-input.json', 'fixture_sha256': 'bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba', 'expected_error': 'incomplete_scientific_input:atom_mapping_incomplete', 'rejected_before_dispatch': True, 'errors': [\"incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']\", \"incomplete_scientific_input:unmapped_left:['ethene:et_h4']\", \"incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']\"], 'dispatched': False}]",
       "name": "b20a.incomplete_input_rejected",
       "status": "PASS"
     },
     {
-      "detail": "receipt=<repo>/reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json result=PASS",
+      "detail": "receipt=reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json result=PASS",
       "name": "b20a.b18_da_preflight_consumed",
       "status": "PASS"
     },
@@ -88,7 +88,7 @@
       "status": "PASS"
     },
     {
-      "detail": "errors=[] observed={'path': '<repo>/docs/reference/next-change/acp2-contracts/runtime/dependencies.json', 'required_external_edges': [{'consumer': 'B20a-ready', 'external_id': 'A-14'}, {'consumer': 'B20a-ready', 'external_id': 'A-15'}, {'consumer': 'B20a-ready', 'external_id': 'A-16'}, {'consumer': 'B20a-exec', 'external_id': 'C24a'}], 'ready_to_c24a_edges': [{'consumer': 'C/T-34 (C24a)', 'producer': 'B20a-ready', 'artifact': 'DA execution interface/preflight', 'version': '1.0.0', 'digest_or_pending': 'PENDING', 'readiness': 'contract_ready', 'relation': 'AND', 'delivered': True, 'observed': 'B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a', 'supersedes_c_row': 'C24a:gates_on_B20a_ready'}], 'b20b_depends_on': ['B20a-exec'], 'c24a_readiness': 'contract_ready', 'c24a_delivery_status': 'planned', 'c24a_observed_state': 'blocked: C plan T-34 is [~] and no approved single submission exists'}",
+      "detail": "errors=[] observed={'path': 'docs/reference/next-change/acp2-contracts/runtime/dependencies.json', 'required_external_edges': [{'consumer': 'B20a-ready', 'external_id': 'A-14'}, {'consumer': 'B20a-ready', 'external_id': 'A-15'}, {'consumer': 'B20a-ready', 'external_id': 'A-16'}, {'consumer': 'B20a-exec', 'external_id': 'C24a'}], 'ready_to_c24a_edges': [{'consumer': 'C/T-34 (C24a)', 'producer': 'B20a-ready', 'artifact': 'DA execution interface/preflight', 'version': '1.0.0', 'digest_or_pending': 'PENDING', 'readiness': 'contract_ready', 'relation': 'AND', 'delivered': True, 'observed': 'B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a', 'supersedes_c_row': 'C24a:gates_on_B20a_ready'}], 'b20b_depends_on': ['B20a-exec'], 'c24a_readiness': 'contract_ready', 'c24a_delivery_status': 'planned', 'c24a_observed_state': 'blocked: C plan T-34 is [~] and no approved single submission exists'}",
       "name": "b20a.dependency_edges",
       "status": "PASS"
     },
@@ -107,8 +107,8 @@
   "candidate_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7",
   "claim_status": "not_evaluated",
   "command": [
-    "<acp2-dev>/venvs/b/bin/python",
-    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "da-runtime",
     "--phase",
@@ -116,14 +116,14 @@
     "--controller",
     "http://127.0.0.1:18781",
     "--fixture",
-    "<acp2-dev>/data/b/fixtures/da/da-run.json",
+    "/opt/acp2-dev/data/b/fixtures/da/da-run.json",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B20",
     "--timeout",
     "14400"
   ],
   "contract_version": "1.3.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 2,
   "extensions": {
@@ -133,27 +133,27 @@
     "b20a.artifacts": [
       {
         "path": "p2-candidate.json",
-        "sha256": "f089b9bc766de552976689721d1e38055ed797f9765ed15e4dc317a421646b13",
+        "sha256": "5b4b65f3aff2dd663e2357a6a7d7d78c3be8a38c068bf201e72264f75676e353",
         "size_bytes": 5280
       },
       {
         "path": "run-spec.json",
-        "sha256": "8a3604aa11fc5abb076a2d091a649d037bd5ab5343f18611c9907abc6ca803d9",
+        "sha256": "40e9870b8c5bed05aab0b532089a92a399bcabda54b92d11a09522b99484b14b",
         "size_bytes": 3680
       },
       {
         "path": "dependency-edges.json",
-        "sha256": "b37f11987add32faaf33416fa8faf5fe7b1529ddee17dff840f835787834f411",
+        "sha256": "645ee4365185ce7e5b63fe5ad7d57c71ba4be8bb8434812e91e9b78bcb17d172",
         "size_bytes": 1498
       },
       {
         "path": "b20a-ready.json",
-        "sha256": "1817799d9247e2614f81347e69839a52d4026e4ae411f7c4fc9d7348a16e4949",
+        "sha256": "14cb09bff6497c335cc2ec8681c7d899af564b402e056ae4c81d63faa282a199",
         "size_bytes": 13175
       },
       {
         "path": "c24a-gap.json",
-        "sha256": "a39996ec788805ab775a21f2c32c2270cfc25a5a796547339706d23cab99c86c",
+        "sha256": "ad868db8dbe1a5f73bbdeb38b7abc983a62b4f51f6ca96c6909b35555d0c8b63",
         "size_bytes": 1331
       },
       {
@@ -163,12 +163,12 @@
       },
       {
         "path": "incomplete-input-negative.json",
-        "sha256": "64f6949cdb5362d293978f8a6d0c19c3f2a52d7fce997cb544e7953ca9f72c13",
+        "sha256": "a1170ac4c5caae1f74f8e7c784c56961174550e6da23b2704fcffe8ce7efc411",
         "size_bytes": 945
       },
       {
         "path": "consumed-preflight.json",
-        "sha256": "9124bfcda5cce18f41c1449f3b115e3284d9515e5855be6d0ed0d921e1a0dc51",
+        "sha256": "d0e105b1bd44312e32fe206cc85363ee57706ef29663b43b92b9e3a40c46a047",
         "size_bytes": 764
       },
       {
@@ -186,23 +186,23 @@
       "c_evidence_present": false,
       "c_plan": {
         "c24a_blocked": true,
-        "c24a_marker": "- [~] 34. T-34 / C24a\uff1a\u9650\u5b9a Diels\u2013Alder \u63d0\u6848\u3001\u5ba1\u6279\u4e0e\u552f\u4e00\u63d0\u4ea4 \u2014 blocked by T-23..T-33 + A-14..A-16 + B20a-ready",
+        "c24a_marker": "- [~] 34. T-34 / C24a：限定 Diels–Alder 提案、审批与唯一提交 — blocked by T-23..T-33 + A-14..A-16 + B20a-ready",
         "evidence_present": false,
         "evidence_roots": [
-          "<acp2-dev>/C/reports/acp2_implementation/bb45a46/C/da-research-live",
-          "<acp2-dev>/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+          "/opt/acp2-dev/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+          "/opt/acp2-dev/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
         ],
         "gates_on_b20a_ready": true,
-        "plan": "<repo>/.omo/plans/acp2-plan-c-rph-workbench.md"
+        "plan": ".omo/plans/acp2-plan-c-rph-workbench.md"
       },
       "evidence_roots": [
-        "<acp2-dev>/C/reports/acp2_implementation/bb45a46/C/da-research-live",
-        "<acp2-dev>/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+        "/opt/acp2-dev/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+        "/opt/acp2-dev/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
       ],
-      "expected_artifact": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
-      "missing_artifact": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+      "expected_artifact": "reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+      "missing_artifact": "reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
       "owner": "C",
-      "plan": "<repo>/.omo/plans/acp2-plan-c-rph-workbench.md",
+      "plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
       "plan_todo": "34. T-34 / C24a",
       "reason": "c24a_absent",
       "required_fields": [

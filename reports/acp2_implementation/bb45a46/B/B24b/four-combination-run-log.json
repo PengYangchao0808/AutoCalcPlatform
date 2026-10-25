@@ -3,7 +3,7 @@
     "/usr/bin/python3.11",
     "scripts/acceptance/four_combinations.py",
     "--out",
-    "<repo>/reports/acp2_implementation/bb45a46/B/B24b/four-combination",
+    "reports/acp2_implementation/bb45a46/B/B24b/four-combination",
     "--f1-revision",
     "493790709830eac4ce347b5fb81414050f7a1e21",
     "--cells",

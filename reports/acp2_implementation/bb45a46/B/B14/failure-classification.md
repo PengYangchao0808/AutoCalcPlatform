@@ -3,12 +3,12 @@
 Command (exact; no ellipsis):
 
 ```bash
-source <acp2-dev>/data/b/acceptance-env.sh
-export ACP_RUN_ROOT=<acp2-dev>/data/integration/run-root
-export ACP2_RUN_ROOT=<acp2-dev>/data/integration/run-root
-export PYTHONPATH=<acp2-dev>/integration/src
-cd <acp2-dev>/integration
-<acp2-dev>/venvs/b/bin/python -m pytest -m "not slow" -q
+source /opt/acp2-dev/data/b/acceptance-env.sh
+export ACP_RUN_ROOT=/opt/acp2-dev/data/integration/run-root
+export ACP2_RUN_ROOT=/opt/acp2-dev/data/integration/run-root
+export PYTHONPATH=/opt/acp2-dev/integration/src
+cd /opt/acp2-dev/integration
+/opt/acp2-dev/venvs/b/bin/python -m pytest -m "not slow" -q
 ```
 
 Candidate under test: `fbac5abb50ba7f86603b786fc98d857df52f5f2a`
@@ -21,7 +21,7 @@ log is `base-b-candidate-failures.log`.
 
 | # | Test | Classification | Evidence |
 |---|---|---|---|
-| 1 | `tests/test_acp2_experience_harness.py::test_clean_live_environment_is_accepted` | Test-harness/environment, not product code. C's `runtime_env` fixture falls back to `<repo>/scripts/acceptance/acp2_runtime.py` when `ACP2_PROJECT_ROOT` is unset (`tests/test_acp2_experience_harness.py:69-70`). | Rerun on the candidate with `ACP2_PROJECT_ROOT=<acp2-dev>/integration`: `1 passed in 0.12s`. |
+| 1 | `tests/test_acp2_experience_harness.py::test_clean_live_environment_is_accepted` | Test-harness/environment, not product code. C's `runtime_env` fixture falls back to `scripts/acceptance/acp2_runtime.py` when `ACP2_PROJECT_ROOT` is unset (`tests/test_acp2_experience_harness.py:69-70`). | Rerun on the candidate with `ACP2_PROJECT_ROOT=/opt/acp2-dev/integration`: `1 passed in 0.12s`. |
 | 2 | `tests/test_acp2_runtime_persistent_idempotency.py::test_crash_after_reservation_before_job_row` | Timing-sensitive flake in a 0.05 s lease window, not a code delta. | Passes on `2a57d6b` (base run) and on the candidate rerun (`1 passed in 1.58s`). |
 | 3 | `tests/test_acp_remote_catalog_prefetch.py::test_prefetch_skipped_for_non_terminal_job` | Pre-existing B defect: `JobManager._prefetch_remote_catalog` calls `self._prepare_executor.prefetch()` (manager.py:5484), but `_CompositePrepareExecutor` exposes only `execute` (services_data_bootstrap.py:1120). Identical at `2a57d6b`. | Fails on `2a57d6b` in `base-b-candidate-failures.log`. |
 | 4 | `tests/test_acp_remote_catalog_prefetch.py::test_prefetch_skipped_for_local_job` | Same pre-existing B defect as #3. | Fails on `2a57d6b`. |

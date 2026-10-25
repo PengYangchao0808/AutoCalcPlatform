@@ -22,7 +22,7 @@
   "commands": [
     {
       "argv": [
-        "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/bin/python",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/bin/python",
         "-c",
         "local_release_identity(<runner_root>)"
       ],
@@ -52,9 +52,9 @@
     "file_count": 529,
     "keys_are_absolute": false,
     "modules": {
-      "acp": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
-      "acp_services": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
-      "cccp": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/__init__.py"
+      "acp": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+      "acp_services": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
+      "cccp": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/__init__.py"
     },
     "prefixes": [
       "acp",
@@ -63,14 +63,14 @@
     ],
     "release_digest": "c4b54feb6a0b25ccbf0163b852ec66e0a1f003e778081d079030844871e90cc0",
     "release_id": "7698b06589bb30c2",
-    "runner_root": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib/python3.11"
+    "runner_root": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib/python3.11"
   },
   "installed_identity_ok": true,
   "job": {
     "attempt": 1,
     "error": null,
     "status": "completed",
-    "work_dir": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/lab-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint"
+    "work_dir": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/lab-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint"
   },
   "ok": true,
   "schema": "acp2.package-install.scheduler-task.v1",

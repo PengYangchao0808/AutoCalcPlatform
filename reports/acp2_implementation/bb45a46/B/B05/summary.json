@@ -5,22 +5,22 @@
   "revisions": {
     "server_revision": "0d7f6c9f01007c6dde83c7a4a944c279101aa3a3",
     "probe_source_revision": "a0185b15c546fbd07919326d581fab13e05000fa",
-    "server_module_root": "<repo>/src",
-    "probe_source_root": "<acp2-dev>/B",
+    "server_module_root": "src",
+    "probe_source_root": "/opt/acp2-dev/B",
     "note": "B07 re-runs the same matrix on the frozen H2 candidate"
   },
   "controller": {
     "url": "http://127.0.0.1:18765",
     "pid": 81900,
-    "run_root": "<acp2-dev>/data/b/run-root",
-    "db_path": "<acp2-dev>/data/b/run-root/acp_jobs.db",
+    "run_root": "/opt/acp2-dev/data/b/run-root",
+    "db_path": "/opt/acp2-dev/data/b/run-root/acp_jobs.db",
     "contract_version": "1.0.0",
     "contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488",
     "production_8765_touched": false
   },
   "launch": {
-    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
-    "command": "<acp2-dev>/venvs/b/bin/python",
+    "path": "reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
+    "command": "/opt/acp2-dev/venvs/b/bin/python",
     "args": [
       "-m",
       "acp",
@@ -33,7 +33,7 @@
       "--log-level",
       "INFO"
     ],
-    "cwd": "<repo>/src",
+    "cwd": "src",
     "transport": "stdio",
     "protocol_version": "2025-06-18",
     "tool_names": [

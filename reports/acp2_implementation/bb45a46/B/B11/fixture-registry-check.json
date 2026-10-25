@@ -26,7 +26,7 @@
     "evidence": "B/B11/",
     "evidence_owner": "B11",
     "fixture_id": "fx-lsf-singlepoint-v1",
-    "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+    "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
     "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
     "input_status": "present",
     "kind": "lsf-singlepoint",

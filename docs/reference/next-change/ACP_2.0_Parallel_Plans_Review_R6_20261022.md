@@ -13,8 +13,8 @@
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 548 | `30cc367899a2607799a694e6ddef47cd6909cebc09028a36ba54e43d6b7a567f` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 682 | `2a7d1dacc92feeaf0779e422d5c1725cebdd0a3e0dce6030b04c1aa81dc991a6` |
 | [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `018247dd1df0df9d8ce6fce93d44d0bdf9ee051a565de9d67090d98e73aa3e38` |
-| [总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 250 | `eae69e072e185e42b6e0d5be9bdaa0a5d767b18f9bd40c275a7f96a94d4c59a7` |
-| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `91c738a3a3580c264b843c62dbcb78f63a900f5d6eb6c1dad9fcabcad7e1bd66` |
+| [总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 250 | `a5b2702022c34f00cadfc3ae60c24feec5b547e9073be6226639d8873f38f98e` |
+| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 
 三份 `.omo` 计划均较 R5 更新；主计划、总索引和手册本轮未改。新版 B00/B03 已明确承担 H1 前的规范性同步，因而本报告区分“同步责任与时间已修正”和“文档已经同步”两种状态，不把未来交付计成已完成。
 

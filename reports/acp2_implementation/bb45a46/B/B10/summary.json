@@ -8,12 +8,12 @@
       },
       {
         "path": "native/sp.out",
-        "sha256": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+        "sha256": "ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621",
         "size_bytes": 41896
       },
       {
         "path": "native/RESULT__task_result.json",
-        "sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+        "sha256": "cd711c94d41831fb4235dd109b59e754aa5afe2422858c74bcc91aef068ac7e6",
         "size_bytes": 1963
       },
       {
@@ -38,17 +38,17 @@
       },
       {
         "path": "native/execution_receipt.json",
-        "sha256": "f15960a130e8e1bb192feaf063fb9062c5e559c74240bf2c39911da69d683906",
+        "sha256": "9166bb38db9d444a3c0c9bd7ba9749b35eed0c7e098273a2048e231611413aef",
         "size_bytes": 1697
       },
       {
         "path": "native/job.json",
-        "sha256": "43e752a18c603bd9791e65100c6c1ef2519df35444bcede9f703751e325d2dc5",
+        "sha256": "c5124c9f5219b65d5e4823225bf05fedf7ab51177e39b83660d8c7d558b57fb6",
         "size_bytes": 6581
       },
       {
         "path": "native/task.json",
-        "sha256": "b1c3a57a66ae820938e2066e691b71d8e160b4635a57699eed79e844c4fbd8c2",
+        "sha256": "7933ee7b525d2478e45da32f504965c79f3af15ab586d0b5f069eea4fd423f60",
         "size_bytes": 968
       }
     ],

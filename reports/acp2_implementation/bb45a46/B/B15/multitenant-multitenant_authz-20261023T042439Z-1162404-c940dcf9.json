@@ -2,8 +2,8 @@
   "artifacts": [
     {
       "path": "multitenant-authz.json",
-      "sha256": "d935916924ee45dcba82ec830552d4f2daf7bb4d98b9c808dd9c61be70cc1224",
-      "size_bytes": 3610
+      "sha256": "b8d0c53be3ed07d18a58515904b98e0253fb638eb86c5fdee5baa6a3d2750c18",
+      "size_bytes": 3582
     }
   ],
   "assertions": [
@@ -91,19 +91,19 @@
   },
   "candidate_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "command": [
-    "<acp2-dev>/venvs/b/bin/python",
-    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "multitenant",
     "--controller",
     "http://127.0.0.1:18775",
     "--fixture",
-    "<acp2-dev>/data/b/fixtures/multi.json",
+    "/opt/acp2-dev/data/b/fixtures/multi.json",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B15"
   ],
   "contract_version": "1.1.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {
@@ -122,19 +122,19 @@
     "b15.artifacts": [
       {
         "path": "multitenant-authz.json",
-        "sha256": "d935916924ee45dcba82ec830552d4f2daf7bb4d98b9c808dd9c61be70cc1224",
+        "sha256": "30cbf0635ae6e389431d355f0abe2cac49913069977189b2cfbc2bf41dfd7aaf",
         "size_bytes": 3610
       }
     ],
     "b15.controller": "http://127.0.0.1:18775",
-    "b15.fixture": "<acp2-dev>/data/b/fixtures/multi.json",
+    "b15.fixture": "/opt/acp2-dev/data/b/fixtures/multi.json",
     "b15.fixture_jobs": {
       "created": [
         "b15-alpha-paused-v1",
         "b15-beta-paused-v1"
       ],
-      "jobs_database": "<acp2-dev>/data/b/run-root-b15/acp_jobs.db",
-      "run_root": "<acp2-dev>/data/b/run-root-b15"
+      "jobs_database": "/opt/acp2-dev/data/b/run-root-b15/acp_jobs.db",
+      "run_root": "/opt/acp2-dev/data/b/run-root-b15"
     },
     "b15.matrix": "multitenant-authz.json",
     "b15.revocation_semantics": {

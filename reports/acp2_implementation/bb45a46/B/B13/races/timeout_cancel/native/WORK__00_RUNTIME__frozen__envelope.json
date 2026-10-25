@@ -11,7 +11,7 @@
       "mapping_version": 1,
       "project_id": "",
       "relative_path": "9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__15",
-      "root": "<acp2-dev>/data/b/run-root-b13/uncategorized",
+      "root": "/opt/acp2-dev/data/b/run-root-b13/uncategorized",
       "tenant_id": ""
     }
   ],

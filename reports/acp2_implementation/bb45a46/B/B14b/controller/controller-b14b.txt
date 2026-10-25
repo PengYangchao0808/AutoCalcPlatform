@@ -3,7 +3,7 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:18774 (Press CTRL+C to quit)
 ACP Workbench starting at http://127.0.0.1:18774
-  Run root      : <acp2-dev>/data/b/run-root-b14b
+  Run root      : /opt/acp2-dev/data/b/run-root-b14b
   Poll interval : 1s
   Docs (Swagger): http://127.0.0.1:18774/docs
   Reload        : off

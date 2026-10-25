@@ -22,7 +22,7 @@
     "plan",
     "fixtures/da-submit.json"
   ],
-  "cwd": "<repo>",
+  "cwd": "repo-root",
   "started_at": "2026-10-22T12:35:00Z",
   "finished_at": "2026-10-22T12:35:02Z",
   "result": "PASS",

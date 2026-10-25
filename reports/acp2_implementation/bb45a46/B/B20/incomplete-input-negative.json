@@ -9,7 +9,7 @@
         "incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']"
       ],
       "expected_error": "incomplete_scientific_input:atom_mapping_incomplete",
-      "fixture": "<acp2-dev>/data/b/fixtures/da/incomplete-input.json",
+      "fixture": "/opt/acp2-dev/data/b/fixtures/da/incomplete-input.json",
       "fixture_sha256": "bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba",
       "rejected_before_dispatch": true
     }

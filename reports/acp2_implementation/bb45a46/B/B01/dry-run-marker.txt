@@ -3,7 +3,7 @@ marker=/tmp/acp2-b01-dryroot.d7rcrH/marker
 command: /usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario env-runtime --dry-run --out /tmp/acp2-b01-dryroot.d7rcrH/out
 DRY-RUN (not a scenario result; no DB/process/job is created)
 /usr/bin/python3.11 -m acp doctor
-/usr/bin/python3.11 <repo>/scripts/acceptance/acp2_runtime.py --scenario env-runtime --phase main --out /tmp/acp2-b01-dryroot.d7rcrH/out
+/usr/bin/python3.11 scripts/acceptance/acp2_runtime.py --scenario env-runtime --phase main --out /tmp/acp2-b01-dryroot.d7rcrH/out
 dry_run_exit=0
 command: find /tmp/acp2-b01-dryroot.d7rcrH -newer /tmp/acp2-b01-dryroot.d7rcrH/marker -print
 newer_file_count=0

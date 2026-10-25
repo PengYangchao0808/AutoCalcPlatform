@@ -12,11 +12,11 @@
     "release-manifest:cccp-0.3.0.tar.gz": "5cb1f202dba608182be7e38a919d282faa63f3b781e1d6ea59ea0e46b3b32825"
   },
   "errors": [],
-  "evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B25",
-  "install_results": "<repo>/reports/acp2_implementation/bb45a46/B/B25/install-results.json",
-  "release_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release",
-  "release_manifest": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+  "evidence": "reports/acp2_implementation/bb45a46/B/B25",
+  "install_results": "reports/acp2_implementation/bb45a46/B/B25/install-results.json",
+  "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release",
+  "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
   "result": "PASS",
   "schema": "acp2.b25.digest_consistency.v2",
-  "summary": "<repo>/reports/acp2_implementation/bb45a46/B/B25/summary.json"
+  "summary": "reports/acp2_implementation/bb45a46/B/B25/summary.json"
 }

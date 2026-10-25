@@ -6,7 +6,7 @@
     "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
     "base_commit": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
     "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
-    "worktree": "<acp2-dev>/B",
+    "worktree": "/opt/acp2-dev/B",
     "per_file_verification": "1906/1906 PASS (0 mismatches, 0 missing)",
     "worktree_clean_after_commit": true
   },
@@ -21,7 +21,7 @@
       "id": "ENV-02",
       "state": "PASS",
       "evidence": "venv-install.log, import-paths.log",
-      "detail": "Dedicated venv <acp2-dev>/venvs/b installed editable from <acp2-dev>/B with [dev,api,remote]; all three packages import from the frozen worktree after PYTHONPATH unset."
+      "detail": "Dedicated venv /opt/acp2-dev/venvs/b installed editable from /opt/acp2-dev/B with [dev,api,remote]; all three packages import from the frozen worktree after PYTHONPATH unset."
     },
     {
       "id": "ENV-04",
@@ -64,8 +64,8 @@
     }
   ],
   "notes": [
-    "The default /usr/bin/orca is the GNOME Orca screen reader, not QC ORCA. Doctor rejected it; the controller config pins the real ELF ORCA at /home/<user>/orca611/orca.",
-    "~/.local/lib/python3.11/site-packages/__editable__.acp-0.2.0.pth points at <repo>/src (the dirty checkout). The B venv's own site-packages wins on sys.path, and the role matrix asserts every module __file__; role/package tests that must be free of this leak use clean venvs.",
+    "The default /usr/bin/orca is the GNOME Orca screen reader, not QC ORCA. Doctor rejected it; the controller config pins the real ELF ORCA at /home/redacted-user/orca611/orca.",
+    "~/.local/lib/python3.11/site-packages/__editable__.acp-0.2.0.pth points at src (the dirty checkout). The B venv's own site-packages wins on sys.path, and the role matrix asserts every module __file__; role/package tests that must be free of this leak use clean venvs.",
     "The B venv is --system-site-packages by design (inherits numpy/rdkit/fastapi/paramiko); wheel was installed into it on demand to build the P0 package smoke.",
     "Package lifecycle: distribution metadata upgrades 0.2.0 -> 0.2.1; cccp.__version__ stays 0.2.0 because the four-place version constant is source-owned."
   ]

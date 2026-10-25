@@ -84,6 +84,6 @@
   "schema": "acp2.b19.summary.v1",
   "validator": {
     "exit": 0,
-    "stdout": "VALID: <repo>/docs/reference/next-change/acp2-contracts/manifest.json"
+    "stdout": "VALID: docs/reference/next-change/acp2-contracts/manifest.json"
   }
 }

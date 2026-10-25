@@ -1,6 +1,6 @@
 {
   "cccp": {
-    "cwd": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
+    "cwd": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
     "exit": 0,
     "forbidden": {
       "acp": true,
@@ -9,48 +9,48 @@
     },
     "forbidden_absent": true,
     "modules": {
-      "cccp": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/cccp/lib64/python3.11/site-packages/cccp/__init__.py"
+      "cccp": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/cccp/lib64/python3.11/site-packages/cccp/__init__.py"
     },
-    "python": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/cccp/bin/python",
+    "python": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/cccp/bin/python",
     "role": "cccp",
     "site_packages": true,
     "version": "0.3.0",
     "version_ok": true
   },
   "root": {
-    "cwd": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
+    "cwd": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
     "exit": 0,
     "forbidden": {},
     "forbidden_absent": true,
     "modules": {
-      "acp": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/lib64/python3.11/site-packages/acp/__init__.py",
-      "acp_services": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/lib64/python3.11/site-packages/acp_services/__init__.py",
-      "cccp": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/lib64/python3.11/site-packages/cccp/__init__.py"
+      "acp": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/lib64/python3.11/site-packages/acp/__init__.py",
+      "acp_services": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/lib64/python3.11/site-packages/acp_services/__init__.py",
+      "cccp": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/lib64/python3.11/site-packages/cccp/__init__.py"
     },
-    "python": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/bin/python",
+    "python": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/root/bin/python",
     "role": "root",
     "site_packages": true,
     "version": "0.3.0",
     "version_ok": true
   },
   "web": {
-    "cwd": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
+    "cwd": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
     "exit": 0,
     "forbidden": {},
     "forbidden_absent": true,
     "modules": {
-      "acp": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
-      "acp_services": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
-      "acp_web_assets": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp_web_assets/__init__.py"
+      "acp": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+      "acp_services": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
+      "acp_web_assets": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp_web_assets/__init__.py"
     },
-    "python": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/bin/python",
+    "python": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/bin/python",
     "role": "web",
     "site_packages": true,
     "version": "0.3.0",
     "version_ok": true
   },
   "worker": {
-    "cwd": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
+    "cwd": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install",
     "exit": 0,
     "forbidden": {
       "acp": true,
@@ -58,9 +58,9 @@
     },
     "forbidden_absent": true,
     "modules": {
-      "acp_services": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/worker/lib64/python3.11/site-packages/acp_services/__init__.py"
+      "acp_services": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/worker/lib64/python3.11/site-packages/acp_services/__init__.py"
     },
-    "python": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/worker/bin/python",
+    "python": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/worker/bin/python",
     "role": "worker",
     "site_packages": true,
     "version": "0.3.0",

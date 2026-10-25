@@ -20,7 +20,7 @@
       "status": "NOT_VERIFIED(c_dsh_h6_absent)"
     },
     {
-      "expected_path": "<repo>/reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
+      "expected_path": "reports/acp2_implementation/bb45a46/C/cross-domain-live/experience_cross-domain-live-experience_selectivity-<run_id>.json",
       "owner": "C",
       "reason": "C research-record/view-model/manifest-extension schemas are readable, but no C H6 readability receipt or experience:cross-domain-live record exists.",
       "row_id": "H6-C-readability",
@@ -28,7 +28,7 @@
       "status": "NOT_VERIFIED(c_readability_absent)"
     },
     {
-      "expected_path": "<repo>/reports/acp2_implementation/bb45a46/A/A-26/result.json",
+      "expected_path": "reports/acp2_implementation/bb45a46/A/A-26/result.json",
       "owner": "A",
       "reason": "A handoff-H6.json is readable (parsed; h6_closure.closed=false), but no A-26 readability receipt for B data exists.",
       "row_id": "H6-A-readability",

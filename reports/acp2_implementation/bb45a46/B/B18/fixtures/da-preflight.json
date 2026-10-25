@@ -2,7 +2,7 @@
   "schema": "acp2.b18.da-preflight.v1",
   "evidence_class": "STATIC/SIMULATED",
   "real_qc": false,
-  "science_root": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science",
+  "science_root": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science",
   "capability": "capability-energy.json",
   "task_binding": "task-binding-singlepoint.json",
   "reaction": "reaction-da.json",

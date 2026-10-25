@@ -23,7 +23,7 @@
     "summary:root_acp-0.3.0.tar.gz": "1ebd408e4657f8894021d98984ec82673ca9050ef80741dc8c2fa9a995e9e3fe"
   },
   "errors": [],
-  "evidence": "<repo>/reports/acp2_implementation/bb45a46/B/B25",
+  "evidence": "reports/acp2_implementation/bb45a46/B/B25",
   "result": "PASS",
   "schema": "acp2.b25.digest_consistency.v1"
 }

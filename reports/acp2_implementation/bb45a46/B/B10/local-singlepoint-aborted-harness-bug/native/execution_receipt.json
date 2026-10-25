@@ -11,7 +11,7 @@
       "mapping_version": 1,
       "project_id": "",
       "relative_path": "STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint",
-      "root": "<acp2-dev>/data/b/run-root-b10/uncategorized",
+      "root": "/opt/acp2-dev/data/b/run-root-b10/uncategorized",
       "tenant_id": ""
     }
   ],

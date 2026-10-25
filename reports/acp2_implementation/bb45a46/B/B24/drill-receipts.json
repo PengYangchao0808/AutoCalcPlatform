@@ -242,7 +242,7 @@
   "old_duplicate_receipt": {
     "action": "receipts",
     "duplicate": {
-      "manifest_twice": "<acp2-dev>/data/b/b24-migration/drills/duplicate_receipt/result_manifest.json",
+      "manifest_twice": "/opt/acp2-dev/data/b/b24-migration/drills/duplicate_receipt/result_manifest.json",
       "product_ids": [
         "sp_output.log"
       ],

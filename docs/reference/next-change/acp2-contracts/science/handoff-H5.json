@@ -422,7 +422,7 @@
   "contract_set_frozen": true,
   "contract_set_version": 1,
   "contract_version_basis": {
-    "handoff_h4_sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+    "handoff_h4_sha256": "026c55842df5eadfb7e38780a851f2993f4828302fd504f13d26c71d68855a6e",
     "handoff_h4_version": 1,
     "rule": "H5 consumes the exact H4 bytes for the science contract baseline and adds only the plugin-ecosystem gate; no H4 row is rewritten or upgraded."
   },
@@ -471,7 +471,7 @@
   },
   "frozen_at": "2026-10-23T01:53:05Z",
   "gate_command": [
-    "<acp2-dev>/envs/a-python/bin/python",
+    "/opt/acp2-dev/envs/a-python/bin/python",
     "-m",
     "pytest",
     "tests/test_acp2_science_plugin_registry.py",
@@ -530,8 +530,8 @@
   "source": {
     "branch": "acp2/a-science",
     "pre_delivery_commit": "436be8e",
-    "python": "<acp2-dev>/envs/a-python/bin/python",
-    "worktree": "<acp2-dev>/A"
+    "python": "/opt/acp2-dev/envs/a-python/bin/python",
+    "worktree": "/opt/acp2-dev/A"
   },
   "upgrade_matrix": {
     "capability_name": "acp2_upgrade_native_singlepoint",

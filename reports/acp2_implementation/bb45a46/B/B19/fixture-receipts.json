@@ -1,5 +1,5 @@
 {
-  "command": "PYTHONPATH=<repo>/src <acp2-dev>/venvs/b/bin/python -m pytest tests/test_acp2_runtime_event_recovery.py -v",
+  "command": "PYTHONPATH=src /opt/acp2-dev/venvs/b/bin/python -m pytest tests/test_acp2_runtime_event_recovery.py -v",
   "exit_code": 0,
   "passed": 17,
   "receipts": [

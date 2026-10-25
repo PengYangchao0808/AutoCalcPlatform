@@ -1,24 +1,24 @@
 {
   "artifacts": [
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-      "sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
+      "path": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
+      "sha256": "4a9c23e2b522a0e0cda43d2b06b3427d7855c9c0a82e234e4107b7cc9b4e94ca",
       "size_bytes": 23421
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B00/head-sha.txt",
+      "path": "reports/acp2_implementation/bb45a46/B/B00/head-sha.txt",
       "sha256": "c8fdf54b4a9b5ed5e712ccb9412f8db3a0703df8bb6401d991136aeca257e195",
       "size_bytes": 41
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B02/summary.json",
-      "sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
-      "size_bytes": 3896
+      "path": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
+      "sha256": "23482d905b2fdcaec0c6b0ca4e1347ee394e5955d20c401c4dccb097f50a5d1f",
+      "size_bytes": 3830
     },
     {
-      "path": "<repo>/docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
-      "sha256": "6492f241dcea22f59f79971406b91d49d72d63c1f1a872019fa27d647a9470ab",
-      "size_bytes": 5716
+      "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+      "sha256": "277bc6e31391d375c958634782bb83887ccb7fd2f27d937cabfa3fa22b841dc9",
+      "size_bytes": 5670
     }
   ],
   "assertions": [
@@ -45,7 +45,7 @@
     "/tmp/opencode/gen_h7.py"
   ],
   "contract_version": "1.3.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "aggregate",
   "exit_code": 0,
   "extensions": {
@@ -58,7 +58,7 @@
       {
         "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
         "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-        "receipt_sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
+        "receipt_sha256": "213ea0b2a71ee28e1b6d55180b57f9dce04bc003b40d552f30b668c7a15c2c2e",
         "unchanged": [
           "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
           "A/B/C path ownership globs",
@@ -68,7 +68,7 @@
       {
         "rationale": "Environment identity is host-level and was not changed by B-fix-4 (no dependency, config, or interpreter change).",
         "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
-        "receipt_sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
+        "receipt_sha256": "c5280218291f91a9c392b00e7804de0056506d3b14ce55400b10aaca34bf867a",
         "unchanged": [
           "isolated worktree and host environment",
           "three-package import source at the P0 baseline"

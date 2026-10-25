@@ -1,5 +1,5 @@
 {
-  "argv": "<acp2-dev>/venvs/b/bin/python scripts/acceptance/real_environment.py --scenario m1-singlepoint --out <repo>/reports/acp2_implementation/bb45a46/B/B10/m1-baseline --timeout 300 --keep-temp",
+  "argv": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/real_environment.py --scenario m1-singlepoint --out reports/acp2_implementation/bb45a46/B/B10/m1-baseline --timeout 300 --keep-temp",
   "attempt": 1,
   "controller_run_root": "/tmp/acp-m1-hl_kb0ye",
   "energy_hartree": -155.001263624935,

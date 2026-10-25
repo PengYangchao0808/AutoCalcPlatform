@@ -8,7 +8,7 @@
     "publication_failure_event": {
       "attempt": 1,
       "code": "publication_failed",
-      "detail": "publication failed: OSError: ACP2_ACCEPTANCE_PUBLICATION_FAULT: publication write refused while <repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json is armed",
+      "detail": "publication failed: OSError: ACP2_ACCEPTANCE_PUBLICATION_FAULT: publication write refused while reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json is armed",
       "idempotency_key": "publication-pending:20261023_073443_001_singlepoint:1:publication_failed",
       "job_id": "20261023_073443_001_singlepoint",
       "timestamp": "2026-10-22T23:34:52.663056+00:00",

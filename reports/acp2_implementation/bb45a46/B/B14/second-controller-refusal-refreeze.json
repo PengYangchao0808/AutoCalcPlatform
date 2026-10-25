@@ -2,14 +2,14 @@
   "schema": "acp2.second-controller-refusal.v1",
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
-  "run_root": "<acp2-dev>/data/integration/controller-run-root",
+  "run_root": "/opt/acp2-dev/data/integration/controller-run-root",
   "primary": {
     "pid": 1002584,
     "port": 18772
   },
   "second": {
     "argv": [
-      "<acp2-dev>/venvs/b/bin/python",
+      "/opt/acp2-dev/venvs/b/bin/python",
       "-m",
       "acp",
       "run",
@@ -19,16 +19,16 @@
       "--port",
       "18773",
       "--run-root",
-      "<acp2-dev>/data/integration/controller-run-root",
+      "/opt/acp2-dev/data/integration/controller-run-root",
       "--no-browser"
     ],
     "port": 18773,
     "exit_code": 3
   },
-  "refusal": "RuntimeError: run_root '<acp2-dev>/data/integration/controller-run-root' is already owned by another ACP server process (pid=1002584, cmdline='<acp2-dev>/venvs/b/bin/python -m acp run serve --host 127.0.0.1 --port 18772 --run-root <acp2-dev>/data/integration/controller-run-root --no-browser'); refusing to start a second instance — it would kill the owner's running jobs",
+  "refusal": "RuntimeError: run_root '/opt/acp2-dev/data/integration/controller-run-root' is already owned by another ACP server process (pid=1002584, cmdline='/opt/acp2-dev/venvs/b/bin/python -m acp run serve --host 127.0.0.1 --port 18772 --run-root /opt/acp2-dev/data/integration/controller-run-root --no-browser'); refusing to start a second instance — it would kill the owner's running jobs",
   "traceback_resolves_inside_candidate": [
-    "<acp2-dev>/integration/src/acp/api/server.py",
-    "<acp2-dev>/integration/src/acp/scheduler/manager.py"
+    "/opt/acp2-dev/integration/src/acp/api/server.py",
+    "/opt/acp2-dev/integration/src/acp/scheduler/manager.py"
   ],
   "no_side_effects": {
     "jobs_rows": 0,

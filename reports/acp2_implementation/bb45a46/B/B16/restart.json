@@ -107,7 +107,7 @@
   },
   "restart": {
     "command_before": [
-      "<acp2-dev>/venvs/b/bin/python",
+      "/opt/acp2-dev/venvs/b/bin/python",
       "-m",
       "acp.cli",
       "run",
@@ -117,12 +117,12 @@
       "--port",
       "18776",
       "--run-root",
-      "<acp2-dev>/data/b/run-root-b16",
+      "/opt/acp2-dev/data/b/run-root-b16",
       "--poll-interval",
       "1",
       "--no-browser"
     ],
-    "cwd_before": "<acp2-dev>/data/b/controller-config",
+    "cwd_before": "/opt/acp2-dev/data/b/controller-config",
     "health_after": {
       "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
       "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
@@ -139,7 +139,7 @@
       "fault_seam": false,
       "module": "acp.cli",
       "port": 18776,
-      "run_root": "<acp2-dev>/data/b/run-root-b16",
+      "run_root": "/opt/acp2-dev/data/b/run-root-b16",
       "script": null,
       "source": null
     },

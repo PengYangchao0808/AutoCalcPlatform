@@ -14,7 +14,7 @@
   },
   "mcp_processes_stopped": true,
   "note": "Lab (18787), B15 (18788) and B17 (18789) controllers were terminated by PID; ports verified free. Production acp.service on 8765 was only observed, never restarted.",
-  "production_8765_process": "<venv>/bin/acp run serve --host 0.0.0.0 --port 8765 (observed only, PID 336067)",
+  "production_8765_process": "/opt/acp2/venv/bin/acp run serve --host 0.0.0.0 --port 8765 (observed only, PID 336067)",
   "production_run_root_touched": false,
   "production_service_8765_touched": false,
   "schema": "acp2.b26a.cleanup.v1",

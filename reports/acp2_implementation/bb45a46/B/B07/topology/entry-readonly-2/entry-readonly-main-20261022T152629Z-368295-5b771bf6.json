@@ -35,19 +35,19 @@
   },
   "candidate_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
   "command": [
-    "<acp2-dev>/venvs/b/bin/python",
-    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "entry-readonly",
     "--controller",
     "http://127.0.0.1:18765",
     "--out",
-    "<repo>/reports/acp2_implementation/bb45a46/B/B07/topology/entry-readonly-2",
+    "reports/acp2_implementation/bb45a46/B/B07/topology/entry-readonly-2",
     "--timeout",
     "60"
   ],
   "contract_version": "1.1.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {

@@ -1,55 +1,55 @@
 {
   "a_contracts": [
     {
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
       "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
       "size_bytes": 15559
     },
     {
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
       "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
       "size_bytes": 12521
     },
     {
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
       "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
       "size_bytes": 18004
     },
     {
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
       "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
       "size_bytes": 14038
     },
     {
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
       "sha256": "f4a8ffde61ab43c7b17c980ed8ec222ab6aab8b32fc1c6ba1b0e144bf2e1a4d2",
       "size_bytes": 6035
     },
     {
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
-      "sha256": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "sha256": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b",
       "size_bytes": 58068
     }
   ],
   "base_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7",
   "c_contracts": [
     {
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/proposal.schema.json",
       "sha256": "4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
       "size_bytes": 16781
     },
     {
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/research-record.schema.json",
       "sha256": "75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
       "size_bytes": 9943
     },
     {
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/p2-operation-map.md",
       "sha256": "5818be3b6e86b62c4f0fb421186a567223727fb6e5a8266a6354dd3f501921c4",
       "size_bytes": 10826
     },
     {
-      "path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+      "path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
       "sha256": "79bb1c226a6f23af65eb1f2a1a4af27a3ea26dfead0299d40d4bd94ac9a8dd9d",
       "size_bytes": 12558
     }
@@ -62,7 +62,7 @@
   "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
   "contract_version": "1.3.0",
   "env_digest": "d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6",
-  "env_path": "<acp2-dev>/data/b/acceptance-env.sh",
+  "env_path": "/opt/acp2-dev/data/b/acceptance-env.sh",
   "frozen_p1_candidate": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "frozen_p1_candidate_modified": false,
   "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
@@ -100,8 +100,8 @@
     "clean_tree": true,
     "clean_tree_meaning": "the overlay contains only HEAD plus the declared B20 files; unrelated dirty working-tree changes are excluded",
     "matches_running_working_tree": true,
-    "method": "git archive HEAD into <acp2-dev>/data/b/b20-candidate, then copy the declared B20 overlay files",
-    "overlay_root": "<acp2-dev>/data/b/b20-candidate"
+    "method": "git archive HEAD into /opt/acp2-dev/data/b/b20-candidate, then copy the declared B20 overlay files",
+    "overlay_root": "/opt/acp2-dev/data/b/b20-candidate"
   },
   "tested_matrix": {
     "A-14-A-16": "read as P2 science contracts and ReactionSpec example",

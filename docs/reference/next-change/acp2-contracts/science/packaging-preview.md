@@ -78,9 +78,9 @@ Evidence markers: `static-fact` = read from code/config in this run (or re-execu
     {"path": "LICENSE", "kind": "legal", "owner": "MIT license copied into every stage", "ships_in": "all roles", "evidence": "static-fact"}
   ],
   "wheel_smoke_argv": [
-    "<acp2-dev>/envs/a-python/bin/python",
+    "/opt/acp2-dev/envs/a-python/bin/python",
     "scripts/build_release.py",
-    "--source", "<acp2-dev>/A",
+    "--source", "/opt/acp2-dev/A",
     "--out", "/tmp/opencode/acp2-a00b-wheel-smoke",
     "--role", "cccp"
   ]

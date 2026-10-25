@@ -6,7 +6,7 @@
   "candidate_short_sha": "77ac1de",
   "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
   "branch": "acp2/integration-p1",
-  "worktree": "<acp2-dev>/integration",
+  "worktree": "/opt/acp2-dev/integration",
   "frozen_at": "2026-10-23T11:02:00+08:00",
   "previous_candidate_sha": "fbac5abb50ba7f86603b786fc98d857df52f5f2a",
   "refreeze_reason": "Re-freeze after the B-owned base-suite fixes (B-fix-34/35/36) and the advanced A/C heads; the previous merge procedure and ownership map were reused.",
@@ -113,17 +113,17 @@
   "contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
   "contract_version": "1.1.0",
   "contract_validator": {
-    "command": "<acp2-dev>/venvs/b/bin/python scripts/acceptance/validate_acp2_contracts.py",
+    "command": "/opt/acp2-dev/venvs/b/bin/python scripts/acceptance/validate_acp2_contracts.py",
     "result": "VALID",
     "exit_code": 0
   },
   "env_digest": "sha256:67ab9c869e95c3c2a6180e96e7acefbaff9882a835bfb7b4691dfcf14d8e5553",
-  "env_digest_rule": "sha256 of `env -u PYTHONPATH <acp2-dev>/venvs/b/bin/python -m pip freeze` stdout",
+  "env_digest_rule": "sha256 of `env -u PYTHONPATH /opt/acp2-dev/venvs/b/bin/python -m pip freeze` stdout",
   "env": {
-    "interpreter": "<acp2-dev>/venvs/b/bin/python",
+    "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
     "python_version": "3.11.13",
-    "acceptance_env": "<acp2-dev>/data/b/acceptance-env.sh",
-    "run_root": "<acp2-dev>/data/integration/run-root",
+    "acceptance_env": "/opt/acp2-dev/data/b/acceptance-env.sh",
+    "run_root": "/opt/acp2-dev/data/integration/run-root",
     "note": "The venv evolved during B tasks, so the live pip-freeze digest is authoritative for this candidate."
   },
   "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
@@ -194,10 +194,10 @@
   "base_suite": {
     "command": "pytest -m \"not slow\" -q",
     "environment": {
-      "ACP_RUN_ROOT": "<acp2-dev>/data/integration/run-root",
-      "ACP2_RUN_ROOT": "<acp2-dev>/data/integration/run-root",
-      "ACP2_PROJECT_ROOT": "<acp2-dev>/integration",
-      "PYTHONPATH": "<acp2-dev>/integration/src"
+      "ACP_RUN_ROOT": "/opt/acp2-dev/data/integration/run-root",
+      "ACP2_RUN_ROOT": "/opt/acp2-dev/data/integration/run-root",
+      "ACP2_PROJECT_ROOT": "/opt/acp2-dev/integration",
+      "PYTHONPATH": "/opt/acp2-dev/integration/src"
     },
     "result": "FAIL",
     "counters": {
@@ -241,7 +241,7 @@
     "h3_closure": "NOT_VERIFIED: two C-owned rows and one B timing flake remain; no failure is attributable to the domain-ownership merge."
   },
   "second_controller": {
-    "run_root": "<acp2-dev>/data/integration/controller-run-root",
+    "run_root": "/opt/acp2-dev/data/integration/controller-run-root",
     "primary_port": 18772,
     "second_port": 18773,
     "second_exit_code": 3,

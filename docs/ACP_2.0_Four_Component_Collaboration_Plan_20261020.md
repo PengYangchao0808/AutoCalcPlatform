@@ -350,8 +350,8 @@ model assets/样例配置/schema/SDK/docs 在场；四处版本位置一致；`p
 
 | 行 | 期望路径/状态 | 处理 |
 |---|---|---|
-| A-27b/A-28 | `<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z`、`…/A/A-28/20261023T044051Z` | 原始回执已汇总，B25b 不重签科学结论 |
-| C33 | `<acp2-dev>/evidence/C/clean-install-live` | 未发布 → `NOT_VERIFIED` |
-| C34 | `<acp2-dev>/evidence/C/operator-runbook-live` | 未发布 → `NOT_VERIFIED` |
+| A-27b/A-28 | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z`、`…/A/A-28/20261023T044051Z` | 原始回执已汇总，B25b 不重签科学结论 |
+| C33 | `/opt/acp2-dev/evidence/C/clean-install-live` | 未发布 → `NOT_VERIFIED` |
+| C34 | `/opt/acp2-dev/evidence/C/operator-runbook-live` | 未发布 → `NOT_VERIFIED` |
 | C static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | 未发布 → `NOT_VERIFIED(c_static_assets_absent)`；不伪造挂载 |
 | C35 | 非 B25b 前置 | 不签，等待 C 自签 |

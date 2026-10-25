@@ -24,7 +24,7 @@
     "version_bump_performed": false
   },
   "builder": {
-    "command": "<acp2-dev>/venvs/b/bin/python scripts/build_release.py --source <repo> --out /tmp/opencode/b22-wheel --role all",
+    "command": "/opt/acp2-dev/venvs/b/bin/python scripts/build_release.py --source repo-root --out /tmp/opencode/b22-wheel --role all",
     "exit": 0
   },
   "historical_read_after_uninstall": {
@@ -51,7 +51,7 @@
   ],
   "schema": "acp2.b22.wheel-check.v1",
   "scope": "minimal local wheel build/install/uninstall; not the B25a release candidate",
-  "source_tree": "<repo> (working tree @ ded5cfd804675f7b341726990b925e08bc27794c, intentionally dirty)",
+  "source_tree": "repo-root (working tree @ ded5cfd804675f7b341726990b925e08bc27794c, intentionally dirty)",
   "status": "PASS",
   "uninstall": {
     "cccp_still_importable": true,

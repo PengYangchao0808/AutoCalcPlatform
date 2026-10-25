@@ -11,17 +11,17 @@
       "status": "PASS"
     },
     {
-      "detail": "reaction=<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json errors=[]",
+      "detail": "reaction=/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json errors=[]",
       "name": "b20a.input_complete",
       "status": "PASS"
     },
     {
-      "detail": "cases=1 failures=[] rows=[{'case_id': 'missing-atom-mapping', 'fixture': '<acp2-dev>/data/b/fixtures/da/incomplete-input.json', 'fixture_sha256': 'bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba', 'expected_error': 'incomplete_scientific_input:atom_mapping_incomplete', 'rejected_before_dispatch': True, 'errors': [\"incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']\", \"incomplete_scientific_input:unmapped_left:['ethene:et_h4']\", \"incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']\"], 'dispatched': False}]",
+      "detail": "cases=1 failures=[] rows=[{'case_id': 'missing-atom-mapping', 'fixture': '/opt/acp2-dev/data/b/fixtures/da/incomplete-input.json', 'fixture_sha256': 'bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba', 'expected_error': 'incomplete_scientific_input:atom_mapping_incomplete', 'rejected_before_dispatch': True, 'errors': [\"incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']\", \"incomplete_scientific_input:unmapped_left:['ethene:et_h4']\", \"incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']\"], 'dispatched': False}]",
       "name": "b20a.incomplete_input_rejected",
       "status": "PASS"
     },
     {
-      "detail": "receipt=<repo>/reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json result=PASS",
+      "detail": "receipt=reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json result=PASS",
       "name": "b20a.b18_da_preflight_consumed",
       "status": "PASS"
     },
@@ -36,7 +36,7 @@
       "status": "PASS"
     },
     {
-      "detail": "errors=[] observed={'path': '<repo>/docs/reference/next-change/acp2-contracts/runtime/dependencies.json', 'required_external_edges': [{'consumer': 'B20a-ready', 'external_id': 'A-14'}, {'consumer': 'B20a-ready', 'external_id': 'A-15'}, {'consumer': 'B20a-ready', 'external_id': 'A-16'}, {'consumer': 'B20a-exec', 'external_id': 'C24a'}], 'ready_to_c24a_edges': [{'consumer': 'C/T-34 (C24a)', 'producer': 'B20a-ready', 'artifact': 'DA execution interface/preflight', 'version': '1.0.0', 'digest_or_pending': 'PENDING', 'readiness': 'contract_ready', 'relation': 'AND', 'delivered': True, 'observed': 'B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a', 'supersedes_c_row': 'C24a:gates_on_B20a_ready'}], 'b20b_depends_on': ['B20a-exec'], 'c24a_readiness': 'contract_ready', 'c24a_delivery_status': 'planned', 'c24a_observed_state': 'blocked: C plan T-34 is [~] and no approved single submission exists'}",
+      "detail": "errors=[] observed={'path': 'docs/reference/next-change/acp2-contracts/runtime/dependencies.json', 'required_external_edges': [{'consumer': 'B20a-ready', 'external_id': 'A-14'}, {'consumer': 'B20a-ready', 'external_id': 'A-15'}, {'consumer': 'B20a-ready', 'external_id': 'A-16'}, {'consumer': 'B20a-exec', 'external_id': 'C24a'}], 'ready_to_c24a_edges': [{'consumer': 'C/T-34 (C24a)', 'producer': 'B20a-ready', 'artifact': 'DA execution interface/preflight', 'version': '1.0.0', 'digest_or_pending': 'PENDING', 'readiness': 'contract_ready', 'relation': 'AND', 'delivered': True, 'observed': 'B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a', 'supersedes_c_row': 'C24a:gates_on_B20a_ready'}], 'b20b_depends_on': ['B20a-exec'], 'c24a_readiness': 'contract_ready', 'c24a_delivery_status': 'planned', 'c24a_observed_state': 'blocked: C plan T-34 is [~] and no approved single submission exists'}",
       "name": "b20a.dependency_edges",
       "status": "PASS"
     },
@@ -47,7 +47,7 @@
     }
   ],
   "b18_preflight": {
-    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json",
+    "path": "reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json",
     "result": "PASS"
   },
   "c24a": {
@@ -57,20 +57,20 @@
       "c24a_marker": "- [~] 34. T-34 / C24a\uff1a\u9650\u5b9a Diels\u2013Alder \u63d0\u6848\u3001\u5ba1\u6279\u4e0e\u552f\u4e00\u63d0\u4ea4 \u2014 blocked by T-23..T-33 + A-14..A-16 + B20a-ready",
       "evidence_present": false,
       "evidence_roots": [
-        "<acp2-dev>/C/reports/acp2_implementation/bb45a46/C/da-research-live",
-        "<acp2-dev>/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+        "/opt/acp2-dev/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+        "/opt/acp2-dev/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
       ],
       "gates_on_b20a_ready": true,
-      "plan": "<repo>/.omo/plans/acp2-plan-c-rph-workbench.md"
+      "plan": ".omo/plans/acp2-plan-c-rph-workbench.md"
     },
     "evidence_roots": [
-      "<acp2-dev>/C/reports/acp2_implementation/bb45a46/C/da-research-live",
-      "<acp2-dev>/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+      "/opt/acp2-dev/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+      "/opt/acp2-dev/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
     ],
-    "expected_artifact": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
-    "missing_artifact": "<repo>/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+    "expected_artifact": "reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+    "missing_artifact": "reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
     "owner": "C",
-    "plan": "<repo>/.omo/plans/acp2-plan-c-rph-workbench.md",
+    "plan": ".omo/plans/acp2-plan-c-rph-workbench.md",
     "plan_todo": "34. T-34 / C24a",
     "reason": "c24a_absent",
     "required_fields": [
@@ -125,7 +125,7 @@
         "incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']"
       ],
       "expected_error": "incomplete_scientific_input:atom_mapping_incomplete",
-      "fixture": "<acp2-dev>/data/b/fixtures/da/incomplete-input.json",
+      "fixture": "/opt/acp2-dev/data/b/fixtures/da/incomplete-input.json",
       "fixture_sha256": "bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba",
       "rejected_before_dispatch": true
     }
@@ -156,7 +156,7 @@
   },
   "phase": "da-submit",
   "reaction_errors": [],
-  "reaction_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+  "reaction_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
   "result": "PASS",
   "run_spec": {
     "document": {
@@ -189,7 +189,7 @@
           "backend": "local",
           "capability": "singlepoint",
           "evidence": "B/B14b/singlepoint/run.json",
-          "evidence_sha256": "e63e1a5a36449cb503ee58d1f80ecfb037f5c8de165cd451451d8978578466e2",
+          "evidence_sha256": "c78252fb6ca268b67eb9a6a68b0dc19ccd1ec9fef054f6adc1f0ad28b0fb7970",
           "evidence_written_at_utc": "2026-10-23T03:16:39Z",
           "result": "PASS",
           "task_ref": "20261023_111633_001_singlepoint",
@@ -200,7 +200,7 @@
           "backend": "local",
           "capability": "optimize",
           "evidence": "B/B14b/optimize/run.json",
-          "evidence_sha256": "7050febe6321aa6e1749d80bcc0dc59970c023fac299a30d0de7072f1aa16671",
+          "evidence_sha256": "33794aa8f0ded0b912a0e61fe8188bec70842c726b93959f58c417691824f75c",
           "evidence_written_at_utc": "2026-10-23T03:19:57Z",
           "result": "PASS",
           "task_ref": "20261023_111652_002_optimize",
@@ -211,7 +211,7 @@
           "backend": "local",
           "capability": "frequency",
           "evidence": "B/B14b/frequency/run.json",
-          "evidence_sha256": "76914fa3d8322733531e8d9622a7cb35e76156bcd47f1d4c882c6142ffb8495b",
+          "evidence_sha256": "30b3a5ad74d11b8ce3dd09514f5179f09c14ead86a66520272575045bb804988",
           "evidence_written_at_utc": "2026-10-23T03:19:49Z",
           "result": "PASS",
           "task_ref": "20261023_111946_003_frequency",
@@ -236,25 +236,25 @@
   "science_contracts": [
     {
       "contract": "reaction.schema.json",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
       "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
       "size_bytes": 15559
     },
     {
       "contract": "recipe.schema.json",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
       "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
       "size_bytes": 12521
     },
     {
       "contract": "task-binding.schema.json",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
       "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
       "size_bytes": 18004
     },
     {
       "contract": "evidence.schema.json",
-      "path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
       "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
       "size_bytes": 14038
     }

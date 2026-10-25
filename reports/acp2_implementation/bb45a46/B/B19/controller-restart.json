@@ -24,8 +24,8 @@
   "jobs_after_restart_before_replay": 4,
   "jobs_before": 3,
   "restart": {
-    "command": "<acp2-dev>/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18779 --run-root <acp2-dev>/data/b/run-root-b19 --poll-interval 1 --no-browser",
-    "cwd": "<acp2-dev>/data/b/controller-config",
+    "command": "/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18779 --run-root /opt/acp2-dev/data/b/run-root-b19 --poll-interval 1 --no-browser",
+    "cwd": "/opt/acp2-dev/data/b/controller-config",
     "health_after": {
       "candidate_revision": "938e894342d643f75740289a0e7aa84ef071115f",
       "contract_digest": "aeecba1e9c21de16ed5c1c3a659ee88f0828225b1142bcf93a1ffbc897c9e55b",

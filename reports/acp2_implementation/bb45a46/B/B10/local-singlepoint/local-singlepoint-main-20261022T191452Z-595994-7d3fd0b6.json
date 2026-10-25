@@ -7,13 +7,13 @@
     },
     {
       "path": "native/sp.out",
-      "sha256": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
-      "size_bytes": 41896
+      "sha256": "ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621",
+      "size_bytes": 41779
     },
     {
       "path": "native/RESULT__task_result.json",
-      "sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
-      "size_bytes": 1963
+      "sha256": "e43dea2d042fb7a0304736a5942df27c1a216764b8a8651d20bd81e336fc70bd",
+      "size_bytes": 1935
     },
     {
       "path": "native/RESULT__result_manifest.json",
@@ -37,18 +37,18 @@
     },
     {
       "path": "native/execution_receipt.json",
-      "sha256": "f15960a130e8e1bb192feaf063fb9062c5e559c74240bf2c39911da69d683906",
-      "size_bytes": 1697
+      "sha256": "66dfaee95a279ed8e083d0ae96bfd62908ab4ce1a8d42885e6b6ebb6a879cae9",
+      "size_bytes": 1685
     },
     {
       "path": "native/job.json",
-      "sha256": "43e752a18c603bd9791e65100c6c1ef2519df35444bcede9f703751e325d2dc5",
-      "size_bytes": 6581
+      "sha256": "e4d6a734bf17fe169c3e29127d9d6a4606dd93e486d267c110d9eab130af25c5",
+      "size_bytes": 6571
     },
     {
       "path": "native/task.json",
-      "sha256": "b1c3a57a66ae820938e2066e691b71d8e160b4635a57699eed79e844c4fbd8c2",
-      "size_bytes": 968
+      "sha256": "a7a64e6d71434ace3e4d4411a518e0dd295468e9d38b81043ec43a4b212f656b",
+      "size_bytes": 954
     }
   ],
   "assertions": [
@@ -68,7 +68,7 @@
       "status": "PASS"
     },
     {
-      "detail": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+      "detail": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
       "name": "orca_terminated_normally",
       "status": "PASS"
     },
@@ -93,7 +93,7 @@
       "status": "PASS"
     },
     {
-      "detail": "native={'sp.inp': '30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6', 'sp.out': 'b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df'}",
+      "detail": "native={'sp.inp': '30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6', 'sp.out': 'ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621'}",
       "name": "native_artifact_digests_agree",
       "status": "PASS"
     },
@@ -116,8 +116,8 @@
   },
   "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "command": [
-    "<acp2-dev>/venvs/b/bin/python",
-    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "local-singlepoint",
     "--phase",
@@ -127,14 +127,14 @@
     "--launch",
     "reports/acp2_implementation/bb45a46/B/B10/mcp-launch-b10.json",
     "--fixture",
-    "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+    "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B10/local-singlepoint",
     "--timeout",
     "300"
   ],
   "contract_version": "1.1.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {
@@ -148,12 +148,12 @@
       },
       {
         "path": "native/sp.out",
-        "sha256": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+        "sha256": "ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621",
         "size_bytes": 41896
       },
       {
         "path": "native/RESULT__task_result.json",
-        "sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4",
+        "sha256": "cd711c94d41831fb4235dd109b59e754aa5afe2422858c74bcc91aef068ac7e6",
         "size_bytes": 1963
       },
       {
@@ -178,17 +178,17 @@
       },
       {
         "path": "native/execution_receipt.json",
-        "sha256": "f15960a130e8e1bb192feaf063fb9062c5e559c74240bf2c39911da69d683906",
+        "sha256": "9166bb38db9d444a3c0c9bd7ba9749b35eed0c7e098273a2048e231611413aef",
         "size_bytes": 1697
       },
       {
         "path": "native/job.json",
-        "sha256": "43e752a18c603bd9791e65100c6c1ef2519df35444bcede9f703751e325d2dc5",
+        "sha256": "c5124c9f5219b65d5e4823225bf05fedf7ab51177e39b83660d8c7d558b57fb6",
         "size_bytes": 6581
       },
       {
         "path": "native/task.json",
-        "sha256": "b1c3a57a66ae820938e2066e691b71d8e160b4635a57699eed79e844c4fbd8c2",
+        "sha256": "7933ee7b525d2478e45da32f504965c79f3af15ab586d0b5f069eea4fd423f60",
         "size_bytes": 968
       }
     ],
@@ -207,7 +207,7 @@
     },
     "b10.energy_hartree": -1.116759307204,
     "b10.energy_units": "hartree",
-    "b10.fixture": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+    "b10.fixture": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
     "b10.frequencies": [],
     "b10.frequencies_present": false,
     "b10.geometry": {
@@ -240,12 +240,12 @@
     "b10.multiplicity": 1,
     "b10.native_artifact_digests": {
       "sp.inp": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
-      "sp.out": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df"
+      "sp.out": "ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621"
     },
-    "b10.orca_binary": "/home/<user>/orca611/orca",
+    "b10.orca_binary": "/home/redacted-user/orca611/orca",
     "b10.orca_energy_hartree": -1.116759307204,
     "b10.orca_max_concurrent": 1,
-    "b10.orca_output": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+    "b10.orca_output": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
     "b10.orca_pids": [
       596123
     ],
@@ -281,11 +281,11 @@
     "b10.task_ref": "20261023_031453_001_singlepoint",
     "b10.task_result_artifact_digests": {
       "sp.inp": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
-      "sp.out": "sha256:b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df"
+      "sp.out": "sha256:ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621"
     },
     "b10.task_result_digest": "sha256:60d22eff690b080ea38ea3462a615543601ad1c469db699516af5c83e7f376b4",
     "b10.three_entry_descriptor_required": true,
-    "b10.work_dir": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
+    "b10.work_dir": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint"
   },
   "finished_at": "2026-10-22T19:15:14Z",
   "job_id": "20261023_031453_001_singlepoint",

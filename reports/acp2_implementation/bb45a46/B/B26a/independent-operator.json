@@ -46,7 +46,7 @@
       "LC_ALL=C.UTF-8",
       "TMPDIR=/tmp/opencode/b26a-clean/tmp"
     ],
-    "host_software_exception": "The ORCA/xTB local-execution rows used the host binaries named in the published recipe (/home/<user>/orca611, /home/<user>/xtb-dist, OpenMPI bin). Those are host software prerequisites, not the author's shell state or credentials.",
+    "host_software_exception": "The ORCA/xTB local-execution rows used the host binaries named in the published recipe (/home/redacted-user/orca611, /home/redacted-user/xtb-dist, OpenMPI bin). Those are host software prerequisites, not the author's shell state or credentials.",
     "removed_or_absent": [
       "PYTHONPATH",
       "PYTHONHOME",

@@ -18,13 +18,13 @@
     "artifacts": [
       {
         "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
-        "path": "<acp2-dev>/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09/sp.inp",
+        "path": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09/sp.inp",
         "source": "orca",
         "type": "output"
       },
       {
         "checksum": "sha256:6fd7589212e80ba4f043b99361a66a7b45d10f02ae09286c57c74cc177402155",
-        "path": "<acp2-dev>/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09/sp.out",
+        "path": "/opt/acp2-dev/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09/sp.out",
         "source": "orca",
         "type": "log"
       }

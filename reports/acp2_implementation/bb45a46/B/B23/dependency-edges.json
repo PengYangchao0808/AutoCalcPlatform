@@ -43,7 +43,7 @@
     "published_at": "2026-10-23T10:33:41Z",
     "published_before_dispatch": true
   },
-  "path": "<repo>/docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+  "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
   "required_edges": [
     {
       "consumer": "C-T40a",

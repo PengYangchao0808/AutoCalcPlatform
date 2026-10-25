@@ -49,10 +49,10 @@ A-02～04/A-07 是可在 P0 并行开展的反应/Recipe 预研，最迟在 A-14
 : "${ACP2_BASE_REV:?B00 must set the reviewed final_debug_candidate commit}"
 export ACP2_CHECKOUT_ROOT='/可写绝对路径/acp2-development'
 mkdir -p "$ACP2_CHECKOUT_ROOT"
-git -C <repo> worktree add -b acp2/a-science "$ACP2_CHECKOUT_ROOT/A" "$ACP2_BASE_REV"
-git -C <repo> worktree add -b acp2/b-runtime "$ACP2_CHECKOUT_ROOT/B" "$ACP2_BASE_REV"
-git -C <repo> worktree add -b acp2/c-experience "$ACP2_CHECKOUT_ROOT/C" "$ACP2_BASE_REV"
-git -C <repo> worktree add -b acp2/integration "$ACP2_CHECKOUT_ROOT/integration" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/a-science "$ACP2_CHECKOUT_ROOT/A" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/b-runtime "$ACP2_CHECKOUT_ROOT/B" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/c-experience "$ACP2_CHECKOUT_ROOT/C" "$ACP2_BASE_REV"
+git -C repo-root worktree add -b acp2/integration "$ACP2_CHECKOUT_ROOT/integration" "$ACP2_BASE_REV"
 ```
 
 若分支/目录已存在，核对其基线后复用，不执行覆盖/重置。开发 checkout 彼此独立；本机安装、科学作业与真实模型测试只由被指定操作者运行，避免三方重复执行同一笔计算。
@@ -306,7 +306,7 @@ ADR 归属：A 起草 ADR-002/003/008 的科学部分；B 起草 ADR-001/004/005
 - **B25b 安装事实.** 四个干净 venv 安装 0.3.0 四发行；CCCP 无 Controller 样例、Lab、
   stdio MCP、CLI、资产/notice/license、四版本位置均通过；`package-install` exit 0。
 - **未解决跨轨行.** C33/C34 未发布 → `NOT_VERIFIED`（期望
-  `<acp2-dev>/evidence/C/clean-install-live`、
+  `/opt/acp2-dev/evidence/C/clean-install-live`、
   `…/C/operator-runbook-live`）；C 静态资产 manifest 未发布 →
   `NOT_VERIFIED(c_static_assets_absent)`；C35 不是 B25b 前置，不代签。
 
@@ -319,8 +319,8 @@ ADR 归属：A 起草 ADR-002/003/008 的科学部分；B 起草 ADR-001/004/005
 | B | Lab/MCP smoke | `…/B/B25/lab-health.json`; `…/B/B25/mcp-tools.json` | PASS | isolated port/run root; `2025-06-18`, 8 tools |
 | B | asset audit | `…/B/B25/assets-audit.json` | PASS | LICENSE/NOTICE/DP5/model assets/config/schema/SDK/docs |
 | B | version list | `…/B/B25/version-locations.json` | PASS | four locations `0.3.0` |
-| A | A-27b raw install | `<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | present | raw only; no re-sign |
-| A | A-28 SDK/examples | `<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | present (`PASS`) | on A-built 0.2.0 wheel |
-| C | C33 clean install | `<acp2-dev>/evidence/C/clean-install-live` | `NOT_VERIFIED` | expected path absent |
-| C | C34 operator runbook | `<acp2-dev>/evidence/C/operator-runbook-live` | `NOT_VERIFIED` | expected path absent |
+| A | A-27b raw install | `/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | present | raw only; no re-sign |
+| A | A-28 SDK/examples | `/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | present (`PASS`) | on A-built 0.2.0 wheel |
+| C | C33 clean install | `/opt/acp2-dev/evidence/C/clean-install-live` | `NOT_VERIFIED` | expected path absent |
+| C | C34 operator runbook | `/opt/acp2-dev/evidence/C/operator-runbook-live` | `NOT_VERIFIED` | expected path absent |
 | C | static assets | `docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | `NOT_VERIFIED(c_static_assets_absent)` | no mount fabricated |

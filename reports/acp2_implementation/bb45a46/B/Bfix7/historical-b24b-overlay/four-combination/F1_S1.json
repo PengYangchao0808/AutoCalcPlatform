@@ -391,7 +391,7 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
           "/tmp/acp-four-gj1ccxk_/F1",
@@ -547,7 +547,7 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
           "/tmp/acp-four-gj1ccxk_/F1",
@@ -789,7 +789,7 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
           "/tmp/acp-four-gj1ccxk_/F1",
@@ -943,7 +943,7 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
           "/tmp/acp-four-gj1ccxk_/F1",
@@ -1157,7 +1157,7 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
           "/tmp/acp-four-gj1ccxk_/F1",
@@ -1319,7 +1319,7 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
           "/tmp/acp-four-gj1ccxk_/F1",
@@ -1509,7 +1509,7 @@
         ],
         "driver_command": [
           "/usr/bin/python3.11",
-          "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+          "scripts/acceptance/ordinary_legacy_cli.py",
           "--child",
           "--worktree",
           "/tmp/acp-four-gj1ccxk_/F1",
@@ -1587,7 +1587,7 @@
   "environment": {
     "cell_origin_port": 45055,
     "python": "3.11.13",
-    "repo": "<repo>",
+    "repo": "repo-root",
     "service_port": 49077
   },
   "f0_revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
@@ -2096,7 +2096,7 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
             "/tmp/acp-four-gj1ccxk_/F1",
@@ -2252,7 +2252,7 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
             "/tmp/acp-four-gj1ccxk_/F1",
@@ -2494,7 +2494,7 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
             "/tmp/acp-four-gj1ccxk_/F1",
@@ -2648,7 +2648,7 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
             "/tmp/acp-four-gj1ccxk_/F1",
@@ -2862,7 +2862,7 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
             "/tmp/acp-four-gj1ccxk_/F1",
@@ -3024,7 +3024,7 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
             "/tmp/acp-four-gj1ccxk_/F1",
@@ -3214,7 +3214,7 @@
           ],
           "driver_command": [
             "/usr/bin/python3.11",
-            "<repo>/scripts/acceptance/ordinary_legacy_cli.py",
+            "scripts/acceptance/ordinary_legacy_cli.py",
             "--child",
             "--worktree",
             "/tmp/acp-four-gj1ccxk_/F1",
@@ -3234,7 +3234,7 @@
           "workflow": "nmr"
         }
       ],
-      "command": "/usr/bin/python3.11 <repo>/scripts/acceptance/ordinary_legacy_cli.py --worktree /tmp/acp-four-gj1ccxk_/F1 --run-root /tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli",
+      "command": "/usr/bin/python3.11 scripts/acceptance/ordinary_legacy_cli.py --worktree /tmp/acp-four-gj1ccxk_/F1 --run-root /tmp/acp-four-gj1ccxk_/run_S1/ordinary_cli",
       "exit_code": 0,
       "id": "legacy_ordinary_submissions",
       "ok": true,

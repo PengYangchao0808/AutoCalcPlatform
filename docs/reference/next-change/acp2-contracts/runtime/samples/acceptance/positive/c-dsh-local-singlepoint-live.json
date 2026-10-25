@@ -20,7 +20,7 @@
     "--controller",
     "http://127.0.0.1:8765"
   ],
-  "cwd": "<acp2-dev>/C",
+  "cwd": "/opt/acp2-dev/C",
   "started_at": "2026-10-22T12:15:00Z",
   "finished_at": "2026-10-22T12:15:30Z",
   "result": "PASS",

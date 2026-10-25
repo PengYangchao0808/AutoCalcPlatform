@@ -20,7 +20,7 @@
     "label": "release-fix5",
     "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
     "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
-    "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
+    "release_manifest_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
     "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
     "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
     "version": "0.3.0"

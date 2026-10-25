@@ -23,7 +23,7 @@
         "exists": true,
         "sha256": "037f18616c60dd1374d15f964cae0d1f6e95f6c6c2ae3b04d0e759f726b195d1"
       },
-      "resolved_run_root": "/home/<user>/.local/share/acp/runs",
+      "resolved_run_root": "/home/redacted-user/.local/share/acp/runs",
       "~/.cccp.yaml": {
         "bytes": 5675,
         "exists": true
@@ -106,31 +106,31 @@
         "bytes": 45934,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md",
-        "sha256": "4123034a0d106457d514e5ed709d7ba1f4e2be08bd5d2f62129f7a1c5a08a6a8"
+        "sha256": "761dc19835ec7b3b6dee12a55489f3ce207b27bb040ddef2c7e67b94fc9f2ded"
       },
       {
         "bytes": 29319,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md",
-        "sha256": "29864b3eb702cff9fe062df313bbefbfde9b33746d3845a1d2d4b3c67554c43c"
+        "sha256": "d3a3eb2419dc43e1eea01f703ad93ae1d8dd3ac635f01979f436df4b7d5766e4"
       },
       {
         "bytes": 8934,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md",
-        "sha256": "8d4bcf909647ba8caedbcab40b6b31a3879a273d94dc035ebe88ab9a4f4c823e"
+        "sha256": "539d53a8130956fb1021804c748f92104a86ba13c38bc6c2e06d67b5f0a10149"
       },
       {
         "bytes": 9800,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md",
-        "sha256": "dfdb84f2846402f2a4811d5b4c538d1483e34dff91d5a64982c8d40dc1661008"
+        "sha256": "c358254102b91bfad4a9d0e544ff4cc4ba7c0a47f72547f615eaa00da7ba7f45"
       },
       {
         "bytes": 3932,
         "code": "??",
         "path": "docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md",
-        "sha256": "f72d8a38f1989517f0d4250b14d48dde6152b43cffe473d0dfa236d71a431247"
+        "sha256": "9724fdd03021b102e8d1ffcf16823c8b150ae44fe3df342233181d5b7911b83c"
       },
       {
         "code": "??",

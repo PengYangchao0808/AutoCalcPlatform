@@ -10,7 +10,7 @@
       "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-conflict-1.0.0/adapter.json",
       "effective_trust_level": "trusted-explicit",
       "entrypoint_digest": "d0cd56d1ff894940911f4f4513b3c304466e2581c2e8ff4f13038d2c49f0e73e",
-      "entrypoint_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-conflict-1.0.0/adapter.py",
+      "entrypoint_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-conflict-1.0.0/adapter.py",
       "environment": [],
       "executed": false,
       "kind": "storage",
@@ -37,7 +37,7 @@
       "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.0.0/adapter.json",
       "effective_trust_level": "trusted-explicit",
       "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
-      "entrypoint_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.0.0/adapter.py",
+      "entrypoint_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.0.0/adapter.py",
       "environment": [
         "env:ACP2_B21_PLUGIN_ENV"
       ],
@@ -66,7 +66,7 @@
       "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0/adapter.json",
       "effective_trust_level": "trusted-explicit",
       "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
-      "entrypoint_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0/adapter.py",
+      "entrypoint_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0/adapter.py",
       "environment": [
         "env:ACP2_B21_PLUGIN_ENV"
       ],
@@ -95,7 +95,7 @@
       "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-missing-env-1.0.0/adapter.json",
       "effective_trust_level": "trusted-explicit",
       "entrypoint_digest": "bb21e83fab25297cf2f252ffdc0223593d4776c44ffc5541f27fb54f80eab8d8",
-      "entrypoint_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-missing-env-1.0.0/adapter.py",
+      "entrypoint_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-missing-env-1.0.0/adapter.py",
       "environment": [
         "env:ACP2_B21_MISSING_ENV"
       ],
@@ -124,7 +124,7 @@
       "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-sideeffect-1.0.0/adapter.json",
       "effective_trust_level": "trusted-explicit",
       "entrypoint_digest": "bda60e52d1afd38ae32dd7f41edc9d602f905cee99fa7bd91b31e3f1c53fa6e7",
-      "entrypoint_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-sideeffect-1.0.0/adapter.py",
+      "entrypoint_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-sideeffect-1.0.0/adapter.py",
       "environment": [],
       "executed": false,
       "kind": "storage",
@@ -151,7 +151,7 @@
       "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-untrusted-1.0.0/adapter.json",
       "effective_trust_level": "discover-only",
       "entrypoint_digest": "d088495e9a5072d33196757a0a2eedadf36df02165dc9ebdeb6c9bde98ed88a8",
-      "entrypoint_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-untrusted-1.0.0/adapter.py",
+      "entrypoint_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-untrusted-1.0.0/adapter.py",
       "environment": [],
       "executed": false,
       "kind": "storage",
@@ -178,7 +178,7 @@
       "descriptor_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-wrong-version-2.0.0/adapter.json",
       "effective_trust_level": "trusted-explicit",
       "entrypoint_digest": "9b2fdcae982756edf2e60462d9ffdbd24e32af3b247474f12f38364e8e721951",
-      "entrypoint_path": "<repo>/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-wrong-version-2.0.0/adapter.py",
+      "entrypoint_path": "reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-wrong-version-2.0.0/adapter.py",
       "environment": [],
       "executed": false,
       "kind": "storage",

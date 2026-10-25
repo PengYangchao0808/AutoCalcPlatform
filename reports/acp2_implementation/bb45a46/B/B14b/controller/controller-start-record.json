@@ -5,7 +5,7 @@
   "candidate_tree": "9809bea68e7132ae9ab5c0285b2c41373966f443",
   "pid": 1051867,
   "argv": [
-    "<acp2-dev>/venvs/b/bin/python",
+    "/opt/acp2-dev/venvs/b/bin/python",
     "-m",
     "acp",
     "run",
@@ -15,25 +15,25 @@
     "--port",
     "18774",
     "--run-root",
-    "<acp2-dev>/data/b/run-root-b14b",
+    "/opt/acp2-dev/data/b/run-root-b14b",
     "--poll-interval",
     "1",
     "--no-browser"
   ],
-  "cwd": "<acp2-dev>/data/b/controller-config",
-  "pythonpath": "<acp2-dev>/integration/src",
-  "interpreter": "<acp2-dev>/venvs/b/bin/python",
+  "cwd": "/opt/acp2-dev/data/b/controller-config",
+  "pythonpath": "/opt/acp2-dev/integration/src",
+  "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
   "environment": {
-    "PYTHONPATH": "<acp2-dev>/integration/src",
-    "ACP_CONFIG": "<acp2-dev>/data/b/controller-config/cccp.yaml",
-    "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root-b14b",
+    "PYTHONPATH": "/opt/acp2-dev/integration/src",
+    "ACP_CONFIG": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+    "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root-b14b",
     "ACP_CANDIDATE_REVISION": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
-    "CONFSEARCH_ORCA_PATH": "/home/<user>/orca611/orca",
-    "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
-    "LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611"
+    "CONFSEARCH_ORCA_PATH": "/home/redacted-user/orca611/orca",
+    "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+    "LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611"
   },
-  "config": "<acp2-dev>/data/b/controller-config/cccp.yaml",
-  "run_root": "<acp2-dev>/data/b/run-root-b14b",
+  "config": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b14b",
   "bind_host": "127.0.0.1",
   "port": 18774,
   "production_port": 8765,
@@ -49,9 +49,9 @@
     "started_at": "2026-10-23T03:15:08.498141Z"
   },
   "loaded_module_paths": {
-    "acp": "<acp2-dev>/integration/src/acp/__init__.py",
-    "cccp": "<acp2-dev>/integration/src/cccp/__init__.py",
-    "acp_services": "<acp2-dev>/integration/src/acp_services/__init__.py"
+    "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+    "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
+    "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
   },
   "note": "The Controller was started from the frozen candidate source via PYTHONPATH; ACP_CANDIDATE_REVISION was exported to the candidate SHA so /api/health matches the source actually loaded. The B02 acceptance-env.sh H2 value was not edited."
 }

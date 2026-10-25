@@ -37,7 +37,7 @@
 
 C cannot invent the evidence root because product evidence must be reconcilable by
 B and must not land in a path B later reassigns. Today C uses
-`<acp2-dev>/evidence` **only provisionally** and marks it
+`/opt/acp2-dev/evidence` **only provisionally** and marks it
 `PROVISIONAL — B00 must confirm or reassign; NOT_VERIFIED(b00_handoff)`.
 
 ## Minimal input
@@ -49,7 +49,7 @@ B and must not land in a path B later reassigns. Today C uses
   "observed_baseline_lock": "absent",
   "observed_manifest": "absent",
   "historical_reference_sha": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
-  "provisional_evidence_root": "<acp2-dev>/evidence"
+  "provisional_evidence_root": "/opt/acp2-dev/evidence"
 }
 ```
 
@@ -133,7 +133,7 @@ Third failure mode — a patch bundle with only an aggregate digest:
 ## Evidence path
 
 - C-side observation and drift report:
-  `<acp2-dev>/evidence/C/baseline/20261022T191200Z-c00/`
+  `/opt/acp2-dev/evidence/C/baseline/20261022T191200Z-c00/`
 - C candidate block: `docs/reference/next-change/acp2-contracts/experience/ownership.md`
 - B-side expected: `docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json`
   and `docs/reference/next-change/acp2-contracts/runtime/manifest.json`.

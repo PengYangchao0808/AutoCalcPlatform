@@ -12,15 +12,15 @@
     "started_at": "2026-10-23T10:44:24.469581Z",
     "status": "ok"
   },
-  "fixture": "<acp2-dev>/data/b/fixtures/multi-b23.json",
+  "fixture": "/opt/acp2-dev/data/b/fixtures/multi-b23.json",
   "fixture_sha256": "ce929df8e712effaf4c036b1c79a9230b4cba180206c190b560ada7251c17078",
   "harness_revision": "a822ed7ce37f0e2577bf239d7af5eeb327e41a97777919c40ebe5a6a01ef33d2",
   "interpreters": {
-    "b_venv": "<acp2-dev>/venvs/b/bin/python",
+    "b_venv": "/opt/acp2-dev/venvs/b/bin/python",
     "system": "/usr/bin/python3.11"
   },
   "p2_candidate": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
   "schema": "acp2.b23.candidate.v1",
-  "source_overlay": "current working tree via PYTHONPATH=<repo>/src",
+  "source_overlay": "current working tree via PYTHONPATH=src",
   "working_tree_dirty": true
 }

@@ -10,7 +10,7 @@
   {
     "check": "browser-tests",
     "command": [
-      "<venv>/bin/python",
+      "/opt/acp2/venv/bin/python",
       "-m",
       "pytest",
       "-p",

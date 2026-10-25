@@ -15,70 +15,70 @@
   "listening_test_ports": [],
   "migration_fixture_active_rows": [
     {
-      "db": "<acp2-dev>/data/b/b24-migration/backup/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24-migration/backup/acp_jobs.db",
       "id": "mig_lost",
       "pid": 999999,
       "pid_alive": false,
       "status": "running"
     },
     {
-      "db": "<acp2-dev>/data/b/b24-migration/backup/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24-migration/backup/acp_jobs.db",
       "id": "mig_idem_job",
       "pid": null,
       "pid_alive": false,
       "status": "queued"
     },
     {
-      "db": "<acp2-dev>/data/b/b24-migration/db/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24-migration/db/acp_jobs.db",
       "id": "mig_idem_job",
       "pid": null,
       "pid_alive": false,
       "status": "queued"
     },
     {
-      "db": "<acp2-dev>/data/b/b24-migration/restore-pre/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24-migration/restore-pre/acp_jobs.db",
       "id": "mig_lost",
       "pid": 999999,
       "pid_alive": false,
       "status": "running"
     },
     {
-      "db": "<acp2-dev>/data/b/b24-migration/restore-pre/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24-migration/restore-pre/acp_jobs.db",
       "id": "mig_idem_job",
       "pid": null,
       "pid_alive": false,
       "status": "queued"
     },
     {
-      "db": "<acp2-dev>/data/b/b24b-migration/backup/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24b-migration/backup/acp_jobs.db",
       "id": "mig_lost",
       "pid": 999999,
       "pid_alive": false,
       "status": "running"
     },
     {
-      "db": "<acp2-dev>/data/b/b24b-migration/backup/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24b-migration/backup/acp_jobs.db",
       "id": "mig_idem_job",
       "pid": null,
       "pid_alive": false,
       "status": "queued"
     },
     {
-      "db": "<acp2-dev>/data/b/b24b-migration/db/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24b-migration/db/acp_jobs.db",
       "id": "mig_idem_job",
       "pid": null,
       "pid_alive": false,
       "status": "queued"
     },
     {
-      "db": "<acp2-dev>/data/b/b24b-migration/restore-pre/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24b-migration/restore-pre/acp_jobs.db",
       "id": "mig_lost",
       "pid": 999999,
       "pid_alive": false,
       "status": "running"
     },
     {
-      "db": "<acp2-dev>/data/b/b24b-migration/restore-pre/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/b24b-migration/restore-pre/acp_jobs.db",
       "id": "mig_idem_job",
       "pid": null,
       "pid_alive": false,
@@ -88,42 +88,42 @@
   "note": "PAUSED rows are deliberate B15 authorization fixtures with pid=null; migration backup/legacy/restore DBs are frozen B24/B24b evidence, not live jobs. No active queued/running/cancelling/waiting_review row and no test process/port remains in a live run root.",
   "paused_fixture_rows": [
     {
-      "db": "<acp2-dev>/data/b/run-root-b15/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/run-root-b15/acp_jobs.db",
       "id": "b15-alpha-paused-v1",
       "pid": null,
       "pid_alive": false,
       "status": "paused"
     },
     {
-      "db": "<acp2-dev>/data/b/run-root-b15/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/run-root-b15/acp_jobs.db",
       "id": "b15-beta-paused-v1",
       "pid": null,
       "pid_alive": false,
       "status": "paused"
     },
     {
-      "db": "<acp2-dev>/data/b/run-root-b23/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/run-root-b23/acp_jobs.db",
       "id": "b23-alpha-shared",
       "pid": null,
       "pid_alive": false,
       "status": "paused"
     },
     {
-      "db": "<acp2-dev>/data/b/run-root-b23/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/run-root-b23/acp_jobs.db",
       "id": "b23-beta-shared",
       "pid": null,
       "pid_alive": false,
       "status": "paused"
     },
     {
-      "db": "<acp2-dev>/data/b/run-root-b23/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/run-root-b23/acp_jobs.db",
       "id": "b23-alpha-extra",
       "pid": null,
       "pid_alive": false,
       "status": "paused"
     },
     {
-      "db": "<acp2-dev>/data/b/run-root-b23/acp_jobs.db",
+      "db": "/opt/acp2-dev/data/b/run-root-b23/acp_jobs.db",
       "id": "b23-beta-extra",
       "pid": null,
       "pid_alive": false,
@@ -174,7 +174,7 @@
   ],
   "production_deployed": false,
   "production_service": {
-    "command": " 336067       1 Ssl  Thu Oct 22 23:19:37 2026 <venv>/bin/python <venv>/bin/acp run serve --host 0.0.0.0 --port 8765 --no-browser",
+    "command": " 336067       1 Ssl  Thu Oct 22 23:19:37 2026 /opt/acp2/venv/bin/python /opt/acp2/venv/bin/acp run serve --host 0.0.0.0 --port 8765 --no-browser",
     "pid": 336067,
     "restarted": false,
     "state": "running, untouched"

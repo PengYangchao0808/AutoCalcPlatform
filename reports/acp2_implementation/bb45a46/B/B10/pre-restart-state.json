@@ -5,7 +5,7 @@
   ],
   "job_started_events": 1,
   "result_manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
-  "sp_out_sha256": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+  "sp_out_sha256": "ff7c95ca0bb98fc83b2f72626145561929a9c8dfffe3c50c96a7ebc7c283b621",
   "task_count": 1,
-  "task_result_sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4"
+  "task_result_sha256": "cd711c94d41831fb4235dd109b59e754aa5afe2422858c74bcc91aef068ac7e6"
 }

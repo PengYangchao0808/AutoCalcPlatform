@@ -1,10 +1,10 @@
 {
   "argv": [
-    "<acp2-dev>/venvs/b/bin/python",
+    "/opt/acp2-dev/venvs/b/bin/python",
     "-m",
     "acp2_controller_fault",
     "--fault-file",
-    "<repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
     "--",
     "run",
     "serve",
@@ -13,17 +13,17 @@
     "--port",
     "18771",
     "--run-root",
-    "<acp2-dev>/data/b/run-root-b13",
+    "/opt/acp2-dev/data/b/run-root-b13",
     "--poll-interval",
     "1",
     "--no-browser"
   ],
-  "cwd": "<acp2-dev>/B/src",
-  "fault_file": "<repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+  "cwd": "/opt/acp2-dev/B/src",
+  "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
   "fault_seam": true,
   "pid": 715881,
-  "run_root": "<acp2-dev>/data/b/run-root-b13",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b13",
   "source_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
   "source_revision_matches": true,
-  "source_root": "<acp2-dev>/B"
+  "source_root": "/opt/acp2-dev/B"
 }

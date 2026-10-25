@@ -15,7 +15,7 @@
       "id": "20261023_002746_001_singlepoint",
       "workflow": "singlepoint",
       "status": "failed",
-      "work_dir": "<repo>/reports/acp2_implementation/bb45a46/B/B08/restart-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "work_dir": "reports/acp2_implementation/bb45a46/B/B08/restart-run-root/uncategorized/2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
       "attempt": 1
     }
   ]

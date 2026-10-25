@@ -6,7 +6,7 @@
       "id": "A-27b",
       "note": "Raw evidence present at the registered B25 path; B does not re-sign A science.",
       "owner": "A",
-      "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+      "path": "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
       "present": true,
       "raw_facts": {
         "acceptance_focus_exit_code": 0,
@@ -23,7 +23,7 @@
       "id": "A-28",
       "note": "Raw evidence present; A-28 PASS was on 0.2.0 per inherited B25b context. B does not re-sign.",
       "owner": "A",
-      "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+      "path": "/opt/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
       "present": true,
       "raw_facts": {
         "adversarial_probes": 6,
@@ -37,7 +37,7 @@
       "id": "C33",
       "note": "Other C evidence roots exist, but the registered C33 path is absent; no C install sign-off is claimed.",
       "owner": "C",
-      "path": "<acp2-dev>/evidence/C/clean-install-live",
+      "path": "/opt/acp2-dev/evidence/C/clean-install-live",
       "present": false,
       "reason": "registered_path_absent",
       "status": "NOT_VERIFIED"
@@ -46,7 +46,7 @@
       "id": "C34",
       "note": "Registered path absent; no C operator-runbook sign-off is claimed.",
       "owner": "C",
-      "path": "<acp2-dev>/evidence/C/operator-runbook-live",
+      "path": "/opt/acp2-dev/evidence/C/operator-runbook-live",
       "present": false,
       "reason": "registered_path_absent",
       "status": "NOT_VERIFIED"

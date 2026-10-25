@@ -41,14 +41,14 @@
       "status": "PASS"
     },
     {
-      "expected_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
       "owner": "A",
       "reason": "A has not published the H7 science sign-off; B does not sign A scope.",
       "row_id": "A-29-science-signoff",
       "status": "NOT_VERIFIED(a29_absent)"
     },
     {
-      "expected_path": "<acp2-dev>/C/experience-release-closeout/",
+      "expected_path": "/opt/acp2-dev/C/experience-release-closeout/",
       "owner": "C",
       "reason": "C35 is absent. The C plan lists C32-C34, not B26, so the disposition is c35_absent (no C35_INPUT_CYCLE).",
       "row_id": "C35-experience-closeout",

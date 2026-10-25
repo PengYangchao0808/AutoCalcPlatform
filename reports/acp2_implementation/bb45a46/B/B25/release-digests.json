@@ -37,12 +37,12 @@
       "ok": true
     }
   ],
-  "manifest": "<repo>/reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
+  "manifest": "reports/acp2_implementation/bb45a46/B/B25/release/release-manifest.json",
   "ok": true,
   "root_wheel": {
     "actual": "7cba73083e444f8e2be12176eebcbe16012aa4954a4d5052606d83ea6eaf484d",
     "expected": "7cba73083e444f8e2be12176eebcbe16012aa4954a4d5052606d83ea6eaf484d",
     "ok": true,
-    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl"
+    "path": "reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl"
   }
 }

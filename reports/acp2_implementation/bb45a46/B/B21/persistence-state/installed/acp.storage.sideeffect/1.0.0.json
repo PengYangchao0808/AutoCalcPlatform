@@ -30,7 +30,7 @@
   "effective_trust_level": "trusted-explicit",
   "enabled": true,
   "entrypoint_digest": "bda60e52d1afd38ae32dd7f41edc9d602f905cee99fa7bd91b31e3f1c53fa6e7",
-  "entrypoint_path": "<acp2-dev>/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.py",
+  "entrypoint_path": "/opt/acp2-dev/data/b/plugins/b21/storage-sideeffect-1.0.0/adapter.py",
   "installed_at": "2026-10-23T09:52:35Z",
   "installed_by": "controller",
   "schema": "acp2.adapter.installed.v1"

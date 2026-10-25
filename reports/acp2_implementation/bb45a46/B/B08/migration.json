@@ -1,5 +1,5 @@
 {
-  "db": "<acp2-dev>/data/b/run-root-b08/acp_jobs.db",
+  "db": "/opt/acp2-dev/data/b/run-root-b08/acp_jobs.db",
   "applied_migrations": [
     {
       "id": "001",

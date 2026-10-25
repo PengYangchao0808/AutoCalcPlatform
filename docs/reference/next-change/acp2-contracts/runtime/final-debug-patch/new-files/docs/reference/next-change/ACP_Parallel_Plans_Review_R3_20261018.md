@@ -34,7 +34,7 @@
 
 ### 3.1 C-T54 必须是发布前的合并版本验收
 
-**位置：** [C-T54](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:788)、[C 最终验收规则](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:821)、Success criteria 的 IS-10。
+**位置：** [C-T54](.omo/plans/acp-parallel-plan-3-cccp.md:788)、[C 最终验收规则](.omo/plans/acp-parallel-plan-3-cccp.md:821)、Success criteria 的 IS-10。
 
 T54 本身仍是“B 应用打包补丁后，对合并提交重建、安装并运行科学样例”，任务头明确 `Blocks: B release`。但新的 F-wave 注释与 IS-10 又把它归为“发布后结果核对”，并从发布前终验排除。两处语义相反。
 
@@ -61,7 +61,7 @@ flowchart LR
 
 ### 3.2 B-T32 的真实入口切换必须等待 T77/T78
 
-**位置：** [B-T32](<repo>/.omo/plans/acp-parallel-plan-2-services.md:491)、[B-T77](<repo>/.omo/plans/acp-parallel-plan-2-services.md:459)、[B-T78](<repo>/.omo/plans/acp-parallel-plan-2-services.md:521)。
+**位置：** [B-T32](.omo/plans/acp-parallel-plan-2-services.md:491)、[B-T77](.omo/plans/acp-parallel-plan-2-services.md:459)、[B-T78](.omo/plans/acp-parallel-plan-2-services.md:521)。
 
 T77/T78 已补齐迁移和 worker 装配，但 T32 仍只等待 T30–T31 和 C01。按任务头计算，T32 的数字前置闭包只有 `{1,2,3,30,31,72}`，不含 T77/T78；因此执行入口可以在旧实现尚未移除、独立装配尚未通过时切换。T32 自身的独立入口测试也会提前消费尚未完成的产物。
 
@@ -78,7 +78,7 @@ T77/T78 已补齐迁移和 worker 装配，但 T32 仍只等待 T30–T31 和 C0
 
 ### 3.3 在 B 计划中实际接收 C 的科学产品 adapter
 
-**位置：** [C-T13](<repo>/.omo/plans/acp-parallel-plan-3-cccp.md:335)、[B-T28](<repo>/.omo/plans/acp-parallel-plan-2-services.md:439)、A-GT3。
+**位置：** [C-T13](.omo/plans/acp-parallel-plan-3-cccp.md:335)、[B-T28](.omo/plans/acp-parallel-plan-2-services.md:439)、A-GT3。
 
 C-T13 已要求写出 B 侧任务号或 B-T28 子项；A-GT3 也等待 B 的 frames/annotation adapter。但当前 B-T28 仍只实施已有发布入口、markers 和 manifest 的收敛，没有新增产品→frames/annotation 的 adapter 范围、前置和验收。仅让交付方在未来登记任务号，不等于接收方已有实现任务。
 

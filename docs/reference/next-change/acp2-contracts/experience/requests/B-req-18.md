@@ -86,7 +86,7 @@ currently sees the weaker parameter surface. C records this as Finding F1 in
 ## Minimal acceptance C will run once the Controller is up
 
 ```bash
-source <acp2-dev>/data/acceptance-env-c.sh
+source /opt/acp2-dev/data/acceptance-env-c.sh
 c_accept mcp-live 300          # expect 0/PASS or 2/NOT_VERIFIED, never fabricated PASS
 ```
 

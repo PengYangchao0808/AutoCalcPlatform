@@ -136,33 +136,33 @@
   "D8": {
     "orca": {
       "on_path": "/usr/bin/orca",
-      "configured_path": "/home/<user>/orca611/orca",
-      "production_resolved": "/home/<user>/orca611/orca"
+      "configured_path": "/home/redacted-user/orca611/orca",
+      "production_resolved": "/home/redacted-user/orca611/orca"
     },
     "crest": {
-      "on_path": "/home/<user>/bin/crest",
-      "configured_path": "/home/<user>/crest/crest",
-      "production_resolved": "/home/<user>/crest/crest"
+      "on_path": "/home/redacted-user/bin/crest",
+      "configured_path": "/home/redacted-user/crest/crest",
+      "production_resolved": "/home/redacted-user/crest/crest"
     },
     "xtb": {
-      "on_path": "/home/<user>/xtb-dist/bin/xtb",
-      "configured_path": "/home/<user>/xtb-dist/bin/xtb",
-      "production_resolved": "/home/<user>/xtb-dist/bin/xtb"
+      "on_path": "/home/redacted-user/xtb-dist/bin/xtb",
+      "configured_path": "/home/redacted-user/xtb-dist/bin/xtb",
+      "production_resolved": "/home/redacted-user/xtb-dist/bin/xtb"
     },
     "censo": {
-      "on_path": "/home/<user>/.local/bin/censo",
-      "configured_path": "/home/<user>/anaconda3/bin/censo",
-      "production_resolved": "/home/<user>/anaconda3/bin/censo"
+      "on_path": "/home/redacted-user/.local/bin/censo",
+      "configured_path": "/home/redacted-user/anaconda3/bin/censo",
+      "production_resolved": "/home/redacted-user/anaconda3/bin/censo"
     },
     "shermo": {
       "on_path": null,
-      "configured_path": "/home/<user>/Shermo_2.6.1/Shermo",
-      "production_resolved": "/home/<user>/Shermo_2.6.1/Shermo"
+      "configured_path": "/home/redacted-user/Shermo_2.6.1/Shermo",
+      "production_resolved": "/home/redacted-user/Shermo_2.6.1/Shermo"
     },
     "isostat": {
       "on_path": null,
-      "configured_path": "/home/<user>/molclus_1.14_Linux/isostat",
-      "production_resolved": "/home/<user>/molclus_1.14_Linux/isostat"
+      "configured_path": "/home/redacted-user/molclus_1.14_Linux/isostat",
+      "production_resolved": "/home/redacted-user/molclus_1.14_Linux/isostat"
     }
   },
   "repository_head": "32d474890495e2d0f92940f5cfd074d84988337e",

@@ -2,7 +2,7 @@
   "launch_version": 1,
   "transport": "stdio",
   "protocol_version": "2025-06-18",
-  "command": "<acp2-dev>/venvs/b/bin/python",
+  "command": "/opt/acp2-dev/venvs/b/bin/python",
   "args": [
     "-m",
     "acp",
@@ -15,10 +15,10 @@
     "--log-level",
     "WARNING"
   ],
-  "cwd": "<repo>",
+  "cwd": ".",
   "env": {
-    "PYTHONPATH": "<repo>/src",
-    "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root-b08",
+    "PYTHONPATH": "src",
+    "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root-b08",
     "ACP_CONTROLLER_URL": "http://127.0.0.1:18766",
     "ACP2_MCP_LOG_LEVEL": "WARNING"
   },

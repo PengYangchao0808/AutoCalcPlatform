@@ -18,13 +18,13 @@
     "artifacts": [
       {
         "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
-        "path": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp",
+        "path": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp",
         "source": "orca",
         "type": "output"
       },
       {
-        "checksum": "sha256:566529291f50b4bebbec3ea3328880e1f6ab9d5afb34233f8a6c1157ad341c5a",
-        "path": "<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+        "checksum": "sha256:bbcd4d8f05d0d68963f7b45dd4878ddc26f1c92b39babad6880671a549857fb5",
+        "path": "/opt/acp2-dev/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
         "source": "orca",
         "type": "log"
       }

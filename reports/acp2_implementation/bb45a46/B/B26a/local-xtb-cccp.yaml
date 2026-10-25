@@ -1,6 +1,6 @@
 executables:
   xtb:
-    path: /home/<user>/xtb-dist/bin/xtb
+    path: /home/redacted-user/xtb-dist/bin/xtb
 cluster:
   enabled: false
   execution_mode: local

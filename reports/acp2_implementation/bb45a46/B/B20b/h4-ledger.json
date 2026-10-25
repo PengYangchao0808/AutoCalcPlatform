@@ -2,7 +2,7 @@
   "schema": "acp2.b20b.h4-ledger.v1",
   "generated_at": "2026-10-23T09:17:41Z",
   "source_handoff": {
-    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
+    "path": "reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
     "schema": "acp2.b20b.science-handoff.v1"
   },
   "h4_gate": "open",
@@ -18,10 +18,10 @@
       "required_for_h4_closure": true,
       "source": "B20a-exec",
       "source_gap": "B20a-exec has not published the authorized TS optimize/frequency step receipts and artifacts: no real magnitude/mode record, snapshot digest, attempt or release exists. A constructed validator PASS is not real evidence.",
-      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "promoted": false,
       "promotion_reason": null
@@ -36,10 +36,10 @@
       "required_for_h4_closure": true,
       "source": "B20a-exec",
       "source_gap": "B20a-exec has not published the authorized forward/reverse IRC step receipts and artifacts: no real direction results, native step counts, terminal states or snapshot digest exist.",
-      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "promoted": false,
       "promotion_reason": null
@@ -54,10 +54,10 @@
       "required_for_h4_closure": true,
       "source": "B20a-exec",
       "source_gap": "B20a-exec has not published the authorized endpoint geometries or the mapped product structure; no real atom-order-stable endpoint mapping exists.",
-      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "promoted": false,
       "promotion_reason": null
@@ -72,10 +72,10 @@
       "required_for_h4_closure": true,
       "source": "B20a-exec",
       "source_gap": "B20a-exec has not published authorized energy/thermochemistry artifacts; additionally B18 must reconcile the frozen 1_bar_ideal_gas standard state with the ThermochemistryOptions 1atm/1M lexicon before a real run.",
-      "source_artifact": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_artifact": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
       "source_digest": {
         "algorithm": "sha256",
-        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+        "value": "37fd8f6b5e10ce0f8420cf6985b378125eeff8b9be1e25f382d04ccc86b9160b"
       },
       "promoted": false,
       "promotion_reason": null
@@ -90,7 +90,7 @@
       "required_for_h4_closure": true,
       "source": "B20a-search",
       "source_gap": "B20a-search has not published its separate search evidence row: no input category, candidate source/count, generation steps, rejection reasons, validators or success criteria exist. A control-loop or known-candidate PASS is explicitly not search evidence.",
-      "source_artifact": "<repo>/reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
+      "source_artifact": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
       "source_digest": {
         "algorithm": "sha256",
         "value": "cc70787c02fc9b488d5d0e5d0ebf608d3292050f799fbe6da9fa010988280f8e"

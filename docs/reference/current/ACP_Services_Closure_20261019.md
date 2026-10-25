@@ -139,7 +139,7 @@ L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留
 | 门 | 渠道 | 状态 | 依据 | 原因（逐项） |
 |---|---|---|---|---|
 | **浏览器** | A05 | **NOT_VERIFIED** | `.omo/evidence/acp-parallel-plan-1-frontend/task-31-acp-parallel-plan-1-frontend.md`、`task-32-…md`、`task-33-…md`；`docs/reference/current/ACP_Frontend_Plan1_Acceptance_20261019.md` | A05 的 13+2 浏览器矩阵绑定**其自身提交**（`5518aa6`/`c579c66`），不是本候选 `71c36da`；B 只执行 A 提供的黑盒用例、**不取得 A 源码写权**，本轮未收到候选级黑盒用例；A05 退出门按计划保持 OPEN |
-| **科学软件** | C10 | **NOT_VERIFIED** | `tests/baseline/cccp-evidence/c10-final-evidence-index.md`；`tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md` | 真实 ORCA/xTB/CREST/CENSO 未在本候选运行；`xtb`/`crest`/`censo`/`isostat`/`molclus` 不在 PATH；`/home/<user>/orca611/orca` 仅回应参数提示，未经 ACP 执行；C10 未在本候选出判定 |
+| **科学软件** | C10 | **NOT_VERIFIED** | `tests/baseline/cccp-evidence/c10-final-evidence-index.md`；`tests/baseline/cccp-evidence/handoffs/HN-02-frames-mapping.md` | 真实 ORCA/xTB/CREST/CENSO 未在本候选运行；`xtb`/`crest`/`censo`/`isostat`/`molclus` 不在 PATH；`/home/redacted-user/orca611/orca` 仅回应参数提示，未经 ACP 执行；C10 未在本候选出判定 |
 | **LSF / 远端** | C10 / B | **NOT_VERIFIED** | `tests/baseline/services-evidence/isolation_matrix.md`（lsf-identity `configured`，live cluster NOT_VERIFIED）；`tests/test_remote_phase1.py` 系列（夹具） | `/opt/openlava-2.0/bin/{bjobs,bhosts}` 存在但 `lsb_init: Failed … Unable to open file lsf.conf` → 无可用集群；SSH 无节点凭据 |
 | **生产** | B | **NOT_VERIFIED** | 计划 todo 76 门（F1–F4 全 APPROVE 后才发布） | 本 todo **未发布、未重启服务、未改 unit**；发布后冒烟归 todo 76 + F5 |
 

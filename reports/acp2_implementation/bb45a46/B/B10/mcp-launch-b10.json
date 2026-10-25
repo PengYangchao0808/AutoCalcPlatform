@@ -11,7 +11,7 @@
     "--log-level",
     "INFO"
   ],
-  "command": "<acp2-dev>/venvs/b/bin/python",
+  "command": "/opt/acp2-dev/venvs/b/bin/python",
   "constraints": {
     "max_in_flight": 4,
     "no_credential_in_descriptor": true,
@@ -28,24 +28,24 @@
     "start_controller": false,
     "transport": "loopback-http"
   },
-  "cwd": "<acp2-dev>/B/src",
+  "cwd": "/opt/acp2-dev/B/src",
   "env": {
     "ACP2_MCP_LOG_LEVEL": "INFO",
-    "ACP2_TOOLS": "<acp2-dev>/venvs",
-    "ACP_CONFIG": "<acp2-dev>/data/b/controller-config/cccp.yaml",
+    "ACP2_TOOLS": "/opt/acp2-dev/venvs",
+    "ACP_CONFIG": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
     "ACP_CONTROLLER_URL": "http://127.0.0.1:18768",
-    "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root-b10",
-    "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
-    "CONFSEARCH_ORCA_PATH": "/home/<user>/orca611/orca",
-    "LD_LIBRARY_PATH": "/home/<user>/openmpi418/lib:/home/<user>/orca611",
-    "PATH": "<acp2-dev>/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+    "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root-b10",
+    "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+    "CONFSEARCH_ORCA_PATH": "/home/redacted-user/orca611/orca",
+    "LD_LIBRARY_PATH": "/home/redacted-user/openmpi418/lib:/home/redacted-user/orca611",
+    "PATH": "/opt/acp2-dev/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
   },
   "extensions": [
     {
       "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
       "controller": "http://127.0.0.1:18768",
       "id": "acp.b10.p1",
-      "run_root": "<acp2-dev>/data/b/run-root-b10"
+      "run_root": "/opt/acp2-dev/data/b/run-root-b10"
     }
   ],
   "initialize": {

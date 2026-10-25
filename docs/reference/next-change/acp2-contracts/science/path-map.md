@@ -2,7 +2,7 @@
 
 Baseline: delivery revision `2e0ce9c202f5a65180aa97ca2787f82dc0054e6b` on `acp2/a-science`
 (see `baseline.md`). All paths below are relative to the A worktree
-`<acp2-dev>/A` unless prefixed with `$ACP2_EVIDENCE`.
+`/opt/acp2-dev/A` unless prefixed with `$ACP2_EVIDENCE`.
 
 Rule from the plan: every path marked **new** was searched against the frozen baseline first. If an
 equivalent module already exists, the existing implementation is extended and this map records the
@@ -71,6 +71,6 @@ require an F4 amendment request to B first; existing greps/guards must not be re
 
 - Snapshot identity: 1906 files, SHA-256 per `candidate-snapshot.json`, drift 0 (see `baseline.md` §3).
 - Import resolution: `cccp`, `acp`, `acp_services` all under
-  `<acp2-dev>/A/src/` with `$ACP2_A_PYTHON` (see `baseline.md` §4).
+  `/opt/acp2-dev/A/src/` with `$ACP2_A_PYTHON` (see `baseline.md` §4).
 - Baseline guards (A-00): `tests/test_architecture_invariants.py`, `tests/test_cccp_isolation.py`,
   `tests/test_recovery_fixtures_smoke.py` — raw output in `$ACP2_EVIDENCE/A/A-00/`.

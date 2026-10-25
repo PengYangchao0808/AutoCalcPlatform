@@ -91,7 +91,7 @@
 ### 4.1 规范流程（项目铁律）
 
 1. **编辑 `scripts/install_systemd.sh`，勿手改 `/etc/systemd/system/acp.service`**（根 AGENTS SYSTEMD 节；unit 为 generated 文件）。
-2. 重新生成 + 重启：`sudo bash scripts/install_systemd.sh --user <user>`（脚本内含 `tee` 写 unit → `daemon-reload` → `restart`）。
+2. 重新生成 + 重启：`sudo bash scripts/install_systemd.sh --user redacted-user`（脚本内含 `tee` 写 unit → `daemon-reload` → `restart`）。
 3. 观察：`sudo journalctl -u acp -f`；`systemctl is-active acp`。
 
 ### 4.2 unit 生成来源核对（本 todo 只读核对，未重启、未改 unit）
@@ -104,15 +104,15 @@
 |---|---|---|---|
 | Description | `ACP — Auto-Calc Platform Web Dashboard` | `ACP Auto-Calc Platform (FastAPI Web Service + Scheduler)` | DRIFT |
 | After/Wants | `After=network.target` | `After=network-online.target` + `Wants=network-online.target` | DRIFT（多行） |
-| ExecStart | `$PROJECT_ROOT/scripts/start_acp.sh` | `<venv>/bin/acp run serve --host 0.0.0.0 --port 8765 --no-browser` | **DRIFT（实质：绕过 start_acp.sh，venv 直启）** |
+| ExecStart | `$PROJECT_ROOT/scripts/start_acp.sh` | `/opt/acp2/venv/bin/acp run serve --host 0.0.0.0 --port 8765 --no-browser` | **DRIFT（实质：绕过 start_acp.sh，venv 直启）** |
 | Environment | `ACP_RUN_ROOT=/var/lib/acp/runs` | 同 + `PYTHONDONTWRITEBYTECODE=1` | DRIFT（多一行） |
 | 加固/日志行 | 无 | `TimeoutStopSec=30` `UMask=0027` `LimitNOFILE=65536` `StandardOutput/Error=journal` `SyslogIdentifier=acp` `Documentation=` | DRIFT（多行） |
 | User/Group/WorkingDirectory/StateDirectory/LogsDirectory/Restart/WantedBy | 与模板一致 | 一致 | OK |
 
 **结论**：现网 unit 曾被手改（或由其他版本脚本生成）——**恰好是本 todo 要防的反模式**。todo 76 重启前必须二选一收口（不得第三选手改）：
 
-- **路径 A（推荐）**：把生产行并入 `scripts/install_systemd.sh` 模板（venv 直启 vs `start_acp.sh`、network-online、加固行、环境行——逐行评审后写入 heredoc），然后 `sudo bash scripts/install_systemd.sh --user <user>` 重新生成；此后模板即真相。
-- **路径 B**：接受模板现状，重新生成会**丢失**上述生产定制（venv 直启改为 start_acp.sh 需要 `.venv` 存在或 conda PATH 满足 `start_acp.sh:14-23` 的回退条件——当前生产用 `<venv>`，须先核对 start_acp.sh 能否解析到它）。
+- **路径 A（推荐）**：把生产行并入 `scripts/install_systemd.sh` 模板（venv 直启 vs `start_acp.sh`、network-online、加固行、环境行——逐行评审后写入 heredoc），然后 `sudo bash scripts/install_systemd.sh --user redacted-user` 重新生成；此后模板即真相。
+- **路径 B**：接受模板现状，重新生成会**丢失**上述生产定制（venv 直启改为 start_acp.sh 需要 `.venv` 存在或 conda PATH 满足 `start_acp.sh:14-23` 的回退条件——当前生产用 `/opt/acp2/venv`，须先核对 start_acp.sh 能否解析到它）。
 
 **todo 76 执行时**：记录选择的路径 + 重新生成后的 `systemctl cat acp` 输出快照入发布记录；此后任何 unit 变更只经 `install_systemd.sh`。
 

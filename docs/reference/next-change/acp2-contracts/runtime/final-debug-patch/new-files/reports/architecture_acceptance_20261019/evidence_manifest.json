@@ -110,12 +110,12 @@
     {
       "path": "evidence/defects.xml",
       "bytes": 15101,
-      "sha256": "8f4f5bd36f1650b1faa855c9d33e5a301241d2e71da75928d8308d8f8e20c593"
+      "sha256": "8b157d4d05e188cae2167c8bdd976683d590f1d6f2435afa9aaec654fd184fa7"
     },
     {
       "path": "evidence/e2e-task-root.test-output.txt",
       "bytes": 47,
-      "sha256": "6393ab1ad82efef7b2b46375c47b859bd608ccb19939578de4b625b3f1618d2b"
+      "sha256": "6f08cb7bb73c7f0da3a39b057b6c3ae5c40c30e793ea672c091c2405b0e151c7"
     },
     {
       "path": "evidence/format.log",
@@ -130,7 +130,7 @@
     {
       "path": "evidence/guards.xml",
       "bytes": 28105,
-      "sha256": "290851027fdb6ea377ea2115657b46f356db3dc3993e64c9b098c16832cd6ba5"
+      "sha256": "7961fa9235e403fba489f330a23014c1a1d7241dc82991664af53550eb6c666f"
     },
     {
       "path": "evidence/metrics.json",
@@ -150,12 +150,12 @@
     {
       "path": "evidence/nonslow-unrestricted.xml",
       "bytes": 1263078,
-      "sha256": "ad6be2e3c47f00576565b645a02d01358a9e4bf847743ddfedfd72885b2bab2b"
+      "sha256": "c517a1aa458281ee7a2ab579f68f38137bfc2b27becf6d0877cc21b3ba44bf92"
     },
     {
       "path": "evidence/ruff.json",
       "bytes": 7399,
-      "sha256": "9b993bbf4ef10807b6c68a8cdc2780a73be0e26024af637692096aaffe5466aa"
+      "sha256": "af0db8f5c61c271dbefe0f61f8af474e254f65abdcdd83c714fa149279157075"
     },
     {
       "path": "evidence/wheel-build-with-local-tools.log",

@@ -13,16 +13,16 @@
     },
     "transport": "stdio",
     "protocol_version": "2025-06-18",
-    "command": "<acp2-venv>/bin/python",
+    "command": "/opt/acp2/venv/bin/python",
     "args": [
       "-m",
       "acp_services.entrypoints.mcp",
       "--controller",
       "http://127.0.0.1:18765"
     ],
-    "cwd": "<acp2-data>/runs",
+    "cwd": "/opt/acp2/data/runs",
     "env": {
-      "ACP_RUN_ROOT": "<acp2-data>/runs",
+      "ACP_RUN_ROOT": "/opt/acp2/data/runs",
       "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
       "ACP2_MCP_LOG_LEVEL": "INFO",
       "ACP2_TOOLS": "/opt/acp2/tools",

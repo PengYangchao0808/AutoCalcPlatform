@@ -1,1 +1,1 @@
-/tmp/pytest-of-<user>/pytest-4356/e2e_chain0
+/tmp/pytest-of-redacted-user/pytest-4356/e2e_chain0

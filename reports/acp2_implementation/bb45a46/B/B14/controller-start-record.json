@@ -4,7 +4,7 @@
   "candidate_tree": "0a9436f24a2a62232c2186a8ba75d0b05f3397a8",
   "pid": 827185,
   "argv": [
-    "<acp2-dev>/venvs/b/bin/python",
+    "/opt/acp2-dev/venvs/b/bin/python",
     "-m",
     "acp",
     "run",
@@ -14,14 +14,14 @@
     "--port",
     "18772",
     "--run-root",
-    "<acp2-dev>/data/integration/controller-run-root",
+    "/opt/acp2-dev/data/integration/controller-run-root",
     "--no-browser"
   ],
-  "cwd": "<acp2-dev>/data/integration/controller-config",
-  "pythonpath": "<acp2-dev>/integration/src",
-  "interpreter": "<acp2-dev>/venvs/b/bin/python",
-  "db_path": "<acp2-dev>/data/integration/controller-run-root/acp_jobs.db",
-  "run_root": "<acp2-dev>/data/integration/controller-run-root",
+  "cwd": "/opt/acp2-dev/data/integration/controller-config",
+  "pythonpath": "/opt/acp2-dev/integration/src",
+  "interpreter": "/opt/acp2-dev/venvs/b/bin/python",
+  "db_path": "/opt/acp2-dev/data/integration/controller-run-root/acp_jobs.db",
+  "run_root": "/opt/acp2-dev/data/integration/controller-run-root",
   "bind_host": "127.0.0.1",
   "port": 18772,
   "production_port": 8765,
@@ -33,9 +33,9 @@
     "read_only": true
   },
   "loaded_module_paths": {
-    "acp": "<acp2-dev>/integration/src/acp/__init__.py",
-    "cccp": "<acp2-dev>/integration/src/cccp/__init__.py",
-    "acp_services": "<acp2-dev>/integration/src/acp_services/__init__.py"
+    "acp": "/opt/acp2-dev/integration/src/acp/__init__.py",
+    "cccp": "/opt/acp2-dev/integration/src/cccp/__init__.py",
+    "acp_services": "/opt/acp2-dev/integration/src/acp_services/__init__.py"
   },
   "note": "PID/port are from this B14a run; the candidate serves integration source through PYTHONPATH while the B02 venv remains the interpreter environment."
 }

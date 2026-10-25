@@ -7,7 +7,7 @@
   T-05, T-06, T-11, T-12, T-13, T-18–T-22, T-34–T-40
 - **Consumer track:** C (`acp2-plan-c-rph-workbench`)
 - **Current schema revision:** no versioned `docs/reference/next-change/acp2-contracts/runtime/dependencies.json`
-  is visible in the C baseline (`<acp2-dev>/C`, HEAD
+  is visible in the C baseline (`/opt/acp2-dev/C`, HEAD
   `c54823109010b651de3f0cca28da5af54a10fdfb`); `runtime/**` is absent there.
   C keeps its own rows in `experience/handoffs/dependencies-c.json`
   (`acp2.experience.dependencies-c.v1`, 6 rows, all `delivered:false`) and never

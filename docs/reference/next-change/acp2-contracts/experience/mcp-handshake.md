@@ -15,25 +15,25 @@
 
 | Descriptor | Path (under `$ACP2_EVIDENCE`) | SHA-256 | Contract | Contract digest |
 | --- | --- | --- | --- | --- |
-| B05 | `B/B05/mcp-launch.json` | `ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046` | `1.0.0` | `1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488` |
-| B06 | `B/B06/mcp-launch.json` | `867d25a6e5757ded401006e2c51f3512fcce551299a3221e7b892e3b82c9a7f6` | `1.1.0` | `67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4` |
+| B05 | `B/B05/mcp-launch.json` | `07e140de13b72ef4ef5fcd87bcfb185467625d61ae20499b58ab0420ee827971` | `1.0.0` | `1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488` |
+| B06 | `B/B06/mcp-launch.json` | `5c88e7407d89a122766cae6111f126dd40ef64cf8f00e6947de3152274339475` | `1.1.0` | `67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4` |
 
 Both descriptors are byte-identical except for the server contract version,
 the extension block and the tool `inputSchema` revision:
 
 ```json
 {
-  "command": "<acp2-dev>/venvs/b/bin/python",
+  "command": "/opt/acp2-dev/venvs/b/bin/python",
   "args": ["-m", "acp", "mcp", "serve", "--transport", "stdio",
            "--controller", "http://127.0.0.1:18765", "--log-level", "INFO"],
-  "cwd": "<repo>/src",
+  "cwd": "src",
   "env": {
-    "ACP_RUN_ROOT": "<acp2-dev>/data/b/run-root",
+    "ACP_RUN_ROOT": "/opt/acp2-dev/data/b/run-root",
     "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
     "ACP2_MCP_LOG_LEVEL": "INFO",
-    "ACP2_TOOLS": "<acp2-dev>/venvs",
-    "ACP_CONFIG": "<acp2-dev>/data/b/controller-config/cccp.yaml",
-    "PATH": "<acp2-dev>/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+    "ACP2_TOOLS": "/opt/acp2-dev/venvs",
+    "ACP_CONFIG": "/opt/acp2-dev/data/b/controller-config/cccp.yaml",
+    "PATH": "/opt/acp2-dev/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
   },
   "protocol_version": "2025-06-18",
   "transport": "stdio",
@@ -50,7 +50,7 @@ Static checks executed by the scenario (all **PASS**, run
 - `launch_version == 1`, `transport == "stdio"`, `protocol_version == "2025-06-18"`;
 - contract versions `1.0.0` (B05) / `1.1.0` (B06) and 64-hex contract digests;
 - absolute executable exists (`…/venvs/b/bin/python`, Python 3.11.13) and
-  `cwd` exists (`<repo>/src`);
+  `cwd` exists (`src`);
 - `args` head is `-m acp mcp serve --transport stdio --controller <url>` and the
   tail is `--log-level INFO`; B05 and B06 agree on `command/args/cwd/env` keys;
 - `ACP_RUN_ROOT` is an existing directory and `ACP_CONFIG` an existing file;
@@ -286,8 +286,8 @@ document must not be cited as an H2 PASS.
 
 | Profile | Overlay | SHA-256 |
 | --- | --- | --- |
-| web | `rph/packages/dsh-bundle/profiles/web.cordis.yml` | `ca9294b0c50b60425306375b1f69376aec756fd42de52295ed5b5b2b5f7449a4` |
-| headless | `rph/packages/dsh-bundle/profiles/headless.cordis.yml` | `2d8141461bcec91d772f9d3a8daae5c59c17948e9ec0e667877659007ecc4513` |
+| web | `rph/packages/dsh-bundle/profiles/web.cordis.yml` | `6684e1b3b6d282556bc6941cbc582247f912c4ee052103188d1d4e67a422c1c2` |
+| headless | `rph/packages/dsh-bundle/profiles/headless.cordis.yml` | `343fbca2b6f18bf77c5a41e70fb48af86da6af18e00096af3cc45e5e46433289` |
 
 Both are a top-level Cordis patch array. The new entry uses `insert`
 semantics (never a deep merge):
@@ -305,7 +305,7 @@ semantics (never a deep merge):
 
 `command/args/cwd/env` were compared field-by-field against
 `B/B05/mcp-launch.json` (sha256
-`ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046`) in both
+`07e140de13b72ef4ef5fcd87bcfb185467625d61ae20499b58ab0420ee827971`) in both
 the overlay source and the composed `--dump-config` tree: **equal**.
 
 The web profile also ships one research preset (`rph-research`) with persona,

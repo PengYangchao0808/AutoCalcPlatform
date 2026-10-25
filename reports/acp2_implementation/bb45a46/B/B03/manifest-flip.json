@@ -36,7 +36,7 @@
       "id": "final-debug-patch",
       "delivered_by": "B00",
       "status": "delivered",
-      "sha256": "95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181",
+      "sha256": "8340f2e81d8f4adcfe2aa872106285468d6b2c71ccc3fcd3b9cef1bbced8f21e",
       "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/"
     },
     {
@@ -127,7 +127,7 @@
       "id": "samples",
       "delivered_by": "B03",
       "status": "delivered",
-      "sha256": "d37dcfab39f2181e4ca9533267eac156fc84ca8772e6831a9a8d9108a1fc852e",
+      "sha256": "542ab8abcfda65b2ca1617bf5b718268d2f43fe2decc5083bef66888fe199456",
       "path": "docs/reference/next-change/acp2-contracts/runtime/samples/"
     }
   ],

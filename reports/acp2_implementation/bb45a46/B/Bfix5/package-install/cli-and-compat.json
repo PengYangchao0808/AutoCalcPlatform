@@ -3,9 +3,9 @@
     "contracts_identity": true,
     "exit": 0,
     "modules": {
-      "acp.backends": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/backends/__init__.py",
-      "acp.calculations.primitives": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/calculations/primitives/__init__.py",
-      "acp.compat.legacy.manifests": "<repo>/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/compat/legacy/manifests.py"
+      "acp.backends": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/backends/__init__.py",
+      "acp.calculations.primitives": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/calculations/primitives/__init__.py",
+      "acp.compat.legacy.manifests": "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/compat/legacy/manifests.py"
     },
     "store_identity": true
   },

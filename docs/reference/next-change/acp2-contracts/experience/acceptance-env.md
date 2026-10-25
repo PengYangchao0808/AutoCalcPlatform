@@ -2,7 +2,7 @@
 
 Status: **frozen by C/T-04 (C04), 2026-10-22; B00/B02a adoption by T-04a,
 2026-10-22**. Owner: C track.
-Canonical live file: `<acp2-dev>/data/acceptance-env-c.sh` (`chmod 600`).
+Canonical live file: `/opt/acp2-dev/data/acceptance-env-c.sh` (`chmod 600`).
 This document is the human-readable companion to that file and to
 `dsh-compatibility.json` in this directory.
 
@@ -15,12 +15,12 @@ This document is the human-readable companion to that file and to
 
 | Component | Frozen value | Absolute executable |
 | --- | --- | --- |
-| Node | `22.19.0` (`node-v22.19.0-linux-x64`) | `<server-root>/acp2-tools/node-v22.19.0-linux-x64/bin/node` |
-| npm (bundled) | `10.9.3` | `<server-root>/acp2-tools/node-v22.19.0-linux-x64/bin/npm` |
-| pnpm | `11.28.5` | `<server-root>/acp2-tools/pnpm/node_modules/.bin/pnpm` |
-| DSH | revision `687f282e8625c6b8d11ff58211a90524be2e4317`, version `0.2.1-rc.2` | `<server-root>/acp2-tools/deepseek-harness/apps/cli/src/bin.ts` |
-| Official MCP client | `@deepseek-ai/dsh-mcp-client@0.2.1-rc.2` (workspace) | `<server-root>/acp2-tools/deepseek-harness/packages/mcp/mcp-client` |
-| tsx loader | `4.23.13` | `file://<server-root>/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs` |
+| Node | `22.19.0` (`node-v22.19.0-linux-x64`) | `/opt/acp2-tools/node-v22.19.0-linux-x64/bin/node` |
+| npm (bundled) | `10.9.3` | `/opt/acp2-tools/node-v22.19.0-linux-x64/bin/npm` |
+| pnpm | `11.28.5` | `/opt/acp2-tools/pnpm/node_modules/.bin/pnpm` |
+| DSH | revision `687f282e8625c6b8d11ff58211a90524be2e4317`, version `0.2.1-rc.2` | `/opt/acp2-tools/deepseek-harness/apps/cli/src/bin.ts` |
+| Official MCP client | `@deepseek-ai/dsh-mcp-client@0.2.1-rc.2` (workspace) | `/opt/acp2-tools/deepseek-harness/packages/mcp/mcp-client` |
+| tsx loader | `4.23.13` | `file:///opt/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs` |
 
 Node archive `node-v22.19.0-linux-x64.tar.xz` was verified against the official
 `SHASUMS256.txt` **before** extraction:
@@ -29,52 +29,52 @@ Node archive `node-v22.19.0-linux-x64.tar.xz` was verified against the official
 sha256 c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2
 ```
 
-The archive and checksum file remain in `<server-root>/acp2-tools/downloads/`.
+The archive and checksum file remain in `/opt/acp2-tools/downloads/`.
 DSH `engines.node` is verbatim `^22.19.0 || >=24.0.0`; Node 22.19.0 satisfies it,
 so the planned revision was not re-selected. `pnpm-lock.yaml` SHA-256 is
 `4637cca3b89c4c8d5a147321710e597aa62ec2444a3772ab542be5690893dfe4`.
 
-The system Node at `/home/<user>/.opencode/bin/node` (v20.19.0) is untouched.
+The system Node at `/home/redacted-user/.opencode/bin/node` (v20.19.0) is untouched.
 Only the acceptance shell prepends `$ACP2_NODE_HOME/bin` and
 `$ACP2_TOOLS/pnpm/node_modules/.bin` to `PATH`.
 
 Install/build evidence (historical, pre-adoption root):
-`<acp2-dev>/evidence/C/node-dsh-install/20261022T112416Z-c04/`.
+`/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/`.
 New product evidence is written under the adopted
-`<repo>/reports/acp2_implementation/bb45a46/C/`.
+`reports/acp2_implementation/bb45a46/C/`.
 
 ## 2. Exported variables
 
 All values are absolute. No credentials are exported.
 
 ```
-ACP2_PROJECT_ROOT       <repo>            (resolves B00 project-relative roots)
-ACP2_C_SOURCE            <acp2-dev>/C
-ACP2_A_SOURCE            <acp2-dev>/A          (read-only; C never reads it)
-ACP2_INTEGRATION_SOURCE  <acp2-dev>/integration
+ACP2_PROJECT_ROOT       repo-root            (resolves B00 project-relative roots)
+ACP2_C_SOURCE            /opt/acp2-dev/C
+ACP2_A_SOURCE            /opt/acp2-dev/A          (read-only; C never reads it)
+ACP2_INTEGRATION_SOURCE  /opt/acp2-dev/integration
 ACP2_SOURCE              $ACP2_INTEGRATION_SOURCE               (alias, one meaning)
-ACP2_TOOLS               <server-root>/acp2-tools                 (C Node/DSH root; B02a uses .../venvs)
-ACP2_DATA_ROOT           <acp2-dev>/data      (B02a's own root is .../data/b)
-ACP2_DSH_SOURCE          <server-root>/acp2-tools/deepseek-harness
+ACP2_TOOLS               /opt/acp2-tools                 (C Node/DSH root; B02a uses .../venvs)
+ACP2_DATA_ROOT           /opt/acp2-dev/data      (B02a's own root is .../data/b)
+ACP2_DSH_SOURCE          /opt/acp2-tools/deepseek-harness
 ACP2_DSH_LOADER          file://…/tsx@4.23.13/.../esm/index.mjs
 ACP2_DSH_HOME            $ACP2_DATA_ROOT/dsh-home
 ACP2_DSH_WORKSPACE       $ACP2_DATA_ROOT/research-workspace
 ACP2_DSH_OVERLAYS        $ACP2_CONTRACTS/experience/dsh-overlays
 ACP2_BASELINE_LOCK       $ACP2_PROJECT_ROOT/docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json
-ACP2_EVIDENCE            <repo>/reports/acp2_implementation/bb45a46   (adopted B00 root)
-ACP2_PROVISIONAL_EVIDENCE <acp2-dev>/evidence  (historical alias only; rejected)
+ACP2_EVIDENCE            reports/acp2_implementation/bb45a46   (adopted B00 root)
+ACP2_PROVISIONAL_EVIDENCE /opt/acp2-dev/evidence  (historical alias only; rejected)
 ACP2_CONTRACTS           $ACP2_C_SOURCE/docs/reference/next-change/acp2-contracts
 ACP2_C_PYTHON            venvs/c/bin/python
 ACP2_INTEGRATION_PYTHON  venvs/integration/bin/python
 ACP2_BROWSER_PYTHON      venvs/browser/bin/python
 ACP2_PYTHON              $ACP2_C_PYTHON
-ACP2_NODE_HOME           <server-root>/acp2-tools/node-v22.19.0-linux-x64
+ACP2_NODE_HOME           /opt/acp2-tools/node-v22.19.0-linux-x64
 PLAYWRIGHT_BROWSERS_PATH $ACP2_TOOLS/playwright-browsers
 ```
 
 `ACP2_TOOLS` intentionally diverges from B02a: B02a's
-`data/b/acceptance-env.sh` sets `ACP2_TOOLS=<acp2-dev>/venvs`
-(B's Python role-venv root), while C keeps `<server-root>/acp2-tools` for the
+`data/b/acceptance-env.sh` sets `ACP2_TOOLS=/opt/acp2-dev/venvs`
+(B's Python role-venv root), while C keeps `/opt/acp2-tools` for the
 T-04 Node/pnpm/DSH/browser toolchain. The roots are not unified; the three role
 interpreters still point into B02a's venv root.
 
@@ -203,11 +203,11 @@ asserts:
    provisional `not_verified` stamp.
 
 Adopted values: `evidence_root=reports/acp2_implementation/bb45a46`,
-`$ACP2_EVIDENCE=<repo>/reports/acp2_implementation/bb45a46`,
+`$ACP2_EVIDENCE=reports/acp2_implementation/bb45a46`,
 `evidence_roots.C=reports/acp2_implementation/bb45a46/C` →
-`<repo>/reports/acp2_implementation/bb45a46/C`.
+`reports/acp2_implementation/bb45a46/C`.
 A missing lock fails closed with `2`. The old provisional root
-`<acp2-dev>/evidence` is retained only as
+`/opt/acp2-dev/evidence` is retained only as
 `$ACP2_PROVISIONAL_EVIDENCE` documentation and is rejected.
 
 Exercised branches: real lock + adopted root → proceeds to the harness check;

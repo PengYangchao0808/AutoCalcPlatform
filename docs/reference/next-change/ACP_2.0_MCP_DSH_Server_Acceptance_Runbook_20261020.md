@@ -112,7 +112,7 @@ export ACP2_DATA_ROOT='/原生文件系统绝对路径/acp2-acceptance/p1-run01'
 export ACP2_EVIDENCE='/绝对路径/acp2-evidence/p1-run01'
 
 mkdir -p "$ACP2_TOOLS" "$ACP2_DATA_ROOT" "$ACP2_EVIDENCE"
-git -C <repo> worktree add --detach "$ACP2_SOURCE" "$ACP2_REV"
+git -C repo-root worktree add --detach "$ACP2_SOURCE" "$ACP2_REV"
 findmnt -T "$ACP2_DATA_ROOT"
 git -C "$ACP2_SOURCE" rev-parse HEAD
 git -C "$ACP2_SOURCE" status --short
@@ -574,8 +574,8 @@ p1-run01/
 ```bash
 python3.11 -m venv /tmp/opencode/b25b/venvs/web
 env -u PYTHONPATH /tmp/opencode/b25b/venvs/web/bin/python -m pip install \
-  --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release \
-  <repo>/reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
+  --find-links reports/acp2_implementation/bb45a46/B/B25/release \
+  reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
 ```
 
 升级时同一环境只选择“根 `acp`”或“三角色发行”之一；不要混装同路径文件。升级前后各跑一次

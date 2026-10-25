@@ -50,7 +50,7 @@ A B-published `runtime/dependencies.json` fragment containing at minimum:
 ```json
 {
   "rows": {
-    "B02a:tools-root": {"producer": "B02a", "artifact": "<server-root>/acp2-tools", "readiness": "integration_ready", "delivery_status": "planned", "requires": ["frozen node distribution", "frozen pnpm", "frozen DSH revision"]},
+    "B02a:tools-root": {"producer": "B02a", "artifact": "/opt/acp2-tools", "readiness": "integration_ready", "delivery_status": "planned", "requires": ["frozen node distribution", "frozen pnpm", "frozen DSH revision"]},
     "B02a:role-interpreters": {"producer": "B02a", "readiness": "verified", "requires": ["ACP2_C_PYTHON resolves to $ACP2_C_SOURCE", "ACP2_INTEGRATION_PYTHON resolves to $ACP2_INTEGRATION_SOURCE"]},
     "B02a:browser-venv": {"producer": "B02a", "readiness": "verified", "requires": [".[browser] extra importable"], "acceptance_excludes": ["chromium launch"]},
     "B02b:package-smoke": {"producer": "B02b", "readiness": "verified", "requires": ["package artifact installs without source PYTHONPATH"]}
@@ -103,7 +103,7 @@ environment is delivered:
 
 ## Evidence path
 
-- C-side observation: `<acp2-dev>/evidence/C/baseline/20261022T191200Z-c00/`
+- C-side observation: `/opt/acp2-dev/evidence/C/baseline/20261022T191200Z-c00/`
 - C dependency ledger: `docs/reference/next-change/acp2-contracts/experience/handoffs/dependencies-c.json`
 - B-side expected: `docs/reference/next-change/acp2-contracts/runtime/dependencies.json`
   and the B02a/B02b receipts registered by B00/B03.

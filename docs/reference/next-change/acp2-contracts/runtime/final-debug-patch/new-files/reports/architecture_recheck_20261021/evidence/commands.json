@@ -29,6 +29,6 @@
       "PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 python3.11 reports/architecture_recheck_20261021/reproductions/data.py",
       "PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 python3.11 reports/architecture_recheck_20261021/reproductions/frontend_science.py"
     ],
-    "note": "Diagnostic output demonstrates reproduced defects; an exit code 0 is NOT a product PASS. frontend_science.py was independently run with <venv>/bin/python and real Chromium outside sandbox."
+    "note": "Diagnostic output demonstrates reproduced defects; an exit code 0 is NOT a product PASS. frontend_science.py was independently run with /opt/acp2/venv/bin/python and real Chromium outside sandbox."
   }
 }

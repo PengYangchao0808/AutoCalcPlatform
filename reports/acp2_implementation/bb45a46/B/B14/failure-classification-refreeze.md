@@ -3,13 +3,13 @@
 Command (exact; no ellipsis):
 
 ```bash
-source <acp2-dev>/data/b/acceptance-env.sh
-export ACP_RUN_ROOT=<acp2-dev>/data/integration/run-root
-export ACP2_RUN_ROOT=<acp2-dev>/data/integration/run-root
-export ACP2_PROJECT_ROOT=<acp2-dev>/integration
-export PYTHONPATH=<acp2-dev>/integration/src
-cd <acp2-dev>/integration
-<acp2-dev>/venvs/b/bin/python -m pytest -m "not slow" -q
+source /opt/acp2-dev/data/b/acceptance-env.sh
+export ACP_RUN_ROOT=/opt/acp2-dev/data/integration/run-root
+export ACP2_RUN_ROOT=/opt/acp2-dev/data/integration/run-root
+export ACP2_PROJECT_ROOT=/opt/acp2-dev/integration
+export PYTHONPATH=/opt/acp2-dev/integration/src
+cd /opt/acp2-dev/integration
+/opt/acp2-dev/venvs/b/bin/python -m pytest -m "not slow" -q
 ```
 
 Candidate under test: `77ac1de1af6a5db6b57f4f904a859305ff73042c` (tree

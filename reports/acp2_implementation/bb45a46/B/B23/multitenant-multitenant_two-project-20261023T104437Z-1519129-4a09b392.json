@@ -7,28 +7,28 @@
     },
     {
       "path": "budget-rows.json",
-      "sha256": "208c3260e9b83423aef97dbe366c5f07e1b53f23165c26141f3bb57d321c7bac",
-      "size_bytes": 2608
+      "sha256": "4976721d2ad9cea69c2f7669f2257977954843b6c95d9ace8a6236908765de43",
+      "size_bytes": 2580
     },
     {
       "path": "cross-domain-consistency.json",
-      "sha256": "3a8550f33dc37ea9fabf9a70d10f121e19022938165db5d8352600f326e6249f",
-      "size_bytes": 3269
+      "sha256": "31281208907a13e9940611446eb736753dab6510d67b0c7f72b61c01c28d00ca",
+      "size_bytes": 3241
     },
     {
       "path": "dependency-edges.json",
-      "sha256": "c2f97d5f1c19ed49ed7d89f9057eb55295146a0f87aeaca3229d5999e19ecfb4",
-      "size_bytes": 1491
+      "sha256": "dc8d3daf34ebc8f60fbe1f08b26f36c241344f5c754783ea59858759db547e3e",
+      "size_bytes": 1463
     },
     {
       "path": "measurements.json",
-      "sha256": "e680668fd487d02df37d7cc5058e63c55cfc9368ea270097020b83e2d160b09d",
-      "size_bytes": 4197
+      "sha256": "c50bfd01d54a92da2c30473427a4edf7a63df4a94cd1999f4bbc9f53550f1718",
+      "size_bytes": 4199
     },
     {
       "path": "multitenant-two-project.json",
-      "sha256": "67cfe1b9edc0af1440e2b40cfd5717a6eee7f325629f50991be1e454917f477f",
-      "size_bytes": 17919
+      "sha256": "92be4e750821c28ecc63bb5fc8a325c1ab562b8fd930ed1b35f14053c9e84e6b",
+      "size_bytes": 17807
     },
     {
       "path": "p4-sub-delivery-sync.json",
@@ -131,8 +131,8 @@
   },
   "candidate_revision": "1ff72bd45ba6eac7d0e8984b2e0e73c260b26807",
   "command": [
-    "<acp2-dev>/venvs/b/bin/python",
-    "<repo>/scripts/acceptance/acp2_runtime.py",
+    "/opt/acp2-dev/venvs/b/bin/python",
+    "scripts/acceptance/acp2_runtime.py",
     "--scenario",
     "multitenant",
     "--phase",
@@ -140,14 +140,14 @@
     "--controller",
     "http://127.0.0.1:18784",
     "--fixture",
-    "<acp2-dev>/data/b/fixtures/multi-b23.json",
+    "/opt/acp2-dev/data/b/fixtures/multi-b23.json",
     "--out",
     "reports/acp2_implementation/bb45a46/B/B23",
     "--timeout",
     "1800"
   ],
   "contract_version": "1.3.0",
-  "cwd": "<repo>",
+  "cwd": ".",
   "evidence_kind": "live",
   "exit_code": 0,
   "extensions": {
@@ -171,27 +171,27 @@
       },
       {
         "path": "budget-rows.json",
-        "sha256": "208c3260e9b83423aef97dbe366c5f07e1b53f23165c26141f3bb57d321c7bac",
+        "sha256": "70f9f5f591902a073503c38b57d1b8c2a82babda7bbf7f45a262519428a40ad5",
         "size_bytes": 2608
       },
       {
         "path": "cross-domain-consistency.json",
-        "sha256": "3a8550f33dc37ea9fabf9a70d10f121e19022938165db5d8352600f326e6249f",
+        "sha256": "6268c4192abb0b85fb515063702e6d00cdbb5eb1eee601336a4df1cd469dbf46",
         "size_bytes": 3269
       },
       {
         "path": "dependency-edges.json",
-        "sha256": "c2f97d5f1c19ed49ed7d89f9057eb55295146a0f87aeaca3229d5999e19ecfb4",
+        "sha256": "1343c2e04c83f7c232b9d40dd52e8d4b917c54b2f270136cd3034cd65c736df4",
         "size_bytes": 1491
       },
       {
         "path": "measurements.json",
-        "sha256": "e680668fd487d02df37d7cc5058e63c55cfc9368ea270097020b83e2d160b09d",
+        "sha256": "c50bfd01d54a92da2c30473427a4edf7a63df4a94cd1999f4bbc9f53550f1718",
         "size_bytes": 4197
       },
       {
         "path": "multitenant-two-project.json",
-        "sha256": "67cfe1b9edc0af1440e2b40cfd5717a6eee7f325629f50991be1e454917f477f",
+        "sha256": "d5ccaf9f994c2dc03e2fa551e771cc53562a1fa3f16826e8584c8b2217c07d1e",
         "size_bytes": 17919
       },
       {
@@ -202,7 +202,7 @@
     ],
     "b23.controller": "http://127.0.0.1:18784",
     "b23.dependencies": "dependency-edges.json",
-    "b23.fixture": "<acp2-dev>/data/b/fixtures/multi-b23.json",
+    "b23.fixture": "/opt/acp2-dev/data/b/fixtures/multi-b23.json",
     "b23.identity": {
       "phase": "experience:selectivity",
       "scenario": "experience:cross-domain-live",

@@ -4,9 +4,9 @@
   "backend": "local",
   "result": "PASS",
   "fixture_id": "fx-local-frequency-h2-sto3g-v1",
-  "fixture_path": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+  "fixture_path": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
   "fixture_sha256": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
-  "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
+  "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
   "reuse_command": null,
   "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
   "controller": "http://127.0.0.1:18774",
@@ -21,9 +21,9 @@
   "result_digest": "",
   "step_identity": "v2:63b46f19e8ae27ee28c8185e0adbe748",
   "result_manifest_digest": "sha256:54f9adffcb128452bcfd5ee69b22f159d5a6cd55d716da02ebfb7d283a511716",
-  "work_dir": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency",
-  "orca_binary": "/home/<user>/orca611/orca",
-  "orca_output": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.out",
+  "work_dir": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency",
+  "orca_binary": "/home/redacted-user/orca611/orca",
+  "orca_output": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.out",
   "orca_terminated_normally": true,
   "orca_energy_hartree": -1.116773191779,
   "orca_pids": [
@@ -84,7 +84,7 @@
     {
       "name": "orca_terminated_normally",
       "status": "PASS",
-      "detail": "<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.out"
+      "detail": "/opt/acp2-dev/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.out"
     },
     {
       "name": "orca_energy_matches_task_result",
@@ -121,17 +121,17 @@
     {
       "path": "native/job.json",
       "size_bytes": 5316,
-      "sha256": "65f676a5d73ae46fc17b0318bdd8b1e77e0cf4ae7d55df3aa1183e164f6c0e18"
+      "sha256": "944f0b61a1ef4c60682afe8d04c1eb24c776471bca034053c11e52caf34dec29"
     },
     {
       "path": "native/task.json",
       "size_bytes": 957,
-      "sha256": "e6f2e404b9e2a02dcc4de2dfb50aae81e12047478ec81ceadca52ef7e7841bcd"
+      "sha256": "eb1b44e5172d481ed57dffcfa99dff0f488d5e75cd638561c82882df7c912c35"
     },
     {
       "path": "native/WORK__04_FREQ__freq.out",
       "size_bytes": 60282,
-      "sha256": "9d9481826c79759bbfbe4fd3e161553ea40cffe5bc25ef230630d70df131e916"
+      "sha256": "1218c014726cc50e4a97ee3b47f5f7edbd2545dc484f17250d38dc2a8bf4b5d4"
     },
     {
       "path": "native/WORK__04_FREQ__freq.inp",
@@ -141,7 +141,7 @@
     {
       "path": "native/WORK__04_FREQ__step_result.json",
       "size_bytes": 1525,
-      "sha256": "139c7c31c2146a75056764fc963d3a7850c6e91da5a5a150d40b967c50b987ca"
+      "sha256": "bf08f92adf952311e2d8213ae128488d81a4165d07cb53348c9c1202d674a687"
     },
     {
       "path": "native/WORK__04_FREQ__scientific_result.json",

@@ -20,7 +20,7 @@
       "evidence": "B/B10/local-singlepoint/",
       "evidence_owner": "B10",
       "fixture_id": "fx-local-singlepoint-h2-sto3g-v1",
-      "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
       "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
       "input_status": "present",
       "kind": "local-singlepoint",
@@ -71,7 +71,7 @@
       "evidence": "B/B11/",
       "evidence_owner": "B11",
       "fixture_id": "fx-lsf-singlepoint-v1",
-      "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
       "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
       "input_status": "present",
       "kind": "lsf-singlepoint",
@@ -120,7 +120,7 @@
           "LSF_ENVDIR",
           "ACP_LSF_NODE"
         ],
-        "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
+        "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
         "submitted": false,
         "remote_job_attempted": false,
         "evidence": "B/B14b/lsf/singlepoint/"
@@ -140,7 +140,7 @@
       "cleanup_seconds": 60,
       "evidence_owner": "B13",
       "fixture_id": "fx-control-recovery-lsf-v1",
-      "input": "<acp2-dev>/data/b/fixtures/control.json",
+      "input": "/opt/acp2-dev/data/b/fixtures/control.json",
       "input_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
       "input_status": "present",
       "kind": "control-recovery",
@@ -205,7 +205,7 @@
       "cleanup_seconds": 10,
       "evidence_owner": "B15",
       "fixture_id": "fx-multi-singlepoint-v1",
-      "input": "<acp2-dev>/data/b/fixtures/multi.json",
+      "input": "/opt/acp2-dev/data/b/fixtures/multi.json",
       "input_digest": "0075ab6c2415367c61504d4922f9ff100f907fa4e5ba0c03656bbc71895981dd",
       "input_status": "present",
       "kind": "multitenant",
@@ -239,8 +239,8 @@
       "cleanup_seconds": 120,
       "evidence_owner": "B20a",
       "fixture_id": "fx-da-bounded-dag-v1",
-      "input": "<acp2-dev>/data/b/fixtures/da/da-run.json",
-      "input_digest": "ef543b6936d2e91cb64a831af3edb39aa2acf1a85d9db770df367780bb399486",
+      "input": "/opt/acp2-dev/data/b/fixtures/da/da-run.json",
+      "input_digest": "32ef892610adf61160f16f7fd0481480d6a6028711b38c6aff669d83bb47c82c",
       "input_status": "present",
       "kind": "da",
       "margin_seconds": 0,
@@ -303,7 +303,7 @@
       "cleanup_seconds": 20,
       "evidence_owner": "B24a",
       "fixture_id": "fx-migration-v1",
-      "input": "<acp2-dev>/data/b/fixtures/migration",
+      "input": "/opt/acp2-dev/data/b/fixtures/migration",
       "input_digest": "c577f46299013de3346262baec78cbd6b42d13e6e5e43a453965d478771315ca",
       "input_status": "present",
       "kind": "migration",
@@ -354,7 +354,7 @@
       "workflow": "planned"
     },
     {
-      "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
       "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
       "input_status": "present",
       "method": {
@@ -398,11 +398,11 @@
       "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
       "execution_chain": "legacy-cli",
       "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
-      "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
       "result": "PASS"
     },
     {
-      "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
       "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
       "input_status": "present",
       "method": {
@@ -463,15 +463,15 @@
           "LSF_ENVDIR",
           "ACP_LSF_NODE"
         ],
-        "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
+        "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
         "submitted": false,
         "remote_job_attempted": false,
         "evidence": "B/B14b/lsf/optimize/"
       },
-      "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300"
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300"
     },
     {
-      "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
       "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
       "input_status": "present",
       "method": {
@@ -515,11 +515,11 @@
       "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
       "execution_chain": "legacy-cli",
       "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
-      "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
       "result": "PASS"
     },
     {
-      "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
       "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
       "input_status": "present",
       "method": {
@@ -580,19 +580,19 @@
           "LSF_ENVDIR",
           "ACP_LSF_NODE"
         ],
-        "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
+        "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
         "submitted": false,
         "remote_job_attempted": false,
         "evidence": "B/B14b/lsf/frequency/"
       },
-      "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300"
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300"
     },
     {
       "fixture_id": "fx-local-singlepoint-h2-sto3g-b14b-v1",
       "kind": "local-singlepoint",
       "backend": "local",
       "workflow": "singlepoint",
-      "input": "<acp2-dev>/data/b/fixtures/singlepoint.xyz",
+      "input": "/opt/acp2-dev/data/b/fixtures/singlepoint.xyz",
       "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
       "input_status": "present",
       "method": {
@@ -629,7 +629,7 @@
         "release_digest": "42a004836eec9fad89a9c54a06cdfb62cf674ed3da5fac9deda832b0f968dd19"
       },
       "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
-      "exact_command": "<acp2-dev>/venvs/b/bin/python <repo>/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch <repo>/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input <acp2-dev>/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out <repo>/reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
+      "exact_command": "/opt/acp2-dev/venvs/b/bin/python reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /opt/acp2-dev/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
       "result": "PASS",
       "note": "B14b re-execution on 77ac1de. The submission command used the existing B10 fixture label in --fixture-id; the registry row is separate so the B10 historical task is never overwritten. Same fixture path and digest.",
       "submitted_fixture_label": "fx-local-singlepoint-h2-sto3g-v1"

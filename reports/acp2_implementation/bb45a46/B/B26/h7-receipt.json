@@ -31,8 +31,8 @@
     "c35_prerequisites": "C32-C34; A/B/C candidate SHA agreement; required scenario evidence (no B26 prerequisite in the C plan)",
     "disposition": "c35_absent",
     "expected_evidence_roots": [
-      "<acp2-dev>/C/experience-release-closeout/",
-      "<repo>/reports/acp2_implementation/bb45a46/C/experience-release-closeout/"
+      "/opt/acp2-dev/C/experience-release-closeout/",
+      "reports/acp2_implementation/bb45a46/C/experience-release-closeout/"
     ],
     "h7_effect": "H7 stays OPEN; B does not sign C's missing experience scope.",
     "observed_evidence_present": false,
@@ -65,8 +65,8 @@
       "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 6ec01ec and their digests are unchanged."
     },
     "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
-    "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
-    "release_source_json_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+    "release_manifest_sha256": "9abdf987749573429a6328af8b6243049e11955e426fbd61257860a4c47bb2ec",
+    "release_source_json_sha256": "e2ee1096e0a7ec05efe86ffb35c4e6772d65021c1c50d8643c099780ced436df",
     "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
     "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
   },
@@ -92,14 +92,14 @@
       "status": "PASS"
     },
     {
-      "expected_path": "<acp2-dev>/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
       "owner": "A",
       "reason": "A has not published the H7 science sign-off; B does not sign A scope.",
       "row_id": "A-29-science-signoff",
       "status": "NOT_VERIFIED(a29_absent)"
     },
     {
-      "expected_path": "<acp2-dev>/C/experience-release-closeout/",
+      "expected_path": "/opt/acp2-dev/C/experience-release-closeout/",
       "owner": "C",
       "reason": "C35 is absent. The C plan lists C32-C34, not B26, so the disposition is c35_absent (no C35_INPUT_CYCLE).",
       "row_id": "C35-experience-closeout",
@@ -142,7 +142,7 @@
         {
           "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4/B-fix-5 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
-          "receipt_sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
+          "receipt_sha256": "4a9c23e2b522a0e0cda43d2b06b3427d7855c9c0a82e234e4107b7cc9b4e94ca",
           "unchanged": [
             "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
             "A/B/C path ownership globs",
@@ -152,7 +152,7 @@
         {
           "rationale": "Environment identity is host-level and was not changed by B-fix-4/B-fix-5 (no dependency, config, or interpreter change).",
           "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
-          "receipt_sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
+          "receipt_sha256": "23482d905b2fdcaec0c6b0ca4e1347ee394e5955d20c401c4dccb097f50a5d1f",
           "unchanged": [
             "isolated worktree and host environment",
             "three-package import source at the P0 baseline"
@@ -285,7 +285,7 @@
         {
           "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and 6ec01ec.",
           "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
-          "receipt_sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
+          "receipt_sha256": "582c7ab0642ddd5abf73df65f00b6495527c5997d8749416662447f35c4cb0c2",
           "unchanged": [
             "src/acp_services/runtime/adapter_registry.py and capability_registry.py",
             "plugin workspace fixtures and descriptor digests",

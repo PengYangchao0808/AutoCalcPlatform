@@ -3,7 +3,7 @@
   "command_block_count": 23,
   "commands": [
     {
-      "command": "# label: REVERSIBLE\nexport ACP2_REPO=<repo>\nsource <acp2-dev>/data/b/acceptance-env.sh\nexport PYTHONPATH=\"$ACP2_REPO/src:$ACP2_REPO\"\nexport B24B_WORKSPACE=<acp2-dev>/data/b/b24b-migration\nexport B24B_EVIDENCE=\"$ACP2_EVIDENCE/B/B24b\"\nexport B24B_FIXTURE=<acp2-dev>/data/b/fixtures/migration/b24b-migration.json\nexport B24B_CANDIDATE=493790709830eac4ce347b5fb81414050f7a1e21\nexport ACP_CANDIDATE_REVISION=\"$B24B_CANDIDATE\"",
+      "command": "# label: REVERSIBLE\nexport ACP2_REPO=repo-root\nsource /opt/acp2-dev/data/b/acceptance-env.sh\nexport PYTHONPATH=\"$ACP2_REPO/src:$ACP2_REPO\"\nexport B24B_WORKSPACE=/opt/acp2-dev/data/b/b24b-migration\nexport B24B_EVIDENCE=\"$ACP2_EVIDENCE/B/B24b\"\nexport B24B_FIXTURE=/opt/acp2-dev/data/b/fixtures/migration/b24b-migration.json\nexport B24B_CANDIDATE=493790709830eac4ce347b5fb81414050f7a1e21\nexport ACP_CANDIDATE_REVISION=\"$B24B_CANDIDATE\"",
       "has_literal_ellipsis": false,
       "has_production_restart": false,
       "index": 1,
@@ -196,7 +196,7 @@
   "production_restart_indices": [],
   "result": "PASS",
   "runbook": "docs/reference/next-change/acp2-contracts/runtime/recovery-rollback-runbook.md",
-  "runbook_sha256": "7698aa170904e443985674e1b938cfc786c38af612472a893629f6183f9fce7a",
+  "runbook_sha256": "4a2b01222891a8a85bccbd6d45b63c6785a3e9e671658e7dca8f9f76fef0c189",
   "schema": "acp2.b24b.runbook_command_validation.v1",
   "target_schema": 23,
   "unlabelled_indices": [],

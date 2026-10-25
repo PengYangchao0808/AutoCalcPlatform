@@ -4,7 +4,7 @@
   "port_free": true,
   "production_8765_touched": false,
   "production_run_root_touched": false,
-  "run_root": "<acp2-dev>/data/b/run-root-b18",
+  "run_root": "/opt/acp2-dev/data/b/run-root-b18",
   "schema": "acp2.b18.cleanup.v1",
   "sigterm_sent": true,
   "stopped_at": "2026-10-23T08:09:00Z",

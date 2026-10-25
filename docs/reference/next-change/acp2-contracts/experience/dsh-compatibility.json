@@ -2,12 +2,12 @@
   "schema": "acp2.dsh-compatibility.v1",
   "frozen_at": "2026-10-22T11:24:16Z",
   "frozen_by": "C/T-04 (C04)",
-  "evidence_run_root": "<acp2-dev>/evidence/C/node-dsh-install/20261022T112416Z-c04",
+  "evidence_run_root": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04",
   "host": {
     "uname": "Linux redacted-host 5.14.0-687.56.1.el9_8.x86_64",
     "arch": "x86_64",
     "system_node_untouched": {
-      "path": "/home/<user>/.opencode/bin/node",
+      "path": "/home/redacted-user/.opencode/bin/node",
       "version": "v20.19.0"
     }
   },
@@ -16,19 +16,19 @@
     "dist_name": "node-v22.19.0-linux-x64",
     "source_url": "https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.xz",
     "checksums_url": "https://nodejs.org/dist/v22.19.0/SHASUMS256.txt",
-    "archive_path": "<server-root>/acp2-tools/downloads/node-v22.19.0-linux-x64.tar.xz",
+    "archive_path": "/opt/acp2-tools/downloads/node-v22.19.0-linux-x64.tar.xz",
     "archive_sha256": "c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2",
     "archive_sha256_source": "SHASUMS256.txt entry, independently recomputed; verified before extraction",
-    "home": "<server-root>/acp2-tools/node-v22.19.0-linux-x64",
-    "executable": "<server-root>/acp2-tools/node-v22.19.0-linux-x64/bin/node",
-    "npm_executable": "<server-root>/acp2-tools/node-v22.19.0-linux-x64/bin/npm",
+    "home": "/opt/acp2-tools/node-v22.19.0-linux-x64",
+    "executable": "/opt/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+    "npm_executable": "/opt/acp2-tools/node-v22.19.0-linux-x64/bin/npm",
     "npm_version": "10.9.3"
   },
   "pnpm": {
     "version": "11.28.5",
-    "install_method": "npm install --prefix <server-root>/acp2-tools/pnpm --save-exact pnpm@11.28.5",
-    "prefix": "<server-root>/acp2-tools/pnpm",
-    "executable": "<server-root>/acp2-tools/pnpm/node_modules/.bin/pnpm",
+    "install_method": "npm install --prefix /opt/acp2-tools/pnpm --save-exact pnpm@11.28.5",
+    "prefix": "/opt/acp2-tools/pnpm",
+    "executable": "/opt/acp2-tools/pnpm/node_modules/.bin/pnpm",
     "verified_version": "11.28.5"
   },
   "dsh": {
@@ -36,7 +36,7 @@
     "revision": "687f282e8625c6b8d11ff58211a90524be2e4317",
     "revision_subject": "Merge pull request #6408 from deepseek-harness/worktree/release-dsh-0.2.1-rc.2",
     "checkout_mode": "git clone --no-single-branch; git checkout --detach <revision>",
-    "source": "<server-root>/acp2-tools/deepseek-harness",
+    "source": "/opt/acp2-tools/deepseek-harness",
     "version": "0.2.1-rc.2",
     "package_manager": "pnpm@11.28.5",
     "engines": {
@@ -49,51 +49,51 @@
       "reason": null
     },
     "lockfile": {
-      "path": "<server-root>/acp2-tools/deepseek-harness/pnpm-lock.yaml",
+      "path": "/opt/acp2-tools/deepseek-harness/pnpm-lock.yaml",
       "sha256": "4637cca3b89c4c8d5a147321710e597aa62ec2444a3772ab542be5690893dfe4"
     },
     "install": {
       "argv": "pnpm install --frozen-lockfile",
-      "cwd": "<server-root>/acp2-tools/deepseek-harness",
+      "cwd": "/opt/acp2-tools/deepseek-harness",
       "exit_code": 0,
-      "evidence": "<acp2-dev>/evidence/C/node-dsh-install/20261022T112416Z-c04/06-pnpm-install.txt"
+      "evidence": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/06-pnpm-install.txt"
     },
     "build": {
       "argv": "pnpm run build",
-      "cwd": "<server-root>/acp2-tools/deepseek-harness",
+      "cwd": "/opt/acp2-tools/deepseek-harness",
       "exit_code": 0,
       "gates": "9 passed, 0 failed, 0 skipped in 213.27s",
-      "evidence": "<acp2-dev>/evidence/C/node-dsh-install/20261022T112416Z-c04/07-build-and-version.txt"
+      "evidence": "/opt/acp2-dev/evidence/C/node-dsh-install/20261022T112416Z-c04/07-build-and-version.txt"
     },
     "version_probe": {
       "argv": "pnpm dsh --version",
-      "cwd": "<server-root>/acp2-tools/deepseek-harness",
+      "cwd": "/opt/acp2-tools/deepseek-harness",
       "exit_code": 0,
       "stdout": "0.2.1-rc.2"
     },
     "source_loader": {
       "resolution": "node --input-type=module -e 'console.log(import.meta.resolve(\"tsx/esm\"))'",
-      "value": "file://<server-root>/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs",
+      "value": "file:///opt/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs",
       "tsx_version": "4.23.13",
-      "tsconfig_required_when_cwd_outside_checkout": "<server-root>/acp2-tools/deepseek-harness/tsconfig.json (passed as TSX_TSCONFIG_PATH)"
+      "tsconfig_required_when_cwd_outside_checkout": "/opt/acp2-tools/deepseek-harness/tsconfig.json (passed as TSX_TSCONFIG_PATH)"
     }
   },
   "official_mcp_client": {
     "package": "@deepseek-ai/dsh-mcp-client",
     "version": "0.2.1-rc.2",
     "resolution": "workspace:*",
-    "package_manifest": "<server-root>/acp2-tools/deepseek-harness/packages/mcp/mcp-client/package.json",
+    "package_manifest": "/opt/acp2-tools/deepseek-harness/packages/mcp/mcp-client/package.json",
     "note": "Official DSH MCP transport; C must not fork it or write a second MCP transport."
   },
   "acceptance_env": {
-    "path": "<acp2-dev>/data/acceptance-env-c.sh",
+    "path": "/opt/acp2-dev/data/acceptance-env-c.sh",
     "mode": "0600",
-    "route_probe": "<acp2-dev>/C/scripts/acceptance/acp2_route_probe.sh",
+    "route_probe": "/opt/acp2-dev/C/scripts/acceptance/acp2_route_probe.sh",
     "live_scenarios_count": 21,
     "all_scenarios_count": 36
   },
   "disk": {
-    "tools_root": "<server-root>/acp2-tools",
+    "tools_root": "/opt/acp2-tools",
     "tools_root_cap": "10 GB",
     "tools_root_usage_after_install": "3.0G",
     "evidence_root_cap": "2 GB"

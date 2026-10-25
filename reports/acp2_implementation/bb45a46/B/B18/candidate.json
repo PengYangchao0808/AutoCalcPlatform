@@ -5,7 +5,7 @@
   "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B18 working-tree files",
   "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
   "contract_version": "1.2.0",
-  "controller_command": "<acp2-dev>/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18778 --run-root <acp2-dev>/data/b/run-root-b18 --poll-interval 1 --no-browser",
+  "controller_command": "/opt/acp2-dev/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18778 --run-root /opt/acp2-dev/data/b/run-root-b18 --poll-interval 1 --no-browser",
   "controller_health": {
     "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
     "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
@@ -17,10 +17,10 @@
     "status": "ok"
   },
   "fixture": "reports/acp2_implementation/bb45a46/B/B18/fixtures/da-preflight.json",
-  "fixture_sha256": "d0cecbe488b060c7d36f1d5d0f6dcdb0d82884a32c2c8d9edd87e7cce7accad0",
+  "fixture_sha256": "84f7da6632d58d00d29de7fa0f45348ca285602dc9e80703216c1c40429e3fc4",
   "schema": "acp2.b18.candidate.v1",
-  "source_checkout": "<repo>",
-  "source_composition": "current working tree (PYTHONPATH=<repo>/src)",
+  "source_checkout": "repo-root",
+  "source_composition": "current working tree (PYTHONPATH=src)",
   "working_tree_files": [
     {
       "path": "src/acp_services/runtime/science_binding.py",
@@ -44,7 +44,7 @@
     },
     {
       "path": "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
-      "sha256": "b6ceeb339bf09cb2783cf1104db656d45140eb1150d1fb5632bd6f9b4c38a9a3"
+      "sha256": "6ae6342c1a34cf5bdae849497c3bf0b9b0a6ebc575a59409cfb69a8c40e192dc"
     },
     {
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",

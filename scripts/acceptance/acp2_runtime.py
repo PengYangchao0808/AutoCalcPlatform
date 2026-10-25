@@ -1169,6 +1169,7 @@ def _artifact_errors(document: dict[str, Any], artifact_root: Path | None) -> li
                 candidates.append(Path(cwd) / relative)
             if artifact_root is not None:
                 candidates.append(Path(artifact_root) / relative)
+            candidates.append(REPO_ROOT / relative)
             if isinstance(cwd, str):
                 candidates.append(Path(cwd) / relative)
         found = next((candidate for candidate in candidates if candidate.is_file()), None)

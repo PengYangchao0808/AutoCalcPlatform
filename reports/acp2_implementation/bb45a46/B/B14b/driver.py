@@ -652,7 +652,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--candidate-sha", required=True)
     parser.add_argument("--method", default="HF")
     parser.add_argument("--basis", default="STO-3G")
-    parser.add_argument("--orca", default="/home/<user>/orca611/orca")
+    parser.add_argument("--orca", default="/home/redacted-user/orca611/orca")
     parser.add_argument("--timeout", type=float, default=240.0)
     parser.add_argument("--reuse-task", default=None,
                         help="Validate an existing TaskRef without submitting a new task")

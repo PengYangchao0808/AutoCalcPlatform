@@ -112,7 +112,7 @@ export ACP2_DATA_ROOT='/原生文件系统绝对路径/acp2-acceptance/p1-run01'
 export ACP2_EVIDENCE='/绝对路径/acp2-evidence/p1-run01'
 
 mkdir -p "$ACP2_TOOLS" "$ACP2_DATA_ROOT" "$ACP2_EVIDENCE"
-git -C <repo> worktree add --detach "$ACP2_SOURCE" "$ACP2_REV"
+git -C repo-root worktree add --detach "$ACP2_SOURCE" "$ACP2_REV"
 findmnt -T "$ACP2_DATA_ROOT"
 git -C "$ACP2_SOURCE" rev-parse HEAD
 git -C "$ACP2_SOURCE" status --short

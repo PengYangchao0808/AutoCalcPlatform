@@ -2,8 +2,8 @@
   "artifacts": [
     {
       "path": "scientific/execution_receipt.json",
-      "sha256": "f6ca5a16cae5c1839080d9d38e3c71a022752ff205134cb75bb40e9e675ace23",
-      "size_bytes": 1753,
+      "sha256": "0b8b6b20ae21d7c1bdbf80e016781b6a065f8f5ae47fdc3f31562463b5df0329",
+      "size_bytes": 1741,
       "source_relative": "execution_receipt.json"
     },
     {
@@ -20,26 +20,26 @@
     },
     {
       "path": "scientific/WORK__00_RUNTIME__task_result.json",
-      "sha256": "6b574c8e36fb05796e022e03379d368464402141d94f9b20d27ac6d302391c9f",
-      "size_bytes": 2019,
+      "sha256": "8e2f948878caef87722d20defefee924898b799686189f1b9a2a361ab2330472",
+      "size_bytes": 1991,
       "source_relative": "WORK/00_RUNTIME/task_result.json"
     },
     {
       "path": "scientific/WORK__00_RUNTIME__frozen__envelope.json",
-      "sha256": "201749341fbd55b13a9abc0828bca0a762c28c96668fa3af2e74dd8ac48d6856",
-      "size_bytes": 1622,
+      "sha256": "d5ab7560055fd6468d6383aa505712ed7ffefa3593dc6445c57dba979daf6fb9",
+      "size_bytes": 1610,
       "source_relative": "WORK/00_RUNTIME/frozen/envelope.json"
     },
     {
       "path": "scientific/WORK__00_RUNTIME__events.jsonl",
-      "sha256": "f88da050adbb78514049763fc20a85d5f1f96788b39b246afccaed3170c4c215",
-      "size_bytes": 3132,
+      "sha256": "32bbd417997224f0afd95831ce1a1098322282f7d2f3a8aa99c1be8b29ff10c7",
+      "size_bytes": 3005,
       "source_relative": "WORK/00_RUNTIME/events.jsonl"
     },
     {
       "path": "scientific/RESULT__task_result.json",
-      "sha256": "6b574c8e36fb05796e022e03379d368464402141d94f9b20d27ac6d302391c9f",
-      "size_bytes": 2019,
+      "sha256": "8e2f948878caef87722d20defefee924898b799686189f1b9a2a361ab2330472",
+      "size_bytes": 1991,
       "source_relative": "RESULT/task_result.json"
     },
     {
@@ -49,12 +49,12 @@
       "source_relative": "RESULT/scientific_result.json"
     }
   ],
-  "fault_file": "<repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+  "fault_file": "reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
   "manifest_absent_at_failure": true,
   "publication_failed_event": {
     "attempt": 1,
     "code": "publication_failed",
-    "detail": "publication failed: OSError: ACP2_ACCEPTANCE_PUBLICATION_FAULT: publication write refused while <repo>/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json is armed",
+    "detail": "publication failed: OSError: ACP2_ACCEPTANCE_PUBLICATION_FAULT: publication write refused while reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json is armed",
     "idempotency_key": "publication-pending:20261023_073443_001_singlepoint:1:publication_failed",
     "job_id": "20261023_073443_001_singlepoint",
     "timestamp": "2026-10-22T23:34:52.663056+00:00",
@@ -77,7 +77,7 @@
         "mapping_version": 1,
         "project_id": "",
         "relative_path": "2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__10",
-        "root": "<acp2-dev>/data/b/run-root-b13/uncategorized",
+        "root": "/opt/acp2-dev/data/b/run-root-b13/uncategorized",
         "tenant_id": ""
       }
     ],

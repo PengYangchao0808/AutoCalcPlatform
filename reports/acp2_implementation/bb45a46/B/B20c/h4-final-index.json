@@ -1,78 +1,78 @@
 {
   "a20_ref": {
     "digest": null,
-    "expected_path": "<repo>/reports/acp2_implementation/bb45a46/A/A-20/result.json",
+    "expected_path": "reports/acp2_implementation/bb45a46/A/A-20/result.json",
     "status": "NOT_VERIFIED(a20_absent)"
   },
   "c25_ref": {
     "digest": null,
-    "expected_path": "<acp2-dev>/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
+    "expected_path": "/opt/acp2-dev/C/docs/reference/next-change/acp2-contracts/experience/handoffs/H4.json",
     "status": "NOT_VERIFIED(c25_absent)"
   },
   "candidate_sha": "460b0dbe8cee7d0ba0ef5afff3c8656b79a66462",
   "candidate_tree": "041706226619a403256a2ea206d05ad30a509033",
   "closed": false,
   "closeout": {
-    "closeout_input_digest": "d7795d45f952db139583e6b85292b1b905699c7574b9dc427faf66cdcc7fce3b",
-    "final_reference_digest": "e915a12a447ef998e9309217d62c18f5c7c087b99a95836c4c66e3503a2f84d7",
-    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+    "closeout_input_digest": "9a75addbf025c789c2fd25778fabdc5a39cdece7e327d3ba20ef99c34a99dfb2",
+    "final_reference_digest": "50f3f8bb76d8677f1f1d8f695e1e07db5b3311b4578bae7c34f173c97773d100",
+    "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
     "schema": "acp2.h4.closeout.v1",
-    "sha256": "ba517365d86e5d8c8d0826170f98a026d570fe624f5b58476e5b1f7f898cbbd3"
+    "sha256": "2aef9939b1d921ab101563a3f9e4e87a72ec2bab7c1eb7c18d4fe8a67d67ae21"
   },
   "generated_at": "2026-10-23T09:32:36Z",
   "h4_status": "OPEN",
   "mechanism_proven": false,
   "open_rows": {
-    "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
-    "sha256": "232daf2bc7158b44231ee3548d6f326ec6ec6f1e7498309d7bacea38e757ef5f"
+    "path": "reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
+    "sha256": "3c70e1d4d1d055961771acb9411284d3ccd5a1cb26b913a5755288cdf1dc7cf6"
   },
   "owner": "B",
   "p2_phase_result_count": 8,
   "p2_phase_results": [
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/b20a-ready.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/b20a-ready.json",
       "phase": "B20a-ready",
       "result": "PASS",
-      "sha256": "1817799d9247e2614f81347e69839a52d4026e4ae411f7c4fc9d7348a16e4949"
+      "sha256": "14cb09bff6497c335cc2ec8681c7d899af564b402e056ae4c81d63faa282a199"
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/da-runtime-da-submit-20261023T091047Z-1425776-5bf82a03.json",
       "phase": "B20a-exec",
       "result": "NOT_VERIFIED",
-      "sha256": "51cc4c89453cae166b79f4ec0e69e166703503fdf56f1c05cb9cec051e25bdcc"
+      "sha256": "ab78a728127031ab1dd6f431ccd11e5bbf9068f81a35b2c7a8740c6140e21ee7"
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
       "phase": "B20a-search",
       "result": "NOT_VERIFIED",
       "sha256": "cc70787c02fc9b488d5d0e5d0ebf608d3292050f799fbe6da9fa010988280f8e"
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
       "phase": "B20b",
       "result": "PASS",
-      "sha256": "83a30a6e9e531dea8c229fc729cc8ac2f193e040e94173e0049a1f2afa2b06fc"
+      "sha256": "ccb112b6c535e33f3388a643d2c8fae040dbf8915c298ab9a71a7903ca03d400"
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B19/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B19/summary.json",
       "phase": "B19",
       "result": "PASS",
-      "sha256": "85f0cde2ccdf934148cede64f775d4eece78d6a8db293a718f3e95c67b108bdc"
+      "sha256": "0c3e935d4930b9f9b0c0ce4456c9a3ffe4019288c3531898bce61f5e99ba9f44"
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B18/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B18/summary.json",
       "phase": "B18",
       "result": "PASS",
       "sha256": "4d27bb76af058d4576ee27415e3004f7a1b90e493203366b587fa221d1d1aa6d"
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B17/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B17/summary.json",
       "phase": "B17",
       "result": "PASS",
       "sha256": "73729b31c69534ef75baca607bd8bb77746f89f2a9829811bbdcfcde6c8ca407"
     },
     {
-      "path": "<repo>/reports/acp2_implementation/bb45a46/B/B16/summary.json",
+      "path": "reports/acp2_implementation/bb45a46/B/B16/summary.json",
       "phase": "B16",
       "result": "PASS",
       "sha256": "f40a53793a175c9e1794bc0882d1ebb95b3dae1577843521dc2b47ef09fd5621"
