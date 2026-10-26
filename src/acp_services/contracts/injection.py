@@ -179,12 +179,17 @@ class JobSubmissionPort(Protocol):
         group_id: str | None = None,
         idempotency: Any | None = None,
         budget: Any | None = None,
+        identity: Any | None = None,
     ) -> Any:
         """Validate, persist and enqueue *spec*; return the created record.
 
         ``idempotency`` is an optional
         :class:`acp_services.runtime.idempotency.IdempotencyContext`.  Legacy
         callers pass ``None`` and keep the original submit behaviour.
+        ``identity`` is an optional server-verified
+        :class:`acp_services.workspace.command_identity.CommandIdentity`; it
+        attributes the admission reservation to the real principal (M0-04) and
+        is never a request field.
         """
         ...
 

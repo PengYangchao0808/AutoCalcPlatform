@@ -350,7 +350,7 @@ def action_seed_legacy(args: argparse.Namespace) -> int:
     conn = _connect(db)
     try:
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute("DELETE FROM _schema_migrations WHERE id IN ('022','023')")
+        conn.execute("DELETE FROM _schema_migrations WHERE id IN ('022','023','024')")
         conn.execute("DROP TABLE IF EXISTS idempotency_records")
         conn.execute("DROP TABLE IF EXISTS approval_records")
         conn.commit()

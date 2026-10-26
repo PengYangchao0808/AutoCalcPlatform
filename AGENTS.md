@@ -44,7 +44,7 @@ src/acp/                  # 工作流/规划/发布层（289 .py）
 src/acp_services/         # 平台服务层（99 .py；acp → acp_services 单向；禁反向）
 ├── bootstrap.py          # ServicesPorts：过渡端口包（收窄至 10 字段；JobStore/Migrations/StepRequirement 端口已就地移除）
 ├── worker_bootstrap.py   # 独立 worker 组合根（零 acp import / 零 jobs DB；= acp-worker console script）
-├── workspace/            # projects/admin/entry_authz/identity_lifecycle/identity_mapping/keys/boundary + NEW http_identity（多用户 HTTP 凭据→principal）/server_identity
+├── workspace/            # projects/admin/entry_authz/identity_lifecycle/identity_mapping/keys/boundary + NEW http_identity（多用户 HTTP 凭据→principal）/server_identity/command_identity（M0-04 唯一 CommandIdentity：HTTP/CLI/admission/幂等 scope）
 ├── data/                 # contracts/operations/transfer/resource_read/read_root/storage_binding/namespaces/archive/import_/budget(存储配额)/helpers + NEW artifacts（ArtifactRef 生命周期）/research_resources（Proposal/ResearchRecord CAS）
 ├── runtime/              # 44 模块 = 原 23 + NEW 21：research_budget/usage_units/approvals/canonical_digest/research_events(游标)/attempt_recovery/cgroup/adapter_registry/adapter_bootstrap/execution_right/receipt_identity/errors/attempt_completion/attempt_freeze/step_dag/science_binding/capability_registry/analysis_capabilities/idempotency/local_admission/metering_decoupling
 ├── store/                # store(JobStore CAS)/migrations(24 条)/record(s)/layout/naming/legacy_method/molecule_groups
@@ -109,7 +109,7 @@ examples/                 # 仅 example_inputs.txt
 - **风格**: `__all__` 全量 re-export（例外：`cccp/__init__.py` 与 `cccp/analysis/__init__.py` 仅 docstring）；ruff（E/F/I/N/W/UP）+ ruff-format + mypy(strict) + pre-commit
 - **Job PAUSED 语义**: active 非终态（计入队列、禁删），poller 跳过；本地 killpg SIGSTOP/SIGCONT，远端 bstop/bresume；restart：本地 → FAILED `[RESTART_FAILED]`，远端重收养保持 PAUSED；cancel 顺序 SIGCONT → SIGTERM → SIGKILL
 - **Task custom names / Structure-source store / Job-edit coverage**: 见 ANTI #12/#23 与 `scheduler/AGENTS.md`
-- **Services 依赖方向**: `src/acp` 可导入 `acp_services`；`src/acp_services/**` 禁止导入 `acp`（含懒加载/TYPE_CHECKING/importlib/字符串反射）；旧路径 identity forwarder（`is` 同一对象）
+- **Services 依赖方向**: `acp_services → acp` 禁止（单向依赖硬门，`acp → acp_services` 允许）；`src/acp_services/**` 禁止导入 `acp`（含懒加载/TYPE_CHECKING/importlib/字符串反射）；旧路径 identity forwarder（`is` 同一对象）
 - **Services 台账/证据**: 平台能力登记 `tests/baseline/services-evidence/migration_ledger.md`（6 列）；公开兼容面登记 `public_shim_inventory.md`；三态 PASS/FAIL/NOT_VERIFIED，`NOT_VERIFIED` 不得改写 PASS
 - **研究运行时**: 预算身份服务端固定（project+proposal_ref）；审批不写执行事实；`canonical_digest.py` 是唯一 digest 实现；适配器 discovery 永不执行代码
 - **ACP 2.0 证据**: `reports/acp2_implementation/`（当前基线 bb45a46）；C33/C34 与 experience/static-assets.manifest.json 仍 `NOT_VERIFIED`

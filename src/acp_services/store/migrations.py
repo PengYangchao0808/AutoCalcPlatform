@@ -360,6 +360,16 @@ CREATE INDEX IF NOT EXISTS idx_approval_proposal
     ON approval_records(proposal_ref, plan_digest);
 """,
     },
+    {
+        "id": "024",
+        "description": (
+            "M0-04/R09 idempotency identity versioning: additive principal_id/"
+            "project_id attribution plus identity_version, request_digest_version, "
+            "scope_origin and migration_state; pre-M0-04 rows are versioned as v1 "
+            "and classified for reconciliation (never silently adopted)"
+        ),
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility + versioning",
+    },
 ]
 
 
@@ -905,6 +915,101 @@ def get_prepare_schema_version(conn: sqlite3.Connection) -> int:
     return int(row["v"]) if row is not None and row["v"] is not None else 0
 
 
+def _apply_idempotency_identity_columns(conn: sqlite3.Connection) -> bool:
+    """Version the idempotency ledger rows and record verified attribution.
+
+    M0-04 (D02/R09) adds, additively:
+
+    * ``principal_id`` / ``project_id`` — the verified identity behind
+      ``scope_id`` (``NULL`` when the legacy scope id cannot be attributed);
+    * ``identity_version`` — ``"2"`` for a scope built from a verified
+      :class:`~acp_services.workspace.command_identity.CommandIdentity`;
+      pre-M0-04 rows keep ``"1"``;
+    * ``request_digest_version`` — the canonical request-digest rules the row
+      was written with (M0-06 bumps this when the field policy changes);
+    * ``scope_origin`` — ``verified`` / ``legacy-local`` / ``legacy-scoped`` /
+      ``legacy-unknown``;
+    * ``migration_state`` — ``native`` / ``legacy-verified`` /
+      ``legacy-pending`` / ``legacy-unverified``.
+
+    Existing rows are classified, never guessed: a *committed* row with a
+    parseable scope and a TaskRef is ``legacy-verified`` (same-scope replay and
+    mapping are allowed, and the scope id itself still pins the principal);
+    a non-terminal row is ``legacy-pending`` (normal takeover rules apply); a
+    row without parseable attribution — or with an unrecognised state — is
+    ``legacy-unverified`` and only reconciled, never handed to whichever caller
+    presents the same key.
+    """
+    if not _table_exists(conn, "idempotency_records"):
+        return False
+
+    from acp_services.contracts.access import LOCAL_PRINCIPAL_ID
+    from acp_services.runtime.idempotency import (
+        LEGACY_IDENTITY_VERSION,
+        LEGACY_REQUEST_DIGEST_VERSION,
+        MIGRATION_STATE_PENDING,
+        MIGRATION_STATE_UNVERIFIED,
+        MIGRATION_STATE_VERIFIED,
+        SCOPE_ORIGIN_LEGACY_LOCAL,
+        SCOPE_ORIGIN_LEGACY_SCOPED,
+        SCOPE_ORIGIN_LEGACY_UNKNOWN,
+        split_scope_id,
+    )
+
+    additive_columns = (
+        ("principal_id", "TEXT"),
+        ("project_id", "TEXT"),
+        ("identity_version", f"TEXT NOT NULL DEFAULT '{LEGACY_IDENTITY_VERSION}'"),
+        ("request_digest_version", f"TEXT NOT NULL DEFAULT '{LEGACY_REQUEST_DIGEST_VERSION}'"),
+        ("scope_origin", f"TEXT NOT NULL DEFAULT '{SCOPE_ORIGIN_LEGACY_UNKNOWN}'"),
+        ("migration_state", f"TEXT NOT NULL DEFAULT '{MIGRATION_STATE_UNVERIFIED}'"),
+    )
+    for name, definition in additive_columns:
+        if not _column_exists(conn, "idempotency_records", name):
+            conn.execute(f"ALTER TABLE idempotency_records ADD COLUMN {name} {definition}")
+
+    pending_states = {"claimed", "released", "expired"}
+    rows = conn.execute(
+        "SELECT claim_id, scope_id, state, task_id FROM idempotency_records"
+    ).fetchall()
+    for row in rows:
+        principal, project = split_scope_id(row["scope_id"])
+        state = str(row["state"] or "")
+        if principal is None:
+            origin = SCOPE_ORIGIN_LEGACY_UNKNOWN
+            migration_state = MIGRATION_STATE_UNVERIFIED
+        else:
+            origin = (
+                SCOPE_ORIGIN_LEGACY_LOCAL
+                if principal == LOCAL_PRINCIPAL_ID
+                else SCOPE_ORIGIN_LEGACY_SCOPED
+            )
+            if state == "committed" and row["task_id"]:
+                migration_state = MIGRATION_STATE_VERIFIED
+            elif state in pending_states:
+                migration_state = MIGRATION_STATE_PENDING
+            else:
+                migration_state = MIGRATION_STATE_UNVERIFIED
+        conn.execute(
+            "UPDATE idempotency_records SET principal_id=?, project_id=?, identity_version=?, "
+            "request_digest_version=?, scope_origin=?, migration_state=? WHERE claim_id=?",
+            (
+                principal,
+                project,
+                LEGACY_IDENTITY_VERSION,
+                LEGACY_REQUEST_DIGEST_VERSION,
+                origin,
+                migration_state,
+                row["claim_id"],
+            ),
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_idempotency_principal "
+        "ON idempotency_records(principal_id, project_id)"
+    )
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -929,6 +1034,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_tasks_custom_name_columns(conn)
     if migration_id == "020":
         return _apply_jobs_revision_attempt_columns(conn)
+    if migration_id == "024":
+        return _apply_idempotency_identity_columns(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

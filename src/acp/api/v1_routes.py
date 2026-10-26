@@ -455,6 +455,29 @@ def _server_identity(request: Request) -> Any:
     return identity
 
 
+def _command_identity(request: Request, *, project_id: str | None = None) -> Any:
+    """Return the verified :class:`CommandIdentity` of this request (M0-04).
+
+    The authenticated HTTP path projects the credential-resolved principal
+    (B15).  The default ``local-single`` deployment has no per-request identity
+    and projects the Controller's own operator identity instead — that is the
+    only legitimate use of ``LOCAL_PRINCIPAL_ID``.  A request body/header can
+    never supply the principal.
+    """
+    from acp_services.workspace.command_identity import CommandIdentity, EntryClass
+
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return CommandIdentity.from_verified_http(
+            resolved, project_id=project_id, entry_class=EntryClass.HTTP
+        )
+    return CommandIdentity.from_server(
+        _server_identity(request),
+        project_id=project_id,
+        entry_class=EntryClass.HTTP,
+    )
+
+
 def _require_submit_access(request: Request, project_hint: str | None) -> str | None:
     """Authorize a submit before normalization; return the effective project."""
     decision = _server_identity(request).resolve_submit_project(project_hint)
@@ -2625,29 +2648,33 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     except (ExecutionTargetError, NoCapableNodeError) as exc:
         raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
     idempotency_key = _submit_idempotency_key(request, req)
+    scope_project = str(req.project_id or manager.default_project_id)
+    identity = _command_identity(request, project_id=scope_project)
     idempotency_context = None
     if idempotency_key:
-        from acp_services.contracts.access import LOCAL_PRINCIPAL_ID
         from acp_services.runtime.idempotency import (
             ACTION_SUBMIT,
             IdempotencyContext,
-            resolve_scope_id,
         )
 
-        scope_project = req.project_id or manager.default_project_id
         idempotency_context = IdempotencyContext(
             key=idempotency_key,
-            scope_id=resolve_scope_id(LOCAL_PRINCIPAL_ID, str(scope_project)),
+            scope_id=identity.idempotency_scope(project_id=scope_project),
             action=ACTION_SUBMIT,
             request_payload=req.model_dump(exclude_none=True),
+            principal_id=identity.principal_id,
+            key_id=identity.key_id,
         )
     budget_claim = _budget_claim_from_approval(approval)
     try:
         if idempotency_context is None:
-            record = _commands(request).submit(spec, budget=budget_claim)
+            record = _commands(request).submit(spec, budget=budget_claim, identity=identity)
         else:
             record = _commands(request).submit(
-                spec, idempotency=idempotency_context, budget=budget_claim
+                spec,
+                idempotency=idempotency_context,
+                budget=budget_claim,
+                identity=identity,
             )
     except (AdmissionRefusedError, IdempotencyReservationDeniedError) as exc:
         raise _admission_http_error(exc.decision) from exc

@@ -332,7 +332,7 @@ def test_cli_control_entry_shares_the_web_runtime_use_case() -> None:
     manager.cancel = spy.cancel
     manager.continue_job = spy.continue_job
     manager.rerun_job = spy.rerun_job
-    manager.submit = lambda spec, group_id=None: None
+    manager.submit = lambda spec, group_id=None, **_kwargs: None
     manager.edit_recalculate = lambda job_id, **kwargs: None
 
     assert cli.job_control_command("pause", "j1", manager=manager) == "paused"

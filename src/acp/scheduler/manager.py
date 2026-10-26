@@ -120,6 +120,7 @@ from acp_services.runtime.worker import (
     ReceiptConflictError,
     read_receipt,
 )
+from acp_services.workspace.command_identity import CommandIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -928,6 +929,7 @@ class JobManager:
         *,
         idempotency: IdempotencyContext | None = None,
         budget: dict[str, Any] | None = None,
+        identity: CommandIdentity | None = None,
     ) -> JobRecord:
         """Validate, persist, and enqueue a new job. Returns immediately.
 
@@ -942,11 +944,20 @@ class JobManager:
                 (self-rooted); pass an ancestor's id to link a clone (e.g.
                 a ``rerun_job``) into the same group.
             idempotency: Optional verified-scope idempotency context.
+            identity: Optional server-verified ``CommandIdentity`` (M0-04).
+                The HTTP and CLI entries pass it so the admission reservation
+                (and the persisted ``result["admission"]`` projection) is
+                attributed to the real principal.  The idempotent path takes the
+                same attribution from ``idempotency.principal_id``.
         """
         if idempotency is None:
-            return self._submit_legacy(spec, group_id=group_id, budget=budget)
+            return self._submit_legacy(spec, group_id=group_id, budget=budget, identity=identity)
         return self._submit_idempotent(
-            spec, group_id=group_id, idempotency=idempotency, budget=budget
+            spec,
+            group_id=group_id,
+            idempotency=idempotency,
+            budget=budget,
+            identity=identity,
         )
 
     def _submit_legacy(
@@ -955,6 +966,7 @@ class JobManager:
         group_id: str | None = None,
         *,
         budget: dict[str, Any] | None = None,
+        identity: CommandIdentity | None = None,
     ) -> JobRecord:
         """Original submit path (unchanged for legacy callers)."""
         if spec.workflow not in ALL_WORKFLOWS:
@@ -977,14 +989,23 @@ class JobManager:
 
         admission_result: dict[str, Any] | None = None
         if self._admission is not None:
+            identity_principal = None if identity is None else identity.principal_id
+            identity_key = None if identity is None else identity.key_id
             decision = self._admission.admit_job(
-                job_id, spec, project_id=spec.project_id, budget=budget
+                job_id,
+                spec,
+                project_id=spec.project_id,
+                budget=budget,
+                principal_id=identity_principal,
+                key_id=identity_key,
             )
             if not decision.allowed:
                 raise AdmissionRefusedError(decision)
             admission_result = self._admission.result_for_reservation(
                 decision.reservation_id,
                 decision=decision,
+                principal_id=identity_principal,
+                key_id=identity_key,
             )
         try:
             work_dir = self._allocate_work_dir(spec, job_id)
@@ -1063,6 +1084,7 @@ class JobManager:
         group_id: str | None,
         idempotency: IdempotencyContext,
         budget: dict[str, Any] | None = None,
+        identity: CommandIdentity | None = None,
     ) -> JobRecord:
         if spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
@@ -1077,6 +1099,16 @@ class JobManager:
             project_id=spec.project_id or self.default_project_id,
             input_hash=spec.input_hash or compute_input_hash(spec),
         )
+        # M0-04: the verified identity of the claim (context wins; the explicit
+        # submit identity is the fallback for a legacy caller that built the
+        # context itself).
+        fallback_principal = None if identity is None else identity.principal_id
+        principal_id = idempotency.principal or fallback_principal
+        key_id = (
+            idempotency.key_id
+            if idempotency.key_id is not None
+            else (None if identity is None else identity.key_id)
+        )
 
         digest = idempotency.digest()
         outcome = self.store.claim_idempotency(
@@ -1085,6 +1117,8 @@ class JobManager:
             idempotency.key,
             digest,
             lease_seconds=idempotency.lease_seconds,
+            principal_id=principal_id,
+            project_id=spec.project_id,
         )
         self._fault_point("idempotency.after_claim")
         if outcome.in_progress:
@@ -1111,9 +1145,15 @@ class JobManager:
                     idempotency_key=idempotency.key,
                     spec=spec,
                     budget=budget,
+                    principal_id=principal_id,
+                    key_id=key_id,
                 )
                 if self._admission is not None:
-                    admission_result = self._admission.result_for_reservation(reservation_id)
+                    admission_result = self._admission.result_for_reservation(
+                        reservation_id,
+                        principal_id=principal_id,
+                        key_id=key_id,
+                    )
             self._fault_point("idempotency.after_reservation")
 
             staging.mkdir(parents=True, exist_ok=True)
@@ -1195,6 +1235,7 @@ class JobManager:
                 idempotency.key,
                 digest,
                 lease_seconds=idempotency.lease_seconds,
+                principal_id=idempotency.principal,
             )
             if not outcome.in_progress:
                 return outcome

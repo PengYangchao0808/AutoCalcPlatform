@@ -16,8 +16,12 @@ The reservation is made **queued** at submit time (storage + an active-task
 slot), then re-validated and promoted at dispatch.  A denial therefore happens
 before a work directory, a QC process or a remote submission exists.
 
-This is local single-principal enforcement.  It is not multi-tenant security,
-and model-token metering remains ``NOT_VERIFIED``.
+The reservation is attributed to the **verified** principal of the command
+(M0-04): a multi-user HTTP/CLI submit carries its own ``CommandIdentity``
+principal/key reference, while the legacy local-single path keeps the
+Controller-process default.  ``principal_id`` on this object is that default,
+never a request field.  This is local single-tier quota enforcement; it is not
+multi-tenant security, and model-token metering remains ``NOT_VERIFIED``.
 """
 
 from __future__ import annotations
@@ -297,9 +301,13 @@ class _ControllerReservationPort:
         idempotency_key: str,
         spec: Any,
         budget: Mapping[str, Any] | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> str:
         reservation_id = "res_" + str(claim_id)
-        request = self._admission.request_for_spec(claim_id, spec)
+        request = self._admission.request_for_spec(
+            claim_id, spec, principal_id=principal_id, key_id=key_id
+        )
         if (
             self._admission.verified_project is not None
             and request.project_id != self._admission.verified_project
@@ -426,8 +434,21 @@ class LocalAdmission:
 
     # -- request construction -------------------------------------------
 
-    def request_for_spec(self, job_id: str, spec: Any) -> AdmissionRequest:
-        """Build the server-verified admission request for *spec*."""
+    def request_for_spec(
+        self,
+        job_id: str,
+        spec: Any,
+        *,
+        principal_id: str | None = None,
+        key_id: str | None = None,
+    ) -> AdmissionRequest:
+        """Build the server-verified admission request for *spec*.
+
+        ``principal_id``/``key_id`` are the verified caller identity of this
+        command (M0-04).  When omitted the Controller-process default principal
+        applies — the legacy local-single path.  A client can never supply
+        either: they come from the resolved ``CommandIdentity``.
+        """
         resources = getattr(spec, "resources", None)
         project = (
             str(getattr(spec, "project_id", None) or self.verified_project or "default").strip()
@@ -441,10 +462,12 @@ class LocalAdmission:
         if duration is None:
             duration = self.limits.default_walltime_s
         target = getattr(spec, "target_node", None)
+        resolved_key = None if key_id is None else (str(key_id).strip() or None)
         return AdmissionRequest(
-            principal_id=self.principal_id,
+            principal_id=str(principal_id or "").strip() or self.principal_id,
             project_id=project,
             job_id=str(job_id),
+            key_id=resolved_key,
             cores=_cores(resources),
             memory_mb=_memory_mb(resources.get("mem") if isinstance(resources, dict) else None),
             duration_s=int(duration),
@@ -462,9 +485,16 @@ class LocalAdmission:
         *,
         project_id: str | None = None,
         budget: Mapping[str, Any] | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> AdmissionDecision:
-        """Pre-claim admission for the legacy (no-idempotency) submit path."""
-        request = self.request_for_spec(job_id, spec)
+        """Pre-claim admission for the legacy (no-idempotency) submit path.
+
+        ``principal_id``/``key_id`` are forwarded from the verified
+        ``CommandIdentity`` of the command (M0-04) so a multi-user HTTP submit
+        without an idempotency key is still attributed to the real principal.
+        """
+        request = self.request_for_spec(job_id, spec, principal_id=principal_id, key_id=key_id)
         project = str(project_id or request.project_id)
         if self.verified_project is not None and project != self.verified_project:
             return AdmissionDecision(
@@ -556,15 +586,29 @@ class LocalAdmission:
         reservation_id: str | None,
         *,
         decision: AdmissionDecision | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> dict[str, Any]:
-        """Return the persisted ``result["admission"]`` projection."""
+        """Return the persisted ``result["admission"]`` projection.
+
+        The recorded principal/key are read back from the reservation row (the
+        ledger is the authority) and fall back to the caller-supplied verified
+        identity.  That keeps the persisted projection truthful per user instead
+        of echoing the Controller-process default.
+        """
+        reservation = None
+        if reservation_id:
+            reservation = self.controller.reservation(str(reservation_id))
+        recorded_principal = None if reservation is None else reservation.principal_id
+        recorded_key = None if reservation is None else reservation.key_id
         payload: dict[str, Any] = {
             "reservation_id": reservation_id,
             "enforcement": ADMISSION_ENFORCEMENT,
             "mode": (decision.mode if decision is not None else "quota-only"),
             "enforced": bool(decision.enforced) if decision is not None else True,
             "policy_version": self.limits.policy_version,
-            "principal_id": self.principal_id,
+            "principal_id": recorded_principal or principal_id or self.principal_id,
+            "key_id": recorded_key or key_id,
             "verified_project": self.verified_project,
             "multi_tenant_security": False,
         }
@@ -721,10 +765,17 @@ def build_local_admission(
     *,
     limits: AdmissionLimits | None = None,
     verified_project: str | None = None,
+    principal_id: str = LOCAL_PRINCIPAL_ID,
 ) -> LocalAdmission:
-    """Build the Controller's single local admission composition."""
+    """Build the Controller's single local admission composition.
+
+    ``principal_id`` is the process-level default (the trusted local operator).
+    A multi-user HTTP/CLI command overrides it per request with the verified
+    ``CommandIdentity`` principal; the ledger row keeps the real principal.
+    """
     return LocalAdmission.build(
         db_path,
         limits=limits,
+        principal_id=principal_id,
         verified_project=verified_project,
     )

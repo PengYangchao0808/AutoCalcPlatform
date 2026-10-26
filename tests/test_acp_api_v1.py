@@ -516,7 +516,7 @@ def _stub_manager_submit(client: TestClient, tmp_path: Path) -> dict[str, object
     captured: dict[str, object] = {}
     original = manager.submit
 
-    def _submit(spec, group_id=None):
+    def _submit(spec, group_id=None, **_kwargs):
         captured["spec"] = spec
         work_dir = tmp_path / "captured"
         work_dir.mkdir(parents=True, exist_ok=True)

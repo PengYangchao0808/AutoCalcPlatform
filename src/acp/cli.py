@@ -2426,10 +2426,20 @@ def _dispatch_mcp(args: argparse.Namespace) -> int:
     return _MCP_EXIT_USAGE
 
 
-def job_submit_command(spec: Any, *, manager: Any | None = None) -> Any:
-    """Submit a job through the shared Runtime use case (single execution owner)."""
+def job_submit_command(
+    spec: Any, *, manager: Any | None = None, identity: Any | None = None
+) -> Any:
+    """Submit a job through the shared Runtime use case (single execution owner).
+
+    ``identity`` is the explicit local-operator ``CommandIdentity`` of this CLI
+    process (M0-04).  It attributes the admission reservation to the local
+    operator and is forwarded only when supplied, so callers that build the
+    Runtime command surface themselves keep the legacy call shape.
+    """
     commands = job_runtime_commands(manager)
-    return commands.submit(spec)
+    if identity is None:
+        return commands.submit(spec)
+    return commands.submit(spec, identity=identity)
 
 
 def _task_run_root(args: argparse.Namespace) -> Path:
@@ -2438,11 +2448,49 @@ def _task_run_root(args: argparse.Namespace) -> Path:
     return resolve_run_root(getattr(args, "run_root", None))
 
 
+def _task_identity(*, project_id: str | None = None) -> Any:
+    """Return the explicit local-operator identity of this CLI process (M0-04).
+
+    A local CLI operator is the deployment owner, not a remote caller: the
+    identity is declared here (never inferred from a request field) and the
+    ``subject_kind`` is fixed to ``operator`` so the admission ledger and the
+    idempotency scope can never confuse it with an authenticated multi-user
+    principal.  The project is the deployment pin (``ACP_SERVER_PROJECT``).
+    """
+    from acp_services.workspace.command_identity import CommandIdentity
+    from acp_services.workspace.server_identity import resolve_server_project
+
+    return CommandIdentity.from_local(
+        project_id=resolve_server_project() if project_id is None else project_id,
+    )
+
+
 def _task_manager(run_root: Path) -> Any:
+    """Build the CLI's local job manager with the same admission as HTTP/MCP.
+
+    M0-04 removes the CLI-only bypass: the local task manager now assembles the
+    single admission composition (ledger + claim-keyed reservation port) so a
+    CLI submit is quota-checked and its reservation is attributed to the
+    explicit local operator, exactly like a Controller submit.  The ceilings are
+    the same server-side defaults (``ACP_ADMISSION_*``), so the observable
+    change is the recorded reservation/usage row, not a new limit.
+    """
     from acp.scheduler.manager import JobManager
+    from acp_services.runtime.local_admission import build_local_admission
 
     run_root.mkdir(parents=True, exist_ok=True)
-    return JobManager(run_root=run_root, reconnect_local_workers=True)
+    identity = _task_identity()
+    admission = build_local_admission(
+        run_root / "acp_admission.db",
+        verified_project=identity.project_id,
+        principal_id=identity.principal_id,
+    )
+    return JobManager(
+        run_root=run_root,
+        reconnect_local_workers=True,
+        idempotency_reservations=admission.reservation_port(),
+        admission=admission,
+    )
 
 
 def _task_store(run_root: Path) -> Any:
@@ -2733,15 +2781,20 @@ def _handle_task_execute(args: argparse.Namespace) -> int:
     method: dict[str, Any] = {}
     if args.method:
         method["method"] = args.method
+    identity = _task_identity()
     spec = JobSpec(
         workflow=args.workflow,
         name=args.name or "",
         input=_task_input_payload(args.input),
         method=method,
+        # The deployment project pin (ACP_SERVER_PROJECT) applies to the local
+        # operator exactly as it does to the HTTP entry: a pinned Controller
+        # never writes a task into another project.  Unset = unchanged default.
+        project_id=identity.project_id,
     )
     manager = _task_manager(run_root)
     try:
-        record = job_submit_command(spec, manager=manager)
+        record = job_submit_command(spec, manager=manager, identity=identity)
         follow = bool(args.follow) or args.workflow == "fake"
         fresh = _wait_for_task(manager, record.id, terminal=follow)
         if fresh is None:
