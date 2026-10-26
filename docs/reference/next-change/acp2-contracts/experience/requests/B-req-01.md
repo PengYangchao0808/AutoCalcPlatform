@@ -103,3 +103,40 @@ not match the resolved scope, is rejected and no task is created:
 ## Evidence path
 
 `$ACP2_EVIDENCE/C/contracts/<run_id>/` plus the B contract digest cited above.
+
+## D06 amendment (M1-04a / M1-04b, 2026-10-27)
+
+The launch field gap above is closed with **two** digests and **one** submit
+classification; neither is optional and neither may stand in for the other.
+
+| wire field | means after M1-04 | domain (plan-identity §6) |
+| --- | --- | --- |
+| `proposal_ref` | the proposal the science belongs to | `proposal_digest` scope |
+| `proposal_digest` | the semantic Proposal projection | `proposal_digest` |
+| `plan_digest` | the **execution** plan (workflow/input/method/resources) | `execution_plan_digest` |
+| `budget` | the launch bound **only** (`unit` + `count?` + `timeout_s`) | `execution_limits` / `ResourceBounds` |
+| approval `science_digest` | the C `plan_definition_digest` the approver signed | `plan_definition_digest` |
+
+Rules now enforced at submit (single `classify_submit`, `tests/test_acp2_submit_policy.py`):
+
+1. a submit carrying **only** `budget` is **not** a legacy job: it is refused
+   (`approval_required`) instead of having its budget silently dropped;
+2. a complete research launch requires `proposal_ref` **and** `plan_digest`;
+   a missing `plan_digest` is `input_invalid(plan_digest_required)`, a missing
+   proposal reference is `access_denied(approval_required)`;
+3. the approval binds the science digest as well; a submit whose proposal
+   science cannot be read/verified is `access_denied(science_binding_unverifiable)`;
+4. an **agent** credential (server-side credential scope or deployment policy
+   profile `ACP_SUBMIT_POLICY_PROFILE=agent`) can never downgrade: omit-all,
+   budget-only and proposal-less submits are denials with a typed rule;
+5. a legacy `local-single` / keyed `manual-legacy` submit is explicitly allowed
+   and recorded (`V1JobCreatedResponse.submit_class`).
+
+The `budget` object itself stays `{unit, count?, timeout_s}` on the v1 wire; an
+undeclared inner key is `422 input_invalid(unknown_field)` (it used to be
+dropped by the normalizer). The D09 shape (`wall_seconds`, `queue_seconds`,
+`input_tokens`, `output_tokens`, `core_hours`) is the **proposal/approval**
+budget: `wall_seconds` → `ResourceBounds`/timeout (local termination + CCCP
+`resources.timeout_s` at subprocess level + LSF `-W`), `queue_seconds` → the
+queue deadline, tokens/core-hours → recorded-only (the RPH client throttle is
+not a platform enforcement claim).

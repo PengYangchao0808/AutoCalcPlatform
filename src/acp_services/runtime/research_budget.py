@@ -303,6 +303,11 @@ class BudgetPolicy:
     timeouts: Mapping[str, float] = field(default_factory=dict)
     approval_ref: str = ""
     project_id: str = ""
+    #: Parse-time projection of the D09 budget shape (``wall_seconds``,
+    #: ``queue_seconds``, tokens, core hours).  It is *not* durable policy: the
+    #: durable limits stay ``limits``/``timeouts``.  It exists so a caller can
+    #: see that a recognized non-unit field was interpreted rather than dropped.
+    shape: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not str(self.budget_id).strip():
@@ -336,6 +341,7 @@ class BudgetPolicy:
             "approval_ref": self.approval_ref,
             "project_id": self.project_id,
             "unit_capabilities": {unit: self.capability(unit) for unit in sorted(self.limits)},
+            "execution_limits": dict(self.shape),
         }
 
 
@@ -353,8 +359,24 @@ def parse_budget_policy(
     ``{"units": {...}}`` / ``{"timeouts": {...}}`` shape.  ``timeout_s`` maps to
     ``science_runtime_s`` for compatibility; the four timeout classes stay
     separate and are never collapsed into one value.
+
+    D09 (M1-04b): the shape is bound by
+    :func:`acp_services.runtime.execution_limits.bind_budget_shape` — the single
+    implementation — so ``wall_seconds`` / ``queue_seconds`` /
+    ``input_tokens`` / ``output_tokens`` / ``core_hours`` are *interpreted*
+    (they never silently vanish) and a non-empty unknown key is a typed
+    ``BudgetConfigurationError`` instead of "no limits".
+
+    Raises:
+        BudgetConfigurationError: A non-empty unknown budget shape, or a value
+            that is not a non-negative integer.
     """
     source = dict(budget or {})
+    # Validation + D09 interpretation (single implementation; also lazy-imported
+    # this way because execution_limits imports the capability vocabulary here).
+    from acp_services.runtime.execution_limits import bind_budget_shape
+
+    shape = bind_budget_shape(source)
     limits: dict[str, int] = {}
     for key in ("units", "unit_limits"):
         raw = source.get(key)
@@ -389,6 +411,7 @@ def parse_budget_policy(
         timeouts=timeouts,
         approval_ref=str(approval_ref),
         project_id=str(project_id),
+        shape=shape.to_dict() if shape.bounded or shape.recorded_only else {},
     )
 
 
@@ -601,6 +624,8 @@ def evaluate_budget_boundary(
 
 def release_statement() -> dict[str, Any]:
     """The enforced / recorded-only / NOT_VERIFIED release statement."""
+    from acp_services.runtime.execution_limits import execution_limits_statement
+
     enforced = [unit for unit, cap in UNIT_CAPABILITIES.items() if cap == BudgetCapability.ENFORCED]
     recorded = [
         unit for unit, cap in UNIT_CAPABILITIES.items() if cap == BudgetCapability.RECORDED_ONLY
@@ -621,4 +646,8 @@ def release_statement() -> dict[str, Any]:
         "unit_consumption": UNIT_CONSUMPTION_RULES,
         "release_rules": RELEASE_RULES,
         "notes": RESEARCH_BUDGET_NOTES,
+        # M1-04b: the non-BudgetUnit limits (admission-bound / process
+        # termination / queue deadline) and the three clocks, from the one
+        # execution-limits matrix.  Never re-derived per surface.
+        "execution_limits": execution_limits_statement(),
     }

@@ -205,6 +205,12 @@ class Approval:
     approver_principal: str | None
     budget: dict[str, Any] | None
     budget_digest: str
+    #: D06 (M1-04a): the *scientific* plan digest this approval also binds
+    #: (``experience/plan-identity.md`` §1).  Empty means the approval was
+    #: requested without a proposal body, so only the execution digest is bound;
+    #: that gap is reported as ``binding_status=execution-only`` and never
+    #: silently presented as a full science binding.
+    science_digest: str
     allowed_change_range: dict[str, Any]
     state: str
     expires_at: str | None
@@ -224,10 +230,22 @@ class Approval:
     def live(self) -> bool:
         return self.state in _LIVE_STATES
 
+    @property
+    def binding_status(self) -> str:
+        """``full`` (science + execution) or ``execution-only`` (no proposal)."""
+        return "full" if self.science_digest else "execution-only"
+
     def binding(self) -> dict[str, Any]:
-        """The immutable approval binding (R3-06 layer 3)."""
+        """The immutable approval binding (R3-06 layer 3 + D06).
+
+        Two digests are bound independently: ``plan_digest`` (execution plan) and
+        ``science_digest`` (the C ``plan_definition_digest``).  Neither may stand
+        in for the other, and a change to either invalidates the approval.
+        """
         return {
             "plan_digest": self.plan_digest,
+            "science_digest": self.science_digest,
+            "binding_status": self.binding_status,
             "proposal_digest": self.proposal_digest,
             "project_id": self.project_id,
             "budget_digest": self.budget_digest,
@@ -240,6 +258,8 @@ class Approval:
             "proposal_ref": self.proposal_ref,
             "proposal_digest": self.proposal_digest,
             "plan_digest": self.plan_digest,
+            "science_digest": self.science_digest,
+            "binding_status": self.binding_status,
             "plan_definition": self.plan_definition,
             "project_id": self.project_id,
             "requester_ref": self.requester_principal,
@@ -285,6 +305,7 @@ def _row_to_approval(row: sqlite3.Row) -> Approval:
         approver_principal=row["approver_principal"],
         budget=budget,
         budget_digest=str(row["budget_digest"] or ""),
+        science_digest=str(row["science_digest"] or ""),
         allowed_change_range=_json(row["allowed_change_range_json"], {}) or {},
         state=str(row["state"]),
         expires_at=row["expires_at"],
@@ -343,6 +364,7 @@ class ApprovalService:
         allowed_change_range: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
         idempotency_key: str | None = None,
+        science_digest: str = "",
     ) -> Approval:
         """Persist an unrequested (``draft``) record.
 
@@ -354,6 +376,7 @@ class ApprovalService:
         requester = self._require_text(requester_principal, "requester_principal")
         proposal_digest = _require_digest(proposal_digest, "proposal_digest")
         plan_digest = _require_digest(plan_digest, "plan_digest")
+        science_digest = self._normalize_science_digest(science_digest)
         expires = self._normalize_expiry(expires_at)
         binding_budget = self._normalize_budget(budget)
         now = self._now()
@@ -372,9 +395,9 @@ class ApprovalService:
                            approver_principal, budget_json, budget_digest,
                            allowed_change_range_json, state, expires_at, revision,
                            created_at, updated_at, decided_at, reason, task_ref_json,
-                           idempotency_key, last_event_revision)
+                           idempotency_key, science_digest, last_event_revision)
                        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'draft', ?, 1,
-                               ?, ?, NULL, NULL, NULL, ?, 0)""",
+                               ?, ?, NULL, NULL, NULL, ?, ?, 0)""",
                     (
                         approval_id,
                         proposal_ref,
@@ -390,6 +413,7 @@ class ApprovalService:
                         now,
                         now,
                         idempotency_key,
+                        science_digest,
                     ),
                 )
                 row = conn.execute(
@@ -417,6 +441,7 @@ class ApprovalService:
         allowed_change_range: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
         idempotency_key: str | None = None,
+        science_digest: str = "",
     ) -> tuple[Approval, bool]:
         """Create/return the live approval for ``(proposal_ref, plan_digest)``.
 
@@ -430,6 +455,7 @@ class ApprovalService:
         requester = self._require_text(requester_principal, "requester_principal")
         proposal_digest = _require_digest(proposal_digest, "proposal_digest")
         plan_digest = _require_digest(plan_digest, "plan_digest")
+        science_digest = self._normalize_science_digest(science_digest)
         expires = self._normalize_expiry(expires_at)
         binding_budget = self._normalize_budget(budget)
         budget_ref = budget_digest(binding_budget) if binding_budget else ""
@@ -453,6 +479,15 @@ class ApprovalService:
                         raise ApprovalConflictError(
                             "approval_proposal_changed",
                             "the live approval is bound to a different proposal digest",
+                        )
+                    if (
+                        science_digest
+                        and existing.science_digest
+                        and existing.science_digest != science_digest
+                    ):
+                        raise ApprovalConflictError(
+                            "approval_binding_mismatch",
+                            "the live approval is bound to a different scientific plan digest",
                         )
                     if existing.state == "pending":
                         conn.commit()
@@ -484,9 +519,9 @@ class ApprovalService:
                            approver_principal, budget_json, budget_digest,
                            allowed_change_range_json, state, expires_at, revision,
                            created_at, updated_at, decided_at, reason, task_ref_json,
-                           idempotency_key, last_event_revision)
+                           idempotency_key, science_digest, last_event_revision)
                        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'pending', ?, 1,
-                               ?, ?, NULL, NULL, NULL, ?, 0)""",
+                               ?, ?, NULL, NULL, NULL, ?, ?, 0)""",
                     (
                         approval_id,
                         proposal_ref,
@@ -502,6 +537,7 @@ class ApprovalService:
                         now,
                         now,
                         idempotency_key,
+                        science_digest,
                     ),
                 )
                 row = conn.execute(
@@ -962,6 +998,13 @@ class ApprovalService:
         if not result:
             return None
         return result
+
+    def _normalize_science_digest(self, value: str | None) -> str:
+        """Validate the optional D06 science digest (``""`` = not supplied)."""
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        return _require_digest(text, "science_digest")
 
     def _get_locked(self, conn: sqlite3.Connection, approval_ref: str) -> Approval | None:
         row = conn.execute(

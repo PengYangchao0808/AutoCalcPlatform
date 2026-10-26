@@ -761,8 +761,17 @@ class LocalAdmission:
     # -- projections ----------------------------------------------------
 
     def snapshot(self) -> dict[str, Any]:
-        """P2-compatible admission capability projection."""
+        """P2-compatible admission capability projection.
+
+        M1-04b/D09: ``quota_enforced`` is about *units and admission ceilings*
+        only.  The walltime claim is split explicitly through
+        ``limit_semantics`` so an admission-bound check can never be read as
+        "the process is terminated at the deadline".
+        """
+        from acp_services.runtime.execution_limits import execution_limits_statement
+
         occupancy = self.controller.occupancy()
+        limits_statement = execution_limits_statement()
         return {
             "enforcement": ADMISSION_ENFORCEMENT,
             "mode": "quota-only",
@@ -774,6 +783,14 @@ class LocalAdmission:
             "verified_project": self.verified_project,
             "policy_version": self.limits.policy_version,
             "limits": self.limits.to_dict(),
+            # Split semantics (never a single "hard limit enforced" claim):
+            #   admission-bound = enforced; process termination and queue
+            #   deadline = NOT_VERIFIED until their receipts exist.
+            "limit_semantics": {
+                row["limit"]: {"kind": row["kind"], "capability": row["capability"]}
+                for row in limits_statement["limits"]
+            },
+            "execution_limits": limits_statement,
             "occupancy": occupancy,
             "usage": self.controller.usage_totals(),
             "research_budget": {

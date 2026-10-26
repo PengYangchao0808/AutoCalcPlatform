@@ -782,10 +782,27 @@ def _optional_idempotency(payload: Mapping[str, Any]) -> str | None:
     return value
 
 
+#: Fields of the registered v1 submit ``budget`` object (B-req-01).  The D09
+#: shape (``wall_seconds``/``queue_seconds``/tokens/``core_hours``) is the
+#: approval/proposal budget, not the v1 launch field, so an unknown key here is a
+#: 422 ``unknown_field`` instead of being silently dropped by the normalizer.
+_BUDGET_KEYS = frozenset({"unit", "count", "timeout_s"})
+
+
 def _normalize_budget(value: Any) -> dict[str, Any] | None:
     if value is None:
         return None
     budget = _require_mapping(value, field="budget")
+    unknown = sorted(str(key) for key in budget if key not in _BUDGET_KEYS)
+    if unknown:
+        raise ApplicationParamError(
+            "budget carries undeclared field(s): " + ", ".join(unknown),
+            params={
+                "field": f"budget.{unknown[0]}",
+                "rule": "unknown_field",
+                "fields": [f"budget.{name}" for name in unknown],
+            },
+        )
     unit = budget.get("unit")
     if unit not in _BUDGET_UNITS:
         raise ApplicationParamError(

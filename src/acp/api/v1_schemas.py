@@ -339,7 +339,7 @@ class V1JobCreateRequest(BaseModel):
     idempotency_key: str | None = None
     # B1-3 optional preflight binding: the plan digest a caller got from
     # ``POST /preflight``.  Deliberately NOT ``plan_digest`` so
-    # ``_is_research_launch`` never treats it as a research trigger.
+    # ``classify_submit`` never treats it as a research trigger.
     preflight_fingerprint: str | None = None
     # U4: namespaced, opaque extension metadata.  Declared (the registered
     # contract has it) and accepted, never used for execution — but part of the
@@ -536,6 +536,9 @@ class V1JobCreatedResponse(BaseModel):
     plan_digest: str | None = None
     proposal_digest: str | None = None
     approval_ref: str | None = None
+    #: M1-04b: the frozen submit class (``research`` / ``agent`` /
+    #: ``local-single`` / ``manual-legacy``) recorded for this accepted submit.
+    submit_class: str | None = None
     result: str = "accepted"
     idempotency_key: str | None = None
     idempotent_replay: bool = False

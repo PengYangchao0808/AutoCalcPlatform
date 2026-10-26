@@ -370,6 +370,15 @@ CREATE INDEX IF NOT EXISTS idx_approval_proposal
         ),
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility + versioning",
     },
+    {
+        "id": "025",
+        "description": (
+            "M1-04a/D06: the approval binds the scientific plan digest as well as "
+            "the execution plan digest (additive science_digest column; an approval "
+            "without a proposal body stays execution-only and says so)"
+        ),
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
 ]
 
 
@@ -1032,6 +1041,29 @@ def _apply_idempotency_identity_columns(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_approval_science_digest_column(conn: sqlite3.Connection) -> bool:
+    """Add ``approval_records.science_digest`` (D06 dual-digest binding).
+
+    Additive and idempotent: an approval created before M1-04a keeps an empty
+    science digest, which the service reports as ``binding_status=execution-only``
+    instead of pretending the scientific plan was bound.
+    """
+    columns = {
+        str(row["name"]) for row in conn.execute("PRAGMA table_info(approval_records)").fetchall()
+    }
+    if not columns:
+        # The approvals table is created by migration 023 in the same run.
+        return False
+    if "science_digest" in columns:
+        return True
+    conn.execute("ALTER TABLE approval_records ADD COLUMN science_digest TEXT NOT NULL DEFAULT ''")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_science_digest "
+        "ON approval_records(plan_digest, science_digest)"
+    )
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -1058,6 +1090,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_jobs_revision_attempt_columns(conn)
     if migration_id == "024":
         return _apply_idempotency_identity_columns(conn)
+    if migration_id == "025":
+        return _apply_approval_science_digest_column(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

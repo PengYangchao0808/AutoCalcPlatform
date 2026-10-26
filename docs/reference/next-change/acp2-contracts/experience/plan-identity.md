@@ -233,11 +233,28 @@ Rules:
 An approval binds exactly this tuple:
 
 ```text
-plan_definition_digest
+plan_definition_digest        (the science; D06 domain 1)
++ execution_plan_digest       (the frozen workflow/input/method/resources; D06 domain 2)
 + project_id
 + budget
 + allowed_change_scope
 ```
+
+**D06 amendment (M1-04a).** The approval record carries two independent digests:
+`science_digest` (this document's `plan_definition_digest`) and `plan_digest`
+(the platform's `execution_plan_digest`). Neither is derived from, compared
+with, or substituted for the other:
+
+- a change to either digest invalidates the approval (`revision_conflict` /
+  `approval_binding_mismatch`);
+- an approval requested without a Proposal body binds only the execution digest
+  and reports `binding_status = "execution-only"` — that gap is explicit and is
+  never presented as a full science binding;
+- the Workbench/RPH displays both digests; the platform returns the execution
+  digest in preflight/approval responses so no client needs to compute it;
+- a client must not send the C science digest as the submit `plan_digest`
+  (the pre-D06 mistake). The wire name `plan_digest` means
+  `execution_plan_digest` on submit; the science digest travels in the approval.
 
 `budget` and the scientific substitution set are already inside
 `plan_definition_digest`; binding them again is a defence-in-depth consistency
@@ -317,3 +334,44 @@ opportunity.
   `messages`, `transcript`, `conversation` and `model_role` are rejected.
 - The Workbench read-only view model is not a second scientific authority and
   must not compute or upgrade a claim/decision.
+
+---
+
+## 6. D06 digest-domain registry (frozen contract rows)
+
+Every identity that was historically called "the digest" is registered here with
+one owner, one canonical input/field order, one version, the **single**
+validation implementation (platform / CCCP / RPH) and the legacy wire field it
+replaces. A domain whose validator is not registered **may not be marked
+frozen** — `recipe_definition_digest` stays `not-frozen` until A registers a
+cross-side verifier (M2-05).
+
+The machine-readable twin of this table is
+`src/acp_services/runtime/digest_domains.py` (`DIGEST_DOMAINS`); a test asserts
+that the two sets agree row for row, so neither side may drift.
+
+| domain | owner | version | unique validator | side | status |
+| --- | --- | --- | --- | --- | --- |
+| `plan_definition_digest` | C-RPH science / B16 canonicalization | `1.0.0` | `src/acp_services/runtime/canonical_digest.py::proposal_plan_definition_digest` | platform | frozen |
+| `execution_plan_digest` | B | `1.0.0` | `src/acp_services/runtime/canonical_digest.py::plan_digest` | platform | frozen |
+| `proposal_digest` | B | `4` | `src/acp_services/runtime/canonical_digest.py::proposal_digest` | platform | frozen |
+| `submit_request_digest` | B | `2` | `src/acp_services/runtime/idempotency.py::canonical_request_digest` | platform | frozen |
+| `frozen_plan_body_digest` | B | `2` | `src/acp_services/runtime/attempt_freeze.py::frozen_group` | platform | frozen |
+| `recipe_definition_digest` | A (CCCP) | `0.0.0-pending` | — (no cross-side verifier registered) | cccp | not-frozen |
+| `step_execution_identity` | B worker + A science | `2` | `src/acp_services/runtime/receipt_identity.py::identity_digest` | platform | frozen |
+| `contract_digest` | B | `1.0.0` | `scripts/acceptance/validate_acp2_contracts.py::contract_digest_for` | platform | frozen |
+| `artifact_digest` | B | `1.0.0` | `src/acp_services/data/artifacts.py::normalize_artifact_digest` | platform | frozen |
+| `release_digest` | B | `1.0.0` | `scripts/build_release.py::_wheel_facts` | platform | frozen |
+
+Rules for adding a domain:
+
+1. register the owner, the canonical field order (order-significant) and the
+   version before any producer writes the digest;
+2. register the *unique* validator; a second implementation is a defect even if
+   it happens to agree (B16 `canonical_digest` is the only canonicalizer, B08
+   `canonical_request_digest` the only request-digest implementation);
+3. record the legacy wire field and its mapping so an old client keeps a defined
+   meaning (`plan_digest` on submit is the execution digest; a pre-D06 approval
+   without `science_digest` is `execution-only`);
+4. a domain with no validator is `not-frozen` and must never appear as frozen in
+   a BOM, an approval or a release statement.

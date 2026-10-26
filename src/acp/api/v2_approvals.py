@@ -78,6 +78,10 @@ class ApprovalRequestBody(BaseModel):
     proposal_ref: str
     proposal: dict[str, Any] | None = None
     proposal_digest: str | None = None
+    #: D06 science digest (C ``plan_definition_digest``).  Optional: it is
+    #: derived from ``proposal`` when that body is supplied, and verified when
+    #: both are present.  The approval binds it *in addition to* ``plan_digest``.
+    science_digest: str | None = None
     plan: dict[str, Any] | None = None
     plan_digest: str | None = None
     project_id: str | None = None
@@ -179,7 +183,7 @@ def _approval_projection(approval: Any, *, replayed: bool = False) -> dict[str, 
 
 def _compute_request_digests(
     body: ApprovalRequestBody,
-) -> tuple[str, str, dict[str, Any] | None]:
+) -> tuple[str, str, str, dict[str, Any] | None]:
     plan_definition = dict(body.plan) if body.plan is not None else None
     if plan_definition is not None:
         if body.plan_digest is not None:
@@ -245,7 +249,37 @@ def _compute_request_digests(
                 "retryable": False,
             },
         )
-    return proposal_digest, plan_digest, plan_definition
+
+    # D06 (M1-04a): the approval also binds the scientific plan digest.  With a
+    # proposal body it is derived from that body (one canonicalization); an
+    # explicit value must agree with it.
+    science_digest = ""
+    if body.proposal is not None and {"recipe_digest", "science", "budget"} <= set(body.proposal):
+        # Only a C-shaped Proposal (recipe + science + budget) has a
+        # ``plan_definition_digest``.  A platform-only proposal body keeps the
+        # approval execution-only instead of failing the request.
+        from acp_services.runtime.canonical_digest import (
+            proposal_plan_definition_digest,
+        )
+
+        try:
+            science_digest = proposal_plan_definition_digest(body.proposal).digest
+        except CanonicalDigestError as exc:
+            raise _digest_error(exc) from exc
+    claimed = str(body.science_digest or "").strip()
+    if claimed:
+        if science_digest and claimed != science_digest:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "input_invalid",
+                    "message": "science_digest does not match the proposal science projection",
+                    "params": {"field": "science_digest", "rule": "science_digest_mismatch"},
+                    "retryable": False,
+                },
+            )
+        science_digest = claimed
+    return proposal_digest, plan_digest, science_digest, plan_definition
 
 
 @router.post("/research/approvals", status_code=201)
@@ -253,7 +287,7 @@ def request_approval(body: ApprovalRequestBody, request: Request) -> dict[str, A
     """Persist (or replay) the approval request for a frozen plan."""
     _reject_payload_identity(body)
     project_id = _resolve_project(request, body.project_id)
-    proposal_digest, plan_digest, plan_definition = _compute_request_digests(body)
+    proposal_digest, plan_digest, science_digest, plan_definition = _compute_request_digests(body)
     principal = _principal(request)
     service = _approval_service(request)
     try:
@@ -269,6 +303,7 @@ def request_approval(body: ApprovalRequestBody, request: Request) -> dict[str, A
                 allowed_change_range=body.allowed_change_range,
                 expires_at=body.expires_at,
                 idempotency_key=body.idempotency_key,
+                science_digest=science_digest,
             )
             return _approval_projection(approval)
         approval, replayed = service.request(
@@ -282,6 +317,7 @@ def request_approval(body: ApprovalRequestBody, request: Request) -> dict[str, A
             allowed_change_range=body.allowed_change_range,
             expires_at=body.expires_at,
             idempotency_key=body.idempotency_key,
+            science_digest=science_digest,
         )
     except ApprovalError as exc:
         raise _http_error(exc) from exc

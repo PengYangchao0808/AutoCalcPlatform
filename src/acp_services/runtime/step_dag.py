@@ -749,6 +749,14 @@ class StepDispatchContext:
         }
 
 
+def _persisted_running(persisted: Mapping[str, Any], step_id: str) -> bool:
+    """Whether the persisted state says *step_id* was interrupted while running."""
+    for entry in persisted.get("states") or ():
+        if isinstance(entry, Mapping) and str(entry.get("step_id")) == str(step_id):
+            return str(entry.get("status")) == "running"
+    return False
+
+
 DispatchFn = Callable[[StepDispatchContext], StepOutcome]
 PublishFn = Callable[[StepSpec, StepOutcome], Mapping[str, str]]
 
@@ -771,6 +779,7 @@ class BoundedStepDagExecutor:
         release_id: str,
         budget_caps: BudgetCaps | None = None,
         state: DagRunState | None = None,
+        recovery_allowance: int = 0,
     ) -> None:
         errors = dag.validate()
         if errors:
@@ -780,13 +789,20 @@ class BoundedStepDagExecutor:
         self._publish = publish
         self.plan_identity = plan_identity
         self.release_id = release_id
+        allowance = int(recovery_allowance)
+        if allowance < 0:
+            raise StepDagError("invalid_budget_caps", "recovery_allowance must be non-negative")
+        # D09 (M1-04b): the pre-M1-04 default added one implicit allowance per
+        # step (``+ len(dag.steps)``) for crash re-dispatch.  That silently
+        # widened the QC/attempt budget, so the allowance is now explicit: a
+        # caller that wants a recovery margin must authorize it here, and the
+        # default derives the caps from the reservation only.
+        self.recovery_allowance = allowance
         self.budget_caps = budget_caps or BudgetCaps(
             task_refs=1,
             steps=len(dag.steps),
-            # One recovery allowance per step: a crashed/restarted attempt may
-            # re-dispatch and re-invoke QC without being treated as new science.
-            qc_invocations=sum(step.qc_invocations for step in dag.steps) + len(dag.steps),
-            attempts=sum(step.max_attempts for step in dag.steps) + len(dag.steps),
+            qc_invocations=sum(step.qc_invocations for step in dag.steps) + allowance,
+            attempts=sum(step.max_attempts for step in dag.steps) + allowance,
             bsub=sum(1 for step in dag.steps if step.bsub),
         )
         self.state = state or self._initial_state()
@@ -1034,6 +1050,7 @@ class BoundedStepDagExecutor:
         release_id: str,
         persisted: Mapping[str, Any],
         budget_caps: BudgetCaps | None = None,
+        recovery_allowance: int | None = None,
     ) -> BoundedStepDagExecutor:
         """Rebuild from persisted state, resetting only unfinished steps.
 
@@ -1041,6 +1058,12 @@ class BoundedStepDagExecutor:
         and ``cancelled`` are preserved; ``running``/``ready``/``pending`` become
         ``pending`` again.  The caller then calls ``run()``, which re-dispatches
         only the unfinished steps (and retries publication separately).
+
+        D09 (M1-04b): a restart needs a re-dispatch allowance for the steps that
+        were actually interrupted.  The allowance is **derived from the persisted
+        evidence** (one per previously ``running`` step) instead of being added
+        implicitly for every step; a caller may pass an explicit
+        ``recovery_allowance`` only when it has a stronger authorization.
         """
         state = DagRunState.from_dict(persisted)
         known = {step.step_id for step in dag.steps}
@@ -1055,6 +1078,14 @@ class BoundedStepDagExecutor:
             if current.status in _UNFINISHED:
                 current.status = StepStatus.PENDING
                 current.reason = ""
+        allowance = recovery_allowance
+        if allowance is None:
+            allowance = sum(
+                1
+                for step in dag.steps
+                if state.states[step.step_id].status == StepStatus.PENDING
+                and _persisted_running(persisted, step.step_id)
+            )
         return cls(
             dag,
             dispatch,
@@ -1063,6 +1094,7 @@ class BoundedStepDagExecutor:
             release_id=release_id,
             budget_caps=budget_caps,
             state=state,
+            recovery_allowance=int(allowance),
         )
 
 

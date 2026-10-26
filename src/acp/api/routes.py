@@ -291,6 +291,7 @@ def _capabilities_payload(
         negotiate_research_extension,
         normalize_extension_request,
     )
+    from acp_services.runtime.execution_limits import execution_limits_statement
     from acp_services.workspace.http_identity import (
         IdentityMode,
         remote_identity_providers,
@@ -343,6 +344,10 @@ def _capabilities_payload(
         },
         "admission": admission_snapshot,
         "admission_enforcement": admission_snapshot["enforcement"],
+        # M1-04b: the non-BudgetUnit execution limits (admission-bound /
+        # process-termination / queue-deadline) and the three clocks.  Same
+        # matrix as the release statement; never re-derived per surface.
+        "execution_limits": execution_limits_statement(),
         "model_token_enforcement": "NOT_VERIFIED",
         "multi_tenant_security": (
             False if identity_mode == IdentityMode.LOCAL_SINGLE else "api-key-scoped"

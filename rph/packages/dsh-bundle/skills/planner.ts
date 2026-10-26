@@ -8,18 +8,29 @@
  * the remaining budget.
  */
 
-import type { EvidenceReport, PlanBudget, PlanScience } from "./models.js";
+import type {
+  EvidenceReport,
+  PlanBudget,
+  PlanScience,
+  PlanScienceInputs,
+  ScienceSeed,
+} from "./models.js";
 import {
   DIGEST_RE,
   EVIDENCE_REPORT_SCHEMA,
   PLAN_BUDGET_SPEC,
   PLAN_SCIENCE_SPEC,
+  SCIENCE_SEED_SPEC,
+  toPlanScienceInputs,
 } from "./models.js";
 import type { FieldSpec, SkillSpec, ValidationIssue } from "./schema.js";
 import { validateSkillObject } from "./schema.js";
 
 export const PLANNER_SKILL = "planner";
-export const PLANNER_SKILL_VERSION = "1.0.0";
+// 1.1.0 (M1-04a): typed science seed (charge/multiplicity/electronic state/
+// structure provenance/constraints) is required; the seven-field `science`
+// projection that feeds the frozen plan_definition_digest is unchanged.
+export const PLANNER_SKILL_VERSION = "1.1.0";
 export const PLANNER_INPUT_SCHEMA = "acp2.skill.planner.input.v1";
 export const PLANNER_OUTPUT_SCHEMA = "acp2.skill.planner.output.v1";
 
@@ -39,6 +50,8 @@ export interface PlannerInput {
     readonly format: string;
     readonly role: string | null;
   };
+  /** Typed scientific values; a missing critical value is a clarification. */
+  readonly science_seed: ScienceSeed;
   readonly critique_findings: readonly string[];
   readonly evidence: EvidenceReport | null;
   readonly remaining_budget: PlanBudget;
@@ -55,6 +68,8 @@ export interface PlannerOutput {
   readonly recipe_digest: string;
   readonly plan_definition_digest: string;
   readonly science: PlanScience;
+  /** Typed science block (M1-04a); digest projection stays the seven fields. */
+  readonly science_inputs: PlanScienceInputs;
   readonly budget: PlanBudget;
   readonly notes: readonly string[];
 }
@@ -94,6 +109,7 @@ export const PLANNER_INPUT_SPEC: SkillSpec = {
     recipe_digest: stringField({ pattern: DIGEST_RE }),
     plan_definition_digest: stringField({ pattern: DIGEST_RE }),
     initial_input: INITIAL_INPUT_SPEC,
+    science_seed: SCIENCE_SEED_SPEC,
     critique_findings: stringArray({ unique: true }),
     evidence: { kind: "object", required: true, nullable: true, passthrough: true },
     remaining_budget: PLAN_BUDGET_SPEC,
@@ -112,6 +128,25 @@ export const PLANNER_OUTPUT_SPEC: SkillSpec = {
     recipe_digest: stringField({ pattern: DIGEST_RE }),
     plan_definition_digest: stringField({ pattern: DIGEST_RE }),
     science: PLAN_SCIENCE_SPEC,
+    science_inputs: {
+      kind: "object",
+      required: true,
+      fields: {
+        charge: { kind: "integer", required: true, min: Number.MIN_SAFE_INTEGER },
+        multiplicity: { kind: "integer", required: true, min: 1 },
+        electronic_state: { kind: "object", required: true, nullable: true, passthrough: true },
+        structure_provenance: {
+          kind: "array",
+          required: true,
+          items: { kind: "object", required: true, passthrough: true },
+        },
+        constraints: {
+          kind: "array",
+          required: true,
+          items: { kind: "object", required: true, passthrough: true },
+        },
+      },
+    },
     budget: PLAN_BUDGET_SPEC,
     notes: stringArray({ unique: true }),
   },
@@ -173,6 +208,9 @@ export function runPlanner(input: PlannerInput): PlannerOutput {
       `planner input invalid: ${issues.map((item) => item.path).join(",")}`,
     );
   }
+  // The typed science block is derived from the seed: charge/multiplicity are
+  // never fabricated (a missing value throws ScienceClarificationError).
+  const scienceInputs = toPlanScienceInputs(input.science_seed);
   const requested: PlanBudget = {
     model_requests: 1,
     input_tokens: 1000,
@@ -211,15 +249,17 @@ export function runPlanner(input: PlannerInput): PlannerOutput {
           role: input.initial_input.role,
         }),
       ]),
-      method: "r2SCAN-3c",
-      mapping: "identity",
-      charge: 0,
-      multiplicity: 1,
+      method: input.science_seed.method,
+      mapping: input.science_seed.mapping,
+      charge: scienceInputs.charge,
+      multiplicity: scienceInputs.multiplicity,
       allowed_substitutions: Object.freeze([]),
     }),
+    science_inputs: scienceInputs,
     budget,
     notes: Object.freeze([
       "budget is clamped to the remaining admission budget",
+      "charge/multiplicity come from the typed science seed (never defaulted)",
       ...input.critique_findings,
     ]),
   });

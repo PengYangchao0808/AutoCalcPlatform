@@ -2588,12 +2588,26 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
                 "preflight fingerprint does not match the submitted plan",
                 params={"field": "preflight_fingerprint", "expected": current},
             )
-    if _is_research_launch(req):
+    # M1-04b: ONE submit classification decides research vs legacy, approval
+    # requirement and the recorded submit class.  An agent-scoped credential can
+    # never downgrade (omit-all/budget-only/no-proposal are denials), and a legacy
+    # local-single/manual submit is explicitly allowed *and recorded*.
+    classification = _classify_submit(request, req, defer_approval=True)
+    if not classification.allowed:
+        raise _deny_submit(classification)
+    if classification.research:
         req.project_id = _research_project(manager, req.project_id)
+    logger.info(
+        "submit classified submit_class=%s profile=%s research=%s approval_required=%s",
+        classification.submit_class,
+        classification.profile.name,
+        classification.research,
+        classification.approval_required,
+    )
     # B16: an approval bound to the frozen plan_digest is checked BEFORE any
     # resolution/snapshot/dispatch side effect.  A pending/expired/revoked/
     # changed-plan/other-principal approval never reaches the manager.
-    approval = _enforce_approval(request, req)
+    approval = _enforce_approval(request, req, classification)
     req.method = _expand_method_electronic_state(req.method)
     _validate_simple_method_cli(req.workflow, req.method)
     _validate_scan_submission(req.workflow, req.method, req.input)
@@ -2789,6 +2803,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         plan_digest=req.plan_digest,
         proposal_digest=req.proposal_digest,
         approval_ref=approval_ref,
+        submit_class=classification.submit_class,
         result="accepted",
         idempotency_key=idempotency_key,
         idempotent_replay=bool(getattr(record, "_idempotent_replay", False)),
@@ -8383,11 +8398,162 @@ def _approval_service(request: Request) -> Any:
     return cached
 
 
-def _enforce_approval(request: Request, req: Any) -> Any:
+def _submit_probe(req: Any) -> Any:
+    """The M1-04b probe over every research-signalling submit field.
+
+    One probe replaces the two field sets that used to disagree
+    (``_is_research_launch`` vs ``_enforce_approval``): a request carrying only
+    ``budget`` is research-signalling for *both* the project-scope branch and
+    the approval branch.
+    """
+    from acp_services.runtime.submit_policy import SubmitProbe
+
+    payload = {
+        "workflow": getattr(req, "workflow", ""),
+        "proposal_ref": getattr(req, "proposal_ref", None),
+        "proposal_digest": getattr(req, "proposal_digest", None),
+        "plan_digest": getattr(req, "plan_digest", None),
+        "budget": getattr(req, "budget", None),
+    }
+    return SubmitProbe.from_payload(payload)
+
+
+def _classify_submit(
+    request: Request,
+    req: Any,
+    *,
+    approval: Any = None,
+    science_digest: str = "",
+    defer_approval: bool = False,
+) -> Any:
+    """The single submit decision (M1-04b) for this request identity."""
+    from acp_services.runtime.submit_policy import classify_submit
+
+    identity = _command_identity(request, project_id=req.project_id)
+    return classify_submit(
+        _submit_probe(req),
+        identity,
+        approval=approval,
+        science_digest=str(science_digest or ""),
+        approval_science_digest=str(getattr(approval, "science_digest", "") or ""),
+        defer_approval=defer_approval,
+    )
+
+
+def _deny_submit(classification: Any) -> HTTPException:
+    """Render one submit denial in the frozen application error shape."""
+    detail = classification.detail()
+    return _command_error(
+        classification.http_status,
+        str(detail["code"]),
+        str(detail["message"]),
+        params=dict(detail["params"]),
+    )
+
+
+def _proposal_science_digest(request: Request, req: Any) -> str:
+    """Compute the C ``plan_definition_digest`` of the referenced proposal.
+
+    The Proposal is the scientific authority; it is read from the Data boundary
+    and projected with B16's single canonicalization.  A missing/unreadable
+    proposal returns ``""`` (unverifiable) — it is never treated as "matches".
+    """
+    from acp_services.runtime.canonical_digest import (
+        CanonicalDigestError,
+        proposal_plan_definition_digest,
+    )
+
+    proposal_ref = str(getattr(req, "proposal_ref", "") or "")
+    if not proposal_ref:
+        return ""
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        return ""
+    from acp_services.data.research_resources import (
+        ResearchResourceError,
+        research_resource_key,
+    )
+
+    # The proposal lives in the resolved project; an absent payload claim uses
+    # the same default the approval binding uses (never a client-chosen scope).
+    project = str(getattr(req, "project_id", "") or _manager(request).default_project_id or "")
+    principal = str(_server_identity(request).principal.principal_id)
+    try:
+        record = store.read(
+            research_resource_key(project, "proposal", proposal_ref),
+            principal_id=principal,
+            project_id=project,
+        )
+    except (ResearchResourceError, KeyError, ValueError):
+        return ""
+    document = getattr(record, "document", None)
+    if not isinstance(document, Mapping):
+        return ""
+    # G10 / M1-04a: a research launch never binds a science block whose critical
+    # values are missing.  The single typed validator decides; a missing
+    # charge/multiplicity is a clarification (never an implicit 0/1).
+    science = document.get("science")
+    if isinstance(science, Mapping):
+        _require_typed_science(science)
+    if not {"recipe_digest", "science", "budget"} <= set(document):
+        return ""
+    try:
+        return proposal_plan_definition_digest(document).digest
+    except CanonicalDigestError:
+        return ""
+
+
+def _require_typed_science(science: Mapping[str, Any]) -> None:
+    """Validate a stored Proposal's science block (clarification, not 0/1)."""
+    from acp_services.runtime.science_inputs import normalize_science_inputs
+
+    payload: dict[str, Any] = {
+        key: science[key]
+        for key in ("method", "mapping", "charge", "multiplicity")
+        if key in science
+    }
+    initial_inputs = science.get("initial_inputs")
+    if isinstance(initial_inputs, list):
+        payload["structure_provenance"] = [
+            {
+                "input_id": str(item.get("input_id") or ""),
+                "sha256": str(item.get("sha256") or ""),
+                "format": str(item.get("format") or ""),
+                "role": str(item.get("role") or "minimum"),
+            }
+            for item in initial_inputs
+            if isinstance(item, Mapping)
+        ]
+    verdict = normalize_science_inputs(payload)
+    if verdict.values is not None:
+        return
+    if verdict.clarifications:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "the proposal science is missing critical value(s): "
+            + ", ".join(item.field_name for item in verdict.clarifications),
+            params={
+                "rule": "clarification_required",
+                "fields": [item.field_name for item in verdict.clarifications],
+            },
+        )
+    first = verdict.issues[0]
+    raise _command_error(
+        400,
+        "input_invalid",
+        first.message,
+        params={"rule": first.rule, "field": first.field_name},
+    )
+
+
+def _enforce_approval(request: Request, req: Any, classification: Any = None) -> Any:
     """Check the frozen plan + approval binding before any submit side effect.
 
-    Returns the authorizing :class:`Approval` (or ``None`` for a non-research
-    launch).  Raises an HTTP error with the frozen approval/plan error shape.
+    M1-04b: the classification is the single decision point; this function only
+    performs the digest/approval/scientific-binding work after the class is
+    known.  Returns the authorizing :class:`Approval` (or ``None`` for a legacy
+    submit) and raises the frozen approval/plan error shape.
     """
     from acp_services.runtime.approvals import ApprovalError
     from acp_services.runtime.canonical_digest import (
@@ -8398,23 +8564,11 @@ def _enforce_approval(request: Request, req: Any) -> Any:
         plan_digest as canonical_plan_digest,
     )
 
-    proposal_bound = bool(req.proposal_ref or req.proposal_digest or req.plan_digest)
-    if not proposal_bound:
+    decision = classification or _classify_submit(request, req)
+    if not decision.research:
         return None
-    if not req.plan_digest:
-        raise _command_error(
-            400,
-            "input_invalid",
-            "a research launch requires plan_digest",
-            params={"field": "plan_digest", "rule": "plan_digest_required"},
-        )
-    if not req.proposal_ref:
-        raise _command_error(
-            403,
-            "access_denied",
-            "a research launch requires a proposal reference with a server approval",
-            params={"rule": "approval_required"},
-        )
+    if not decision.allowed:
+        raise _deny_submit(decision)
     try:
         definition = frozen_plan_definition(
             workflow=str(req.workflow),
@@ -8441,7 +8595,7 @@ def _enforce_approval(request: Request, req: Any) -> Any:
     approval_project = req.project_id or manager.default_project_id
     principal = str(_server_identity(request).principal.principal_id)
     try:
-        return _approval_service(request).authorize_submission(
+        approval = _approval_service(request).authorize_submission(
             plan_digest=req.plan_digest,
             proposal_ref=str(req.proposal_ref),
             project_id=str(approval_project or ""),
@@ -8451,6 +8605,16 @@ def _enforce_approval(request: Request, req: Any) -> Any:
         )
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.detail()) from exc
+    # D06 (M1-04a): the approval binds the scientific digest *and* the execution
+    # digest.  Only read/project the proposal when the approval actually carries a
+    # science digest, so a legacy execution-only approval keeps its behaviour.
+    science_digest = ""
+    if getattr(approval, "science_digest", ""):
+        science_digest = _proposal_science_digest(request, req)
+    final = _classify_submit(request, req, approval=approval, science_digest=science_digest)
+    if not final.allowed:
+        raise _deny_submit(final)
+    return approval
 
 
 def _budget_claim_from_approval(approval: Any) -> dict[str, Any] | None:
@@ -8494,15 +8658,6 @@ def _research_project(manager: JobManager, project_id: str | None) -> str | None
             params={"rule": "project_scope_mismatch", "path": "project_id"},
         )
     return project_id
-
-
-def _is_research_launch(req: Any) -> bool:
-    return bool(
-        getattr(req, "proposal_ref", None)
-        or getattr(req, "budget", None)
-        or getattr(req, "proposal_digest", None)
-        or getattr(req, "plan_digest", None)
-    )
 
 
 def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:

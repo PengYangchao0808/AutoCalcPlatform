@@ -23,16 +23,32 @@
  * every effect goes through the injected ports.
  */
 
-import type { EvidenceReport, PlanBudget, PlanScience, TaskRef } from "./models.js";
+import type {
+  EvidenceReport,
+  PlanBudget,
+  PlanScience,
+  ScienceSeed,
+  TaskRef,
+} from "./models.js";
 import {
   blockingClaimStatus,
   reportHasEvidence,
   validateEvidenceReport,
 } from "./models.js";
 import type { InterpreterInput, InterpreterOutput } from "./interpreter.js";
-import { runInterpreter } from "./interpreter.js";
+import {
+  INTERPRETER_INPUT_SCHEMA,
+  INTERPRETER_SKILL,
+  INTERPRETER_SKILL_VERSION,
+  runInterpreter,
+} from "./interpreter.js";
 import type { PlannerInput, PlannerOutput } from "./planner.js";
-import { runPlanner } from "./planner.js";
+import {
+  PLANNER_INPUT_SCHEMA,
+  PLANNER_SKILL,
+  PLANNER_SKILL_VERSION,
+  runPlanner,
+} from "./planner.js";
 import type {
   ReviewerFinding,
   ReviewerInput,
@@ -96,6 +112,8 @@ export interface SupervisorInput {
   readonly available_inputs: readonly string[];
   readonly recipe_digest: string;
   readonly initial_input: PlannerInput["initial_input"];
+  /** Typed scientific values (M1-04a); a missing critical value clarifies. */
+  readonly science_seed: ScienceSeed;
   readonly limits: SupervisorLimits;
   /** Approval-bound digest for a round; a constant is valid for a fixture. */
   readonly plan_definition_digest?: (round: number) => string;
@@ -418,14 +436,15 @@ export async function runSupervisor(
     "normalize the user question",
     async () =>
       skills.interpret({
-        schema: "acp2.skill.interpreter.input.v1",
-        skill: "interpreter",
-        skill_version: "1.0.0",
+        schema: INTERPRETER_INPUT_SCHEMA,
+        skill: INTERPRETER_SKILL,
+        skill_version: INTERPRETER_SKILL_VERSION,
         project_id: input.project_id,
         question: input.question,
         question_ref: input.question_ref,
         constraints: input.constraints,
         available_inputs: input.available_inputs,
+        science_seed: input.science_seed,
       }),
   );
   if (interpretation === null) {
@@ -513,9 +532,9 @@ export async function runSupervisor(
       "materialize the plan draft",
       async () =>
         skills.plan({
-          schema: "acp2.skill.planner.input.v1",
-          skill: "planner",
-          skill_version: "1.0.0",
+          schema: PLANNER_INPUT_SCHEMA,
+          skill: PLANNER_SKILL,
+          skill_version: PLANNER_SKILL_VERSION,
           project_id: input.project_id,
           round,
           hypothesis: hypothesis.hypothesis ?? "",
@@ -523,6 +542,7 @@ export async function runSupervisor(
           recipe_digest: input.recipe_digest,
           plan_definition_digest: digest,
           initial_input: input.initial_input,
+          science_seed: input.science_seed,
           critique_findings: critiqueFindings(critique),
           evidence: lastReport,
           remaining_budget: remaining(),
