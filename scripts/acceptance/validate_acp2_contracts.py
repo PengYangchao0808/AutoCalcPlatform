@@ -77,6 +77,10 @@ DELIVERED_IDS_BY_STAGE = {
     "M0-07": {
         "trusted-usage-receipts",
     },
+    "M0-12": {
+        "decision-freeze-identity",
+        "decision-freeze-integration",
+    },
 }
 EXPECTED_TODOS = {
     "B00",
@@ -244,8 +248,10 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> None:
         path_value = require(entry, "path", f"contracts[{contract_id}].path")
         status = require(entry, "status", f"contracts[{contract_id}].status")
         owner = require(entry, "owner", f"contracts[{contract_id}].owner")
-        if owner not in {"A", "B", "C"}:
-            fail(f"contracts[{contract_id}].owner must be A, B or C")
+        if owner not in {"A", "B", "C", "INT"}:
+            # M0-12/D-INT-08: the decision-freeze documents are aggregated by
+            # the INT lane and registered with owner INT.
+            fail(f"contracts[{contract_id}].owner must be A, B, C or INT")
         if status not in {"planned", "delivered"}:
             fail(f"contracts[{contract_id}].status must be planned or delivered")
         target = root / path_value

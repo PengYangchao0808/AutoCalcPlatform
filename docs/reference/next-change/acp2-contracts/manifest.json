@@ -152,9 +152,9 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "3ce1164c40c7ad7f2479ab5b7d7ba45b92b3a531e1ceddcc362c28b69f7743b2",
+  "contract_digest": "f2b22b1f1882a34d6b440801991b853079ca82271010549d02e1cd9cb42e890f",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
-  "contract_version": "1.4.0",
+  "contract_version": "1.5.0",
   "contract_version_history": [
     {
       "note": "initial freeze",
@@ -200,6 +200,11 @@
       "note": "M0-01b registers release/scope.json, release/evidence-coverage.schema.json and release/bom.schema.json as planned contracts owned by B (no delivered wire field changed). contract_version is bumped anyway because the release namespace is a new consumer-visible contract family: the coverage validator keys on the planned ids and M5-02 freezes the same files at the B26 release stage.",
       "stage": "M0-01",
       "version": "1.4.0"
+    },
+    {
+      "note": "registers the decision-freeze identity/integration contracts (owner INT) and the application-api 1.3.0 prepare field table; additive, no delivered wire field removed",
+      "stage": "M0-12",
+      "version": "1.5.0"
     }
   ],
   "contracts": [
@@ -209,7 +214,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "f0d027eb05696bd6d57258620d5cac1b6a6e3acbc99ef9b594f3dec5199573c5",
+      "sha256": "b04bd94fd88342c271273676936f8f15a5b0edc76d01a38774f1d1b05ac53aae",
       "status": "delivered"
     },
     {
@@ -275,7 +280,7 @@
       "id": "application-api",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "sha256": "bf31209109330779403e99bbe575a782f091e2c5dcad00266c590089db3c0026",
+      "sha256": "64c8b70f7f5c17985d04683429404a4cf90f7ae2ed5f6d548b838c9248ca9ad8",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -421,6 +426,24 @@
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/trusted-usage-receipts.v1.md",
       "sha256": "f78ac012793d44f6755b75aa7458d551e3e8f970b26bf514d74f3d7e37a7285e",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "M0-12",
+      "id": "decision-freeze-identity",
+      "note": "M0-11 frozen identity/field/migration decisions with the mechanical client inventory digest embedded.",
+      "owner": "INT",
+      "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
+      "sha256": "981560dc4d91dc8801d1f64de7f4309c5e1862f8a14afa59c4122232b4a0c94e",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "M0-12",
+      "id": "decision-freeze-integration",
+      "note": "M0-12 frozen extension-negotiation/branch/CI/hygiene/registration decisions; M1-01 consumes only this file.",
+      "owner": "INT",
+      "path": "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
+      "sha256": "5002f4fae48eb7e275031c76ed2498afd902b8546382a5d5f7be75941f49f7a6",
       "status": "delivered"
     }
   ],

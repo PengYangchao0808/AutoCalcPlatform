@@ -820,8 +820,10 @@ def _contract_digest(manifest: dict[str, Any]) -> str:
 def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) -> None:
     # M0-01 review vector: the release namespace was registered inside the
     # existing delivery set, so the manifest contract version moved to 1.4.0.
+    # M0-12 (2026-10-27): the decision-freeze registrations and the
+    # application-api 1.3.0 prepare table move it to 1.5.0.
     # Kept as an explicit expectation instead of reading the value back.
-    assert manifest["contract_version"] == "1.4.0"
+    assert manifest["contract_version"] == "1.5.0"
     delivered = {entry["id"]: entry for entry in manifest["contracts"]}
     b03_ids = {
         "application-api",
@@ -851,7 +853,18 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
             # first delivered contract registered under a remediation stage id
             # instead of a B-stage; the set grows only through a new manifest
             # registration with its DELIVERED_IDS_BY_STAGE mapping.
-            assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a", "B06", "B19", "M0-07"}
+            # M0-12 (2026-10-27): the two decision-freeze documents register
+            # with owner INT (the aggregated integration lane).
+            assert entry["delivered_by"] in {
+                "B00",
+                "B01",
+                "B03",
+                "B04a",
+                "B06",
+                "B19",
+                "M0-07",
+                "M0-12",
+            }
         else:
             assert "sha256" not in entry
 

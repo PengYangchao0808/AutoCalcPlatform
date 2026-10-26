@@ -280,8 +280,11 @@ def test_release_contracts_are_registered_as_planned_and_owned_by_b() -> None:
         assert entry["owner"] == "B"
         assert "sha256" not in entry
         assert (REPO_ROOT / entry["path"]).is_file()
-    assert manifest["contract_version"] == "1.4.0"
-    assert manifest["contract_version_history"][-1]["stage"] == "M0-01"
+    # M0-12 (2026-10-27): the decision-freeze registration bumps the manifest
+    # to 1.5.0 and appends the M0-12 history entry; the release namespace above
+    # stays planned/owner-B until the M5-02 release stage.
+    assert manifest["contract_version"] == "1.5.0"
+    assert manifest["contract_version_history"][-1]["stage"] == "M0-12"
     release_files = {path.name for path in RELEASE.iterdir() if path.is_file()}
     assert release_files == {
         "scope.json",
