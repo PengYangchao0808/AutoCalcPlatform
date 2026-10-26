@@ -282,3 +282,21 @@ node scripts/acceptance/acp2_mcp_live_client.mjs --launch <launch.json> --out <d
 python scripts/acceptance/validate_acp2_contracts.py                                 # 契约 digest/结构门
 pnpm --dir rph build && pnpm --dir rph test && pnpm --dir rph check                   # C-RPH 握手面
 ```
+
+## 9. M0-12 决策冻结引用（2026-10-27）
+
+本文档的协商决策由 `docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json`
+（schema `acp2.decision-freeze.integration.v1`，task M0-12）机械冻结；validator 为
+`scripts/acceptance/validate_acp2_decision_freeze.py`，测试为
+`tests/test_acp2_decision_freeze_integration.py`。§2 的 D1–D7 语义不变，§9 只是把
+“哪个值算数、谁能改、哪些门是 required”变成可机读、可校验的清单。
+
+| decision | 冻结内容 |
+| --- | --- |
+| D-INT-01 | `acp.research.v1@1.0.0` 单一版本权威：P2 契约 → application-api 投影 → `src/acp/mcp_extension.py`（唯一代码拼写）；`acp_services` 只接收 spec、不持有常量；RPH bridge 镜像。 |
+| D-INT-02 | 载体 `tools/call:acp_capabilities`（请求字段 `research_extension`）；`initialize` 永不声明 negotiated；`negotiated=true` 先决 `implemented=true`。 |
+| D-INT-03 | 分支 = `external_change_not_required`（M0-13 `NOT_APPLICABLE`），并记录两个翻案条件（上游 capability 选项 / 研究线放弃）。 |
+| D-INT-04 | 契约 mutation 顺序：P2 权威 → application-api 投影 → mcp-launch descriptor，一次变更集 + ADR + 样本 + digest。 |
+| D-INT-05 | CI required 范围：matrix 排除 contract、`mcp-conformance` 单一 owner、DSH 经 `ACP2_DSH_SOURCE` 声明不 vendor、frontend 非空门、RPH install surface、wall-clock 分片规则。 |
+| D-INT-06/07 | Ruff 0.15.22 独立 hygiene 流；ratchet 永不进入 G01–G26 required 链（pin/基线/脚本仍 pending，M0-02c）。 |
+| D-INT-08 | 两份 freeze 以 delivered 契约注册进 manifest（digest=文件 sha256、owner INT、stage M0-12），由 orchestrator 执行。 |
