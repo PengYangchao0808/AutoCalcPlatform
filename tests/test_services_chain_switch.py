@@ -566,7 +566,11 @@ def test_services_never_reference_legacy_cli_or_subprocess() -> None:
     for path in _services_sources():
         source = path.read_text(encoding="utf-8")
         rel = path.relative_to(_REPO_ROOT).as_posix()
-        assert scan_for_acp_imports(source) == [], rel
+        # module= wires the M1-01c wire-literal allowlist (value scoped to the
+        # single reviewed station) into this shared scanner as well; imports
+        # and reflection are still refused everywhere, station included.
+        module = rel.removesuffix(".py").removeprefix("src/").replace("/", ".")
+        assert scan_for_acp_imports(source, module=module) == [], rel
         violations.extend(_legacy_cli_hits(source, rel))
     assert violations == []
 
