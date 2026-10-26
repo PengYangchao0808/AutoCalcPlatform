@@ -1,0 +1,21 @@
+{
+  "sample_id": "capabilities-research-extension-version-mismatch.negative",
+  "contract": "application-api.v1.json",
+  "kind": "negative",
+  "operation": "capabilities",
+  "payload": {
+    "schema_version": 1,
+    "research_extension": {
+      "id": "acp.research.v1",
+      "version": "1.1.0"
+    }
+  },
+  "expected": {
+    "valid": false,
+    "class": "unsupported",
+    "code": "unsupported_capability",
+    "violation": "extension_version_mismatch",
+    "field": "research_extension.version"
+  },
+  "note": "1.1.0 was the B06 mistake (the application contract version, not the extension version); the extension authority is 1.0.0 and a mismatch must be refused, never silently accepted."
+}

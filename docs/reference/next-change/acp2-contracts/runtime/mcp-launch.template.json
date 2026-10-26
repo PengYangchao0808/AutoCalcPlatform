@@ -580,8 +580,8 @@
       "extensions": {
         "acp.research.v1": {
           "id": "acp.research.v1",
-          "version": "1.1.0",
-          "negotiated": true
+          "version": "1.0.0",
+          "negotiated": false
         }
       }
     }

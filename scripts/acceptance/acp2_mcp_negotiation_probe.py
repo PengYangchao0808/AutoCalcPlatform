@@ -1,31 +1,40 @@
 #!/usr/bin/env python3
-"""Protocol negotiation matrix diagnostic for the C `mcp-live` acceptance row.
+"""Standard-handshake negotiation matrix for the C `mcp-live` acceptance row.
 
 This is a **diagnostic harness**, not a product transport. It only speaks the
 same newline-delimited JSON-RPC 2.0 framing as the sanctioned
 ``docs/reference/next-change/examples/acp_mcp_stdio_probe.py`` and it never
-sends a tool call. The official DSH client handshake remains the primary
-evidence; this file exists because the frozen SDK client does not emit the
-server's declarative ``protocolVersions`` fallback list, which row (b) of the
-matrix must exercise.
+sends a tool call. The official DSH/SDK client handshake remains the primary
+evidence; this file exercises the wire shapes the frozen SDK client emits and
+the refusal paths around them.
 
-Rows (one fresh adapter process each, because lifecycle state is per
-connection):
+Post-M0-08 semantics (ADR-006) — the server always answers with a version it
+speaks and the client decides compatibility; only a malformed
+``protocolVersion``/``protocolVersions`` shape is ``-32602``:
 
-* ``same``                — request the server's locked version → same version.
-* ``different_supported`` — prefer 2025-11-25 but declare 2025-06-18 too →
-                            the server negotiates its common version.
-* ``no_common``           — request/declare only an unsupported version →
-                            explicit failure; no tool call afterwards.
-* ``tools_before_init``   — ``tools/list`` before ``initialize`` → lifecycle
-                            rejection (``not_initialized``).
-* ``notification_eof``    — initialize, send the initialized notification, then
-                            close stdin → clean exit, no fabricated response,
-                            no cancel of a submitted job (none was submitted).
+* ``same``                 — request the server's version → same version.
+* ``unsupported_version``  — request ``2025-11-25`` with no private fallback
+                             list (exactly what the frozen SDK sends) → the
+                             server answers ``2025-06-18``; tools list is 8.
+* ``private_versions``     — request an unknown version *and* declare it in the
+                             private ``protocolVersions`` list → still the
+                             server version; the list is recorded, never gated.
+* ``malformed_version``    — non-string ``protocolVersion`` → ``-32602``
+                             ``invalid_protocol_version``; no tool call.
+* ``server_discover``      — an era-probing client sends ``server/discover``
+                             before ``initialize`` → ordinary ``-32601``
+                             unknown-method (no discover result is faked);
+                             ``initialize`` then succeeds in the same process.
+* ``tools_before_init``    — ``tools/list`` before ``initialize`` → lifecycle
+                             rejection (``not_initialized``).
+* ``notification_eof``     — initialize, send the initialized notification, then
+                             close stdin → clean exit, no fabricated response,
+                             no cancel of a submitted job (none was submitted).
 
 Missing prerequisites are the caller's problem; every row is executed and
 reported as ``PASS``/``FAIL`` with the raw wire frames, stderr tail and exit
-code archived under ``--out``.
+code archived under ``--out``. Every row also asserts that it sent zero
+``tools/call`` frames, so a handshake row can never create a task.
 """
 
 from __future__ import annotations
@@ -37,9 +46,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-LOCKED_VERSION = "2025-06-18"
-UNSUPPORTED_VERSION = "2025-11-25"
-NO_COMMON_VERSION = "1999-01-01"
+SERVER_VERSION = "2025-06-18"
+SDK_LATEST_VERSION = "2025-11-25"
+UNKNOWN_VERSION = "1999-01-01"
+MALFORMED_VERSION = 20250618
 
 
 class _Row:
@@ -56,14 +66,26 @@ class _Row:
         with (self.dir / "wire.jsonl").open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
+    def tool_calls(self) -> int:
+        return sum(
+            1
+            for item in self.wire
+            if item["direction"] == "send" and item["message"].get("method") == "tools/call"
+        )
+
     def finish(self, status: str, **fields: Any) -> dict[str, Any]:
         (self.dir / "wire.jsonl").touch(exist_ok=True)
+        document = {
+            "row": self.name,
+            "status": status,
+            "tools_call_frames": self.tool_calls(),
+            **fields,
+        }
         (self.dir / "row.json").write_text(
-            json.dumps({"row": self.name, "status": status, **fields}, indent=2, sort_keys=True)
-            + "\n",
+            json.dumps(document, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        return {"row": self.name, "status": status, **fields}
+        return document
 
 
 class _Session:
@@ -140,7 +162,7 @@ async def _close(session: _Session) -> int:
             return await process.wait()
 
 
-def _initialize_params(version: str, declared: list[str] | None = None) -> dict[str, Any]:
+def _initialize_params(version: Any, declared: list[str] | None = None) -> dict[str, Any]:
     params: dict[str, Any] = {
         "protocolVersion": version,
         "capabilities": {},
@@ -151,100 +173,189 @@ def _initialize_params(version: str, declared: list[str] | None = None) -> dict[
     return params
 
 
-async def _case_same(launch: dict[str, Any], out: Path, timeout: float) -> dict[str, Any]:
-    row = _Row("same", out)
+def _guidance(initialized: dict[str, Any]) -> dict[str, Any]:
+    capabilities = initialized.get("result", {}).get("capabilities") or {}
+    extensions = capabilities.get("extensions") or {}
+    return extensions.get("acp.negotiation.v1") or {}
+
+
+def _handshake_blockers(initialized: dict[str, Any]) -> list[str]:
+    """Return the M0-08 result-shape violations (empty == conforming)."""
+    result = initialized.get("result")
+    if not isinstance(result, dict):
+        return ["no result"]
+    problems: list[str] = []
+    if "extensions" in result:
+        problems.append("top_level_extensions_present")
+    if '"negotiated"' in json.dumps(result.get("capabilities") or {}):
+        problems.append("negotiated_claim_present")
+    if _guidance(initialized).get("supported_versions") is None:
+        problems.append("no_negotiation_guidance")
+    return problems
+
+
+async def _handshake_row(
+    name: str,
+    launch: dict[str, Any],
+    out: Path,
+    timeout: float,
+    params_factory: Any,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    row = _Row(name, out)
     session = await _open(launch, row, timeout)
     try:
-        initialized = await _request(session, 1, "initialize", _initialize_params(LOCKED_VERSION))
+        initialized = await _request(session, 1, "initialize", params_factory())
         negotiated = initialized.get("result", {}).get("protocolVersion")
         await _send(session, {"jsonrpc": "2.0", "method": "notifications/initialized"})
         listed = await _request(session, 2, "tools/list", {})
         tools = listed.get("result", {}).get("tools", [])
-        ok = "error" not in initialized and negotiated == LOCKED_VERSION and len(tools) == 8
+        problems = _handshake_blockers(initialized)
+        ok = (
+            "error" not in initialized
+            and negotiated == SERVER_VERSION
+            and len(tools) == 8
+            and not problems
+            and row.tool_calls() == 0
+        )
         return row.finish(
             "PASS" if ok else "FAIL",
-            requested=LOCKED_VERSION,
             negotiated=negotiated,
             tool_count=len(tools),
+            guidance=_guidance(initialized),
+            result_shape_problems=problems,
             error=initialized.get("error"),
+            **(extra or {}),
         )
     except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
-        return row.finish(
-            "FAIL", requested=LOCKED_VERSION, exception=f"{type(exc).__name__}: {exc}"
-        )
+        return row.finish("FAIL", exception=f"{type(exc).__name__}: {exc}", **(extra or {}))
     finally:
         rc = await _close(session)
         session.stderr.close()
         (row.dir / "exit-code.txt").write_text(f"{rc}\n", encoding="utf-8")
 
 
-async def _case_different_supported(
+async def _case_same(launch: dict[str, Any], out: Path, timeout: float) -> dict[str, Any]:
+    return await _handshake_row(
+        "same",
+        launch,
+        out,
+        timeout,
+        lambda: _initialize_params(SERVER_VERSION),
+        extra={"requested": SERVER_VERSION},
+    )
+
+
+async def _case_unsupported_version(
     launch: dict[str, Any], out: Path, timeout: float
 ) -> dict[str, Any]:
-    row = _Row("different_supported", out)
+    """Exactly the frozen SDK 2.2.0 request: newest version, no private list."""
+    return await _handshake_row(
+        "unsupported_version",
+        launch,
+        out,
+        timeout,
+        lambda: _initialize_params(SDK_LATEST_VERSION),
+        extra={"requested": SDK_LATEST_VERSION, "declared": None},
+    )
+
+
+async def _case_private_versions(
+    launch: dict[str, Any], out: Path, timeout: float
+) -> dict[str, Any]:
+    """The private list is recorded, never a gate."""
+    return await _handshake_row(
+        "private_versions",
+        launch,
+        out,
+        timeout,
+        lambda: _initialize_params(UNKNOWN_VERSION, [UNKNOWN_VERSION]),
+        extra={"requested": UNKNOWN_VERSION, "declared": [UNKNOWN_VERSION]},
+    )
+
+
+async def _case_malformed_version(
+    launch: dict[str, Any], out: Path, timeout: float
+) -> dict[str, Any]:
+    row = _Row("malformed_version", out)
     session = await _open(launch, row, timeout)
     try:
         initialized = await _request(
-            session,
-            1,
-            "initialize",
-            _initialize_params(UNSUPPORTED_VERSION, [UNSUPPORTED_VERSION, LOCKED_VERSION]),
-        )
-        negotiated = initialized.get("result", {}).get("protocolVersion")
-        await _send(session, {"jsonrpc": "2.0", "method": "notifications/initialized"})
-        listed = await _request(session, 2, "tools/list", {})
-        tools = listed.get("result", {}).get("tools", [])
-        ok = "error" not in initialized and negotiated == LOCKED_VERSION and len(tools) == 8
-        return row.finish(
-            "PASS" if ok else "FAIL",
-            requested=UNSUPPORTED_VERSION,
-            declared=[UNSUPPORTED_VERSION, LOCKED_VERSION],
-            negotiated=negotiated,
-            tool_count=len(tools),
-            error=initialized.get("error"),
-        )
-    except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
-        return row.finish(
-            "FAIL", requested=UNSUPPORTED_VERSION, exception=f"{type(exc).__name__}: {exc}"
-        )
-    finally:
-        rc = await _close(session)
-        session.stderr.close()
-        (row.dir / "exit-code.txt").write_text(f"{rc}\n", encoding="utf-8")
-
-
-async def _case_no_common(launch: dict[str, Any], out: Path, timeout: float) -> dict[str, Any]:
-    row = _Row("no_common", out)
-    session = await _open(launch, row, timeout)
-    try:
-        initialized = await _request(
-            session,
-            1,
-            "initialize",
-            _initialize_params(NO_COMMON_VERSION, [NO_COMMON_VERSION]),
+            session, 1, "initialize", _initialize_params(MALFORMED_VERSION)
         )
         error = initialized.get("error") or {}
         code = (error.get("data") or {}).get("code")
-        ok = code == "unsupported_protocol_version" and "result" not in initialized
-        # The row explicitly proves no tool call followed the failed
-        # initialize: the harness sent exactly one frame.
-        tool_calls = sum(
-            1
-            for item in row.wire
-            if item["direction"] == "send" and item["message"].get("method") == "tools/call"
+        ok = (
+            error.get("code") == -32602
+            and code == "invalid_protocol_version"
+            and "result" not in initialized
+            and row.tool_calls() == 0
         )
-        ok = ok and tool_calls == 0
         return row.finish(
             "PASS" if ok else "FAIL",
-            requested=NO_COMMON_VERSION,
+            requested=MALFORMED_VERSION,
             error_code=code,
-            tool_calls_after_failure=tool_calls,
+            jsonrpc_code=error.get("code"),
             error=error or None,
         )
     except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
-        return row.finish(
-            "FAIL", requested=NO_COMMON_VERSION, exception=f"{type(exc).__name__}: {exc}"
+        return row.finish("FAIL", exception=f"{type(exc).__name__}: {exc}")
+    finally:
+        rc = await _close(session)
+        session.stderr.close()
+        (row.dir / "exit-code.txt").write_text(f"{rc}\n", encoding="utf-8")
+
+
+async def _case_server_discover(
+    launch: dict[str, Any], out: Path, timeout: float
+) -> dict[str, Any]:
+    """Era probe first (ordinary -32601), then the formal initialize."""
+    row = _Row("server_discover", out)
+    session = await _open(launch, row, timeout)
+    try:
+        probe = await _request(
+            session,
+            1,
+            "server/discover",
+            {
+                "protocolVersions": [SDK_LATEST_VERSION],
+                "clientInfo": {"name": "acp2-c-era-probe", "version": "1"},
+            },
         )
+        probe_error = probe.get("error") or {}
+        probe_data = probe_error.get("data") or {}
+        probe_ok = (
+            probe_error.get("code") == -32601
+            and probe_data.get("code") != "not_initialized"
+            and "result" not in probe
+        )
+        initialized = await _request(
+            session, 2, "initialize", _initialize_params(SDK_LATEST_VERSION)
+        )
+        negotiated = initialized.get("result", {}).get("protocolVersion")
+        await _send(session, {"jsonrpc": "2.0", "method": "notifications/initialized"})
+        listed = await _request(session, 3, "tools/list", {})
+        tools = listed.get("result", {}).get("tools", [])
+        ok = (
+            probe_ok
+            and "error" not in initialized
+            and negotiated == SERVER_VERSION
+            and len(tools) == 8
+            and not _handshake_blockers(initialized)
+            and row.tool_calls() == 0
+        )
+        return row.finish(
+            "PASS" if ok else "FAIL",
+            discover_jsonrpc_code=probe_error.get("code"),
+            discover_error_code=probe_data.get("code"),
+            discover_result_present="result" in probe,
+            negotiated=negotiated,
+            tool_count=len(tools),
+            result_shape_problems=_handshake_blockers(initialized),
+        )
+    except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
+        return row.finish("FAIL", exception=f"{type(exc).__name__}: {exc}")
     finally:
         rc = await _close(session)
         session.stderr.close()
@@ -277,7 +388,7 @@ async def _case_notification_eof(
     session = await _open(launch, row, timeout)
     process = session.process
     try:
-        initialized = await _request(session, 1, "initialize", _initialize_params(LOCKED_VERSION))
+        initialized = await _request(session, 1, "initialize", _initialize_params(SERVER_VERSION))
         negotiated = initialized.get("result", {}).get("protocolVersion")
         await _send(session, {"jsonrpc": "2.0", "method": "notifications/initialized"})
         frames_after_notification = 0
@@ -293,13 +404,14 @@ async def _case_notification_eof(
         rc = await asyncio.wait_for(process.wait(), 10)
         ok = (
             "error" not in initialized
-            and negotiated == LOCKED_VERSION
+            and negotiated == SERVER_VERSION
             and frames_after_notification == 0
             and rc == 0
+            and row.tool_calls() == 0
         )
         return row.finish(
             "PASS" if ok else "FAIL",
-            requested=LOCKED_VERSION,
+            requested=SERVER_VERSION,
             negotiated=negotiated,
             fabricated_frames_after_notification=frames_after_notification,
             exit_code=rc,
@@ -307,7 +419,7 @@ async def _case_notification_eof(
         )
     except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
         return row.finish(
-            "FAIL", requested=LOCKED_VERSION, exception=f"{type(exc).__name__}: {exc}"
+            "FAIL", requested=SERVER_VERSION, exception=f"{type(exc).__name__}: {exc}"
         )
     finally:
         if process.returncode is None:
@@ -320,8 +432,10 @@ async def _case_notification_eof(
 
 CASES = (
     ("same", _case_same),
-    ("different_supported", _case_different_supported),
-    ("no_common", _case_no_common),
+    ("unsupported_version", _case_unsupported_version),
+    ("private_versions", _case_private_versions),
+    ("malformed_version", _case_malformed_version),
+    ("server_discover", _case_server_discover),
     ("tools_before_init", _case_tools_before_init),
     ("notification_eof", _case_notification_eof),
 )
@@ -334,11 +448,15 @@ async def run(args: argparse.Namespace) -> int:
     for name, handler in CASES:
         rows.append(await handler(launch, args.out, args.timeout))
     document = {
-        "schema": "acp2.c.mcp-live.negotiation-matrix.v1",
+        "schema": "acp2.c.mcp-live.negotiation-matrix.v2",
+        "semantics": "mcp-2025-06-18 standard handshake (ADR-006): server answers "
+        "its own version, client decides compatibility, private protocolVersions "
+        "recorded only; malformed shapes are -32602",
         "launch_path": str(args.launch),
         "launch_protocol_version": launch.get("protocol_version"),
-        "locked_version": LOCKED_VERSION,
+        "server_version": SERVER_VERSION,
         "rows": rows,
+        "tools_call_frames": sum(row.get("tools_call_frames", 0) for row in rows),
         "passed": all(row["status"] == "PASS" for row in rows),
     }
     (args.out / "negotiation-matrix.json").write_text(

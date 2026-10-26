@@ -2,8 +2,8 @@
   "schema": "acp2.contracts.manifest.v1",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
-  "contract_version": "1.3.0",
-  "contract_digest": "0348067bbebeb636bf1b934242821b975ce1752b30cd617d72bc6a8915707fb5",
+  "contract_version": "1.4.0",
+  "contract_digest": "81cc60220a7ac8bd82946dd07fa8cafe9042559013947487d23f72f605f25c63",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "baseline": {
     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
@@ -169,7 +169,7 @@
       "owner": "B",
       "status": "delivered",
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "7bda6199f1328e4f3d9842e3da9896fd2c820134597e59e386c6c5d96763ab0d",
+      "sha256": "bc98363ec4b8eaab974ec6c13de5e530a5c6f8c92f443542bae3fbb0b96fe77e",
       "delivered_by": "B00"
     },
     {
@@ -236,7 +236,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "843132f171507e97f40d3a267b1db1071e36e2360acb8f771d6fef806f119792",
+      "sha256": "91bf0f6cffa49462516ef7b7141606c8e77d7a2bd427cb59af5faf81ebe766d0",
       "updated_by": "B16"
     },
     {
@@ -254,7 +254,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "10f2ad63c4fdb6471bb8c56fd025a9460eb054b7afc17db7b1f2e57e7904fa04",
+      "sha256": "d8a00b32eaccfcc3a17f15e2d922159b885c6ae007e9476dde677c9379f6dc62",
       "updated_by": "B16"
     },
     {
@@ -263,7 +263,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "92fd0cca55ec4869b1e10c1149d8860729b897d935d4b6c058c8be34cafd4984",
+      "sha256": "b6a0e9da64ae4a6366c2f95f445d137f99d136211b282c4bbd278b20fac1647c",
       "updated_by": "B06"
     },
     {
@@ -272,7 +272,7 @@
       "owner": "B",
       "status": "delivered",
       "delivered_by": "B03",
-      "sha256": "27c681198b1d8036f3e6267eccc6ba0d8a35ba4abad911ebd1665ca29dffeb76",
+      "sha256": "198ce928789b0715fff831d12027c7deb906118d60fb6cc25171103400a23532",
       "updated_by": "B06"
     },
     {
@@ -331,7 +331,7 @@
       "status": "delivered",
       "digest_target": "docs/reference/next-change/acp2-contracts/runtime/samples/manifest.json",
       "delivered_by": "B03",
-      "sha256": "d37dcfab39f2181e4ca9533267eac156fc84ca8772e6831a9a8d9108a1fc852e"
+      "sha256": "5678f4f5636676aefb810e972db09bfef003d85c2a8cd98d76d32197b5c1b844"
     },
     {
       "id": "cross-track-requests",
@@ -349,6 +349,30 @@
       "note": "B19a freezes cross-research event identity, opaque cursor/max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules.",
       "sha256": "9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
       "delivered_by": "B19"
+    },
+    {
+      "id": "release-scope",
+      "path": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "owner": "B",
+      "status": "planned",
+      "note": "M0-01b: single authority for IN_SCOPE/DEFERRED/OUT_OF_SCOPE, the G01–G26 index and the H0–H7 mapping. Registered by B; only the M5-02 release stage may flip it to delivered.",
+      "planned_by": "M0-01"
+    },
+    {
+      "id": "release-evidence-coverage-schema",
+      "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.schema.json",
+      "owner": "B",
+      "status": "planned",
+      "note": "M0-01b: acp2.release.evidence-coverage.v1 schema for tasks, a/b/c/d checkpoints, G01–G26 gaps and H0–H7 required rows. Registered by B; M5-02 freezes the ledger against it.",
+      "planned_by": "M0-01"
+    },
+    {
+      "id": "release-bom-schema",
+      "path": "docs/reference/next-change/acp2-contracts/release/bom.schema.json",
+      "owner": "B",
+      "status": "planned",
+      "note": "M0-01b/M0-03a: acp2.release.bom.v1 skeleton (source revision, artifacts with URI+sha256+size, toolchain locks, coverage digest reference). Registered by B.",
+      "planned_by": "M0-01"
     }
   ],
   "deferred_capabilities": [
@@ -743,6 +767,11 @@
       "version": "1.3.0",
       "stage": "B23",
       "note": "additive cross_track_edges and p4_sync in runtime/dependencies.json; no delivered field removed or renamed, so contract_version stays 1.3.0"
+    },
+    {
+      "version": "1.4.0",
+      "stage": "M0-01",
+      "note": "M0-01b registers release/scope.json, release/evidence-coverage.schema.json and release/bom.schema.json as planned contracts owned by B (no delivered wire field changed). contract_version is bumped anyway because the release namespace is a new consumer-visible contract family: the coverage validator keys on the planned ids and M5-02 freezes the same files at the B26 release stage."
     }
   ],
   "b01_deliverables": [

@@ -37,6 +37,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
 from acp_services.entrypoints import machine_output as mo
 from acp_services.entrypoints import mcp
 from acp_services.entrypoints.application_params import (
@@ -153,10 +154,10 @@ class _ControllerCapabilities:
         data = dict(snapshot.raw)
         data.setdefault("protocol_version", mcp.MCP_PROTOCOL_VERSION)
         data.setdefault("tools", list(mcp.TOOL_ALLOWLIST))
-        data.setdefault(
-            "extensions",
-            [{"id": "acp.research.v1", "version": "1.1.0", "negotiated": True}],
-        )
+        # The research extension is *not* injected here: `extensions[]` is the
+        # server's application-level handshake answer and is computed once by
+        # `mcp.McpServer._tool_capabilities`.  A hard-coded `negotiated: true`
+        # fallback (B06) claimed a delivery that does not exist and is gone.
         return data
 
 
@@ -371,6 +372,9 @@ def build_mcp_runtime(
         backends=backends,
         identity=identity,
         configured_tier=mcp.STDIO_PERMISSION_SCOPE,
+        # M0-09: the research extension is advertised/negotiated through
+        # `acp_capabilities`; `initialize` makes no extension claim.
+        extension=RESEARCH_EXTENSION_SPEC,
     )
     return McpRuntime(server=server, client=client, health=health)
 

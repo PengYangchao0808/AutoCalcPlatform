@@ -2,9 +2,13 @@
 
 Proves the acceptance clauses of ``acp_services.entrypoints.mcp``:
 
-1. **Locked protocol** — ``initialize`` returns one version and refuses any other;
-   ``tools/list`` + ``tools/call`` + ``ping`` answer at that version; unknown
-   methods are JSON-RPC errors; notifications return ``None``.
+1. **Standard handshake (M0-08/ADR-006)** — ``initialize`` always answers with
+   the version the server speaks; an unsupported ``protocolVersion`` is not a
+   server error (the client decides), only malformed ``protocolVersion`` /
+   ``protocolVersions`` shapes are ``-32602``; the result declares no top-level
+   ``extensions`` and no ``negotiated`` claim. ``tools/list`` + ``tools/call`` +
+   ``ping`` answer at that version; unknown methods (including a
+   ``server/discover`` probe) are JSON-RPC errors; notifications return ``None``.
 2. **Closed allowlist** — ``tools/list`` advertises exactly the eight frozen
    tools, covering the six families; ``tools/call`` rejects an unknown /
    shell-ish tool at the protocol layer (never dispatches it).
@@ -239,16 +243,77 @@ def test_initialize_without_version_defaults_to_locked() -> None:
     assert result["protocolVersion"] == mcp.MCP_PROTOCOL_VERSION
 
 
-def test_initialize_rejects_other_protocol_version() -> None:
-    response = _call(_server(), "initialize", {"protocolVersion": "1999-01-01"})
-    assert response["error"]["code"] == mcp.JsonRpcErrorCode.INVALID_PARAMS
-    assert response["error"]["data"]["code"] == "unsupported_protocol_version"
-    assert response["error"]["data"]["locked"] == mcp.MCP_PROTOCOL_VERSION
+def test_initialize_unsupported_version_returns_server_version() -> None:
+    """MCP lifecycle: the server answers with a version it speaks; the client decides."""
+    response = _call(_server(), "initialize", {"protocolVersion": "2025-11-25"})
+    assert "error" not in response, response
+    result = response["result"]
+    assert result["protocolVersion"] == mcp.MCP_PROTOCOL_VERSION
+    assert result["supportedProtocolVersions"] == list(mcp.SUPPORTED_PROTOCOL_VERSIONS)
+    guidance = result["capabilities"]["extensions"]["acp.negotiation.v1"]
+    assert guidance["requested_version"] == "2025-11-25"
+    assert guidance["server_preferred_version"] == mcp.MCP_PROTOCOL_VERSION
+
+
+def test_initialize_private_protocol_versions_are_recorded_not_gated() -> None:
+    """The private ``protocolVersions`` hint is diagnostic only (ADR-006)."""
+    response = _call(
+        _server(),
+        "initialize",
+        {"protocolVersion": "1999-01-01", "protocolVersions": ["1999-01-01"]},
+    )
+    assert "error" not in response, response
+    result = response["result"]
+    assert result["protocolVersion"] == mcp.MCP_PROTOCOL_VERSION
+    guidance = result["capabilities"]["extensions"]["acp.negotiation.v1"]
+    assert guidance["client_declared_versions"] == ["1999-01-01"]
+    assert guidance["requested_version"] == "1999-01-01"
+
+
+def test_initialize_rejects_malformed_protocol_version() -> None:
+    for malformed in (123, "", "   ", {"version": "2025-06-18"}, ["2025-06-18"]):
+        response = _call(_server(), "initialize", {"protocolVersion": malformed})
+        assert response["error"]["code"] == mcp.JsonRpcErrorCode.INVALID_PARAMS
+        assert response["error"]["data"]["code"] == "invalid_protocol_version"
+        assert "result" not in response
+
+
+def test_initialize_rejects_malformed_protocol_versions() -> None:
+    for malformed in ("2025-06-18", [1], ["2025-06-18", 2], {"v": "2025-06-18"}, [""]):
+        response = _call(
+            _server(),
+            "initialize",
+            {"protocolVersion": mcp.MCP_PROTOCOL_VERSION, "protocolVersions": malformed},
+        )
+        assert response["error"]["code"] == mcp.JsonRpcErrorCode.INVALID_PARAMS
+        assert "result" not in response
+
+
+def test_initialize_declares_no_top_level_extensions_or_negotiated_claim() -> None:
+    """M0-08/ADR-006: extension negotiation stays an M0-09 decision."""
+    result = _call(_server(), "initialize", {"protocolVersion": mcp.MCP_PROTOCOL_VERSION})["result"]
+    assert "extensions" not in result
+    assert "acp.research.v1" not in json.dumps(result)
+    encoded = json.dumps(result["capabilities"])
+    assert '"negotiated"' not in encoded
+    guidance = result["capabilities"]["extensions"]["acp.negotiation.v1"]
+    assert guidance["supported_versions"] == list(mcp.SUPPORTED_PROTOCOL_VERSIONS)
+    assert guidance["negotiation"] == "server_advertises_supported_version"
+    assert guidance["client_decides_compatibility"] is True
+    assert "negotiated" not in guidance
 
 
 def test_unknown_method_is_jsonrpc_error() -> None:
     response = _call(_server(), "does/not/exist")
     assert response["error"]["code"] == mcp.JsonRpcErrorCode.METHOD_NOT_FOUND
+
+
+def test_server_discover_is_an_ordinary_unknown_method() -> None:
+    """No discover result is implemented; era-negotiating clients must see -32601."""
+    response = _call(_server(), "server/discover", {"protocolVersions": ["2025-06-18"]})
+    assert response["error"]["code"] == mcp.JsonRpcErrorCode.METHOD_NOT_FOUND
+    assert "result" not in response
+    assert "not_initialized" != response["error"].get("data", {}).get("code")
 
 
 def test_ping_returns_empty_result() -> None:
@@ -752,3 +817,12 @@ def test_protocol_level_client_session_record() -> None:
     assert any(row["protocol_version"] == mcp.MCP_PROTOCOL_VERSION for row in matrix)
     assert any("NOT_VERIFIED" in str(row["status"]) for row in matrix)
     assert all(row["session_coupled"] is False for row in matrix)
+
+    dsh = next(row for row in matrix if row["client"] == "dsh-official-mcp-client")
+    assert dsh["package_version"] == "0.2.1-rc.2"
+    assert dsh["client_info"] == {"name": "dsh-mcp-client", "version": "0.0.1"}
+    assert dsh["sdk_version"] == "2.2.0"
+    assert "auto" in dsh["version_negotiation"]
+    assert dsh["status"].startswith("PASS handshake")
+    assert "NOT_VERIFIED" in dsh["status"]
+    assert "full DSH Agent" in dsh["status"]

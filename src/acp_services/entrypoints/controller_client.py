@@ -146,6 +146,7 @@ class Capabilities:
     limits: Mapping[str, Any]
     tools: tuple[str, ...] | None
     protocol_version: str | None
+    extensions: tuple[Mapping[str, Any], ...] = ()
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -164,6 +165,9 @@ class Capabilities:
                 str(payload["protocol_version"])
                 if payload.get("protocol_version") is not None
                 else None
+            ),
+            extensions=tuple(
+                item for item in payload.get("extensions") or () if isinstance(item, Mapping)
             ),
             raw=dict(payload),
         )
@@ -441,10 +445,48 @@ class ControllerClient:
             ) from None
 
     # -- read-only discovery ----------------------------------------------
-    def capabilities(self, *, extensions: Mapping[str, Any] | None = None) -> Capabilities:
-        """Return what the Controller currently offers (no side effects)."""
-        del extensions  # discovery takes no request body; extensions are metadata only
-        data = self._request_json("GET", "/api/capabilities")
+    def capabilities(
+        self,
+        *,
+        extensions: Mapping[str, Any] | None = None,
+        research_extension: Mapping[str, Any] | str | None = None,
+        project_id: str | None = None,
+        client: Mapping[str, Any] | None = None,
+    ) -> Capabilities:
+        """Return what the Controller currently offers (no side effects).
+
+        Args:
+            extensions: Legacy namespaced extension metadata passthrough
+                (``application-api.v1`` ``capabilities.request.extensions``).
+            research_extension: Application-level handshake request, either a
+                ``{"id": ..., "version": ...}`` mapping or ``"id@version"``.
+                The Controller answers ``extensions[]``
+                (``supported``/``requested``/``negotiated_by``/``implemented``/
+                ``negotiated``/``refusal``) — this is the M0-09 carrier, **not**
+                an ``initialize`` claim.
+            project_id: Advisory Workspace hint; never an authorization input.
+            client: Client identifier recorded for audit only.
+
+        A call with no arguments keeps the plain credential-free
+        ``GET /api/capabilities`` read; any argument uses the equivalent
+        ``POST /api/capabilities`` body surface, so the two surfaces stay
+        interchangeable rather than one silently dropping fields.
+        """
+        body: dict[str, Any] = {}
+        if extensions is not None:
+            body["extensions"] = dict(extensions)
+        requested = _research_extension_request(research_extension)
+        if requested is not None:
+            body["research_extension"] = requested
+        if project_id is not None:
+            body["project_id"] = str(project_id)
+        if client is not None:
+            body["client"] = dict(client)
+        if body:
+            body.setdefault("schema_version", 1)
+            data = self._request_json("POST", "/api/capabilities", body)
+        else:
+            data = self._request_json("GET", "/api/capabilities")
         if not isinstance(data, Mapping):
             raise ControllerClientError("capabilities response is not an object")
         return Capabilities.from_mapping(data)
@@ -706,6 +748,48 @@ def _as_mapping(data: Any, command: str) -> Mapping[str, Any]:
     if not isinstance(data, Mapping):
         raise ControllerClientError(f"{command} response is not an object")
     return data
+
+
+def _research_extension_request(
+    value: Mapping[str, Any] | str | None,
+) -> dict[str, Any] | None:
+    """Normalize a research-extension handshake request.
+
+    Accepts the explicit ``{"id": ..., "version": ...}`` form or the compact
+    ``"id@version"`` spelling; a malformed request is ``input_invalid`` before any
+    network call, never a silently dropped argument.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            raise InvalidParameterError(
+                "research_extension must be non-empty", params={"field": "research_extension"}
+            )
+        extension_id, _, version = raw.partition("@")
+        return {"id": extension_id.strip(), "version": version.strip() or None}
+    if not isinstance(value, Mapping):
+        raise InvalidParameterError(
+            "research_extension must be a mapping or an 'id@version' string",
+            params={"field": "research_extension"},
+        )
+    extension_id = value.get("id")
+    if not isinstance(extension_id, str) or not extension_id.strip():
+        raise InvalidParameterError(
+            "research_extension.id must be a non-empty string",
+            params={"field": "research_extension.id"},
+        )
+    version = value.get("version")
+    if version is not None and (not isinstance(version, str) or not version.strip()):
+        raise InvalidParameterError(
+            "research_extension.version must be a non-empty string when present",
+            params={"field": "research_extension.version"},
+        )
+    return {
+        "id": extension_id.strip(),
+        "version": None if version is None else version.strip(),
+    }
 
 
 def _error_from_http(exc: urllib.error.HTTPError) -> ControllerClientError:

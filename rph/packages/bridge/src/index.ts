@@ -638,7 +638,11 @@ export function mapP2Operation(operation: P2Operation): P2OperationMapping {
 
 /**
  * A negotiated extension is either the bare id (`"acp.research.v1"`) or the
- * `{id, version}` pair a client sends in `capabilities.extensions`.
+ * `{id, version}` pair a client asks for. M0-09 (ADR-006 D7) carries that
+ * request in a `tools/call` to `acp_capabilities`
+ * (`research_extension: {id, version}`), never in `initialize`: the frozen DSH
+ * client sends `capabilities: {}` and discards a top-level `initialize`
+ * extensions block.
  */
 export type NegotiatedExtension =
   | string
@@ -688,6 +692,330 @@ export function assertOperationAllowed(
       observed_version: version,
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// M0-09: application-level research-extension handshake (tools/call carrier)
+// ---------------------------------------------------------------------------
+
+/**
+ * The tool that carries the extension handshake.
+ *
+ * `initialize` makes no extension claim (M0-09/ADR-006 D7); this P1 discovery
+ * tool answers `extensions[]` for every capability extension, and the client
+ * decides what to do with `implemented=false` / `negotiated=false`.
+ */
+export const RESEARCH_HANDSHAKE_TOOL = "acp_capabilities";
+
+/** One advertised extension as the server reports it (never inferred). */
+export interface ExtensionAdvertisement {
+  readonly id: string;
+  readonly version: string;
+  readonly supported: boolean;
+  readonly supportedVersions: readonly string[];
+  readonly requestedId: string | null;
+  readonly requestedVersion: string | null;
+  readonly negotiatedBy: string | null;
+  readonly implemented: boolean;
+  readonly negotiated: boolean;
+  readonly refusal: BridgeErrorObject | null;
+}
+
+/**
+ * Handshake outcomes.
+ *
+ * - `negotiated`: the server reports implemented **and** negotiated for the
+ *   requested version — the only state that unlocks P2 calls;
+ * - `advertised`: the extension is advertised but not negotiable (today: the ten
+ *   research tools are a promise, not a registration);
+ * - `refused`: the server answered a typed in-band refusal
+ *   (`unsupported_capability` / `access_denied`);
+ * - `absent`: the server does not advertise this extension at all.
+ */
+export type ResearchHandshakeStatus =
+  | "negotiated"
+  | "advertised"
+  | "refused"
+  | "absent";
+
+/** What a caller asks the server to negotiate (audit facts only besides id). */
+export interface ResearchHandshakeRequest {
+  readonly id?: string;
+  readonly version?: string;
+  /** Advisory Workspace hint; the server binding still decides the scope. */
+  readonly projectId?: string;
+  /** Client identifier recorded by the server for audit only. */
+  readonly client?: {
+    readonly name: string;
+    readonly version?: string;
+  };
+}
+
+/** Deterministic handshake result; feeds `BridgeOptions.negotiatedExtensions`. */
+export interface ResearchHandshake {
+  readonly status: ResearchHandshakeStatus;
+  readonly extension: ExtensionAdvertisement | null;
+  readonly advertised: readonly ExtensionAdvertisement[];
+  /** Extensions a `Bridge`/`callP2Operation` may treat as negotiated. */
+  readonly negotiatedExtensions: readonly NegotiatedExtension[];
+  readonly refusal: BridgeErrorObject | null;
+  /** The effective request (id/version actually asked for). */
+  readonly requested: { readonly id: string; readonly version: string };
+}
+
+function errorClassOf(code: string, rawClass: unknown): BridgeErrorClass {
+  if (
+    rawClass === "unsupported" ||
+    rawClass === "invalid-parameter" ||
+    rawClass === "authorization" ||
+    rawClass === "conflict" ||
+    rawClass === "not-prepared" ||
+    rawClass === "retryable"
+  ) {
+    return rawClass;
+  }
+  if (code === "access_denied") {
+    return "authorization";
+  }
+  if (code === "unsupported_capability") {
+    return "unsupported";
+  }
+  return "invalid-parameter";
+}
+
+function errorObjectFrom(value: unknown): BridgeErrorObject | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const code = value["code"];
+  if (typeof code !== "string" || code.length === 0) {
+    return null;
+  }
+  return {
+    class: errorClassOf(code, value["class"]),
+    code,
+    params: isRecord(value["params"]) ? value["params"] : {},
+  };
+}
+
+function advertisementFrom(value: unknown): ExtensionAdvertisement | null {
+  if (!isRecord(value) || typeof value["id"] !== "string") {
+    return null;
+  }
+  const version = value["version"];
+  if (typeof version !== "string" || version.length === 0) {
+    return null;
+  }
+  const requested = isRecord(value["requested"]) ? value["requested"] : null;
+  const supportedVersions = Array.isArray(value["supported_versions"])
+    ? value["supported_versions"].filter(
+        (item): item is string => typeof item === "string",
+      )
+    : [version];
+  return {
+    id: value["id"],
+    version,
+    supported: value["supported"] !== false,
+    supportedVersions,
+    requestedId:
+      requested !== null && typeof requested["id"] === "string"
+        ? requested["id"]
+        : null,
+    requestedVersion:
+      requested !== null && typeof requested["version"] === "string"
+        ? requested["version"]
+        : null,
+    negotiatedBy:
+      typeof value["negotiated_by"] === "string"
+        ? value["negotiated_by"]
+        : null,
+    implemented: value["implemented"] === true,
+    negotiated: value["negotiated"] === true,
+    refusal: errorObjectFrom(value["refusal"]),
+  };
+}
+
+/**
+ * Parse the `extensions[]` projection out of a `tools/call` result payload.
+ *
+ * The projection is read from `data.extensions`; a payload whose `extensions`
+ * key is not an array is a server/contract bug and is refused locally instead of
+ * being silently treated as "no extensions".
+ */
+export function parseExtensionAdvertisements(
+  structuredContent: Readonly<Record<string, unknown>>,
+): readonly ExtensionAdvertisement[] {
+  const data = structuredContent["data"];
+  if (!isRecord(data) || !Object.hasOwn(data, "extensions")) {
+    return Object.freeze([]);
+  }
+  const raw = data["extensions"];
+  if (!Array.isArray(raw)) {
+    contractError("invalid-parameter", "bridge_payload_invalid", {
+      rule: "extensions_not_an_array",
+      tool: RESEARCH_HANDSHAKE_TOOL,
+    });
+  }
+  const entries: ExtensionAdvertisement[] = [];
+  for (const item of raw) {
+    const advertisement = advertisementFrom(item);
+    if (advertisement === null) {
+      contractError("invalid-parameter", "bridge_payload_invalid", {
+        rule: "extension_entry_invalid",
+        tool: RESEARCH_HANDSHAKE_TOOL,
+      });
+    }
+    entries.push(advertisement);
+  }
+  return Object.freeze(entries);
+}
+
+/**
+ * Interpret one `acp_capabilities` result as a research handshake.
+ *
+ * `negotiated` is taken **only** from the server advertisement, and only when
+ * the server also reports `implemented: true` at the requested version. A request
+ * is therefore never upgraded into a claim by the client, and a typed server
+ * refusal (`isError` + `unsupported_capability`/`access_denied`) is surfaced in
+ * the result instead of thrown, so a supervisor can continue on P1.
+ */
+export function parseResearchHandshake(
+  result: BridgeToolResult,
+  requested: ResearchHandshakeRequest = {},
+): ResearchHandshake {
+  const advertised = parseExtensionAdvertisements(result.structuredContent);
+  const extension =
+    advertised.find((entry) => entry.id === BRIDGE_EXTENSION_ID) ?? null;
+  const effective = Object.freeze({
+    id: requested.id ?? BRIDGE_EXTENSION_ID,
+    version: requested.version ?? BRIDGE_EXTENSION_VERSION,
+  });
+  const serverError = errorObjectFrom(
+    isRecord(result.structuredContent["error"])
+      ? result.structuredContent["error"]
+      : null,
+  );
+
+  if (extension === null) {
+    return Object.freeze({
+      status: "absent" as const,
+      extension: null,
+      advertised,
+      negotiatedExtensions: Object.freeze([]),
+      refusal:
+        serverError ??
+        Object.freeze({
+          class: "unsupported" as const,
+          code: "unsupported_capability",
+          params: Object.freeze({
+            rule: "extension_not_advertised",
+            extension: BRIDGE_EXTENSION_ID,
+          }),
+        }),
+      requested: effective,
+    });
+  }
+
+  const negotiated =
+    !result.isError &&
+    extension.implemented &&
+    extension.negotiated &&
+    effective.id === extension.id &&
+    effective.version === extension.version;
+
+  if (negotiated) {
+    return Object.freeze({
+      status: "negotiated" as const,
+      extension,
+      advertised,
+      negotiatedExtensions: Object.freeze([
+        Object.freeze({ id: extension.id, version: extension.version }),
+      ]),
+      refusal: null,
+      requested: effective,
+    });
+  }
+
+  const refusal =
+    serverError ??
+    extension.refusal ??
+    Object.freeze({
+      class: "unsupported" as const,
+      code: "unsupported_capability",
+      params: Object.freeze({
+        rule: "extension_not_implemented",
+        extension: BRIDGE_EXTENSION_ID,
+        supported_version: extension.version,
+      }),
+    });
+  return Object.freeze({
+    status: result.isError || extension.refusal !== null
+      ? ("refused" as const)
+      : ("advertised" as const),
+    extension,
+    advertised,
+    negotiatedExtensions: Object.freeze([]),
+    refusal,
+    requested: effective,
+  });
+}
+
+/**
+ * Ask the server to negotiate the research extension through `tools/call`.
+ *
+ * Builds the one legal request (`research_extension{id,version}` plus optional
+ * audit facts), calls the P1 discovery tool and parses the answer. It never
+ * throws for a server refusal: an un-negotiated extension is a normal, typed
+ * outcome, because `acp_capabilities` is always callable when the tool exists.
+ */
+export async function negotiateResearch(
+  client: PlatformClient,
+  request: ResearchHandshakeRequest = {},
+): Promise<ResearchHandshake> {
+  const raw = assertRawToolName(RESEARCH_HANDSHAKE_TOOL);
+  const args: Record<string, unknown> = {
+    research_extension: {
+      id: request.id ?? BRIDGE_EXTENSION_ID,
+      version: request.version ?? BRIDGE_EXTENSION_VERSION,
+    },
+  };
+  if (request.projectId !== undefined) {
+    args["project_id"] = request.projectId;
+  }
+  if (request.client !== undefined) {
+    args["client"] = {
+      name: request.client.name,
+      ...(request.client.version === undefined
+        ? {}
+        : { version: request.client.version }),
+    };
+  }
+
+  let result: BridgeToolResult;
+  try {
+    result = await client.callTool(raw, Object.freeze(args));
+  } catch (error) {
+    return Object.freeze({
+      status: "refused" as const,
+      extension: null,
+      advertised: Object.freeze([]),
+      negotiatedExtensions: Object.freeze([]),
+      refusal: Object.freeze({
+        class: "retryable" as const,
+        code: "backend_unavailable",
+        params: Object.freeze({
+          rule: "handshake_call_failed",
+          tool: raw,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      }),
+      requested: Object.freeze({
+        id: request.id ?? BRIDGE_EXTENSION_ID,
+        version: request.version ?? BRIDGE_EXTENSION_VERSION,
+      }),
+    });
+  }
+  return parseResearchHandshake(result, request);
 }
 
 const PAYLOAD_IDENTITY_KEYS: readonly string[] = Object.freeze([

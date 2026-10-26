@@ -1,0 +1,850 @@
+{
+  "schema": "acp2.c.mcp-live.official-client.v1",
+  "status": "ok",
+  "phase": "done",
+  "scenario": "default",
+  "package_versions": {
+    "@deepseek-ai/dsh-mcp-client": {
+      "name": "@deepseek-ai/dsh-mcp-client",
+      "version": "0.2.1-rc.2"
+    },
+    "@modelcontextprotocol/client": {
+      "name": "@modelcontextprotocol/client",
+      "version": "2.2.0"
+    }
+  },
+  "launch_path": "/tmp/opencode/m008/work/mcp-launch.json",
+  "wire": [
+    {
+      "direction": "send",
+      "message": {
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "dsh-mcp-client",
+            "version": "0.0.1"
+          }
+        },
+        "jsonrpc": "2.0",
+        "id": 0
+      }
+    },
+    {
+      "direction": "receive",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "protocolVersion": "2025-06-18",
+          "supportedProtocolVersions": [
+            "2025-06-18"
+          ],
+          "capabilities": {
+            "tools": {
+              "listChanged": false
+            },
+            "extensions": {
+              "acp.negotiation.v1": {
+                "id": "acp.negotiation.v1",
+                "version": "1.0.0",
+                "supported_versions": [
+                  "2025-06-18"
+                ],
+                "server_preferred_version": "2025-06-18",
+                "negotiation": "server_advertises_supported_version",
+                "client_decides_compatibility": true,
+                "requested_version": "2025-11-25",
+                "client_declared_versions": []
+              }
+            }
+          },
+          "serverInfo": {
+            "name": "acp-services-mcp",
+            "version": "0.1.0"
+          },
+          "instructions": "Local stdio MCP entry (permission scope 'local-single', transport 'stdio'). Tool calls are dispatched against a closed allowlist; no shell is exposed. Long tasks return an operation/job reference that survives disconnection; query it with acp_status."
+        }
+      }
+    },
+    {
+      "direction": "send",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized"
+      }
+    },
+    {
+      "direction": "send",
+      "message": {
+        "method": "tools/list",
+        "jsonrpc": "2.0",
+        "id": 1
+      }
+    },
+    {
+      "direction": "receive",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "tools": [
+            {
+              "name": "acp_capabilities",
+              "description": "List the capabilities (workflows/backends/limits) the service currently offers.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            },
+            {
+              "name": "acp_preflight",
+              "description": "Preflight/estimate a request with zero side effects (no science, no metering).",
+              "inputSchema": {
+                "type": "object",
+                "description": "Submit descriptor. Legacies and research launches share this schema; the field relations below are documented for callers, never enforced here — the Controller remains the gate. plan_digest is the research-launch switch: supplying it (or any of proposal_ref/proposal_digest/budget) makes the submit a research launch, which additionally requires proposal_ref bound to a server-side approval and optionally proposal_digest/budget. Omitting all four keeps the legacy path. A research submit without proposal_ref is refused by the Controller with access_denied (rule=approval_required) before idempotency or admission.",
+                "properties": {
+                  "workflow": {
+                    "type": "string",
+                    "description": "Active workflow id (server-validated)."
+                  },
+                  "input": {
+                    "type": "object",
+                    "description": "Workflow input descriptor."
+                  },
+                  "method": {
+                    "type": "object",
+                    "description": "Method/parameter descriptor."
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "description": "Requested Workspace hint (never the tenant)."
+                  },
+                  "resources": {
+                    "type": "object",
+                    "description": "Optional resource request (e.g. cores)."
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "description": "Client retry key; same key yields exactly one operation."
+                  },
+                  "plan_digest": {
+                    "type": "string",
+                    "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+                  },
+                  "proposal_ref": {
+                    "type": "string",
+                    "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+                  },
+                  "proposal_digest": {
+                    "type": "string",
+                    "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+                  },
+                  "budget": {
+                    "type": "object",
+                    "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+                  }
+                },
+                "required": [
+                  "workflow"
+                ],
+                "additionalProperties": true
+              }
+            },
+            {
+              "name": "acp_submit",
+              "description": "Controlled submit; returns an operation/job reference immediately (long task).",
+              "inputSchema": {
+                "type": "object",
+                "description": "Submit descriptor. Legacies and research launches share this schema; the field relations below are documented for callers, never enforced here — the Controller remains the gate. plan_digest is the research-launch switch: supplying it (or any of proposal_ref/proposal_digest/budget) makes the submit a research launch, which additionally requires proposal_ref bound to a server-side approval and optionally proposal_digest/budget. Omitting all four keeps the legacy path. A research submit without proposal_ref is refused by the Controller with access_denied (rule=approval_required) before idempotency or admission.",
+                "properties": {
+                  "workflow": {
+                    "type": "string",
+                    "description": "Active workflow id (server-validated)."
+                  },
+                  "input": {
+                    "type": "object",
+                    "description": "Workflow input descriptor."
+                  },
+                  "method": {
+                    "type": "object",
+                    "description": "Method/parameter descriptor."
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "description": "Requested Workspace hint (never the tenant)."
+                  },
+                  "resources": {
+                    "type": "object",
+                    "description": "Optional resource request (e.g. cores)."
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "description": "Client retry key; same key yields exactly one operation."
+                  },
+                  "plan_digest": {
+                    "type": "string",
+                    "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+                  },
+                  "proposal_ref": {
+                    "type": "string",
+                    "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+                  },
+                  "proposal_digest": {
+                    "type": "string",
+                    "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+                  },
+                  "budget": {
+                    "type": "object",
+                    "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+                  }
+                },
+                "required": [
+                  "workflow"
+                ],
+                "additionalProperties": true
+              }
+            },
+            {
+              "name": "acp_status",
+              "description": "Query the status of an operation/job reference. Holds no connection state.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "reference": {
+                    "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "reference"
+                ],
+                "additionalProperties": true
+              }
+            },
+            {
+              "name": "acp_cancel",
+              "description": "Request cancellation of an operation/job reference.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "reference": {
+                    "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "reference"
+                ],
+                "additionalProperties": true
+              }
+            },
+            {
+              "name": "acp_prepare_artifact",
+              "description": "Prepare an artifact for read; idempotent and budget-checked server-side.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "job_id": {
+                    "type": "string"
+                  },
+                  "resource_id": {
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "type": "string"
+                  },
+                  "attempt": {
+                    "type": "integer"
+                  },
+                  "idempotency_key": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            {
+              "name": "acp_read_artifact",
+              "description": "Read an already-prepared artifact (bounded; no fetch on miss).",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "job_id": {
+                    "type": "string"
+                  },
+                  "resource_id": {
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "type": "string"
+                  },
+                  "attempt": {
+                    "type": "integer"
+                  },
+                  "idempotency_key": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            {
+              "name": "acp_analyze",
+              "description": "Run an explicit analysis request (must opt in with explicit=true).",
+              "inputSchema": {
+                "type": "object",
+                "description": "Submit descriptor. Legacies and research launches share this schema; the field relations below are documented for callers, never enforced here — the Controller remains the gate. plan_digest is the research-launch switch: supplying it (or any of proposal_ref/proposal_digest/budget) makes the submit a research launch, which additionally requires proposal_ref bound to a server-side approval and optionally proposal_digest/budget. Omitting all four keeps the legacy path. A research submit without proposal_ref is refused by the Controller with access_denied (rule=approval_required) before idempotency or admission.",
+                "properties": {
+                  "workflow": {
+                    "type": "string",
+                    "description": "Active workflow id (server-validated)."
+                  },
+                  "input": {
+                    "type": "object",
+                    "description": "Workflow input descriptor."
+                  },
+                  "method": {
+                    "type": "object",
+                    "description": "Method/parameter descriptor."
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "description": "Requested Workspace hint (never the tenant)."
+                  },
+                  "resources": {
+                    "type": "object",
+                    "description": "Optional resource request (e.g. cores)."
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "description": "Client retry key; same key yields exactly one operation."
+                  },
+                  "plan_digest": {
+                    "type": "string",
+                    "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+                  },
+                  "proposal_ref": {
+                    "type": "string",
+                    "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+                  },
+                  "proposal_digest": {
+                    "type": "string",
+                    "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+                  },
+                  "budget": {
+                    "type": "object",
+                    "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+                  },
+                  "explicit": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "workflow"
+                ],
+                "additionalProperties": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "direction": "send",
+      "message": {
+        "method": "tools/call",
+        "params": {
+          "name": "acp_capabilities",
+          "arguments": {}
+        },
+        "jsonrpc": "2.0",
+        "id": 2
+      }
+    },
+    {
+      "direction": "receive",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"schema_version\": 1, \"operation\": \"acp_capabilities\", \"status\": \"ok\", \"exit_code\": 0, \"dry_run\": false, \"operation_identity\": \"tenant:local-single\", \"diagnostic_ref\": null, \"data\": {\"schema_version\": 1, \"task_kinds\": [\"singlepoint\"], \"workflows\": [\"singlepoint\", \"optimize\"], \"backends\": [{\"name\": \"orca\", \"available\": true}], \"capability_descriptors\": null, \"limits\": {\"max_cores\": 64}, \"tools\": [\"acp_analyze\", \"acp_cancel\", \"acp_capabilities\", \"acp_preflight\", \"acp_prepare_artifact\", \"acp_read_artifact\", \"acp_status\", \"acp_submit\"], \"protocol_version\": \"2025-06-18\", \"description\": \"m0-08 live handshake stub\", \"extensions\": [{\"id\": \"acp.research.v1\", \"version\": \"1.1.0\", \"negotiated\": true}]}, \"error\": null}"
+            }
+          ],
+          "structuredContent": {
+            "schema_version": 1,
+            "operation": "acp_capabilities",
+            "status": "ok",
+            "exit_code": 0,
+            "dry_run": false,
+            "operation_identity": "tenant:local-single",
+            "diagnostic_ref": null,
+            "data": {
+              "schema_version": 1,
+              "task_kinds": [
+                "singlepoint"
+              ],
+              "workflows": [
+                "singlepoint",
+                "optimize"
+              ],
+              "backends": [
+                {
+                  "name": "orca",
+                  "available": true
+                }
+              ],
+              "capability_descriptors": null,
+              "limits": {
+                "max_cores": 64
+              },
+              "tools": [
+                "acp_analyze",
+                "acp_cancel",
+                "acp_capabilities",
+                "acp_preflight",
+                "acp_prepare_artifact",
+                "acp_read_artifact",
+                "acp_status",
+                "acp_submit"
+              ],
+              "protocol_version": "2025-06-18",
+              "description": "m0-08 live handshake stub",
+              "extensions": [
+                {
+                  "id": "acp.research.v1",
+                  "version": "1.1.0",
+                  "negotiated": true
+                }
+              ]
+            },
+            "error": null
+          },
+          "isError": false
+        }
+      }
+    }
+  ],
+  "launch_sha256": null,
+  "client_options": {
+    "client_info": {
+      "name": "dsh-mcp-client",
+      "version": "0.0.1"
+    },
+    "capabilities": {},
+    "versionNegotiation": {
+      "mode": "auto"
+    }
+  },
+  "sdk_defaults": {
+    "latest_protocol_version": "2025-11-25",
+    "supported_protocol_versions": [
+      "2025-11-25",
+      "2025-06-18",
+      "2025-03-26",
+      "2024-11-05",
+      "2024-10-07"
+    ],
+    "default_negotiated_protocol_version": "2025-03-26"
+  },
+  "launch": {
+    "command": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "args": [
+      "-m",
+      "acp",
+      "mcp",
+      "serve",
+      "--transport",
+      "stdio",
+      "--controller",
+      "http://127.0.0.1:33391",
+      "--log-level",
+      "INFO"
+    ],
+    "cwd": "/ACPServer/acp2-remediation-integration/src",
+    "env_keys": [
+      "ACP2_MCP_LOG_LEVEL",
+      "ACP_CONTROLLER_URL",
+      "ACP_RUN_ROOT",
+      "PYTHONPATH"
+    ],
+    "protocol_version": "2025-06-18",
+    "server": {
+      "name": "acp",
+      "entrypoint": "acp_services.entrypoints.mcp"
+    }
+  },
+  "server": {
+    "server_info": {
+      "name": "acp-services-mcp",
+      "version": "0.1.0"
+    },
+    "capabilities": {
+      "tools": {
+        "listChanged": false
+      },
+      "extensions": {
+        "acp.negotiation.v1": {
+          "id": "acp.negotiation.v1",
+          "version": "1.0.0",
+          "supported_versions": [
+            "2025-06-18"
+          ],
+          "server_preferred_version": "2025-06-18",
+          "negotiation": "server_advertises_supported_version",
+          "client_decides_compatibility": true,
+          "requested_version": "2025-11-25",
+          "client_declared_versions": []
+        }
+      }
+    }
+  },
+  "negotiated_protocol": "2025-06-18",
+  "requested_protocol": "2025-11-25",
+  "initialize_response": {
+    "protocolVersion": "2025-06-18",
+    "supportedProtocolVersions": [
+      "2025-06-18"
+    ],
+    "capabilities": {
+      "tools": {
+        "listChanged": false
+      },
+      "extensions": {
+        "acp.negotiation.v1": {
+          "id": "acp.negotiation.v1",
+          "version": "1.0.0",
+          "supported_versions": [
+            "2025-06-18"
+          ],
+          "server_preferred_version": "2025-06-18",
+          "negotiation": "server_advertises_supported_version",
+          "client_decides_compatibility": true,
+          "requested_version": "2025-11-25",
+          "client_declared_versions": []
+        }
+      }
+    },
+    "serverInfo": {
+      "name": "acp-services-mcp",
+      "version": "0.1.0"
+    },
+    "instructions": "Local stdio MCP entry (permission scope 'local-single', transport 'stdio'). Tool calls are dispatched against a closed allowlist; no shell is exposed. Long tasks return an operation/job reference that survives disconnection; query it with acp_status."
+  },
+  "tools": [
+    {
+      "name": "acp_capabilities",
+      "description": "List the capabilities (workflows/backends/limits) the service currently offers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": null
+    },
+    {
+      "name": "acp_preflight",
+      "description": "Preflight/estimate a request with zero side effects (no science, no metering).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string",
+            "description": "Active workflow id (server-validated)."
+          },
+          "input": {
+            "type": "object",
+            "description": "Workflow input descriptor."
+          },
+          "method": {
+            "type": "object",
+            "description": "Method/parameter descriptor."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "Requested Workspace hint (never the tenant)."
+          },
+          "resources": {
+            "type": "object",
+            "description": "Optional resource request (e.g. cores)."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "Client retry key; same key yields exactly one operation."
+          },
+          "plan_digest": {
+            "type": "string",
+            "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+          },
+          "proposal_ref": {
+            "type": "string",
+            "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+          },
+          "proposal_digest": {
+            "type": "string",
+            "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+          },
+          "budget": {
+            "type": "object",
+            "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+          }
+        },
+        "required": [
+          "workflow"
+        ],
+        "description": "Submit descriptor. Legacies and research launches share this schema; the field relations below are documented for callers, never enforced here — the Controller remains the gate. plan_digest is the research-launch switch: supplying it (or any of proposal_ref/proposal_digest/budget) makes the submit a research launch, which additionally requires proposal_ref bound to a server-side approval and optionally proposal_digest/budget. Omitting all four keeps the legacy path. A research submit without proposal_ref is refused by the Controller with access_denied (rule=approval_required) before idempotency or admission.",
+        "additionalProperties": true
+      },
+      "outputSchema": null
+    },
+    {
+      "name": "acp_submit",
+      "description": "Controlled submit; returns an operation/job reference immediately (long task).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string",
+            "description": "Active workflow id (server-validated)."
+          },
+          "input": {
+            "type": "object",
+            "description": "Workflow input descriptor."
+          },
+          "method": {
+            "type": "object",
+            "description": "Method/parameter descriptor."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "Requested Workspace hint (never the tenant)."
+          },
+          "resources": {
+            "type": "object",
+            "description": "Optional resource request (e.g. cores)."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "Client retry key; same key yields exactly one operation."
+          },
+          "plan_digest": {
+            "type": "string",
+            "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+          },
+          "proposal_ref": {
+            "type": "string",
+            "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+          },
+          "proposal_digest": {
+            "type": "string",
+            "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+          },
+          "budget": {
+            "type": "object",
+            "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+          }
+        },
+        "required": [
+          "workflow"
+        ],
+        "description": "Submit descriptor. Legacies and research launches share this schema; the field relations below are documented for callers, never enforced here — the Controller remains the gate. plan_digest is the research-launch switch: supplying it (or any of proposal_ref/proposal_digest/budget) makes the submit a research launch, which additionally requires proposal_ref bound to a server-side approval and optionally proposal_digest/budget. Omitting all four keeps the legacy path. A research submit without proposal_ref is refused by the Controller with access_denied (rule=approval_required) before idempotency or admission.",
+        "additionalProperties": true
+      },
+      "outputSchema": null
+    },
+    {
+      "name": "acp_status",
+      "description": "Query the status of an operation/job reference. Holds no connection state.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": [
+          "reference"
+        ],
+        "additionalProperties": true
+      },
+      "outputSchema": null
+    },
+    {
+      "name": "acp_cancel",
+      "description": "Request cancellation of an operation/job reference.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": [
+          "reference"
+        ],
+        "additionalProperties": true
+      },
+      "outputSchema": null
+    },
+    {
+      "name": "acp_prepare_artifact",
+      "description": "Prepare an artifact for read; idempotent and budget-checked server-side.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "relative_path": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "outputSchema": null
+    },
+    {
+      "name": "acp_read_artifact",
+      "description": "Read an already-prepared artifact (bounded; no fetch on miss).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "relative_path": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "outputSchema": null
+    },
+    {
+      "name": "acp_analyze",
+      "description": "Run an explicit analysis request (must opt in with explicit=true).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string",
+            "description": "Active workflow id (server-validated)."
+          },
+          "input": {
+            "type": "object",
+            "description": "Workflow input descriptor."
+          },
+          "method": {
+            "type": "object",
+            "description": "Method/parameter descriptor."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "Requested Workspace hint (never the tenant)."
+          },
+          "resources": {
+            "type": "object",
+            "description": "Optional resource request (e.g. cores)."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "Client retry key; same key yields exactly one operation."
+          },
+          "plan_digest": {
+            "type": "string",
+            "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+          },
+          "proposal_ref": {
+            "type": "string",
+            "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+          },
+          "proposal_digest": {
+            "type": "string",
+            "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+          },
+          "budget": {
+            "type": "object",
+            "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+          },
+          "explicit": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "workflow"
+        ],
+        "description": "Submit descriptor. Legacies and research launches share this schema; the field relations below are documented for callers, never enforced here — the Controller remains the gate. plan_digest is the research-launch switch: supplying it (or any of proposal_ref/proposal_digest/budget) makes the submit a research launch, which additionally requires proposal_ref bound to a server-side approval and optionally proposal_digest/budget. Omitting all four keeps the legacy path. A research submit without proposal_ref is refused by the Controller with access_denied (rule=approval_required) before idempotency or admission.",
+        "additionalProperties": true
+      },
+      "outputSchema": null
+    }
+  ],
+  "capabilities_call": {
+    "isError": false,
+    "status": "ok",
+    "operation": "acp_capabilities",
+    "tools": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ]
+  }
+}

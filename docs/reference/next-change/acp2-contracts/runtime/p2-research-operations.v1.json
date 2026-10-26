@@ -9,12 +9,20 @@
     "chosen": "versioned MCP extension",
     "reason": "C's MCP Bridge only calls tools registered on the DSH MCP server; a server-side data interface is not reachable from RPH. The extension keeps one controlled path instead of adding a second client protocol.",
     "p1_contract_preserved": "the eight frozen P1 tools (acp_capabilities, acp_preflight, acp_submit, acp_status, acp_cancel, acp_prepare_artifact, acp_read_artifact, acp_analyze) remain the P1 allowlist and never change names or schemas",
-    "extension_rule": "P2 tools are advertised only when the client negotiates the extension capability in the MCP initialize params; a client that did not negotiate receives unsupported_capability and sees only the P1 allowlist",
+    "extension_rule": "P2 tools are promised by the versioned extension acp.research.v1 but are not callable until they are registered: tools/list is the whole model-visible surface, so an unregistered research tool is refused as unknown_tool and an extension request is answered in-band by acp_capabilities with implemented=false / negotiated=false. Advertising an extension is never a delivery claim (M0-09/ADR-006 D7).",
     "negotiation": {
-      "initialize_param": "capabilities.extensions",
+      "request_carrier": "tools/call",
+      "request_tool": "acp_capabilities",
+      "request_field": "research_extension",
+      "initialize_claim": "none",
+      "initialize_note": "M0-09 (ADR-006 D7): the frozen DSH client sends capabilities:{} and discards a top-level initialize extensions block, so this contract no longer negotiates in initialize. initialize only points at the carrier through capabilities.extensions['acp.negotiation.v1'].extension_handshake.",
       "extension_id": "acp.research.v1",
       "extension_version": "1.0.0",
-      "refusal": {"class": "unsupported", "code": "unsupported_capability", "params": {"rule": "extension_not_negotiated"}}
+      "implemented": false,
+      "negotiated_default": false,
+      "negotiated_rule": "negotiated=true requires the registered tool set to cover the whole promise set AND the requested version to equal extension_version; a partial implementation never reports negotiated.",
+      "refusal": {"class": "unsupported", "code": "unsupported_capability", "params": {"rule": "extension_not_negotiated"}, "rules": ["extension_not_advertised", "extension_version_mismatch", "extension_not_implemented", "extension_not_negotiated"]},
+      "access_refusal": {"class": "authorization", "code": "access_denied", "params": {"rule": "project_scope_mismatch"}}
     },
     "rejected_alternative": "restricted HTTP client path - not chosen in Plan B; adding one would create a second client contract to keep in sync",
     "forbidden": [

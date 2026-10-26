@@ -7,15 +7,15 @@
   "digest_rule": "sha256 over the file bytes",
   "sample_rule": "every frozen contract has at least one positive and one negative sample; a contract without a negative sample may not be frozen",
   "counts": {
-    "total": 55,
+    "total": 58,
     "by_contract": {
       "admission-approval.v1.json": {
         "positive": 2,
         "negative": 3
       },
       "application-api.v1.json": {
-        "positive": 11,
-        "negative": 8
+        "positive": 12,
+        "negative": 10
       },
       "control-and-data.v1.json": {
         "positive": 4,
@@ -140,6 +140,44 @@
       "kind": "positive",
       "size_bytes": 477,
       "sha256": "59f20a4c0858b85a399c6ca6336d6ffd4bc678718e5a82621c0a056d95dcbfaa",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "path": "samples/application-api/capabilities-research-extension-unknown.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 619,
+      "sha256": "2ba5fa032172226023eb45b180251a3ece57caff6cd4b9aa6bc0abe6164c5992",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "unknown_extension",
+        "field": "research_extension.id"
+      }
+    },
+    {
+      "path": "samples/application-api/capabilities-research-extension-version-mismatch.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 696,
+      "sha256": "6cc67374a41627a0a1bca0ff0db637f44dd5ad80b87cf37956ce51771f497c46",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "extension_version_mismatch",
+        "field": "research_extension.version"
+      }
+    },
+    {
+      "path": "samples/application-api/capabilities-research-extension.positive.json",
+      "contract": "application-api.v1.json",
+      "kind": "positive",
+      "size_bytes": 634,
+      "sha256": "26695b701652433a4304d36846047d90ca361a75bb954b9efd64429af0eb8fad",
       "expected": {
         "valid": true
       }

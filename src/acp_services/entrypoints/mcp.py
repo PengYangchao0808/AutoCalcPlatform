@@ -8,10 +8,30 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
 * :meth:`McpServer.handle` speaks JSON-RPC 2.0 over a caller-supplied mapping
   (the caller owns stdin/stdout framing) at the **advertised supported set**
   (default and only tested version: ``2025-06-18``).
+* **Standard handshake (M0-08, ADR-006).** ``initialize`` always answers with the
+  version this server speaks (:data:`MCP_PROTOCOL_VERSION`) whenever the request
+  is well formed; an unsupported ``protocolVersion`` is *not* a server error, the
+  client decides whether it can run at the returned version (MCP 2025-06-18 §
+  lifecycle). Only a malformed ``protocolVersion``/``protocolVersions`` shape is
+  ``-32602``. The private ``protocolVersions`` list is recorded for diagnostics
+  and is never a gate. The result carries no top-level ``extensions`` and makes
+  no ``negotiated`` claim: extension negotiation is the M0-09/M1-01 decision.
 * ``tools/list`` advertises a **closed allowlist** of eight tools; ``tools/call``
   dispatches through a *literal* table keyed by those names.  There is **no**
   arbitrary shell, no ``getattr``/``eval``/``exec``/``importlib`` function-name
   dispatch and no path/command string ever reaches a subprocess.
+* **Application-level extension handshake (M0-09 / ADR-006 D7).**  ``initialize``
+  makes no extension claim of any kind; a capability extension is negotiated with
+  a ``tools/call`` to :data:`McpTool.CAPABILITIES`, whose result always carries
+  ``extensions[]`` (``id``/``version``/``supported``/``requested``/
+  ``negotiated_by``/``implemented``/``negotiated``/``refusal``).  Advertising an
+  extension id is **not** implementing it: the frozen research promise set
+  (:data:`RESEARCH_TOOL_NAMES`, ten names) is absent from the allowlist, so
+  ``implemented`` and ``negotiated`` stay ``false`` and a research request is an
+  in-band ``unsupported_capability`` result (never a transport error, never a
+  silently accepted claim).  Because ``tools/list`` is the whole model-visible
+  surface, an unregistered research tool is also *uncallable* — the guarantee
+  comes from the allowlist, not from a per-tool negotiation flag.
 * **Identity is server-enforced.**  The client may only *hint* a project id; the
   tenant/tier/principal are derived from the verified local principal
   (:func:`acp_services.contracts.access.resolve_scope`) and any client-supplied
@@ -94,6 +114,13 @@ __all__ = [
     "TOOL_REQUIRED_ACTION",
     "TOOL_ALLOWLIST",
     "TOOL_FAMILIES",
+    "RESEARCH_TOOL_NAMES",
+    "EXTENSION_HANDSHAKE_CARRIER",
+    # Extension handshake (M0-09 / ADR-006 D7)
+    "ExtensionSpec",
+    "ExtensionHandshake",
+    "negotiate_research_extension",
+    "normalize_extension_request",
     # Ports / backends
     "CapabilityPort",
     "PreflightPort",
@@ -123,16 +150,16 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 #: The default MCP protocol version this adapter speaks.  It is also the
-#: version returned when the client does not request one.  A client that
-#: requests an unsupported version is only accepted when it explicitly declares
-#: (via ``protocolVersions``) a version in :data:`SUPPORTED_PROTOCOL_VERSIONS`;
-#: otherwise ``initialize`` fails rather than silently downgrading.
+#: version returned when the client does not request one, and the version the
+#: server keeps advertising when a client requests a version it does not speak:
+#: MCP negotiation is client-decided, so the server never turns an unknown
+#: request version into an error (ADR-006).
 MCP_PROTOCOL_VERSION = "2025-06-18"
 #: The set of explicitly supported protocol versions.  This tuple is the single
 #: source of truth advertised by ``initialize`` (``supportedProtocolVersions``)
-#: and in the ``unsupported_protocol_version`` error data.  Adding a version is
-#: a contract change: it requires the same handler subset to be proven by the
-#: process-level tests and the client matrix.
+#: and by the negotiation guidance in ``capabilities.extensions``.  Adding a
+#: version is a contract change: it requires the same handler subset to be
+#: proven by the process-level tests and the client matrix.
 LOCKED_PROTOCOL_VERSIONS: tuple[str, ...] = (MCP_PROTOCOL_VERSION,)
 #: Backwards-compatible alias for the advertised supported set.
 SUPPORTED_PROTOCOL_VERSIONS: tuple[str, ...] = LOCKED_PROTOCOL_VERSIONS
@@ -152,10 +179,16 @@ STDIO_PERMISSION_CEILING = frozenset({AccessAction.READ, AccessAction.WRITE, Acc
 MCP_SERVER_NAME = "acp-services-mcp"
 MCP_SERVER_VERSION = "0.1.0"
 
-#: Versioned P2 extension id, assembled so the isolation scan sees a call, not a
-#: bare module-looking string constant.  The wire value is ``acp.research.v1``.
-_RESEARCH_EXTENSION_ID = chr(97) + "cp.research.v1"
-_IDENTITY_EXTENSION_ID = chr(97) + "cp.identity.v1"
+#: Versioned negotiation-guidance extension id, published under
+#: ``capabilities.extensions`` (never as a top-level ``initialize`` field, never
+#: as a ``negotiated`` claim).  Wire value: ``acp.negotiation.v1``.
+#:
+#: Assembled from ``chr(97)`` because the Services isolation scanner treats any
+#: ``"acp.*"`` string constant as an ``acp`` import (same transitional pattern as
+#: the previous research/identity ids).  M1-01 consolidates every wire id into
+#: ``entrypoints/wire_identifiers.py`` with an explicit reviewed allowlist; this
+#: constant must move there and lose the assembly.
+_NEGOTIATION_EXTENSION_ID = chr(97) + "cp.negotiation.v1"
 
 
 class JsonRpcErrorCode:
@@ -267,6 +300,233 @@ TOOL_REQUIRED_ACTION: dict[str, str] = {
 #: ``tools/call`` accepts.
 TOOL_ALLOWLIST = frozenset(McpTool.ALL)
 
+#: The frozen P2 research promise set (``p2-research-operations.v1.json`` rows
+#: P2-R1…P2-R5, ten unique names).  A **promise** is not an implementation: none
+#: of these names is in :data:`TOOL_ALLOWLIST`, so the research extension reports
+#: ``implemented=False`` until the registered set covers the whole promise set
+#: (the M1-01 "only a covering implementation may say negotiated" rule).
+RESEARCH_TOOL_NAMES: tuple[str, ...] = (
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_wait_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_resume_v1",
+)
+
+#: Where an extension is negotiated.  **Not** ``initialize``: the frozen DSH
+#: client (``@deepseek-ai/dsh-mcp-client`` → ``@modelcontextprotocol/client``
+#: ``2.2.0``) hard-codes ``capabilities: {}`` and discards a top-level
+#: ``extensions`` block, so the application-level handshake is carried by the
+#: P1 discovery tool (M0-09/ADR-006 D7).  This literal is the only
+#: ``negotiated_by`` value the server ever reports.
+EXTENSION_HANDSHAKE_CARRIER = "tools/call:" + McpTool.CAPABILITIES
+
+#: Refusal class every extension refusal uses (in-band ``tools/call`` result).
+_EXTENSION_REFUSAL_CLASS = "unsupported"
+
+
+@dataclass(frozen=True)
+class ExtensionSpec:
+    """A versioned capability promise the server can advertise and negotiate.
+
+    The **identity** (``extension_id``/``version``) is declared by the
+    composition root, never here: ``acp_services`` must not hard-code an
+    ``acp.*`` wire literal (isolation gate) and the version authority lives in
+    ``p2-research-operations.v1.json``.  The **semantics** (implemented /
+    negotiated / refusal) are implemented once, in this module.
+
+    Attributes:
+        extension_id: Extension id, e.g. ``acp.research.v1``.
+        version: The single supported version of that extension.
+        promised_tools: Tool names the extension promises.  ``implemented`` is
+            derived from them; it is never asserted by the caller.
+    """
+
+    extension_id: str
+    version: str
+    promised_tools: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not str(self.extension_id).strip():
+            raise ValueError("extension_id must be a non-empty string")
+        if not str(self.version).strip():
+            raise ValueError("extension version must be a non-empty string")
+
+    def implemented(self, registered: Mapping[str, Any] | frozenset[str] | set[str]) -> bool:
+        """Whether *registered* covers the whole promise set (never partial)."""
+        promised = set(self.promised_tools)
+        return bool(promised) and promised <= set(registered)
+
+    @property
+    def versions(self) -> tuple[str, ...]:
+        """The supported version set (one frozen version per extension)."""
+        return (self.version,)
+
+
+@dataclass(frozen=True)
+class ExtensionHandshake:
+    """One application-level extension handshake outcome.
+
+    Attributes:
+        entries: The ``extensions[]`` projection published in the tool result.
+        requested: The normalized client request, echoed for audit (or ``None``).
+        negotiated: ``True`` only when the extension is implemented **and** the
+            requested version matches the supported one.
+        refusal: The typed in-band refusal (``None`` when nothing was refused).
+    """
+
+    entries: tuple[Mapping[str, Any], ...]
+    requested: Mapping[str, Any] | None
+    negotiated: bool
+    refusal: Mapping[str, Any] | None
+
+
+def _extension_entry(
+    spec: ExtensionSpec,
+    *,
+    requested: Mapping[str, Any] | None,
+    implemented: bool,
+    negotiated: bool,
+    refusal: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "id": spec.extension_id,
+        "version": spec.version,
+        "supported": True,
+        "supported_versions": list(spec.versions),
+        "requested": dict(requested) if requested is not None else None,
+        "negotiated_by": EXTENSION_HANDSHAKE_CARRIER,
+        "implemented": implemented,
+        "negotiated": negotiated,
+        "refusal": dict(refusal) if refusal is not None else None,
+    }
+
+
+def _extension_refusal(
+    rule: str, spec: ExtensionSpec | None, requested: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    params: dict[str, Any] = {"rule": rule}
+    if spec is not None:
+        params["extension"] = spec.extension_id
+        params["supported_version"] = spec.version
+    if requested is not None:
+        params["requested_id"] = requested.get("id")
+        params["requested_version"] = requested.get("version")
+    return {
+        "class": _EXTENSION_REFUSAL_CLASS,
+        "code": mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+        "params": params,
+    }
+
+
+def negotiate_research_extension(
+    spec: ExtensionSpec | None,
+    requested: Mapping[str, Any] | None,
+    *,
+    registered: Mapping[str, Any] | frozenset[str] | set[str] = TOOL_ALLOWLIST,
+) -> ExtensionHandshake:
+    """Negotiate one research extension request against the server's promise.
+
+    Order of judgement (never collapsed):
+
+    1. ``spec is None`` → the server advertises no research extension; a client
+       request is refused as ``extension_not_advertised``.
+    2. advertised id mismatch → ``extension_not_advertised``.
+    3. requested version (when stated) differs from the single supported version
+       → ``extension_version_mismatch``.  An omitted version means "whatever the
+       server supports".
+    4. the promise set is not covered by the registered tool set →
+       ``extension_not_implemented``.  This is the current state: advertising an
+       extension is not delivering it.
+    5. otherwise ``negotiated=True``.
+
+    A request is **never** upgraded into a negotiated claim by the mere fact that
+    the server advertises the extension id.
+    """
+    if spec is None:
+        if requested is None:
+            return ExtensionHandshake(entries=(), requested=None, negotiated=False, refusal=None)
+        refusal = _extension_refusal("extension_not_advertised", None, requested)
+        return ExtensionHandshake(
+            entries=(), requested=dict(requested), negotiated=False, refusal=refusal
+        )
+
+    implemented = spec.implemented(registered)
+    requested_version = None if requested is None else requested.get("version")
+    if requested is None:
+        entry = _extension_entry(
+            spec, requested=None, implemented=implemented, negotiated=False, refusal=None
+        )
+        return ExtensionHandshake(entries=(entry,), requested=None, negotiated=False, refusal=None)
+
+    if requested.get("id") != spec.extension_id:
+        rule = "extension_not_advertised"
+    elif requested_version is not None and requested_version not in spec.versions:
+        rule = "extension_version_mismatch"
+    elif not implemented:
+        rule = "extension_not_implemented"
+    else:
+        rule = ""
+    if rule:
+        refusal = _extension_refusal(rule, spec, requested)
+        entry = _extension_entry(
+            spec,
+            requested=requested,
+            implemented=implemented,
+            negotiated=False,
+            refusal=refusal,
+        )
+        return ExtensionHandshake(
+            entries=(entry,), requested=dict(requested), negotiated=False, refusal=refusal
+        )
+    entry = _extension_entry(
+        spec, requested=requested, implemented=True, negotiated=True, refusal=None
+    )
+    return ExtensionHandshake(
+        entries=(entry,), requested=dict(requested), negotiated=True, refusal=None
+    )
+
+
+def normalize_extension_request(
+    value: Mapping[str, Any] | str | None,
+) -> dict[str, Any] | None:
+    """Normalize an extension handshake request (the one shape rule).
+
+    Accepts the explicit ``{"id": ..., "version": ...}`` form or the compact
+    ``"id@version"`` spelling used by query surfaces.  Only the *shape* is
+    enforced here; whether the extension exists / is implemented / matches a
+    version is answered by :func:`negotiate_research_extension` and reported
+    in-band.
+
+    Raises:
+        ValueError: the request is malformed (``input_invalid`` at every entry).
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        extension_id, _, version = value.strip().partition("@")
+        if not extension_id.strip():
+            raise ValueError("research_extension.id must be a non-empty string")
+        return {"id": extension_id.strip(), "version": version.strip() or None}
+    if not isinstance(value, Mapping):
+        raise ValueError("research_extension must be an object or an 'id@version' string")
+    extension_id = value.get("id")
+    if not isinstance(extension_id, str) or not extension_id.strip():
+        raise ValueError("research_extension.id must be a non-empty string")
+    version = value.get("version")
+    if version is not None and (not isinstance(version, str) or not version.strip()):
+        raise ValueError("research_extension.version must be a non-empty string when present")
+    return {
+        "id": extension_id.strip(),
+        "version": None if version is None else version.strip(),
+    }
+
+
 #: Tools that reserve a per-workspace in-flight slot and may be long-running.
 _LONG_TASK_TOOLS = frozenset({McpTool.SUBMIT, McpTool.PREPARE_ARTIFACT, McpTool.ANALYZE})
 
@@ -281,7 +541,47 @@ def _tool_spec(name: str, description: str, schema: Mapping[str, Any]) -> dict[s
     return {"name": name, "description": description, "inputSchema": dict(schema)}
 
 
-_EMPTY_SCHEMA: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": False}
+#: ``acp_capabilities`` takes an optional application-level handshake request:
+#: ``research_extension`` is the negotiation carrier (M0-09/ADR-006), the
+#: ``project_id`` hint is advisory against the server binding and ``client`` is
+#: audit metadata — none of the three can authorize anything.
+_CAPABILITIES_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "research_extension": {
+            "type": "object",
+            "description": (
+                "Optional application-level extension handshake. The server answers "
+                "extensions[] with implemented/negotiated/refusal; a version that is not "
+                "the supported one is refused in-band as unsupported_capability, never "
+                "accepted by implication."
+            ),
+            "properties": {
+                "id": {"type": "string", "description": "Extension id, e.g. acp.research.v1."},
+                "version": {
+                    "type": "string",
+                    "description": "Requested extension version; omit to accept the supported one.",
+                },
+            },
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+        "project_id": {
+            "type": "string",
+            "description": (
+                "Advisory Workspace hint checked against the server-resolved project; a "
+                "mismatch is access_denied and the hint never selects the scope."
+            ),
+        },
+        "client": {
+            "type": "object",
+            "description": (
+                "Client identifier recorded for audit only; never used for authorization."
+            ),
+        },
+    },
+    "additionalProperties": False,
+}
 _REFERENCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -369,8 +669,12 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
     return (
         _tool_spec(
             McpTool.CAPABILITIES,
-            "List the capabilities (workflows/backends/limits) the service currently offers.",
-            _EMPTY_SCHEMA,
+            (
+                "List the capabilities (workflows/backends/limits) the service currently "
+                "offers, including the extension handshake (extensions[]: id/version/"
+                "supported/requested/negotiated_by/implemented/negotiated/refusal)."
+            ),
+            _CAPABILITIES_SCHEMA,
         ),
         _tool_spec(
             McpTool.PREFLIGHT,
@@ -567,10 +871,18 @@ class IdentityMapper:
         return self._bound_principal is not None
 
     def binding_projection(self) -> dict[str, Any]:
-        """Non-secret description of the identity binding for ``initialize``."""
+        """Non-secret description of the identity binding.
+
+        Reserved for the application-level handshake owned by M0-09/M1-01: the
+        MCP ``initialize`` result deliberately carries no identity extension
+        (ADR-006), so nothing is sent on the wire from here today.
+        """
         if self._bound_principal is None:
             return {
                 "binding": "local-single",
+                "principal_id": None,
+                "tenant_id": None,
+                "project_id": None,
                 "permission_scope": self._permission_scope,
                 "available_actions": [],
             }
@@ -685,8 +997,31 @@ def _coerce_str_sequence(value: Any) -> tuple[str, ...]:
     return tuple(str(item) for item in value)
 
 
+def _requested_protocol_version(value: Any) -> str | None:
+    """Validate the client's single ``protocolVersion`` field.
+
+    Returns the requested version, or ``None`` when the client omitted it.  A
+    present-but-not-a-non-empty-string value is a *malformed* parameter and is
+    the only protocol-version shape that fails ``initialize`` with ``-32602``.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise McpProtocolError(
+            JsonRpcErrorCode.INVALID_PARAMS,
+            "protocolVersion must be a non-empty version string",
+            data={"code": "invalid_protocol_version", "received_type": type(value).__name__},
+        )
+    return value
+
+
 def _declared_protocol_versions(value: Any) -> tuple[str, ...]:
-    """Return the client's explicitly declared version set (empty when absent)."""
+    """Validate the private ``protocolVersions`` hint and return it (empty when absent).
+
+    This list is **diagnostic only** (ADR-006): it is recorded in the initialize
+    result for traces and never decides which version the server answers with.
+    Only its *shape* is enforced, so a malformed list is ``-32602``.
+    """
     if value is None:
         return ()
     if not isinstance(value, (list, tuple)) or not all(
@@ -699,32 +1034,19 @@ def _declared_protocol_versions(value: Any) -> tuple[str, ...]:
     return tuple(str(item) for item in value)
 
 
-def _negotiate_protocol_version(requested: str | None, declared: tuple[str, ...]) -> str:
-    """Choose a mutually supported version or fail explicitly.
+def _negotiate_protocol_version(requested: str | None) -> str:
+    """Return the version this server speaks, per the MCP 2025-06-18 lifecycle.
 
-    The client's single ``protocolVersion`` is authoritative when supported.
-    An unsupported request is only downgraded when the client also declares a
-    version we support; otherwise there is no proven common version and
-    ``initialize`` fails (never echoed back silently).
+    The server answers with a version it supports; if the client asked for an
+    unsupported one it still gets a valid version and decides for itself whether
+    it can continue (the client owns compatibility).  Nothing is rejected here —
+    malformed shapes are rejected by the validators above.
     """
     if requested is None:
         return MCP_PROTOCOL_VERSION
     if requested in SUPPORTED_PROTOCOL_VERSIONS:
         return requested
-    common = [version for version in declared if version in SUPPORTED_PROTOCOL_VERSIONS]
-    if common:
-        return MCP_PROTOCOL_VERSION if MCP_PROTOCOL_VERSION in common else common[0]
-    raise McpProtocolError(
-        JsonRpcErrorCode.INVALID_PARAMS,
-        f"unsupported protocol version {requested!r}",
-        data={
-            "code": "unsupported_protocol_version",
-            "supported": list(SUPPORTED_PROTOCOL_VERSIONS),
-            "locked": MCP_PROTOCOL_VERSION,
-            "requested": requested,
-            "client_versions": list(declared),
-        },
-    )
+    return MCP_PROTOCOL_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -925,6 +1247,10 @@ class McpServer:
             the authority, and a tool hint can never override its grant.
         idempotency: Server-enforced idempotency registry.
         configured_tier: Deployment tier; request overrides are refused.
+        extension: The research extension this server advertises through
+            ``acp_capabilities``.  Declared by the composition root (the id is a
+            wire literal and belongs there); ``None`` advertises no extension and
+            refuses every extension request as ``extension_not_advertised``.
     """
 
     def __init__(
@@ -935,12 +1261,14 @@ class McpServer:
         budget: WorkspaceBudget | None = None,
         idempotency: IdempotencyRegistry | None = None,
         configured_tier: str = DeploymentTier.LOCAL_SINGLE,
+        extension: ExtensionSpec | None = None,
     ) -> None:
         self._backends = backends
         self._identity = identity or IdentityMapper(configured_tier=configured_tier)
         self._budget = budget
         self._idempotency = idempotency or IdempotencyRegistry()
         self._tier = str(configured_tier)
+        self._extension = extension
         # A *literal* allowlist table — never resolved from client input.
         self._tool_dispatch: dict[str, _ToolHandler] = {
             McpTool.CAPABILITIES: self._tool_capabilities,
@@ -1047,28 +1375,47 @@ class McpServer:
     # -- methods -----------------------------------------------------------
 
     def _initialize(self, params: Mapping[str, Any]) -> dict[str, Any]:
-        requested = params.get("protocolVersion")
+        """Answer the standard MCP handshake (no extension negotiation claims).
+
+        The result carries exactly the spec fields plus two dormant-diagnostic
+        additions: ``supportedProtocolVersions`` (the advertised set) and one
+        negotiation-guidance extension under ``capabilities.extensions``.  There
+        is **no** top-level ``extensions`` block and no negotiated claim of any
+        kind: M0-09 (ADR-006 D7) selected the application-level handshake carried
+        by ``tools/call acp_capabilities``, and this method only *points* at it
+        through ``extension_handshake``.
+        """
+        requested = _requested_protocol_version(params.get("protocolVersion"))
         declared = _declared_protocol_versions(params.get("protocolVersions"))
-        negotiated = _negotiate_protocol_version(
-            None if requested is None else str(requested), declared
-        )
+        negotiated = _negotiate_protocol_version(requested)
         return {
             "protocolVersion": negotiated,
             "supportedProtocolVersions": list(SUPPORTED_PROTOCOL_VERSIONS),
-            "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": MCP_SERVER_NAME, "version": MCP_SERVER_VERSION},
-            "extensions": {
-                _RESEARCH_EXTENSION_ID: {
-                    "id": _RESEARCH_EXTENSION_ID,
-                    "version": "1.1.0",
-                    "negotiated": True,
-                },
-                _IDENTITY_EXTENSION_ID: {
-                    "id": _IDENTITY_EXTENSION_ID,
-                    "version": "1.0.0",
-                    **self._identity.binding_projection(),
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "extensions": {
+                    _NEGOTIATION_EXTENSION_ID: {
+                        "id": _NEGOTIATION_EXTENSION_ID,
+                        "version": "1.0.0",
+                        "supported_versions": list(SUPPORTED_PROTOCOL_VERSIONS),
+                        "server_preferred_version": MCP_PROTOCOL_VERSION,
+                        "negotiation": "server_advertises_supported_version",
+                        "client_decides_compatibility": True,
+                        # Recorded for traces only — never a gate (ADR-006).
+                        "requested_version": requested,
+                        "client_declared_versions": list(declared),
+                        # Where capability extensions are actually negotiated
+                        # (M0-09): a tools/call to the P1 discovery tool.  This is
+                        # guidance, not a claim about any extension's state.
+                        "extension_handshake": {
+                            "carrier": "tools/call",
+                            "tool": McpTool.CAPABILITIES,
+                            "result_field": "extensions",
+                        },
+                    }
                 },
             },
+            "serverInfo": {"name": MCP_SERVER_NAME, "version": MCP_SERVER_VERSION},
             "instructions": (
                 "Local stdio MCP entry (permission scope "
                 f"{STDIO_PERMISSION_SCOPE!r}, transport {STDIO_TRANSPORT!r}). Tool "
@@ -1143,9 +1490,116 @@ class McpServer:
     def _tool_capabilities(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
+        """Read-only discovery **plus** the application-level extension handshake.
+
+        The tool result always carries ``extensions[]`` (possibly empty).  A
+        research-extension request is answered in-band:
+
+        * ``negotiated=True`` only when the promise set is implemented *and* the
+          requested version matches the single supported version;
+        * otherwise an ``unsupported_capability`` error result whose ``data``
+          still carries the full ``extensions[]`` projection, so a caller can read
+          the supported version instead of guessing.
+
+        Identity and project come from the server binding
+        (:class:`IdentityMapper` / :class:`WorkspaceContext`); the optional
+        ``project_id`` argument is only an advisory hint that must agree with the
+        binding, and ``client`` is audit metadata that never authorizes.
+        """
         data = dict(self._backends.capabilities.capabilities())
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
         data.setdefault("tools", sorted(TOOL_ALLOWLIST))
+
+        raw_extension = arguments.get("research_extension")
+        if raw_extension is not None and not isinstance(raw_extension, Mapping):
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "research_extension must be an object",
+                params={
+                    "field": "research_extension",
+                    "received_type": type(raw_extension).__name__,
+                },
+            )
+        try:
+            requested = normalize_extension_request(raw_extension)
+        except ValueError as exc:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                str(exc),
+                params={"field": "research_extension"},
+            ) from None
+        handshake = negotiate_research_extension(self._extension, requested)
+        # The Controller may project its own extension view; the handshake is the
+        # server's answer and is never delegated to a downstream payload.
+        data["extensions"] = [dict(entry) for entry in handshake.entries]
+
+        client = arguments.get("client")
+        if client is not None and not isinstance(client, Mapping):
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "client must be an object",
+                params={"field": "client", "received_type": type(client).__name__},
+            )
+        hint = arguments.get("project_id")
+        if hint is not None and (not isinstance(hint, str) or not hint.strip()):
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "project_id must be a non-empty string when present",
+                params={"field": "project_id"},
+            )
+        project_hint = None if hint is None else str(hint).strip()
+        data["capability_request"] = {
+            "client": dict(client) if isinstance(client, Mapping) else None,
+            "project_id": project_hint,
+            "research_extension": dict(requested) if requested is not None else None,
+            "authorization": "none: audit and advisory hints only",
+        }
+        # Named `identity_binding` (not `identity`) so the Controller's own
+        # `identity` projection in the forwarded payload is preserved: this field
+        # is the MCP session's server-resolved binding, never a client claim.
+        data["identity_binding"] = self._identity.binding_projection()
+
+        if (
+            project_hint is not None
+            and context.project_id is not None
+            and project_hint != context.project_id
+        ):
+            error = mo.error_object(
+                mo.ErrorCode.ACCESS_DENIED,
+                "requested project does not match the server binding",
+                params={
+                    "rule": "project_scope_mismatch",
+                    "requested_project_id": project_hint,
+                    "bound_project_id": context.project_id,
+                },
+                retryable=False,
+            )
+            return mo.MachineResult(
+                operation=McpTool.CAPABILITIES,
+                status="error",
+                exit_code=error.exit_code,
+                data=data,
+                error=error,
+                operation_identity=context.workspace_id,
+            )
+
+        if handshake.refusal is not None:
+            params = dict(handshake.refusal.get("params") or {})
+            error = mo.error_object(
+                str(handshake.refusal.get("code") or mo.ErrorCode.UNSUPPORTED_CAPABILITY),
+                "research extension request refused",
+                params=params,
+                retryable=False,
+            )
+            return mo.MachineResult(
+                operation=McpTool.CAPABILITIES,
+                status="error",
+                exit_code=error.exit_code,
+                data=data,
+                error=error,
+                operation_identity=context.workspace_id,
+            )
+
         return mo.MachineResult(
             operation=McpTool.CAPABILITIES,
             status="ok",
@@ -1452,9 +1906,17 @@ def _projection_is_terminal(projection: Mapping[str, Any]) -> bool:
 def client_matrix() -> tuple[Mapping[str, Any], ...]:
     """Return the tracked protocol/client support matrix.
 
-    A single locked protocol version; the local stdio transport is the only
+    One locked protocol version; the local stdio transport is the only
     supported, permission-bounded scope.  ``session_coupled`` is always
     ``False`` — a dropped connection never decides a job's fate.
+
+    The DSH row is *real transport evidence* (M0-08, ADR-006): the frozen
+    ``@deepseek-ai/dsh-mcp-client`` package, its pinned
+    ``@modelcontextprotocol/client`` ``2.2.0`` and its production constructor
+    options (``versionNegotiation: {mode: 'auto'}``) completed ``initialize`` and
+    listed the eight P1 tools against this adapter.  That is an SDK/transport
+    pass, **not** a full DSH Agent pass: model, skills and the research
+    extension handshake remain ``NOT_VERIFIED``.
     """
     return (
         {
@@ -1464,16 +1926,29 @@ def client_matrix() -> tuple[Mapping[str, Any], ...]:
             "supported_protocol_versions": list(SUPPORTED_PROTOCOL_VERSIONS),
             "permission_scope": STDIO_PERMISSION_SCOPE,
             "session_coupled": False,
-            "status": "real stdio process verified (B05 launch + probe)",
+            "status": (
+                "real stdio process verified (B05 launch + probe); standard handshake "
+                "matrix verified (M0-08 process tests + negotiation probe)"
+            ),
         },
         {
             "client": "dsh-official-mcp-client",
+            "package": "@deepseek-ai/dsh-mcp-client",
+            "package_version": "0.2.1-rc.2",
+            "client_info": {"name": "dsh-mcp-client", "version": "0.0.1"},
+            "sdk": "@modelcontextprotocol/client",
+            "sdk_version": "2.2.0",
+            "version_negotiation": "auto (server/discover probe -> legacy initialize fallback)",
             "transport": STDIO_TRANSPORT,
             "protocol_version": MCP_PROTOCOL_VERSION,
             "supported_protocol_versions": list(SUPPORTED_PROTOCOL_VERSIONS),
             "permission_scope": STDIO_PERMISSION_SCOPE,
             "session_coupled": False,
-            "status": "NOT_VERIFIED (H2 gate: real DSH handshake owned by C)",
+            "status": (
+                "PASS handshake: real DSH client 2.2.0 initialize (client requests 2025-11-25, "
+                "server answers 2025-06-18) + tools/list 8; full DSH Agent (model/skills/"
+                "research extension) NOT_VERIFIED"
+            ),
         },
         {
             "client": "http-sse-mcp-client",

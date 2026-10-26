@@ -818,7 +818,10 @@ def _contract_digest(manifest: dict[str, Any]) -> str:
 
 
 def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) -> None:
-    assert manifest["contract_version"] == "1.3.0"
+    # M0-01 review vector: the release namespace was registered inside the
+    # existing delivery set, so the manifest contract version moved to 1.4.0.
+    # Kept as an explicit expectation instead of reading the value back.
+    assert manifest["contract_version"] == "1.4.0"
     delivered = {entry["id"]: entry for entry in manifest["contracts"]}
     b03_ids = {
         "application-api",
@@ -847,6 +850,23 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
             assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a", "B06", "B19"}
         else:
             assert "sha256" not in entry
+
+    # M0-01b registers the release namespace as planned contracts owned by B;
+    # they may only flip to delivered through the recorded M5-02 release stage.
+    release_ids = {
+        "release-scope",
+        "release-evidence-coverage-schema",
+        "release-bom-schema",
+    }
+    assert release_ids <= set(delivered)
+    for contract_id in release_ids:
+        entry = delivered[contract_id]
+        assert entry["status"] == "planned", contract_id
+        assert entry["owner"] == "B", contract_id
+        assert entry["path"].startswith("docs/reference/next-change/acp2-contracts/release/"), (
+            contract_id
+        )
+        assert (REPO_ROOT / entry["path"]).is_file(), contract_id
 
 
 def test_cross_track_requests_are_recorded_and_owned(manifest: dict[str, Any]) -> None:
@@ -879,9 +899,42 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     for name in ("task_ref", "result", "approval_ref"):
         assert name in submit["response"]["fields"], name
     extension = api["mcp_extensions"]["acp.research.v1"]
-    assert extension["negotiated_in"] == "initialize"
-    assert extension["version"] == "1.1.0"
+    # M0-09/ADR-006 D7: negotiation moved out of initialize into the P1
+    # discovery tool; the version is the extension authority (1.0.0), not the
+    # application contract version (1.1.0).
+    assert extension["negotiated_in"] == "tools/call"
+    assert extension["negotiation_tool"] == "acp_capabilities"
+    assert extension["negotiation_request_field"] == "research_extension"
+    assert extension["initialize_claim"] == "none"
+    assert extension["version"] == "1.0.0"
     assert extension["p1_tool_allowlist_unchanged"] is True
+    assert extension["implemented"] is False
+    assert extension["negotiated_default"] is False
+
+
+def test_extension_version_authority_is_the_p2_contract() -> None:
+    """One authority for the extension id/version, projected everywhere else."""
+    api = load_json(RUNTIME / "application-api.v1.json")
+    p2 = load_json(RUNTIME / "p2-research-operations.v1.json")
+    negotiation = p2["client_path"]["negotiation"]
+    assert negotiation["extension_id"] == "acp.research.v1"
+    assert negotiation["extension_version"] == "1.0.0"
+    assert negotiation["request_carrier"] == "tools/call"
+    assert negotiation["request_tool"] == "acp_capabilities"
+    assert negotiation["request_field"] == "research_extension"
+    assert negotiation["initialize_claim"] == "none"
+    assert negotiation["implemented"] is False
+    assert negotiation["negotiated_default"] is False
+    assert "initialize_param" not in negotiation
+    projection = api["mcp_extensions"]["acp.research.v1"]
+    assert projection["version"] == negotiation["extension_version"]
+    assert projection["negotiated_in"] == negotiation["request_carrier"]
+    assert projection["negotiation_tool"] == negotiation["request_tool"]
+    # The frozen RPH bridge declares the same pair; the M0-09 server spec must
+    # project the same authority (checked in test_acp2_mcp_research_handshake).
+    bridge = (REPO_ROOT / "rph/packages/bridge/src/index.ts").read_text(encoding="utf-8")
+    assert 'BRIDGE_EXTENSION_ID = "acp.research.v1"' in bridge
+    assert f'BRIDGE_EXTENSION_VERSION = "{negotiation["extension_version"]}"' in bridge
 
 
 def test_manifest_contract_digest_and_self_digest(manifest: dict[str, Any]) -> None:
@@ -1011,7 +1064,33 @@ def _application_api_violations(payload: dict[str, Any], operation: str) -> list
             violations.append(("unknown_field", name))
             continue
         check(value, spec["fields"][name], name)
+    if operation == "capabilities":
+        violations.extend(_extension_request_violations(payload, api))
     return violations
+
+
+def _extension_request_violations(
+    payload: dict[str, Any], api: dict[str, Any]
+) -> list[tuple[str, str]]:
+    """Semantic checks for the M0-09 handshake request (shape is checked above).
+
+    The request is accepted only for an advertised extension at the supported
+    version; a version mismatch or an unknown id is refused, never adopted by
+    inference.  The 1.1.0 value is the historical B06 mistake (the application
+    contract version) and exists here as a permanent negative.
+    """
+    extension = payload.get("research_extension")
+    if not isinstance(extension, dict):
+        return []
+    advertised = api.get("mcp_extensions") or {}
+    extension_id = extension.get("id")
+    if extension_id not in advertised:
+        return [("unknown_extension", "research_extension.id")]
+    expected = advertised[extension_id]["version"]
+    requested = extension.get("version")
+    if requested is not None and requested != expected:
+        return [("extension_version_mismatch", "research_extension.version")]
+    return []
 
 
 def _launch_violations(payload: dict[str, Any]) -> list[tuple[str, str]]:

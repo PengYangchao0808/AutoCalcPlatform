@@ -32,7 +32,9 @@ research launch:
   free-form job payload);
 - `project_id` resolved server-side (a payload claim is ignored/rejected);
 - a `budget` object with an explicit unit and `timeout_s`;
-- the negotiated `acp.research.v1` extension id/version in initialize;
+- the `acp.research.v1` extension handshake through `tools/call acp_capabilities`
+  (`extensions[]` with `implemented`/`negotiated`/`refusal`) — M0-09 moved this out of
+  `initialize`, which now only points at the carrier;
 - a stable place for the created `task_ref` (`job_id`, `attempt`,
   `release_id`) in the submit result.
 

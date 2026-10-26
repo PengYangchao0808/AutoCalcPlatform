@@ -62,9 +62,9 @@ MCP client dependency: @modelcontextprotocol/client 2.2.0
 
 - 显式请求 `2025-06-18` 的诊断探针。
 - DSH 官方客户端按默认行为发起协商，记录实际请求和最终协议版本。
-- 没有共同支持版本时明确失败，不能跳过 initialize 或篡改版本字符串。
+- 客户端自身不支持服务端版本时由**客户端**明确失败，服务端不跳过 initialize、不改写版本字符串。
 
-MCP 生命周期规范要求双方协商支持的协议；当前“其他版本一律返回错误”与新版客户端的组合需要实际验证。若修改服务器协商行为，更新 ADR-006、协议矩阵、兼容测试和版本支持声明，不只修改文档常量。[MCP 版本协商](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle)
+**已决（M0-08，2026-10-26，见 `adr/ADR-006-mcp-negotiation.md`）**：MCP 生命周期规范要求双方协商支持的协议，服务端现在按规范回答自己支持的版本（`2025-06-18`）并由客户端判断兼容性；旧“其他版本一律返回错误”的行为已删除，只有畸形 `protocolVersion`/`protocolVersions` 才是 `-32602`。真实 `@modelcontextprotocol/client` 2.2.0 默认 `versionNegotiation:auto` 的握手、`server/discover` 探测（普通 `-32601`）与“客户端自行拒绝”反例见 `reports/acp2_remediation_20261026/m0-08/`。协议变更仍须同步 ADR-006、协议矩阵、兼容测试和版本支持声明，不只改文档常量。[MCP 版本协商](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle)
 
 ## 3. 隔离环境与版本准备
 
@@ -530,7 +530,7 @@ p1-run01/
 | 现象 | 优先检查 |
 |---|---|
 | DSH 能聊天但没有 ACP 工具 | overlay 是否 `insert`、MCP 插件加载日志、进程 command/args、初始化版本；Web 可运行不等于 MCP 接入成功 |
-| `unsupported_protocol_version` | 对比客户端请求/服务端支持版本；按 §2.2 修协商并复验，不修改日志伪装成功 |
+| 握手版本不一致（旧症状 `unsupported_protocol_version`） | 服务端应回自己的版本并由客户端判断（ADR-006 / M0-08）；出现 `-32602 unsupported_protocol_version` 说明跑的是旧适配器或自建 stub，按 §2.2 更新后复验，不修改日志伪装成功 |
 | stdout JSON 解析失败 | Python/banner/debug print 是否污染 stdout；日志应写 stderr |
 | 本机探针可用，DSH 启动失败 | Node engines、DSH plugin/peer 版本、cwd、环境清理、探测进程退出行为 |
 | Web 模型可用，headless 认证失败 | profile 配置差异、headless 默认凭据来源、空环境变量覆盖 `.env` |
@@ -560,7 +560,7 @@ p1-run01/
 
 **No-side-effect constraints.** `initialize`, `tools/list` and `ping` must create no file/task/attempt/reservation and must not start a scheduler or worker; stdout is the JSON-RPC channel only; a tool call derives all state from the Controller (no in-connection authority — GAP-B03-03 records today's submit-side idempotency dict). Credentials are launcher-injected and are refused inside the descriptor.
 
-**P2 extension.** Research tools are a versioned MCP extension (`acp.research.v1`, namespaced `acp_research_*_v1` names) negotiated in `initialize`; un-negotiated clients receive `unsupported_capability` and see only the eight P1 tools. R3-02 rows and owners are in `runtime/p2-research-operations.v1.json` (B16 approval, B18 Proposal/ResearchRecord + form handoff). No restricted HTTP client is added.
+**P2 extension.** Research tools are a versioned MCP extension (`acp.research.v1`, namespaced `acp_research_*_v1` names). **M0-09/ADR-006 §D7 update:** negotiation moved out of `initialize` into `tools/call acp_capabilities` (`research_extension{id,version}`), because the unmodified DSH client sends `capabilities: {}` and drops a top-level `initialize` extensions block, so an initialize-based request would be unreadable. Un-negotiated clients see only the eight P1 tools and receive `unsupported_capability`; the extension currently reports `implemented=false` because the ten P2 tools are not registered. R3-02 rows and owners are in `runtime/p2-research-operations.v1.json` (B16 approval, B18 Proposal/ResearchRecord + form handoff). No restricted HTTP client is added.
 
 **Entry equivalence and dependencies.** `health` returns `candidate_revision`, `contract_version` and `contract_digest` (delivered contract set) so the runbook can prove CLI/HTTP/MCP hit the same application; a mismatch fails the check. `runtime/entry-call-table.v1.md` records the audited entry map (verdict PARTIAL) and `runtime/dependencies.json` records C's merged rows plus A's `NOT_VERIFIED / blocked_fixture` edge.
 

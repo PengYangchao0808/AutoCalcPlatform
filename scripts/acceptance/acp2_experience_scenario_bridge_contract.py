@@ -293,7 +293,12 @@ def scenario_bridge_contract(context: Any) -> int:
         context,
         "bridge.b03_negotiation_rule",
         b03.get("schema") == "acp2.runtime.p2-research-operations.v1"
-        and negotiation.get("initialize_param") == "capabilities.extensions"
+        # M0-09/ADR-006 D7: the carrier is tools/call acp_capabilities, not an
+        # initialize parameter (the frozen DSH client sends capabilities:{}).
+        and negotiation.get("request_carrier") == "tools/call"
+        and negotiation.get("request_tool") == "acp_capabilities"
+        and negotiation.get("request_field") == "research_extension"
+        and negotiation.get("initialize_claim") == "none"
         and negotiation.get("extension_id") == EXTENSION_ID
         and negotiation.get("extension_version") == EXTENSION_VERSION
         and refusal.get("code") == "unsupported_capability"

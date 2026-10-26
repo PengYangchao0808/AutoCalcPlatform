@@ -22,16 +22,23 @@ The P1 allowlist stays exactly eight tools and never widens:
 `acp_cancel`, `acp_prepare_artifact`, `acp_read_artifact`, `acp_analyze`.
 P2 adds ten tool names; the combined allowlist is 18 names.
 
-Negotiation rule (B03 `client_path.negotiation`):
+Negotiation rule (B03 `client_path.negotiation`, carrier moved by M0-09/ADR-006 D7):
 
-1. The client advertises `capabilities.extensions` in the MCP `initialize`
-   params with `{"id": "acp.research.v1", "version": "1.0.0"}`.
+1. The client calls the P1 discovery tool `acp_capabilities` with
+   `research_extension: {"id": "acp.research.v1", "version": "1.0.0"}`. The
+   carrier is **`tools/call`, never `initialize`**: the frozen DSH client sends
+   `capabilities: {}` and discards a top-level `initialize` extensions block, so
+   an `initialize` claim would be unreadable.
 2. A client that did not negotiate the extension sees only the P1 allowlist;
    calling a P2 tool is refused with class `unsupported`, code
-   `unsupported_capability`, `params.rule = extension_not_negotiated`.
+   `unsupported_capability`, `params.rule = extension_not_negotiated` (or
+   `unknown_tool` at the JSON-RPC layer, because an unregistered research tool is
+   not in `tools/list`).
 3. A negotiated id with a different version is refused with the same code and
    `params.rule = extension_version_mismatch`; the bridge never guesses a
-   compatible shape.
+   compatible shape. An extension the server advertises but has not implemented
+   answers `implemented=false` / `negotiated=false` with
+   `params.rule = extension_not_implemented` — advertising is never delivery.
 4. There is no fallback HTTP client, no shell/SSH tool and no untyped
    passthrough. A Data interface that is not a live DSH tool is not a closure.
 

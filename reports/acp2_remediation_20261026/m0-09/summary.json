@@ -1,0 +1,185 @@
+{
+  "schema": "acp2.m0-09.research-extension-handshake.v1",
+  "task": "M0-09 real DSH research-extension handshake verification (G02/G04, R12)",
+  "generated_at": "2026-10-26T15:57:28Z",
+  "git_head": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
+  "working_tree_dirty_paths": 64,
+  "decision": {
+    "outcome": "path_selected",
+    "path": "application_level_handshake_tools_call",
+    "carrier": "tools/call:acp_capabilities",
+    "request_field": "research_extension",
+    "initialize_claim": "none",
+    "why": "The frozen DSH client (@deepseek-ai/dsh-mcp-client 0.2.1-rc.2 on @modelcontextprotocol/client 2.2.0) hard-codes capabilities:{} and discards a top-level initialize extensions block, so no initialize-based negotiation is observable by the client. The handshake therefore rides the P1 discovery tool.",
+    "m0_13": {
+      "status": "NOT_APPLICABLE",
+      "reason": "external_change_not_required",
+      "detail": "No upstream DSH client capability option or official adapter change is required: acp_capabilities is already in the eight-tool P1 allowlist and is callable by the unmodified client. No fork, patch or BOM entry is introduced."
+    }
+  },
+  "extension": {
+    "authority": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json::client_path.negotiation",
+    "id": "acp.research.v1",
+    "version": "1.0.0",
+    "promised_tools": 10,
+    "implemented": false,
+    "negotiated": false,
+    "refusal": {
+      "class": "unsupported",
+      "code": "unsupported_capability",
+      "params": {
+        "rule": "extension_not_implemented"
+      }
+    },
+    "access_refusal": {
+      "class": "authorization",
+      "code": "access_denied",
+      "params": {
+        "rule": "project_scope_mismatch"
+      }
+    },
+    "version_authority_note": "application-api.v1.json::contract_version stays 1.1.0 (application contract); mcp_extensions[\"acp.research.v1\"].version is a projection of the extension authority and is now 1.0.0 (was the B06 drift 1.1.0)."
+  },
+  "observed_dsh_behaviour": {
+    "tools_list": "tools/list is the whole model-visible surface: every advertised tool is registered and callable; there is no per-tool negotiation flag and no post-handshake gating.",
+    "absent_tool": "A tool that is not in tools/list is not registered and cannot be called at all (JSON-RPC unknown_tool at the adapter), so an unimplemented research tool is uncallable by construction rather than by a negotiated=false check.",
+    "is_error_results": "The official plugin converts an MCP isError result into a thrown tool failure (packages/mcp/mcp-client/src/tools.ts::createExecutor) whose message is the text content; structuredContent is not delivered to the model. The ACP adapter puts the whole machine envelope in that text, so the typed refusal is recoverable and the dsh-bundle adapter does exactly that (tested with a fake ctx.tools runtime).",
+    "tool_names": "DSH registers MCP tools as mcp__<serverName>__<rawName> (publicToolName) and ctx.tools.execute takes that model-visible name; the adapter adds the mcp__acp__ prefix by default."
+  },
+  "live_client_run": {
+    "scenario": "default",
+    "status": "ok",
+    "exit_code": 0,
+    "requested_protocol": "2025-11-25",
+    "negotiated_protocol": "2025-06-18",
+    "package_versions": {
+      "@deepseek-ai/dsh-mcp-client": {
+        "name": "@deepseek-ai/dsh-mcp-client",
+        "version": "0.2.1-rc.2"
+      },
+      "@modelcontextprotocol/client": {
+        "name": "@modelcontextprotocol/client",
+        "version": "2.2.0"
+      }
+    },
+    "tools_list": [
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_submit",
+      "acp_status",
+      "acp_cancel",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_analyze"
+    ],
+    "capabilities_call": {
+      "isError": false,
+      "status": "ok",
+      "operation": "acp_capabilities",
+      "tools": [
+        "acp_analyze",
+        "acp_cancel",
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_status",
+        "acp_submit"
+      ],
+      "extensions": [
+        {
+          "id": "acp.research.v1",
+          "version": "1.0.0",
+          "supported": true,
+          "supported_versions": [
+            "1.0.0"
+          ],
+          "requested": null,
+          "negotiated_by": "tools/call:acp_capabilities",
+          "implemented": false,
+          "negotiated": false,
+          "refusal": null
+        }
+      ]
+    },
+    "research_handshake": {
+      "tool": "acp_capabilities",
+      "isError": true,
+      "status": "error",
+      "extensions": [
+        {
+          "id": "acp.research.v1",
+          "version": "1.0.0",
+          "supported": true,
+          "supported_versions": [
+            "1.0.0"
+          ],
+          "requested": {
+            "id": "acp.research.v1",
+            "version": "1.0.0"
+          },
+          "negotiated_by": "tools/call:acp_capabilities",
+          "implemented": false,
+          "negotiated": false,
+          "refusal": {
+            "class": "unsupported",
+            "code": "unsupported_capability",
+            "params": {
+              "rule": "extension_not_implemented",
+              "extension": "acp.research.v1",
+              "supported_version": "1.0.0",
+              "requested_id": "acp.research.v1",
+              "requested_version": "1.0.0"
+            }
+          }
+        }
+      ],
+      "error_code": "unsupported_capability",
+      "error_params": {
+        "rule": "extension_not_implemented",
+        "extension": "acp.research.v1",
+        "supported_version": "1.0.0",
+        "requested_id": "acp.research.v1",
+        "requested_version": "1.0.0"
+      },
+      "content_text_is_json": true
+    },
+    "wire_methods": [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "tools/call",
+      "tools/call"
+    ],
+    "artifacts": {
+      "mcp-launch.json": "a2b7762f73d9578dccdeea75d12dcda38ee4f44ccf6d4f263f7a372284a9807b",
+      "dsh-client.json": "62762a8add55f6ef58b3b2ad2c539fcf591a267a0712e489fcb259ed9d8cfb9c",
+      "wire.jsonl": "fa414636a26195dabfd5f0b595a859866c1e243c6e94d21a0da34a46f03e2a36"
+    }
+  },
+  "zero_side_effects": {
+    "submit_posts": 0,
+    "other_controller_requests": [],
+    "health_reads": 2,
+    "capabilities_reads": 2,
+    "run_root_entries": [],
+    "note": "The loopback Controller stub counts every request; the handshake creates no task, prepare operation or run-root file."
+  },
+  "verification": {
+    "unit_and_fake_ctx": [
+      "tests/test_acp2_mcp_research_handshake.py",
+      "rph/test/mcp-handshake.test.ts"
+    ],
+    "real_server_real_sdk": [
+      "tests/test_acp2_mcp_sdk_contract.py -m contract (test_real_sdk_capabilities_call_returns_the_research_handshake)"
+    ],
+    "contracts": [
+      "python scripts/acceptance/validate_acp2_contracts.py",
+      "tests/test_acp2_runtime_contracts.py"
+    ],
+    "not_verified": [
+      "full DSH Agent end-to-end (model, skills, preset, ctx.tools registration, approval UX) - M3-01/M3-03",
+      "P2 research tools (10) are NOT delivered and stay implemented=false/negotiated=false"
+    ]
+  }
+}

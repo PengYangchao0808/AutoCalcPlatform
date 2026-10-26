@@ -725,6 +725,18 @@
               "null"
             ],
             "description": "Namespaced extension metadata (U4)."
+          },
+          "research_extension": {
+            "type": "object",
+            "description": "Application-level handshake request {id, version}. The answer is extensions[] (id/version/supported/supported_versions/requested/negotiated_by/implemented/negotiated/refusal); a version that is not the supported one, or an extension whose promise set is not implemented, is refused in-band as unsupported_capability. This is the M0-09 carrier: initialize makes no extension claim."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "Advisory Workspace hint checked against the server binding; a mismatch is access_denied(rule=project_scope_mismatch). A hint never selects or widens the scope."
+          },
+          "client": {
+            "type": "object",
+            "description": "Client identifier recorded for audit only; never used for authorization."
           }
         }
       },
@@ -794,6 +806,17 @@
               "null"
             ],
             "description": "MCP entry only: 2025-06-18."
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Extension handshake projection (M0-09): one entry per advertised extension with id/version/supported/supported_versions/requested/negotiated_by/implemented/negotiated/refusal. negotiated=true requires the implementation set to cover the promise set AND the requested version to match."
+          },
+          "capability_request": {
+            "type": "object",
+            "description": "Echo of the audit-only inputs (client/project_id/research_extension)."
           }
         }
       },
@@ -2643,19 +2666,24 @@
       "submit.response.task_ref{job_id,attempt,release_id}",
       "submit.response.result",
       "submit.response.approval_ref",
-      "initialize.extensions.acp.research.v1"
+      "capabilities.response.extensions[acp.research.v1]"
     ],
     "project_claim": "server-resolved; an unknown/mismatched payload project is access_denied(rule=project_scope_mismatch); a client tenant/role/approver claim is never trusted",
     "approval_semantics": "B16 owns approval persistence; approval_ref may be null until then"
   },
   "mcp_extensions": {
     "acp.research.v1": {
-      "negotiated_in": "initialize",
-      "version": "1.1.0",
+      "negotiated_in": "tools/call",
+      "negotiation_tool": "acp_capabilities",
+      "negotiation_request_field": "research_extension",
+      "initialize_claim": "none",
+      "version": "1.0.0",
       "tool_name_prefix": "acp_research_",
       "p1_tool_allowlist_unchanged": true,
+      "implemented": false,
+      "negotiated_default": false,
       "descriptor_schema": "runtime/mcp-launch.schema.json",
-      "note": "The eight P1 tool names and input schemas are unchanged; the P2 extension adds namespaced tools and advertises its id/version in initialize."
+      "note": "The eight P1 tool names and input schemas are unchanged. M0-09 (ADR-006 D7) removed the initialize claim: the frozen DSH client hard-codes capabilities:{} and drops a top-level extensions block, so the extension is negotiated by calling acp_capabilities (tools/call) with research_extension{id,version}. Advertising is not implementing: the ten P2 tools are not in the allowlist, so implemented/negotiated stay false and a research request is refused with unsupported_capability."
     }
   },
   "approval_events": {
