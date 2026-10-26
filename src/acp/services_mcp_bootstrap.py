@@ -46,7 +46,6 @@ from acp_services.entrypoints.application_params import (
     normalize_preflight,
     normalize_prepare,
     normalize_read,
-    normalize_submit,
 )
 from acp_services.entrypoints.controller_client import (
     DEFAULT_TIMEOUT_SECONDS,
@@ -85,6 +84,10 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "idempotency_in_progress": mo.ErrorCode.REVISION_CONFLICT,
     "admission_denied": mo.ErrorCode.ACCESS_DENIED,
     "access_denied": mo.ErrorCode.ACCESS_DENIED,
+    # B15 identity denials: a revoked/expired/unknown credential answers one
+    # uniform 401 (``unauthenticated``) and must stay a typed access denial at
+    # the MCP surface (M0-05 per-call revalidation).
+    "unauthenticated": mo.ErrorCode.ACCESS_DENIED,
     "timeout": mo.ErrorCode.TIMEOUT,
     "interrupted": mo.ErrorCode.INTERRUPTED,
     "cancelled": mo.ErrorCode.CANCELLED,
@@ -181,34 +184,39 @@ class _ControllerSubmit:
         self._client = client
 
     def submit(self, spec: Mapping[str, Any], *, idempotency_key: str, workspace_id: str) -> Any:
+        """Forward the caller's request body and raw idempotency key (M0-05).
+
+        The adapter no longer rebuilds a trimmed payload (field equivalence is
+        M0-06) and never adds an identity: the Controller derives the principal
+        and the project scope from its own credential, so ``principal_id`` and
+        ``project_id`` are server facts, never request fields.  ``idempotency_key``
+        is forwarded verbatim (``""`` = no key, an explicitly non-idempotent
+        request); the Controller's persistent ledger owns claim/replay/conflict.
+        """
         del workspace_id
+        payload = dict(spec)
+        key = str(idempotency_key or "").strip()
+        if key:
+            payload["idempotency_key"] = key
+        else:
+            payload.pop("idempotency_key", None)
         try:
-            normalized = normalize_submit(spec)
-            normalized.setdefault("idempotency_key", idempotency_key)
-            record = dict(self._client.submit(normalized))
+            record = dict(self._client.submit(payload))
         except ApplicationParamError as exc:
             raise _param_error("submit", exc) from None
         except ControllerClientError as exc:
             raise _tool_error("submit", exc) from None
         except Exception as exc:  # pragma: no cover - defensive transport failure
             raise _terminal_failure("submit", exc) from None
-        payload = _job_reference(record)
-        for key in (
-            "state",
-            "status",
-            "plan_digest",
-            "proposal_digest",
-            "idempotency_key",
-            "idempotent_replay",
-            "admission",
-            "identity",
-            "submission_id",
-            "result",
-            "approval_ref",
-        ):
-            if record.get(key) is not None:
-                payload[key] = record[key]
-        return payload
+        payload_out = _job_reference(record)
+        # Full response passthrough: a replay must deliver the same complete
+        # TaskRef/attempt/admission envelope as the first call.
+        for field_name, value in record.items():
+            if value is not None:
+                payload_out[field_name] = value
+        payload_out["idempotency_key"] = record.get("idempotency_key", key or None)
+        payload_out["idempotent_replay"] = bool(record.get("idempotent_replay", False))
+        return payload_out
 
 
 class _ControllerStatus:
@@ -272,7 +280,9 @@ class _ControllerArtifacts:
         del workspace_id
         try:
             normalized = normalize_prepare(request)
-            normalized.setdefault("idempotency_key", idempotency_key)
+            key = str(idempotency_key or "").strip()
+            if key:
+                normalized.setdefault("idempotency_key", key)
             record = dict(self._client.prepare(normalized))
         except ApplicationParamError as exc:
             raise _param_error("prepare", exc) from None
@@ -380,29 +390,42 @@ def build_mcp_runtime(
 
 
 def _stdio_identity_mapper(client: ControllerClient, api_key: str | None) -> mcp.IdentityMapper:
-    """Bind the stdio mapper to the Controller-resolved principal (B15)."""
+    """Bind the stdio mapper to the Controller-resolved principal (B15/M0-05).
+
+    Without a key this is the trusted ``local-single`` operator entry.  With a
+    key the binding is the Controller's ``/api/identity`` answer — never a
+    client claim — and it is **revalidated before every tool call**, so a
+    revoked key refuses reads, writes and control on an already-open stdio
+    session (G25).
+    """
     if not api_key:
         return mcp.IdentityMapper(configured_tier=mcp.STDIO_PERMISSION_SCOPE)
-    from acp_services.contracts.access import Principal
 
-    identity = client.identity()
-    principal_data = identity.get("principal")
-    if not isinstance(principal_data, Mapping):
-        raise ControllerClientError("identity response carries no principal")
-    principal = Principal.from_dict(principal_data)
-    bound_actions = tuple(str(action) for action in identity.get("actions") or ())
+    def _resolve_binding() -> mcp.StdioCredentialBinding:
+        try:
+            return mcp.StdioCredentialBinding.from_identity_response(client.identity())
+        except ControllerClientError as exc:
+            raise _tool_error("identity", exc) from None
+        except (TypeError, ValueError) as exc:
+            raise mcp.McpToolError(
+                mo.ErrorCode.ACCESS_DENIED,
+                "the Controller no longer resolves this credential",
+                params={"command": "identity", "exception": type(exc).__name__},
+                retryable=False,
+            ) from None
+
+    binding = _resolve_binding()
     logger.info(
         "MCP stdio identity bound to principal=%s project=%s actions=%s",
-        principal.principal_id,
-        identity.get("verified_project"),
-        list(bound_actions),
+        binding.principal.principal_id,
+        binding.verified_project,
+        list(binding.actions),
     )
     return mcp.IdentityMapper(
         configured_tier=mcp.STDIO_PERMISSION_SCOPE,
         permission_scope=mcp.STDIO_MULTIUSER_SCOPE,
-        bound_principal=principal,
-        bound_project=identity.get("verified_project"),
-        bound_actions=bound_actions,
+        credential=binding,
+        revalidate=_resolve_binding,
     )
 
 

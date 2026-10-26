@@ -139,8 +139,10 @@ immediately** and never block on the science:
 - A status observation of a terminal state releases the long-task budget slot
   (`mcp.py:1049-1052`; terminal spellings `mcp.py:250-252`).
 - The model must never poll by re-submitting. Retry uses the same
-  `idempotency_key`; the server collapses it onto one operation
-  (`mcp.py:983-1005`, `IdempotencyRegistry` `mcp.py:700-747`).
+  `idempotency_key`; the Controller's persistent idempotency ledger
+  (`JobStore.claim_idempotency`, migrations 022/024) collapses it onto one
+  attributed operation — the MCP entry forwards the raw key verbatim and holds
+  no operation-result state of its own (M0-05).
 - The bridge must surface `reference` + `query_tool` to the model, not a
   synthetic "in progress" boolean.
 

@@ -131,6 +131,7 @@ class CommandIdentity:
         *,
         project_id: str | None = None,
         entry_class: str = EntryClass.HTTP,
+        permission_scope: str | None = None,
     ) -> CommandIdentity:
         """Project an authenticated HTTP request identity (B15).
 
@@ -143,6 +144,10 @@ class CommandIdentity:
                 verified project.
             entry_class: Entry label; HTTP for a REST call, MCP when a stdio
                 proxy forwards an already-resolved identity.
+            permission_scope: Overrides the transport/permission attribute
+                recorded on the identity (M0-05: an MCP stdio proxy records
+                ``stdio`` while the credential's own scope stays on
+                ``key_scope``).  It never changes the principal or the scope id.
 
         Raises:
             TypeError: *verified* is not a resolved request identity.
@@ -163,7 +168,8 @@ class CommandIdentity:
             actions=tuple(str(action) for action in getattr(verified, "actions", ()) or ()),
             subject_kind=subject_kind,
             entry_class=entry_class,
-            permission_scope=_clean(getattr(verified, "key_scope", None))
+            permission_scope=_clean(permission_scope)
+            or _clean(getattr(verified, "key_scope", None))
             or _clean(getattr(verified, "mode", None))
             or PermissionScope.API_KEY,
             tenant_id=_clean(principal.tenant_id),

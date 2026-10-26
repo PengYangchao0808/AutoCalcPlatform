@@ -336,6 +336,10 @@ class UnsupportedError(ControllerClientError):
 #: may override the code, never the class family.
 _HTTP_ERRORS: dict[int, tuple[str, type[ControllerClientError]]] = {
     400: ("input_invalid", InvalidParameterError),
+    # 401 is the uniform "credential revoked/expired/unknown" answer (B15); it is
+    # an authorization denial, never an opaque internal failure (M0-05 keeps a
+    # revoked stdio credential a typed access_denied at the MCP surface).
+    401: ("access_denied", AuthorizationError),
     403: ("access_denied", AuthorizationError),
     404: ("resource_not_ready", NotPreparedError),
     409: ("revision_conflict", ConflictError),

@@ -17,8 +17,10 @@ Proves the acceptance clauses of ``acp_services.entrypoints.mcp``:
    ``access_denied``.
 4. **Server-enforced budget** — an over-cap submission is refused before the
    backend is reached (``access_denied`` with structured ``exceeded``).
-5. **Server-enforced idempotency** — the same key yields exactly one operation
-   (explicit and derived keys), and permission scope participates in the key.
+5. **One idempotency authority (M0-05)** — the client's raw key is forwarded
+   unchanged to the Controller ledger (no adapter cache, no ``op_`` scope fold);
+   a missing key is non-idempotent except for the frozen ``auto_`` lookup on the
+   explicit local-operator binding.
 6. **Long-task references** — ``acp_submit`` returns immediately; ``acp_status``
    queries it; a *dropped connection* (a fresh server sharing the ports) still
    queries the same operation.
@@ -39,6 +41,7 @@ from typing import Any
 
 import pytest
 
+from acp_services.contracts.access import Principal
 from acp_services.entrypoints import machine_output as mo
 from acp_services.entrypoints import mcp
 
@@ -93,10 +96,18 @@ class _JobStore:
 
 
 class _FakeSubmit:
+    """Controller-faithful submit fake: the *server* owns idempotency (M0-05).
+
+    The MCP adapter forwards the raw key every time and holds no result cache;
+    this fake mirrors that by deduplicating on ``(workspace_id, key)`` the way
+    ``JobStore.claim_idempotency`` does.
+    """
+
     def __init__(self, store: _JobStore) -> None:
         self.store = store
         self.calls: list[tuple[dict[str, Any], str, str]] = []
         self.fail_next: mo.ErrorCode | None = None
+        self._claims: dict[tuple[str, str], str] = {}
 
     def submit(
         self, spec: dict[str, Any], *, idempotency_key: str, workspace_id: str
@@ -105,9 +116,15 @@ class _FakeSubmit:
         if self.fail_next is not None:
             code, self.fail_next = self.fail_next, None
             raise mcp.McpToolError(code, "backend refused")
+        claim = (workspace_id, idempotency_key)
+        if idempotency_key and claim in self._claims:
+            job_id = self._claims[claim]
+            return {"job_id": job_id, "idempotent_replay": True, "task_ref": {"task_id": job_id}}
         job_id = f"job-{len(self.calls)}"
+        if idempotency_key:
+            self._claims[claim] = job_id
         self.store.put(job_id, {"state": "running", "reference": job_id})
-        return {"job_id": job_id}
+        return {"job_id": job_id, "idempotent_replay": False}
 
 
 class _FakeStatus:
@@ -132,15 +149,25 @@ class _FakeCancel:
 
 
 class _FakeArtifacts:
+    """Prepare fake that deduplicates on the *server* (raw key passthrough)."""
+
     def __init__(self) -> None:
         self.prepare_calls: list[tuple[dict[str, Any], str, str]] = []
         self.read_calls: list[dict[str, Any]] = []
+        self._claims: dict[tuple[str, str], str] = {}
 
     def prepare(
         self, request: dict[str, Any], *, idempotency_key: str, workspace_id: str
     ) -> dict[str, Any]:
         self.prepare_calls.append((dict(request), idempotency_key, workspace_id))
-        return {"operation_id": f"op-{len(self.prepare_calls)}"}
+        claim = (workspace_id, idempotency_key)
+        if idempotency_key and claim in self._claims:
+            operation_id = self._claims[claim]
+            return {"operation_id": operation_id, "idempotent_replay": True}
+        operation_id = f"op-{len(self.prepare_calls)}"
+        if idempotency_key:
+            self._claims[claim] = operation_id
+        return {"operation_id": operation_id, "idempotent_replay": False}
 
     def read(self, request: dict[str, Any], *, workspace_id: str) -> dict[str, Any]:
         self.read_calls.append(dict(request))
@@ -183,14 +210,12 @@ def _server(
     *,
     fakes: _Fakes | None = None,
     budget: mcp.WorkspaceBudget | None = None,
-    idempotency: mcp.IdempotencyRegistry | None = None,
     identity: mcp.IdentityMapper | None = None,
 ) -> mcp.McpServer:
     fakes = fakes or _Fakes()
     return mcp.McpServer(
         backends=fakes.backends(),
         budget=budget,
-        idempotency=idempotency,
         identity=identity,
     )
 
@@ -481,11 +506,12 @@ def test_status_terminal_releases_in_flight_budget() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 5. Server-enforced idempotency
+# 5. One idempotency authority: raw key passthrough, server-side dedup
 # --------------------------------------------------------------------------- #
 
 
-def test_idempotent_submission_same_key_one_operation() -> None:
+def test_same_key_is_forwarded_unchanged_and_the_server_replays() -> None:
+    """M0-05: no adapter cache. Both calls reach the port; one operation exists."""
     fakes = _Fakes()
     server = _server(fakes=fakes)
     args = {"workflow": "singlepoint", "idempotency_key": "retry-1"}
@@ -493,12 +519,44 @@ def test_idempotent_submission_same_key_one_operation() -> None:
     first = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
     second = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
 
+    # The adapter forwarded the *raw* key both times (no ``op_`` fold, no cache).
+    assert [call[1] for call in fakes.submit.calls] == ["retry-1", "retry-1"]
     assert first["reference"] == second["reference"]
+    assert first["idempotency_key_origin"] == mcp.IDEMPOTENCY_KEY_ORIGIN_CLIENT
     assert second["idempotent_replay"] is True
-    assert len(fakes.submit.calls) == 1
+    assert second["task_ref"]["task_id"] == first["task_ref"]["task_id"]
 
 
-def test_idempotent_submission_derived_key_for_identical_args() -> None:
+def test_missing_key_is_non_idempotent_for_a_bound_user() -> None:
+    """Without a key a bound (non-operator) caller creates a new task per call."""
+    bound = Principal(
+        principal_id="principal_bound", kind="user", tenant_id="tenant-bound", roles=("member",)
+    )
+    identity = mcp.IdentityMapper(
+        permission_scope=mcp.STDIO_MULTIUSER_SCOPE,
+        credential=mcp.StdioCredentialBinding(
+            principal=bound,
+            verified_project="project_alpha",
+            key_id="key-1",
+            key_scope="workspace",
+            actions=("read", "write", "control"),
+        ),
+    )
+    fakes = _Fakes()
+    server = _server(fakes=fakes, identity=identity)
+    args = {"workflow": "optimize", "input": {"source": "CCO"}}
+
+    first = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
+    second = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
+
+    assert fakes.submit.calls[0][1] == "" and fakes.submit.calls[1][1] == ""
+    assert first["idempotency_key_origin"] == mcp.IDEMPOTENCY_KEY_ORIGIN_NONE
+    assert first["reference"] != second["reference"]
+    assert len(fakes.submit.calls) == 2
+
+
+def test_operator_without_a_key_uses_the_frozen_legacy_derivation() -> None:
+    """The local operator still resolves the pre-M0-05 ``auto_`` lookup key."""
     fakes = _Fakes()
     server = _server(fakes=fakes)
     args = {"workflow": "optimize", "input": {"source": "CCO"}}
@@ -506,15 +564,26 @@ def test_idempotent_submission_derived_key_for_identical_args() -> None:
     first = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
     second = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
 
+    expected = mcp.derive_idempotency_key(args)
+    assert expected.startswith(mcp.LEGACY_DERIVED_KEY_PREFIX)
+    assert fakes.submit.calls[0][1] == expected
+    assert first["idempotency_key_origin"] == mcp.IDEMPOTENCY_KEY_ORIGIN_LEGACY
+    assert first["idempotency"]["legacy_rule_version"] == mcp.LEGACY_DERIVED_KEY_VERSION
     assert first["reference"] == second["reference"]
-    assert len(fakes.submit.calls) == 1
 
 
-def test_permission_scope_participates_in_idempotency_key() -> None:
-    registry = mcp.IdempotencyRegistry()
-    scoped_a = registry.scoped_key(permission_scope="local-single", raw_key="k")
-    scoped_b = registry.scoped_key(permission_scope="lab", raw_key="k")
-    assert scoped_a != scoped_b
+def test_permission_scope_never_folds_into_the_ledger_key() -> None:
+    """The raw key is identical whatever the transport permission scope is."""
+    keys: list[str] = []
+    for scope in ("local-single", "stdio-api-key", "lab"):
+        fakes = _Fakes()
+        server = _server(
+            fakes=fakes,
+            identity=mcp.IdentityMapper(permission_scope=scope),
+        )
+        _call_tool(server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k"})
+        keys.append(fakes.submit.calls[0][1])
+    assert keys == ["k", "k", "k"]
 
 
 def test_derive_idempotency_key_ignores_volatile_key() -> None:
@@ -522,17 +591,19 @@ def test_derive_idempotency_key_ignores_volatile_key() -> None:
     assert mcp.derive_idempotency_key(base) == mcp.derive_idempotency_key(
         {**base, "idempotency_key": "ignored"}
     )
+    assert not mcp.derive_idempotency_key(base).startswith("op_")
 
 
-def test_prepare_artifact_is_idempotent() -> None:
+def test_prepare_artifact_refuses_to_cache_and_uses_the_raw_key() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes)
     args = {"job_id": "j1", "relative_path": "RESULT/x.json", "idempotency_key": "prep-1"}
     first = _call_tool(server, mcp.McpTool.PREPARE_ARTIFACT, args)["structuredContent"]["data"]
     second = _call_tool(server, mcp.McpTool.PREPARE_ARTIFACT, args)["structuredContent"]["data"]
+    assert [call[1] for call in fakes.artifacts.prepare_calls] == ["prep-1", "prep-1"]
     assert first["reference"] == second["reference"]
     assert second["idempotent_replay"] is True
-    assert len(fakes.artifacts.prepare_calls) == 1
+    assert second["idempotency_key"] == "prep-1"
 
 
 # --------------------------------------------------------------------------- #
@@ -566,24 +637,29 @@ def test_unknown_reference_reports_not_ready() -> None:
 def test_disconnect_does_not_affect_operation() -> None:
     """A dropped connection is a closed server; a fresh one still queries the job."""
     fakes = _Fakes()
-    idempotency = mcp.IdempotencyRegistry()
     budget = mcp.WorkspaceBudget()
-    connection_a = _server(fakes=fakes, idempotency=idempotency, budget=budget)
+    connection_a = _server(fakes=fakes, budget=budget)
 
-    submitted = _call_tool(connection_a, mcp.McpTool.SUBMIT, {"workflow": "singlepoint"})
+    submitted = _call_tool(
+        connection_a, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "drop-1"}
+    )
     reference = submitted["structuredContent"]["data"]["reference"]["id"]
     del connection_a  # simulate the MCP connection dropping
 
     fakes.store.put(reference, {"state": "running", "reference": reference})
-    connection_b = _server(fakes=fakes, idempotency=idempotency, budget=budget)
+    connection_b = _server(fakes=fakes, budget=budget)
     status = _call_tool(connection_b, mcp.McpTool.STATUS, {"reference": reference})
     assert status["isError"] is False
     assert status["structuredContent"]["data"]["state"] == "running"
 
-    # The same key on the new connection still collapses onto one operation.
-    replay = _call_tool(connection_b, mcp.McpTool.SUBMIT, {"workflow": "singlepoint"})
+    # The same key on the new connection still collapses onto one operation —
+    # decided by the server-side ledger, not by any adapter cache.
+    replay = _call_tool(
+        connection_b, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "drop-1"}
+    )
     assert replay["structuredContent"]["data"]["idempotent_replay"] is True
-    assert len(fakes.submit.calls) == 1
+    assert replay["structuredContent"]["data"]["reference"]["id"] == reference
+    assert [call[1] for call in fakes.submit.calls] == ["drop-1", "drop-1"]
 
 
 def test_cancel_calls_backend() -> None:

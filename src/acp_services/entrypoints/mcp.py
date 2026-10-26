@@ -36,15 +36,24 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
   tenant/tier/principal are derived from the verified local principal
   (:func:`acp_services.contracts.access.resolve_scope`) and any client-supplied
   tenant or deployment tier is ignored (tier overrides are refused outright).
-* **Budget caps and idempotency keys are server-enforced.**  On the final
-  Controller path the server-side admission ledger is the only resource
-  authority; this adapter deliberately does not construct an in-process
-  :class:`WorkspaceBudget`, so a tool ``cores`` hint can never override the
-  server grant.  :class:`WorkspaceBudget` remains available as an explicit
-  cache/test adapter.  :class:`IdempotencyRegistry` collapses replays of one key
-  onto a single operation (reusing the Services data primitive
-  :func:`acp_services.data.operations.idempotency_key_for`); the durable claim
-  stays with the Controller.
+* **One idempotency authority (M0-05).**  There is no MCP-side result cache and
+  no second ledger: the client's ``idempotency_key`` is forwarded **unchanged**
+  to the Controller, whose persistent ``idempotency_records`` ledger
+  (:meth:`JobStore.claim_idempotency
+  <acp_services.store.store.JobStore.claim_idempotency>`) owns the claim.  The
+  permission scope no longer folds into the key and an ``op_``-shaped key is
+  never written as a ledger key (``op_`` is the *operation reference*
+  namespace).  A missing key is non-idempotent: the tool contract says so, and
+  the only exception is the frozen legacy ``auto_`` lookup below.
+* **Frozen legacy ``auto_`` lookup.**  Pre-M0-05 MCP clients that sent no key
+  were recorded under :func:`derive_idempotency_key`'s ``auto_`` namespace.  The
+  derivation is now *lookup-only*: it is recomputed only on the explicit
+  ``local-single`` operator binding (the only writer of that namespace) so an
+  old client's retry replays the original task instead of creating a second
+  one.  The Controller's ledger enforces the R09 rules: only a
+  ``migration_state == "legacy-verified"`` row replays; a
+  ``legacy-pending``/``legacy-unverified`` row is a typed conflict to
+  reconcile.  An authenticated binding never claims that namespace.
 * **Long tasks return an operation/job reference immediately** (query-based).
   The adapter holds no per-connection task state, so an MCP connection dropping
   never decides a job's fate; a later connection queries the same reference.
@@ -56,20 +65,24 @@ The transport this adapter is written for is local ``stdin``/``stdout`` in the
 :data:`STDIO_PERMISSION_SCOPE`).  The caller must run the process with the
 privileges of the account that owns the run-root: the permission scope is the
 **local process scope**, and no long-lived API key or bearer token is accepted
-or forwarded to a tool.  The permission scope participates in every idempotency
-key so one scope's operation can never shadow another's.
+or forwarded to a tool.  A multi-user launch (:data:`STDIO_MULTIUSER_SCOPE`) is
+bound to a credential the Controller resolved; the binding is **revalidated on
+every tool call** (M0-05), so a revoked key stops reads, writes and control
+without needing a reconnect.
 
 Dependency direction
 --------------------
 ``src/acp_services/**`` must never import ``acp`` (see
 ``tests/baseline/services-evidence/public_allowlist.md``).  This module imports
 only the stdlib plus the stdlib-only Services seams
-(:mod:`acp_services.contracts.access`, :mod:`acp_services.data.operations`,
+(:mod:`acp_services.contracts.access`,
 :mod:`acp_services.entrypoints.machine_output`,
-:mod:`acp_services.workspace.boundary`).  The composition root on the legacy side
-injects the concrete ports; this module never reaches into the CLI/API.
+:mod:`acp_services.workspace.boundary`,
+:mod:`acp_services.workspace.command_identity`).  The composition root on the
+legacy side injects the concrete ports; this module never reaches into the
+CLI/API.
 
-Author: ACP Services (B lane, todo 43).
+Author: ACP Services (B lane, todo 43; M0-05 idempotency/identity wiring).
 """
 
 from __future__ import annotations
@@ -90,9 +103,13 @@ from acp_services.contracts.access import (
     Principal,
     resolve_scope,
 )
-from acp_services.data.operations import idempotency_key_for
 from acp_services.entrypoints import machine_output as mo
 from acp_services.workspace.boundary import evaluate_tier_request
+from acp_services.workspace.command_identity import (
+    CommandIdentity,
+    EntryClass,
+    PermissionScope,
+)
 
 __all__ = [
     # Protocol / transport
@@ -133,16 +150,23 @@ __all__ = [
     # Identity
     "WorkspaceContext",
     "IdentityMapper",
+    "StdioCredentialBinding",
+    "STDIO_CREDENTIAL_BINDING_SCHEMA",
     # Budget
     "BudgetCaps",
     "BudgetDecision",
     "WorkspaceBudget",
-    # Idempotency
-    "IdempotencyRegistry",
+    # Idempotency (M0-05: one authority, raw key passthrough)
+    "IdempotencyResolution",
+    "IDEMPOTENCY_KEY_ORIGIN_CLIENT",
+    "IDEMPOTENCY_KEY_ORIGIN_LEGACY",
+    "IDEMPOTENCY_KEY_ORIGIN_NONE",
+    "LEGACY_DERIVED_KEY_PREFIX",
+    "LEGACY_DERIVED_KEY_VERSION",
+    "derive_idempotency_key",
     # Server
     "McpServer",
     "client_matrix",
-    "derive_idempotency_key",
 ]
 
 # ---------------------------------------------------------------------------
@@ -616,7 +640,15 @@ _SUBMIT_SCHEMA: dict[str, Any] = {
         "resources": {"type": "object", "description": "Optional resource request (e.g. cores)."},
         "idempotency_key": {
             "type": "string",
-            "description": "Client retry key; same key yields exactly one operation.",
+            "description": (
+                "Client retry key, forwarded unchanged to the Controller ledger. Same key "
+                "+ same verified identity = exactly one operation and the same complete "
+                "TaskRef. A raw key is global per action (across projects/users): use a "
+                "high-entropy, namespaced key (e.g. '<client>:<project>:<round>:<call>'). "
+                "A key reused with different content is an explicit conflict. OMITTING "
+                "the key is NOT idempotent: a retry may create a new task (the frozen "
+                "legacy 'auto_' lookup only covers pre-existing local-single rows)."
+            ),
         },
         "plan_digest": {
             "type": "string",
@@ -659,7 +691,14 @@ _ARTIFACT_SCHEMA: dict[str, Any] = {
         "resource_id": {"type": "string"},
         "relative_path": {"type": "string"},
         "attempt": {"type": "integer"},
-        "idempotency_key": {"type": "string"},
+        "idempotency_key": {
+            "type": "string",
+            "description": (
+                "Client retry key for the prepare operation, forwarded unchanged. The "
+                "server derives the versioned key from (principal, project, client key, "
+                "epoch). Omitting it is NOT idempotent: a retry may re-prepare."
+            ),
+        },
     },
     "additionalProperties": True,
 }
@@ -810,6 +849,60 @@ class McpBackends:
 
 
 @dataclass(frozen=True)
+class StdioCredentialBinding:
+    """The Controller-resolved credential behind one stdio session (M0-05).
+
+    It is the *server's* answer (``GET /api/identity``) — never a ``_meta``
+    claim from the client — and is shaped like
+    :class:`~acp_services.workspace.http_identity.VerifiedRequestIdentity` so
+    :meth:`CommandIdentity.from_verified_http
+    <acp_services.workspace.command_identity.CommandIdentity.from_verified_http>`
+    can project it without a second resolver.
+
+    Attributes:
+        principal: The verified principal of the credential.
+        verified_project: The project the credential is narrowed to.
+        key_id: Non-secret reference of the credential.
+        key_scope: The credential's permission scope (e.g. ``workspace``).
+        actions: The credential's action ceiling.
+        mode: The identity mode the Controller reported (``api-key``).
+    """
+
+    principal: Principal
+    verified_project: str | None = None
+    key_id: str | None = None
+    key_scope: str | None = None
+    actions: tuple[str, ...] = ()
+    mode: str = STDIO_MULTIUSER_SCOPE
+
+    @classmethod
+    def from_identity_response(cls, payload: Mapping[str, Any]) -> StdioCredentialBinding:
+        """Build the binding from the Controller's ``/api/identity`` answer.
+
+        Raises:
+            ValueError: the answer carries no principal.
+        """
+        principal_data = payload.get("principal")
+        if not isinstance(principal_data, Mapping):
+            raise ValueError("identity response carries no principal")
+        verified_project = payload.get("verified_project")
+        return cls(
+            principal=Principal.from_dict(dict(principal_data)),
+            verified_project=(
+                None if verified_project is None else str(verified_project).strip() or None
+            ),
+            key_id=None if payload.get("key_id") is None else str(payload["key_id"]),
+            key_scope=None if payload.get("key_scope") is None else str(payload["key_scope"]),
+            actions=tuple(str(action) for action in payload.get("actions") or ()),
+            mode=str(payload.get("mode") or STDIO_MULTIUSER_SCOPE),
+        )
+
+
+#: Schema version of :class:`StdioCredentialBinding` (diagnostic projection).
+STDIO_CREDENTIAL_BINDING_SCHEMA = 1
+
+
+@dataclass(frozen=True)
 class WorkspaceContext:
     """The server-derived identity/authority for one MCP request.
 
@@ -843,6 +936,14 @@ class IdentityMapper:
             different ``project_id`` hint is denied, never switched.
         bound_actions: The credential's action ceiling; intersected with the
             resolved actions and :data:`STDIO_PERMISSION_CEILING`.
+        credential: The full resolved credential binding (M0-05).  When set it is
+            the single source for the bound principal/project/actions and for
+            :meth:`command_identity`.
+        revalidate: Callable invoked before **every** tool call (M0-05).  It must
+            return a fresh :class:`StdioCredentialBinding` (or raise
+            :class:`McpToolError`).  This is how a revoked credential stops
+            reads, writes and control on an already-open connection: the adapter
+            holds no cached authority.
     """
 
     def __init__(
@@ -856,19 +957,72 @@ class IdentityMapper:
         bound_principal: Principal | None = None,
         bound_project: str | None = None,
         bound_actions: Sequence[str] | None = None,
+        credential: StdioCredentialBinding | None = None,
+        revalidate: Callable[[], StdioCredentialBinding] | None = None,
     ) -> None:
         self._tier = str(configured_tier)
         self._known_projects = None if known_projects is None else dict(known_projects)
         self._user = user
         self._grants = tuple(grants)
         self._permission_scope = str(permission_scope)
+        self._revalidate = revalidate
         self._bound_principal = bound_principal
         self._bound_project = None if bound_project is None else str(bound_project).strip() or None
         self._bound_actions = None if bound_actions is None else tuple(bound_actions)
+        self._credential = credential
+        if credential is not None:
+            self._apply_credential(credential)
+
+    def _apply_credential(self, credential: StdioCredentialBinding) -> None:
+        self._credential = credential
+        self._bound_principal = credential.principal
+        self._bound_project = credential.verified_project
+        self._bound_actions = tuple(credential.actions)
+
+    def refresh(self) -> None:
+        """Re-resolve the bound credential before one tool call (M0-05).
+
+        A no-op for the ``local-single`` operator entry (there is no credential
+        to revalidate).  For a bound multi-user launch the callable is the
+        Controller's identity answer: a revoked/expired credential raises, so the
+        tool call fails **before** any backend is touched.
+
+        Raises:
+            McpToolError: the credential can no longer be verified.
+        """
+        if self._revalidate is None:
+            return
+        self._apply_credential(self._revalidate())
 
     @property
     def bound(self) -> bool:
         return self._bound_principal is not None
+
+    def command_identity(self, context: WorkspaceContext) -> CommandIdentity:
+        """Project this request onto the one frozen :class:`CommandIdentity`.
+
+        The identity is built from the **server-side stdio binding** — the
+        credential the Controller resolved, never ``_meta``:
+        :meth:`CommandIdentity.from_verified_http
+        <acp_services.workspace.command_identity.CommandIdentity.from_verified_http>`
+        for a bound launch, and the explicit local-operator identity for the
+        trusted ``local-single`` transport.
+        """
+        if self._credential is not None:
+            return CommandIdentity.from_verified_http(
+                self._credential,
+                project_id=context.project_id or self._credential.verified_project,
+                entry_class=EntryClass.MCP,
+                permission_scope=PermissionScope.STDIO,
+            )
+        return CommandIdentity.from_local(
+            principal_id=context.principal.principal_id,
+            project_id=context.project_id,
+            entry_class=EntryClass.MCP,
+            permission_scope=PermissionScope.STDIO,
+            actions=context.available_actions,
+            tenant_id=context.principal.tenant_id,
+        )
 
     def binding_projection(self) -> dict[str, Any]:
         """Non-secret description of the identity binding.
@@ -1179,48 +1333,73 @@ class WorkspaceBudget:
 
 
 # ---------------------------------------------------------------------------
-# Idempotency (server-enforced)
+# Idempotency (one authority: the Controller's persistent ledger, M0-05)
 # ---------------------------------------------------------------------------
+
+#: Prefix of the frozen pre-M0-05 MCP derivation.  It is a *legacy lookup
+#: namespace* only: the formula below is byte-frozen so an old client's retry
+#: can be recognised, and it is never applied to a client-supplied key.
+LEGACY_DERIVED_KEY_PREFIX = "auto_"
+
+#: The rule version of :func:`derive_idempotency_key` (the pre-M0-05 MCP
+#: derivation).  Bumping it would make old rows unreachable, so it is frozen.
+LEGACY_DERIVED_KEY_VERSION = "auto-v1"
+
+#: The key the caller supplied, forwarded unchanged.
+IDEMPOTENCY_KEY_ORIGIN_CLIENT = "client"
+#: The frozen legacy ``auto_`` key, used to find a pre-M0-05 row.
+IDEMPOTENCY_KEY_ORIGIN_LEGACY = "legacy-derived"
+#: No key at all: the request is explicitly non-idempotent.
+IDEMPOTENCY_KEY_ORIGIN_NONE = "none"
 
 
 def derive_idempotency_key(payload: Mapping[str, Any]) -> str:
-    """Derive a deterministic retry key from a request when the client omits one.
+    """Recompute the frozen pre-M0-05 MCP retry key (legacy lookup only).
 
-    Volatile keys (``idempotency_key`` itself) are excluded so a re-sent call
-    collapses onto the same operation.
+    The formula is unchanged from the code that wrote the old rows
+    (:data:`LEGACY_DERIVED_KEY_VERSION`), so it can be used to *find* them.
+    It never names a new claim for a client that supplied its own key, and it is
+    never combined with a permission scope (the old ``op_`` fold is gone: an
+    ``op_`` string is an operation reference, not a ledger key).
     """
     material = {key: value for key, value in payload.items() if key != "idempotency_key"}
     blob = json.dumps(material, sort_keys=True, default=str, ensure_ascii=False)
-    return "auto_" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
+    return LEGACY_DERIVED_KEY_PREFIX + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 
 
-class IdempotencyRegistry:
-    """Explicit, server-side exactly-once map for MCP operations.
+@dataclass(frozen=True)
+class IdempotencyResolution:
+    """How one tool call names its operation on the Controller ledger.
 
-    Keyed by ``(workspace_id, scoped_idempotency_key)``; the scoped key folds the
-    permission scope in (via
-    :func:`acp_services.data.operations.idempotency_key_for`) so one scope's
-    retry can never shadow another's operation.
+    Attributes:
+        key: The key handed to the submit/prepare port (``""`` = no key, the
+            request is non-idempotent).
+        origin: :data:`IDEMPOTENCY_KEY_ORIGIN_CLIENT`,
+            :data:`IDEMPOTENCY_KEY_ORIGIN_LEGACY` or
+            :data:`IDEMPOTENCY_KEY_ORIGIN_NONE`.
+        key_scope: The identity scope the key is claimed under (audit only —
+            the Controller rebuilds the authoritative scope itself).
+        legacy_key: The recomputed ``auto_`` key when ``origin`` is legacy.
     """
 
-    def __init__(self) -> None:
-        self._lock = threading.RLock()
-        self._entries: dict[tuple[str, str], Any] = {}
+    key: str
+    origin: str
+    key_scope: str = ""
+    legacy_key: str | None = None
 
-    def get(self, workspace_id: str, idempotency_key: str) -> Any:
-        with self._lock:
-            return self._entries.get((str(workspace_id), str(idempotency_key)))
+    @property
+    def is_legacy(self) -> bool:
+        return self.origin == IDEMPOTENCY_KEY_ORIGIN_LEGACY
 
-    def put(self, workspace_id: str, idempotency_key: str, value: Any) -> Any:
-        with self._lock:
-            self._entries[(str(workspace_id), str(idempotency_key))] = value
-            return value
-
-    def scoped_key(self, *, permission_scope: str, raw_key: str) -> str:
-        """Fold the permission scope into *raw_key* (single Services primitive)."""
-        return idempotency_key_for(
-            permission_scope=str(permission_scope), resource_key=str(raw_key)
-        )
+    def to_dict(self) -> dict[str, Any]:
+        """Non-secret projection published in the tool result."""
+        return {
+            "origin": self.origin,
+            "key": self.key or None,
+            "scope_id": self.key_scope or None,
+            "legacy_rule_version": LEGACY_DERIVED_KEY_VERSION if self.is_legacy else None,
+            "legacy_key": self.legacy_key,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -1245,12 +1424,15 @@ class McpServer:
         budget: Optional in-process cache/test adapter.  ``None`` on the final
             Controller path: the Controller's server-side admission ledger is
             the authority, and a tool hint can never override its grant.
-        idempotency: Server-enforced idempotency registry.
         configured_tier: Deployment tier; request overrides are refused.
         extension: The research extension this server advertises through
             ``acp_capabilities``.  Declared by the composition root (the id is a
             wire literal and belongs there); ``None`` advertises no extension and
             refuses every extension request as ``extension_not_advertised``.
+
+    There is deliberately **no** idempotency cache parameter (M0-05): the
+    adapter holds no operation result state, so it can never replay a stale
+    answer after a credential revocation or shadow a second principal's key.
     """
 
     def __init__(
@@ -1259,14 +1441,12 @@ class McpServer:
         backends: McpBackends,
         identity: IdentityMapper | None = None,
         budget: WorkspaceBudget | None = None,
-        idempotency: IdempotencyRegistry | None = None,
         configured_tier: str = DeploymentTier.LOCAL_SINGLE,
         extension: ExtensionSpec | None = None,
     ) -> None:
         self._backends = backends
         self._identity = identity or IdentityMapper(configured_tier=configured_tier)
         self._budget = budget
-        self._idempotency = idempotency or IdempotencyRegistry()
         self._tier = str(configured_tier)
         self._extension = extension
         # A *literal* allowlist table — never resolved from client input.
@@ -1452,6 +1632,10 @@ class McpServer:
         meta = meta if isinstance(meta, Mapping) else {}
 
         try:
+            # M0-05: every tool call re-resolves the server-side credential.  A
+            # revoked key therefore refuses reads, writes and control on an
+            # already-open connection, with no cached result to leak.
+            self._identity.refresh()
             context = self._identity.map(meta)
             self._authorize(name, context)
             result = handler(arguments, context)
@@ -1622,26 +1806,15 @@ class McpServer:
     def _tool_submit(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
-        idem = self._resolve_idempotency(arguments, context)
-        payload_digest = derive_idempotency_key(arguments)
-        cached = self._idempotency.get(context.workspace_id, idem)
-        if isinstance(cached, Mapping) and cached.get("payload_digest") is not None:
-            if cached.get("payload_digest") == payload_digest:
-                return mo.MachineResult(
-                    operation=McpTool.SUBMIT,
-                    status="ok",
-                    data={"reference": cached.get("reference"), "idempotent_replay": True},
-                    operation_identity=context.workspace_id,
-                )
-            cached = None
-        elif cached is not None:
-            return mo.MachineResult(
-                operation=McpTool.SUBMIT,
-                status="ok",
-                data={"reference": cached, "idempotent_replay": True},
-                operation_identity=context.workspace_id,
-            )
+        """Forward one submit with the client's raw idempotency key (M0-05).
 
+        There is no adapter-side cache and no key rewriting: the Controller's
+        persistent ledger claims ``(verified identity, raw key)`` and answers
+        ``created``/``replay``/``conflict``.  The full Controller response is
+        forwarded, so a replay carries the same complete TaskRef as the first
+        call.
+        """
+        resolution = self._resolve_idempotency(arguments, context)
         cores = _requested_cores(arguments)
         if self._budget is not None:
             decision = self._budget.admit(context.workspace_id, cores=cores)
@@ -1654,39 +1827,25 @@ class McpServer:
                 )
         try:
             record = self._backends.submit.submit(
-                arguments, idempotency_key=idem, workspace_id=context.workspace_id
+                arguments, idempotency_key=resolution.key, workspace_id=context.workspace_id
             )
         except McpToolError:
             if self._budget is not None:
                 self._budget.release(context.workspace_id, cores=cores)
             raise
         reference = _reference_from(record, kind="job")
-        self._idempotency.put(
-            context.workspace_id,
-            idem,
-            {"reference": reference, "payload_digest": payload_digest},
-        )
-        payload: dict[str, Any] = {
-            "reference": reference,
-            "idempotency_key": idem,
-            "query_tool": McpTool.STATUS,
-            "cancel_tool": McpTool.CANCEL,
-        }
-        if isinstance(record, Mapping):
-            if isinstance(record.get("task_ref"), Mapping):
-                payload["task_ref"] = dict(record["task_ref"])
-            if record.get("result") is not None:
-                payload["result"] = record["result"]
-            if record.get("approval_ref") is not None:
-                payload["approval_ref"] = record["approval_ref"]
-            if record.get("plan_digest") is not None:
-                payload["plan_digest"] = record["plan_digest"]
-            if record.get("idempotent_replay") is not None:
-                payload["idempotent_replay"] = record["idempotent_replay"]
-            if record.get("admission") is not None:
-                payload["admission"] = record["admission"]
-            if record.get("identity") is not None:
-                payload["identity"] = record["identity"]
+        # Full response passthrough: every field the Controller returned is part
+        # of the replay contract (task_ref/attempt/state/identity/admission...).
+        payload: dict[str, Any] = dict(record) if isinstance(record, Mapping) else {}
+        payload["reference"] = payload.get("reference") or reference
+        if not isinstance(payload.get("task_ref"), Mapping):
+            task_id = str(payload["reference"].get("id") or "")
+            payload["task_ref"] = {"task_id": task_id, "job_id": task_id}
+        payload["idempotency_key"] = resolution.key or None
+        payload["idempotency_key_origin"] = resolution.origin
+        payload["idempotency"] = resolution.to_dict()
+        payload.setdefault("query_tool", McpTool.STATUS)
+        payload.setdefault("cancel_tool", McpTool.CANCEL)
         return mo.MachineResult(
             operation=McpTool.SUBMIT,
             status="ok",
@@ -1739,15 +1898,15 @@ class McpServer:
     def _tool_prepare_artifact(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
-        idem = self._resolve_idempotency(arguments, context)
-        cached = self._idempotency.get(context.workspace_id, idem)
-        if cached is not None:
-            return mo.MachineResult(
-                operation=McpTool.PREPARE_ARTIFACT,
-                status="ok",
-                data={"reference": cached, "idempotent_replay": True},
-                operation_identity=context.workspace_id,
-            )
+        """Forward one prepare with the raw key; the Controller owns the dedup.
+
+        M0-05: the prepare key is versioned server-side by
+        :func:`acp_services.data.operations.idempotency_key_for` (v2 =
+        ``(principal, project, client_key, epoch)``).  The adapter does not fold
+        the key, does not cache the operation reference, and forwards the whole
+        response envelope.
+        """
+        resolution = self._resolve_idempotency(arguments, context)
         if self._budget is not None:
             decision = self._budget.admit(context.workspace_id)
             if not decision.allowed:
@@ -1759,24 +1918,19 @@ class McpServer:
                 )
         try:
             record = self._backends.artifacts.prepare(
-                arguments, idempotency_key=idem, workspace_id=context.workspace_id
+                arguments, idempotency_key=resolution.key, workspace_id=context.workspace_id
             )
         except McpToolError:
             if self._budget is not None:
                 self._budget.release(context.workspace_id)
             raise
         reference = _reference_from(record, kind="operation")
-        self._idempotency.put(context.workspace_id, idem, reference)
-        payload: dict[str, Any] = {
-            "reference": reference,
-            "idempotency_key": idem,
-            "query_tool": McpTool.STATUS,
-        }
-        if isinstance(record, Mapping):
-            if record.get("operation_ref") is not None:
-                payload["operation_ref"] = record["operation_ref"]
-            if record.get("availability") is not None:
-                payload["availability"] = record["availability"]
+        payload: dict[str, Any] = dict(record) if isinstance(record, Mapping) else {}
+        payload["reference"] = payload.get("reference") or reference
+        payload["idempotency_key"] = resolution.key or None
+        payload["idempotency_key_origin"] = resolution.origin
+        payload["idempotency"] = resolution.to_dict()
+        payload.setdefault("query_tool", McpTool.STATUS)
         return mo.MachineResult(
             operation=McpTool.PREPARE_ARTIFACT,
             status="ok",
@@ -1832,11 +1986,46 @@ class McpServer:
 
     # -- helpers -----------------------------------------------------------
 
-    def _resolve_idempotency(self, arguments: Mapping[str, Any], context: WorkspaceContext) -> str:
+    def _resolve_idempotency(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> IdempotencyResolution:
+        """Resolve the ledger key of one write/control call (M0-05).
+
+        Order of judgement (never collapsed):
+
+        1. a client-supplied ``idempotency_key`` is forwarded **unchanged** —
+           the Controller's ledger looks it up under the *verified* identity;
+        2. otherwise the frozen legacy ``auto_`` derivation is recomputed so a
+           pre-M0-05 client's retry finds its row.  Only the explicit
+           ``local-single`` operator binding may claim that namespace (it is the
+           only writer of it); an authenticated binding stays key-less, which is
+           the documented non-idempotent behaviour until the key becomes
+           mandatory (M1-01);
+        3. the derived key is never folded with a permission scope: an
+           ``op_``-shaped string is an operation reference, never a ledger key.
+        """
+        identity = self._identity.command_identity(context)
         raw = arguments.get("idempotency_key")
-        if not isinstance(raw, str) or not raw.strip():
-            raw = derive_idempotency_key(arguments)
-        return self._idempotency.scoped_key(permission_scope=context.permission_scope, raw_key=raw)
+        scope_id = identity.idempotency_scope()
+        if isinstance(raw, str) and raw.strip():
+            return IdempotencyResolution(
+                key=raw.strip(),
+                origin=IDEMPOTENCY_KEY_ORIGIN_CLIENT,
+                key_scope=scope_id,
+            )
+        if not identity.is_operator:
+            return IdempotencyResolution(
+                key="",
+                origin=IDEMPOTENCY_KEY_ORIGIN_NONE,
+                key_scope=scope_id,
+            )
+        legacy_key = derive_idempotency_key(arguments)
+        return IdempotencyResolution(
+            key=legacy_key,
+            origin=IDEMPOTENCY_KEY_ORIGIN_LEGACY,
+            key_scope=scope_id,
+            legacy_key=legacy_key,
+        )
 
 
 # ---------------------------------------------------------------------------

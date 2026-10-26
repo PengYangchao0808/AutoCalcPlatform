@@ -72,9 +72,12 @@ in the test module enforces this.
 - **Budget cap.** A per-workspace `WorkspaceBudget` refuses an over-cap
   submission before the backend is reached (`access_denied`, structured
   `exceeded`). Slot/core counters are released on cancel or a terminal status.
-- **Idempotency key.** A `(workspace, scoped-key)` `IdempotencyRegistry` collapses
-  replays onto a single operation; identical requests without a client key derive
-  a deterministic key.
+- **Idempotency key.** Since M0-05 the MCP entry has no registry of its own:
+  the raw client key is forwarded verbatim to the Controller's persistent
+  ledger (`JobStore.claim_idempotency`), which collapses replays onto one
+  attributed operation. Authenticated submissions without a client key are
+  documented non-idempotent; only the explicit local-operator binding
+  recomputes the frozen `auto_` legacy key, lookup-only.
 
 ## Integration record
 

@@ -765,7 +765,10 @@ def _json1_available(conn: sqlite3.Connection) -> bool:
 #      never recorded as migrated).
 
 #: Bumped when the prepare schema changes; independent of the jobs migrations.
-PREPARE_SCHEMA_VERSION = 1
+#: Version ``2`` (M0-05) adds the verified prepare-key attribution
+#: (``principal_id``/``project_id``/``identity_version``) and splits the
+#: client-key unique index into a v2 predicate plus the frozen v1 predicate.
+PREPARE_SCHEMA_VERSION = 2
 
 _PREPARE_SCHEMA_MIGRATIONS_SQL = """
 CREATE TABLE IF NOT EXISTS _prepare_schema_migrations (
@@ -806,30 +809,49 @@ CREATE TABLE IF NOT EXISTS data_operations (
     available_at REAL NOT NULL DEFAULT 0.0,
     content_identity TEXT NOT NULL DEFAULT '',
     client_idempotency_key TEXT NOT NULL DEFAULT '',
-    dedup_epoch INTEGER NOT NULL DEFAULT 0
+    dedup_epoch INTEGER NOT NULL DEFAULT 0,
+    principal_id TEXT NOT NULL DEFAULT '',
+    project_id TEXT NOT NULL DEFAULT '',
+    identity_version TEXT NOT NULL DEFAULT '1'
 )
 """
 
 #: Additive columns applied to pre-D05 rows.  Old rows get ``''``/``''``/``0``
 #: and stay conservative (revalidate/reprepare, never silently current-ready).
+#: ``principal_id``/``project_id``/``identity_version`` are M0-05's prepare-key
+#: versioning: every pre-existing row keeps ``identity_version='1'`` and is read
+#: through the frozen v1 predicate.
 _PREPARE_COLUMNS: tuple[tuple[str, str], ...] = (
     ("content_identity", "TEXT NOT NULL DEFAULT ''"),
     ("client_idempotency_key", "TEXT NOT NULL DEFAULT ''"),
     ("dedup_epoch", "INTEGER NOT NULL DEFAULT 0"),
+    ("principal_id", "TEXT NOT NULL DEFAULT ''"),
+    ("project_id", "TEXT NOT NULL DEFAULT ''"),
+    ("identity_version", "TEXT NOT NULL DEFAULT '1'"),
 )
 
 #: ``idx_data_operations_client_key`` is the DB-level guard that the
 #: idempotency hash alone cannot provide: it rejects the same explicit client
 #: key at the same epoch even when the request content (and therefore the hash)
 #: differs.  Legacy rows carry ``''`` and are excluded by the predicate.
+#:
+#: M0-05 splits that guard by key identity version: v2 keys are unique per
+#: ``(principal, project, client_key, epoch)`` (two users in one deployment
+#: scope no longer collide), and the pre-M0-05 index survives verbatim as the
+#: v1 predicate so existing rows keep their exact uniqueness contract.  The old
+#: unversioned index is dropped and recreated under the v1 predicate.
 _PREPARE_INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_data_operations_state ON data_operations(state, available_at)",
     "CREATE INDEX IF NOT EXISTS idx_data_operations_key ON data_operations(idempotency_key)",
     "CREATE INDEX IF NOT EXISTS idx_data_operations_resource "
     "ON data_operations(permission_scope, resource_key, dedup_epoch)",
+    "DROP INDEX IF EXISTS idx_data_operations_client_key",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_data_operations_client_key "
     "ON data_operations(permission_scope, client_idempotency_key, dedup_epoch) "
-    "WHERE client_idempotency_key <> ''",
+    "WHERE client_idempotency_key <> '' AND identity_version = '1'",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_data_operations_identity_client_key "
+    "ON data_operations(principal_id, project_id, client_idempotency_key, dedup_epoch) "
+    "WHERE client_idempotency_key <> '' AND identity_version = '2'",
 )
 
 

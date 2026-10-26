@@ -8832,6 +8832,11 @@ def prepare_artifact(
         artifact_payload["expected_size_bytes"] = int(normalized["expected_size_bytes"])
     if evidence_report is not None:
         artifact_payload["evidence_report"] = dict(evidence_report)
+    # M0-05: the prepare key is versioned by the server-derived identity.  The
+    # principal/project are resolved here (never from the request body); the
+    # transport permission scope stays the deployment attribute.
+    prepare_project = str(record.project_id or record.spec.project_id or "")
+    prepare_principal = _command_identity(request, project_id=prepare_project or None).principal_id
     prepare_request = PrepareRequest(
         job_id=job_id,
         attempt=attempt,
@@ -8842,6 +8847,8 @@ def prepare_artifact(
         resource_generation=generation,
         payload=artifact_payload,
         client_idempotency_key=str(normalized.get("idempotency_key") or ""),
+        principal_id=prepare_principal,
+        project_id=prepare_project,
     )
     try:
         operation = service.enqueue(prepare_request)
