@@ -407,6 +407,13 @@ class BudgetReservation:
     detail: str = ""
     created_at: str = ""
     updated_at: str = ""
+    #: Execution identity persisted at settlement (M0-07) — attempt, the
+    #: receipt that settled it and its chain summary.  Empty before settlement.
+    attempt: int = 0
+    receipt_id: str = ""
+    chain_digest: str = ""
+    release_id: str = ""
+    plan_identity: str = ""
 
     @property
     def consumed(self) -> dict[str, int]:
@@ -423,6 +430,11 @@ class BudgetReservation:
             "claim_id": self.claim_id,
             "admission_reservation_id": self.admission_reservation_id,
             "detail": self.detail,
+            "attempt": self.attempt,
+            "receipt_id": self.receipt_id,
+            "chain_digest": self.chain_digest,
+            "release_id": self.release_id,
+            "plan_identity": self.plan_identity,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

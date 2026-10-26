@@ -32,9 +32,13 @@ Dependency direction
 --------------------
 ``src/acp_services/**`` must never import ``acp`` (see
 ``tests/baseline/services-evidence/public_allowlist.md``).  This module is
-**stdlib only** (``sqlite3`` is the storage backend).  It defines its own reason
-vocabulary whose values mirror ``acp_services.contracts.access.ReasonCode`` so an
-authorisation layer can map them 1:1 without this module importing that one.
+otherwise **stdlib only** (``sqlite3`` is the storage backend); the single
+sibling import is the dependency-free
+:mod:`acp_services.runtime.usage_authority` vocabulary that validates the
+server-controlled usage-producer capability metadata (M0-07).  It defines its
+own reason vocabulary whose values mirror
+``acp_services.contracts.access.ReasonCode`` so an authorisation layer can map
+them 1:1 without this module importing that one.
 
 Deferred to B09 / MU-02 (todo 73) — NOT implemented here
 --------------------------------------------------------
@@ -62,9 +66,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+from acp_services.runtime.usage_authority import normalize_usage_capabilities
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "IDENTITY_SCHEMA_MIGRATION_VERSION",
     "KEY_PREFIX",
     "KDF_NAME",
     "PBKDF2_ITERATIONS",
@@ -75,7 +82,21 @@ __all__ = [
     "KeyDecision",
     "KeyReason",
     "KeyRecord",
+    "get_identity_schema_version",
 ]
+
+#: Identity DB schema version.  The repository-wide migration series reached
+#: ``024`` on the jobs DB; the identity DB is a *separate* SQLite file, so it
+#: keeps its own id-versioned meta table and continues the series at ``025``
+#: (``api_keys.usage_capabilities``).  Numbers are never reused.
+IDENTITY_SCHEMA_MIGRATION_VERSION = 25
+
+_IDENTITY_META_SQL = """
+CREATE TABLE IF NOT EXISTS identity_schema_migrations (
+    id         INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+)
+"""
 
 # ---------------------------------------------------------------------------
 # Key material constants
@@ -109,6 +130,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     scope           TEXT NOT NULL,
     project         TEXT,
     actions         TEXT NOT NULL,
+    usage_capabilities TEXT NOT NULL DEFAULT '[]',
     expires_at      TEXT,
     created_at      TEXT NOT NULL,
     revoked_at      TEXT,
@@ -120,8 +142,9 @@ CREATE TABLE IF NOT EXISTS api_keys (
 _INSERT_SQL = """
 INSERT INTO api_keys (
     key_id, public_prefix, digest, salt, kdf, kdf_iterations, scope, project,
-    actions, expires_at, created_at, revoked_at, rotated_from, rotated_to
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)
+    actions, usage_capabilities, expires_at, created_at, revoked_at,
+    rotated_from, rotated_to
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)
 """
 
 
@@ -244,6 +267,7 @@ class GeneratedKey:
     scope: str = ""
     project: str | None = None
     actions: tuple[str, ...] = ()
+    usage_capabilities: tuple[str, ...] = ()
     expires_at: str | None = None
     created_at: str = ""
 
@@ -255,6 +279,7 @@ class GeneratedKey:
             "scope": self.scope,
             "project": self.project,
             "actions": list(self.actions),
+            "usage_capabilities": list(self.usage_capabilities),
             "expires_at": self.expires_at,
             "created_at": self.created_at,
         }
@@ -277,6 +302,9 @@ class KeyRecord:
     revoked_at: str | None = None
     rotated_from: str | None = None
     rotated_to: str | None = None
+    #: Server-controlled settlement capability metadata (M0-07).  Additive to
+    #: ``actions``; it never widens an ``AccessAction`` ceiling.
+    usage_capabilities: tuple[str, ...] = ()
 
     @property
     def revoked(self) -> bool:
@@ -293,6 +321,7 @@ class KeyDecision:
     scope: str | None = None
     project: str | None = None
     actions: tuple[str, ...] = ()
+    usage_capabilities: tuple[str, ...] = ()
     decided_at: str = ""
 
     @property
@@ -308,6 +337,7 @@ class KeyDecision:
             "scope": self.scope,
             "project": self.project,
             "actions": list(self.actions),
+            "usage_capabilities": list(self.usage_capabilities),
             "decided_at": self.decided_at,
         }
 
@@ -350,6 +380,24 @@ class ApiKeyManager:
             conn = self._connect()
             try:
                 conn.execute(_CREATE_TABLE_SQL)
+                conn.executescript(_IDENTITY_META_SQL)
+                columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(api_keys)")}
+                if "usage_capabilities" not in columns:
+                    try:
+                        conn.execute(
+                            "ALTER TABLE api_keys ADD COLUMN usage_capabilities "
+                            "TEXT NOT NULL DEFAULT '[]'"
+                        )
+                    except sqlite3.OperationalError as exc:
+                        # A concurrent initialiser may have added the column
+                        # between our PRAGMA read and this ALTER.
+                        if "duplicate column name" not in str(exc).lower():
+                            raise
+                conn.execute(
+                    "INSERT OR IGNORE INTO identity_schema_migrations (id, applied_at) "
+                    "VALUES (?, ?)",
+                    (IDENTITY_SCHEMA_MIGRATION_VERSION, datetime.now(timezone.utc).isoformat()),
+                )
                 conn.commit()
             finally:
                 conn.close()
@@ -379,6 +427,7 @@ class ApiKeyManager:
         scope: str,
         actions: Iterable[str] | str | None = None,
         project: str | None = None,
+        usage_capabilities: Iterable[str] | str | None = None,
         expires_at: datetime | str | None = None,
         now: datetime | None = None,
     ) -> GeneratedKey:
@@ -386,12 +435,16 @@ class ApiKeyManager:
 
         The plaintext ``key`` is returned exactly once in the result; it is never
         written to the database, logs, URLs or command lines.
+        ``usage_capabilities`` is the server-controlled settlement metadata
+        (M0-07): it is an explicit issuance argument, never a request field, and
+        the internal ``controller-terminal-receipt`` source is rejected here.
         """
         if not scope:
             raise ValueError("scope is required")
         action_tuple = _normalize_actions(actions)
         if not action_tuple:
             raise ValueError("at least one action is required")
+        capability_tuple = normalize_usage_capabilities(usage_capabilities)
         created_at = self._now(now).isoformat()
         expiry = _coerce_expiry(expires_at)
 
@@ -415,6 +468,7 @@ class ApiKeyManager:
                         scope,
                         project,
                         json.dumps(list(action_tuple), ensure_ascii=False),
+                        json.dumps(list(capability_tuple), ensure_ascii=False),
                         expiry,
                         created_at,
                         None,
@@ -431,6 +485,7 @@ class ApiKeyManager:
             scope=scope,
             project=project,
             actions=action_tuple,
+            usage_capabilities=capability_tuple,
             expires_at=expiry,
             created_at=created_at,
         )
@@ -508,6 +563,7 @@ class ApiKeyManager:
                 scope=record.scope if record is not None else None,
                 project=record.project if record is not None else None,
                 actions=record.actions if record is not None else (),
+                usage_capabilities=(record.usage_capabilities if record is not None else ()),
                 decided_at=decided_at,
             )
 
@@ -556,6 +612,7 @@ class ApiKeyManager:
             scope=record.scope,
             project=record.project,
             actions=record.actions,
+            usage_capabilities=record.usage_capabilities,
             decided_at=decided_at,
         )
 
@@ -590,10 +647,11 @@ class ApiKeyManager:
     ) -> GeneratedKey | None:
         """Issue a replacement key and revoke the old one atomically.
 
-        The new key inherits the old key's scope/project/actions (and expiry when
-        no explicit ``expires_at`` is given).  The old key is marked revoked and
-        linked via ``rotated_to``; the new row records ``rotated_from``.  Returns
-        ``None`` if *key_id* does not exist or is already revoked.
+        The new key inherits the old key's scope/project/actions/usage
+        capabilities (and expiry when no explicit ``expires_at`` is given).  The
+        old key is marked revoked and linked via ``rotated_to``; the new row
+        records ``rotated_from``.  Returns ``None`` if *key_id* does not exist or
+        is already revoked.
         """
         reference = self._now(now)
         created_at = reference.isoformat()
@@ -628,6 +686,7 @@ class ApiKeyManager:
                         old.scope,
                         old.project,
                         json.dumps(list(old.actions), ensure_ascii=False),
+                        json.dumps(list(old.usage_capabilities), ensure_ascii=False),
                         new_expiry,
                         created_at,
                         old.key_id,
@@ -648,9 +707,21 @@ class ApiKeyManager:
             scope=old.scope,
             project=old.project,
             actions=old.actions,
+            usage_capabilities=old.usage_capabilities,
             expires_at=new_expiry,
             created_at=created_at,
         )
+
+
+def get_identity_schema_version(conn: sqlite3.Connection) -> int:
+    """Return the highest applied identity-DB migration id (``0`` when none)."""
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='identity_schema_migrations'"
+    ).fetchone()
+    if row is None:
+        return 0
+    highest = conn.execute("SELECT MAX(id) AS v FROM identity_schema_migrations").fetchone()
+    return 0 if highest is None or highest["v"] is None else int(highest["v"])
 
 
 def _row_to_record(row: sqlite3.Row) -> KeyRecord:
@@ -658,6 +729,10 @@ def _row_to_record(row: sqlite3.Row) -> KeyRecord:
         actions = tuple(json.loads(row["actions"]) or [])
     except (json.JSONDecodeError, TypeError):
         actions = ()
+    try:
+        capabilities = tuple(json.loads(row["usage_capabilities"]) or [])
+    except (IndexError, KeyError, json.JSONDecodeError, TypeError):
+        capabilities = ()
     return KeyRecord(
         key_id=row["key_id"],
         public_prefix=row["public_prefix"],
@@ -669,4 +744,5 @@ def _row_to_record(row: sqlite3.Row) -> KeyRecord:
         revoked_at=row["revoked_at"],
         rotated_from=row["rotated_from"],
         rotated_to=row["rotated_to"],
+        usage_capabilities=capabilities,
     )

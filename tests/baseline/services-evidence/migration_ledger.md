@@ -112,6 +112,7 @@
 | 持久 Proposal 审批（B16，2026-10-23） | `src/acp_services/runtime/approvals.py:1`（ApprovalService） | `acp.api.v2_approvals` HTTP 面；`src/acp/api/v1_routes.py:_enforce_approval` 提交前校验；`src/acp_services/runtime/canonical_digest.py` 唯一规范化实现（B18 只导入） | `src/acp/api/v1_routes.py:create_job`（审批先于 dispatch）；`src/acp/api/server.py`（v2 路由挂载） | [CLOSED] 迁移 023 加性；draft/pending/approved/rejected/expired/revoked 持久 CAS；未批准/过期/换计划/换预算/他人批准不 dispatch；重启后同一审批可查询且重复 approve 幂等；不新增 JobStatus、不挪用 WAITING_REVIEW、不改 resume() | `tests/test_acp2_runtime_approvals.py`；`tests/test_services_cas_fidelity.py`；`scripts/acceptance/acp2_runtime.py --scenario approval-budget --phase approval` |
 | 研究资源键 helper（research_resource_key，B1-7，2026-10-24） | `src/acp_services/data/research_resources.py:247` | `ResearchResourceStore.create()` 在 `resource_id` 为空串时走同一 helper；`resource_id_for()` 仅保留为内容身份/legacy helper | 尚未接线（B1-7 读取路由未交付）；`ResearchResourceStore.create` 为当前唯一默认 key 派生点 | [CLOSED] JSON 数组无歧义编码（冒号碰撞三元组得到不同 key）；kind 仅 proposal 或 record，由 schema 推导；document id 缺失或空白即拒绝，不生成共享默认 key；显式 resource_id 行为不变；接收集成验收 B1-7 | `tests/test_acp2_research_resource_key.py` |
 | 只读按任务列 prepare 操作（PrepareOperationService.list_for_job，B1-1，2026-10-24） | `src/acp_services/data/operations.py:840` | 既有 `list()` 与 `find()` 不加改；本方法为加性只读面 | 尚未接线（B1-1 投影模块与 HTTP 路由未交付）；无生产消费者 | [CLOSED] 参数化 job_id 与 attempt（int 且 >=1）、kind 默认 ARTIFACT 并排除 INPUT 行、ORDER BY created_at 与 operation_id、LIMIT 参数化；不做全局 list() 全表过滤；接收集成验收 B1-1 | `tests/test_acp2_research_resource_key.py` |
+| 可信 usage 回执与结算绑定（M0-07/G26） | `src/acp_services/runtime/admission.py:ReservationLedger.record_usage_once` | `acp_services.runtime.admission` 仍为唯一账本，无第二实现；`src/acp/api/v2_budgets.py` 仅 HTTP 适配 | `src/acp/api/v2_budgets.py`（producer 由凭据 capability 解析）；`src/acp_services/runtime/local_admission.py:LocalAdmission.record_usage`（Controller 内部 terminal receipt）；`src/acp_services/workspace/keys.py:ApiKeyManager.generate`（usage_capabilities 仅服务端签发） | [OPEN] 真实 Controller 生产连接线与运行证据未落 reports/；模块与 fixture 级已验证，不得据此改写为 CLOSED | `tests/test_acp2_runtime_usage_receipts.py` |
 
 ## 覆盖说明
 
@@ -129,8 +130,8 @@
 
 ## 当前台账摘要（2026-10-22；2026-10-24 追加 2 行 B1-1/B1-7；保留 todo 70 的历史收口口径）
 
-- **行数**：72（全部恰好 6 列；守护 `tests/test_services_first_slice_contracts.py` + `tests/test_acp_services_isolation.py`）。
-- **状态计数**：`[CLOSED]` 57 · `[RETAINED]` 5 · `[OPEN]` 10 · `[DEFERRED]` 0。
+- **行数**：73（全部恰好 6 列；守护 `tests/test_services_first_slice_contracts.py` + `tests/test_acp_services_isolation.py`）。
+- **状态计数**：`[CLOSED]` 57 · `[RETAINED]` 5 · `[OPEN]` 11 · `[DEFERRED]` 0。
 - **2026-10-24 追加**：`research_resource_key`（B1-7）与 `PrepareOperationService.list_for_job`（B1-1）各 1 行，均为只读/加性能力；HTTP 投影尚未接线，未改写任何既有 `NOT_VERIFIED` 状态。
 - **本轮关闭的切片**：todo 6（ProjectManager/Workspace owner）、11—15（Data 端口/持久 prepare/读取根）、25—29（Runtime 控制/PES-plan 恢复/发布端口）、77（store/migrations/plan/step 闭包迁移）。
 - **保留面（未删除）**：`acp.calculations.primitives`、`acp.backends`、`acp.scheduler.{store,migrations}` 等同实现转发，`src/acp/compat/legacy/` 只读历史 reader，`tests/baseline/recovery_fixtures/` 跨版本 fixture，模型/资产/notice 随包。调用者审计见 `public_shim_inventory.md`。

@@ -10621,6 +10621,53 @@ def _run_approval_budget(
     return EXIT_PASS, assertions, extensions
 
 
+def _b17_service_key(provisioned: Mapping[str, Any], project_id: str) -> str:
+    """Mint (or reuse) the dedicated service credential that may settle usage.
+
+    The producer capability is server-side identity metadata, independent of the
+    project ``write`` action ceiling used by the normal submit keys.  This is the
+    credential a worker/service receipt must present (M0-07/G26); a project write
+    key deliberately cannot write trusted usage.
+    """
+    from acp_services.runtime.usage_authority import UsageProducer, capability_for_producer
+
+    capability = capability_for_producer(UsageProducer.WORKER)
+    lifecycle = provisioned["lifecycle"]
+    key_manager = provisioned["key_manager"]
+    credentials_path = Path(str(provisioned["credentials_file"]))
+    credentials = _b15_read_json(credentials_path, {}) or {}
+    entries = credentials.setdefault("keys", {})
+    entry = entries.get("b17_service")
+    if isinstance(entry, dict) and entry.get("key_id"):
+        record = key_manager.get(str(entry["key_id"]))
+        if (
+            record is not None
+            and not record.revoked
+            and record.project == project_id
+            and capability in tuple(record.usage_capabilities)
+        ):
+            return str(entry["key"])
+    accounts = provisioned["accounts"]
+    account = next(iter(accounts.values()))
+    generated = lifecycle.issue_key(
+        account.account_id,
+        scope="workspace",
+        actions=["read", "write"],
+        project=project_id,
+        usage_capabilities=[capability],
+    )
+    entries["b17_service"] = {
+        "key_id": generated.key_id,
+        "key": generated.key,
+        "scope": generated.scope,
+        "project": generated.project,
+        "actions": list(generated.actions),
+        "usage_capabilities": list(generated.usage_capabilities),
+    }
+    _b15_write_json(credentials_path, credentials, private=True)
+    return generated.key
+
+
 def _b17_orca_pids() -> list[int]:
     """PIDs whose executable is exactly the configured ORCA binary."""
     target = Path(os.environ.get("ACP_ORCA_BINARY") or "/home/xieningke/orca611/orca")
@@ -10854,6 +10901,7 @@ def _run_budget_branch(
     plan = dict(scenario["plan"])
     budget = dict(scenario["budget"])
     project_id = str(scenario["alpha_project"])
+    service_key = _b17_service_key(provisioned, project_id)
     plan_digest = _b16_plan_digest(plan)
     base_proposal = dict(scenario["proposal"])
     base_proposal["plan_digest"] = plan_digest
@@ -11093,13 +11141,17 @@ def _run_budget_branch(
         )
     )
 
-    # -- duplicate settlement across the restart --------------------------
+    # -- trusted settlement across the restart ----------------------------
+    from acp_services.contracts.envelope import expected_submission_id
+    from acp_services.runtime.usage_authority import UsageProducer, UsageSource
+
     reservations = [
         row
         for row in (race_budget.get("reservations") or [])
         if str(row.get("state")) != "released"
     ]
     reservation_id = str(reservations[0]["reservation_id"]) if reservations else ""
+    settled_job = next((str(row["job_id"]) for row in accepted_rows if row["job_id"]), "")
     receipt_id = f"b17-receipt-{uuid.uuid4().hex}"
     usage = {
         "task_ref": 1,
@@ -11112,15 +11164,56 @@ def _run_budget_branch(
     settlement_body = {
         "receipt_id": receipt_id,
         "reservation_id": reservation_id,
+        "job_id": settled_job,
+        "attempt": 1,
+        "submission_id": (expected_submission_id(settled_job, 1) if settled_job else ""),
         "run_id": f"b17-run-{uuid.uuid4().hex[:8]}",
-        "trusted_source": "worker-receipt",
         "usage": usage,
     }
-    status, first_settle, _ = _b15_http(
+
+    # Negative: a project write key has no usage-producer capability.  The
+    # trusted source is server-derived; the payload cannot select it.
+    status_denied, denied_body, _ = _b15_http(
         base,
         "POST",
         f"/api/v2/research/budgets/{race_budget_id}/settle",
         key=alice,
+        body=settlement_body,
+        timeout=timeout,
+    )
+    denied_code = ""
+    if isinstance(denied_body, dict):
+        denied_detail = denied_body.get("detail")
+        denied_code = str(
+            (denied_detail or {}).get("code")
+            if isinstance(denied_detail, dict)
+            else denied_detail or ""
+        )
+    status, identity_doc, _ = _b15_http(base, "GET", "/api/identity", key=alice, timeout=timeout)
+    identity_mode = str((identity_doc or {}).get("mode") or "") if status == 200 else ""
+    assertions.append(
+        _b15_assert(
+            "b17.project_write_cannot_settle_usage",
+            status_denied == 403 and denied_code == "usage_capability_missing",
+            f"{status_denied} {denied_code}",
+            not_verified=identity_mode != "api-key",
+        )
+    )
+    assertions.append(
+        _b15_assert(
+            "b17.identity_mode_enforces_capability",
+            identity_mode == "api-key",
+            f"mode={identity_mode!r}",
+            not_verified=identity_mode not in {"api-key", "local-single"},
+        )
+    )
+
+    # Positive: the dedicated service credential carries `usage.produce.worker`.
+    status, first_settle, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/budgets/{race_budget_id}/settle",
+        key=service_key,
         body=settlement_body,
         timeout=timeout,
     )
@@ -11129,13 +11222,26 @@ def _run_budget_branch(
         base,
         "POST",
         f"/api/v2/research/budgets/{race_budget_id}/settle",
-        key=alice,
+        key=service_key,
         body=settlement_body,
         timeout=timeout,
     )
     second_budget = (second_settle or {}).get("budget") or {}
     first_applied = bool(((first_settle or {}).get("settlement") or {}).get("applied"))
     second_duplicate = bool(((second_settle or {}).get("settlement") or {}).get("duplicate"))
+    settled_source = str((first_settle or {}).get("trusted_source") or "")
+    settled_producer = str((first_settle or {}).get("producer") or "")
+    assertions.append(
+        _b15_assert(
+            "b17.usage_receipt_settled_from_capability",
+            status == 200
+            and first_applied
+            and settled_source == UsageSource.WORKER_RECEIPT
+            and settled_producer == UsageProducer.WORKER,
+            f"{status} applied={first_applied} source={settled_source!r} "
+            f"producer={settled_producer!r}",
+        )
+    )
     assertions.append(
         _b15_assert(
             "b17.duplicate_settlement_idempotent",
@@ -11182,8 +11288,12 @@ def _run_budget_branch(
             "schema": "acp2.b17.settlement.v1",
             "first": first_settle,
             "second": second_settle,
+            "denied": {"status": status_denied, "body": denied_body, "mode": identity_mode},
             "receipt_id": receipt_id,
             "reservation_id": reservation_id,
+            "job_id": settled_job,
+            "trusted_source": settled_source,
+            "producer": settled_producer,
         },
     )
 

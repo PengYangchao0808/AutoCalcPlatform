@@ -75,6 +75,7 @@ __all__ = [
     "DecouplingViolationKind",
     "DECOUPLING_NOT_SCIENTIFIC_NOTE",
     "MONITORING_IS_NOT_LEDGER_NOTE",
+    "USAGE_INGEST_IS_NOT_AUTHORIZATION_NOTE",
     # ports
     "UsageLedgerPort",
     "PublicationPort",
@@ -113,6 +114,19 @@ DECOUPLING_NOT_SCIENTIFIC_NOTE = (
     "facts: a UsageRecord is never written from the publication/completion path, "
     "and accounting/quota state never blocks reading an already-produced "
     "scientific result (plan §20.6)."
+)
+
+#: Executable statement that this channel is a decoupling seam, **not** a
+#: settlement authority (M0-07/G26).  Producer capability, reservation/attempt
+#: identity and receipt verification belong to
+#: :meth:`acp_services.runtime.admission.ReservationLedger.record_usage_once`;
+#: wiring this channel alone never fixes the trusted-usage gap.
+USAGE_INGEST_IS_NOT_AUTHORIZATION_NOTE = (
+    "UsageIngestChannel only decouples collection from publication/result access. "
+    "It accepts an already-authorized UsageRecord; who may produce trusted usage "
+    "(producer capability), which reservation/attempt/release the receipt belongs "
+    "to, and the receipt chain are verified by the admission ledger's "
+    "record_usage_once — connecting this channel is not a settlement-authority fix."
 )
 
 #: Executable statement that a monitoring sample is evidence about availability,

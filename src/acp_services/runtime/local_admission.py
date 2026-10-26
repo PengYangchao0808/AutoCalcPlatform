@@ -48,6 +48,7 @@ from acp_services.runtime.idempotency import (
     ReservationIdempotency,
     ReservationPort,
 )
+from acp_services.runtime.receipts import ReceiptHistoryBinding
 from acp_services.runtime.research_budget import (
     BudgetConfigurationError,
     BudgetReason,
@@ -55,6 +56,7 @@ from acp_services.runtime.research_budget import (
     release_statement,
 )
 from acp_services.runtime.usage import UsageUnitCounts, usage_id_for
+from acp_services.runtime.usage_authority import UsageProducer
 
 __all__ = [
     "ADMISSION_ENFORCEMENT",
@@ -643,6 +645,19 @@ class LocalAdmission:
         decision = self.controller.revalidate(reservation_id)
         if decision.allowed:
             self.ledger.mark_research_budget_dispatched(str(reservation_id))
+            job_id = str(getattr(record, "id", "") or "")
+            if job_id:
+                # The idempotent path reserves before the task id exists; bind
+                # the admitted task to its reservation now so trusted usage can
+                # verify the (reservation, job) pair without a work directory.
+                self.ledger.bind_reservation_job(str(reservation_id), job_id)
+                # Record the dispatched attempt: an external usage receipt may
+                # not invent an attempt number that was never dispatched.
+                self.ledger.declare_attempt(
+                    job_id,
+                    int(getattr(record, "attempt", 1) or 1),
+                    reservation_id=str(reservation_id),
+                )
         return decision
 
     def release_job(self, record: Any) -> bool:
@@ -678,7 +693,14 @@ class LocalAdmission:
         return self.controller.release(str(reservation_id))
 
     def record_usage(self, record: Any) -> bool:
-        """Record trusted usage once for a terminal job (duplicate-safe)."""
+        """Book trusted usage once for a terminal job (duplicate-safe, M0-07).
+
+        The Controller is the internal producer: it derives the trusted source
+        itself and hands the settlement ledger the attempt execution identity it
+        observed.  Usage and the research-budget settlement are written in one
+        transaction by :meth:`ReservationLedger.record_usage_once` — there is no
+        separate settlement hop that could double-charge or be skipped.
+        """
         reservation_id = self.reservation_id_for_record(record)
         if reservation_id is None:
             return False
@@ -696,35 +718,41 @@ class LocalAdmission:
         if started is not None and finished is not None and finished >= started:
             seconds = int((finished - started).total_seconds())
         submission_id = None
+        release_id = ""
         result = getattr(record, "result", None)
         if isinstance(result, dict):
             remote = result.get("remote")
             if isinstance(remote, dict) and remote.get("submission_id") is not None:
                 submission_id = str(remote["submission_id"])
-        usage_id = usage_id_for(
-            str(record.id), int(getattr(record, "attempt", 1) or 1), submission_id
+            execution = result.get("execution")
+            if isinstance(execution, dict):
+                release_id = str(execution.get("release_id") or "")
+        attempt = int(getattr(record, "attempt", 1) or 1)
+        usage_id = usage_id_for(str(record.id), attempt, submission_id)
+        binding = ReceiptHistoryBinding(
+            job_id=str(record.id),
+            attempt=attempt,
+            submission_id=submission_id or "",
+            release_id=release_id,
+            reservation_id=str(reservation_id),
         )
+        budget_reservation = self.ledger.research_budget_for_admission(reservation_id)
         recorded = self.controller.record_usage_receipt(
             usage_id,
             reservation_id=reservation_id,
             job_id=str(record.id),
-            attempt=int(getattr(record, "attempt", 1) or 1),
+            attempt=attempt,
             cores=cores,
             seconds=seconds,
+            producer=UsageProducer.INTERNAL,
+            binding=binding,
+            counters=UsageUnitCounts(task_ref=1, attempt=attempt),
+            budget_id="" if budget_reservation is None else budget_reservation.budget_id,
+            budget_reservation_id=(
+                "" if budget_reservation is None else budget_reservation.reservation_id
+            ),
+            run_id=str(getattr(record, "id", "")),
         )
-        budget_reservation = self.ledger.research_budget_for_admission(reservation_id)
-        if budget_reservation is not None:
-            self.ledger.settle_research_budget(
-                budget_reservation.budget_id,
-                receipt_id=usage_id,
-                reservation_id=budget_reservation.reservation_id,
-                counters=UsageUnitCounts(
-                    task_ref=1,
-                    attempt=int(getattr(record, "attempt", 1) or 1),
-                ),
-                run_id=str(getattr(record, "id", "")),
-                trusted_source="controller-terminal-receipt",
-            )
         return recorded
 
     def reservation_port(self) -> ReservationPort:

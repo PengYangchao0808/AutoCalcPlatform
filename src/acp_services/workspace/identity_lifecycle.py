@@ -1894,13 +1894,16 @@ class IdentityLifecycle:
         scope: str,
         actions: Iterable[str] | str | None = None,
         project: str | None = None,
+        usage_capabilities: Iterable[str] | str | None = None,
         expires_at: datetime | str | None = None,
         now: datetime | None = None,
     ) -> GeneratedKey:
         """Issue an API key for an ACTIVE account and register it for revocation.
 
         Refuses on a disabled/revoked/invited account so a disabled account can
-        never mint a new credential.
+        never mint a new credential.  ``usage_capabilities`` is the
+        server-controlled settlement capability metadata (M0-07); it is an
+        issuance argument of this administrative path, never a request field.
         """
         self.require_enabled()
         if self._key_manager is None:
@@ -1916,6 +1919,7 @@ class IdentityLifecycle:
             scope=scope,
             actions=actions,
             project=project,
+            usage_capabilities=usage_capabilities,
             expires_at=expires_at,
             now=now,
         )
