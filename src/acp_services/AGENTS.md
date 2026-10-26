@@ -1,7 +1,7 @@
 # acp_services/ — Platform Services Layer
 
 ## OVERVIEW
-Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **103 `.py`** (96 modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
+Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **109 `.py`** (102 modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
 
 **Status (verified 2026-10-26):** legacy module/contract slices plus the ACP 2.0 capability slices are delivered and covered by guard families — `test_acp_services_isolation.py`, `test_services_worker_contract.py` and `test_services_{attempt_recovery,cgroup_attempt_recovery,standalone_recipe,packaging_roles,release_prep,worker_bootstrap,doc_sync,closure_record}.py`. Real browser / scientific software / LSF / production remain `NOT_VERIFIED` (see `docs/reference/current/ACP_Services_Closure_20261019.md`). `acp` old import paths are retained as identity forwarders — never re-add an implementation on the `acp` side.
 
@@ -17,7 +17,7 @@ acp_services/                             # 103 .py
 ├── data/                 # 13 modules: contracts, operations (prepare), artifacts (B12 artifact lifecycle + ArtifactRef), transfer,
 │                         #   resource_read, read_root, storage_binding, namespaces, archive, import_, budget (storage reservation),
 │                         #   research_resources (B18 Proposal/ResearchRecord CAS), helpers
-├── runtime/              # 47 modules: commands, execution_chain, worker, receipts, recovery, plan_contracts, step_result,
+├── runtime/              # 53 modules: commands, execution_chain, worker, receipts, recovery, plan_contracts, step_result,
 │                         #   step_requirements, admission, quota, usage, usage_units, metering_policy, metering_decoupling,
 │                         #   freshness, projections, events, outbox, provisioning, workflow_enablement, isolation,
 │                         #   lab_capabilities, lineage, helpers, method_flags, research_budget (B17), research_events (B19),
@@ -26,7 +26,9 @@ acp_services/                             # 103 .py
 │                         #   attempt_completion (B07-A), execution_right + receipt_identity + errors (D02), step_dag (B18b),
 │                         #   science_binding (B18a), capability_registry (B22), adapter_registry + adapter_bootstrap (B21),
 │                         #   analysis_capabilities (B06/B12), idempotency (B08), local_admission (B09),
-│                         #   usage_authority (M0-07 producer capability authority), research_session (M1-02 identity/claim/receipt/intent/crash-matrix)
+│                         #   usage_authority (M0-07 producer capability authority), research_session (M1-02 identity/claim/receipt/intent/crash-matrix),
+│                         #   evidence_projection (M1-03 唯一平台投影/TaskRef 归一/ResearchDecision), science_inputs + digest_domains + submit_policy +
+│                         #   execution_limits + planning_reservation (M1-04 a/b/c)
 ├── store/                # 8 modules: store (JobStore CAS), migrations (24), record (v2 TaskRecord §9.1), records, layout,
 │                         #   naming, legacy_method, molecule_groups
 ├── contracts/            # 8 modules: access, envelope, events, config_plan, config_validation, action_gating, injection,
