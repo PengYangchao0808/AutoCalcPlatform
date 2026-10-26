@@ -17,7 +17,7 @@
     {
       "path": "positive/c-dsh-local-singlepoint-live.json",
       "expect": "accept",
-      "provenance": "B-authored shape exemplar of the C dsh-local-singlepoint example; C-authored sample pending blocked_fixture"
+      "provenance": "C-authored live shape sample; declares the required present/absent observations (M0-03/R10)"
     },
     {
       "path": "positive/b-approval.json",
@@ -121,6 +121,36 @@
       "path": "negative/aggregate-missing-child-phase.json",
       "expect": "reject",
       "expect_reason": "aggregate_missing_required_child_phase:da-evidence"
+    },
+    {
+      "path": "negative/live-pass-without-observations.json",
+      "expect": "reject",
+      "expect_reason": "experience_observations_missing",
+      "provenance": "M0-03/R10: a live PASS row must publish declared observations"
+    },
+    {
+      "path": "negative/live-with-offline-fixture.json",
+      "expect": "reject",
+      "expect_reason": "live_nested_evidence_kind:offline_fixture:extensions.experience.diagnostic.offline_proof.evidence_kind",
+      "provenance": "M0-03/R10: an outer live row may not embed an offline_fixture evidence kind"
+    },
+    {
+      "path": "negative/live-model-present-without-calls.json",
+      "expect": "reject",
+      "expect_reason": "live_model_present_without_calls",
+      "provenance": "M0-03/R10: model=present requires a real call and a usage receipt"
+    },
+    {
+      "path": "negative/live-observation-mismatch.json",
+      "expect": "reject",
+      "expect_reason": "experience_observation_mismatch:qc",
+      "provenance": "M0-03/R10: a declared qc=present direction may not be published as absent"
+    },
+    {
+      "path": "negative/live-undeclared-observations.json",
+      "expect": "reject",
+      "expect_reason": "experience_observations_undeclared:not-a-live-scenario",
+      "provenance": "M0-03/R10: a live scenario without a declared observation contract is a contract error"
     }
   ]
 }

@@ -212,9 +212,16 @@ def test_source_and_client_revisions_are_distinguished() -> None:
     assert source["raw_receipt_shas_need_not_match"] is True
     assert index["client_revision"]["value"] == "39d4aeb20451c984e20d27e12270a15070adce12"
     assert "absent" in index["client_revision"]["status"]
-    assert index["harness_revision"]["value"] == _sha256(
-        REPO_ROOT / "scripts/acceptance/acp2_runtime.py"
+    # The index is a frozen historical record of candidate bb45a46: its
+    # harness_revision is the digest that candidate shipped.  M0-03 changes
+    # acp2_runtime.py (required observations), so the recorded digest is pinned
+    # as history instead of being re-derived from the current working tree.
+    assert index["harness_revision"]["value"] == (
+        "b5499a1ce889392b16f7724b556636a1cfa283d664ab1d890ca366c49fea5e8f"
     )
+    live_harness_digest = _sha256(REPO_ROOT / "scripts/acceptance/acp2_runtime.py")
+    assert live_harness_digest != index["harness_revision"]["value"]
+    assert len(live_harness_digest) == 64
     assert index["evidence_revision"]["value"]
     assert index["c35"]["disposition"] in {"c35_absent", "C35_INPUT_CYCLE"}
     assert index["c35"]["disposition"] == "c35_absent"

@@ -56,7 +56,9 @@ def test_help_lists_15_scenarios_and_phase_registry() -> None:
 def test_contract_version_tracks_delivered_manifest() -> None:
     manifest = _read(REPO_ROOT / "docs/reference/next-change/acp2-contracts/manifest.json")
     assert harness.contract_version() == manifest["contract_version"]
-    assert harness.contract_version() == "1.3.0"
+    # M0-01 review vector: registered release contracts live inside the same
+    # annotated delivery set, so the frozen manifest version is 1.4.0.
+    assert harness.contract_version() == "1.4.0"
 
 
 def test_scenario_registry_completeness() -> None:
@@ -196,14 +198,14 @@ def test_unknown_scenario_and_undeclared_phase_exit_3(tmp_path: Path) -> None:
 def test_validate_samples_corpus() -> None:
     result = _run("--validate-samples")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "SUMMARY: 25/25 sample expectations matched" in result.stdout
+    assert "SUMMARY: 30/30 sample expectations matched" in result.stdout
     assert result.stdout.count("ACCEPT") == 10
-    assert result.stdout.count("REJECT") == 15
+    assert result.stdout.count("REJECT") == 20
 
 
 def test_sample_corpus_directly_validates() -> None:
     cases = _read(SAMPLES / "cases.json")["samples"]
-    assert len(cases) == 25
+    assert len(cases) == 30
     for case in cases:
         path = SAMPLES / case["path"]
         document = _read(path)

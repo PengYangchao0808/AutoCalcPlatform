@@ -8,6 +8,10 @@ harness-resolved through ``context.identity.phase``:
   records the plan-digest bind/invalidate matrix.  No Controller, DSH, model,
   QC, LSF or browser process is started: the approval evidence content is
   fixture, recorded as ``experience.approval.evidence_kind == "fixture"``.
+  "The feature owns no transport" is a layering rule, not a PASS criterion:
+  the row additionally proves that the injected ``ACPClient.research`` adapter
+  and its wiring exist (static/controlled check), so a module with no adapter
+  at all can never be accepted just because it performs no fetch.
 * ``budget`` — ``NOT_VERIFIED(b16_handoff)``: no Runtime budget endpoint is
   delivered (B16/B17), so no budget/deny/expire/revoke row may claim evidence.
 * ``aggregate`` — never reaches a scenario body: the harness aggregates the
@@ -18,7 +22,9 @@ The harness normalizes ``--phase approval`` to the public phase
 ``experience:fixture`` through a scenario-level phase alias
 (harness-contract.md §4), so the receipt honestly publishes
 ``evidence_kind=fixture``.  The requested phase remains visible to this body as
-``context.identity.requested_phase``.  No live approval row is ever claimed.
+``context.identity.requested_phase``.  No live approval row is ever claimed,
+and the row publishes ``experience.observations`` with every live observation
+absent plus a zero-model-call fact.
 """
 
 from __future__ import annotations
@@ -41,6 +47,7 @@ from acp2_experience_scenarios import (
     _truncate,
     _write_json,
     _write_text,
+    publish_observations,
     register,
 )
 
@@ -50,6 +57,35 @@ FEATURE_SOURCE = "frontend/js/workbench/features/research-approval.js"
 TEST_SOURCE = "frontend/js/module_tests/acp2_approval.test.js"
 RUN_ALL = "frontend/js/module_tests/run_all.js"
 PLAN_IDENTITY = "docs/reference/next-change/acp2-contracts/experience/plan-identity.md"
+CLIENT_RESEARCH = "frontend/js/client/research-query.js"
+
+# Injected adapter/wiring the approval card must have.  The card owns no
+# transport of its own (``FORBIDDEN_PATTERNS``), so "no fetch" is only honest
+# when the real ``ACPClient.research`` adapter exists and is injected.  These
+# anchors are static and cost no network/model call.
+ADAPTER_WIRING: tuple[tuple[str, str, str], ...] = (
+    (
+        "client_research_namespace",
+        CLIENT_RESEARCH,
+        "ACPClient.research = (function",
+    ),
+    ("client_fetch_proposal", CLIENT_RESEARCH, "fetchProposal: fetchProposal"),
+    (
+        "feature_adapter_injection",
+        FEATURE_SOURCE,
+        "deps.research = next.research",
+    ),
+    (
+        "feature_real_namespace",
+        FEATURE_SOURCE,
+        "window.ACPClient.research",
+    ),
+    (
+        "module_test_real_namespace",
+        TEST_SOURCE,
+        "uses the real ACPClient.research namespace",
+    ),
+)
 
 MIN_APPROVAL_CASES = 8
 
@@ -117,6 +153,25 @@ def _source_scan(source: Path) -> dict[str, Any]:
     }
 
 
+def _adapter_wiring(source: Path) -> dict[str, Any]:
+    """Static check that the injected research adapter and its wiring exist."""
+
+    checks: list[dict[str, Any]] = []
+    for name, relative, anchor in ADAPTER_WIRING:
+        path = source / relative
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        checks.append(
+            {
+                "name": name,
+                "file": relative,
+                "anchor": anchor,
+                "present": bool(text) and anchor in text,
+            }
+        )
+    missing = [check["name"] for check in checks if not check["present"]]
+    return {"checks": checks, "present": not missing, "missing": missing}
+
+
 def _phase_budget(context: Any) -> int:
     out = _out_dir(context)
     rows = {name: "NOT_VERIFIED(b16_handoff)" for name in BUDGET_ROWS}
@@ -164,12 +219,24 @@ def _phase_approval(context: Any) -> int:
     scan = _source_scan(source)
     _write_json(out, "approval-source-scan.json", scan)
     _add_artifact(context, "approval-source-scan.json")
-    content_is_fixture = bool(scan["scanned"]) and not scan["forbidden_hits"]
+    # Layering rule: the approval card owns no transport/viewer/process of its
+    # own.  This is NOT a PASS criterion by itself -- see the adapter wiring
+    # check below, which proves the injected ACPClient.research adapter exists.
     _assertion(
         context,
-        "approval.fixture_content_no_platform_transport",
-        content_is_fixture,
+        "approval.feature_no_direct_transport",
+        bool(scan["scanned"]) and not scan["forbidden_hits"],
         json.dumps(scan["forbidden_hits"], sort_keys=True)[:400],
+    )
+
+    wiring = _adapter_wiring(source)
+    _write_json(out, "approval-adapter-wiring.json", wiring)
+    _add_artifact(context, "approval-adapter-wiring.json")
+    _assertion(
+        context,
+        "approval.injected_adapter_wiring_present",
+        bool(wiring["present"]),
+        f"missing={wiring['missing']}",
     )
 
     run = _run(
@@ -236,15 +303,26 @@ def _phase_approval(context: Any) -> int:
             "display_name_and_timestamps_do_not_invalidate": True,
         },
         "live_b16_rows": {name: "NOT_VERIFIED(b16_handoff)" for name in BUDGET_ROWS},
+        "adapter_wiring": {
+            "present": wiring["present"],
+            "missing": wiring["missing"],
+            "checks": wiring["checks"],
+        },
+        "evidence_layering": {
+            "feature_module": "no fetch/XMLHttpRequest/viewer/child_process",
+            "adapter": "ACPClient.research injected by the workbench",
+            "public_evidence_kind": "fixture",
+            "live_rows": "NOT_VERIFIED(b16_handoff)",
+        },
     }
     _write_json(out, "approval-bind-matrix.json", matrix)
     _add_artifact(context, "approval-bind-matrix.json")
 
     _assertion(
         context,
-        "approval.evidence_kind_fixture_content",
-        content_is_fixture and kind == "fixture",
-        f"content evidence_kind=fixture; public evidence_kind={kind}",
+        "approval.public_evidence_kind_fixture",
+        kind == "fixture",
+        f"public evidence_kind={kind}",
     )
 
     context.extensions["experience.approval_budget"] = {
@@ -255,7 +333,29 @@ def _phase_approval(context: Any) -> int:
         "bind_tuple": BIND_TUPLE,
         "node_tests": {"passed": passed, "failed": failed},
         "live_b16_rows": {name: "NOT_VERIFIED(b16_handoff)" for name in BUDGET_ROWS},
+        "adapter_wiring": {
+            "present": wiring["present"],
+            "missing": wiring["missing"],
+        },
     }
+    publish_observations(
+        context,
+        {
+            "transport": "absent",
+            "controller": "absent",
+            "model": "absent",
+            "qc": "absent",
+            "lsf": "absent",
+            "browser": "absent",
+            "artifact": "absent",
+            "denial": "absent",
+        },
+        model_calls=0,
+        model_evidence=(
+            "fixture approval card: Node module tests only; no model client is "
+            "configured or invoked (0 calls)"
+        ),
+    )
     return _finish(context, "approval_assertion_failed")
 
 

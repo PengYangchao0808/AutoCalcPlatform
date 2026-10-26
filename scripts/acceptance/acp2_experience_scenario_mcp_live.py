@@ -15,8 +15,9 @@ Required evidence:
   (``@deepseek-ai/dsh-mcp-client`` from ``$ACP2_DSH_SOURCE``) against B06,
   recording the negotiated protocol and the full input/output schema snapshot
   for the eight P1 tools;
-* the five-row negotiation matrix (same / different-but-supported / no-common /
-  tools-before-initialize / notification-EOF);
+* the seven-row standard-handshake matrix (same / unsupported-version /
+  private-versions / malformed-version / server-discover / tools-before-
+  initialize / notification-EOF), per ADR-006 (M0-08);
 * the no-side-effect check (Controller still alive, task count unchanged, no
   leftover adapter process).
 
@@ -56,6 +57,7 @@ from acp2_experience_scenarios import (
     _tool_env,
     _truncate,
     _write_json,
+    publish_observations,
     register,
 )
 
@@ -76,8 +78,10 @@ PID_CANDIDATES = (
 )
 MATRIX_ROWS = (
     "same",
-    "different_supported",
-    "no_common",
+    "unsupported_version",
+    "private_versions",
+    "malformed_version",
+    "server_discover",
     "tools_before_init",
     "notification_eof",
 )
@@ -703,7 +707,9 @@ def scenario_mcp_live(context: Any) -> int:
         _add_artifact(context, "negotiation-matrix.json")
         _add_artifact(context, "negotiation/negotiation-matrix.json")
         _add_artifact(context, "negotiation/same/wire.jsonl")
-        _add_artifact(context, "negotiation/no_common/wire.jsonl")
+        _add_artifact(context, "negotiation/unsupported_version/wire.jsonl")
+        _add_artifact(context, "negotiation/malformed_version/wire.jsonl")
+        _add_artifact(context, "negotiation/server_discover/wire.jsonl")
         _add_artifact(context, "negotiation/tools_before_init/wire.jsonl")
         _add_artifact(context, "negotiation/notification_eof/wire.jsonl")
         _assertion(
@@ -869,6 +875,24 @@ def scenario_mcp_live(context: Any) -> int:
             "experience.mcp_live.negotiation_matrix": matrix,
             "experience.mcp_live.not_verified_rows": [item["name"] for item in not_verified],
         }
+    )
+
+    publish_observations(
+        context,
+        {
+            "transport": "present" if official.get("negotiated_protocol") else "absent",
+            "controller": "present" if controller["reachable"] else "absent",
+            "model": "absent",
+            "qc": "absent",
+            "lsf": "absent",
+            "browser": "absent",
+            "artifact": "absent",
+            "denial": "absent",
+        },
+        model_calls=0,
+        model_evidence=(
+            "MCP handshake/tools-list row: no model client is invoked (0 calls)"
+        ),
     )
 
     if failures:

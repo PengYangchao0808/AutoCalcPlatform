@@ -56,6 +56,7 @@ from acp2_experience_scenarios import (
     _truncate,
     _write_json,
     _write_text,
+    publish_observations,
     register,
 )
 
@@ -803,6 +804,26 @@ def _run_rows(context: Any, bundle_path: Path, mode: str) -> int:
             "experience.evidence_screenshot_bytes": screenshot_bytes,
             "experience.evidence_chromium": payload.get("chromium"),
         }
+    )
+
+    live = mode == "live"
+    publish_observations(
+        context,
+        {
+            "transport": "present" if live else "absent",
+            "controller": "absent",
+            "model": "absent",
+            "qc": "absent",
+            "lsf": "absent",
+            "browser": "present" if live else "absent",
+            "artifact": "present" if live and bundle_path.is_file() else "absent",
+            "denial": "absent",
+        },
+        model_calls=0,
+        model_evidence=(
+            f"evidence browser {mode} row: Chromium renders the frozen bundle; "
+            "no model client is invoked (0 calls)"
+        ),
     )
 
     failures = [item for item in context.assertions if item.get("status") == "FAIL"]

@@ -115,6 +115,100 @@ TIMESTAMP_PATTERN = re.compile(
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
+# ---------------------------------------------------------------------------
+# C experience required observations (M0-03/R10)
+# ---------------------------------------------------------------------------
+#
+# ``evidence_kind=live`` is a signed product statement, so it may no longer be
+# derived from the phase alone.  Every C live scenario declares, per
+# observation, whether the live row must have observed it (``present``) or must
+# have observed its absence/untriggered state (``absent``).  A live row that
+# does not declare its observations is a contract error, never a default
+# accept.  ``model=absent`` is a valid live negative only with exactly zero
+# model calls and a real untriggered/denial fact; a budget-denial row must also
+# carry no TaskRef.
+
+EXPERIENCE_OBSERVATIONS_SCHEMA = "acp2.experience.observations.v1"
+OBSERVATION_NAMES = (
+    "transport",
+    "controller",
+    "model",
+    "qc",
+    "lsf",
+    "browser",
+    "artifact",
+    "denial",
+)
+OBSERVATION_DIRECTIONS = ("present", "absent")
+
+_DEFAULT_OBSERVATIONS: dict[str, str] = {
+    "transport": "present",
+    "controller": "present",
+    "model": "absent",
+    "qc": "absent",
+    "lsf": "absent",
+    "browser": "absent",
+    "artifact": "absent",
+    "denial": "absent",
+}
+
+
+def _observations(**overrides: str) -> dict[str, str]:
+    """Build one declared direction map on top of the platform-only default."""
+
+    declared = dict(_DEFAULT_OBSERVATIONS)
+    for name, direction in overrides.items():
+        if name not in OBSERVATION_NAMES:
+            raise ValueError(f"unknown observation {name!r}")
+        if direction not in OBSERVATION_DIRECTIONS:
+            raise ValueError(f"unknown observation direction {direction!r}")
+        declared[name] = direction
+    return declared
+
+
+EXPERIENCE_REQUIRED_OBSERVATIONS: dict[str, dict[str, str]] = {
+    "mcp-live": _observations(),
+    "dsh-discovery-live": _observations(),
+    "model-live": _observations(controller="absent", model="present"),
+    "dsh-local-singlepoint-live": _observations(model="present", qc="present", artifact="present"),
+    "dsh-lsf-singlepoint-live": _observations(
+        model="present", qc="present", lsf="present", artifact="present"
+    ),
+    "dsh-optfreq-live": _observations(model="present", qc="present", artifact="present"),
+    "same-task-browser-live": _observations(
+        model="present", qc="present", browser="present", artifact="present"
+    ),
+    "client-recovery-live": _observations(),
+    "approval-budget-live": _observations(denial="present"),
+    "research-loop-live": _observations(model="present"),
+    "evidence-browser-live": _observations(
+        controller="absent", browser="present", artifact="present"
+    ),
+    "research-resume-live": _observations(model="present"),
+    "fault-boundaries-live": _observations(denial="present"),
+    "da-research-live": _observations(model="present", qc="present", artifact="present"),
+    "plugin-discovery-live": _observations(controller="absent"),
+    "schema-form-live": _observations(browser="present"),
+    "plugin-upgrade-live": _observations(artifact="present"),
+    "cross-domain-live": _observations(model="present", qc="present", artifact="present"),
+    "multi-project-live": _observations(),
+    "experience-upgrade-live": _observations(browser="present"),
+    "clean-install-live": _observations(transport="absent", controller="absent"),
+    "operator-runbook-live": _observations(artifact="present"),
+    # Aggregate/closeout rows resolve to ``main`` + live but start no live
+    # component of their own; every live observation is declared absent.
+    "p2-closeout": _observations(transport="absent", controller="absent"),
+    "client-release": _observations(transport="absent", controller="absent"),
+    "experience-release-closeout": _observations(transport="absent", controller="absent"),
+}
+
+
+def required_observations(scenario_key: str) -> dict[str, str] | None:
+    """Return the frozen present/absent directions for one C live scenario."""
+
+    declared = EXPERIENCE_REQUIRED_OBSERVATIONS.get(scenario_key)
+    return dict(declared) if declared is not None else None
+
 
 def contract_version() -> str:
     """Return the delivered contract version from the authoritative manifest.
@@ -141,9 +235,7 @@ METADATA_VERSION_SOURCES = (
     "src/cccp/version.py",
     "pyproject.toml",
 )
-_VERSION_LITERAL_RE = re.compile(
-    r'^[ \t]*__version__\s*=\s*["\']([^"\']+)["\']', re.MULTILINE
-)
+_VERSION_LITERAL_RE = re.compile(r'^[ \t]*__version__\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
 
 
 def source_version_locations(repo_root: Path) -> dict[str, str]:
@@ -177,13 +269,20 @@ def editable_metadata_version_check(
             {"installed": "<missing>", **sources},
         )
     mismatched = [name for name, value in sources.items() if value != installed]
-    detail = "installed=" + installed + " " + " ".join(
-        f"{name}={value}" for name, value in sources.items()
+    detail = (
+        "installed="
+        + installed
+        + " "
+        + " ".join(f"{name}={value}" for name, value in sources.items())
     )
-    return (not mismatched and len(set(sources.values()) | {installed}) == 1), detail, {
-        "installed": installed,
-        **sources,
-    }
+    return (
+        (not mismatched and len(set(sources.values()) | {installed}) == 1),
+        detail,
+        {
+            "installed": installed,
+            **sources,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1075,6 +1174,127 @@ def _aggregate_errors(document: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _nested_evidence_kinds(value: Any, path: str = "extensions") -> list[tuple[str, str]]:
+    """Collect nested ``evidence_kind`` claims that must never sit in a live row."""
+
+    found: list[tuple[str, str]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if key == "evidence_kind" and isinstance(child, str):
+                if child in ("fixture", "offline_fixture"):
+                    found.append((child, child_path))
+            found.extend(_nested_evidence_kinds(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(_nested_evidence_kinds(child, f"{path}[{index}]"))
+    return found
+
+
+def _experience_observation_errors(document: dict[str, Any]) -> list[str]:
+    """Validate the per-scenario required observations of one C receipt."""
+
+    errors: list[str] = []
+    if document.get("owner") != "C":
+        return errors
+    scenario = document.get("scenario")
+    if not isinstance(scenario, str):
+        return errors
+    scenario_key = (
+        scenario[len("experience:") :] if scenario.startswith("experience:") else scenario
+    )
+    evidence_kind = document.get("evidence_kind")
+    result = document.get("result")
+    extensions = document.get("extensions")
+
+    if evidence_kind == "live" and isinstance(extensions, dict):
+        for nested_kind, nested_path in _nested_evidence_kinds(extensions):
+            errors.append(f"live_nested_evidence_kind:{nested_kind}:{nested_path}")
+
+    raw = extensions.get("experience.observations") if isinstance(extensions, dict) else None
+    if raw is None:
+        if evidence_kind == "live" and result == "PASS":
+            errors.append("experience_observations_missing")
+        return errors
+    if not isinstance(raw, dict):
+        errors.append("experience_observations_invalid")
+        return errors
+
+    declared = EXPERIENCE_REQUIRED_OBSERVATIONS.get(scenario_key)
+    if evidence_kind == "live" and declared is None:
+        errors.append(f"experience_observations_undeclared:{scenario_key}")
+    published_declaration = (
+        extensions.get("experience.declared_observations") if isinstance(extensions, dict) else None
+    )
+    if declared is not None and published_declaration is not None:
+        if published_declaration != declared:
+            errors.append("experience_observations_declaration_drift")
+
+    schema = raw.get("schema")
+    if schema is not None and schema != EXPERIENCE_OBSERVATIONS_SCHEMA:
+        errors.append(f"experience_observations_schema_unsupported:{schema}")
+
+    observed = raw.get("observed")
+    if not isinstance(observed, dict) or not observed:
+        errors.append("experience_observations_invalid")
+        return errors
+
+    for name in sorted(observed):
+        direction = observed[name]
+        if name not in OBSERVATION_NAMES:
+            errors.append(f"experience_observation_unknown:{name}")
+            continue
+        if direction not in OBSERVATION_DIRECTIONS:
+            errors.append(f"experience_observation_direction_invalid:{name}")
+            continue
+        if evidence_kind == "fixture" and direction == "present":
+            errors.append(f"fixture_observation_present:{name}")
+
+    model = observed.get("model")
+    if model in OBSERVATION_DIRECTIONS:
+        calls = raw.get("model_calls")
+        model_evidence = raw.get("model_evidence")
+        calls_ok = isinstance(calls, int) and not isinstance(calls, bool)
+        has_evidence = isinstance(model_evidence, str) and bool(model_evidence.strip())
+        if not calls_ok:
+            errors.append("experience_observations_model_calls_invalid")
+        if model == "present":
+            if calls_ok and calls < 1:
+                errors.append("live_model_present_without_calls")
+            if not has_evidence:
+                errors.append("live_model_present_without_evidence")
+        else:
+            if calls_ok and calls != 0:
+                errors.append("live_model_absent_with_calls")
+            if not has_evidence:
+                errors.append("live_model_absent_without_fact")
+
+    if observed.get("denial") == "present":
+        denial_evidence = raw.get("denial_evidence")
+        denial_kind = raw.get("denial_kind")
+        has_denial = isinstance(denial_evidence, str) and bool(denial_evidence.strip())
+        if not has_denial:
+            errors.append("live_denial_present_without_fact")
+        budget_denial = denial_kind == "budget" or (
+            isinstance(denial_evidence, str) and denial_evidence.startswith("budget")
+        )
+        if budget_denial:
+            for key in ("job_id", "operation_id", "attempt"):
+                if document.get(key) is not None:
+                    errors.append(f"live_budget_denial_task_ref:{key}")
+
+    if raw.get("offline_fixture_content") is True and evidence_kind == "live":
+        errors.append("live_inner_offline_fixture")
+
+    if evidence_kind == "live" and result == "PASS" and declared is not None:
+        for name in sorted(declared):
+            if name not in observed:
+                errors.append(f"experience_observation_missing:{name}")
+            elif observed[name] != declared[name]:
+                errors.append(f"experience_observation_mismatch:{name}")
+    return errors
+
+
 def _semantic_errors(document: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     version = document.get("contract_version")
@@ -1129,6 +1349,7 @@ def _semantic_errors(document: dict[str, Any]) -> list[str]:
 
     errors.extend(_platform_matrix_errors(document, operation_class, target, phase_spec))
     errors.extend(_aggregate_errors(document))
+    errors.extend(_experience_observation_errors(document))
     return errors
 
 
@@ -2135,9 +2356,7 @@ def _run_entry_readonly(
     }
     project_id = os.environ.get("ACP_PROJECT_ID") or "uncategorized"
     project_query = quote(project_id, safe="")
-    science_capabilities_url = (
-        base + "/api/v2/science/capabilities?project_id=" + project_query
-    )
+    science_capabilities_url = base + "/api/v2/science/capabilities?project_id=" + project_query
     science_preflight_url = base + "/api/v2/science/preflight?project_id=" + project_query
     try:
         before = _controller_task_count(base, timeout)
@@ -2203,9 +2422,7 @@ def _run_entry_readonly(
         science_capabilities, dict
     )
     science_preflight_ok = (
-        science_preflight_status == 200
-        and isinstance(science_preflight, dict)
-        and before == after
+        science_preflight_status == 200 and isinstance(science_preflight, dict) and before == after
     )
     assertions.extend(
         [
@@ -2243,8 +2460,7 @@ def _run_entry_readonly(
                 "name": "science_preflight_v2_zero_side_effects",
                 "status": "PASS" if science_preflight_ok else "FAIL",
                 "detail": (
-                    f"status={science_preflight_status} "
-                    f"tasks_before={before} tasks_after={after}"
+                    f"status={science_preflight_status} tasks_before={before} tasks_after={after}"
                 ),
             },
             {
@@ -2277,9 +2493,7 @@ def _run_entry_readonly(
             "b06.missing_operation_status": missing_status,
             "m5.installed_version": m5_versions.get("installed"),
             "m5.source_versions": {
-                name: value
-                for name, value in m5_versions.items()
-                if name != "installed"
+                name: value for name, value in m5_versions.items() if name != "installed"
             },
         }
     )
@@ -2502,11 +2716,14 @@ def _run_mcp_stdio(
             probe.close()
         return EXIT_FAIL, assertions, extensions
 
-    extension = (initialized.get("extensions") or {}).get("acp.research.v1") or {}
+    negotiation = ((initialized.get("capabilities") or {}).get("extensions") or {}).get(
+        "acp.negotiation.v1"
+    ) or {}
     initialized_ok = (
         initialized.get("protocolVersion") == launch.get("protocol_version", "2025-06-18")
-        and extension.get("negotiated") is True
-        and extension.get("version") == "1.1.0"
+        and "extensions" not in initialized
+        and negotiation.get("supported_versions") == ["2025-06-18"]
+        and "negotiated" not in json.dumps(initialized.get("capabilities") or {})
     )
     tools_ok = tool_names == set(MCP_TOOLS)
     capabilities_data = capabilities.get("structuredContent", {})
@@ -2543,9 +2760,12 @@ def _run_mcp_stdio(
     assertions.extend(
         [
             {
-                "name": "initialize_research_extension",
+                "name": "initialize_standard_handshake",
                 "status": "PASS" if initialized_ok else "FAIL",
-                "detail": "acp.research.v1 negotiated with version 1.1.0",
+                "detail": (
+                    "server answered its own version; no top-level extensions and no "
+                    "negotiated claim (ADR-006)"
+                ),
             },
             {
                 "name": "tools_allowlist",
