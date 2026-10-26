@@ -1,0 +1,61 @@
+{
+  "schema": "acp2.remediation.package_install_probe.v1",
+  "generated_on": "2026-10-26T23:15:00Z",
+  "task": "M5-01 pre-finding",
+  "owner": "REL + C-RPH",
+  "host": "clean-arm64-01 (ACPtest, implementation-side)",
+  "environment": {
+    "python": "3.11.18",
+    "node": "22.19.0",
+    "pnpm": "11.28.5",
+    "profile": "/home/ACPtest/acp2-env.sh"
+  },
+  "artifacts": [
+    {
+      "name": "rph-research-0.0.0.tgz",
+      "sha256": "70e0906864d56e60c665b0750140bea352417c3550a1871c7b94a64cd278c21b",
+      "result": "sha256_verify_ok"
+    },
+    {
+      "name": "rph-bridge-0.0.0.tgz",
+      "sha256": "ae2cdcd3821f19b62e24719a45c688ece381a0494e1897acfc987a00c4839b24",
+      "result": "sha256_verify_ok"
+    },
+    {
+      "name": "rph-dsh-bundle-0.0.0.tgz",
+      "sha256": "3c8a8c1728544d821d88e654702b144d169933862ba67582cec59b15251c2c42",
+      "result": "sha256_verify_ok"
+    },
+    {
+      "name": "rph-cli-0.0.0.tgz",
+      "sha256": "85901f8498b941b9b5d91d4224baa8d6fa31c888fb4de07a755787e1e81d8d73",
+      "result": "sha256_verify_ok"
+    }
+  ],
+  "probe": {
+    "package_json": {
+      "private": true,
+      "packageManager": "pnpm@11.28.5"
+    },
+    "command": "pnpm add file:rph-research-0.0.0.tgz file:rph-bridge-0.0.0.tgz file:rph-dsh-bundle-0.0.0.tgz file:rph-cli-0.0.0.tgz",
+    "result": "FAIL",
+    "error": "ERR_PNPM_FETCH_404 GET https://registry.npmjs.org/@rph%2Fresearch: Not Found while installing dependencies of @rph/bridge@0.0.0"
+  },
+  "diagnosis": {
+    "packed_dependencies": {
+      "@rph/bridge": {
+        "@rph/research": "0.0.0"
+      },
+      "@rph/dsh-bundle": {
+        "@rph/bridge": "0.0.0"
+      },
+      "@rph/cli": {
+        "@rph/dsh-bundle": "0.0.0"
+      }
+    },
+    "root_cause": "The workspace pack preserves internal dependency names but does not provide a private registry, file/bundled dependency mapping, or install manifest. pnpm therefore tries the public npm registry for private @rph/* packages.",
+    "impact": "M0-02a proves build/test/package only. The four tarballs are not yet independently installable and must not be cited as a release artifact set."
+  },
+  "required_fix": "M5-01 must make the RPH package set installable from the artifact store without the repository or public npm registry: choose and implement one packaging authority (bundled dependencies, private file registry/lock manifest, or aggregated RPH package), then rerun this probe successfully on the clean host.",
+  "claim_scope": "Implementation-side defect discovery; not independent operator acceptance and not a release PASS."
+}

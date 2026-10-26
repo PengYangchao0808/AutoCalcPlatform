@@ -1,0 +1,133 @@
+$ node scripts/package.mjs
+package: @rph/research@0.0.0
+Tarball Contents
+dist/cas.d.ts
+dist/cas.d.ts.map
+dist/cas.js
+dist/cas.js.map
+dist/index.d.ts
+dist/index.d.ts.map
+dist/index.js
+dist/index.js.map
+dist/memory.d.ts
+dist/memory.d.ts.map
+dist/memory.js
+dist/memory.js.map
+dist/proposal.d.ts
+dist/proposal.d.ts.map
+dist/proposal.js
+dist/proposal.js.map
+dist/record.d.ts
+dist/record.d.ts.map
+dist/record.js
+dist/record.js.map
+dist/store.d.ts
+dist/store.d.ts.map
+dist/store.js
+dist/store.js.map
+package.json
+Tarball Details
+/ACPServer/acp2-remediation-integration/rph/dist-packages/rph-research-0.0.0.tgz
+package: @rph/bridge@0.0.0
+Tarball Contents
+dist/index.d.ts
+dist/index.d.ts.map
+dist/index.js
+dist/index.js.map
+package.json
+Tarball Details
+/ACPServer/acp2-remediation-integration/rph/dist-packages/rph-bridge-0.0.0.tgz
+package: @rph/dsh-bundle@0.0.0
+Tarball Contents
+dist/skills/index.d.ts
+dist/skills/index.d.ts.map
+dist/skills/index.js
+dist/skills/index.js.map
+dist/skills/interpreter.d.ts
+dist/skills/interpreter.d.ts.map
+dist/skills/interpreter.js
+dist/skills/interpreter.js.map
+dist/skills/models.d.ts
+dist/skills/models.d.ts.map
+dist/skills/models.js
+dist/skills/models.js.map
+dist/skills/planner.d.ts
+dist/skills/planner.d.ts.map
+dist/skills/planner.js
+dist/skills/planner.js.map
+dist/skills/reviewer.d.ts
+dist/skills/reviewer.d.ts.map
+dist/skills/reviewer.js
+dist/skills/reviewer.js.map
+dist/skills/schema.d.ts
+dist/skills/schema.d.ts.map
+dist/skills/schema.js
+dist/skills/schema.js.map
+dist/skills/supervisor.d.ts
+dist/skills/supervisor.d.ts.map
+dist/skills/supervisor.js
+dist/skills/supervisor.js.map
+dist/skills/synthesizer.d.ts
+dist/skills/synthesizer.d.ts.map
+dist/skills/synthesizer.js
+dist/skills/synthesizer.js.map
+dist/src/index.d.ts
+dist/src/index.d.ts.map
+dist/src/index.js
+dist/src/index.js.map
+dist/tsconfig.tsbuildinfo
+package.json
+profiles/headless.cordis.yml
+profiles/web.cordis.yml
+Tarball Details
+/ACPServer/acp2-remediation-integration/rph/dist-packages/rph-dsh-bundle-0.0.0.tgz
+package: @rph/cli@0.0.0
+Tarball Contents
+dist/index.d.ts
+dist/index.d.ts.map
+dist/index.js
+dist/index.js.map
+package.json
+Tarball Details
+/ACPServer/acp2-remediation-integration/rph/dist-packages/rph-cli-0.0.0.tgz
+Progress: resolved 0, reused 1, downloaded 0, added 0
+Progress: resolved 4, reused 4, downloaded 0, added 0, done
+
+Done in 786ms using pnpm v11.28.5
+✓ Lockfile passes supply-chain policies (verified 640ms ago)
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +4
+++++
+Packages are cloned from the content-addressable store to the virtual store.
+  Content-addressable store is at: /tmp/.pnpm-store/v11
+  Virtual store is at:             node_modules/.pnpm
+Progress: resolved 4, reused 4, downloaded 0, added 4, done
+
+dependencies:
++ @rph/bridge 0.0.0
++ @rph/cli 0.0.0
++ @rph/dsh-bundle 0.0.0
++ @rph/research 0.0.0
+
+Done in 799ms using pnpm v11.28.5
+RPH INSTALL VERIFY PASS
+  @rph/research -> /tmp/rph-install-oknsVO/node_modules/.pnpm/@rph+research@file+rph-research-0.0.0.tgz/node_modules/@rph/research/dist/index.js
+  @rph/bridge -> /tmp/rph-install-oknsVO/node_modules/.pnpm/@rph+bridge@file+rph-bridge-0.0.0.tgz/node_modules/@rph/bridge/dist/index.js
+  @rph/dsh-bundle -> /tmp/rph-install-oknsVO/node_modules/.pnpm/@rph+dsh-bundle@file+rph-dsh-bundle-0.0.0.tgz/node_modules/@rph/dsh-bundle/dist/src/index.js
+  @rph/cli -> /tmp/rph-install-oknsVO/node_modules/.pnpm/@rph+cli@file+rph-cli-0.0.0.tgz/node_modules/@rph/cli/dist/index.js
+packaged 4 artifacts into /ACPServer/acp2-remediation-integration/rph/dist-packages
+  rph-research-0.0.0.tgz  40094 bytes  sha256=70e0906864d56e60c665b0750140bea352417c3550a1871c7b94a64cd278c21b
+  rph-bridge-0.0.0.tgz  19957 bytes  sha256=ae2cdcd3821f19b62e24719a45c688ece381a0494e1897acfc987a00c4839b24
+  rph-dsh-bundle-0.0.0.tgz  40113 bytes  sha256=3c8a8c1728544d821d88e654702b144d169933862ba67582cec59b15251c2c42
+  rph-cli-0.0.0.tgz  2997 bytes  sha256=85901f8498b941b9b5d91d4224baa8d6fa31c888fb4de07a755787e1e81d8d73
+offline install surface:
+  README.md
+  SHA256SUMS
+  package.json
+  pnpm-lock.yaml
+  pnpm-workspace.yaml
+  rph-install.package.json
+  rph-packages.json
+  verify-install.mjs
+OFFLINE INSTALL SURFACE VERIFIED

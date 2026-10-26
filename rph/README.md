@@ -39,6 +39,39 @@ pnpm --dir rph package              # dist-packages/*.tgz
 `test` fails with `EMPTY TEST SET` when no compiled test is found; an empty set
 is never a pass.
 
+## Offline install surface (release artifacts)
+
+`pnpm package` writes the four private tarballs **and** a self-contained install
+surface into `dist-packages/`:
+
+```text
+dist-packages/
+  rph-{research,bridge,dsh-bundle,cli}-0.0.0.tgz
+  rph-install.package.json   consumer manifest (identical bytes to package.json)
+  package.json
+  pnpm-workspace.yaml        pnpm 11 settings + @rph/* overrides
+  pnpm-lock.yaml             file:-only resolutions
+  rph-packages.json          name/version/size/sha256 index
+  SHA256SUMS                 covers every shipped file
+  README.md                  clean-host instructions
+  verify-install.mjs         checksum + import-resolution check
+```
+
+Copy that directory to the target host and install without a checkout or the
+public registry:
+
+```bash
+pnpm install --offline --frozen-lockfile
+node verify-install.mjs
+```
+
+The packed tarballs keep `@rph/*` dependencies as plain versions (npm rewrites
+`workspace:*`), so `pnpm-workspace.yaml` pins them to the local tarballs via
+`overrides`. pnpm 11 ignores the `pnpm` field in `package.json`; the workspace
+file is the authority. Packaging fails if a tarball digest, the lockfile or a
+throwaway offline install regresses. The packages remain `private: true` — the
+tarballs are distributed, not published.
+
 ## Layout
 
 ```text

@@ -1,0 +1,39 @@
+# clean-host simulation: copied artifact dir only; fresh HOME; empty store/cache; dead registry; offline; no checkout
+# node: v22.19.0  pnpm: 11.28.5
+? Verifying lockfile against supply-chain policies (4 entries)...
+✓ Lockfile passes supply-chain policies (4 entries in 3ms)
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +4
+++++
+Packages are cloned from the content-addressable store to the virtual store.
+  Content-addressable store is at: /tmp/opencode/rph-clean-install-sim-final-home/.local/share/pnpm/store/v11
+  Virtual store is at:             node_modules/.pnpm
+Progress: resolved 4, reused 4, downloaded 0, added 4, done
+
+dependencies:
++ @rph/bridge 0.0.0
++ @rph/cli 0.0.0
++ @rph/dsh-bundle 0.0.0
++ @rph/research 0.0.0
+
+Done in 864ms using pnpm v11.28.5
+INSTALL_EXIT=0
+RPH INSTALL VERIFY PASS
+  @rph/research -> /tmp/opencode/rph-clean-install-sim-final/node_modules/.pnpm/@rph+research@file+rph-research-0.0.0.tgz/node_modules/@rph/research/dist/index.js
+  @rph/bridge -> /tmp/opencode/rph-clean-install-sim-final/node_modules/.pnpm/@rph+bridge@file+rph-bridge-0.0.0.tgz/node_modules/@rph/bridge/dist/index.js
+  @rph/dsh-bundle -> /tmp/opencode/rph-clean-install-sim-final/node_modules/.pnpm/@rph+dsh-bundle@file+rph-dsh-bundle-0.0.0.tgz/node_modules/@rph/dsh-bundle/dist/src/index.js
+  @rph/cli -> /tmp/opencode/rph-clean-install-sim-final/node_modules/.pnpm/@rph+cli@file+rph-cli-0.0.0.tgz/node_modules/@rph/cli/dist/index.js
+VERIFY_EXIT=0
+README.md: 成功
+package.json: 成功
+pnpm-lock.yaml: 成功
+pnpm-workspace.yaml: 成功
+rph-bridge-0.0.0.tgz: 成功
+rph-cli-0.0.0.tgz: 成功
+rph-dsh-bundle-0.0.0.tgz: 成功
+rph-install.package.json: 成功
+rph-packages.json: 成功
+rph-research-0.0.0.tgz: 成功
+verify-install.mjs: 成功
+SHA256SUM_EXIT=0
