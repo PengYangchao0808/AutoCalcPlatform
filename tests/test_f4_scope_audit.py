@@ -2522,6 +2522,11 @@ MIGRATION_STATION_PREFIXES = (
     # Four-site version lockstep (ANTI-PATTERN #2): every release commit bumps
     # this file, so the audit must not flag it as unaudited.
     "src/acp/__init__.py",
+    # M0-09 (remediation 2026-10-26): the single ACP-side declaration of the
+    # research MCP extension id/version, injected into the Services server so
+    # ``acp_services`` never carries an ``acp.*`` wire literal (isolation
+    # gate). Exact file only — a version bump is a contract change.
+    "src/acp/mcp_extension.py",
     # todo 19: the frequency-science delegation target (single parse in cccp).
     "src/acp/results/orca_parser.py",
     # todo 25: CENSO template-line construction points (translation-layer consumers).

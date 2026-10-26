@@ -50,7 +50,7 @@ tests/
 | Browser | `test_frontend_*_browser.py` + `test_frontend_interaction.py` | `pytest.importorskip("playwright")`, `pytestmark = pytest.mark.slow`; CI py3.11 only |
 
 ## CONVENTIONS
-- **Naming**: flat `test_*.py`, domain-prefixed (`test_acp_*` 170, `test_services_*` 69, `test_acp2_*` 66, `test_cccp_*` 47, `test_qc_interfaces_*`, `test_remote_phase*`); the only nested package is `tests/benchmark/nmr/` (5 files). Config in `pyproject.toml` (`testpaths=["tests"]`, `python_files=["test_*.py"]`, markers `slow`/`integration`/`requires_*`) — no pytest.ini
+- **Naming**: flat `test_*.py`, domain-prefixed (`test_acp_*` 170, `test_services_*` 69, `test_acp2_*` 74, `test_cccp_*` 47, `test_qc_interfaces_*`, `test_remote_phase*`); the only nested package is `tests/benchmark/nmr/` (5 files). Config in `pyproject.toml` (`testpaths=["tests"]`, `python_files=["test_*.py"]`, markers `slow`/`integration`/`requires_*`) — no pytest.ini
 - **Assertions**: raw `assert` (no unittest-style `self.assert*`)
 - **Mocking**: `unittest.mock.patch` + `MagicMock` (80 files); `monkeypatch` (186 files) for env/config — **NO pytest-mock/mocker anywhere**
 - **Subprocess mocking idiom**: `patch("cccp.qc.interfaces.censo.subprocess.run", side_effect=fake_run)` — patch at the interface-module path, never bare `subprocess.run` unless the file under test uses it
