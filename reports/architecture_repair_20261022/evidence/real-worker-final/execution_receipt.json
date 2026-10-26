@@ -1,0 +1,32 @@
+{
+  "attempt": 1,
+  "data_bindings": [],
+  "errors": [],
+  "evidence_digests": {
+    "exit_code": "0",
+    "job_status": "completed",
+    "missing_required_facts": "",
+    "normal_reuse": "true",
+    "partial_result": "false",
+    "publish": "true",
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "required_facts": "coordinates,symbols_aligned",
+    "task_result_digest": "sha256:463b5c9e07ad9581382d0167b9688f8466a71c6bfcc17737036a6c19ee60b17d",
+    "truth_table_row": "b"
+  },
+  "fencing_token": "acceptance-worker-fence",
+  "job_id": "real-worker-xtb",
+  "owner": "acceptance-worker",
+  "plan_identity": "v2:real-worker-xtb",
+  "receipt_version": 1,
+  "release_digest": "",
+  "release_id": "repair-20261022",
+  "result_digest": "sha256:91fbc42b33d339a6be4fe40f08d9952178bba4deb1c1f6d75ff04a303ec023f7",
+  "state": "completed",
+  "step_identities": [
+    "v2:real-worker-xtb:0"
+  ],
+  "submission_id": "sub_24a6963818188410",
+  "written_at": "2026-10-22T01:12:29.069339+00:00"
+}

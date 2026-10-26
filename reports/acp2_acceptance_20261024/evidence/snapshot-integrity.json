@@ -1,0 +1,18 @@
+{
+  "current": {
+    "snapshot_changes": [
+      "tests/baseline/refactor-evidence/e2e-task-root.txt"
+    ],
+    "source_changes_since_capture": [
+      "tests/baseline/refactor-evidence/e2e-task-root.txt"
+    ]
+  },
+  "science": {
+    "snapshot_changes": [],
+    "source_changes_since_capture": []
+  },
+  "experience": {
+    "snapshot_changes": [],
+    "source_changes_since_capture": []
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "directory": "rph/packages/research/src",
+  "forbidden_hits": [],
+  "rules": [
+    "sqlite",
+    "fs_write",
+    "child_process",
+    "shell_exec",
+    "direct_net"
+  ],
+  "scanned_files": [
+    "rph/packages/research/src/cas.ts",
+    "rph/packages/research/src/index.ts",
+    "rph/packages/research/src/proposal.ts",
+    "rph/packages/research/src/record.ts",
+    "rph/packages/research/src/store.ts"
+  ]
+}

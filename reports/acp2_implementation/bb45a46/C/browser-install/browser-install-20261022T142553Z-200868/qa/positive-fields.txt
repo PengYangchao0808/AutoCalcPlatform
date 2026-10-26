@@ -1,0 +1,11 @@
+Scenario: browser-install (experience:fixture)
+Command: c_accept browser-install 600
+Exit: 0
+Result: PASS
+Required fields:
+  experience.browser_version = 153.0.8010.12
+  experience.browser_pages = 1
+  experience.browser_screenshot_bytes = 11202
+  experience.browser_interpreter = /ACPServer/acp2-development/venvs/browser/bin/python
+  evidence_kind = fixture
+Receipt validation: --verify-receipt exit 0

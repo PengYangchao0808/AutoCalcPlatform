@@ -1,0 +1,69 @@
+{
+  "artifacts": [
+    {
+      "path": "dry-run.txt",
+      "sha256": "f4908e6262cee966076e1d52449110df2948b8405fe30d406a9c43e9d2c88991",
+      "size_bytes": 741
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "input validation only; no scenario execution",
+      "name": "dry_run",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "research-loop-live",
+    "--subcase",
+    "control",
+    "--dry-run",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/four-tuple/rl-control",
+    "--timeout",
+    "60"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "20261022T141500Z-c03a-harness-selftest",
+    "experience.scenario_key": "research-loop-live",
+    "experience.subcase": "control",
+    "experience.test_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9"
+  },
+  "finished_at": "2026-10-22T13:45:48Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:control",
+  "reason": "dry_run",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261022T141500Z-c03a-harness-selftest",
+  "scenario": "experience:research-loop-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T13:45:48Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -1,0 +1,33 @@
+{
+  "reviewed_at_utc": "2026-10-24T13:27:23.165151+00:00",
+  "plan_revision": 8,
+  "head": "f6dd3c928b4f11dc8c3782c4b15c7130cc856a0b",
+  "tree": "2e21cf63824fa9363890268fa8a767fd79691076",
+  "findings": {
+    "P1": [
+      "N1_remote_current_attempt_identity"
+    ],
+    "P2": [
+      "N2_preflight_inflight_identity",
+      "N3_research_key_delimiter_collision"
+    ]
+  },
+  "product_modified": false,
+  "original_plan_modified": false,
+  "full_regression_rerun": false,
+  "live_acceptance_rerun": false,
+  "qc_executed": false,
+  "network_used": false,
+  "source_sha256": {
+    ".omo/plans/acp2-final-acceptance-remediation.md": "58592bc4ab2cd505bf440a404b413195937f10fb94e4d41d09bf20c9536662ce",
+    "src/acp/services_data_bootstrap.py": "6597478ce568da95f893aa0e6407062a2d949d511dfedc90e5ad94badc3c5677",
+    "src/acp/results/remote_structure_cache.py": "898a3155c42038eca2ceff0ff24f91d452ab4d1dfd7a9bf334b9185380fb8969",
+    "src/acp/storage/manifest.py": "17da341f00a4edd406d7c3c7688d5c5301644f1fd0ffd6105d7fb19124d0f36f",
+    "src/acp_services/entrypoints/status_projection.py": "ba9f8691e88527c0394f2f7f11b356c88c516e9e8b5b3117f72886711334fefb",
+    "src/acp_services/data/research_resources.py": "4987ff75d8c68a566bc1fecfb14bd93e29126b7ce147ce4b5da6fc5bcf179750",
+    "frontend/js/client/resource-store.js": "68c03385cb63294345960f5f49e26dea83e06d0b473c0ed85b04890095cee8a3",
+    "frontend/js/client/science-query.js": "527379de8afb4163016fc4f307974ed10c5d1f19915701a5046a3ae755c57add",
+    "frontend/js/workbench/features/science-question.js": "b51c8a6e9b1b07fba18ce5d2493a45d260930c70729bf989e0b0e8f5adc1c4d3"
+  },
+  "probe_scope": "Production modules with controlled temporary data / adapter; not live product acceptance."
+}

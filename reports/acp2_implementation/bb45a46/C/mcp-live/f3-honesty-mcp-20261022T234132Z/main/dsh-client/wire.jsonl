@@ -1,0 +1,1 @@
+{"direction":"send","message":{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"dsh-mcp-client","version":"0.0.1"}},"jsonrpc":"2.0","id":0}}

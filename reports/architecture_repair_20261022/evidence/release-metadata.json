@@ -1,0 +1,44 @@
+{
+  "cccp-0.2.0-py3-none-any.whl": {
+    "name": "cccp",
+    "version": "0.2.0",
+    "requires_python": ">=3.10",
+    "requires_dist": [
+      "numpy>=2.1.0",
+      "rdkit>=2022.09.1",
+      "pyyaml>=6.0",
+      "scipy>=1.10",
+      "matplotlib>=3.7",
+      "openpyxl>=3.1",
+      "typing-extensions>=4.1",
+      "nmrglue>=0.10; extra == \"nmr\"",
+      "openbabel>=3.1; extra == \"nmr\"",
+      "qml>=0.4; extra == \"nmr\""
+    ],
+    "license_sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d"
+  },
+  "acp_worker-0.2.0-py3-none-any.whl": {
+    "name": "acp-worker",
+    "version": "0.2.0",
+    "requires_python": ">=3.10",
+    "requires_dist": [
+      "cccp==0.2.0"
+    ],
+    "license_sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d"
+  },
+  "acp_web-0.2.0-py3-none-any.whl": {
+    "name": "acp-web",
+    "version": "0.2.0",
+    "requires_python": ">=3.10",
+    "requires_dist": [
+      "cccp==0.2.0",
+      "acp-worker==0.2.0",
+      "fastapi>=0.115",
+      "uvicorn>=0.30",
+      "python-multipart>=0.0.9",
+      "zipstream-ng>=1.9.0",
+      "paramiko>=3.0"
+    ],
+    "license_sha256": "7e7e835d97b8b90aef4b5be522aaeb52f8141c842df8f2c1e46e30746eada37d"
+  }
+}

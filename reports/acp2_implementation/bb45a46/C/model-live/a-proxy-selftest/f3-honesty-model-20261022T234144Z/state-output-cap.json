@@ -1,0 +1,31 @@
+{
+  "base_url": "http://127.0.0.1:45197/v1",
+  "batch_id": "batch-9119b0fd098a4b47",
+  "caps": {
+    "input_tokens": 150000,
+    "model_requests": 12,
+    "output_tokens": 10
+  },
+  "health_url": "http://127.0.0.1:45197/health",
+  "host": "127.0.0.1",
+  "ledger_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/f3-honesty-model-20261022T234144Z/budget/ledger.json",
+  "log_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/f3-honesty-model-20261022T234144Z/proxy-output-cap.jsonl",
+  "models": [
+    "acp2-proxy-model",
+    "stub-error",
+    "stub-interrupt",
+    "stub-no-usage",
+    "stub-ok",
+    "stub-slow",
+    "stub-usage10"
+  ],
+  "pid": 762269,
+  "port": 45197,
+  "ready_url": "http://127.0.0.1:45197/ready",
+  "recovered_inflight_requests": 0,
+  "scenario_budget_id": "selftest-output-cap",
+  "schema": "acp2.model-budget.proxy-state.v1",
+  "started_at": "2026-10-22T23:41:51Z",
+  "stopped_at": "2026-10-22T23:41:52Z",
+  "upstream_base_url": "http://127.0.0.1:42671/v1"
+}

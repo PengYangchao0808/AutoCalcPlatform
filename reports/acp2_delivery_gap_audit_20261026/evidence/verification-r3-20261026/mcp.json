@@ -1,0 +1,179 @@
+{
+  "scope": "Real MCP dispatcher and real Controller normalization; backend recording ports replace all effects",
+  "prepare_then_submit": {
+    "prepare": {
+      "schema_version": 1,
+      "operation": "acp_prepare_artifact",
+      "status": "ok",
+      "exit_code": 0,
+      "dry_run": false,
+      "operation_identity": "tenant:local-single",
+      "diagnostic_ref": null,
+      "data": {
+        "reference": {
+          "kind": "operation",
+          "id": "op_r3"
+        },
+        "idempotency_key": "op_5bb0baeb753817e26e39cc3a62002e77",
+        "query_tool": "acp_status",
+        "operation_ref": {
+          "operation_id": "op_r3"
+        },
+        "availability": "pending"
+      },
+      "error": null
+    },
+    "submit": {
+      "schema_version": 1,
+      "operation": "acp_submit",
+      "status": "ok",
+      "exit_code": 0,
+      "dry_run": false,
+      "operation_identity": "tenant:local-single",
+      "diagnostic_ref": null,
+      "data": {
+        "reference": {
+          "kind": "operation",
+          "id": "op_r3"
+        },
+        "idempotent_replay": true
+      },
+      "error": null
+    },
+    "submit_calls": []
+  },
+  "prepare_changed_identity": {
+    "first": {
+      "schema_version": 1,
+      "operation": "acp_prepare_artifact",
+      "status": "ok",
+      "exit_code": 0,
+      "dry_run": false,
+      "operation_identity": "tenant:local-single",
+      "diagnostic_ref": null,
+      "data": {
+        "reference": {
+          "kind": "operation",
+          "id": "op_r3"
+        },
+        "idempotency_key": "op_5bb0baeb753817e26e39cc3a62002e77",
+        "query_tool": "acp_status",
+        "operation_ref": {
+          "operation_id": "op_r3"
+        },
+        "availability": "pending"
+      },
+      "error": null
+    },
+    "second": {
+      "schema_version": 1,
+      "operation": "acp_prepare_artifact",
+      "status": "ok",
+      "exit_code": 0,
+      "dry_run": false,
+      "operation_identity": "tenant:local-single",
+      "diagnostic_ref": null,
+      "data": {
+        "reference": {
+          "kind": "operation",
+          "id": "op_r3"
+        },
+        "idempotent_replay": true
+      },
+      "error": null
+    },
+    "prepare_calls": [
+      {
+        "purpose": "artifact",
+        "job_id": "job-a",
+        "resource": "result_manifest",
+        "idempotency_key": "r3-shared-key"
+      }
+    ]
+  },
+  "submit_replay_loses_identity": {
+    "first": {
+      "schema_version": 1,
+      "operation": "acp_submit",
+      "status": "ok",
+      "exit_code": 0,
+      "dry_run": false,
+      "operation_identity": "tenant:local-single",
+      "diagnostic_ref": null,
+      "data": {
+        "reference": {
+          "kind": "job",
+          "id": "r3-job"
+        },
+        "idempotency_key": "op_5bb0baeb753817e26e39cc3a62002e77",
+        "query_tool": "acp_status",
+        "cancel_tool": "acp_cancel",
+        "task_ref": {
+          "project_id": "r3-project",
+          "job_id": "r3-job",
+          "attempt": 1,
+          "release_id": "r3-release"
+        }
+      },
+      "error": null
+    },
+    "replay": {
+      "schema_version": 1,
+      "operation": "acp_submit",
+      "status": "ok",
+      "exit_code": 0,
+      "dry_run": false,
+      "operation_identity": "tenant:local-single",
+      "diagnostic_ref": null,
+      "data": {
+        "reference": {
+          "kind": "job",
+          "id": "r3-job"
+        },
+        "idempotent_replay": true
+      },
+      "error": null
+    },
+    "submit_count": 1
+  },
+  "control_different_keys": {
+    "submit_count": 1
+  },
+  "controller_adapter_drops_fields": {
+    "input": {
+      "workflow": "singlepoint",
+      "input": {
+        "source": "C"
+      },
+      "idempotency_key": "r3-shared-key",
+      "execution_mode": "remote",
+      "target_node": "lsf-r3",
+      "node_tags": [
+        "remote"
+      ],
+      "name": "required-name",
+      "config_path": "r3-config.yaml",
+      "molecule_name": "r3-molecule",
+      "task_name": "r3-task",
+      "remark": "required-remark"
+    },
+    "controller_received": {
+      "schema_version": 1,
+      "workflow": "singlepoint",
+      "input": {
+        "source": "C"
+      },
+      "idempotency_key": "r3-shared-key"
+    },
+    "dropped": [
+      "config_path",
+      "execution_mode",
+      "molecule_name",
+      "name",
+      "node_tags",
+      "remark",
+      "target_node",
+      "task_name"
+    ]
+  }
+}

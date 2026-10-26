@@ -1,0 +1,75 @@
+{
+  "artifacts": [
+    {
+      "path": "approval-budget-gap.json",
+      "sha256": "b7fa0ec46ecd9979eb38d80405fe69ad1d225adc48e6f7debfab5fb9ed26c298",
+      "size_bytes": 352
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "b16_handoff: Runtime budget endpoint (B16/B17) is not delivered; budget/deny/expire/revoke rows claim no evidence",
+      "name": "prerequisite:b16_handoff",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+    "harness_revision": "d6647a2a4b58ed5b59f0fcfe97e55673b58429009f5ebe7ecf1e3b5891c64561",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "approval-budget-live",
+    "--timeout",
+    "600",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r2/budget"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "experience.approval_budget": {
+      "phase": "budget",
+      "rows": {
+        "budget.deny": "NOT_VERIFIED(b16_handoff)",
+        "budget.expire": "NOT_VERIFIED(b16_handoff)",
+        "budget.reservation": "NOT_VERIFIED(b16_handoff)",
+        "budget.revoke": "NOT_VERIFIED(b16_handoff)"
+      }
+    },
+    "experience.harness_contract_revision": "d6647a2a4b58ed5b59f0fcfe97e55673b58429009f5ebe7ecf1e3b5891c64561",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "approval-budget-live-r2",
+    "experience.scenario_key": "approval-budget-live",
+    "experience.subcase": null,
+    "experience.test_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d"
+  },
+  "finished_at": "2026-10-22T23:32:35Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "budget",
+  "reason": "b16_handoff: Runtime budget endpoint (B16/B17) is not delivered; budget/deny/expire/revoke rows claim no evidence",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "approval-budget-live-r2",
+  "scenario": "experience:approval-budget-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:32:35Z",
+  "submission_id": null,
+  "usage": null
+}

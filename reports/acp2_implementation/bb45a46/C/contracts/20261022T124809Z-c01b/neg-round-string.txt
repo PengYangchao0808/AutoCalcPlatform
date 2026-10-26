@@ -1,0 +1,1 @@
+REJECTED round-as-string: proposal.round: expected integer, got str

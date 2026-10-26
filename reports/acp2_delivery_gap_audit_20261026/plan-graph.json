@@ -1,0 +1,466 @@
+{
+  "schema": "acp2.execution-plan-graph.v2",
+  "status": "ESTIMATE_ONLY_NOT_M0_01_DELIVERY",
+  "source_plan": "EXECUTION_PLAN.md",
+  "source_plan_sha256": "7b5347fe9779f8daa4cf49a0f52f1fa7a9b54e86b1caa05c30b19d7ae140a7a9",
+  "generator_status": "manual assessment reconstruction; replace only after scripts/acceptance/build_acp2_plan_graph.py exists and validates this model",
+  "dependency_model": {
+    "ranges": "expanded",
+    "start": "task start dependencies; close-only M4-06b/M5 final-close augmentations excluded",
+    "close": "overall close adds M4-06b dependencies M4-03/M4-05 and M5-01/M5-02 final-close all M4 tasks",
+    "m0_13": "conditional only on external_change_required; NOT_APPLICABLE on default path"
+  },
+  "unknown_refs": [],
+  "cycles": [],
+  "nodes": [
+    {
+      "id": "M0-01",
+      "size": "S",
+      "dependencies": [],
+      "conditional": false
+    },
+    {
+      "id": "M0-02",
+      "size": "L",
+      "dependencies": [
+        "M0-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-03",
+      "size": "M",
+      "dependencies": [
+        "M0-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-04",
+      "size": "M",
+      "dependencies": [
+        "M0-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-05",
+      "size": "L",
+      "dependencies": [
+        "M0-04"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-06",
+      "size": "M",
+      "dependencies": [
+        "M0-02",
+        "M0-05"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-07",
+      "size": "L",
+      "dependencies": [
+        "M0-04"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-08",
+      "size": "M",
+      "dependencies": [
+        "M0-02"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-09",
+      "size": "L",
+      "dependencies": [
+        "M0-02",
+        "M0-08"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-10",
+      "size": "L",
+      "dependencies": [
+        "M0-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-11",
+      "size": "M",
+      "dependencies": [
+        "M0-04",
+        "M0-05",
+        "M0-06"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-12",
+      "size": "M",
+      "dependencies": [
+        "M0-02",
+        "M0-08",
+        "M0-09",
+        "M0-11"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M0-13",
+      "size": "L",
+      "dependencies": [
+        "M0-09",
+        "M0-12"
+      ],
+      "conditional": true
+    },
+    {
+      "id": "M1-01",
+      "size": "L",
+      "dependencies": [
+        "M0-02",
+        "M0-06",
+        "M0-08",
+        "M0-09",
+        "M0-12"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M1-02",
+      "size": "L",
+      "dependencies": [
+        "M0-04",
+        "M0-11"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M1-03",
+      "size": "L",
+      "dependencies": [
+        "M0-02"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M1-04",
+      "size": "L",
+      "dependencies": [
+        "M0-04",
+        "M0-06",
+        "M0-07",
+        "M0-11"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M1-05",
+      "size": "L",
+      "dependencies": [
+        "M1-03",
+        "M1-04"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M1-06",
+      "size": "L",
+      "dependencies": [
+        "M0-05",
+        "M1-01",
+        "M1-02",
+        "M1-03",
+        "M1-04"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M2-01",
+      "size": "XL",
+      "dependencies": [
+        "M1-06"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M2-02",
+      "size": "L",
+      "dependencies": [
+        "M0-06",
+        "M1-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M2-03",
+      "size": "XL",
+      "dependencies": [
+        "M0-07",
+        "M1-04",
+        "M2-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M2-04",
+      "size": "XL",
+      "dependencies": [
+        "M1-03",
+        "M1-04",
+        "M2-02",
+        "M2-03"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M2-05",
+      "size": "L",
+      "dependencies": [
+        "M1-04",
+        "M2-02"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M3-01",
+      "size": "L",
+      "dependencies": [
+        "M0-05",
+        "M2-01",
+        "M2-02"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M3-02",
+      "size": "XL",
+      "dependencies": [
+        "M3-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M3-03",
+      "size": "L",
+      "dependencies": [
+        "M1-04",
+        "M2-01",
+        "M2-03"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M3-04",
+      "size": "XL",
+      "dependencies": [
+        "M1-02",
+        "M1-03",
+        "M3-01",
+        "M3-03"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M3-05",
+      "size": "L",
+      "dependencies": [
+        "M2-01",
+        "M2-03"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M3-06",
+      "size": "L",
+      "dependencies": [
+        "M2-02",
+        "M2-05"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M4-01",
+      "size": "L",
+      "dependencies": [
+        "M0-03",
+        "M2-01",
+        "M2-02",
+        "M2-03",
+        "M2-04",
+        "M3-01",
+        "M3-02",
+        "M3-03",
+        "M3-04",
+        "M3-05"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M4-02",
+      "size": "XL",
+      "dependencies": [
+        "M0-10",
+        "M4-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M4-03",
+      "size": "XL",
+      "dependencies": [
+        "M0-10",
+        "M4-02"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M4-04",
+      "size": "XL",
+      "dependencies": [
+        "M1-05",
+        "M2-04",
+        "M3-04",
+        "M4-02"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M4-05",
+      "size": "L",
+      "dependencies": [
+        "M3-06",
+        "M4-02"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M4-06",
+      "size": "XL",
+      "dependencies": [
+        "M0-04",
+        "M0-05",
+        "M0-06",
+        "M0-10",
+        "M4-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M5-01",
+      "size": "L",
+      "dependencies": [
+        "M3-02",
+        "M3-06",
+        "M4-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M5-02",
+      "size": "L",
+      "dependencies": [
+        "M0-03",
+        "M5-01"
+      ],
+      "conditional": false
+    },
+    {
+      "id": "M5-03",
+      "size": "L",
+      "dependencies": [
+        "M0-10",
+        "M5-02"
+      ],
+      "conditional": false
+    }
+  ],
+  "default_start": {
+    "nodes": 39,
+    "edges": 96,
+    "xl_count": 3,
+    "critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "critical_path_length": 16
+  },
+  "default_close": {
+    "nodes": 39,
+    "edges": 109,
+    "xl_count": 6,
+    "critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M4-02",
+      "M4-03",
+      "M4-06",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "critical_path_length": 19
+  },
+  "external_change_required_close": {
+    "nodes": 39,
+    "edges": 112,
+    "xl_count": 6,
+    "critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M0-13",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M4-02",
+      "M4-03",
+      "M4-06",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "critical_path_length": 20
+  }
+}

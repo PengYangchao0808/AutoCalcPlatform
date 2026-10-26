@@ -1,0 +1,6 @@
+{
+  "pyproject.toml": "0.3.0",
+  "src/acp/__init__.py": "0.3.0",
+  "src/cccp/__init__.py": "0.3.0",
+  "src/cccp/version.py": "0.3.0"
+}

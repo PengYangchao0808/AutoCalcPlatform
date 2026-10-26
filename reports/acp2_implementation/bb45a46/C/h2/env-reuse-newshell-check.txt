@@ -1,0 +1,20 @@
+# New-shell env re-check (2026-10-22T22:33:20Z)
+
+## command -v
+command -v node -> /ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node
+command -v pnpm -> /ACPServer/acp2-tools/pnpm/node_modules/.bin/pnpm
+command -v python -> /usr/bin/python
+node    : v22.19.0
+pnpm    : 11.28.5
+python  : Python 3.11.13
+
+## role interpreters non-empty
+PASS: ACP2_C_PYTHON/ACP2_INTEGRATION_PYTHON/ACP2_BROWSER_PYTHON all non-empty
+
+## role-import assertions
+PASS: acp imported from /ACPServer/acp2-development/C/src/acp/__init__.py
+PASS: acp imported from /ACPServer/acp2-development/integration/src/acp/__init__.py
+PASS: playwright imported from /ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py sys.prefix= /ACPServer/acp2-development/venvs/browser
+import assertion exits: c=0 integration=0 browser=0
+
+OVERALL: PASS

@@ -1,0 +1,15 @@
+{
+  "reviewed_candidate": "f6dd3c928b4f11dc8c3782c4b15c7130cc856a0b",
+  "reviewed_files": {
+    ".omo/plans/acp2-final-acceptance-remediation.md": "d83eb956ee17bc45fb740e089c10c9f4f92d7bed98eaf44d3ed148ac813351a0",
+    "reports/acp2_final_acceptance_20261024/REPORT.md": "51e27316a5ec4cc0c00244eb0ac7ba3791985edccf6b4373018479697a053bb4",
+    "reports/acp2_final_acceptance_20261024/summary.json": "fb3cf15910c7c5ee5ffb8a234170b03431e9434e36963e43f728f87b4aad28a4"
+  },
+  "product_modified": false,
+  "full_regression_rerun": false,
+  "targeted_probes": [
+    "preflight/submit canonical digest comparison",
+    "same-project proposal/record namespace collision",
+    "queued prepare payload is not a published report"
+  ]
+}

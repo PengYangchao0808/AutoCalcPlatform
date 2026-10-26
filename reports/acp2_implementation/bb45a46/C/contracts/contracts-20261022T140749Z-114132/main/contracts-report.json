@@ -1,0 +1,115 @@
+{
+  "contracts_dir": "/ACPServer/acp2-development/C/docs/reference/next-change/acp2-contracts/experience",
+  "dialect_errors": [],
+  "documents": [
+    "dsh-compatibility.json",
+    "fixtures/illegal-request.json",
+    "fixtures/illegal-request.valid.json",
+    "fixtures/proposal.valid.json",
+    "fixtures/research-record.valid.json",
+    "fixtures/stale-reference.json",
+    "fixtures/stale-reference.valid.json",
+    "fixtures/unknown-tool.json",
+    "fixtures/unknown-tool.valid.json",
+    "fixtures/wrong-project.json",
+    "fixtures/wrong-project.valid.json",
+    "handoffs/dependencies-c.json",
+    "manifest-extension.schema.json",
+    "proposal.schema.json",
+    "research-record.schema.json",
+    "view-model.schema.json"
+  ],
+  "negative": {
+    "api_key_property": {
+      "errors": [
+        "$/properties/api_key"
+      ],
+      "rejected": true
+    },
+    "bare_task_refs": {
+      "errors": [
+        "schema:type:$.task_refs[0]:expected object"
+      ],
+      "rejected": true
+    },
+    "illegal_approver": {
+      "errors": [
+        "payload_identity:approver"
+      ],
+      "rejected": true
+    },
+    "missing_candidate_id": {
+      "errors": [
+        "schema:missing_required:$:candidate_id"
+      ],
+      "rejected": true
+    },
+    "round_string": {
+      "errors": [
+        "schema:type:$.round:expected integer"
+      ],
+      "rejected": true
+    },
+    "stale_digest": {
+      "errors": [
+        "plan_definition_digest_mismatch:sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b != sha256:9999999999999999999999999999999999999999999999999999999999999999"
+      ],
+      "rejected": true
+    },
+    "unknown_availability": {
+      "errors": [
+        "schema:enum:$.artifacts[0].availability"
+      ],
+      "rejected": true
+    },
+    "unknown_tool": {
+      "errors": [
+        "tool_not_in_allowlist"
+      ],
+      "rejected": true
+    },
+    "wrong_project": {
+      "errors": [
+        "task_refs[0].project_id='proj-beta' != 'proj-alpha'"
+      ],
+      "rejected": true
+    }
+  },
+  "parse_errors": [],
+  "positive": {
+    "illegal_request_positive": {
+      "accepted": true,
+      "errors": []
+    },
+    "proposal": {
+      "accepted": true,
+      "errors": []
+    },
+    "research_record": {
+      "accepted": true,
+      "errors": []
+    },
+    "stale_reference_positive": {
+      "accepted": true,
+      "errors": []
+    },
+    "unknown_tool_positive": {
+      "accepted": true,
+      "errors": []
+    },
+    "view_model": {
+      "accepted": true,
+      "errors": []
+    }
+  },
+  "ref_errors": [],
+  "refs_checked": 39,
+  "required_errors": [],
+  "schemas": [
+    "manifest-extension.schema.json",
+    "proposal.schema.json",
+    "research-record.schema.json",
+    "view-model.schema.json"
+  ],
+  "secret_property_violations": []
+}

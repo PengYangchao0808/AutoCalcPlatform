@@ -1,0 +1,4 @@
+# Snapshot-only overlay: the headless one-shot runner would create an
+# agent (and contact a model). T-12 reads registration, not a model run.
+- id: headless-runner
+  disabled: true

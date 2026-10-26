@@ -1,0 +1,231 @@
+{
+  "schema": "acp2.experience.task-3-verification.v1",
+  "todo": "T-03 / C01b",
+  "run_id": "20261022T124809Z-c01b",
+  "fixes": [
+    "fix-1: type proposal budget and science identity; explicit digest projection"
+  ],
+  "result": "PASS",
+  "candidate": {
+    "c_branch": "acp2/c-experience",
+    "c_head_before_fix": "936c20e668bcc1758f115e2ee3f5b2faf3e32343",
+    "c_source": "/ACPServer/acp2-development/C",
+    "b_repo_head": "a3ff3c5c4725d3e5bec8a7cb196b81c85a0da45e",
+    "b_repo": "/ACPServer/AutoCalcPlatform",
+    "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "evidence_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+    "b_contracts_read_only": {
+      "runtime/p2-research-operations.v1.json": "sha256:f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "runtime/acceptance-result.schema.json": "sha256:9c14f1f50bbbba5733a493b8d018e15d6ee137d49c29b3a9121fda1f6a9108ea",
+      "runtime/application-api.v1.json": "sha256:a9f7e741007029638b64e069d918746f7105c2bf99c97dc1e9c3818cdcc0d4a4",
+      "runtime/admission-approval.v1.json": "sha256:7cbd97ee055a10eec2de475b9eb54d46e8c1e2c0950ca7cd1d347b5958edbb94",
+      "runtime/canonical-digest-vectors.v1.json": "sha256:ce889df114c3138b60cb23ee7dcf3b53cf4246343b5c7a3a3e2549b2c6c87358",
+      "runtime/baseline-lock.json": "sha256:fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5"
+    },
+    "note": "B contracts were read from committed blobs (git show HEAD:<path>); no working-tree B edits were consumed and no B-owned file was modified.",
+    "c_head_after_fix": "e79473d28bdd3432e13e1f6931d34f1e75574142",
+    "fix_commit": "e79473d"
+  },
+  "commands": [
+    {
+      "id": "json-tool-proposal",
+      "command": "\"$ACP2_PYTHON\" -m json.tool experience/proposal.schema.json >/dev/null",
+      "exit": 0,
+      "stdout_file": "json-tool-proposal.txt"
+    },
+    {
+      "id": "json-tool-research-record",
+      "command": "\"$ACP2_PYTHON\" -m json.tool experience/research-record.schema.json >/dev/null",
+      "exit": 0,
+      "stdout_file": "json-tool-research-record.txt"
+    },
+    {
+      "id": "schemas",
+      "command": "assert_research_contracts.py --only schemas --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 0,
+      "stdout_file": "schemas.txt"
+    },
+    {
+      "id": "digest",
+      "command": "assert_research_contracts.py --only digest --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 0,
+      "stdout_file": "digest.txt"
+    },
+    {
+      "id": "neg-round-string",
+      "command": "assert_research_contracts.py --only round-string --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 1,
+      "stdout_file": "neg-round-string.txt",
+      "expected_exit": 1
+    },
+    {
+      "id": "neg-taskrefs-bare",
+      "command": "assert_research_contracts.py --only taskrefs-bare --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 1,
+      "stdout_file": "neg-taskrefs-bare.txt",
+      "expected_exit": 1
+    },
+    {
+      "id": "neg-wrong-project",
+      "command": "assert_research_contracts.py --only wrong-project --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 1,
+      "stdout_file": "neg-wrong-project.txt",
+      "expected_exit": 1
+    },
+    {
+      "id": "neg-unknown-tool",
+      "command": "assert_research_contracts.py --only unknown-tool --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 1,
+      "stdout_file": "neg-unknown-tool.txt",
+      "expected_exit": 1
+    },
+    {
+      "id": "neg-illegal-request",
+      "command": "assert_research_contracts.py --only illegal-request --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 1,
+      "stdout_file": "neg-illegal-request.txt",
+      "expected_exit": 1
+    },
+    {
+      "id": "neg-stale-reference",
+      "command": "assert_research_contracts.py --only stale-reference --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 1,
+      "stdout_file": "neg-stale-reference.txt",
+      "expected_exit": 1
+    },
+    {
+      "id": "all",
+      "command": "assert_research_contracts.py --only all --b-repo /ACPServer/AutoCalcPlatform",
+      "exit": 0,
+      "stdout_file": "all.txt"
+    }
+  ],
+  "assertions": {
+    "schemas_parse": true,
+    "proposal_required_set": [
+      "approval_ref",
+      "budget",
+      "plan_definition_digest",
+      "project_id",
+      "proposal_id",
+      "recipe_digest"
+    ],
+    "proposal_science_required_set": [
+      "allowed_substitutions",
+      "capability_steps",
+      "charge",
+      "initial_inputs",
+      "mapping",
+      "method",
+      "multiplicity"
+    ],
+    "proposal_budget_required_set": [
+      "input_tokens",
+      "model_requests",
+      "output_tokens",
+      "qc_invocations",
+      "queue_seconds",
+      "recipe_steps",
+      "task_refs",
+      "wall_seconds"
+    ],
+    "research_record_required_set": [
+      "decision",
+      "evidence_refs",
+      "plan_definition_digest",
+      "project_id",
+      "research_id",
+      "round",
+      "step_identity_refs",
+      "task_refs"
+    ],
+    "digest_projection_paths": [
+      "recipe_digest",
+      "science.capability_steps",
+      "science.initial_inputs",
+      "science.method",
+      "science.mapping",
+      "science.charge",
+      "science.multiplicity",
+      "science.allowed_substitutions",
+      "budget.model_requests",
+      "budget.input_tokens",
+      "budget.output_tokens",
+      "budget.task_refs",
+      "budget.recipe_steps",
+      "budget.qc_invocations",
+      "budget.wall_seconds",
+      "budget.queue_seconds"
+    ],
+    "digest_baseline": "sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b",
+    "digest_previous_baseline": "sha256:d6b0c35220aec8385f0c92778da312d1c60f7023630572969fbbcd2357b70c8b",
+    "digest_insensitive_unchanged": [
+      "approval_ref",
+      "approval_status",
+      "display_name",
+      "appended_refs"
+    ],
+    "digest_sensitive_changed": [
+      "method",
+      "mapping",
+      "initial_input",
+      "charge",
+      "multiplicity",
+      "budget.model_requests",
+      "budget.wall_seconds"
+    ],
+    "round_as_string_rejected": true,
+    "bare_string_task_refs_rejected": true,
+    "wrong_project_rejected_by_view_model_rule": true,
+    "unknown_tool_rejected_against_b_committed_allowlist": true,
+    "illegal_request_rejected": true,
+    "stale_reference_rejected": true,
+    "positive_counterparts_pass": true
+  },
+  "fixtures": {
+    "positive": [
+      "proposal.valid.json",
+      "research-record.valid.json",
+      "unknown-tool.valid.json",
+      "illegal-request.valid.json",
+      "wrong-project.valid.json",
+      "stale-reference.valid.json"
+    ],
+    "negative": {
+      "unknown-tool.json": "tool acp_research_proposal_delete_v1 absent from B committed 18-tool allowlist",
+      "illegal-request.json": "payload-claimed approver='model' rejected (approver_identity_from_payload)",
+      "wrong-project.json": "view_model.project_id proj-alpha != task_refs[0].project_id proj-beta",
+      "stale-reference.json": "record plan_definition_digest != proposal plan_definition_digest"
+    }
+  },
+  "artifact_sha256": {
+    "docs/reference/next-change/acp2-contracts/experience/proposal.schema.json": "sha256:4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
+    "docs/reference/next-change/acp2-contracts/experience/research-record.schema.json": "sha256:75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+    "docs/reference/next-change/acp2-contracts/experience/plan-identity.md": "sha256:79bb1c226a6f23af65eb1f2a1a4af27a3ea26dfead0299d40d4bd94ac9a8dd9d",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/proposal.valid.json": "sha256:cf15149cb4c49b34f8816f9415c531440b9794a7e8552b3782050ccada4d3b76",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/research-record.valid.json": "sha256:db4fbdafbdfbac2c546e7b2e701f8aa1347e2a9c5e985fe107c7423794c83674",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/unknown-tool.json": "sha256:de93de05ae952d2a22e0e9f4ef1a5a5df0ead93e946bfba54362c328ec461c24",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/unknown-tool.valid.json": "sha256:88f46f595f9d40887a2f6d150b569b3941bfeab840bba2b595be8b1622fbebd9",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/illegal-request.json": "sha256:a2e8d831a7df538aa143b04c2d01791103bef6b47570fc570b3285d01dbde987",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/illegal-request.valid.json": "sha256:7dc9d7401762865c4d3b4fc1fbabec69c78c1d42778863ea40fac8b9133759af",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/wrong-project.json": "sha256:31c5025cb7c40114ea99a7840ee5dda2cc1219cd69fd0a448fefd0d66bb85876",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/wrong-project.valid.json": "sha256:4d95d8de4e1730b97542655e98d305215c2967625a8ea4e675175f44ec460263",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/stale-reference.json": "sha256:b851f38cb1a8b13840c2b777126f67c49af377121bdb230cdb5f66550411e40a",
+    "docs/reference/next-change/acp2-contracts/experience/fixtures/stale-reference.valid.json": "sha256:31784711540a9bb9b14816793a5b23193d229ef5a430a0e773887ba72d10bb24",
+    "docs/reference/next-change/acp2-contracts/experience/requests/A-req-01.md": "sha256:e06daf600770ca33677e79177d2a16117c188231d7377caa37c0e2f0ad5e583b",
+    "docs/reference/next-change/acp2-contracts/experience/requests/B-req-01.md": "sha256:4c19e851ebf307f36c50ade4f34db1e4ae76d5bb6c08a3806e48f4ca566e90c5",
+    "docs/reference/next-change/acp2-contracts/experience/requests/A-req-03.md": "sha256:e22d572e384431b38a3f033a3bddd6feb065af8ab0c73aefa94f809ab8193c99",
+    "docs/reference/next-change/acp2-contracts/experience/requests/B-req-10.md": "sha256:000497fd93b6f0208b5a994e32b565f132e2cb58aea0acbe7fb0e225453ca1b7",
+    "docs/reference/next-change/acp2-contracts/experience/requests/A-req-04.md": "sha256:5ac0261f83223f4e1abf38c18185dbfda57fab2383c4623387e018cd69b40290",
+    "docs/reference/next-change/acp2-contracts/experience/requests/B-req-15.md": "sha256:fe585c539e2d3e11c4b3643bc69958f122767e7e2c75aa58f46c49c963c69235",
+    "docs/reference/next-change/acp2-contracts/experience/requests/B-req-11.md": "sha256:785df93f3c5d26f2edc66a9eb7b28283d3c861e182b70529faba921f7a5f19ab",
+    "reports/acp2_implementation/bb45a46/C/contracts/20261022T124809Z-c01b/assert_research_contracts.py": "sha256:9654e8648f50626b5c78218da9a6a4ba197034a5a019115c9049e555f52ee3c5",
+    "reports/acp2_implementation/bb45a46/C/contracts/20261022T124809Z-c01b/fix-1.txt": "sha256:f92318557675153680d11f41c72b1841836e75b73ebab5b49cb620905f8657b2"
+  },
+  "not_verified": [
+    "NOT_VERIFIED(a_science_handoff): A-req-01/A-req-03/A-req-04 await A's frozen contracts",
+    "NOT_VERIFIED(b01_handoff): B01 phase registry not delivered; da-preflight/da-submit are requested, not proven",
+    "NOT_VERIFIED(search_capability): A-req-04/B-req-15 not integration_ready",
+    "NOT_VERIFIED(selectivity_handoff): A-req-03/B-req-10 not integration_ready"
+  ]
+}

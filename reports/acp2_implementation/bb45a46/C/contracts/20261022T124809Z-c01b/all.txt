@@ -1,0 +1,37 @@
+PARSED fixture illegal-request.json
+PARSED fixture illegal-request.valid.json
+PARSED fixture proposal.valid.json
+PARSED fixture research-record.valid.json
+PARSED fixture stale-reference.json
+PARSED fixture stale-reference.valid.json
+PARSED fixture unknown-tool.json
+PARSED fixture unknown-tool.valid.json
+PARSED fixture wrong-project.json
+PARSED fixture wrong-project.valid.json
+PASS proposal.valid.json (plan_definition_digest=sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b)
+PASS research-record.valid.json
+BASELINE plan_definition_digest=sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b
+STABILITY approval_ref         UNCHANGED sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b
+STABILITY approval_status      UNCHANGED sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b
+STABILITY display_name         UNCHANGED sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b
+STABILITY appended_refs        UNCHANGED sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b
+SENSITIVITY method               CHANGED   sha256:796ae124bc9b572b9db82817efcda7916347a15c1537b58ffb0df5f721461a46
+SENSITIVITY mapping              CHANGED   sha256:d23f5bef3decb6a0fc94497aa6ed857865d241c5fdbb8f017d6f61aa00c84b9d
+SENSITIVITY initial_input        CHANGED   sha256:4e5c49028636b985f50675e4d9dfff6821e86f2f30a2fe44827929c78702eeaf
+SENSITIVITY charge               CHANGED   sha256:56cb383d12b1c3f6756d68f7638b80b58ddf20f5d1e7201e583520d5e1dda879
+SENSITIVITY multiplicity         CHANGED   sha256:2de2569e712cfb5a2efad7bfc6e3de1de879e1873d9bf7bd9ac05e5a79b54b41
+SENSITIVITY budget.model_requests CHANGED   sha256:b1c8cbf6065a77948357020660ba96456d79e8b929c8a64a657cf80240014fd7
+SENSITIVITY budget.wall_seconds  CHANGED   sha256:d8dd828fe8899dc6879cde0b1cb66e0e2e4650bb593ff050343d5cd415a0c365
+PASS digest matrix: 4 insensitive unchanged, 7 sensitive changed
+REJECTED round-as-string: proposal.round: expected integer, got str
+REJECTED bare-string task_refs: record.task_refs: a bare string array is not a TaskRef list (item 0)
+PASS wrong-project.valid.json (project scopes agree)
+REJECTED wrong-project: view-model consistency: view_model.project_id='proj-alpha' != task_refs[0].project_id='proj-beta'
+B allowlist loaded from committed docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json: 18 tools, schema=acp2.runtime.p2-research-operations.v1
+PASS unknown-tool.valid.json (tool acp_research_proposal_create_v1 allowed)
+REJECTED unknown-tool: tool='acp_research_proposal_delete_v1' is not one of 18 committed tools
+PASS illegal-request.valid.json (no payload approver)
+REJECTED illegal-request: approver identity must come from the authenticated Controller channel, not payload fields ['approver']
+PASS stale-reference.valid.json (digest and round current)
+REJECTED stale-reference: stale reference: record plan_definition_digest sha256:9999999999999999999999999999999999999999999999999999999999999999 != proposal sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b
+ALL CHECKS PASS

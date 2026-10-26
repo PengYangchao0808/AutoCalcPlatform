@@ -1,0 +1,18 @@
+{
+  "result": "PASS",
+  "scope": "real xTB 6.7.1 H2 CLI only; no GUI/ORCA/LSF claim",
+  "checks": [
+    {
+      "role": "source",
+      "energy_hartree": -0.982686139534,
+      "structure_sha256": "sha256:b3071747bb4d41e828cce2a80de93dfa7ca09f9df681e0026bb369eed7261336",
+      "manifest_status": "completed"
+    },
+    {
+      "role": "installed",
+      "energy_hartree": -0.982686139534,
+      "structure_sha256": "sha256:b3071747bb4d41e828cce2a80de93dfa7ca09f9df681e0026bb369eed7261336",
+      "manifest_status": "completed"
+    }
+  ]
+}

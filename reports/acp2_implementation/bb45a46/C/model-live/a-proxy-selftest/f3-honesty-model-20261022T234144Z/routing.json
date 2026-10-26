@@ -1,0 +1,17 @@
+{
+  "api": "openai-completions",
+  "mechanism": "Cordis patch `- id: llm-pi-ai` with config.providers.<id>.{api,baseURL,models}; Web Settings \u2192 Models \u2192 Custom model API writes the same fields to $DSH_HOME/profiles/web/cordis.patch.yml, headless uses $DSH_HOME/profiles/headless/cordis.patch.yml",
+  "profiles": {
+    "headless": {
+      "base_url_present": true,
+      "dump": "routing-headless.dump.yml"
+    },
+    "web": {
+      "base_url_present": true,
+      "dump": "routing-web.dump.yml"
+    }
+  },
+  "provider_id": "acp2-budget-proxy",
+  "proxy_base_url": "http://127.0.0.1:43461/v1",
+  "schema": "acp2.model-budget.routing.v1"
+}

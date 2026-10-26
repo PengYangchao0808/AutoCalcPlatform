@@ -1,0 +1,27 @@
+{
+  "browser-official": {
+    "tests": 17,
+    "missing": [],
+    "not_passed": []
+  },
+  "runtime-final": {
+    "tests": 278,
+    "missing": [],
+    "not_passed": []
+  },
+  "worker-root-final": {
+    "tests": 224,
+    "missing": [],
+    "not_passed": []
+  },
+  "architecture-final": {
+    "tests": 393,
+    "missing": [],
+    "not_passed": []
+  },
+  "reconstructed-v2": {
+    "tests": 18,
+    "missing": [],
+    "not_passed": []
+  }
+}

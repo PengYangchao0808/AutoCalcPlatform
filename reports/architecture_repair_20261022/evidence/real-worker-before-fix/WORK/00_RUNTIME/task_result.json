@@ -1,0 +1,73 @@
+{
+  "authority": "cccp.calculation.tasks.optimize:467-599 (_successful_geometry/_result)",
+  "complete": true,
+  "content_digest": "sha256:ad64197f1792cde5d9a064ace9cc0bc2fa96e6fb632e95016ed0b650995c2605",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "coordinates",
+    "symbols_aligned"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:dce26935329dde6e5443f01464524c18830fb39c6b94290f57ffe3068044584a",
+        "path": "/ACPServer/AutoCalcPlatform/xtbopt.xyz",
+        "source": "xtb",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:72b279153627e1dd85e04110555de074b48bfcae55c16e084096fec8989365ec",
+        "path": "/ACPServer/AutoCalcPlatform/xtb.log",
+        "source": "xtb",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        -0.01848467372883
+      ],
+      [
+        0.0,
+        -0.0,
+        0.75848467372883
+      ]
+    ],
+    "energy_hartree": -0.982686139534,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged"
+    },
+    "provenance": {
+      "backend": "xtb",
+      "input_signature": "None",
+      "method": "GFN2-xTB",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  },
+  "result_digest": "sha256:df6e5dbffa450734ec36d6cba99a7a5ea9a5861826bf3bd54acf1df06ff86a93",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "optimize",
+  "truth_table_row": "b",
+  "written_at": "2026-10-22T01:00:07.995429+00:00"
+}

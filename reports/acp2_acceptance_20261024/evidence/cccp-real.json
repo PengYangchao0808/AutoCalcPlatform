@@ -1,0 +1,90 @@
+{
+  "package": "/tmp/acp2-acceptance-20261024/cccp-probe-venv/lib64/python3.11/site-packages/cccp/__init__.py",
+  "version": "0.3.0",
+  "complete": true,
+  "energy_hartree": -1.116759307204,
+  "platform_modules": [],
+  "request": {
+    "schema_version": 1,
+    "task": "singlepoint",
+    "charge": 0,
+    "multiplicity": 1,
+    "level": {
+      "method": "HF",
+      "basis": "STO-3G"
+    },
+    "resources": {
+      "nproc": 1,
+      "timeout_s": 120
+    },
+    "structure": {
+      "role": "minimum",
+      "source": "",
+      "coordinates": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.74
+        ]
+      ],
+      "symbols": [
+        "H",
+        "H"
+      ]
+    },
+    "backend": "orca",
+    "output_dir": "/tmp/acp2-acceptance-20261024/cccp-real"
+  },
+  "result": {
+    "schema_version": 1,
+    "task": "singlepoint",
+    "status": "completed",
+    "complete": true,
+    "errors": [],
+    "frequencies": [],
+    "artifacts": [
+      {
+        "path": "/tmp/acp2-acceptance-20261024/cccp-real/sp.inp",
+        "type": "output",
+        "checksum": "sha256:bce8f2ce805b0a59564f5a8908e2f32c77eecad70de4ebef4d50ca0c36a04b18",
+        "source": "orca"
+      },
+      {
+        "path": "/tmp/acp2-acceptance-20261024/cccp-real/sp.out",
+        "type": "log",
+        "checksum": "sha256:2712f1f47ef5e63001c72018c9a662cde55ba208d6b5d873b868ef793aaf53c6",
+        "source": "orca"
+      }
+    ],
+    "metadata": {},
+    "energy_hartree": -1.116759307204,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "provenance": {
+      "backend": "orca",
+      "method": "HF",
+      "version": "unknown",
+      "input_signature": "None"
+    },
+    "payload": {}
+  }
+}

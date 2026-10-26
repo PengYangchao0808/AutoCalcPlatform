@@ -1,0 +1,179 @@
+{
+  "artifacts": [
+    {
+      "path": "evidence-node-suite.log",
+      "sha256": "7fd1b0a6f6139269fd17d57674994feee30dc5f72df93ce1d59ab2ddac93bd7e",
+      "size_bytes": 1342
+    },
+    {
+      "path": "evidence-browser.log",
+      "sha256": "a94f1237aa17d3d686b72d6a7d02a6b4f25ff60a76db14200ff2d7d85dad90c7",
+      "size_bytes": 16916
+    },
+    {
+      "path": "evidence-browser-live.png",
+      "sha256": "099a0fa5561a5ec31a689d759be826a555e063d7ea58eb7a1ce08eb98ba93fa3",
+      "size_bytes": 402860
+    },
+    {
+      "path": "evidence-console.json",
+      "sha256": "42197434d18e0dfe24080973dc05d68673ff29b4a3fc2b65a1c7acfacfdcbb39",
+      "size_bytes": 42
+    },
+    {
+      "path": "evidence-network.json",
+      "sha256": "0012c2c754b7b40ac404201c0e200f8ad90166f1ca99a3ecebc47c6e8164ba72",
+      "size_bytes": 18696
+    },
+    {
+      "path": "evidence-page.html",
+      "sha256": "8cb99061588645e6eaad93b9b50dc6f175eb74095269c23cddb6280d35511d42",
+      "size_bytes": 117216
+    },
+    {
+      "path": "evidence-panel.png",
+      "sha256": "b2a27d18157dcdbbd2711094850ae2eedfc55e873e688bac9bead1f7b34f5721",
+      "size_bytes": 68949
+    },
+    {
+      "path": "evidence-browser-live.json",
+      "sha256": "0b68fcb878cd9a775658cc3400d2c9bff9eaaf76642fd1e10edd933809a14fd6",
+      "size_bytes": 1806
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=19 failed=0 min=10",
+      "name": "evidence.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "visualization fetch hits=0 () feature fetch hits=0",
+      "name": "evidence.no_fetch",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 error=None port=39655",
+      "name": "evidence.browser.probe_completed",
+      "status": "PASS"
+    },
+    {
+      "detail": "entry_visible=True",
+      "name": "evidence.browser.entry_visible",
+      "status": "PASS"
+    },
+    {
+      "detail": "claim_states=['supported', 'refuted', 'inconclusive', 'not_evaluated']",
+      "name": "evidence.browser.claim_states_distinct",
+      "status": "PASS"
+    },
+    {
+      "detail": "marker=True not_success_colored=True",
+      "name": "evidence.browser.inconclusive_live_not_verified",
+      "status": "PASS"
+    },
+    {
+      "detail": "execution_next_to_claim=True",
+      "name": "evidence.browser.execution_next_to_claim",
+      "status": "PASS"
+    },
+    {
+      "detail": "artifacts=True validator=True method=True missing=True decision=True",
+      "name": "evidence.browser.claim_expansion",
+      "status": "PASS"
+    },
+    {
+      "detail": "save_only=True clicks=1 submit_calls=0",
+      "name": "evidence.browser.energy_save_candidate_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "hide=True switch=True dispose={'before': 90, 'ran': 0, 'ranAfterRegister': 0, 'after': 90, 'disposed': True, 'lateError': None}",
+      "name": "evidence.browser.lifecycle",
+      "status": "PASS"
+    },
+    {
+      "detail": "screenshot_bytes=402860 probe_bytes=402860",
+      "name": "evidence.browser.screenshot_nonempty",
+      "status": "PASS"
+    },
+    {
+      "detail": "console_errors=0 page_errors=0 ",
+      "name": "evidence.browser.zero_console_errors",
+      "status": "PASS"
+    },
+    {
+      "detail": "entries=153",
+      "name": "evidence.browser.network_log",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "8413db719681ffa08370c00001bb634f4dea274a",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "8413db719681ffa08370c00001bb634f4dea274a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "evidence-browser-live",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/evidence-browser-live/evidence-browser-live-20261023T024448Z-979225/main/fixture"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.evidence_chromium": "153.0.8010.12",
+    "experience.evidence_claim_states": [
+      "supported",
+      "refuted",
+      "inconclusive",
+      "not_evaluated"
+    ],
+    "experience.evidence_console_errors": 0,
+    "experience.evidence_dispose_tick_fires_nothing": true,
+    "experience.evidence_feature_fetch_hits": 0,
+    "experience.evidence_inconclusive_live_not_verified": true,
+    "experience.evidence_min_tests": 10,
+    "experience.evidence_mode": "fixture",
+    "experience.evidence_screenshot_bytes": 402860,
+    "experience.evidence_submit_calls": 0,
+    "experience.evidence_suite_failed": 0,
+    "experience.evidence_suite_passed": 19,
+    "experience.evidence_viz_fetch_hits": 0,
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "evidence-browser-live-20261023T024448Z-979225",
+    "experience.scenario_key": "evidence-browser-live",
+    "experience.subcase": null,
+    "experience.test_revision": "8413db719681ffa08370c00001bb634f4dea274a"
+  },
+  "finished_at": "2026-10-23T02:44:52Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "evidence-browser-live-20261023T024448Z-979225",
+  "scenario": "experience:evidence-browser-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T02:44:48Z",
+  "submission_id": null,
+  "usage": null
+}

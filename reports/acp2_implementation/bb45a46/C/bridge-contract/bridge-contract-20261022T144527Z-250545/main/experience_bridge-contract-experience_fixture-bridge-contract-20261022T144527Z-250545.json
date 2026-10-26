@@ -1,0 +1,194 @@
+{
+  "artifacts": [
+    {
+      "path": "p2-research-operations.v1.json",
+      "sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "size_bytes": 13247
+    },
+    {
+      "path": "bridge-map.json",
+      "sha256": "63aa7e3f0ba6176004e77df25268805fac1c675deeaf7659f90f75e3cb9510ea",
+      "size_bytes": 5560
+    },
+    {
+      "path": "tool-allowlist.json",
+      "sha256": "edc7184f420c8a6bb892bf639977863447b397db30f5f2d82e22dca3b49eebc4",
+      "size_bytes": 1287
+    },
+    {
+      "path": "rph-test.log",
+      "sha256": "b07d22a2bf6845f80bbcfa45f257f9a4ec62775a5de31e3cb1404e61ca009898",
+      "size_bytes": 5980
+    },
+    {
+      "path": "rph-gates.log",
+      "sha256": "3b9b54dea559c0b254fd4d2aa5299b2da8049937e867b4811b3d1bd8e0994390",
+      "size_bytes": 7635
+    },
+    {
+      "path": "bridge-contract-report.json",
+      "sha256": "aa65921aee7f863e074ac6823ee90ab35afc63cb1362c5d40f3ad13f3f6ce8ea",
+      "size_bytes": 2253
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "evidence_kind=fixture",
+      "name": "bridge.evidence_kind_fixture",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 Scope: all 5 workspace projects\nAlready up to date\nDone in 621ms using pnpm v11.28.5",
+      "name": "bridge.install",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ tsc -b",
+      "name": "bridge.build",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 side-effect free\n  ---\n  duration_ms: 1.734237\n  type: 'test'\n  ...\n# Subtest: cli parser rejects unknown arguments and missing profile values\nok 33 - cli parser rejects unknown arguments and missing profile values\n  ---\n  duration_ms: 0.43908\n  type: 'test'\n  ...\n1..33\n# tests 33\n# suites 0\n# pass 33\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 124.739337\n$ node scripts/run-tests.mjs",
+      "name": "bridge.test",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ node scripts/check-boundaries.mjs && tsc -b --pretty false",
+      "name": "bridge.check",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0  scanned files: 4\n  research: 1 file(s), imports -> research\n  bridge: 1 file(s), imports -> bridge, research\n  dsh-bundle: 1 file(s), imports -> dsh-bundle, bridge\n  cli: 1 file(s), imports -> cli, dsh-bundle\n  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),\n             DSH private source paths, platform store imports, wrong-direction imports\n\nBOUNDARY CHECK PASS",
+      "name": "bridge.boundaries",
+      "status": "PASS"
+    },
+    {
+      "detail": "tests=33 failures=0",
+      "name": "bridge.test_count",
+      "status": "PASS"
+    },
+    {
+      "detail": "missing=[] covered=['artifact_reference_digest', 'extension_negotiation', 'iserror_never_success', 'long_task_reference_only', 'mutated_method', 'negative_iserror_mutant', 'raw_prefix', 'read_without_prepare']",
+      "name": "bridge.boundary_cases_in_test_names",
+      "status": "PASS"
+    },
+    {
+      "detail": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "name": "bridge.b03_snapshot_sha256",
+      "status": "PASS"
+    },
+    {
+      "detail": "declared=['f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c'] committed=f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "name": "bridge.doc_declares_b03_sha256",
+      "status": "PASS"
+    },
+    {
+      "detail": "acp.research.v1@1.0.0",
+      "name": "bridge.doc_extension_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"extension_id\": \"acp.research.v1\", \"extension_version\": \"1.0.0\", \"initialize_param\": \"capabilities.extensions\", \"refusal\": {\"class\": \"unsupported\", \"code\": \"unsupported_capability\", \"params\": {\"rule\": \"extension_not_negotiated\"}}}",
+      "name": "bridge.b03_negotiation_rule",
+      "status": "PASS"
+    },
+    {
+      "detail": "declared=['acp_analyze', 'acp_cancel', 'acp_capabilities', 'acp_preflight', 'acp_prepare_artifact', 'acp_read_artifact', 'acp_status', 'acp_submit']",
+      "name": "bridge.p1_allowlist_is_eight",
+      "status": "PASS"
+    },
+    {
+      "detail": "p1=8 p2=10 combined=18",
+      "name": "bridge.allowlist_size_18",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 sume\",\n      \"toolVersion\": \"1.0.0\",\n      \"controllerClientMethod\": \"resume_research\",\n      \"errorCodes\": [\n        \"authorization\",\n        \"invalid-parameter\",\n        \"conflict\",\n        \"retryable\",\n        \"not-prepared\"\n      ],\n      \"wiringTask\": \"T-32\",\n      \"longTask\": false\n    }\n  ]\n}",
+      "name": "bridge.dump_exit",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"id\": \"acp.research.v1\", \"version\": \"1.0.0\"}",
+      "name": "bridge.compiled_extension_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "columns=['operation', 'row', 'tool/version', 'controller method', 'application use case', 'permission/principal', 'error codes', 'wiring task']",
+      "name": "bridge.doc_table_columns",
+      "status": "PASS"
+    },
+    {
+      "detail": "doc=12 compiled=12 diff=[]",
+      "name": "bridge.map_has_no_missing_row",
+      "status": "PASS"
+    },
+    {
+      "detail": "mismatches=[]",
+      "name": "bridge.p2_rows_reference_committed_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "covered=10 of 10",
+      "name": "bridge.every_b03_tool_has_a_row",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "5e01758376ecde96fd5bfa3bc8b6379b0e23951b",
+    "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "5e01758376ecde96fd5bfa3bc8b6379b0e23951b",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "bridge-contract",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T144527Z-250545/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.bridge_contract.allowlist_size": 18,
+    "experience.bridge_contract.b03_sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+    "experience.bridge_contract.closes_h2": false,
+    "experience.bridge_contract.evidence_kind": "fixture",
+    "experience.bridge_contract.extension": "acp.research.v1@1.0.0",
+    "experience.bridge_contract.p2_operations": 12,
+    "experience.bridge_contract.tests": 33,
+    "experience.bridge_contract.tool_allowlist_sha256": "d9581b450ab79e7c7c76ea0643abab40d6911c123bcfddfafeef23499c4964a9",
+    "experience.harness_contract_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "bridge-contract-20261022T144527Z-250545",
+    "experience.scenario_key": "bridge-contract",
+    "experience.subcase": null,
+    "experience.test_revision": "5e01758376ecde96fd5bfa3bc8b6379b0e23951b"
+  },
+  "finished_at": "2026-10-22T14:45:31Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "bridge-contract-20261022T144527Z-250545",
+  "scenario": "experience:bridge-contract",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:45:28Z",
+  "submission_id": null,
+  "usage": null
+}

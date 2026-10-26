@@ -1,0 +1,265 @@
+{
+  "artifacts": [
+    {
+      "path": "p2-research-operations.v1.json",
+      "sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "size_bytes": 13247
+    },
+    {
+      "path": "bridge-map.json",
+      "sha256": "63aa7e3f0ba6176004e77df25268805fac1c675deeaf7659f90f75e3cb9510ea",
+      "size_bytes": 5560
+    },
+    {
+      "path": "tool-allowlist.json",
+      "sha256": "edc7184f420c8a6bb892bf639977863447b397db30f5f2d82e22dca3b49eebc4",
+      "size_bytes": 1287
+    },
+    {
+      "path": "rph-test.log",
+      "sha256": "f69061b2db63ad6543567265cd39703ea7d59d41dd76a332aeed78fc951fe530",
+      "size_bytes": 7570
+    },
+    {
+      "path": "rph-gates.log",
+      "sha256": "7534d2217f640354cf8b653770dbc99903891adbb64390560975c9bb7c373d71",
+      "size_bytes": 9225
+    },
+    {
+      "path": "bridge-mutants.log",
+      "sha256": "ec96311129bffdc2e83be4f9c0e31898e42f06a16e3762b8f8f3094d5468a9a0",
+      "size_bytes": 2721
+    },
+    {
+      "path": "bridge-negative-evidence.json",
+      "sha256": "2f5a45180df273f76d20e14d65c12082a21de84697fcae3181e2e7712287604e",
+      "size_bytes": 643
+    },
+    {
+      "path": "bridge-contract-report.json",
+      "sha256": "583774bcffdac3c2fa82a9bc78076094c6ea12cad67315adb137c6465308dab6",
+      "size_bytes": 2844
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "evidence_kind=fixture",
+      "name": "bridge.evidence_kind_fixture",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 Scope: all 5 workspace projects\nAlready up to date\nDone in 613ms using pnpm v11.28.5",
+      "name": "bridge.install",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ tsc -b",
+      "name": "bridge.build",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 ide-effect free\n  ---\n  duration_ms: 0.437394\n  type: 'test'\n  ...\n# Subtest: cli parser rejects unknown arguments and missing profile values\nok 41 - cli parser rejects unknown arguments and missing profile values\n  ---\n  duration_ms: 0.405851\n  type: 'test'\n  ...\n1..41\n# tests 41\n# suites 0\n# pass 41\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 140.257683\n$ node scripts/run-tests.mjs",
+      "name": "bridge.test",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ node scripts/check-boundaries.mjs && tsc -b --pretty false",
+      "name": "bridge.check",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0  scanned files: 4\n  research: 1 file(s), imports -> research\n  bridge: 1 file(s), imports -> bridge, research\n  dsh-bundle: 1 file(s), imports -> dsh-bundle, bridge\n  cli: 1 file(s), imports -> cli, dsh-bundle\n  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),\n             DSH private source paths, platform store imports, wrong-direction imports\n\nBOUNDARY CHECK PASS",
+      "name": "bridge.boundaries",
+      "status": "PASS"
+    },
+    {
+      "detail": "tests=41 failures=0",
+      "name": "bridge.test_count",
+      "status": "PASS"
+    },
+    {
+      "detail": "missing=[] covered=['artifact_reference_digest', 'extension_negotiation', 'iserror_never_success', 'long_task_reference_only', 'mutated_method', 'negative_iserror_mutant', 'raw_prefix', 'read_without_prepare']",
+      "name": "bridge.boundary_cases_in_test_names",
+      "status": "PASS"
+    },
+    {
+      "detail": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "name": "bridge.b03_snapshot_sha256",
+      "status": "PASS"
+    },
+    {
+      "detail": "declared=['f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c'] committed=f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+      "name": "bridge.doc_declares_b03_sha256",
+      "status": "PASS"
+    },
+    {
+      "detail": "acp.research.v1@1.0.0",
+      "name": "bridge.doc_extension_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"extension_id\": \"acp.research.v1\", \"extension_version\": \"1.0.0\", \"initialize_param\": \"capabilities.extensions\", \"refusal\": {\"class\": \"unsupported\", \"code\": \"unsupported_capability\", \"params\": {\"rule\": \"extension_not_negotiated\"}}}",
+      "name": "bridge.b03_negotiation_rule",
+      "status": "PASS"
+    },
+    {
+      "detail": "declared=['acp_analyze', 'acp_cancel', 'acp_capabilities', 'acp_preflight', 'acp_prepare_artifact', 'acp_read_artifact', 'acp_status', 'acp_submit']",
+      "name": "bridge.p1_allowlist_is_eight",
+      "status": "PASS"
+    },
+    {
+      "detail": "p1=8 p2=10 combined=18",
+      "name": "bridge.allowlist_size_18",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 sume\",\n      \"toolVersion\": \"1.0.0\",\n      \"controllerClientMethod\": \"resume_research\",\n      \"errorCodes\": [\n        \"authorization\",\n        \"invalid-parameter\",\n        \"conflict\",\n        \"retryable\",\n        \"not-prepared\"\n      ],\n      \"wiringTask\": \"T-32\",\n      \"longTask\": false\n    }\n  ]\n}",
+      "name": "bridge.dump_exit",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"id\": \"acp.research.v1\", \"version\": \"1.0.0\"}",
+      "name": "bridge.compiled_extension_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "columns=['operation', 'row', 'tool/version', 'controller method', 'application use case', 'permission/principal', 'error codes', 'wiring task']",
+      "name": "bridge.doc_table_columns",
+      "status": "PASS"
+    },
+    {
+      "detail": "doc=12 compiled=12 diff=[]",
+      "name": "bridge.map_has_no_missing_row",
+      "status": "PASS"
+    },
+    {
+      "detail": "mismatches=[]",
+      "name": "bridge.p2_rows_reference_committed_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "covered=10 of 10",
+      "name": "bridge.every_b03_tool_has_a_row",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0    \"build_exit\": 0,\n      \"test_exit\": 1\n    },\n    {\n      \"id\": \"credential_absolute_path\",\n      \"guard\": \"credential/absolute-path refusal\",\n      \"test\": \"credential-bearing and absolute-path results are refused\",\n      \"applied\": true,\n      \"occurrences\": 1,\n      \"red\": true,\n      \"specific_test_failed\": true,\n      \"restored\": true,\n      \"build_exit\": 0,\n      \"test_exit\": 1\n    }\n  ]\n}",
+      "name": "bridge.negative.mutant_run_exit",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "name": "bridge.negative.matrix_present",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"applied\": true, \"build_exit\": 0, \"guard\": \"raw-prefix rejection\", \"id\": \"raw_prefix\", \"occurrences\": 1, \"red\": true, \"restored\": true, \"specific_test_failed\": true, \"test\": \"model-visible prefix stripping is exactly once and raw prefixes are rejected\", \"test_exit\": 1}",
+      "name": "bridge.negative.raw_prefix",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"applied\": true, \"build_exit\": 0, \"guard\": \"isError preservation\", \"id\": \"iserror_preserved\", \"occurrences\": 1, \"red\": true, \"restored\": true, \"specific_test_failed\": true, \"test\": \"tool isError is never promoted to success\", \"test_exit\": 1}",
+      "name": "bridge.negative.iserror_preserved",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"applied\": true, \"build_exit\": 0, \"guard\": \"read-before-prepare\", \"id\": \"read_before_prepare\", \"occurrences\": 1, \"red\": true, \"restored\": true, \"specific_test_failed\": true, \"test\": \"read before prepare returns the exact not_prepared envelope without preparing\", \"test_exit\": 1}",
+      "name": "bridge.negative.read_before_prepare",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"applied\": true, \"build_exit\": 0, \"guard\": \"per-operation required matrix\", \"id\": \"operation_required_matrix\", \"occurrences\": 1, \"red\": true, \"restored\": true, \"specific_test_failed\": true, \"test\": \"per-operation required-field matrix accepts positives and rejects every missing field\", \"test_exit\": 1}",
+      "name": "bridge.negative.operation_required_matrix",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"applied\": true, \"build_exit\": 0, \"guard\": \"project/attempt ownership\", \"id\": \"artifact_ownership\", \"occurrences\": 1, \"red\": true, \"restored\": true, \"specific_test_failed\": true, \"test\": \"cross-project and cross-attempt reads are refused\", \"test_exit\": 1}",
+      "name": "bridge.negative.artifact_ownership",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"applied\": true, \"build_exit\": 0, \"guard\": \"credential/absolute-path refusal\", \"id\": \"credential_absolute_path\", \"occurrences\": 1, \"red\": true, \"restored\": true, \"specific_test_failed\": true, \"test\": \"credential-bearing and absolute-path results are refused\", \"test_exit\": 1}",
+      "name": "bridge.negative.credential_absolute_path",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92 after=d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92 current=d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+      "name": "bridge.negative.source_restored_byte_for_byte",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected=6 observed=6 restored=True",
+      "name": "bridge.negative.all_six_guards_red",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "4fa39bb309d0230c88164268df02a87bb2922e7a",
+    "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "4fa39bb309d0230c88164268df02a87bb2922e7a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "bridge-contract",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/bridge-contract-20261022T150332Z-301445/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.bridge_contract.allowlist_size": 18,
+    "experience.bridge_contract.b03_sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+    "experience.bridge_contract.closes_h2": false,
+    "experience.bridge_contract.evidence_kind": "fixture",
+    "experience.bridge_contract.extension": "acp.research.v1@1.0.0",
+    "experience.bridge_contract.negative_evidence": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/negative/bridge-contract-20261022T150332Z-301445",
+    "experience.bridge_contract.negative_guards": [
+      "raw_prefix",
+      "iserror_preserved",
+      "read_before_prepare",
+      "operation_required_matrix",
+      "artifact_ownership",
+      "credential_absolute_path"
+    ],
+    "experience.bridge_contract.negative_red_mutants": 6,
+    "experience.bridge_contract.p2_operations": 12,
+    "experience.bridge_contract.source_sha256": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+    "experience.bridge_contract.tests": 41,
+    "experience.bridge_contract.tool_allowlist_sha256": "d9581b450ab79e7c7c76ea0643abab40d6911c123bcfddfafeef23499c4964a9",
+    "experience.harness_contract_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "bridge-contract-20261022T150332Z-301445",
+    "experience.scenario_key": "bridge-contract",
+    "experience.subcase": null,
+    "experience.test_revision": "4fa39bb309d0230c88164268df02a87bb2922e7a"
+  },
+  "finished_at": "2026-10-22T15:03:45Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "bridge-contract-20261022T150332Z-301445",
+  "scenario": "experience:bridge-contract",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T15:03:32Z",
+  "submission_id": null,
+  "usage": null
+}

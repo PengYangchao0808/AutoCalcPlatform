@@ -1,0 +1,84 @@
+{
+  "schema": "acp2.c.bridge-mutant-proof.v1",
+  "generated_at": "2026-10-22T15:01:56.442Z",
+  "source": "rph/packages/bridge/src/index.ts",
+  "sha256_before": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+  "sha256_after": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+  "restored": true,
+  "expected_mutants": 6,
+  "red_mutants": 6,
+  "mutants": [
+    {
+      "id": "raw_prefix",
+      "guard": "raw-prefix rejection",
+      "test": "model-visible prefix stripping is exactly once and raw prefixes are rejected",
+      "applied": true,
+      "occurrences": 1,
+      "red": true,
+      "specific_test_failed": true,
+      "restored": true,
+      "build_exit": 0,
+      "test_exit": 1
+    },
+    {
+      "id": "iserror_preserved",
+      "guard": "isError preservation",
+      "test": "tool isError is never promoted to success",
+      "applied": true,
+      "occurrences": 1,
+      "red": true,
+      "specific_test_failed": true,
+      "restored": true,
+      "build_exit": 0,
+      "test_exit": 1
+    },
+    {
+      "id": "read_before_prepare",
+      "guard": "read-before-prepare",
+      "test": "read before prepare returns the exact not_prepared envelope without preparing",
+      "applied": true,
+      "occurrences": 1,
+      "red": true,
+      "specific_test_failed": true,
+      "restored": true,
+      "build_exit": 0,
+      "test_exit": 1
+    },
+    {
+      "id": "operation_required_matrix",
+      "guard": "per-operation required matrix",
+      "test": "per-operation required-field matrix accepts positives and rejects every missing field",
+      "applied": true,
+      "occurrences": 1,
+      "red": true,
+      "specific_test_failed": true,
+      "restored": true,
+      "build_exit": 0,
+      "test_exit": 1
+    },
+    {
+      "id": "artifact_ownership",
+      "guard": "project/attempt ownership",
+      "test": "cross-project and cross-attempt reads are refused",
+      "applied": true,
+      "occurrences": 1,
+      "red": true,
+      "specific_test_failed": true,
+      "restored": true,
+      "build_exit": 0,
+      "test_exit": 1
+    },
+    {
+      "id": "credential_absolute_path",
+      "guard": "credential/absolute-path refusal",
+      "test": "credential-bearing and absolute-path results are refused",
+      "applied": true,
+      "occurrences": 1,
+      "red": true,
+      "specific_test_failed": true,
+      "restored": true,
+      "build_exit": 0,
+      "test_exit": 1
+    }
+  ]
+}

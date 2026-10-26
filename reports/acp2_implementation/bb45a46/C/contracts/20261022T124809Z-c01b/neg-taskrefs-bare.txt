@@ -1,0 +1,1 @@
+REJECTED bare-string task_refs: record.task_refs: a bare string array is not a TaskRef list (item 0)

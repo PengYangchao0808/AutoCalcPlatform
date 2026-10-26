@@ -1,0 +1,153 @@
+{
+  "artifacts": [
+    {
+      "path": "manual-node-suite.log",
+      "sha256": "e8d281e2ea9cbdc26584d01bbccb859e1ed1956947c612d40ca8a7d6cf55b1f1",
+      "size_bytes": 990
+    },
+    {
+      "path": "manual-browser.log",
+      "sha256": "84b33c36b598003d7f779357c68cd8edffa289b00a1d54d47363a71fae01a60b",
+      "size_bytes": 16848
+    },
+    {
+      "path": "manual-browser-fixtures.png",
+      "sha256": "5950572caee830b56987bda956ffe7dbd3a56458c93d0cc762fc6bcec23601e2",
+      "size_bytes": 424258
+    },
+    {
+      "path": "manual-console.json",
+      "sha256": "42197434d18e0dfe24080973dc05d68673ff29b4a3fc2b65a1c7acfacfdcbb39",
+      "size_bytes": 42
+    },
+    {
+      "path": "manual-network.json",
+      "sha256": "3675a33b851a145388378f3311ad36a89cee455dd3b3f356e154c88fdd190163",
+      "size_bytes": 19090
+    },
+    {
+      "path": "manual-page.html",
+      "sha256": "afc95146cddd10da85bdecd50fee0491f2379389861d314d0a76e418a1503ef2",
+      "size_bytes": 94935
+    },
+    {
+      "path": "manual-form-full.png",
+      "sha256": "1e24519ccbb8efbbb6e08370207e8dcd8d0119763253be3c756b5039feb25ac1",
+      "size_bytes": 131367
+    },
+    {
+      "path": "manual-browser-fixtures.json",
+      "sha256": "992d3a05c255e377ca206a9bdde686d509c1b1403979b645323d8b957613e517",
+      "size_bytes": 1069
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=13 failed=0 min=8",
+      "name": "manual.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 error=None port=37899",
+      "name": "manual.browser.probe_completed",
+      "status": "PASS"
+    },
+    {
+      "detail": "entry_visible=True",
+      "name": "manual.browser.entry_visible",
+      "status": "PASS"
+    },
+    {
+      "detail": "demo_badge=True text='\u6f14\u793a\u6570\u636e'",
+      "name": "manual.browser.demo_badge",
+      "status": "PASS"
+    },
+    {
+      "detail": "disabled=True status='\u9884\u68c0\u5931\u8d25\uff0c\u63d0\u4ea4\u5df2\u7981\u7528\\n\u539f\u56e0\uff1afixture preflight failure\\n\u91cd\u8bd5\u9884\u68c0'",
+      "name": "manual.browser.submit_disabled_after_preflight_failure",
+      "status": "PASS"
+    },
+    {
+      "detail": "submit_calls=0",
+      "name": "manual.browser.zero_submit_calls",
+      "status": "PASS"
+    },
+    {
+      "detail": "screenshot_bytes=424258 probe_bytes=424258",
+      "name": "manual.browser.screenshot_nonempty",
+      "status": "PASS"
+    },
+    {
+      "detail": "console_errors=0 page_errors=0 ",
+      "name": "manual.browser.zero_console_errors",
+      "status": "PASS"
+    },
+    {
+      "detail": "entries=156",
+      "name": "manual.browser.network_log",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "harness_revision": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+  "command": [
+    "/usr/bin/python3.11",
+    "/tmp/acp2-acceptance-20261024/experience/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "manual-browser-fixtures",
+    "--mode",
+    "fixture",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_acceptance_20261024/evidence/browser-manual-final",
+    "--timeout",
+    "300"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "/tmp/acp2-acceptance-20261024/experience",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b",
+    "experience.harness_path": "/tmp/acp2-acceptance-20261024/experience/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/usr/bin/python3.11",
+    "experience.manual_chromium": "153.0.8010.12",
+    "experience.manual_console_errors": 0,
+    "experience.manual_demo_badge": true,
+    "experience.manual_entry_visible": true,
+    "experience.manual_min_tests": 8,
+    "experience.manual_screenshot_bytes": 424258,
+    "experience.manual_submit_calls": 0,
+    "experience.manual_submit_disabled_after_preflight": true,
+    "experience.manual_suite_failed": 0,
+    "experience.manual_suite_passed": 13,
+    "experience.mode": "fixture",
+    "experience.product_import": "/tmp/acp2-acceptance-20261024/experience/src/acp/__init__.py",
+    "experience.run_id": "manual-browser-fixtures-20261024T025503Z-2103381-40b9b2",
+    "experience.scenario_key": "manual-browser-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "39d4aeb20451c984e20d27e12270a15070adce12"
+  },
+  "finished_at": "2026-10-24T02:55:10Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "manual-browser-fixtures-20261024T025503Z-2103381-40b9b2",
+  "scenario": "experience:manual-browser-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-24T02:55:04Z",
+  "submission_id": null,
+  "usage": null
+}

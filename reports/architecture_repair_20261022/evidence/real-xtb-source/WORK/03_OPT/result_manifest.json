@@ -1,0 +1,20 @@
+{
+  "products": [
+    {
+      "id": "xtbopt.xyz",
+      "kind": "file",
+      "label": "xtbopt.xyz",
+      "path": "xtbopt.xyz"
+    },
+    {
+      "id": "xtb.log",
+      "kind": "file",
+      "label": "xtb.log",
+      "path": "xtb.log"
+    }
+  ],
+  "status": "completed",
+  "task_id": "v2:5ab1d8cb600d3730964fa77bf5c47d31-step0-optimize",
+  "version": 2,
+  "workflow": "optimize"
+}

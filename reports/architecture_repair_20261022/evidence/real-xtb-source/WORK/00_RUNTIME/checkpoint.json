@@ -1,0 +1,61 @@
+{
+  "identity_schema": 2,
+  "items_state": {
+    "__handoff__": {
+      "coords": [
+        [
+          0.0,
+          0.0,
+          -0.01848467372883
+        ],
+        [
+          0.0,
+          -0.0,
+          0.75848467372883
+        ]
+      ],
+      "geometry_identity": {
+        "coords_sha256": "dc832b340af31167a6eaa646ed72a9cf1da15007251593fb59458e9f23999584",
+        "step_index": 0,
+        "symbols": [
+          "H",
+          "H"
+        ]
+      },
+      "symbols": [
+        "H",
+        "H"
+      ]
+    },
+    "execution_record": {
+      "attempt": 1,
+      "code_release": "0.2.0",
+      "config_digest": "sha256:a12924d5eada632e85881948ab704369d9ba41621c8480943f44fe5704eef225",
+      "software_version": null
+    },
+    "paths": {
+      "0": "/tmp/acp-repair-real-xtb/hydrogen.xyz"
+    }
+  },
+  "plan_fingerprint": "v2:5ab1d8cb600d3730964fa77bf5c47d31",
+  "resume_count": 0,
+  "step_states": [
+    {
+      "blocked_reason": "",
+      "energy": -0.982686139534,
+      "error": "",
+      "executed_this_run": true,
+      "index": 0,
+      "kind": "optimize",
+      "last_executed_attempt": null,
+      "result_ref": {
+        "path": "WORK/03_OPT/step_result.json",
+        "sha256": "a0340617cfbc742f9c2de9f99de120c9f844047e6dec5d8d7c8e02c22287665b"
+      },
+      "reused_from_attempt": null,
+      "status": "completed"
+    }
+  ],
+  "task_id": "executor",
+  "workflow": "xtb_optimize"
+}

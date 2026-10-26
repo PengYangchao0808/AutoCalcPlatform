@@ -1,0 +1,36 @@
+{
+  "browser": {
+    "exit_code": 1,
+    "interpreter": "/ACPServer/acp2-development/venvs/browser/bin/python",
+    "network_entries": 0,
+    "payload": {
+      "chromium": "153.0.8010.12",
+      "console_errors": [],
+      "demo_badge": true,
+      "demo_badge_text": "\u6f14\u793a\u6570\u636e",
+      "entry_visible": true,
+      "error": "TimeoutError: Page.wait_for_function: Timeout 10000ms exceeded.",
+      "ok": false,
+      "page_errors": [],
+      "port": 42855,
+      "preflight_status_text": "",
+      "screenshot_bytes": 0,
+      "submit_calls": 0,
+      "submit_disabled_after_preflight_failure": false,
+      "zero_submit_calls": false
+    }
+  },
+  "filter": "acp2_manual",
+  "node": {
+    "command": [
+      "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+      "/ACPServer/acp2-development/C/frontend/js/module_tests/run_all.js",
+      "acp2_manual"
+    ],
+    "exit_code": 0,
+    "failed": 0,
+    "min_tests": 8,
+    "passed": 10
+  },
+  "scenario": "manual-browser-fixtures"
+}

@@ -1,0 +1,16 @@
+{
+  "current_source_sha256": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+  "evidence_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/negative/bridge-contract-20261022T150142Z-294304",
+  "guards": [
+    "raw_prefix",
+    "iserror_preserved",
+    "read_before_prepare",
+    "operation_required_matrix",
+    "artifact_ownership",
+    "credential_absolute_path"
+  ],
+  "red_mutants": 6,
+  "restored": true,
+  "sha256_after": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+  "sha256_before": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92"
+}

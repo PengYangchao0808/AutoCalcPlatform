@@ -1,0 +1,679 @@
+{
+  "schema": "acp2.c.dsh-discovery.tool-snapshot.v1",
+  "status": "ok",
+  "profile": "headless",
+  "source": "real_registration",
+  "booted_via": "apps/cli/src/profile-boot.ts::runProfile",
+  "patches": [
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T200600Z-634944/main/negative/bad-command.cordis.yml",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T200600Z-634944/main/headless-runner-disabled.cordis.yml"
+  ],
+  "web_url": null,
+  "model_visible_scope": "global",
+  "global_tools": [
+    {
+      "name": "web_search",
+      "description": "Search the web for current information. Returns an optional summary answer and a list of source URLs.",
+      "source_plugin": "@deepseek-ai/dsh-tool-web",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/web/tool-web/src/search.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "queries"
+      ]
+    },
+    {
+      "name": "web_fetch",
+      "description": "Fetch the content of a specific HTTP(S) URL and return it decoded to text.",
+      "source_plugin": "@deepseek-ai/dsh-tool-web",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/web/tool-web/src/fetch.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "url"
+      ]
+    },
+    {
+      "name": "exit_plan_mode",
+      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
+      "source_plugin": "@deepseek-ai/dsh-plan-mode",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/plan/plan-mode/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "plan"
+      ]
+    },
+    {
+      "name": "todo_write",
+      "description": "Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done.",
+      "source_plugin": "@deepseek-ai/dsh-tool-todo",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/todo/tool-todo/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "todos"
+      ]
+    },
+    {
+      "name": "get_goal",
+      "description": "Read the current session goal, including the id and revision that update_goal requires.",
+      "source_plugin": "@deepseek-ai/dsh-tool-goal",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/goal/tool-goal/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": []
+    },
+    {
+      "name": "create_goal",
+      "description": "Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work.",
+      "source_plugin": "@deepseek-ai/dsh-tool-goal",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/goal/tool-goal/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "max_goal_rounds",
+        "objective"
+      ]
+    },
+    {
+      "name": "update_goal",
+      "description": "Update the current goal.",
+      "source_plugin": "@deepseek-ai/dsh-tool-goal",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/goal/tool-goal/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "action",
+        "blocked_reason",
+        "goal_id",
+        "max_goal_rounds",
+        "objective",
+        "revision"
+      ]
+    },
+    {
+      "name": "working_directory",
+      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
+      "source_plugin": "@deepseek-ai/dsh-tool-working-directory",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/session/tool-working-directory/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cd"
+      ]
+    },
+    {
+      "name": "skill",
+      "description": "Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog.",
+      "source_plugin": "@deepseek-ai/dsh-tool-skill",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/skill/tool-skill/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "name"
+      ]
+    },
+    {
+      "name": "list_agents",
+      "description": "List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent-control",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent-control/src/list-agents.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "scope"
+      ]
+    },
+    {
+      "name": "send_message",
+      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent-control",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent-control/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "agent_id",
+        "message"
+      ]
+    },
+    {
+      "name": "interrupt_agent",
+      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent-control",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent-control/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "agent_id"
+      ]
+    },
+    {
+      "name": "subagent",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cwd",
+        "description",
+        "prompt"
+      ]
+    },
+    {
+      "name": "subagent_fork",
+      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cwd",
+        "description",
+        "prompt"
+      ]
+    },
+    {
+      "name": "read",
+      "description": "Read a UTF-8 text file and return line-numbered content.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/read.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "file_path",
+        "limit",
+        "offset"
+      ]
+    },
+    {
+      "name": "write",
+      "description": "Create or fully replace a UTF-8 text file.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/write.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "content",
+        "file_path",
+        "justification",
+        "sandbox_permissions"
+      ]
+    },
+    {
+      "name": "edit",
+      "description": "Edit an existing UTF-8 text file by replacing literal text.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/edit.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "file_path",
+        "justification",
+        "new_string",
+        "old_string",
+        "replace_all",
+        "sandbox_permissions"
+      ]
+    },
+    {
+      "name": "read_image",
+      "description": "Read a PNG/JPEG/WebP/GIF file and return the image itself. Large images are downscaled automatically; do not install image libraries or create thumbnails to inspect an image.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/read-image.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "file_path"
+      ]
+    },
+    {
+      "name": "glob",
+      "description": "Find files, not directories, whose paths match a glob pattern, including hidden and ignored files. Returns up to 100 paths in modification-time order; a larger result keeps the first paths and reports where the complete list was saved.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs-search",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs-search/src/glob.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "path",
+        "pattern"
+      ]
+    },
+    {
+      "name": "grep",
+      "description": "Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. Returns up to 250 matches; a larger result reports where the complete match list was saved.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs-search",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs-search/src/grep.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "include",
+        "path",
+        "pattern"
+      ]
+    },
+    {
+      "name": "workflow",
+      "description": "Run a JavaScript workflow script that orchestrates subagents at scale. Use this for work that fans out across many independent pieces — an audit over many files, a migration, multi-angle research, adversarial verification of findings — where you write the orchestration as a script instead of delegating turn by turn.\n\nScript-body hooks:\n- `agent(prompt, opts?): Promise<any>` — run one subagent to completion. Without `opts.schema` it resolves to the child's final text; with `opts.schema` (an object-rooted JSON Schema using ONLY type/properties/required/additionalProperties/items/enum/const/oneOf) it resolves to the validated object. Resolves `null` when the child fails (filter with `.filter(Boolean)`). Other opts: `label` (display), `phase` (progress group), and independent `provider`/`model` LLM target overrides.\n- `pipeline(items, ...stages): Promise<any[]>` — run each item through the stages independently with NO barrier between stages (prefer this for multi-stage work). Each stage receives `(prev, item, index)`. A stage throw drops that ITEM to `null` and skips its remaining stages.\n- `parallel(thunks): Promise<any[]>` — run zero-argument functions concurrently and await ALL of them (a barrier; use only when a stage genuinely needs every prior result together). A throwing thunk resolves to `null`.\n- `phase(title)` — start a progress phase; `log(message)` — narrate progress; `args` — the tool call's `args` input, verbatim.\n\nMisused hooks (bad arguments, unknown options, unsupported schemas, tripped caps) end the whole script instead of producing `null`. The script has no filesystem, network, timer, or Node.js APIs; the agents do the work.",
+      "source_plugin": "@deepseek-ai/dsh-tool-workflow",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/workflow/tool-workflow/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "args",
+        "meta",
+        "run_in_background",
+        "script"
+      ]
+    }
+  ],
+  "model_visible_tools": [
+    {
+      "name": "web_search",
+      "description": "Search the web for current information. Returns an optional summary answer and a list of source URLs.",
+      "source_plugin": "@deepseek-ai/dsh-tool-web",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/web/tool-web/src/search.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "queries"
+      ]
+    },
+    {
+      "name": "web_fetch",
+      "description": "Fetch the content of a specific HTTP(S) URL and return it decoded to text.",
+      "source_plugin": "@deepseek-ai/dsh-tool-web",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/web/tool-web/src/fetch.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "url"
+      ]
+    },
+    {
+      "name": "exit_plan_mode",
+      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
+      "source_plugin": "@deepseek-ai/dsh-plan-mode",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/plan/plan-mode/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "plan"
+      ]
+    },
+    {
+      "name": "todo_write",
+      "description": "Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done.",
+      "source_plugin": "@deepseek-ai/dsh-tool-todo",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/todo/tool-todo/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "todos"
+      ]
+    },
+    {
+      "name": "get_goal",
+      "description": "Read the current session goal, including the id and revision that update_goal requires.",
+      "source_plugin": "@deepseek-ai/dsh-tool-goal",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/goal/tool-goal/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": []
+    },
+    {
+      "name": "create_goal",
+      "description": "Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work.",
+      "source_plugin": "@deepseek-ai/dsh-tool-goal",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/goal/tool-goal/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "max_goal_rounds",
+        "objective"
+      ]
+    },
+    {
+      "name": "update_goal",
+      "description": "Update the current goal.",
+      "source_plugin": "@deepseek-ai/dsh-tool-goal",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/goal/tool-goal/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "action",
+        "blocked_reason",
+        "goal_id",
+        "max_goal_rounds",
+        "objective",
+        "revision"
+      ]
+    },
+    {
+      "name": "working_directory",
+      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
+      "source_plugin": "@deepseek-ai/dsh-tool-working-directory",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/session/tool-working-directory/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cd"
+      ]
+    },
+    {
+      "name": "skill",
+      "description": "Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog.",
+      "source_plugin": "@deepseek-ai/dsh-tool-skill",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/skill/tool-skill/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "name"
+      ]
+    },
+    {
+      "name": "list_agents",
+      "description": "List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent-control",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent-control/src/list-agents.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "scope"
+      ]
+    },
+    {
+      "name": "send_message",
+      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent-control",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent-control/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "agent_id",
+        "message"
+      ]
+    },
+    {
+      "name": "interrupt_agent",
+      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent-control",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent-control/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "agent_id"
+      ]
+    },
+    {
+      "name": "subagent",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cwd",
+        "description",
+        "prompt"
+      ]
+    },
+    {
+      "name": "subagent_fork",
+      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "source_plugin": "@deepseek-ai/dsh-tool-subagent",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/subagent/tool-subagent/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cwd",
+        "description",
+        "prompt"
+      ]
+    },
+    {
+      "name": "read",
+      "description": "Read a UTF-8 text file and return line-numbered content.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/read.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "file_path",
+        "limit",
+        "offset"
+      ]
+    },
+    {
+      "name": "write",
+      "description": "Create or fully replace a UTF-8 text file.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/write.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "content",
+        "file_path",
+        "justification",
+        "sandbox_permissions"
+      ]
+    },
+    {
+      "name": "edit",
+      "description": "Edit an existing UTF-8 text file by replacing literal text.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/edit.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "file_path",
+        "justification",
+        "new_string",
+        "old_string",
+        "replace_all",
+        "sandbox_permissions"
+      ]
+    },
+    {
+      "name": "read_image",
+      "description": "Read a PNG/JPEG/WebP/GIF file and return the image itself. Large images are downscaled automatically; do not install image libraries or create thumbnails to inspect an image.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs/src/read-image.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "file_path"
+      ]
+    },
+    {
+      "name": "glob",
+      "description": "Find files, not directories, whose paths match a glob pattern, including hidden and ignored files. Returns up to 100 paths in modification-time order; a larger result keeps the first paths and reports where the complete list was saved.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs-search",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs-search/src/glob.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "path",
+        "pattern"
+      ]
+    },
+    {
+      "name": "grep",
+      "description": "Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. Returns up to 250 matches; a larger result reports where the complete match list was saved.",
+      "source_plugin": "@deepseek-ai/dsh-tool-fs-search",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/fs/tool-fs-search/src/grep.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "include",
+        "path",
+        "pattern"
+      ]
+    },
+    {
+      "name": "workflow",
+      "description": "Run a JavaScript workflow script that orchestrates subagents at scale. Use this for work that fans out across many independent pieces — an audit over many files, a migration, multi-angle research, adversarial verification of findings — where you write the orchestration as a script instead of delegating turn by turn.\n\nScript-body hooks:\n- `agent(prompt, opts?): Promise<any>` — run one subagent to completion. Without `opts.schema` it resolves to the child's final text; with `opts.schema` (an object-rooted JSON Schema using ONLY type/properties/required/additionalProperties/items/enum/const/oneOf) it resolves to the validated object. Resolves `null` when the child fails (filter with `.filter(Boolean)`). Other opts: `label` (display), `phase` (progress group), and independent `provider`/`model` LLM target overrides.\n- `pipeline(items, ...stages): Promise<any[]>` — run each item through the stages independently with NO barrier between stages (prefer this for multi-stage work). Each stage receives `(prev, item, index)`. A stage throw drops that ITEM to `null` and skips its remaining stages.\n- `parallel(thunks): Promise<any[]>` — run zero-argument functions concurrently and await ALL of them (a barrier; use only when a stage genuinely needs every prior result together). A throwing thunk resolves to `null`.\n- `phase(title)` — start a progress phase; `log(message)` — narrate progress; `args` — the tool call's `args` input, verbatim.\n\nMisused hooks (bad arguments, unknown options, unsupported schemas, tripped caps) end the whole script instead of producing `null`. The script has no filesystem, network, timer, or Node.js APIs; the agents do the work.",
+      "source_plugin": "@deepseek-ai/dsh-tool-workflow",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/workflow/tool-workflow/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "args",
+        "meta",
+        "run_in_background",
+        "script"
+      ]
+    }
+  ],
+  "presets": [],
+  "bound_preset": null,
+  "acp_entry": {
+    "id": "acp-mcp-acceptance",
+    "name": "@deepseek-ai/dsh-mcp-client",
+    "disabled": false,
+    "fiber_state": 3,
+    "failed": true,
+    "pending": false
+  },
+  "acp_entry_error": {
+    "name": "Error",
+    "message": "mcp-client(acp): initial connection or tool synchronization failed",
+    "stack": [
+      "Error: mcp-client(acp): initial connection or tool synchronization failed",
+      "    at Object.apply (/ACPServer/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)",
+      "    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+      "    at async Fiber._reload (/ACPServer/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)",
+      "    at async Fiber.await (/ACPServer/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:706:7)"
+    ]
+  },
+  "permission_policy": {
+    "approval_policy": "ask",
+    "sandbox_mode": null,
+    "note": "DSH applies approval/sandbox policy per session; the MCP allowlist is enforced server-side."
+  },
+  "stderr_lines": [
+    "dsh: warning: 2 entries did not activate",
+    "permission (@deepseek-ai/dsh-permission-presets): pending (waiting for service: shell)",
+    "acp-mcp-acceptance (@deepseek-ai/dsh-mcp-client): Error: mcp-client(acp): initial connection or tool synchronization failed",
+    "    at Object.apply (/ACPServer/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)",
+    "    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+    "    at async Fiber._reload (/ACPServer/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)",
+    "    at async Fiber.await (/ACPServer/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:706:7)",
+    "Error: spawn /nonexistent/acp2-missing-python ENOENT",
+    "    at ChildProcess._handle.onexit (node:internal/child_process:285:19)",
+    "    at onErrorNT (node:internal/child_process:483:16)",
+    "    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)"
+  ],
+  "launched_at": "2026-10-22T20:06:10.969Z",
+  "launch": {
+    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
+    "server": {
+      "name": "acp",
+      "version": "0.2.0",
+      "entrypoint": "acp_services.entrypoints.mcp",
+      "contract_version": "1.0.0",
+      "contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488"
+    },
+    "protocol_version": "2025-06-18",
+    "tool_names": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ]
+  },
+  "inner_argv": [
+    "--json",
+    "acceptance-tool-snapshot"
+  ],
+  "finished_at": "2026-10-22T20:06:13.086Z"
+}

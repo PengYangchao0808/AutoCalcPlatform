@@ -1,0 +1,96 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/research-loop-live-r1/main/control/experience_research-loop-live-experience_control-research-loop-live-r1.json",
+      "name": "child:experience:control",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/research-loop-live-r1/main/search/experience_research-loop-live-experience_search-research-loop-live-r1.json",
+      "name": "child:experience:search",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "experience:control,experience:search",
+      "name": "aggregate_gaps",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "ca850291febfcfb9d4c324a6398244be7a27bb5d",
+    "harness_revision": "e4baa0e7f9ae3576848c5d0d639865cc73aba3fcf4d9e7d8d4a63d1624e7bd9b",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "ca850291febfcfb9d4c324a6398244be7a27bb5d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "research-loop-live",
+    "--timeout",
+    "120",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/research-loop-live-r1/aggregate"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.required_child_phases": [
+      "experience:control",
+      "experience:search"
+    ],
+    "experience.aggregate_gaps": [
+      "experience:control",
+      "experience:search"
+    ],
+    "experience.harness_contract_revision": "e4baa0e7f9ae3576848c5d0d639865cc73aba3fcf4d9e7d8d4a63d1624e7bd9b",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "research-loop-live-r1",
+    "experience.scenario_key": "research-loop-live",
+    "experience.subcase": null,
+    "experience.test_revision": "ca850291febfcfb9d4c324a6398244be7a27bb5d"
+  },
+  "finished_at": "2026-10-22T23:12:33Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "aggregate",
+  "reason": "aggregate_incomplete:experience:control,experience:search",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "research-loop-live-r1",
+  "scenario": "experience:research-loop-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:12:33Z",
+  "sub_results": [
+    {
+      "owner": "C",
+      "phase": "experience:control",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/research-loop-live-r1/main/control/experience_research-loop-live-experience_control-research-loop-live-r1.json",
+      "result": "NOT_VERIFIED",
+      "run_id": "research-loop-live-r1",
+      "scenario": "experience:research-loop-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:search",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/research-loop-live-r1/main/search/experience_research-loop-live-experience_search-research-loop-live-r1.json",
+      "result": "NOT_VERIFIED",
+      "run_id": "research-loop-live-r1",
+      "scenario": "experience:research-loop-live"
+    }
+  ],
+  "submission_id": null,
+  "usage": null
+}

@@ -1,0 +1,84 @@
+{
+  "executed_at": "2026-10-25T16:50:25.113697+00:00",
+  "candidate_revision": "ec4a0b39b26645139c01aa9578fbedd0c3db23a2",
+  "python_suites": [
+    {
+      "suite": "targeted-pytest-unrestricted",
+      "tests": 168,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "log": "targeted-pytest-unrestricted.log",
+      "junit": "targeted-pytest-unrestricted.xml"
+    },
+    {
+      "suite": "science-runtime-pytest",
+      "tests": 131,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "log": "science-runtime-pytest.log",
+      "junit": "science-runtime-pytest.xml"
+    }
+  ],
+  "python_total": 299,
+  "rph": {
+    "tests": 80,
+    "passed": 80,
+    "failed": 0,
+    "log": "rph-tests-no-isolation.log",
+    "command": "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node --experimental-test-isolation=none --test rph/test/dist/*.test.js"
+  },
+  "frontend": {
+    "passed": 444,
+    "failed": 0,
+    "log": "frontend-tests-unrestricted.log",
+    "command": "PYTHONPATH=src ACP_PYTHON=/usr/bin/python3.11 /ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node frontend/js/module_tests/run_all.js"
+  },
+  "scope": "Existing regression suites. These do not supersede failed cross-component probes or certify real QC/model/browser/LSF behavior.",
+  "environment_incidents": [
+    {
+      "case": "initial targeted pytest",
+      "result": "interrupted",
+      "reason": "sandbox denied socket creation; one-test diagnostic confirms PermissionError EPERM",
+      "evidence": "sandbox-diagnostic.log",
+      "resolution": "full selected suite rerun outside sandbox: 168 passed"
+    },
+    {
+      "case": "initial frontend runs",
+      "result": "failed in environment",
+      "reason": "Node spawnSync Python EPERM; import-detection wrapper obscured underlying cause",
+      "resolution": "configured Python/PYTHONPATH and allowed subprocess environment: 444 passed"
+    },
+    {
+      "case": "default python for probe",
+      "result": "unsupported interpreter",
+      "reason": "dataclass slots unavailable",
+      "resolution": "used /usr/bin/python3.11"
+    },
+    {
+      "case": "RPH normal runner",
+      "result": "only 5 file-level results printed",
+      "resolution": "explicit no-isolation execution confirmed 80 named tests"
+    },
+    {
+      "case": "--test-isolation=none",
+      "result": "unsupported Node flag",
+      "resolution": "correct version-specific flag --experimental-test-isolation=none"
+    }
+  ],
+  "probes": {
+    "sdk": "sdk-probe.json",
+    "node": "node-probes.json",
+    "python": "python-probes.json"
+  },
+  "live_not_run": [
+    "full DSH agent",
+    "paid model",
+    "real QC calculation",
+    "LSF submission/control",
+    "real browser UI",
+    "independent clean installation",
+    "production running-code attestation"
+  ]
+}

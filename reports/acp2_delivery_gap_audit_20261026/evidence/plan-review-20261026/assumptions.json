@@ -1,0 +1,110 @@
+{
+  "scope": "Real adapters, DAG, compiler and stores. Scientific runners replaced with typed TaskResult; optimize uses recording backend; temporary files only.",
+  "dag_task_result_semantics": [
+    {
+      "input_status": "failed",
+      "input_complete": false,
+      "energy_hartree": null,
+      "existing_worker_truth_table_state": "failed",
+      "dag_status": {
+        "compute": "completed"
+      },
+      "returned_products": {
+        "result": "sha256:624dad3377f79d293c6eb47e771099b39a726ef20e94a4cf0592490b6daaf698"
+      },
+      "declared_products": [
+        "energy"
+      ]
+    },
+    {
+      "input_status": "completed",
+      "input_complete": false,
+      "energy_hartree": null,
+      "existing_worker_truth_table_state": "failed",
+      "dag_status": {
+        "compute": "completed"
+      },
+      "returned_products": {
+        "result": "sha256:1d170e3c2da6b8bf13edb87700adc14f73e76ba6dc805d6578c0846e9f0f5f64"
+      },
+      "declared_products": [
+        "energy"
+      ]
+    },
+    {
+      "input_status": "completed",
+      "input_complete": true,
+      "energy_hartree": null,
+      "existing_worker_truth_table_state": "failed",
+      "dag_status": {
+        "compute": "completed"
+      },
+      "returned_products": {
+        "result": "sha256:3f95e4ce4193a4a9cf33af8a4292cfe8313c2a21d220907af729ce880e839662"
+      },
+      "declared_products": [
+        "energy"
+      ]
+    },
+    {
+      "input_status": "completed",
+      "input_complete": true,
+      "energy_hartree": -40.0,
+      "existing_worker_truth_table_state": "completed",
+      "dag_status": {
+        "compute": "completed"
+      },
+      "returned_products": {
+        "result": "sha256:066a32224aede378cde31938e267ef311bdff33fb7161f5ba774392e72adef41"
+      },
+      "declared_products": [
+        "energy"
+      ]
+    }
+  ],
+  "direct_dispatch_signature": {
+    "signature": "(context: 'StepDispatchContext', request: 'Any', *, task_context: 'Any' = None) -> 'StepOutcome'",
+    "state": {
+      "compute": "failed"
+    },
+    "reason": "TypeError: cccp_compute_dispatch() missing 1 required positional argument: 'request'"
+  },
+  "qc_budget_granularity": {
+    "budget_cap": 1,
+    "dag_qc_count": 1,
+    "real_task_backend_calls": 3,
+    "dag_status": {
+      "compute": "completed"
+    },
+    "real_qc_processes": 0
+  },
+  "identity_migration_existing_key": {
+    "old_outcome": "created",
+    "new_outcome": "conflict",
+    "detail": "idempotency key was already used under a different verified scope"
+  },
+  "late_bound_step_identity": {
+    "definition_digest": "v2:94451ec0248d9057519875ea246922f9",
+    "missing_upstream": {
+      "type": "UnresolvedOutputRefError",
+      "message": "step 'opt' cannot materialize dependency 'sp::energy::{\"selector_kind\":\"whole_product\"}': missing_upstream_digest"
+    },
+    "upstream_a": "v2:78d8a9b563a53c653b57704c58daa32a",
+    "upstream_b": "v2:219b307b5f0315a3aa8260fee8f1597b"
+  },
+  "digest_domains": {
+    "submit_authorization_plan_digest": "sha256:8035929d3e437fc809225d0fdc008780fedbb07dc1f1aea4ce0ebb99c6ffb78e",
+    "runtime_frozen_plan_body_digest": "v2:1aefb75252cde3961a808de6ffdeb3a5",
+    "recipe_definition_digest": "v2:94451ec0248d9057519875ea246922f9"
+  },
+  "lsf_walltime_mapping": {
+    "request_walltime_s": 1,
+    "derived_lsf_walltime_with_config_24h": "24:00"
+  },
+  "receipt_verifier_scope": {
+    "same_attempt_accepted": true,
+    "after_job_attempt_increment_accepted": false,
+    "reason": "stale_attempt",
+    "interpretation": "Correct state-transition behavior; do not reuse with current-job context to reject all historical usage."
+  }
+}

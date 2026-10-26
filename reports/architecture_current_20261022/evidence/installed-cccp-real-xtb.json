@@ -1,0 +1,173 @@
+{
+  "result": "PASS",
+  "python": "/tmp/acp-architecture-current-cccp-env/bin/python",
+  "cccp_version": "0.2.0",
+  "installed_module": "/tmp/acp-architecture-current-cccp-env/lib64/python3.11/site-packages/cccp/__init__.py",
+  "source_files_verified": 189,
+  "forbidden_absent": [
+    "acp",
+    "acp_services",
+    "fastapi",
+    "uvicorn",
+    "paramiko"
+  ],
+  "sys_path": [
+    "/usr/lib64/python311.zip",
+    "/usr/lib64/python3.11",
+    "/usr/lib64/python3.11/lib-dynload",
+    "/tmp/acp-architecture-current-cccp-env/lib64/python3.11/site-packages",
+    "/tmp/acp-architecture-current-cccp-env/lib/python3.11/site-packages"
+  ],
+  "requirements": [
+    "numpy>=2.1.0",
+    "rdkit>=2022.09.1",
+    "pyyaml>=6.0",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "openpyxl>=3.1",
+    "typing-extensions>=4.1",
+    "nmrglue>=0.10; extra == \"nmr\"",
+    "openbabel>=3.1; extra == \"nmr\"",
+    "qml>=0.4; extra == \"nmr\""
+  ],
+  "task_api": [
+    {
+      "task": "singlepoint",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "optimize",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "frequency",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "scan",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "irc",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "casscf",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "thermochemistry",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "conformer_search",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "md_sampling",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "clustering",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "censo_refine",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "nmr_shielding",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "xtb_path_search",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "orca_gradient",
+      "module_callable": true,
+      "root_export": true
+    },
+    {
+      "task": "xtb_constrained_opt",
+      "module_callable": true,
+      "root_export": false
+    }
+  ],
+  "console_entrypoints": [],
+  "python_m_cccp_error": "/tmp/acp-architecture-current-cccp-env/bin/python: No module named cccp.__main__; 'cccp' is a package and cannot be directly executed",
+  "dp4_normalization": [
+    0.7310585786300049,
+    0.2689414213699951
+  ],
+  "product_kinds": [
+    "structure_trajectory",
+    "curve_scatter",
+    "vibration",
+    "derived"
+  ],
+  "plugin_sdk_version": 1,
+  "real_xtb_result": {
+    "schema_version": 1,
+    "task": "optimize",
+    "status": "completed",
+    "complete": true,
+    "errors": [],
+    "frequencies": [],
+    "artifacts": [
+      {
+        "path": "/tmp/acp-architecture-current-xtb-confirm/xtbopt.xyz",
+        "type": "output",
+        "checksum": "sha256:dce26935329dde6e5443f01464524c18830fb39c6b94290f57ffe3068044584a",
+        "source": "xtb"
+      },
+      {
+        "path": "/tmp/acp-architecture-current-xtb-confirm/xtb.log",
+        "type": "log",
+        "checksum": "sha256:87980c7f8944e39accd2cf2cad34ae1b487b1481e12143fd050ae4d11ff4ce38",
+        "source": "xtb"
+      }
+    ],
+    "metadata": {},
+    "energy_hartree": -0.982686139534,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        -0.01848467372883
+      ],
+      [
+        0.0,
+        -0.0,
+        0.75848467372883
+      ]
+    ],
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "provenance": {
+      "backend": "xtb",
+      "method": "GFN2-xTB",
+      "version": "unknown",
+      "input_signature": "None"
+    },
+    "payload": {
+      "optimization_status": "converged"
+    }
+  },
+  "leaked_modules": []
+}

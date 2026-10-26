@@ -1,0 +1,30 @@
+- insert:
+  - id: acp-mcp-acceptance
+    name: '@deepseek-ai/dsh-mcp-client'
+    config:
+      serverName: acp
+      transport: stdio
+      command: /ACPServer/acp2-development/venvs/c/bin/python
+      args:
+      - /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T200431Z-633327/main/negative/incompatible_protocol_stub.py
+      cwd: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T200431Z-633327/main/negative
+      env:
+        PATH: /usr/local/bin:/usr/bin:/bin
+        STUB_WIRE: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T200431Z-633327/main/negative/incompatible-protocol.wire.jsonl
+      toolCallTimeoutMs: 120000
+      failOnStartupError: true
+      reconnect:
+        enabled: true
+        initialDelayMs: 500
+        maxDelayMs: 30000
+        maxAttempts: 10
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: bash-sandbox
+  disabled: true
+- id: pwsh-sandbox
+  disabled: true

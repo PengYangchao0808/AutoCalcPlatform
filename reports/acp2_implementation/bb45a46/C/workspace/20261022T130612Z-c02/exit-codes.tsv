@@ -1,0 +1,8 @@
+pnpm --dir rph install	0
+pnpm --dir rph install --frozen-lockfile	0
+pnpm --dir rph build	0
+pnpm --dir rph test	0
+pnpm --dir rph check	0
+node rph/scripts/check-boundaries.mjs	0
+pnpm --dir rph package	0
+test ! -f package.json	0

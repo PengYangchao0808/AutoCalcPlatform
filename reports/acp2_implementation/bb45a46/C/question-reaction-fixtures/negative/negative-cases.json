@@ -1,0 +1,86 @@
+{
+  "authoritative_run": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/question-reaction-fixtures/f1-1792723842-question-reaction-fixtures",
+  "cases": [
+    {
+      "fragment": "unconfirmed clarification blocks submit",
+      "status": "PASS",
+      "test": "unconfirmed clarification blocks submit: missing_stereo must be explicitly confirmed"
+    },
+    {
+      "fragment": "approximation hidden/omitted blocks submit",
+      "status": "PASS",
+      "test": "approximation hidden/omitted blocks submit: missing_conditions approximation must stay visible"
+    },
+    {
+      "fragment": "CDXML parse error shows error and no submit",
+      "status": "PASS",
+      "test": "CDXML parse error shows error and no submit"
+    },
+    {
+      "fragment": "mapping ambiguity",
+      "status": "PASS",
+      "test": "mapping ambiguity (cross-side pairing) is surfaced: mapping_ambiguity"
+    },
+    {
+      "fragment": "unknown multiplicity requires explicit input",
+      "status": "PASS",
+      "test": "unknown multiplicity requires explicit input: unknown_multiplicity"
+    },
+    {
+      "fragment": "net multi-step prompt cannot be bypassed",
+      "status": "PASS",
+      "test": "net multi-step prompt cannot be bypassed: reaction.candidate_steps"
+    }
+  ],
+  "clarification_matrix": [
+    "missing_stereo",
+    "missing_conditions",
+    "mapping_ambiguity",
+    "unknown_multiplicity",
+    "reaction.candidate_steps"
+  ],
+  "command": [
+    "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+    "/ACPServer/acp2-development/C/frontend/js/module_tests/run_all.js",
+    "acp2_question_reaction"
+  ],
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "failed": 0,
+  "filter": "acp2_question_reaction",
+  "passed": 21,
+  "passing_tests": [
+    "rejects duplicate atom map in the reaction spec",
+    "rejects missing product in the reaction spec",
+    "rejects charge non-conservation in the reaction spec",
+    "net multi-step reaction as a single TS yields a clarification item, not a submit",
+    "CDXML input is marked DEFERRED and never parsed as an empty structure",
+    "P2 input range is frozen to MOL/SDF/SMILES plus structure upload",
+    "atom labels, mapping and stereo are preserved across edits",
+    "charge/spin and solvent/temperature/standard state are visible",
+    "human confirmations and approximations are recorded with the input revision",
+    "net reaction vs elementary step distinction is shown",
+    "no silent identity fill: missing charge/spin/stereo stay unspecified",
+    "science-question submit is blocked while reaction clarifications are open",
+    "unconfirmed clarification blocks submit: missing_stereo must be explicitly confirmed",
+    "approximation hidden/omitted blocks submit: missing_conditions approximation must stay visible",
+    "CDXML parse error shows error and no submit",
+    "mapping ambiguity (cross-side pairing) is surfaced: mapping_ambiguity",
+    "unknown multiplicity requires explicit input: unknown_multiplicity",
+    "net multi-step prompt cannot be bypassed: reaction.candidate_steps",
+    "clarification item field names match view-model.schema.json",
+    "proposal payload writes confirmations, approximations and the input revision with frozen proposal.schema.json field names",
+    "a parallel proposal shape is rejected"
+  ],
+  "required_negatives": [
+    "unconfirmed clarification blocks submit",
+    "approximation hidden/omitted blocks submit",
+    "CDXML parse error shows error and no submit",
+    "mapping ambiguity",
+    "unknown multiplicity requires explicit input",
+    "net multi-step prompt cannot be bypassed"
+  ],
+  "run_artifact": "negative/negative-cases.json",
+  "scenario": "question-reaction-fixtures"
+}

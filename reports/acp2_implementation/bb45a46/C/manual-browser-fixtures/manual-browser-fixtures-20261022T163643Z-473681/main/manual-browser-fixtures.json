@@ -1,0 +1,35 @@
+{
+  "browser": {
+    "exit_code": 0,
+    "interpreter": "/ACPServer/acp2-development/venvs/browser/bin/python",
+    "network_entries": 150,
+    "payload": {
+      "chromium": "153.0.8010.12",
+      "console_errors": [],
+      "demo_badge": true,
+      "demo_badge_text": "\u6f14\u793a\u6570\u636e",
+      "entry_visible": true,
+      "ok": true,
+      "page_errors": [],
+      "port": 39427,
+      "preflight_status_text": "\u9884\u68c0\u5931\u8d25\uff0c\u63d0\u4ea4\u5df2\u7981\u7528",
+      "screenshot_bytes": 325743,
+      "submit_calls": 0,
+      "submit_disabled_after_preflight_failure": true,
+      "zero_submit_calls": true
+    }
+  },
+  "filter": "acp2_manual",
+  "node": {
+    "command": [
+      "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+      "/ACPServer/acp2-development/C/frontend/js/module_tests/run_all.js",
+      "acp2_manual"
+    ],
+    "exit_code": 0,
+    "failed": 0,
+    "min_tests": 8,
+    "passed": 10
+  },
+  "scenario": "manual-browser-fixtures"
+}

@@ -1,0 +1,126 @@
+{
+  "artifacts": [
+    {
+      "path": "manual-node-suite.log",
+      "sha256": "03a4a0809e6e778067373ce387a9db1f3dce7e4b47e57def2746b13d07992476",
+      "size_bytes": 774
+    },
+    {
+      "path": "manual-browser.log",
+      "sha256": "1287dfcc324eac44f3a2a3dcc4de572f0798e196d4ec8cffa1d5f589cce38044",
+      "size_bytes": 1998
+    },
+    {
+      "path": "manual-browser-fixtures.json",
+      "sha256": "0f2de873ce9a97d4d8ec597f29327d2ebbfa5521162d149c1e7ac0f366ad3f33",
+      "size_bytes": 1005
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=10 failed=0 min=8",
+      "name": "manual.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=1 error=TimeoutError: Page.wait_for_function: Timeout 10000ms exceeded. port=42855",
+      "name": "manual.browser.probe_completed",
+      "status": "FAIL"
+    },
+    {
+      "detail": "entry_visible=True",
+      "name": "manual.browser.entry_visible",
+      "status": "PASS"
+    },
+    {
+      "detail": "demo_badge=True text='\u6f14\u793a\u6570\u636e'",
+      "name": "manual.browser.demo_badge",
+      "status": "PASS"
+    },
+    {
+      "detail": "disabled=False status=''",
+      "name": "manual.browser.submit_disabled_after_preflight_failure",
+      "status": "FAIL"
+    },
+    {
+      "detail": "submit_calls=0",
+      "name": "manual.browser.zero_submit_calls",
+      "status": "FAIL"
+    },
+    {
+      "detail": "screenshot_bytes=0 probe_bytes=0",
+      "name": "manual.browser.screenshot_nonempty",
+      "status": "FAIL"
+    },
+    {
+      "detail": "console_errors=0 page_errors=0 ",
+      "name": "manual.browser.zero_console_errors",
+      "status": "PASS"
+    },
+    {
+      "detail": "entries=0",
+      "name": "manual.browser.network_log",
+      "status": "FAIL"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a",
+    "harness_revision": "642c2643c9db7bebcbe90d69ff24d6560a3f4ac1ee278e585e407ecd99c8c36f",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "manual-browser-fixtures",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/manual-browser-fixtures/manual-browser-fixtures-20261022T163245Z-470373/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 1,
+  "extensions": {
+    "experience.harness_contract_revision": "642c2643c9db7bebcbe90d69ff24d6560a3f4ac1ee278e585e407ecd99c8c36f",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.manual_chromium": "153.0.8010.12",
+    "experience.manual_console_errors": 0,
+    "experience.manual_demo_badge": true,
+    "experience.manual_entry_visible": true,
+    "experience.manual_min_tests": 8,
+    "experience.manual_screenshot_bytes": 0,
+    "experience.manual_submit_calls": 0,
+    "experience.manual_submit_disabled_after_preflight": false,
+    "experience.manual_suite_failed": 0,
+    "experience.manual_suite_passed": 10,
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "manual-browser-fixtures-20261022T163245Z-470373",
+    "experience.scenario_key": "manual-browser-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a"
+  },
+  "finished_at": "2026-10-22T16:32:58Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": "manual_browser_fixtures_assertion_failed",
+  "release_id": null,
+  "result": "FAIL",
+  "run_id": "manual-browser-fixtures-20261022T163245Z-470373",
+  "scenario": "experience:manual-browser-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T16:32:46Z",
+  "submission_id": null,
+  "usage": null
+}

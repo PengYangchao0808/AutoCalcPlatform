@@ -1,0 +1,20 @@
+{
+  "contracts": [
+    {
+      "contains_not_verified_rule": true,
+      "path": "docs/reference/next-change/acp2-contracts/experience/requests/A-req-04.md",
+      "status": "open"
+    },
+    {
+      "contains_not_verified_rule": false,
+      "path": "docs/reference/next-change/acp2-contracts/experience/requests/B-req-15.md",
+      "status": "open"
+    }
+  ],
+  "evidence_kind": "not_verified",
+  "result": "NOT_VERIFIED(search_capability)",
+  "run_id": "research-loop-live-r1",
+  "scenario_key": "experience:research-loop-live/search",
+  "schema": "acp2.experience.research-loop.search.v1",
+  "search_capability": "NOT_VERIFIED"
+}

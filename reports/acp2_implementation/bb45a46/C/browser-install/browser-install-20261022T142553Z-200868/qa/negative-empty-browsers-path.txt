@@ -1,0 +1,7 @@
+Negative QA: PLAYWRIGHT_BROWSERS_PATH points at an empty temporary directory.
+Command: source acceptance-env-c.sh; export PLAYWRIGHT_BROWSERS_PATH=<empty tmp>; c_accept browser-install 600
+Observed exit: 2
+Observed result: NOT_VERIFIED
+Observed reason: chromium_not_installed:<empty tmp>/chromium-1243/chrome-linux64/chrome
+Negative receipt: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T142617Z-202805/main/experience_browser-install-experience_fixture-browser-install-20261022T142617Z-202805.json
+Assertion: never PASS. The empty directory was removed after the run.

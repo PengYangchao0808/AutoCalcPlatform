@@ -1,0 +1,6 @@
+{
+  "role": "worker",
+  "python": "/tmp/acp-repair-final-env-worker/bin/python",
+  "verified_installed_files": 276,
+  "result": "PASS"
+}

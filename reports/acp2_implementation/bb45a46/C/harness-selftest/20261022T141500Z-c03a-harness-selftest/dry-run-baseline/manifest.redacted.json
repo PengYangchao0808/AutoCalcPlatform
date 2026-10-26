@@ -1,0 +1,11 @@
+{
+  "candidate_id": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+  "evidence_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+  "extensions": {},
+  "fixtures": [],
+  "paths": {
+    "c_source": "/ACPServer/acp2-development/C"
+  },
+  "schema": "acp2.experience.manifest-extension.v1",
+  "schema_version": "1.0.0"
+}
