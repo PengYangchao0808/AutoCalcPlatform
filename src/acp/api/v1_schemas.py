@@ -7,49 +7,22 @@ Pydantic models for the ACP Workbench v2 ``/api/v1`` surface.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-logger = logging.getLogger(__name__)
+from acp_services.entrypoints.application_params import (
+    NODE_TAGS_MAX_COUNT,
+    NODE_TAGS_MAX_LENGTH,
+    normalize_node_tags,
+)
 
-#: node_tags sanitation caps (m7): at most 16 tags of at most 64 chars each.
-NODE_TAGS_MAX_COUNT = 16
-NODE_TAGS_MAX_LENGTH = 64
-
-
-def normalize_node_tags(values: list[str]) -> list[str]:
-    """Sanitize a ``node_tags`` list: strip, drop empties, dedupe
-    (order-preserving), cap at :data:`NODE_TAGS_MAX_COUNT` tags of at most
-    :data:`NODE_TAGS_MAX_LENGTH` chars.
-
-    Over-limit entries are dropped with a warning; a list that normalizes
-    to empty imposes no tag constraint (never an unsatisfiable filter).
-    """
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    for raw in values:
-        tag = str(raw).strip()
-        if not tag or tag in seen:
-            continue
-        if len(tag) > NODE_TAGS_MAX_LENGTH:
-            logger.warning(
-                "node_tags entry dropped (exceeds %d chars): %.64s",
-                NODE_TAGS_MAX_LENGTH,
-                tag,
-            )
-            continue
-        if len(cleaned) >= NODE_TAGS_MAX_COUNT:
-            logger.warning(
-                "node_tags entry dropped (more than %d tags): %.64s",
-                NODE_TAGS_MAX_COUNT,
-                tag,
-            )
-            continue
-        seen.add(tag)
-        cleaned.append(tag)
-    return cleaned
+# ``node_tags`` sanitation lives in the application-params single authority
+# (``acp_services.entrypoints.application_params``) so the DTO, the CLI and the
+# canonical request digest cannot normalise tags differently (M0-06).  The names
+# stay importable from this module as identity re-exports for existing callers
+# (``acp.api.v2_schemas`` imports ``normalize_node_tags`` from here); they are
+# listed in ``__all__`` below.
 
 
 class ProjectModel(BaseModel):
@@ -336,6 +309,13 @@ class V1JobRecordModel(BaseModel):
 
 
 class V1JobCreateRequest(BaseModel):
+    # M0-06/G23: v1 freezes ``extra="forbid"``.  An undeclared execution field can
+    # never reach a task (it used to be silently dropped by Pydantic, so a typo
+    # such as ``execution_mod`` degraded into a *local* run).  The app-level
+    # RequestValidationError handler turns ``extra_forbidden`` into the shared
+    # ``input_invalid`` envelope with ``params={"field", "rule": "unknown_field"}``.
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
     workflow: str
     name: str = ""
     input: dict[str, Any] = Field(default_factory=dict)
@@ -361,6 +341,10 @@ class V1JobCreateRequest(BaseModel):
     # ``POST /preflight``.  Deliberately NOT ``plan_digest`` so
     # ``_is_research_launch`` never treats it as a research trigger.
     preflight_fingerprint: str | None = None
+    # U4: namespaced, opaque extension metadata.  Declared (the registered
+    # contract has it) and accepted, never used for execution — but part of the
+    # request identity like every other client-chosen field.
+    extensions: dict[str, Any] | None = None
 
     @field_validator("node_tags")
     @classmethod
@@ -1921,17 +1905,23 @@ class EnergyGraphResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class V1PreflightRequest(BaseModel):
-    schema_version: int = 1
-    workflow: str
-    input: dict[str, Any] = Field(default_factory=dict)
-    method: dict[str, Any] = Field(default_factory=dict)
-    resources: dict[str, Any] = Field(default_factory=dict)
-    project_id: str | None = None
-    extensions: dict[str, Any] | None = None
+class V1PreflightRequest(V1JobCreateRequest):
+    """The zero-side-effect preflight of a submit request.
+
+    M0-06/G23: preflight is a **dry run of the same request**, so it accepts
+    exactly the submit field set (the frontend builds both from one normalised
+    body).  It inherits ``extra="forbid"`` and every declared field; naming, tag
+    and research-binding fields never enter the science plan digest, they are only
+    accepted so a shared body is not rejected one step earlier than the submit.
+    """
 
 
 class V1PrepareRequest(BaseModel):
+    # M0-06: the MCP adapter forwards the prepare request unchanged, so both
+    # entries must agree on what a declared field is (unknown_field_policy U1
+    # applies to prepare too).
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
     schema_version: int = 1
     purpose: Literal["artifact", "structure-input"]
     task_ref: dict[str, Any] | None = None
@@ -1963,6 +1953,9 @@ class V1AnalyzeRequest(BaseModel):
 
 
 __all__ = [
+    "NODE_TAGS_MAX_COUNT",
+    "NODE_TAGS_MAX_LENGTH",
+    "normalize_node_tags",
     "ArtifactListResponse",
     "ArtifactModel",
     "BondLengthScanJobInput",

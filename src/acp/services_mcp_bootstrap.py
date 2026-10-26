@@ -41,11 +41,14 @@ from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
 from acp_services.entrypoints import machine_output as mo
 from acp_services.entrypoints import mcp
 from acp_services.entrypoints.application_params import (
+    ENTRY_MCP,
+    REQUEST_PREFLIGHT,
+    REQUEST_PREPARE,
+    REQUEST_SUBMIT,
     ApplicationParamError,
     normalize_analyze,
-    normalize_preflight,
-    normalize_prepare,
     normalize_read,
+    validate_request_fields,
 )
 from acp_services.entrypoints.controller_client import (
     DEFAULT_TIMEOUT_SECONDS,
@@ -169,10 +172,20 @@ class _ControllerPreflight:
         self._client = client
 
     def preflight(self, request: Mapping[str, Any], *, workspace_id: str) -> Mapping[str, Any]:
+        """Forward the caller's preflight request unchanged (M0-06).
+
+        Preflight is the dry run of a submit, so it must reach the Controller with
+        the same fields: rebuild-through-``normalize_preflight`` dropped the
+        execution-target/naming fields, which made an MCP preflight of a pinned
+        (unknown/incapable) node look feasible while the HTTP submit rejected it.
+        The field policy is applied first so an undeclared field is the same
+        ``input_invalid`` before any network call.
+        """
         del workspace_id
+        payload = dict(request)
         try:
-            normalized = normalize_preflight(request)
-            return dict(self._client.preflight(normalized))
+            validate_request_fields(payload, request_kind=REQUEST_PREFLIGHT, entry=ENTRY_MCP)
+            return dict(self._client.preflight(payload))
         except ApplicationParamError as exc:
             raise _param_error("preflight", exc) from None
         except ControllerClientError as exc:
@@ -184,7 +197,7 @@ class _ControllerSubmit:
         self._client = client
 
     def submit(self, spec: Mapping[str, Any], *, idempotency_key: str, workspace_id: str) -> Any:
-        """Forward the caller's request body and raw idempotency key (M0-05).
+        """Forward the caller's request body and raw idempotency key (M0-05/M0-06).
 
         The adapter no longer rebuilds a trimmed payload (field equivalence is
         M0-06) and never adds an identity: the Controller derives the principal
@@ -192,6 +205,11 @@ class _ControllerSubmit:
         ``project_id`` are server facts, never request fields.  ``idempotency_key``
         is forwarded verbatim (``""`` = no key, an explicitly non-idempotent
         request); the Controller's persistent ledger owns claim/replay/conflict.
+
+        M0-06 adds the *same* exhaustive field policy the HTTP entry applies, so an
+        undeclared field (``execution_mod``) or a server-path field is the same
+        ``input_invalid`` here instead of being silently dropped and forwarded.
+        Nothing else about the body is rewritten.
         """
         del workspace_id
         payload = dict(spec)
@@ -201,6 +219,7 @@ class _ControllerSubmit:
         else:
             payload.pop("idempotency_key", None)
         try:
+            validate_request_fields(payload, request_kind=REQUEST_SUBMIT, entry=ENTRY_MCP)
             record = dict(self._client.submit(payload))
         except ApplicationParamError as exc:
             raise _param_error("submit", exc) from None
@@ -277,25 +296,36 @@ class _ControllerArtifacts:
     def prepare(
         self, request: Mapping[str, Any], *, idempotency_key: str, workspace_id: str
     ) -> Any:
+        """Forward the prepare request unchanged (M0-06 field equivalence).
+
+        The adapter used to rebuild the request through ``normalize_prepare`` and
+        send the normalised subset, so a field the Controller's DTO declares but
+        the local normaliser did not know was silently dropped before validation.
+        The request now reaches the Controller exactly as the caller wrote it (the
+        route normalises once, server-side); the frozen field policy is applied
+        first so an undeclared field is the same ``input_invalid`` the HTTP entry
+        reports.
+        """
         del workspace_id
+        payload = dict(request)
+        key = str(idempotency_key or "").strip()
+        if key:
+            payload.setdefault("idempotency_key", key)
         try:
-            normalized = normalize_prepare(request)
-            key = str(idempotency_key or "").strip()
-            if key:
-                normalized.setdefault("idempotency_key", key)
-            record = dict(self._client.prepare(normalized))
+            validate_request_fields(payload, request_kind=REQUEST_PREPARE, entry=ENTRY_MCP)
+            record = dict(self._client.prepare(payload))
         except ApplicationParamError as exc:
             raise _param_error("prepare", exc) from None
         except ControllerClientError as exc:
             raise _tool_error("prepare", exc) from None
         operation_ref = record.get("operation_ref") or record.get("operation_id") or ""
-        payload = dict(record)
-        payload["operation_ref"] = operation_ref
-        payload.setdefault(
+        payload_out = dict(record)
+        payload_out["operation_ref"] = operation_ref
+        payload_out.setdefault(
             "reference",
             {"kind": "operation", "id": str(operation_ref)},
         )
-        return payload
+        return payload_out
 
     def read(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
         del workspace_id

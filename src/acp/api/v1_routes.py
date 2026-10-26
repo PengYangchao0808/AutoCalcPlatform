@@ -2375,18 +2375,13 @@ def _canonicalize_batch_keywords(method: dict[str, Any]) -> None:
 def _target_validation_detail(exc: Exception) -> dict[str, Any]:
     """Serialize a submission-time target error into the 400 body (D12).
 
-    Carries the machine-readable ``code`` plus ``missing_software`` /
-    ``missing_tags`` so clients (and the frontend i18n layer) can map errors
-    without parsing free-form English.
+    Delegates to :func:`acp.scheduler.nodes.target_error_detail` so the D12 shape
+    has exactly one implementation (M0-06); the application envelope used by the
+    submit entry is :func:`acp.scheduler.nodes.target_error_envelope`.
     """
-    return {
-        "code": getattr(exc, "code", None) or "execution_target_error",
-        "message": str(exc),
-        "missing_software": list(getattr(exc, "missing_software", ()) or ()),
-        "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
-        "local_missing_software": list(getattr(exc, "local_missing_software", ()) or ()),
-        "remote_nodes_configured": getattr(exc, "remote_nodes_configured", None),
-    }
+    from acp.scheduler.nodes import target_error_detail
+
+    return target_error_detail(exc)
 
 
 def _source_job_id_from_input(inp: dict[str, Any]) -> str:
@@ -2554,13 +2549,25 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         )
     from acp_services.entrypoints.application_params import (
         ApplicationParamError,
+        canonical_submit_request,
         normalize_submit,
     )
 
+    # M0-06/G23: one exhaustive field policy decides what this request may carry.
+    # An undeclared field or a client-chosen server path is a 422 ``input_invalid``
+    # before any resolution/snapshot/dispatch side effect, and the canonical form
+    # is the same object MCP and the CLI build (so the request digest and the
+    # effective JobSpec cannot drift per entry).
+    request_payload = req.model_dump(exclude_none=True)
     try:
-        normalized_submit = normalize_submit(req.model_dump(exclude_none=True))
+        canonical_submit_request(request_payload, entry="http")
+        normalized_submit = normalize_submit(request_payload)
     except ApplicationParamError as exc:
-        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+        # A field-policy violation is 422 (the frozen extra=forbid answer); every
+        # other shape violation keeps the long-standing 400 (budget/type/required).
+        raise _command_error(
+            _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
+        ) from exc
     fingerprint = normalized_submit.get("preflight_fingerprint")
     if fingerprint:
         from acp_services.runtime.canonical_digest import CanonicalDigestError
@@ -2618,35 +2625,46 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     )
     task_name = req.task_name or req.workflow
     molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
+    # M0-06: the effective JobSpec takes every decision field from the canonical
+    # request (blank optional strings collapse to the single absent value), so the
+    # CLI's equivalent spec is byte-identical instead of differing on "" vs None.
+    # The canonical form is recomputed from the *effective* request (post project
+    # resolution / stage inheritance), which is also the digest material — the
+    # same rule the pre-M0-06 entry hashed.
+    canonical = canonical_submit_request(req.model_dump(exclude_none=True), entry="http")
     spec = JobSpec(
         workflow=req.workflow,
-        name=req.name,
+        name=canonical["name"],
         input=req.input,
         method=req.method,
         resources=req.resources,
-        output_dir=req.output_dir,
-        config_path=req.config_path,
-        tags=req.tags,
-        node_tags=req.node_tags,
+        tags=list(canonical["tags"]),
+        node_tags=list(canonical["node_tags"]),
         project_id=req.project_id,
-        execution_mode=req.execution_mode,
-        target_node=req.target_node,
+        execution_mode=req.execution_mode or None,
+        target_node=req.target_node or None,
         molecule_name=molecule_name,
         task_name=task_name,
-        remark=req.remark,
+        remark=canonical["remark"],
     )
     try:
         validate_execution_request(spec)
-    except ExecutionTargetError as exc:
-        # Same D12 dict shape as the continue endpoint; the conflict check
-        # in nodes.py carries no code, so stamp the stable one here.
-        detail = _target_validation_detail(exc)
-        detail["code"] = getattr(exc, "code", None) or "execution_mode_conflict"
-        raise HTTPException(status_code=400, detail=detail) from exc
-    try:
         validate_submission_target(spec, registry=manager.registry)
     except (ExecutionTargetError, NoCapableNodeError) as exc:
-        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+        # M0-06: one application envelope for every entry — a stable
+        # ``input_invalid`` code plus ``params.field``/``params.rule`` carrying the
+        # fine-grained scheduler decision.  An unknown remote node is therefore the
+        # same rejection at HTTP, MCP and the CLI.
+        from acp.scheduler.nodes import target_error_envelope
+
+        envelope = target_error_envelope(exc)
+        raise _command_error(
+            422,
+            str(envelope["code"]),
+            str(envelope["message"]),
+            params=dict(envelope["params"]),
+            retryable=False,
+        ) from exc
     idempotency_key = _submit_idempotency_key(request, req)
     scope_project = str(req.project_id or manager.default_project_id)
     identity = _command_identity(request, project_id=scope_project)
@@ -2661,7 +2679,11 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             key=idempotency_key,
             scope_id=identity.idempotency_scope(project_id=scope_project),
             action=ACTION_SUBMIT,
-            request_payload=req.model_dump(exclude_none=True),
+            # The digest material is the canonical effective request (M0-06); the
+            # row records its frozen rule version and the payload so a pre-M0-06
+            # row is verified against its own field table instead of being called
+            # tampered.
+            request_payload=canonical,
             principal_id=identity.principal_id,
             key_id=identity.key_id,
         )
@@ -8307,6 +8329,20 @@ def _command_error(
     return HTTPException(status_code=status_code, detail=detail)
 
 
+#: Field-policy rules that answer ``422`` (the frozen v1 ``extra=forbid`` result).
+_FIELD_POLICY_RULES = frozenset({"unknown_field", "unsupported_server_path"})
+
+
+def _field_policy_status(exc: Any) -> int:
+    """Map an :class:`ApplicationParamError` onto its HTTP status.
+
+    ``422`` for the two frozen field-policy rules, ``400`` for every other request
+    shape violation (unchanged pre-M0-06 behaviour).
+    """
+    rule = str((getattr(exc, "params", {}) or {}).get("rule") or "")
+    return 422 if rule in _FIELD_POLICY_RULES else 400
+
+
 def _plan_digest(payload: Mapping[str, Any]) -> str:
     """Server-computed canonical digest of the frozen scientific plan.
 
@@ -8475,10 +8511,17 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
     Entry access is authorized by the thin :func:`preflight_request` wrapper;
     everything after that check lives here unchanged so the B1-3 science
     preflight can reuse the single implementation.
+
+    M0-06: the same exhaustive field policy and the same execution-target checks
+    as :func:`create_job` run here first, so a typo'd field or an unknown remote
+    node is reported identically before and after a submit.  The response key set
+    stays frozen (B1-3); an infeasible target is projected into ``reasons`` with
+    the application ``input_invalid`` code plus the fine-grained rule.
     """
     from acp_services.entrypoints.application_params import (
         ApplicationParamError,
         normalize_preflight,
+        validate_request_fields,
     )
 
     if req.workflow not in ALL_WORKFLOWS:
@@ -8490,9 +8533,12 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         )
     payload = req.model_dump(exclude_none=True)
     try:
+        validate_request_fields(payload, request_kind="preflight", entry="http")
         normalize_preflight(payload)
     except ApplicationParamError as exc:
-        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+        raise _command_error(
+            _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
+        ) from exc
     try:
         _validate_simple_method_cli(req.workflow, req.method)
         _validate_scan_submission(req.workflow, req.method, req.input)
@@ -8512,15 +8558,34 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         method=req.method,
         resources=req.resources,
         project_id=project_id,
+        execution_mode=req.execution_mode,
+        target_node=req.target_node or None,
+        node_tags=list(req.node_tags),
     )
     reasons: list[dict[str, Any]] = []
     feasible = True
     try:
         validate_execution_request(spec)
-    except ExecutionTargetError as exc:
+        # Only a target the client actually chose is validated here: an auto job's
+        # capability resolution stays a submit-time decision (it depends on probe
+        # state, not on the request), while a pinned node / explicit remote is the
+        # same permanent check the submit entry applies.
+        if req.target_node or req.execution_mode == "remote":
+            validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        from acp.scheduler.nodes import target_error_envelope
+
         feasible = False
+        envelope = target_error_envelope(exc)
+        params = dict(envelope["params"])
         reasons.append(
-            {"code": getattr(exc, "code", None) or "execution_mode_conflict", "message": str(exc)}
+            {
+                "code": envelope["code"],
+                "message": envelope["message"],
+                "field": params.get("field"),
+                "rule": params.get("rule"),
+                "params": params,
+            }
         )
     digest = None
     if feasible:

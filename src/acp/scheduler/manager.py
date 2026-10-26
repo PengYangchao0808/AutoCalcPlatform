@@ -1119,6 +1119,8 @@ class JobManager:
             lease_seconds=idempotency.lease_seconds,
             principal_id=principal_id,
             project_id=spec.project_id,
+            request_digest_version=idempotency.request_digest_version,
+            request_payload=idempotency.request_payload,
         )
         self._fault_point("idempotency.after_claim")
         if outcome.in_progress:
@@ -1236,6 +1238,8 @@ class JobManager:
                 digest,
                 lease_seconds=idempotency.lease_seconds,
                 principal_id=idempotency.principal,
+                request_digest_version=idempotency.request_digest_version,
+                request_payload=idempotency.request_payload,
             )
             if not outcome.in_progress:
                 return outcome

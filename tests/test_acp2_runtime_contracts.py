@@ -847,7 +847,11 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
         assert sha256_bytes(path.read_bytes()) == entry["sha256"], contract_id
     for entry in manifest["contracts"]:
         if entry["status"] == "delivered":
-            assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a", "B06", "B19"}
+            # M0-07 (2026-10-27): the trusted-usage-receipts contract is the
+            # first delivered contract registered under a remediation stage id
+            # instead of a B-stage; the set grows only through a new manifest
+            # registration with its DELIVERED_IDS_BY_STAGE mapping.
+            assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a", "B06", "B19", "M0-07"}
         else:
             assert "sha256" not in entry
 
@@ -891,10 +895,36 @@ def test_cross_track_requests_are_recorded_and_owned(manifest: dict[str, Any]) -
 
 def test_application_api_v1_1_research_fields_are_additive() -> None:
     api = load_json(RUNTIME / "application-api.v1.json")
-    assert api["contract_version"] == "1.1.0"
+    # 1.2.0 (M0-06/G23): additive execution-decision fields (name/tags/node_tags/
+    # execution_mode/target_node/molecule_name/task_name/remark/
+    # preflight_fingerprint) plus the exhaustive ``submit_field_policy`` block.
+    # 1.1.0's research fields stay untouched.
+    assert api["contract_version"] == "1.2.0"
     submit = api["operations"]["submit"]
     for name in ("proposal_ref", "plan_digest", "budget"):
         assert name in submit["request"]["fields"], name
+    for name in (
+        "name",
+        "tags",
+        "node_tags",
+        "execution_mode",
+        "target_node",
+        "molecule_name",
+        "task_name",
+        "remark",
+        "preflight_fingerprint",
+    ):
+        assert name in submit["request"]["fields"], name
+    assert api["submit_field_policy"]["freeze"].startswith("v1 extra=forbid")
+    assert api["submit_field_policy"]["legacy_allowlist"] == {}
+    documented = api["submit_field_policy"]["fields"]
+    # The policy block also documents the two *rejected* server-path fields, which
+    # are deliberately absent from the declared request fields.
+    assert set(documented) - {"output_dir", "config_path"} == set(submit["request"]["fields"])
+    assert documented["output_dir"]["disposition"] == "server_path_rejected"
+    assert documented["config_path"]["entries"] == []
+    for name in ("execution_mode", "target_node", "node_tags"):
+        assert name in api["operations"]["preflight"]["request"]["fields"], name
     assert submit["request"]["fields"]["budget"]["required"] == ["unit", "timeout_s"]
     for name in ("task_ref", "result", "approval_ref"):
         assert name in submit["response"]["fields"], name

@@ -1769,9 +1769,10 @@ async function preselectNodeFromSourceJob(sourceJobId) {
   renderNodeSelector();
 }
 
-// D12: submission-time target errors carry a machine-readable code in the
-// 400 body ({code, missing_software, missing_tags}); map codes to localized
-// text instead of surfacing the server's English message.
+// D12: submission-time target errors carry the application envelope
+// `{code, message, params:{field, rule, missing_software, ...}}` (M0-06). Map
+// the fine-grained `params.rule` first and keep the legacy top-level `code` as a
+// fallback so an older server answer still translates.
 function translateNodeError(err) {
   var msg = (err && err.message) || String(err || "");
   var parsed = null;
@@ -1780,29 +1781,31 @@ function translateNodeError(err) {
     if (candidate && typeof candidate === "object" && candidate.code) parsed = candidate;
   } catch (e) { /* not a coded error body */ }
   if (!parsed) return null;
-  var key = "nodes.error." + parsed.code;
+  var params = (parsed.params && typeof parsed.params === "object") ? parsed.params : parsed;
+  var rule = (typeof params.rule === "string" && params.rule) || parsed.code;
+  var key = "nodes.error." + rule;
   var translated = t(key);
   if (translated === key) translated = t("nodes.error.execution_target_error");
   var extras = [];
-  if (parsed.code === "no_capable_node" && parsed.remote_nodes_configured !== undefined &&
-      parsed.remote_nodes_configured !== null) {
-    if (parsed.local_missing_software && parsed.local_missing_software.length) {
+  if (rule === "no_capable_node" && params.remote_nodes_configured !== undefined &&
+      params.remote_nodes_configured !== null) {
+    if (params.local_missing_software && params.local_missing_software.length) {
       extras.push(t("nodes.reason.local_missing_software", {
-        software: parsed.local_missing_software.join(", ")
+        software: params.local_missing_software.join(", ")
       }));
     }
-    if (parsed.remote_nodes_configured === false) {
+    if (params.remote_nodes_configured === false) {
       extras.push(t("nodes.reason.no_remote_nodes"));
-    } else if (parsed.missing_software && parsed.missing_software.length) {
+    } else if (params.missing_software && params.missing_software.length) {
       extras.push(t("nodes.reason.remote_missing_software", {
-        software: parsed.missing_software.join(", ")
+        software: params.missing_software.join(", ")
       }));
     }
-  } else if (parsed.missing_software && parsed.missing_software.length) {
-    extras.push(t("nodes.reason.missing_software", { software: parsed.missing_software.join(", ") }));
+  } else if (params.missing_software && params.missing_software.length) {
+    extras.push(t("nodes.reason.missing_software", { software: params.missing_software.join(", ") }));
   }
-  if (parsed.missing_tags && parsed.missing_tags.length) {
-    extras.push(t("nodes.reason.missing_tags", { tags: parsed.missing_tags.join(", ") }));
+  if (params.missing_tags && params.missing_tags.length) {
+    extras.push(t("nodes.reason.missing_tags", { tags: params.missing_tags.join(", ") }));
   }
   return extras.length ? translated + " (" + extras.join("; ") + ")" : translated;
 }

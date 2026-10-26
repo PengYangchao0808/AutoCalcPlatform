@@ -12,22 +12,84 @@ catalog and the Controller route.  A normalisation failure raises
 :class:`ApplicationParamError` carrying the frozen ``machine_output`` code
 (``input_invalid``) so both the HTTP layer and the MCP layer can map it without
 inventing a second vocabulary.
+
+M0-06 (G23): exhaustive field policy
+------------------------------------
+:data:`SUBMIT_FIELD_POLICY` / :data:`PREFLIGHT_FIELD_POLICY` /
+:data:`PREPARE_FIELD_POLICY` are the **single authority** for which request
+field means what, at which entry, in which request kind.  Every declared field
+of the corresponding v1 DTO must appear there exactly once (anti-drift guard:
+``tests/test_acp2_request_field_equivalence.py`` compares the tables against the
+Pydantic models and against the registered
+``runtime/application-api.v1.json`` contract fields).
+
+Field-policy vocabulary (frozen for v1):
+
+``job_spec``
+    Mapped onto the effective :class:`JobSpec` field named by
+    ``FieldPolicy.job_spec_field`` by every entry.
+``request_control``
+    Request identity/versioning (``schema_version``, ``idempotency_key``,
+    ``preflight_fingerprint``).  Never part of the scientific plan.
+``research``
+    B-req-01 research launch fields (approval/plan/budget binding).
+``server_path_rejected``
+    A server filesystem path.  A client may not choose where the Controller
+    writes (``output_dir``) or which host config it loads (``config_path``);
+    the field is *declared* (so ``extra="forbid"`` reports the truthful
+    ``unsupported_server_path`` rule instead of pretending it never existed)
+    and rejected at ``http``/``mcp``.
+``legacy_allowlist``
+    Accepted for a named set of still-registered consumers, never used for
+    execution, and scheduled for removal (``removal_version`` +
+    ``exit_condition``).  Empty in v1: the mechanical inventory (frontend,
+    RPH bridge, CLI, ``scripts/acceptance/**``, registered SDK contract) found
+    no undeclared field in use — see :data:`LEGACY_REQUEST_FIELD_ALLOWLIST`.
+    There is deliberately **no** "ignore unknown fields and warn" mode.
+
+Server path fields are rejected with ``params={"field": ..., "rule":
+"unsupported_server_path"}``; an undeclared field is rejected with
+``params={"field": ..., "rule": "unknown_field"}``.  Both surface as the
+``input_invalid`` application error at HTTP (422), MCP and CLI.
 """
 
 from __future__ import annotations
 
+import logging
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, replace
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "APPLICATION_SCHEMA_VERSION",
     "ApplicationParamError",
+    "ENTRIES",
+    "ENTRY_CLI",
+    "ENTRY_HTTP",
+    "ENTRY_MCP",
+    "FIELD_POLICY",
+    "FieldPolicy",
+    "LEGACY_REQUEST_FIELD_ALLOWLIST",
+    "NODE_TAGS_MAX_COUNT",
+    "NODE_TAGS_MAX_LENGTH",
+    "PREFLIGHT_FIELD_POLICY",
+    "PREPARE_FIELD_POLICY",
+    "REQUEST_PREFLIGHT",
+    "REQUEST_PREPARE",
+    "REQUEST_SUBMIT",
+    "SUBMIT_FIELD_POLICY",
+    "canonical_submit_request",
+    "field_policy_gaps",
     "normalize_analyze",
+    "normalize_node_tags",
     "normalize_preflight",
     "normalize_prepare",
     "normalize_read",
     "normalize_submit",
+    "validate_request_fields",
 ]
 
 #: Contract major version accepted by every application command.
@@ -36,6 +98,33 @@ APPLICATION_SCHEMA_VERSION = 1
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDEMPOTENCY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 _BUDGET_UNITS = frozenset({"task_count", "core_hours", "walltime_s"})
+
+#: Application entries the field policy is frozen for.  ``legacy-http`` (the
+#: unversioned ``/api/jobs`` surface retained for F0 display compatibility) and
+#: ``acp run`` (a local operator that builds a JobSpec directly, never an
+#: application request payload) are deliberately **not** application entries:
+#: they are not part of the ACP 2.0 request contract.
+ENTRY_HTTP = "http"
+ENTRY_MCP = "mcp"
+ENTRY_CLI = "cli"
+ENTRIES: frozenset[str] = frozenset({ENTRY_HTTP, ENTRY_MCP, ENTRY_CLI})
+
+#: Request kinds with a frozen field policy.
+REQUEST_SUBMIT = "submit"
+REQUEST_PREFLIGHT = "preflight"
+REQUEST_PREPARE = "prepare"
+
+#: Field dispositions of the policy table.
+DISPOSITION_JOB_SPEC = "job_spec"
+DISPOSITION_REQUEST_CONTROL = "request_control"
+DISPOSITION_RESEARCH = "research"
+DISPOSITION_SERVER_PATH_REJECTED = "server_path_rejected"
+DISPOSITION_LEGACY_ALLOWLIST = "legacy_allowlist"
+
+#: Frozen ``node_tags`` limits (moved here from ``acp.api.v1_schemas`` so the
+#: DTO, the CLI and the canonical request share one implementation).
+NODE_TAGS_MAX_COUNT = 16
+NODE_TAGS_MAX_LENGTH = 64
 
 
 class ApplicationParamError(ValueError):
@@ -56,6 +145,388 @@ class ApplicationParamError(ValueError):
         self.code = str(code)
         self.message = str(message)
         self.params = dict(params) if params else {}
+
+
+@dataclass(frozen=True)
+class FieldPolicy:
+    """One row of the authoritative request-field policy.
+
+    Attributes:
+        name: Wire field name.
+        disposition: One of the ``DISPOSITION_*`` values.
+        entries: Application entries allowed to send the field.
+        request_kinds: Request kinds that declare the field.
+        job_spec_field: Effective :class:`JobSpec` attribute for a
+            ``job_spec`` field (``None`` otherwise).
+        removal_version: Release that removes an allowlisted field (required
+            for ``legacy_allowlist``).
+        exit_condition: What must be true before the allowlist row is removed
+            (required for ``legacy_allowlist``).
+        note: Why the field exists / what a client may expect.
+    """
+
+    name: str
+    disposition: str
+    entries: frozenset[str]
+    request_kinds: frozenset[str]
+    job_spec_field: str | None = None
+    removal_version: str | None = None
+    exit_condition: str = ""
+    note: str = ""
+
+    def __post_init__(self) -> None:
+        if self.disposition not in {
+            DISPOSITION_JOB_SPEC,
+            DISPOSITION_REQUEST_CONTROL,
+            DISPOSITION_RESEARCH,
+            DISPOSITION_SERVER_PATH_REJECTED,
+            DISPOSITION_LEGACY_ALLOWLIST,
+        }:
+            raise ValueError(f"unknown field disposition {self.disposition!r}")
+        if self.disposition == DISPOSITION_JOB_SPEC and not self.job_spec_field:
+            raise ValueError(f"{self.name}: a job_spec field must name its target attribute")
+        if self.disposition == DISPOSITION_LEGACY_ALLOWLIST and not (
+            self.removal_version and self.exit_condition
+        ):
+            raise ValueError(
+                f"{self.name}: a legacy allowlist row requires removal_version and exit_condition"
+            )
+
+
+def _entry(
+    name: str,
+    disposition: str,
+    *,
+    job_spec_field: str | None = None,
+    request_kinds: Iterable[str] = (REQUEST_SUBMIT,),
+    entries: Iterable[str] = (ENTRY_HTTP, ENTRY_MCP, ENTRY_CLI),
+    note: str = "",
+) -> FieldPolicy:
+    return FieldPolicy(
+        name=name,
+        disposition=disposition,
+        entries=frozenset(entries),
+        request_kinds=frozenset(request_kinds),
+        job_spec_field=job_spec_field,
+        note=note,
+    )
+
+
+#: The submit request policy.  Must be exhaustive over
+#: ``acp.api.v1_schemas.V1JobCreateRequest.model_fields`` (anti-drift test).
+SUBMIT_FIELD_POLICY: dict[str, FieldPolicy] = {
+    field.name: field
+    for field in (
+        _entry(
+            "schema_version",
+            DISPOSITION_REQUEST_CONTROL,
+            note="Contract major version; recorded in the request digest.",
+        ),
+        _entry("workflow", DISPOSITION_JOB_SPEC, job_spec_field="workflow"),
+        _entry("name", DISPOSITION_JOB_SPEC, job_spec_field="name"),
+        _entry("input", DISPOSITION_JOB_SPEC, job_spec_field="input"),
+        _entry("method", DISPOSITION_JOB_SPEC, job_spec_field="method"),
+        _entry("resources", DISPOSITION_JOB_SPEC, job_spec_field="resources"),
+        _entry("tags", DISPOSITION_JOB_SPEC, job_spec_field="tags"),
+        _entry("node_tags", DISPOSITION_JOB_SPEC, job_spec_field="node_tags"),
+        _entry("project_id", DISPOSITION_JOB_SPEC, job_spec_field="project_id"),
+        _entry("execution_mode", DISPOSITION_JOB_SPEC, job_spec_field="execution_mode"),
+        _entry("target_node", DISPOSITION_JOB_SPEC, job_spec_field="target_node"),
+        _entry("molecule_name", DISPOSITION_JOB_SPEC, job_spec_field="molecule_name"),
+        _entry("task_name", DISPOSITION_JOB_SPEC, job_spec_field="task_name"),
+        _entry("remark", DISPOSITION_JOB_SPEC, job_spec_field="remark"),
+        _entry(
+            "output_dir",
+            DISPOSITION_SERVER_PATH_REJECTED,
+            entries=(),
+            note="Server filesystem path: the task directory is allocated by the Controller.",
+        ),
+        _entry(
+            "config_path",
+            DISPOSITION_SERVER_PATH_REJECTED,
+            entries=(),
+            note="Server filesystem path: the Controller owns its configuration sources.",
+        ),
+        _entry(
+            "idempotency_key",
+            DISPOSITION_REQUEST_CONTROL,
+            note="Raw client retry key; excluded from the request digest.",
+        ),
+        _entry(
+            "preflight_fingerprint",
+            DISPOSITION_REQUEST_CONTROL,
+            note="Optional binding to the plan digest a preflight returned (B1-3).",
+        ),
+        _entry(
+            "extensions",
+            DISPOSITION_REQUEST_CONTROL,
+            note=(
+                "Namespaced extension metadata (unknown_field_policy U4); "
+                "opaque to the platform and never used for execution."
+            ),
+        ),
+        _entry("plan_digest", DISPOSITION_RESEARCH),
+        _entry("proposal_ref", DISPOSITION_RESEARCH),
+        _entry("proposal_digest", DISPOSITION_RESEARCH),
+        _entry("budget", DISPOSITION_RESEARCH),
+    )
+}
+
+#: The zero-side-effect preflight policy.  Preflight is a *dry run of the same
+#: submit request* (the frontend builds both from one normalised body), so it
+#: accepts exactly the submit field set — including the execution-target, naming
+#: and research-binding fields — and rejects exactly the same server-path fields.
+#: Naming/tags/research fields never enter the science plan digest; they are
+#: accepted so a shared request body is not rejected at the preflight step and a
+#: target rejection is decided by the *same* check before and after a submit.
+PREFLIGHT_FIELD_POLICY: dict[str, FieldPolicy] = {
+    name: replace(row, request_kinds=row.request_kinds | {REQUEST_PREFLIGHT})
+    for name, row in SUBMIT_FIELD_POLICY.items()
+}
+
+#: The explicit prepare policy: the MCP adapter forwards the request unchanged
+#: (M0-06) and this table is the drift guard that says every prepare DTO field
+#: is a known one.  Prepare has no execution-field semantics.
+PREPARE_FIELD_POLICY: dict[str, FieldPolicy] = {
+    field.name: field
+    for field in (
+        _entry(name, DISPOSITION_REQUEST_CONTROL, request_kinds=(REQUEST_PREPARE,))
+        for name in (
+            "schema_version",
+            "purpose",
+            "task_ref",
+            "job_id",
+            "artifact_id",
+            "attempt",
+            "generation",
+            "expected_revision",
+            "relative_path",
+            "expected_digest",
+            "content_digest",
+            "expected_size_bytes",
+            "schema_ref",
+            "source_refs",
+            "evidence_report",
+            "media_type",
+            "idempotency_key",
+        )
+    )
+}
+
+#: Request kind → authoritative policy table.
+FIELD_POLICY: dict[str, dict[str, FieldPolicy]] = {
+    REQUEST_SUBMIT: SUBMIT_FIELD_POLICY,
+    REQUEST_PREFLIGHT: PREFLIGHT_FIELD_POLICY,
+    REQUEST_PREPARE: PREPARE_FIELD_POLICY,
+}
+
+#: Explicit legacy allowlist.  Empty in v1: the M0-06 mechanical inventory of
+#: every registered consumer found no undeclared field in use.
+#:
+#: Inventory (2026-10-27, ``git grep``/AST scan of the checkouts below):
+#:
+#: * ``frontend/js/**`` — submit builders send workflow, molecule_name, remark,
+#:   input, method, resources, project_id, task_name, target_node, node_tags;
+#:   science-question.js adds plan_digest/proposal_ref/proposal_digest/budget and
+#:   preflight_fingerprint.
+#: * ``rph/packages/bridge/src/index.ts::buildToolArguments`` — workflow, input,
+#:   method, project_id, resources, idempotency_key.
+#: * ``src/acp/cli.py`` — workflow, input, method, resources, name, tags,
+#:   node_tags, project_id, execution_mode, target_node, molecule_name,
+#:   task_name, remark, idempotency_key.
+#: * ``scripts/acceptance/**`` — every POST /api/v1/jobs body uses declared
+#:   fields only (``acp2_runtime.py``, ``four_combinations.py``,
+#:   ``acp2_event_recovery.py``, ``acp2_package_install.py``,
+#:   ``compatibility_checks.py``, ``real_environment.py``).
+#: * registered SDK contract ``runtime/application-api.v1.json`` — see the
+#:   additive fields registered in M0-06.
+#:
+#: A future row MUST carry ``removal_version`` and ``exit_condition``; the
+#: dataclass rejects a row without them.
+LEGACY_REQUEST_FIELD_ALLOWLIST: dict[str, FieldPolicy] = {}
+
+
+def field_policy_gaps(
+    declared: Iterable[str], *, request_kind: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return ``(unregistered, stale)`` field names for a request kind.
+
+    ``unregistered`` fields are declared by a DTO but absent from the policy
+    (the anti-drift failure M0-06 guards); ``stale`` fields are in the policy
+    but no longer declared.
+    """
+    table = FIELD_POLICY[request_kind]
+    declared_set = set(declared)
+    unregistered = tuple(sorted(declared_set - set(table)))
+    stale = tuple(sorted(set(table) - declared_set))
+    return unregistered, stale
+
+
+def normalize_node_tags(values: Iterable[str] | None) -> list[str]:
+    """Sanitize a ``node_tags`` list: strip, drop empties, dedupe (order kept).
+
+    Caps the list at :data:`NODE_TAGS_MAX_COUNT` tags of at most
+    :data:`NODE_TAGS_MAX_LENGTH` chars.  Over-limit entries are dropped with a
+    warning; a list that normalizes to empty imposes no tag constraint (never an
+    unsatisfiable filter).  Single implementation shared by the v1 DTO, the CLI
+    and :func:`canonical_submit_request`.
+    """
+    if values is None:
+        return []
+    if not isinstance(values, (list, tuple)):
+        raise ApplicationParamError(
+            "node_tags must be an array of strings",
+            params={"field": "node_tags", "rule": "type"},
+        )
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        if not isinstance(raw, str):
+            raise ApplicationParamError(
+                "node_tags entry must be a string",
+                params={"field": "node_tags", "rule": "type"},
+            )
+        tag = raw.strip()
+        if not tag or tag in seen:
+            continue
+        if len(tag) > NODE_TAGS_MAX_LENGTH:
+            logger.warning(
+                "node_tags entry dropped (exceeds %d chars): %.64s",
+                NODE_TAGS_MAX_LENGTH,
+                tag,
+            )
+            continue
+        if len(cleaned) >= NODE_TAGS_MAX_COUNT:
+            logger.warning(
+                "node_tags entry dropped (more than %d tags): %.64s",
+                NODE_TAGS_MAX_COUNT,
+                tag,
+            )
+            continue
+        cleaned.append(tag)
+        seen.add(tag)
+    return cleaned
+
+
+def validate_request_fields(payload: Mapping[str, Any], *, request_kind: str, entry: str) -> None:
+    """Reject an undeclared or entry-forbidden request field.
+
+    Raises:
+        ApplicationParamError: ``rule="unknown_field"`` for a field that is not
+            in the policy at all, ``rule="unsupported_server_path"`` for a
+            server filesystem path field at an entry that does not accept it.
+    """
+    if request_kind not in FIELD_POLICY:
+        raise ValueError(f"unknown request kind {request_kind!r}")
+    if entry not in ENTRIES:
+        raise ValueError(f"unknown application entry {entry!r}")
+    table = FIELD_POLICY[request_kind]
+    unknown = sorted(str(name) for name in payload if str(name) not in table)
+    if unknown:
+        raise ApplicationParamError(
+            f"{request_kind} request has an undeclared field {unknown[0]!r}",
+            params={
+                "field": unknown[0],
+                "rule": "unknown_field",
+                "fields": unknown,
+                "request_kind": request_kind,
+                "entry": entry,
+            },
+        )
+    rejected = sorted(
+        str(name)
+        for name in payload
+        if table[str(name)].disposition == DISPOSITION_SERVER_PATH_REJECTED
+        and entry not in table[str(name)].entries
+    )
+    if rejected:
+        raise ApplicationParamError(
+            f"{request_kind} request may not choose the server path field {rejected[0]!r}",
+            params={
+                "field": rejected[0],
+                "rule": "unsupported_server_path",
+                "fields": rejected,
+                "request_kind": request_kind,
+                "entry": entry,
+            },
+        )
+
+
+def canonical_submit_request(
+    payload: Mapping[str, Any], *, entry: str = ENTRY_HTTP
+) -> dict[str, Any]:
+    """Return the frozen effective submit request for *entry*.
+
+    This is the **same** object for the same logical request at HTTP, MCP and
+    CLI: field policy applied, defaults materialised (``name``/``molecule_name``/
+    ``task_name``/``remark`` are always present as strings, ``tags``/``node_tags``
+    are always lists), ``node_tags`` normalised, and every research/control
+    field validated.  It is both the JobSpec source for an entry that builds its
+    own spec (CLI) and the material of the canonical request digest
+    (:func:`acp_services.runtime.idempotency.canonical_request_digest`), so two
+    entries cannot disagree about what "the same request" means.
+
+    Values are kept verbatim (apart from ``str.strip`` on the identity fields the
+    pre-M0-06 normaliser already stripped); the digest rule must not change for a
+    request that was already accepted.
+    """
+    data = _require_mapping(payload, field="request")
+    validate_request_fields(data, request_kind=REQUEST_SUBMIT, entry=entry)
+    _schema_version(data)
+    workflow = _string(data, "workflow")
+    if workflow is None:
+        raise ApplicationParamError(
+            "workflow is required", params={"field": "workflow", "rule": "required"}
+        )
+    input_value = data.get("input")
+    if input_value is None:
+        raise ApplicationParamError(
+            "input is required", params={"field": "input", "rule": "required"}
+        )
+    canonical: dict[str, Any] = {
+        "schema_version": APPLICATION_SCHEMA_VERSION,
+        "workflow": workflow,
+        "name": _verbatim_text(data, "name"),
+        "input": _require_mapping(input_value, field="input"),
+        "method": _verbatim_mapping(data, "method"),
+        "resources": _verbatim_mapping(data, "resources"),
+        "tags": _string_list(data, "tags"),
+        "node_tags": normalize_node_tags(data.get("node_tags")),
+        "molecule_name": _verbatim_text(data, "molecule_name"),
+        "task_name": _verbatim_text(data, "task_name"),
+        "remark": _verbatim_text(data, "remark"),
+    }
+    for field in ("project_id", "execution_mode", "target_node"):
+        value = _string(data, field)
+        if value is not None:
+            canonical[field] = value
+    plan_digest = _optional_digest(data, "plan_digest")
+    if plan_digest is not None:
+        canonical["plan_digest"] = plan_digest
+    proposal_digest = _optional_digest(data, "proposal_digest")
+    if proposal_digest is not None:
+        canonical["proposal_digest"] = proposal_digest
+    proposal_ref = _string(data, "proposal_ref")
+    if proposal_ref is not None:
+        canonical["proposal_ref"] = proposal_ref
+    budget = _normalize_budget(data.get("budget"))
+    if budget is not None:
+        canonical["budget"] = budget
+    idempotency = _optional_idempotency(data)
+    if idempotency is not None:
+        canonical["idempotency_key"] = idempotency
+    preflight_fingerprint = _string(data, "preflight_fingerprint")
+    if preflight_fingerprint is not None:
+        canonical["preflight_fingerprint"] = preflight_fingerprint
+    extensions = data.get("extensions")
+    if extensions is not None:
+        canonical["extensions"] = _require_mapping(extensions, field="extensions")
+    if proposal_ref is not None and plan_digest is None:
+        raise ApplicationParamError(
+            "a research launch requires plan_digest",
+            params={"field": "plan_digest", "rule": "plan_digest_required"},
+        )
+    return canonical
 
 
 def _require_mapping(payload: Any, *, field: str) -> dict[str, Any]:
@@ -91,6 +562,42 @@ def _string(payload: Mapping[str, Any], field: str) -> str | None:
             params={"field": field, "rule": "type"},
         )
     return value.strip()
+
+
+def _verbatim_text(payload: Mapping[str, Any], field: str) -> str:
+    """Return a display string verbatim (``""`` when absent).
+
+    Naming fields are the task-directory components: they are compared across
+    entries byte-for-byte, so they are never silently stripped or defaulted to a
+    different value here.
+    """
+    value = payload.get(field)
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ApplicationParamError(
+            f"{field} must be a string", params={"field": field, "rule": "type"}
+        )
+    return value
+
+
+def _verbatim_mapping(payload: Mapping[str, Any], field: str) -> dict[str, Any]:
+    value = payload.get(field)
+    if value is None:
+        return {}
+    return _require_mapping(value, field=field)
+
+
+def _string_list(payload: Mapping[str, Any], field: str) -> list[str]:
+    value = payload.get(field)
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)) or not all(isinstance(item, str) for item in value):
+        raise ApplicationParamError(
+            f"{field} must be an array of strings",
+            params={"field": field, "rule": "type"},
+        )
+    return [str(item) for item in value]
 
 
 def _optional_int(

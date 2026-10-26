@@ -1,7 +1,7 @@
 {
   "schema": "acp2.runtime.application-api.v1",
-  "contract_version": "1.1.0",
-  "frozen_at": "2026-10-22",
+  "contract_version": "1.2.0",
+  "frozen_at": "2026-10-27",
   "owner": "B",
   "status": "delivered",
   "scope": "The single ACP 2.0 application command surface. Every entry (CLI `acp task`, `acp run`, HTTP `/api/v1/*`, MCP tools, ControllerClient) maps to exactly one command in this document; no entry owns its own Submit/Cancel/Result implementation.",
@@ -936,7 +936,7 @@
               1
             ],
             "default": 1,
-            "description": "Contract major version; any value other than 1 is an unknown major version and executes nothing."
+            "description": "Contract major version; any other value is unsupported and executes nothing."
           },
           "workflow": {
             "type": "string",
@@ -957,32 +957,128 @@
               "frequency",
               "xtb_optimize"
             ],
-            "description": "Active workflow id (retired ids are unsupported)."
+            "description": "Active workflow id."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display name; the persisted task directory name is derived from molecule_name/task_name/remark (v2 naming)."
+          },
+          "tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Free-form filter tags; never influences execution."
+          },
+          "node_tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Required node capability tags (AND semantics, stripped/deduped, capped at 16x64); a tag-driven rejection is input_invalid with params.field=node_tags."
+          },
+          "execution_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "local",
+              "remote",
+              null
+            ],
+            "description": "Per-request execution preference. A contradictory mode/target pair is rejected before any side effect."
+          },
+          "target_node": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pin one execution target ('local' or a configured remote node). Unknown/disabled/incapable targets are input_invalid with params.rule=unknown_target_node|target_node_disabled|target_node_incapable."
+          },
+          "molecule_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "v2 task-directory molecule component."
+          },
+          "task_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "v2 task-directory task component (defaults to the workflow id)."
+          },
+          "remark": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "v2 task-directory remark component."
+          },
+          "preflight_fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Optional B1-3 binding: the plan digest the caller got from preflight. A stale fingerprint is rejected with preflight_stale before any side effect."
           },
           "input": {
             "type": "object",
-            "description": "A-owned workflow input descriptor; forwarded, never reinterpreted."
+            "description": "A-owned workflow input descriptor."
           },
           "method": {
             "type": [
               "object",
               "null"
             ],
-            "description": "A-owned method descriptor."
+            "description": "A-owned method descriptor; the platform never rewrites method/charge/spin defaults."
           },
           "resources": {
             "type": [
               "object",
               "null"
             ],
-            "description": "Requested resources (cores, memory_mb, walltime_s, storage_bytes)."
+            "description": "cores (integer >=1), memory_mb (integer >=1), walltime_s (integer >=1), storage_bytes (integer >=0)."
           },
           "project_id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Workspace hint only; never the tenant identity."
+            "description": "Workspace hint; server resolves the effective project."
+          },
+          "plan_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Accepted (shared request body) but preflight never authorizes a research launch; approval binding is checked at submit."
+          },
+          "proposal_digest": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Optional canonical Proposal/ResearchRecord semantic projection; when present it must match the referenced record."
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9._:-]{8,128}$",
+            "description": "Client retry key. When absent the server derives it as sha256 over (plan_digest, entry id, resolved principal) and echoes it."
           },
           "extensions": {
             "type": [
@@ -990,6 +1086,46 @@
               "null"
             ],
             "description": "Namespaced extension metadata (unknown_field_policy U4); opaque to the platform and never influences execution."
+          },
+          "proposal_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Research Proposal reference (B-req-01). Additive v1.1.0 field; approval semantics remain B16."
+          },
+          "budget": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Research launch budget (B-req-01). unit is explicit and timeout_s is required when the object is present.",
+            "fields": {
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "task_count",
+                  "core_hours",
+                  "walltime_s"
+                ],
+                "description": "Explicit budget unit; never an implicit default."
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of units (task_count/core_hours) when applicable."
+              },
+              "timeout_s": {
+                "type": "integer",
+                "minimum": 1,
+                "unit": "s",
+                "description": "Whole-launch timeout in seconds."
+              }
+            },
+            "required": [
+              "unit",
+              "timeout_s"
+            ]
           }
         }
       },
@@ -1105,6 +1241,81 @@
               "xtb_optimize"
             ],
             "description": "Active workflow id."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display name; the persisted task directory name is derived from molecule_name/task_name/remark (v2 naming)."
+          },
+          "tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Free-form filter tags; never influences execution."
+          },
+          "node_tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Required node capability tags (AND semantics, stripped/deduped, capped at 16x64); a tag-driven rejection is input_invalid with params.field=node_tags."
+          },
+          "execution_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "local",
+              "remote",
+              null
+            ],
+            "description": "Per-request execution preference. A contradictory mode/target pair is rejected before any side effect."
+          },
+          "target_node": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pin one execution target ('local' or a configured remote node). Unknown/disabled/incapable targets are input_invalid with params.rule=unknown_target_node|target_node_disabled|target_node_incapable."
+          },
+          "molecule_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "v2 task-directory molecule component."
+          },
+          "task_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "v2 task-directory task component (defaults to the workflow id)."
+          },
+          "remark": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "v2 task-directory remark component."
+          },
+          "preflight_fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Optional B1-3 binding: the plan digest the caller got from preflight. A stale fingerprint is rejected with preflight_stale before any side effect."
           },
           "input": {
             "type": "object",
@@ -2703,5 +2914,225 @@
     "stale_event_rule": "an event is appended in the same transaction as the committed CAS revision and its id names that revision; an older revision can never overwrite the record",
     "delivery_owner": "B19 (approval/budget waiting and cross-session stream); B16 commits the durable fact only",
     "task_outbox_isolation": "approval rows carry owner_type=project and are retained as delivered facts so the task-outbox sweeper never treats an approval id as a job id"
+  },
+  "submit_field_policy": {
+    "authority": "src/acp_services/entrypoints/application_params.py::SUBMIT_FIELD_POLICY",
+    "entries": [
+      "http",
+      "mcp",
+      "cli"
+    ],
+    "freeze": "v1 extra=forbid: an undeclared execution field is never forwarded to a task. HTTP answers 422 input_invalid with params.rule=unknown_field; MCP answers the same code/params locally; the CLI emits one structured error object.",
+    "dispositions": {
+      "job_spec": "Mapped onto the effective JobSpec field named by the policy row by every entry.",
+      "request_control": "schema_version / idempotency_key / preflight_fingerprint; never part of the scientific plan.",
+      "research": "B-req-01 research launch binding (plan_digest/proposal_ref/proposal_digest/budget).",
+      "server_path_rejected": "A client may not choose a server filesystem path. Declared so the rejection is explicit (params.rule=unsupported_server_path), rejected at http and mcp.",
+      "legacy_allowlist": "Accepted for a named consumer set, never used for execution, with a removal version and exit condition. Empty in v1 (M0-06 inventory found no undeclared field in use); there is deliberately no 'ignore unknown fields and warn' mode."
+    },
+    "fields": {
+      "schema_version": {
+        "disposition": "request_control",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "workflow": {
+        "disposition": "job_spec",
+        "job_spec_field": "workflow",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "name": {
+        "disposition": "job_spec",
+        "job_spec_field": "name",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "input": {
+        "disposition": "job_spec",
+        "job_spec_field": "input",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "method": {
+        "disposition": "job_spec",
+        "job_spec_field": "method",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "resources": {
+        "disposition": "job_spec",
+        "job_spec_field": "resources",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "tags": {
+        "disposition": "job_spec",
+        "job_spec_field": "tags",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "node_tags": {
+        "disposition": "job_spec",
+        "job_spec_field": "node_tags",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "project_id": {
+        "disposition": "job_spec",
+        "job_spec_field": "project_id",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "execution_mode": {
+        "disposition": "job_spec",
+        "job_spec_field": "execution_mode",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "target_node": {
+        "disposition": "job_spec",
+        "job_spec_field": "target_node",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "molecule_name": {
+        "disposition": "job_spec",
+        "job_spec_field": "molecule_name",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "task_name": {
+        "disposition": "job_spec",
+        "job_spec_field": "task_name",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "remark": {
+        "disposition": "job_spec",
+        "job_spec_field": "remark",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "output_dir": {
+        "disposition": "server_path_rejected",
+        "entries": [],
+        "reason": "The Controller allocates the task directory; a client-chosen path is refused with params.rule=unsupported_server_path."
+      },
+      "config_path": {
+        "disposition": "server_path_rejected",
+        "entries": [],
+        "reason": "The Controller owns its configuration sources; a client-chosen host path is refused with params.rule=unsupported_server_path."
+      },
+      "idempotency_key": {
+        "disposition": "request_control",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ],
+        "note": "Raw client retry key; excluded from the request digest."
+      },
+      "preflight_fingerprint": {
+        "disposition": "request_control",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "extensions": {
+        "disposition": "request_control",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ],
+        "note": "Namespaced extension metadata (unknown_field_policy U4); opaque to the platform and never used for execution."
+      },
+      "plan_digest": {
+        "disposition": "research",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "proposal_ref": {
+        "disposition": "research",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "proposal_digest": {
+        "disposition": "research",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      },
+      "budget": {
+        "disposition": "research",
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ]
+      }
+    },
+    "legacy_allowlist": {},
+    "request_digest": {
+      "version": "2",
+      "frozen_field_tables": "src/acp_services/runtime/idempotency.py::DIGEST_FIELD_TABLES",
+      "rule": "The row persists (request_digest_version, digest) and the full effective request. Equal digest bytes always mean the same request; a row of another version is verified against its own frozen field table. An unverifiable row is a reconcile conflict — never 'tampered' and never a silent second task.",
+      "compatibility": "A pre-M0-06 row (version 1) replays when its stored digest equals the current digest or re-derives from the v1 field table."
+    },
+    "preflight_shares_target_validation": true,
+    "preflight_field_set": "same as submit (preflight is the dry run of the same normalized request); naming/tags/research fields never enter the plan digest"
   }
 }

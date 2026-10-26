@@ -74,6 +74,9 @@ DELIVERED_IDS_BY_STAGE = {
     "B19": {
         "events-recovery",
     },
+    "M0-07": {
+        "trusted-usage-receipts",
+    },
 }
 EXPECTED_TODOS = {
     "B00",

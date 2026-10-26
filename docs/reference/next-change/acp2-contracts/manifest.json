@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "0cc488ff0813508569bfab6a8ce97b6597ecbc3a8911a6ede46806c09d315d64",
+  "contract_digest": "3ce1164c40c7ad7f2479ab5b7d7ba45b92b3a531e1ceddcc362c28b69f7743b2",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "contract_version": "1.4.0",
   "contract_version_history": [
@@ -209,7 +209,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "32b6b8bceed6b1caf6e329fd09d6d3947bfde192a70f62b9a3f57b5eb275954d",
+      "sha256": "f0d027eb05696bd6d57258620d5cac1b6a6e3acbc99ef9b594f3dec5199573c5",
       "status": "delivered"
     },
     {
@@ -275,7 +275,7 @@
       "id": "application-api",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "sha256": "91bf0f6cffa49462516ef7b7141606c8e77d7a2bd427cb59af5faf81ebe766d0",
+      "sha256": "bf31209109330779403e99bbe575a782f091e2c5dcad00266c590089db3c0026",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -413,6 +413,15 @@
       "path": "docs/reference/next-change/acp2-contracts/release/bom.schema.json",
       "planned_by": "M0-01",
       "status": "planned"
+    },
+    {
+      "delivered_by": "M0-07",
+      "id": "trusted-usage-receipts",
+      "note": "M0-07/G26: trusted usage settlement — producer capability authority, two receipt contexts, settlement wiring, migrations 025/026, negative vectors.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/trusted-usage-receipts.v1.md",
+      "sha256": "f78ac012793d44f6755b75aa7458d551e3e8f970b26bf514d74f3d7e37a7285e",
+      "status": "delivered"
     }
   ],
   "created_at": "2026-10-22T00:00:00Z",

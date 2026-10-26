@@ -47,13 +47,16 @@ from typing import Any, Protocol, runtime_checkable
 __all__ = [
     "ACTION_SUBMIT",
     "CLAIM_STATES",
+    "DIGEST_FIELD_TABLES",
     "IDENTITY_VERSION",
     "LEGACY_IDENTITY_VERSION",
+    "LEGACY_REQUEST_DIGEST_FIELDS",
     "LEGACY_REQUEST_DIGEST_VERSION",
     "MIGRATION_STATE_NATIVE",
     "MIGRATION_STATE_PENDING",
     "MIGRATION_STATE_UNVERIFIED",
     "MIGRATION_STATE_VERIFIED",
+    "REQUEST_DIGEST_FIELDS",
     "REQUEST_DIGEST_VERSION",
     "SCOPE_ORIGIN_LEGACY_LOCAL",
     "SCOPE_ORIGIN_LEGACY_SCOPED",
@@ -75,9 +78,11 @@ __all__ = [
     "ReservationPort",
     "canonical_payload",
     "canonical_request_digest",
+    "canonical_request_digest_for_version",
     "resolve_scope_id",
     "split_scope_id",
     "task_ref_for",
+    "verify_request_digest",
 ]
 
 #: The only Runtime action that currently uses the persistent ledger.
@@ -95,11 +100,72 @@ IDENTITY_VERSION = "2"
 LEGACY_IDENTITY_VERSION = "1"
 
 #: Version of the canonical request-digest rules (:func:`canonical_request_digest`
-#: over the full effective submit request, ``idempotency_key`` excluded).  M0-06
-#: bumps this when the field policy changes; a row of another digest version is
-#: reconciled, never silently replayed.
-REQUEST_DIGEST_VERSION = "1"
+#: over the full effective submit request, ``idempotency_key`` excluded).
+#:
+#: * ``"2"`` (M0-06) — the material is the **field-policy canonical request**
+#:   (:func:`acp_services.entrypoints.application_params.
+#:   canonical_submit_request`): the exhaustive policy field set with defaults
+#:   materialised, ``node_tags`` normalised, server-path fields rejected before
+#:   identity and the DTO ``schema_version`` always included.  The field table is
+#:   :data:`DIGEST_FIELD_TABLES`\\ ``["2"]``.
+#: * ``"1"`` — the pre-M0-06 rule: the raw ``V1JobCreateRequest.model_dump(
+#:   exclude_none=True)`` declaration, unknown extras dropped by the DTO.  A row
+#:   of this version is verified against its own frozen field table
+#:   (:func:`canonical_request_digest_for_version`) and never declared tampered
+#:   merely because the rule version changed.
+#:
+#: A row of another version is reconciled, never silently replayed: equal digest
+#: bytes prove the same request (the version only names the materialisation), and
+#: a differing digest is verified under the row's frozen table; when that is not
+#: possible the outcome is a typed conflict that says "reconcile", not "tampered"
+#: and not "resubmit with a new key".
+REQUEST_DIGEST_VERSION = "2"
 LEGACY_REQUEST_DIGEST_VERSION = "1"
+
+#: Frozen v1 field table (the ``V1JobCreateRequest`` declaration at the time the
+#: rule was frozen, including the two server-path fields that M0-06 now rejects
+#: at the entry).  A legacy row is only verifiable when the current request can
+#: be projected onto exactly this table.
+LEGACY_REQUEST_DIGEST_FIELDS: tuple[str, ...] = (
+    "schema_version",
+    "workflow",
+    "name",
+    "input",
+    "method",
+    "resources",
+    "output_dir",
+    "config_path",
+    "tags",
+    "node_tags",
+    "project_id",
+    "execution_mode",
+    "target_node",
+    "molecule_name",
+    "task_name",
+    "remark",
+    "plan_digest",
+    "proposal_ref",
+    "proposal_digest",
+    "budget",
+    "idempotency_key",
+    "preflight_fingerprint",
+)
+
+#: Frozen v2 field table: the policy-accepted submit fields
+#: (``application_params.SUBMIT_FIELD_POLICY`` with ``job_spec``,
+#: ``request_control`` and ``research`` dispositions; the two server-path fields
+#: are absent because they can never reach identity).
+REQUEST_DIGEST_FIELDS: tuple[str, ...] = tuple(
+    name for name in LEGACY_REQUEST_DIGEST_FIELDS if name not in {"output_dir", "config_path"}
+)
+
+#: Digest version → frozen field table.  The only authority for "which fields did
+#: this rule hash"; add a row before bumping :data:`REQUEST_DIGEST_VERSION`.
+DIGEST_FIELD_TABLES: dict[str, tuple[str, ...]] = {
+    LEGACY_REQUEST_DIGEST_VERSION: LEGACY_REQUEST_DIGEST_FIELDS,
+    REQUEST_DIGEST_VERSION: REQUEST_DIGEST_FIELDS,
+}
+
 
 #: ``scope_origin`` vocabulary of the idempotency ledger.
 SCOPE_ORIGIN_VERIFIED = "verified"
@@ -401,6 +467,39 @@ def canonical_request_digest(
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
+def canonical_request_digest_for_version(version: str, payload: Mapping[str, Any]) -> str | None:
+    """Return the digest of *payload* under the frozen rule *version*.
+
+    ``None`` when the version is not registered: an unknown rule can never
+    verify a stored row, so the caller must reconcile instead of guessing.
+    """
+    fields = DIGEST_FIELD_TABLES.get(str(version))
+    if fields is None:
+        return None
+    material = {str(key): value for key, value in payload.items() if str(key) in set(fields)}
+    return canonical_request_digest(material)
+
+
+def verify_request_digest(
+    request_digest: str, request_digest_version: str, payload: Mapping[str, Any] | None
+) -> bool:
+    """Whether *payload* is the same request a stored row recorded.
+
+    Equal digest bytes prove identity regardless of the declared rule version
+    (the version only names the materialisation).  A different digest is
+    re-derived from the row's **frozen field table** when the payload is
+    available; an unregistered version or a missing payload cannot verify and
+    therefore returns ``False`` (the caller reconciles).
+    """
+    stored = str(request_digest or "")
+    if not stored:
+        return False
+    if payload is None:
+        return False
+    computed = canonical_request_digest_for_version(request_digest_version, payload)
+    return computed is not None and computed == stored
+
+
 @dataclass(frozen=True)
 class ReservationIdempotency:
     """The claim identity a reservation ledger records alongside its row."""
@@ -519,6 +618,12 @@ class IdempotencyContext:
     attributed to.  They never widen ``scope_id`` — the scope id is built from
     the same principal by :meth:`acp_services.workspace.command_identity.
     CommandIdentity.idempotency_scope`.
+
+    ``request_digest_version`` is additive (M0-06): the frozen digest rule the
+    row is written with.  It defaults to :data:`REQUEST_DIGEST_VERSION`; a caller
+    replaying a pre-M0-06 row presents the same payload and the store verifies the
+    stored digest against that row's frozen field table instead of declaring a
+    different rule a conflict.
     """
 
     key: str
@@ -526,6 +631,7 @@ class IdempotencyContext:
     action: str = ACTION_SUBMIT
     request_payload: Mapping[str, Any] | None = None
     request_digest: str = ""
+    request_digest_version: str = REQUEST_DIGEST_VERSION
     lease_seconds: float = 60.0
     wait_seconds: float = 10.0
     reservations: ReservationPort | None = None

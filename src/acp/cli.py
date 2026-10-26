@@ -2248,6 +2248,40 @@ Examples:
     execute.add_argument("--input", "-i", required=True, help="Input source (SMILES or file path)")
     execute.add_argument("--name", default=None, help="Task/molecule name")
     execute.add_argument("--method", default="", help="Method override")
+    # M0-06: the local operator can express the same effective JobSpec as the
+    # HTTP/MCP entries (execution target, tags, v2 naming, remark, raw retry key).
+    execute.add_argument(
+        "--execution-mode",
+        choices=["local", "remote"],
+        default=None,
+        help="Execution resource preference (per-job; overrides the server default)",
+    )
+    execute.add_argument(
+        "--target-node",
+        default=None,
+        help="Pin a specific execution target ('local' or a configured remote node)",
+    )
+    execute.add_argument(
+        "--node-tag",
+        action="append",
+        default=None,
+        dest="node_tags",
+        metavar="TAG",
+        help="Required node capability tag (repeatable; AND semantics)",
+    )
+    execute.add_argument("--tag", action="append", default=None, dest="tags", help="Free-form tag")
+    execute.add_argument("--project", default=None, help="Project id (default: server pin)")
+    execute.add_argument("--task-name", default=None, help="v2 task-directory component")
+    execute.add_argument("--molecule-name", default=None, help="v2 molecule-directory component")
+    execute.add_argument("--remark", default=None, help="v2 remark component")
+    execute.add_argument(
+        "--idempotency-key",
+        default=None,
+        help=(
+            "Raw retry key; the local ledger replays the same task for the same key and "
+            "conflicting payloads, never a second task"
+        ),
+    )
     execute.add_argument(
         "--follow",
         action="store_true",
@@ -2427,7 +2461,11 @@ def _dispatch_mcp(args: argparse.Namespace) -> int:
 
 
 def job_submit_command(
-    spec: Any, *, manager: Any | None = None, identity: Any | None = None
+    spec: Any,
+    *,
+    manager: Any | None = None,
+    identity: Any | None = None,
+    idempotency: Any | None = None,
 ) -> Any:
     """Submit a job through the shared Runtime use case (single execution owner).
 
@@ -2435,11 +2473,19 @@ def job_submit_command(
     process (M0-04).  It attributes the admission reservation to the local
     operator and is forwarded only when supplied, so callers that build the
     Runtime command surface themselves keep the legacy call shape.
+
+    ``idempotency`` (M0-06) is the optional persistent-ledger context built from
+    the canonical effective request; the same ``(operator scope, key, payload)``
+    replays the same task, and a changed payload is a conflict.
     """
     commands = job_runtime_commands(manager)
+    if idempotency is None:
+        if identity is None:
+            return commands.submit(spec)
+        return commands.submit(spec, identity=identity)
     if identity is None:
-        return commands.submit(spec)
-    return commands.submit(spec, identity=identity)
+        return commands.submit(spec, idempotency=idempotency)
+    return commands.submit(spec, idempotency=idempotency, identity=identity)
 
 
 def _task_run_root(args: argparse.Namespace) -> Path:
@@ -2776,25 +2822,106 @@ def _handle_task_execute(args: argparse.Namespace) -> int:
     refusal = _refuse_local_ownership(args, run_root)
     if refusal is not None:
         return refusal
+    from acp.scheduler.capabilities import NoCapableNodeError
     from acp.scheduler.jobs import JobSpec
-
-    method: dict[str, Any] = {}
-    if args.method:
-        method["method"] = args.method
-    identity = _task_identity()
-    spec = JobSpec(
-        workflow=args.workflow,
-        name=args.name or "",
-        input=_task_input_payload(args.input),
-        method=method,
-        # The deployment project pin (ACP_SERVER_PROJECT) applies to the local
-        # operator exactly as it does to the HTTP entry: a pinned Controller
-        # never writes a task into another project.  Unset = unchanged default.
-        project_id=identity.project_id,
+    from acp.scheduler.nodes import (
+        ExecutionTargetError,
+        target_error_envelope,
+        validate_execution_request,
+        validate_submission_target,
     )
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        canonical_submit_request,
+    )
+    from acp_services.runtime.idempotency import (
+        ACTION_SUBMIT,
+        IdempotencyConflictError,
+        IdempotencyContext,
+    )
+
+    identity = _task_identity(project_id=getattr(args, "project", None))
     manager = _task_manager(run_root)
     try:
-        record = job_submit_command(spec, manager=manager, identity=identity)
+        # The effective project is the deployment pin when set, else the manager's
+        # default — the same server-side resolution the HTTP entry applies.  It is
+        # part of the canonical request (and therefore of the digest).
+        project_id = identity.project_id or manager.default_project_id
+        request: dict[str, Any] = {
+            "workflow": args.workflow,
+            "name": args.name or "",
+            "input": _task_input_payload(args.input),
+            "method": {"method": args.method} if args.method else {},
+            "tags": list(getattr(args, "tags", None) or []),
+            "node_tags": list(getattr(args, "node_tags", None) or []),
+            "task_name": args.task_name or "",
+            "molecule_name": args.molecule_name or "",
+            "remark": args.remark or "",
+        }
+        if identity.project_id:
+            # Only the *deployment pin* is part of the request (it is the value
+            # the HTTP entry resolves from its own credential); an unpinned
+            # operator keeps the request project-less and the manager default
+            # applies, exactly like HTTP.  This keeps the canonical request — and
+            # therefore the digest — identical across entries.
+            request["project_id"] = identity.project_id
+        if getattr(args, "execution_mode", None):
+            request["execution_mode"] = args.execution_mode
+        if getattr(args, "target_node", None):
+            request["target_node"] = args.target_node
+        idempotency_key = str(getattr(args, "idempotency_key", None) or "").strip()
+        if idempotency_key:
+            request["idempotency_key"] = idempotency_key
+        # M0-06: the CLI builds the *same* canonical request as HTTP/MCP, so the
+        # effective JobSpec and the idempotency request digest are identical for
+        # the same logical request (tests/test_acp2_request_field_equivalence).
+        try:
+            canonical = canonical_submit_request(request, entry="cli")
+        except ApplicationParamError as exc:
+            return _emit_submit_invalid(args, exc.code, exc.message, dict(exc.params))
+        spec = JobSpec(
+            workflow=canonical["workflow"],
+            name=canonical["name"],
+            input=canonical["input"],
+            method=canonical["method"],
+            resources=canonical["resources"],
+            tags=list(canonical["tags"]),
+            node_tags=list(canonical["node_tags"]),
+            # The deployment project pin (ACP_SERVER_PROJECT) applies to the local
+            # operator exactly as it does to the HTTP entry: a pinned Controller
+            # never writes a task into another project.  Unset = unchanged default.
+            project_id=project_id,
+            execution_mode=canonical.get("execution_mode"),
+            target_node=canonical.get("target_node"),
+            molecule_name=canonical["molecule_name"],
+            task_name=canonical["task_name"] or canonical["workflow"],
+            remark=canonical["remark"],
+        )
+        # Same two checks (and the same application envelope) as the Controller
+        # submit entry: an unknown remote node is one `input_invalid` with
+        # params.field/rule, never an async failure after the job is queued.
+        try:
+            validate_execution_request(spec)
+            validate_submission_target(spec, registry=manager.registry)
+        except (ExecutionTargetError, NoCapableNodeError) as exc:
+            envelope = target_error_envelope(exc)
+            return _emit_submit_invalid(
+                args,
+                str(envelope["code"]),
+                str(envelope["message"]),
+                dict(envelope["params"]),
+            )
+        context = None
+        if idempotency_key:
+            context = IdempotencyContext(
+                key=idempotency_key,
+                scope_id=identity.idempotency_scope(project_id=str(project_id)),
+                action=ACTION_SUBMIT,
+                request_payload=canonical,
+                principal_id=identity.principal_id,
+                key_id=identity.key_id,
+            )
+        record = job_submit_command(spec, manager=manager, identity=identity, idempotency=context)
         follow = bool(args.follow) or args.workflow == "fake"
         fresh = _wait_for_task(manager, record.id, terminal=follow)
         if fresh is None:
@@ -2811,14 +2938,64 @@ def _handle_task_execute(args: argparse.Namespace) -> int:
                     "job_id": fresh.id,
                     "attempt": fresh.attempt,
                 },
+                "idempotency_key": idempotency_key or None,
+                # The ledger flag lives on the record returned by submit; the
+                # follow-up read is a fresh DB row.
+                "idempotent_replay": bool(getattr(record, "_idempotent_replay", False)),
             }
         )
         return 0 if not fresh.status.is_terminal or fresh.status.value == "completed" else 1
+    except IdempotencyConflictError as exc:
+        # Same code the Controller answers (HTTP 409 ``idempotency_conflict``):
+        # the same key with a different effective request is a conflict, never a
+        # replay and never a second task.
+        from acp_services.entrypoints.machine_output import ExitCode
+
+        _emit_task(
+            {
+                "command": "execute",
+                "status": "failed",
+                "error": "idempotency_conflict",
+                "message": str(exc),
+                "params": {
+                    "field": "idempotency_key",
+                    "rule": "idempotency_key_reuse",
+                    "idempotency_key": idempotency_key or None,
+                },
+                "exit_code": ExitCode.CONFLICT,
+            }
+        )
+        return ExitCode.CONFLICT
     except (ValueError, RuntimeError) as exc:
         _emit_task({"command": "execute", "status": "failed", "error": str(exc)})
         return 1
     finally:
         manager.shutdown()
+
+
+def _emit_submit_invalid(
+    args: argparse.Namespace, code: str, message: str, params: dict[str, Any]
+) -> int:
+    """Emit one structured CLI rejection and return the usage exit code.
+
+    M0-06: the CLI reports the *same* application code and ``params`` as HTTP and
+    MCP for the same rejected field/target, so a script never parses prose.  The
+    exit code follows the frozen machine-output table (``input_invalid`` →
+    ``USAGE`` = 2).
+    """
+    from acp_services.entrypoints.machine_output import ExitCode, exit_code_for
+
+    _emit_task(
+        {
+            "command": "execute",
+            "status": "failed",
+            "error": code,
+            "message": message,
+            "params": params,
+            "exit_code": exit_code_for(code) or ExitCode.USAGE,
+        }
+    )
+    return exit_code_for(code) or ExitCode.USAGE
 
 
 def _handle_task_query(args: argparse.Namespace) -> int:

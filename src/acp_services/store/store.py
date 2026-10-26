@@ -15,7 +15,7 @@ import logging
 import sqlite3
 import threading
 import uuid
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -39,6 +39,7 @@ from acp_services.runtime.idempotency import (
     OutcomeKind,
     split_scope_id,
     task_ref_for,
+    verify_request_digest,
 )
 from acp_services.runtime.outbox import OutboxEventSpec, OutboxRecord
 from acp_services.store.migrations import migrate
@@ -1096,6 +1097,7 @@ class JobStore:
         project_id: str | None = None,
         identity_version: str = IDENTITY_VERSION,
         request_digest_version: str = REQUEST_DIGEST_VERSION,
+        request_payload: Mapping[str, Any] | None = None,
     ) -> IdempotencyOutcome:
         """Claim one ``(scope, action, key)`` or report the durable outcome.
 
@@ -1111,6 +1113,15 @@ class JobStore:
         reconciliation.  When omitted they are split from the scope id, so a
         caller that only knows the scope id still records a truthful
         attribution.
+
+        ``request_payload`` (M0-06) is the full effective request the digest was
+        computed from.  It is only read when the stored row was written under a
+        different digest rule: the row is then verified against **its own frozen
+        field table** (:func:`acp_services.runtime.idempotency.
+        verify_request_digest`).  Equal digest bytes always mean the same request
+        (the version only names the materialisation); a differing digest that
+        cannot be re-derived under the row's rule is a typed *reconcile* conflict
+        — never "tampered", and never a silent second task.
 
         Legacy rows (``identity_version = "1"``, written before M0-04) are
         never adopted silently: an unattributable row is a typed ``conflict``
@@ -1197,14 +1208,26 @@ class JobStore:
                     )
 
                 claim = _row_to_idempotency_claim(row)
-                if claim.request_digest_version != digest_ver:
+                # M0-06: a stored row written under another digest rule is not a
+                # conflict by itself.  Equal digest bytes prove the same request;
+                # a differing digest is re-derived under the row's frozen field
+                # table.  Only an unverifiable difference is a reconcile conflict.
+                same_request = claim.request_digest == digest
+                if not same_request and claim.request_digest_version != digest_ver:
+                    same_request = verify_request_digest(
+                        claim.request_digest,
+                        claim.request_digest_version,
+                        request_payload,
+                    )
+                if claim.request_digest_version != digest_ver and not same_request:
                     conn.execute("ROLLBACK")
                     return IdempotencyOutcome(
                         OutcomeKind.CONFLICT.value,
                         claim=claim,
                         detail=(
                             "idempotency claim was recorded under request digest version "
-                            f"{claim.request_digest_version!r}; reconcile instead of resubmitting"
+                            f"{claim.request_digest_version!r} and cannot be re-derived from "
+                            "this request; reconcile instead of resubmitting"
                         ),
                     )
                 if claim.is_legacy and claim.migration_state not in {
@@ -1220,12 +1243,19 @@ class JobStore:
                             "principal; reconcile instead of resubmitting"
                         ),
                     )
-                if claim.request_digest != digest:
+                if not same_request:
                     conn.execute("ROLLBACK")
+                    detail = "idempotency key reused with a different request payload"
+                    if claim.request_digest_version != digest_ver:
+                        detail = (
+                            f"idempotency key was claimed under request digest version "
+                            f"{claim.request_digest_version!r} with a different request "
+                            "payload; reconcile instead of resubmitting"
+                        )
                     return IdempotencyOutcome(
                         OutcomeKind.CONFLICT.value,
                         claim=claim,
-                        detail="idempotency key reused with a different request payload",
+                        detail=detail,
                     )
                 if claim.state == ClaimState.COMMITTED.value:
                     task_ref = _task_ref_from_connection(conn, claim.task_id)

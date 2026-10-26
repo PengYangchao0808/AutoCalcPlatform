@@ -34,11 +34,11 @@ from acp_services.contracts.access import LOCAL_PRINCIPAL_ID
 from acp_services.runtime.idempotency import (
     IDENTITY_VERSION,
     LEGACY_IDENTITY_VERSION,
+    LEGACY_REQUEST_DIGEST_VERSION,
     MIGRATION_STATE_NATIVE,
     MIGRATION_STATE_PENDING,
     MIGRATION_STATE_UNVERIFIED,
     MIGRATION_STATE_VERIFIED,
-    REQUEST_DIGEST_VERSION,
     SCOPE_ORIGIN_LEGACY_LOCAL,
     SCOPE_ORIGIN_VERIFIED,
     canonical_request_digest,
@@ -463,7 +463,10 @@ def test_legacy_rows_are_versioned_and_verifiable_rows_still_replay(tmp_path: Pa
     committed = store.find_idempotency_claim(LEGACY_SCOPE, "submit", "legacy-committed")
     assert committed is not None
     assert committed.identity_version == LEGACY_IDENTITY_VERSION
-    assert committed.request_digest_version == REQUEST_DIGEST_VERSION
+    # M0-06 bumped the current rule to "2"; a row written before the bump keeps
+    # the frozen v1 rule version and is verified against that version's field
+    # table instead of being declared tampered.
+    assert committed.request_digest_version == LEGACY_REQUEST_DIGEST_VERSION
     assert committed.scope_origin == SCOPE_ORIGIN_LEGACY_LOCAL
     assert committed.migration_state == MIGRATION_STATE_VERIFIED
     assert committed.principal_id == LOCAL_PRINCIPAL_ID

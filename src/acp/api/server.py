@@ -13,8 +13,11 @@ import os
 from contextlib import asynccontextmanager
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
@@ -51,6 +54,26 @@ if not _FRONTEND_DIR.is_dir():
     if _assets_spec is not None and _assets_spec.origin is not None:
         _FRONTEND_DIR = Path(_assets_spec.origin).parent
 logger = logging.getLogger(__name__)
+
+
+def unknown_field_envelope(exc: RequestValidationError) -> dict[str, Any] | None:
+    """Return the frozen ``input_invalid`` envelope for an undeclared field.
+
+    ``None`` when the validation failure is not ``extra_forbidden`` (the caller
+    then keeps FastAPI's default error list).  One implementation so every
+    ``extra="forbid"`` DTO — not only the submit request — reports the same
+    machine-readable shape.
+    """
+    extra = [error for error in exc.errors() if error.get("type") == "extra_forbidden"]
+    if not extra:
+        return None
+    fields = [str((error.get("loc") or ("",))[-1]) for error in extra]
+    return {
+        "code": "input_invalid",
+        "message": f"request has an undeclared field {fields[0]!r}",
+        "retryable": False,
+        "params": {"field": fields[0], "rule": "unknown_field", "fields": fields},
+    }
 
 
 class _RevalidatingStaticFiles(StaticFiles):
@@ -415,6 +438,24 @@ def create_app(
                 content={"detail": {"code": decision.reason_code, "message": decision.detail}},
             )
         return await call_next(request)
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Report an undeclared request field as the shared application error.
+
+        M0-06 freezes ``extra="forbid"`` on the execution DTOs.  FastAPI's default
+        422 body is a list of pydantic errors; the frozen application contract is
+        ``input_invalid`` with ``params={"field": ..., "rule": "unknown_field"}``
+        (``unknown_field_policy`` U1), identical to what the MCP adapter answers
+        locally and what the CLI projects.  Every other validation error keeps the
+        long-standing FastAPI shape.
+        """
+        envelope = unknown_field_envelope(exc)
+        if envelope is not None:
+            return JSONResponse(status_code=422, content={"detail": envelope})
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
