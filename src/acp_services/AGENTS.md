@@ -1,13 +1,13 @@
 # acp_services/ — Platform Services Layer
 
 ## OVERVIEW
-Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **101 `.py`** (94 modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
+Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **103 `.py`** (96 modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
 
 **Status (verified 2026-10-26):** legacy module/contract slices plus the ACP 2.0 capability slices are delivered and covered by guard families — `test_acp_services_isolation.py`, `test_services_worker_contract.py` and `test_services_{attempt_recovery,cgroup_attempt_recovery,standalone_recipe,packaging_roles,release_prep,worker_bootstrap,doc_sync,closure_record}.py`. Real browser / scientific software / LSF / production remain `NOT_VERIFIED` (see `docs/reference/current/ACP_Services_Closure_20261019.md`). `acp` old import paths are retained as identity forwarders — never re-add an implementation on the `acp` side.
 
 ## STRUCTURE
 ```
-acp_services/                             # 101 .py
+acp_services/                             # 103 .py
 ├── bootstrap.py          # ServicesPorts frozen port bundle (10 fields; "port convergence" phase; each port has a migration/removal task)
 ├── worker_bootstrap.py   # self-sufficient worker composition root (`python -m acp_services.worker_bootstrap`; also the `acp-worker` console script; zero acp import / zero jobs DB)
 ├── events.py             # pure re-export shim → contracts.events (frozen EventEnvelope/EventCursor/EventScope allowlist)
@@ -17,21 +17,23 @@ acp_services/                             # 101 .py
 ├── data/                 # 13 modules: contracts, operations (prepare), artifacts (B12 artifact lifecycle + ArtifactRef), transfer,
 │                         #   resource_read, read_root, storage_binding, namespaces, archive, import_, budget (storage reservation),
 │                         #   research_resources (B18 Proposal/ResearchRecord CAS), helpers
-├── runtime/              # 46 modules: commands, execution_chain, worker, receipts, recovery, plan_contracts, step_result,
+├── runtime/              # 47 modules: commands, execution_chain, worker, receipts, recovery, plan_contracts, step_result,
 │                         #   step_requirements, admission, quota, usage, usage_units, metering_policy, metering_decoupling,
 │                         #   freshness, projections, events, outbox, provisioning, workflow_enablement, isolation,
 │                         #   lab_capabilities, lineage, helpers, method_flags, research_budget (B17), research_events (B19),
+│                         #   research_session (M1-02 planning claim / submit intent / crash-point recovery),
 │                         #   approvals (B16), canonical_digest, attempt_recovery (B13), cgroup, attempt_freeze,
 │                         #   attempt_completion (B07-A), execution_right + receipt_identity + errors (D02), step_dag (B18b),
 │                         #   science_binding (B18a), capability_registry (B22), adapter_registry + adapter_bootstrap (B21),
 │                         #   analysis_capabilities (B06/B12), idempotency (B08), local_admission (B09),
-│                         #   usage_authority (M0-07 producer capability authority)
+│                         #   usage_authority (M0-07 producer capability authority), research_session (M1-02 identity/claim/receipt/intent/crash-matrix)
 ├── store/                # 8 modules: store (JobStore CAS), migrations (24), record (v2 TaskRecord §9.1), records, layout,
 │                         #   naming, legacy_method, molecule_groups
 ├── contracts/            # 8 modules: access, envelope, events, config_plan, config_validation, action_gating, injection,
 │                         #   adapters (B21 infra-adapter contract)
-└── entrypoints/          # 7 modules: diagnostics, machine_output, mcp (TOOL_ALLOWLIST 8 tools), mcp_stdio (B05 framing),
-                          #   application_params + status_projection (B06), controller_client (B04a)
+└── entrypoints/          # 8 modules: diagnostics, machine_output, mcp (TOOL_ALLOWLIST 8 tools), mcp_stdio (B05 framing),
+                          #   application_params + status_projection (B06), controller_client (B04a),
+                          #   wire_identifiers (M1-01c 唯一经审查 wire-id 常量驻点；ANTI #29 例外范围)
 ```
 
 ## WHERE TO LOOK
@@ -50,6 +52,7 @@ acp_services/                             # 101 .py
 | Storage budget | `data/budget.py` | B02-7 reservation for bytes/inodes/scratch/upload amplification — **distinct** from `runtime/research_budget.py` |
 | Events / outbox | `runtime/events.py`, `runtime/outbox.py`, `events.py` | Persistent event protocol; per-task JSONL reuse; `events.py` = pure re-export shim of the frozen `EventEnvelope`/`EventCursor`/`EventScope` allowlist (implementation in `contracts/events.py`) |
 | Research events + cursor | `runtime/research_events.py` | B19 cross-session events + opaque time-bounded cursor (expiry = explicit snapshot reset, never a silent gap) + write-once terminal projection + detach/claim/action ledger |
+| Research session / submit intent | `runtime/research_session.py` | M1-02: `ResearchIdentity.allocate` (identity before the first plan), `planning_claim` (D-IDENT-04 `plan|...`) + `model_receipt_id` (D-IDENT-05 `modelrcpt|...`) reusing `canonical_digest`, opaque `SubmitIntent` (D-IDENT-07) with `supersede_approval_for_plan_change` (old approval revoked via CAS, new round/revision/approval intent, no execution fact), and the frozen `CRASH_POINT_RULES` + `recover_research_session` over the B19 coordinator (never `JobManager.resume()`) |
 | Research budget | `runtime/research_budget.py`, `runtime/usage_units.py`, `runtime/local_admission.py` | B17 persistent cumulative budget vocabulary (`BudgetReservation/Decision/Settlement/Release/Projection`); identity = project + `proposal_ref`, survives retry/restart and is server-derived (client cannot pick the scope); ledger = `admission.ReservationLedger`; `usage_units.py` = dependency-free counters shared by usage/budget/admission; `local_admission.py` (B09) = local-single admission composition over the same ledger |
 | Approvals | `runtime/approvals.py` | B16 Proposal/ResearchRecord approvals bound to the frozen plan via `plan_digest` + `proposal_digest`; `draft → pending → approved / rejected → revoked / expired`; one optimistic CAS on `expected_revision`; never writes execution facts |
 | Canonical digest | `runtime/canonical_digest.py` | The ONE canonical-digest implementation for the frozen B03 rules/vectors; B18 imports it and never re-implements |

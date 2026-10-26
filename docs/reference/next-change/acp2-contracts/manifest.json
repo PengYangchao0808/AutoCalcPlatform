@@ -152,9 +152,9 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "f2b22b1f1882a34d6b440801991b853079ca82271010549d02e1cd9cb42e890f",
+  "contract_digest": "fd9562423c4638aaa2c9fd8248c0cb73e2c7ccf5f7fd4911e5ab9837ecf67c84",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
-  "contract_version": "1.5.0",
+  "contract_version": "1.6.0",
   "contract_version_history": [
     {
       "note": "initial freeze",
@@ -205,6 +205,11 @@
       "note": "registers the decision-freeze identity/integration contracts (owner INT) and the application-api 1.3.0 prepare field table; additive, no delivered wire field removed",
       "stage": "M0-12",
       "version": "1.5.0"
+    },
+    {
+      "note": "M1-01 contract unification (application-api 1.4.0, control-and-data 1.2.0, launch tables, implementation_status vocabulary) and the M1-02 research-session contract registration",
+      "stage": "M1-02",
+      "version": "1.6.0"
     }
   ],
   "contracts": [
@@ -214,7 +219,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "b04bd94fd88342c271273676936f8f15a5b0edc76d01a38774f1d1b05ac53aae",
+      "sha256": "38bbe0c8a4e72600bc8c595036f29be6bfcee47b1698bc901e52df6a30132ce1",
       "status": "delivered"
     },
     {
@@ -280,7 +285,7 @@
       "id": "application-api",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "sha256": "64c8b70f7f5c17985d04683429404a4cf90f7ae2ed5f6d548b838c9248ca9ad8",
+      "sha256": "271b67082117d1156a7a48881601144fa8073e06646c7b729dd5afc820fa9a89",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -298,7 +303,7 @@
       "id": "p2-research-operations",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-      "sha256": "d8a00b32eaccfcc3a17f15e2d922159b885c6ae007e9476dde677c9379f6dc62",
+      "sha256": "4902a8c8b0825dcf1b9b2ab5a4e0c01412189d1a6b083698e612cf32d2bf5746",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -307,7 +312,7 @@
       "id": "mcp-launch-schema",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-      "sha256": "b6a0e9da64ae4a6366c2f95f445d137f99d136211b282c4bbd278b20fac1647c",
+      "sha256": "76a3c538a51c66e0cdc231c1f08c99e1e6d9452bb985df39382c507026a0ac13",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -316,7 +321,7 @@
       "id": "mcp-launch-template",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
-      "sha256": "198ce928789b0715fff831d12027c7deb906118d60fb6cc25171103400a23532",
+      "sha256": "22413124505ee37b41a4d3bf8ca6841315d379bc1ff40bdb122d3669bda354ae",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -341,7 +346,7 @@
       "id": "control-and-data",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
-      "sha256": "af0a55436c1f38146edd59d1a9cca91973c12fdd9ac525fa35cbb75d2f86319e",
+      "sha256": "ee5f130d0da9281c051bcf77e17bccf9304db2761e536607b1fb095ba2035298",
       "status": "delivered"
     },
     {
@@ -375,7 +380,7 @@
       "id": "samples",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/samples/",
-      "sha256": "5678f4f5636676aefb810e972db09bfef003d85c2a8cd98d76d32197b5c1b844",
+      "sha256": "9b279e1d8ef54bca64cc9346091eca63f73575331259376f85a9827fcff87d60",
       "status": "delivered"
     },
     {
@@ -434,7 +439,7 @@
       "note": "M0-11 frozen identity/field/migration decisions with the mechanical client inventory digest embedded.",
       "owner": "INT",
       "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
-      "sha256": "981560dc4d91dc8801d1f64de7f4309c5e1862f8a14afa59c4122232b4a0c94e",
+      "sha256": "13d37243efee7cec00622c206f8011ab6ef9a6d9cba82a67faf9ee516eca69d8",
       "status": "delivered"
     },
     {
@@ -444,6 +449,15 @@
       "owner": "INT",
       "path": "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
       "sha256": "5002f4fae48eb7e275031c76ed2498afd902b8546382a5d5f7be75941f49f7a6",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "M1-02",
+      "id": "research-session",
+      "note": "M1-02: research-session identity, planning/model-receipt namespaces, submit intent, crash-point recovery matrix.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+      "sha256": "80b23340bd92c41dd0c918de274b93473ead20fcce149354a433000a40fc5c21",
       "status": "delivered"
     }
   ],

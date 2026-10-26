@@ -41,7 +41,7 @@ src/acp/                  # 工作流/规划/发布层（289 .py）
 ├── core/ backends/ chem/ intake/ io/ compat/legacy/   # 通用机制 / 纯 re-export shim / 化学 / 摄入 / 结构 I/O / 历史只读
 └── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/xtb_constrained_opt/orca_gradient/nmr + registry
 
-src/acp_services/         # 平台服务层（101 .py；acp → acp_services 单向；禁反向）
+src/acp_services/         # 平台服务层（103 .py；acp → acp_services 单向；禁反向）
 ├── bootstrap.py          # ServicesPorts：过渡端口包（收窄至 10 字段；JobStore/Migrations/StepRequirement 端口已就地移除）
 ├── worker_bootstrap.py   # 独立 worker 组合根（零 acp import / 零 jobs DB；= acp-worker console script）
 ├── workspace/            # projects/admin/entry_authz/identity_lifecycle/identity_mapping/keys/boundary + NEW http_identity（多用户 HTTP 凭据→principal）/server_identity/command_identity（M0-04 唯一 CommandIdentity：HTTP/CLI/admission/幂等 scope）
@@ -154,7 +154,7 @@ examples/                 # 仅 example_inputs.txt
 26. **远程 `pending_fetch` 禁仅依赖浏览器 `?fetch=1`** — 后台 terminal transition 时 `_queue_catalog_prefetch`
 27. **远程作业结果读取必须经 `_job_read_root`** — 远端走 `RemoteStructureCache.fetch_catalog`；写回走 `push_paths`
 28. **前端 `api()` 超时禁泄露 raw AbortError** — SFTP 端点用 `apiRemote()`（60s）
-29. **`acp_services` 禁止导入 `acp`** — 单向依赖硬门；禁把 `acp.*` 类型放进公开签名。守护 `tests/test_acp_services_isolation.py` + `tests/test_services_worker_contract.py`
+29. **`acp_services` 禁止导入 `acp`** — 单向依赖硬门；禁把 `acp.*` 类型放进公开签名。**wire-id 例外（M1-01c，唯一范围）**：仅允许 `src/acp_services/entrypoints/wire_identifiers.py` 中经审查的常量值（当前 `NEGOTIATION_EXTENSION_ID = "acp.negotiation.v1"`，即 `REVIEWED_WIRE_IDENTIFIERS` 元组）；其他模块只能用常量引用，禁再出现字面量、禁 `chr(97)` 之类拼接；import / 懒加载 / `TYPE_CHECKING` / `importlib` / `__import__` / `getattr(...,"acp.*")` / `sys.modules["acp.*"]` 在该模块内亦**永不豁免**；ANTI #32 不新增例外。守护 `tests/test_acp_services_isolation.py`（按常量值+模块 allowlist，不按行号/函数位置豁免）+ `tests/test_services_injection_contracts.py` + `tests/test_services_worker_contract.py`
 30. **旧路径只做 identity forwarder，不做第二实现** — 公共服务能力唯一实现根在 `src/acp_services/`
 31. **兼容面与资产不可为"减行数"删除** — `acp.calculations.primitives`、`acp.backends`、`compat/legacy/`、退役引擎 shim、`tests/baseline/recovery_fixtures/`、`cccp/analysis/nmr/model_assets/`（NOTICE.md/LICENSE-DP5）与 `frontend/js/vendor/` 均保留
 32. **Services 护栏/台账不得放宽或跳过** — `NOT_VERIFIED` 不得改写成 PASS，`已交付字段` 不得写成 `前端已接入`
