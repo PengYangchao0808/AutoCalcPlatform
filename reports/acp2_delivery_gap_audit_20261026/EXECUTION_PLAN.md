@@ -225,7 +225,7 @@ A、C-RPH、C-Web、INT 各自同一时间最多一个 XL；每个任务/子检�
 
 ### 2.6 容量估算与 Team/Solo 形态
 
-以下是**可被 M1-06 重估挑战的初始容量模型，不是承诺工期**。按 39 任务、9 XL、22 L、7 M、1 S，估计总投入 **110–190 人日**：AI 辅助实现/测试 45–80，审查/跨端返工/迁移与并发验证 45–70，真实环境与独立验收 20–40。Candidate-Contracts 约 20–40 人日。M0-09 已升为 L，M0-13 的条件成本计入该范围。
+以下是**可被 M1-06 重估挑战的初始容量模型，不是承诺工期**。按 39 任务、9 XL、23 L、6 M、1 S，估计总投入 **110–190 人日**：AI 辅助实现/测试 45–80，审查/跨端返工/迁移与并发验证 45–70，真实环境与独立验收 20–40。Candidate-Contracts 约 20–40 人日。M0-09 已升为 L，M0-13 的条件成本计入该范围。
 
 - **Team（4–6 人、至少 3 条车道）**：环境全部就绪时，Candidate-Full 以 3–5 个月为规划区间；LSF/模型/第二操作者的等待可能主导日历。
 - **Solo（1–2 人）**：全量以 6–12 个月为规划区间，且必须优先 Candidate-Contracts + Local ORCA 子集；Candidate-Full 默认 DEFERRED，不能按 Team 的并行波次汇报。
@@ -720,6 +720,7 @@ M5 发行与独立移交
 - **Owner**：REL + C-RPH + B；**规模**：L；**前置**：M3-02、M3-06、M4-01；最终关闭需 M4 全部。
 - 保留已有 CCCP/acp-worker/acp-web 与 root ACP 安装成果，不重复“修复”已通过的 OriginPolicy；将 root 构建与三角色制品纳入同一 BOM，而不是硬编码制品数量。
 - `rph/scripts/package.mjs` 打包所有实际 workspace 包，生成每个 tgz 的 name/version/size/sha256；CLI bin、版本、license/notice/profile 完整。默认保留 `private:true`，以签名 tgz 制品分发，不宣称已发布到公共 npm registry；若将来公开发布另做 license/发布决策。
+- **RPH 包安装缺陷为必修项**：2026-10-26 干净 ARM64 主机探测证明当前四个 tgz 虽通过构建与 SHA 校验，但 `@rph/bridge` 等内部依赖仍被 pnpm 解析到公共 registry 并返回 404（见 `reports/acp2_remediation_20261026/rph-package-install-probe.json`）。M5-01 必须先选定私有包安装权威——bundled dependencies、file dependency/私有锁清单或聚合 RPH 包——并使包集仅从 artifact store 可安装，再把该探测翻转为 PASS；禁止把“tgz 可打包”写成“独立可安装”。
 - 生成 `experience/release-manifest.json` 和 `static-assets.manifest.json`；静态资产从安装后的 web 包验证，不只从源码树验证。M4-05 使用的第三方插件 wheel 及其 name/version/sha256 也纳入可取回制品，不能只保留临时构建路径。
 - 静态资产服务只读、digest 启动校验、路径穿越拒绝、未知 404；release mount 不依赖 checkout。
 - `check_release_artifacts.py` 等按 manifest 遍历，不再写死 3 个 wheel/sdist；package-install 覆盖 RPH、Web 研究和 root/roles 的互斥安装规则。

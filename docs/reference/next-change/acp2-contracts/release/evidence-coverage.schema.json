@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "acp2.release.evidence-coverage.v1",
+  "title": "ACP 2.0 release evidence coverage ledger",
+  "description": "Machine-checkable coverage ledger for M0-01: every G01–G26 gap, every one of the 39 M-tasks and every a/b/c/d sub-checkpoint carries an owner, a required evidence level and a required evidence kind. Status is only ever OPEN/CLOSED plus PASS/FAIL/NOT_VERIFIED; DEFERRED rows may never claim PASS.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "task_id",
+    "owner",
+    "generated_at",
+    "source",
+    "digest_rules",
+    "coverage_sha256",
+    "tasks",
+    "checkpoints",
+    "gaps",
+    "h_rows",
+    "h_index",
+    "summary",
+    "candidate_full",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {"const": "acp2.release.evidence-coverage.v1"},
+    "task_id": {"const": "M0-01"},
+    "owner": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "source": {"$ref": "#/$defs/source"},
+    "digest_rules": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1},
+      "required": ["coverage_sha256"],
+      "properties": {
+        "coverage_sha256": {"type": "string", "minLength": 1}
+      }
+    },
+    "coverage_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tasks": {"type": "array", "minItems": 39, "items": {"$ref": "#/$defs/task_row"}},
+    "checkpoints": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/checkpoint_row"}},
+    "gaps": {"type": "array", "minItems": 26, "items": {"$ref": "#/$defs/gap_row"}},
+    "h_rows": {"type": "array", "minItems": 8, "items": {"$ref": "#/$defs/h_row"}},
+    "h_index": {"$ref": "#/$defs/h_index"},
+    "summary": {"$ref": "#/$defs/summary"},
+    "candidate_full": {"$ref": "#/$defs/candidate_full"},
+    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "hex64": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_id": {"type": "string", "pattern": "^M[0-5]-[0-9]{2}$"},
+    "checkpoint_id": {"type": "string", "pattern": "^M[0-5]-[0-9]{2}[a-z]$"},
+    "gap_id": {"type": "string", "pattern": "^G[0-9]{2}$"},
+    "h_id": {"type": "string", "pattern": "^H[0-7]$"},
+    "scope_class": {"type": "string", "enum": ["IN_SCOPE", "DEFERRED", "NOT_APPLICABLE"]},
+    "row_status": {"type": "string", "enum": ["OPEN", "CLOSED"]},
+    "row_result": {"type": "string", "enum": ["PASS", "FAIL", "NOT_VERIFIED"]},
+    "evidence_level": {"type": "string", "enum": ["L0", "L1", "L2", "L3", "L4", "L5"]},
+    "evidence_kind": {"type": "string", "enum": ["fixture", "live", "aggregate"]},
+    "receipt": {"type": ["string", "null"]},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "plan_sha256",
+        "plan_graph",
+        "plan_graph_sha256",
+        "scope",
+        "scope_sha256",
+        "h_index",
+        "h7_handoff",
+        "h7_handoff_sha256"
+      ],
+      "properties": {
+        "plan": {"type": "string", "minLength": 1},
+        "plan_sha256": {"$ref": "#/$defs/hex64"},
+        "plan_graph": {"type": "string", "minLength": 1},
+        "plan_graph_sha256": {"$ref": "#/$defs/hex64"},
+        "scope": {"type": "string", "minLength": 1},
+        "scope_sha256": {"$ref": "#/$defs/hex64"},
+        "h_index": {"type": "string", "minLength": 1},
+        "h7_handoff": {"type": "string", "minLength": 1},
+        "h7_handoff_sha256": {"$ref": "#/$defs/hex64"}
+      }
+    },
+    "task_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "owner",
+        "size",
+        "scope",
+        "status",
+        "result",
+        "evidence_level",
+        "evidence_kind",
+        "gaps",
+        "checkpoints",
+        "receipt"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/task_id"},
+        "title": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1},
+        "size": {"type": "string", "enum": ["S", "M", "L", "XL"]},
+        "scope": {"$ref": "#/$defs/scope_class"},
+        "status": {"$ref": "#/$defs/row_status"},
+        "result": {"$ref": "#/$defs/row_result"},
+        "evidence_level": {"$ref": "#/$defs/evidence_level"},
+        "evidence_kind": {"$ref": "#/$defs/evidence_kind"},
+        "gaps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/gap_id"}},
+        "checkpoints": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/checkpoint_id"}
+        },
+        "receipt": {"$ref": "#/$defs/receipt"},
+        "notes": {"type": "string"}
+      }
+    },
+    "checkpoint_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parent",
+        "owner",
+        "status",
+        "result",
+        "evidence_level",
+        "evidence_kind",
+        "receipt"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/checkpoint_id"},
+        "parent": {"$ref": "#/$defs/task_id"},
+        "owner": {"type": "string", "minLength": 1},
+        "status": {"$ref": "#/$defs/row_status"},
+        "result": {"$ref": "#/$defs/row_result"},
+        "evidence_level": {"$ref": "#/$defs/evidence_level"},
+        "evidence_kind": {"$ref": "#/$defs/evidence_kind"},
+        "receipt": {"$ref": "#/$defs/receipt"},
+        "notes": {"type": "string"}
+      }
+    },
+    "gap_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "h_rows",
+        "tasks",
+        "scope",
+        "status",
+        "result",
+        "evidence_level",
+        "evidence_kind",
+        "closing_evidence",
+        "receipt"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/gap_id"},
+        "title": {"type": "string", "minLength": 1},
+        "h_rows": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/h_id"}},
+        "tasks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/task_id"}},
+        "scope": {"$ref": "#/$defs/scope_class"},
+        "status": {"$ref": "#/$defs/row_status"},
+        "result": {"$ref": "#/$defs/row_result"},
+        "evidence_level": {"$ref": "#/$defs/evidence_level"},
+        "evidence_kind": {"$ref": "#/$defs/evidence_kind"},
+        "closing_evidence": {"type": "string", "minLength": 1},
+        "conditional_tasks": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/task_id"}
+        },
+        "receipt": {"$ref": "#/$defs/receipt"}
+      }
+    },
+    "h_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "required", "gaps", "status", "result", "science_state"],
+      "properties": {
+        "id": {"$ref": "#/$defs/h_id"},
+        "title": {"type": "string", "minLength": 1},
+        "required": {"type": "boolean"},
+        "gaps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/gap_id"}},
+        "status": {"$ref": "#/$defs/row_status"},
+        "result": {"$ref": "#/$defs/row_result"},
+        "science_state": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "NOT_VERIFIED", "NOT_APPLICABLE"]
+        },
+        "source": {"type": "string", "minLength": 1}
+      }
+    },
+    "h_index": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_index", "handoff_h7"],
+      "properties": {
+        "execution_index": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "status"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/$defs/hex64"},
+            "status": {"type": "string", "enum": ["REFERENCED", "NOT_VERIFIED"]}
+          }
+        },
+        "handoff_h7": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "handoff_id",
+            "handoff_version",
+            "contract_set",
+            "contract_set_version",
+            "sha256",
+            "handoff_digests_verified",
+            "release_ready"
+          ],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "handoff_id": {"const": "H7"},
+            "handoff_version": {"type": "integer", "minimum": 1},
+            "contract_set": {"type": "string", "minLength": 1},
+            "contract_set_version": {"type": "integer", "minimum": 1},
+            "sha256": {"$ref": "#/$defs/hex64"},
+            "handoff_digests_verified": {"type": "boolean"},
+            "release_ready": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tasks_total",
+        "tasks_open",
+        "checkpoints_total",
+        "checkpoints_open",
+        "gaps_total",
+        "gaps_open",
+        "h_rows_total",
+        "h_rows_open",
+        "full_release_status"
+      ],
+      "properties": {
+        "tasks_total": {"type": "integer", "minimum": 39},
+        "tasks_open": {"type": "integer", "minimum": 0},
+        "checkpoints_total": {"type": "integer", "minimum": 32},
+        "checkpoints_open": {"type": "integer", "minimum": 0},
+        "gaps_total": {"type": "integer", "minimum": 26},
+        "gaps_open": {"type": "integer", "minimum": 0},
+        "h_rows_total": {"type": "integer", "minimum": 8},
+        "h_rows_open": {"type": "integer", "minimum": 0},
+        "full_release_status": {"$ref": "#/$defs/row_result"},
+        "notes": {"type": "string"}
+      }
+    },
+    "candidate_full": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "reason", "blocking_rows"],
+      "properties": {
+        "allowed": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1},
+        "blocking_rows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
