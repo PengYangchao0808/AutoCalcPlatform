@@ -161,12 +161,16 @@ def test_pending_decisions_are_never_frozen(freeze: dict[str, Any]) -> None:
     for decision in _decisions(freeze):
         if decision["id"] in listed:
             assert listed[decision["id"]] == decision["status"]
-    # The three forward conventions stay pending; the prepare conflict was
-    # resolved by D-IDENT-10 (M0-11) and is frozen.
+    # M1-02 landed the producers for the three former forward conventions
+    # (planning claim, model receipt, RPH plan-digest key) and flipped them to
+    # frozen; the prepare conflict was resolved by D-IDENT-10 (M0-11).
+    assert listed == {}
     for identifier in ("D-IDENT-04", "D-IDENT-05", "D-IDENT-07"):
-        assert _decision(freeze, identifier)["status"] == PENDING_IMPLEMENTATION
-        assert _decision(freeze, identifier)["frozen_forward_convention"] is True
-    assert set(listed) == {"D-IDENT-04", "D-IDENT-05", "D-IDENT-07"}
+        decision = _decision(freeze, identifier)
+        assert decision["status"] == FROZEN
+        assert "pending_reason" not in decision
+        assert "implementation" in decision and decision["implementation"]
+        assert decision["vectors"]
     assert _decision(freeze, "D-IDENT-10")["status"] == FROZEN
 
 
@@ -379,27 +383,42 @@ def _src_text() -> str:
     )
 
 
-def test_planning_claim_namespace_is_declared_forward_only(freeze: dict[str, Any]) -> None:
-    """The plan|... claim namespace has no producer in src/ yet (so: pending)."""
+def test_planning_claim_namespace_is_implemented(freeze: dict[str, Any]) -> None:
+    """The plan|... claim namespace is frozen *and* has a real producer."""
     decision = _decision(freeze, "D-IDENT-04")
-    assert decision["status"] == PENDING_IMPLEMENTATION
+    assert decision["status"] == FROZEN
     assert "plan|<project>|<research>|<session>|<round>|<call_seq>" in decision["decision"]
     assert "never a submit ledger key" in decision["decision"]
     source = _src_text()
-    assert "call_seq" not in source
-    assert '"plan|' not in source and "'plan|" not in source
+    assert "call_seq" in source
+    assert "plan|" in source and "modelrcpt" in source
+    from acp_services.runtime.research_session import planning_claim
+
+    assert callable(planning_claim)
 
 
-def test_model_receipt_namespace_is_declared_forward_only(freeze: dict[str, Any]) -> None:
+def test_model_receipt_namespace_is_implemented(freeze: dict[str, Any]) -> None:
     """The model receipt namespace binds research/round/call, never job/attempt."""
     decision = _decision(freeze, "D-IDENT-05")
-    assert decision["status"] == PENDING_IMPLEMENTATION
+    assert decision["status"] == FROZEN
     assert (
         "modelrcpt|<project>|<research>|<session>|<round>|<call_seq>|<request_digest>"
         in (decision["decision"])
     )
     assert "NOT to a job_id or attempt" in decision["decision"]
-    assert "modelrcpt" not in _src_text()
+    assert "modelrcpt" in _src_text()
+    from acp_services.runtime.research_session import model_receipt_id
+
+    receipt = model_receipt_id(
+        project_id="proj-a",
+        research_id="res-1",
+        session_id="ses-1",
+        round=0,
+        call_seq=1,
+        request_digest="sha256:" + "a" * 64,
+    )
+    assert receipt.startswith("modelrcpt|")
+    assert "job" not in receipt and "attempt" not in receipt
 
 
 def test_rph_research_key_encoding_is_unchanged(freeze: dict[str, Any]) -> None:
@@ -419,14 +438,25 @@ def test_rph_research_key_encoding_is_unchanged(freeze: dict[str, Any]) -> None:
         assert segment in decision["decision"]
 
 
-def test_rph_key_plan_digest_segment_is_forward_only(freeze: dict[str, Any]) -> None:
-    """plan_digest is required for the derived key but is not implemented today."""
-    source = RPH_RECORD.read_text(encoding="utf-8")
-    assert "plan_digest" not in source
+def test_rph_key_plan_digest_segment_is_implemented(freeze: dict[str, Any]) -> None:
+    """The derived RPH key binds plan_digest and the decision is frozen."""
+    submit_intent = REPO_ROOT / "rph/packages/research/src/submit-intent.ts"
+    source = submit_intent.read_text(encoding="utf-8")
+    assert "plan_definition_digest" in source
+    assert "SUBMIT_INTENT_PLAN_SEGMENT" in source
+    # The frozen round key itself is unchanged (D-IDENT-06); the new segment is
+    # appended by a new key function.
+    round_source = RPH_RECORD.read_text(encoding="utf-8")
+    assert (
+        "plan_definition_digest"
+        not in round_source.split("export function researchRoundKey")[1].split(
+            "export function researchEventKey"
+        )[0]
+    )
     decision = _decision(freeze, "D-IDENT-07")
-    assert decision["status"] == PENDING_IMPLEMENTATION
-    assert decision["frozen_forward_convention"] is True
+    assert decision["status"] == FROZEN
     assert "plan_digest" in decision["decision"]
+    assert "submit-intent.ts" in decision["decision"]
 
 
 # ---------------------------------------------------------------------------
@@ -450,11 +480,13 @@ def test_scanner_check_mode_exit_codes(tmp_path: Path, capsys: pytest.CaptureFix
 
 
 def test_validator_rejects_a_frozen_pending_decision(tmp_path: Path) -> None:
-    """A pending decision relabelled frozen is INVALID (no silent promotion)."""
+    """A frozen decision may not keep pending fields (no half-flipped record)."""
     doctored = json.loads(FREEZE_PATH.read_text(encoding="utf-8"))
     for decision in doctored["decisions"]:
         if decision["id"] == "D-IDENT-04":
             decision["status"] = FROZEN
+            decision["pending_reason"] = "relabelled without a producer"
+            decision["consumer_task"] = "M1-04c"
     path = tmp_path / "identity.v1.json"
     path.write_text(json.dumps(doctored), encoding="utf-8")
     errors = validator.validate(path, REPO_ROOT)

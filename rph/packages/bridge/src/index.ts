@@ -8,6 +8,12 @@
  * DSH plugin) in a later task.
  */
 
+import {
+  MemorySubmitIntentStore,
+  SubmitIntentConflict,
+  SubmitIntentLedger,
+  type SubmitIntentStore,
+} from "@rph/research";
 import type { ResearchRecordRef } from "@rph/research";
 
 /** DSH exposes MCP tools to the model with exactly this prefix. */
@@ -94,6 +100,17 @@ export interface BridgeRequest {
   readonly resources?: unknown;
   readonly explicit?: boolean;
   readonly phase?: BridgePhase;
+  /**
+   * Research identity of a submit (M1-02 / D-IDENT-07).
+   *
+   * `research` + `round` + `planDigest` let the bridge derive the stable
+   * submit idempotency key (`project + research + round + plan_digest`) and
+   * persist it before the call.  They never replace `idempotencyKey`: a
+   * caller-supplied key is forwarded verbatim.
+   */
+  readonly research?: string;
+  readonly round?: number;
+  readonly planDigest?: string;
 }
 
 /** One tool result as returned by a platform client (public envelope only). */
@@ -147,11 +164,51 @@ function isPresent(field: BridgeField, request: BridgeRequest): boolean {
   }
 }
 
+/** One research-round submit identity (all four segments are required). */
+export interface SubmitIntentIdentity {
+  readonly project: string;
+  readonly research: string;
+  readonly round: number;
+  readonly planDigest: string;
+}
+
+/** The research-round dimensions of a request, or `null` when incomplete. */
+export function resolveSubmitIntentIdentity(
+  request: BridgeRequest,
+): SubmitIntentIdentity | null {
+  if (request.operation !== "submit") {
+    return null;
+  }
+  const { project, research, round, planDigest } = request;
+  if (
+    typeof project !== "string" ||
+    project.length === 0 ||
+    typeof research !== "string" ||
+    research.length === 0 ||
+    typeof round !== "number" ||
+    !Number.isInteger(round) ||
+    round < 0 ||
+    typeof planDigest !== "string" ||
+    planDigest.length === 0
+  ) {
+    return null;
+  }
+  return Object.freeze({ project, research, round, planDigest });
+}
+
+/** Whether a submit can derive (and persist) its own idempotency key. */
+export function canDeriveSubmitKey(request: BridgeRequest): boolean {
+  return resolveSubmitIntentIdentity(request) !== null;
+}
+
 /** Fields required by the operation but absent/invalid on the request. */
 export function missingFieldsFor(request: BridgeRequest): BridgeField[] {
-  return requiredFieldsFor(request.operation).filter(
-    (field) => !isPresent(field, request),
-  );
+  return requiredFieldsFor(request.operation).filter((field) => {
+    if (field === "idempotencyKey" && canDeriveSubmitKey(request)) {
+      return false;
+    }
+    return !isPresent(field, request);
+  });
 }
 
 /**
@@ -1336,8 +1393,10 @@ export interface P2BridgeResult {
  */
 export function buildToolArguments(
   request: BridgeRequest,
+  idempotencyKeyOverride?: string,
 ): Readonly<Record<string, unknown>> {
   const args: Record<string, unknown> = {};
+  const idempotencyKey = idempotencyKeyOverride ?? request.idempotencyKey;
   const put = (key: string, value: unknown): void => {
     if (value !== undefined) {
       args[key] = value;
@@ -1354,7 +1413,7 @@ export function buildToolArguments(
       put("method", request.method);
       put("project_id", request.project);
       put("resources", request.resources);
-      put("idempotency_key", request.idempotencyKey);
+      put("idempotency_key", idempotencyKey);
       if (request.operation === "evidence") {
         put("explicit", request.explicit);
       }
@@ -1373,7 +1432,7 @@ export function buildToolArguments(
       put("job_id", request.task);
       put("attempt", request.attempt);
       put("artifact_id", request.resource);
-      put("idempotency_key", request.idempotencyKey);
+      put("idempotency_key", idempotencyKey);
       return Object.freeze(args);
     case "read":
       put("job_id", request.task);
@@ -1415,6 +1474,15 @@ function canonicalJson(value: unknown): string {
 export interface BridgeOptions {
   readonly negotiatedExtensions?: readonly NegotiatedExtension[];
   readonly requirePreparedRead?: boolean;
+  /**
+   * Storage for derived submit intents (M1-02 / D-IDENT-07).
+   *
+   * The bridge persists the derived key here *before* it calls the platform, so
+   * a crash between derive and call replays the same key.  Defaults to an
+   * in-memory store (a cache, not a durable database); a durable caller injects
+   * its own `SubmitIntentStore`.
+   */
+  readonly submitIntentStore?: SubmitIntentStore;
 }
 
 function notPreparedResult(request: BridgeRequest): BridgeResult {
@@ -1497,11 +1565,16 @@ export class Bridge {
   private readonly prepared = new Set<string>();
   private readonly ownership = new Map<string, PreparedArtifact>();
   private readonly idempotency = new Map<string, IdempotencyEntry>();
+  /** Derived submit intents: persisted before the platform call (M1-02). */
+  readonly submitIntents: SubmitIntentLedger;
 
   constructor(client: PlatformClient, options: BridgeOptions = {}) {
     this.client = client;
     this.negotiated = options.negotiatedExtensions ?? [];
     this.requirePreparedRead = options.requirePreparedRead ?? true;
+    this.submitIntents = new SubmitIntentLedger(
+      options.submitIntentStore ?? new MemorySubmitIntentStore(),
+    );
   }
 
   /** Execute one P1 operation; throws a `BridgeContractError` on a guard hit. */
@@ -1521,13 +1594,29 @@ export class Bridge {
         return notPreparedResult(request);
       }
     }
-    const replay = this.replayIdempotentResult(request);
+    const key = this.resolveSubmitKey(request);
+    const replay = this.replayIdempotentResult(request, key);
     if (replay !== null) {
       return replay;
     }
-    const params = buildToolArguments(request);
+    // An empty key means "no key": never send `idempotency_key: ""`.
+    const params = buildToolArguments(request, key.length > 0 ? key : undefined);
     const raw = assertRawToolName(mapping.tool);
     const result = await this.client.callTool(raw, params);
+    if (request.operation === "submit" && !result.isError) {
+      // The key was already persisted by `resolveSubmitKey`; marking the
+      // intent submitted is a second durable fact, not a new key.  A
+      // caller-supplied opaque key never went through `prepare`, so the
+      // ledger simply reports a miss.
+      const identity = resolveSubmitIntentIdentity(request);
+      if (identity !== null && key.length > 0) {
+        this.submitIntents.markSubmitted({
+          project_id: identity.project,
+          research_id: identity.research,
+          round: identity.round,
+        });
+      }
+    }
     if (request.operation === "prepare" && !result.isError) {
       this.rememberPreparedArtifact(request);
     }
@@ -1538,8 +1627,46 @@ export class Bridge {
       structuredContent: result.structuredContent,
       projection: projectToolResult(raw, result),
     });
-    this.rememberIdempotentResult(request, bridgeResult);
+    this.rememberIdempotentResult(request, key, bridgeResult);
     return bridgeResult;
+  }
+
+  /**
+   * Resolve the idempotency key a submit will send.
+   *
+   * A caller key is opaque and forwarded verbatim.  Without one, the bridge
+   * derives the D-IDENT-07 key from the research identity and persists it
+   * **before** the call; a changed plan digest for the same round is a typed
+   * conflict that opens a new round instead of reusing the old key.
+   */
+  private resolveSubmitKey(request: BridgeRequest): string {
+    if (request.operation !== "submit") {
+      return request.idempotencyKey ?? "";
+    }
+    if (request.idempotencyKey !== undefined && request.idempotencyKey.length > 0) {
+      return request.idempotencyKey;
+    }
+    const identity = resolveSubmitIntentIdentity(request);
+    if (identity === null) {
+      contractError("invalid-parameter", "input_invalid", {
+        rule: "missing_required_field",
+        operation: "submit",
+        fields: ["idempotencyKey"],
+      });
+    }
+    try {
+      return this.submitIntents.prepare({
+        project_id: identity.project,
+        research_id: identity.research,
+        round: identity.round,
+        plan_definition_digest: identity.planDigest,
+      }).intent.key;
+    } catch (error) {
+      if (error instanceof SubmitIntentConflict) {
+        return contractError("conflict", "revision_conflict", error.toParams());
+      }
+      throw error;
+    }
   }
 
   private rememberPreparedArtifact(request: BridgeRequest): void {
@@ -1599,9 +1726,9 @@ export class Bridge {
     }
   }
 
-  private signatureFor(request: BridgeRequest): string | null {
-    const key = request.idempotencyKey;
-    if (key === undefined || key.length === 0) {
+  private signatureFor(request: BridgeRequest, key?: string): string | null {
+    const resolved = key ?? request.idempotencyKey;
+    if (resolved === undefined || resolved.length === 0) {
       return null;
     }
     return canonicalJson({
@@ -1613,24 +1740,30 @@ export class Bridge {
     });
   }
 
-  private replayIdempotentResult(request: BridgeRequest): BridgeResult | null {
+  private replayIdempotentResult(
+    request: BridgeRequest,
+    key?: string,
+  ): BridgeResult | null {
     if (!isIdempotentOperation(request.operation)) {
       return null;
     }
-    const key = request.idempotencyKey;
-    const signature = this.signatureFor(request);
-    if (key === undefined || signature === null) {
+    const resolvedKey = key ?? request.idempotencyKey;
+    if (resolvedKey === undefined || resolvedKey.length === 0) {
       return null;
     }
-    const previous = this.idempotency.get(key);
+    const signature = this.signatureFor(request, resolvedKey);
+    if (signature === null) {
+      return null;
+    }
+    const previous = this.idempotency.get(resolvedKey);
     if (previous === undefined) {
-      this.idempotency.set(key, { signature, result: null });
+      this.idempotency.set(resolvedKey, { signature, result: null });
       return null;
     }
     if (previous.signature !== signature) {
       contractError("conflict", "revision_conflict", {
         rule: "idempotency_key_reuse",
-        idempotency_key: key,
+        idempotency_key: resolvedKey,
       });
     }
     return previous.result;
@@ -1638,14 +1771,14 @@ export class Bridge {
 
   private rememberIdempotentResult(
     request: BridgeRequest,
+    key: string,
     result: BridgeResult,
   ): void {
     if (!isIdempotentOperation(request.operation) || result.isError) {
       return;
     }
-    const key = request.idempotencyKey;
-    const signature = this.signatureFor(request);
-    if (key === undefined || signature === null) {
+    const signature = this.signatureFor(request, key);
+    if (key.length === 0 || signature === null) {
       return;
     }
     this.idempotency.set(key, { signature, result });

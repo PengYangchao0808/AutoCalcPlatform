@@ -3,7 +3,7 @@
   "contract_version": "1.0.0",
   "frozen_at": "2026-10-27",
   "owner": "INT",
-  "task": "M0-11",
+  "task": "M0-11 (M1-02 flipped D-IDENT-04/05/07 after landing their producers and vectors)",
   "title": "Identity, field and migration decisions (G02/G03/G12/G13/G20)",
   "branch": "acp2/integration-remediation",
   "head": "e82cd8a",
@@ -36,7 +36,7 @@
     "pending_implementation": "the decision is recorded as a forward convention (frozen_forward_convention=true) because no producer exists yet; the consumer task must implement it before it may be called frozen.",
     "pending_conflict": "two frozen surfaces disagree and choosing one changes a contract; recorded with the exact conflicting evidence, resolved by the named consumer task, never silently."
   },
-  "pending_rule": "An undecided item is never frozen: a decision with status pending_* must carry pending_reason, consumer_task and frozen_forward_convention, and must not be advertised as closed by M1.",
+  "pending_rule": "An undecided item is never frozen: a decision with status pending_* must carry pending_reason, consumer_task and frozen_forward_convention, and must not be advertised as closed by M1. M1-02 flipped D-IDENT-04/05/07 after landing their producers and vectors; no pending decision remains in this file.",
   "approval_protocol": {
     "aggregated_by": "INT",
     "signoff_pending": [
@@ -68,7 +68,7 @@
   "client_inventory": {
     "authority": "scripts/acceptance/check_v1_request_field_consumers.py",
     "schema": "acp2.identity.v1.request-field-consumers",
-    "digest": "sha256:5653d89d8c6f8026f6cf8a9a677d5e0abee0cd228b208a4b04a66956e23ca560",
+    "digest": "sha256:dc9c62e976bb5841443967bd80d2fe9457449ad1219152236542a118adf1289e",
     "scanned_roots": [
       "frontend/js",
       "rph/packages",
@@ -82,12 +82,12 @@
       "rph/packages/**/node_modules/** (build output)"
     ],
     "summary": {
-      "consumers": 32,
+      "consumers": 35,
       "counts": {
         "breaking": 0,
         "compliant": 22,
         "contract_divergence": 0,
-        "expected_rejection": 7,
+        "expected_rejection": 10,
         "other_request_kind": 3
       },
       "breaking_consumers": []
@@ -209,6 +209,26 @@
         "disposition": "expected_rejection"
       },
       {
+        "consumer": "docs:idempotency-key-short-cross-tenant.negative",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
+        "kind": "docs-json",
+        "request_kind": "submit",
+        "extra_keys": [
+          "existing_owner_project",
+          "key_entropy",
+          "namespace",
+          "requesting_project"
+        ],
+        "rejected_keys": [],
+        "contract_extra_keys": [
+          "existing_owner_project",
+          "key_entropy",
+          "namespace",
+          "requesting_project"
+        ],
+        "disposition": "expected_rejection"
+      },
+      {
         "consumer": "docs:preflight.positive",
         "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/preflight.positive.json",
         "kind": "docs-json",
@@ -261,6 +281,30 @@
       {
         "consumer": "docs:submit-invalid-workflow.negative",
         "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-invalid-workflow.negative.json",
+        "kind": "docs-json",
+        "request_kind": "submit",
+        "extra_keys": [],
+        "rejected_keys": [],
+        "contract_extra_keys": [],
+        "disposition": "expected_rejection"
+      },
+      {
+        "consumer": "docs:submit-keyless-duplicate-task.negative",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json",
+        "kind": "docs-json",
+        "request_kind": "submit",
+        "extra_keys": [
+          "entry"
+        ],
+        "rejected_keys": [],
+        "contract_extra_keys": [
+          "entry"
+        ],
+        "disposition": "expected_rejection"
+      },
+      {
+        "consumer": "docs:submit-missing-idempotency-key.negative",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-idempotency-key.negative.json",
         "kind": "docs-json",
         "request_kind": "submit",
         "extra_keys": [],
@@ -633,6 +677,11 @@
           "disposition": "expected_rejection"
         },
         {
+          "consumer": "docs:idempotency-key-short-cross-tenant.negative",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
+          "disposition": "expected_rejection"
+        },
+        {
           "consumer": "docs:preflight.positive",
           "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/preflight.positive.json",
           "disposition": "compliant"
@@ -660,6 +709,16 @@
         {
           "consumer": "docs:submit-invalid-workflow.negative",
           "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-invalid-workflow.negative.json",
+          "disposition": "expected_rejection"
+        },
+        {
+          "consumer": "docs:submit-keyless-duplicate-task.negative",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json",
+          "disposition": "expected_rejection"
+        },
+        {
+          "consumer": "docs:submit-missing-idempotency-key.negative",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-idempotency-key.negative.json",
           "disposition": "expected_rejection"
         },
         {
@@ -842,84 +901,102 @@
     {
       "id": "D-IDENT-04",
       "title": "Planning claim namespace plan|<project>|<research>|<session>|<round>|<call_seq>",
-      "status": "pending_implementation",
+      "status": "frozen",
       "owner": "B",
       "signoff": [
         "B",
         "C-RPH"
       ],
-      "decision": "A planning/model claim id is the pipe-joined tuple plan|<project>|<research>|<session>|<round>|<call_seq>. Every segment is non-empty, contains no '|', and is server-derived (the client supplies neither project nor research/session identity). call_seq is monotonically increasing per (project, research, session, round). The claim carries its request_digest and a model receipt namespace (D-IDENT-05). It is a planning reservation id, never a submit ledger key: it must not be written to idempotency_records (whose action is submit) and it must not be an empty claim_id that escapes the partial index.",
-      "pending_reason": "No implementation exists in this checkout: there is no plan_claim/call_seq producer anywhere under src/ (grep for 'plan|', call_seq, claim_key returns nothing). Writing frozen would declare a convention delivered that has no code, no ledger and no vector.",
-      "consumer_task": "M1-04c (planning reservation; M1-02 for the research/session/round identity)",
-      "frozen_forward_convention": true,
-      "blocking": false,
+      "decision": "A planning/model claim id is the pipe-joined tuple plan|<project>|<research>|<session>|<round>|<call_seq>. Every segment is non-empty, contains no '|', and is server-derived (the client supplies neither project nor research/session identity). call_seq is monotonically increasing per (project, research, session, round). The claim carries its request_digest and a model receipt namespace (D-IDENT-05). It is a planning reservation id, never a submit ledger key: it must not be written to idempotency_records (whose action is submit) and it must not be an empty claim_id that escapes the partial index. Implemented by acp_services.runtime.research_session.planning_claim (producer + the single canonical digest); the research/session identity is allocated before the first plan by ResearchIdentity.allocate.",
       "rationale": "Without a stable planning identity a model call cannot be charged before a proposal exists, and a retry cannot be reconciled to the call it repeats.",
       "impact": {
         "files": [
+          "src/acp_services/runtime/research_session.py",
           "src/acp_services/runtime/research_budget.py",
-          "src/acp_services/runtime/admission.py",
-          "src/acp_services/runtime/usage_units.py"
+          "src/acp_services/runtime/canonical_digest.py"
         ],
         "entries": [
-          "planning model call (gateway → runtime research budget ledger)"
+          "planning model call (research session -> planning claim -> model receipt)"
         ],
         "documents": [
-          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-04c",
-          "docs/reference/next-change/acp2-contracts/experience/model-budget.md"
+          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
         ]
       },
       "wire_version": null,
       "migration_version": null,
-      "rollback": "No runtime surface exists yet, so rollback is 'do not implement'. Once M1-04c lands, the convention is additive: a new claim namespace is a new prefix with its own segments, never a re-interpretation of a stored claim id.",
+      "rollback": "The convention is additive: a new claim namespace is a new prefix with its own segments, never a re-interpretation of a stored claim id. Removing the producer deletes the helper and its tests; no persisted claim id is rewritten or re-parsed by a second implementation.",
       "compatible_clients": [],
       "vectors": [
         {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_planning_claim_namespace_is_declared_forward_only",
-          "asserts": "the namespace is recorded as a forward convention with no producer in src/"
+          "test": "tests/test_acp2_research_session_contract.py::test_planning_claim_namespace_vector",
+          "asserts": "the claim reproduces plan|<project>|<research>|<session>|<round>|<call_seq> and reuses the single canonical digest"
+        },
+        {
+          "test": "tests/test_acp2_research_session_contract.py::test_planning_claim_is_never_a_submit_ledger_key",
+          "asserts": "a claim/receipt id is never a submit ledger key and the module never writes claim_idempotency"
+        },
+        {
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_planning_claim_namespace_is_implemented",
+          "asserts": "the namespace has a real producer in src/ and the decision is frozen"
         }
       ],
-      "notes": "Exit condition: M1-04c implements the producer, a test pins the segment grammar, then this decision flips to frozen with a new commit."
+      "notes": "Exit condition: M1-04c implements the producer, a test pins the segment grammar, then this decision flips to frozen with a new commit.",
+      "implementation": {
+        "producer": "src/acp_services/runtime/research_session.py::planning_claim",
+        "identity": "src/acp_services/runtime/research_session.py::ResearchIdentity.allocate",
+        "digest": "src/acp_services/runtime/canonical_digest.py (single implementation)",
+        "budget": "src/acp_services/runtime/research_budget.py::budget_id_for (project + research/session)",
+        "consumer_task": "M1-04c owns the planning reservation; M1-02 delivered the research/session/round identity and this producer"
+      }
     },
     {
       "id": "D-IDENT-05",
       "title": "Model receipt namespace modelrcpt|... binds research/round/call/request, never a job/attempt",
-      "status": "pending_implementation",
+      "status": "frozen",
       "owner": "B",
       "signoff": [
         "B",
         "C-RPH"
       ],
-      "decision": "A model receipt id is modelrcpt|<project>|<research>|<session>|<round>|<call_seq>|<request_digest>. It is the settlement key for one model call, bound to research/round/call/request/model and explicitly NOT to a job_id or attempt (a model call is not a platform task). Unknown, stream-interrupted or unknown-outcome calls stay reserved and reconcile; a scientific rejection deletes no already-incurred model usage.",
-      "pending_reason": "No model receipt producer exists under src/ (no 'modelrcpt', model_receipt or receipt_id producer for planning calls); the only receipt chain implemented today is the job-attempt receipt (runtime/receipt_identity.py), which is a different identity.",
-      "consumer_task": "M1-04c (model settlement); M1-02 for the research round that owns the receipt",
-      "frozen_forward_convention": true,
-      "blocking": false,
+      "decision": "A model receipt id is modelrcpt|<project>|<research>|<session>|<round>|<call_seq>|<request_digest>. It is the settlement key for one model call, bound to research/round/call/request/model and explicitly NOT to a job_id or attempt (a model call is not a platform task). Unknown, stream-interrupted or unknown-outcome calls stay reserved and reconcile; a scientific rejection deletes no already-incurred model usage. Implemented by acp_services.runtime.research_session.model_receipt_id; the grammar has no job/attempt segment and a test pins that absence.",
       "rationale": "A receipt that binds to a job/attempt would be a false execution fact: planning happens before any task exists, and a rejected proposal still consumed model budget.",
       "impact": {
         "files": [
-          "src/acp_services/runtime/research_budget.py",
-          "src/acp_services/runtime/admission.py",
-          "src/acp_services/runtime/usage_units.py"
+          "src/acp_services/runtime/research_session.py",
+          "src/acp_services/runtime/research_budget.py"
         ],
         "entries": [
-          "model gateway → runtime research budget settlement"
+          "model gateway -> runtime research budget settlement"
         ],
         "documents": [
-          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-04c",
-          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN_REVIEW.md"
+          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
         ]
       },
       "wire_version": null,
       "migration_version": null,
-      "rollback": "No runtime surface exists yet. Once implemented, receipt ids are persisted settlement facts: a rollback must not rewrite an existing receipt id, only stop producing new ones.",
+      "rollback": "Receipt ids are persisted settlement facts: a rollback must not rewrite an existing receipt id, only stop producing new ones. The namespace is additive and the settlement ledger keeps the rows it already holds.",
       "compatible_clients": [],
       "vectors": [
         {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_model_receipt_namespace_is_declared_forward_only",
-          "asserts": "the receipt namespace is forward-only and carries no job/attempt segment"
+          "test": "tests/test_acp2_research_session_contract.py::test_model_receipt_namespace_vector",
+          "asserts": "the receipt reproduces modelrcpt|<project>|<research>|<session>|<round>|<call_seq>|<request_digest> with no job/attempt segment"
+        },
+        {
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_model_receipt_namespace_is_implemented",
+          "asserts": "the receipt has a real producer in src/ and the decision is frozen"
         }
       ],
-      "notes": "Exit condition: M1-04c lands the producer + a settlement idempotency test, then this decision flips to frozen."
+      "notes": "Exit condition: M1-04c lands the producer + a settlement idempotency test, then this decision flips to frozen.",
+      "implementation": {
+        "producer": "src/acp_services/runtime/research_session.py::model_receipt_id",
+        "settlement_owner": "M1-04c owns model settlement; M1-02 owns the research/round the receipt names",
+        "not_bound_to": [
+          "job_id",
+          "attempt"
+        ]
+      }
     },
     {
       "id": "D-IDENT-06",
@@ -981,43 +1058,63 @@
     {
       "id": "D-IDENT-07",
       "title": "plan_digest is a required segment of the RPH-derived stable key (forward, not implemented)",
-      "status": "pending_implementation",
+      "status": "frozen",
       "owner": "C-RPH",
       "signoff": [
         "C-RPH",
         "B"
       ],
-      "decision": "When RPH derives a submit idempotency key for a research round it must bind project + research + round + plan_digest (the approved plan), persist the derived key before the call, and never rewrite it when the plan changes: a changed plan_digest invalidates the old approval and opens a new round/revision with a new key. Today RPH does not include plan_digest in any key and the bridge forwards a caller-supplied key.",
-      "pending_reason": "The plan_digest segment has no producer: researchRoundKey/researchEventKey contain no plan_digest, and the bridge forwards request.idempotencyKey unchanged. Freezing it would document a key shape no code emits.",
-      "consumer_task": "M1-02 (research submit intent persisted before the call; plan_digest invalidation)",
-      "frozen_forward_convention": true,
-      "blocking": false,
+      "decision": "When RPH derives a submit idempotency key for a research round it binds project + research + round + plan_digest (the approved plan), persists the derived key before the call, and never rewrites it when the plan changes: a changed plan_digest invalidates the old approval and opens a new round/revision with a new key. Implemented by rph/packages/research/src/submit-intent.ts: submitIntentKey appends ':submit:plan-<digest hex>' to the frozen researchRoundKey (the old encoding stays addressable) and SubmitIntentLedger persists the intent through an injected store before the platform call. A changed digest for the same round is a typed plan_digest_changed conflict carrying next_round; the bridge forwards a caller-supplied opaque key verbatim and never completes or rewrites it.",
       "rationale": "Without plan_digest in the key, a revised plan could replay the previous intent's key and silently reuse an approval for different science.",
       "impact": {
         "files": [
+          "rph/packages/research/src/submit-intent.ts",
           "rph/packages/research/src/record.ts",
-          "rph/packages/research/src/store.ts",
           "rph/packages/bridge/src/index.ts"
         ],
         "entries": [
-          "rph:research submit intent → mcp:acp_submit"
+          "rph:research submit intent -> mcp:acp_submit"
         ],
         "documents": [
-          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02",
-          "docs/reference/next-change/acp2-contracts/experience/plan-identity.md"
+          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
         ]
       },
       "wire_version": null,
       "migration_version": null,
-      "rollback": "Additive: a new key function appends the plan_digest segment; the old key stays for lookup of already-persisted intents.",
-      "compatible_clients": [],
-      "vectors": [
+      "rollback": "Additive: the old key function stays for lookup of already-persisted intents; a rollback keeps both key functions and re-derives the old key for lookup. No persisted client key is rewritten, and the platform ledger keeps receiving the opaque value it was given.",
+      "compatible_clients": [
         {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_rph_key_plan_digest_segment_is_forward_only",
-          "asserts": "the missing plan_digest segment is recorded as pending, not frozen"
+          "consumer": "rph:buildToolArguments:submit",
+          "path": "rph/packages/bridge/src/index.ts",
+          "disposition": "compliant"
         }
       ],
-      "notes": "Exit condition: M1-02 lands the derived key + a changed-plan test, then this decision flips to frozen."
+      "vectors": [
+        {
+          "test": "rph/test/submit-intent.test.ts::submit-intent: key binds project/research/round/plan digest and appends to the round key",
+          "asserts": "the derived key appends the plan-digest segment to the frozen round key without changing it"
+        },
+        {
+          "test": "rph/test/submit-intent.test.ts::submit-intent: a changed plan digest for the same round is a typed conflict",
+          "asserts": "a new plan digest cannot reuse the round key; the conflict names next_round"
+        },
+        {
+          "test": "rph/test/submit-intent.test.ts::submit-intent: the ledger persists the key before the platform call",
+          "asserts": "the intent is persisted before the call and reused by a retry"
+        },
+        {
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_rph_key_plan_digest_segment_is_implemented",
+          "asserts": "the plan-digest segment has a producer and the decision is frozen"
+        }
+      ],
+      "notes": "Exit condition: M1-02 lands the derived key + a changed-plan test, then this decision flips to frozen.",
+      "implementation": {
+        "key": "rph/packages/research/src/submit-intent.ts::submitIntentKey",
+        "ledger": "rph/packages/research/src/submit-intent.ts::SubmitIntentLedger",
+        "bridge": "rph/packages/bridge/src/index.ts::Bridge.resolveSubmitKey (persist before call, never rewrite)",
+        "platform": "src/acp_services/runtime/research_session.py (opaque key + approval invalidation)"
+      }
     },
     {
       "id": "D-IDENT-08",
@@ -1119,15 +1216,15 @@
           "asserts": "the ledger key is the raw client key; no op_ key is ever written"
         },
         {
-          "test": "tests/test_acp2_runtime_mcp_identity.py::test_legacy_auto_row_replays_on_the_same_binding_only",
-          "asserts": "an auto_ row replays only on the local-single binding that wrote it"
+          "test": "tests/test_acp2_runtime_mcp_identity.py::test_legacy_auto_row_is_never_claimed_by_a_keyless_submit",
+          "asserts": "a key-less submit is refused before any port is touched and never claims the historical auto_ row (M1-01b supersedes the M0-05 fallback)"
         },
         {
           "test": "tests/test_acp2_runtime_command_identity.py::test_legacy_auto_derived_mcp_key_is_a_distinct_reconciliation_namespace",
           "asserts": "auto_ is a separate reconciliation namespace, not a second ledger"
         }
       ],
-      "notes": "An authenticated binding never claims the auto_ namespace."
+      "notes": "An authenticated binding never claims the auto_ namespace. M1-01b refuses a key-less MCP submit outright, so the legacy auto_ derivation is lookup-only."
     },
     {
       "id": "D-IDENT-10",
@@ -1201,29 +1298,7 @@
       "notes": "The read path keeps the resource_id identity (GET /jobs/{id}/prepared/{resource}); it is not judged by the submit policy (other_request_kind). The MCP launch contract mcp-launch.schema.json declares a strict subset of the prepare fields; widening it is left to M1-01."
     }
   ],
-  "pending_summary": [
-    {
-      "id": "D-IDENT-04",
-      "status": "pending_implementation",
-      "reason": "No implementation exists in this checkout: there is no plan_claim/call_seq producer anywhere under src/ (grep for 'plan|', call_seq, claim_key returns nothing). Writing frozen would declare a convention delivered that has no code, no ledger and no vector.",
-      "consumer_task": "M1-04c (planning reservation; M1-02 for the research/session/round identity)",
-      "blocking": false
-    },
-    {
-      "id": "D-IDENT-05",
-      "status": "pending_implementation",
-      "reason": "No model receipt producer exists under src/ (no 'modelrcpt', model_receipt or receipt_id producer for planning calls); the only receipt chain implemented today is the job-attempt receipt (runtime/receipt_identity.py), which is a different identity.",
-      "consumer_task": "M1-04c (model settlement); M1-02 for the research round that owns the receipt",
-      "blocking": false
-    },
-    {
-      "id": "D-IDENT-07",
-      "status": "pending_implementation",
-      "reason": "The plan_digest segment has no producer: researchRoundKey/researchEventKey contain no plan_digest, and the bridge forwards request.idempotencyKey unchanged. Freezing it would document a key shape no code emits.",
-      "consumer_task": "M1-02 (research submit intent persisted before the call; plan_digest invalidation)",
-      "blocking": false
-    }
-  ],
+  "pending_summary": [],
   "observations": [
     {
       "id": "O-IDENT-01",
