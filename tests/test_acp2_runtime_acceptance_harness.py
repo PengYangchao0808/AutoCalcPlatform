@@ -58,7 +58,8 @@ def test_contract_version_tracks_delivered_manifest() -> None:
     assert harness.contract_version() == manifest["contract_version"]
     # M0-01 review vector: registered release contracts live inside the same
     # annotated delivery set, so the frozen manifest version is 1.4.0.
-    assert harness.contract_version() == "1.4.0"
+    # M0-12 (2026-10-27): the decision-freeze registrations move it to 1.5.0.
+    assert harness.contract_version() == "1.5.0"
 
 
 def test_scenario_registry_completeness() -> None:

@@ -153,7 +153,8 @@ def test_extension_identity_has_one_authority() -> None:
         == "1.0.0"
     )
     # The application contract *version* is not the extension version (B06 drift).
-    assert api["contract_version"] == "1.1.0"
+    # M0-06 -> 1.2.0 (field policy); D-IDENT-10 -> 1.3.0 (prepare field table).
+    assert api["contract_version"] == "1.3.0"
     assert api["contract_version"] != mcp_extension.RESEARCH_EXTENSION_VERSION
 
 
