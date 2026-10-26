@@ -47,7 +47,7 @@ src/acp_services/         # 平台服务层（99 .py；acp → acp_services 单�
 ├── workspace/            # projects/admin/entry_authz/identity_lifecycle/identity_mapping/keys/boundary + NEW http_identity（多用户 HTTP 凭据→principal）/server_identity
 ├── data/                 # contracts/operations/transfer/resource_read/read_root/storage_binding/namespaces/archive/import_/budget(存储配额)/helpers + NEW artifacts（ArtifactRef 生命周期）/research_resources（Proposal/ResearchRecord CAS）
 ├── runtime/              # 44 模块 = 原 23 + NEW 21：research_budget/usage_units/approvals/canonical_digest/research_events(游标)/attempt_recovery/cgroup/adapter_registry/adapter_bootstrap/execution_right/receipt_identity/errors/attempt_completion/attempt_freeze/step_dag/science_binding/capability_registry/analysis_capabilities/idempotency/local_admission/metering_decoupling
-├── store/                # store(JobStore CAS)/migrations(23 条)/record(s)/layout/naming/legacy_method/molecule_groups
+├── store/                # store(JobStore CAS)/migrations(24 条)/record(s)/layout/naming/legacy_method/molecule_groups
 ├── contracts/            # access/envelope/events/config_plan/config_validation/action_gating/injection + NEW adapters（AdapterDescriptor）
 ├── entrypoints/          # diagnostics/machine_output/mcp(TOOL_ALLOWLIST 8 工具) + NEW application_params/controller_client/mcp_stdio/status_projection
 └── events.py             # 纯 re-export shim（EventEnvelope/EventCursor/EventScope）
@@ -135,7 +135,7 @@ examples/                 # 仅 example_inputs.txt
 7. **ORCA `%geom` 关键字是 `Trust` 非 `TrustRadius`** — `MaxIter` 出自 `max_cycles`/`geom_maxiter`
 8. **新代码禁裸 `except Exception:`**
 9. **常量单点定义** — 新常量禁复制
-10. **CI（更新 2026-10）**: push main/feat/** + PR → py3.10/3.11/3.12 compileall + `pytest -m "not slow"`；install 行必须含全部 extras + nmrglue（`pip install -e '.[dev,api,remote]'`）；browser 套件仅 3.11（`.[browser]` + playwright chromium）；**rph-detect/rph job**（Node 22.19.0 + pnpm 11.28.5，存在 `rph/pnpm-lock.yaml` 才跑：install --frozen-lockfile → build → test → check）；lint/format 门仍注释中
+10. **CI（更新 2026-10-26/M0-02a）**: push main/feat/** + PR → py3.10/3.11/3.12 compileall + `pytest -m "not slow and not contract"`（`--strict-markers` 默认开启，markers 见 `pyproject.toml`）；install 行必须含全部 extras + nmrglue（`pip install -e '.[dev,api,remote]'`）；browser 套件仅 3.11（`.[browser]` + playwright chromium）；**frontend-module-tests**（Node 22.19，`run_all.js` 非空强制门）；**rph-detect/rph job**（Node 22.19.0 + pnpm 11.28.5，存在 `rph/pnpm-lock.yaml` 才跑：install --frozen-lockfile → build → test → check → **package** → upload）；**mcp-conformance**（Python3.11+Node22.19+pnpm11.28.5）目前是 M0-02b 骨架，placeholder 非空但 contract 门 `NOT_CLOSED`；各 job 记录 wall-clock，超时必须分片不得 skip。lint/format 门仍注释中
 11. **`_SCHEDULER_MARKERS` 必须列出调度器预建文件全集** — 守护：`tests/test_scheduler_markers_audit.py`
 12. **新增 job status 必须全表面同步** — `jobs.py::JobStatus` is_active/is_terminal + `store.counts()` + 前端 `getStatusClass`/i18n（zh+en）
 13. **NEVER 裸 `DELETE FROM jobs`** — 走 `store.purge_cascade`
