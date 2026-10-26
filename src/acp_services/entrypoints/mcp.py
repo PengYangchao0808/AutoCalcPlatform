@@ -43,8 +43,20 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
   <acp_services.store.store.JobStore.claim_idempotency>`) owns the claim.  The
   permission scope no longer folds into the key and an ``op_``-shaped key is
   never written as a ledger key (``op_`` is the *operation reference*
-  namespace).  A missing key is non-idempotent: the tool contract says so, and
-  the only exception is the frozen legacy ``auto_`` lookup below.
+  namespace).  **M1-01b: ``acp_submit`` requires the key** — a missing/blank key
+  is a typed ``input_invalid`` (``params.rule=idempotency_key_required``) with
+  zero side effects, and the only surviving ``auto_`` path is the frozen legacy
+  lookup below (historical rows and the optional-key prepare surface).
+* **Declared argument tables are enforced here (M1-01b).**  ``tools/list``
+  advertises the same ``additionalProperties: false`` tables the adapter checks
+  before any port call (``_ARGUMENT_SCHEMAS``): an unknown execution field is
+  ``input_invalid``/``unknown_field``, a missing required field is
+  ``input_invalid``/``missing_required_field``.  Status stays a permissive
+  historical read (unknown-field policy U2).
+* **One reviewed wire-id station (M1-01c).**  The only ``acp.*`` wire literal in
+  this package is the negotiation-guidance id declared in
+  :mod:`acp_services.entrypoints.wire_identifiers`; this module refers to the
+  constant and never repeats the literal (the old ``chr(97)`` assembly is gone).
 * **Frozen legacy ``auto_`` lookup.**  Pre-M0-05 MCP clients that sent no key
   were recorded under :func:`derive_idempotency_key`'s ``auto_`` namespace.  The
   derivation is now *lookup-only*: it is recomputed only on the explicit
@@ -104,6 +116,8 @@ from acp_services.contracts.access import (
     resolve_scope,
 )
 from acp_services.entrypoints import machine_output as mo
+from acp_services.entrypoints import wire_identifiers
+from acp_services.runtime.analysis_capabilities import capability_projection
 from acp_services.workspace.boundary import evaluate_tier_request
 from acp_services.workspace.command_identity import (
     CommandIdentity,
@@ -205,14 +219,11 @@ MCP_SERVER_VERSION = "0.1.0"
 
 #: Versioned negotiation-guidance extension id, published under
 #: ``capabilities.extensions`` (never as a top-level ``initialize`` field, never
-#: as a ``negotiated`` claim).  Wire value: ``acp.negotiation.v1``.
-#:
-#: Assembled from ``chr(97)`` because the Services isolation scanner treats any
-#: ``"acp.*"`` string constant as an ``acp`` import (same transitional pattern as
-#: the previous research/identity ids).  M1-01 consolidates every wire id into
-#: ``entrypoints/wire_identifiers.py`` with an explicit reviewed allowlist; this
-#: constant must move there and lose the assembly.
-_NEGOTIATION_EXTENSION_ID = chr(97) + "cp.negotiation.v1"
+#: as a ``negotiated`` claim).  The value lives in
+#: :mod:`acp_services.entrypoints.wire_identifiers`, the single reviewed station
+#: for ``acp.*`` wire literals on the Services side (M1-01c); this module refers
+#: to the constant and never repeats the literal.
+_NEGOTIATION_EXTENSION_ID = wire_identifiers.NEGOTIATION_EXTENSION_ID
 
 
 class JsonRpcErrorCode:
@@ -606,7 +617,217 @@ _CAPABILITIES_SCHEMA: dict[str, Any] = {
     },
     "additionalProperties": False,
 }
-_REFERENCE_SCHEMA: dict[str, Any] = {
+#: Shared declared field table of the submit family.  The names are the
+#: ``acp_services.entrypoints.application_params.SUBMIT_FIELD_POLICY`` set (minus
+#: the two server-path fields a client may never choose), so the adapter's
+#: ``tools/list`` schema and the Controller's field policy are one table
+#: (M0-06/M1-01b).  ``additionalProperties`` is false everywhere: an undeclared
+#: argument is a typed ``input_invalid`` at the adapter, never forwarded.
+_SUBMIT_PROPERTIES: dict[str, Any] = {
+    "schema_version": {
+        "type": "integer",
+        "enum": [1],
+        "default": 1,
+        "description": "Contract major version; any other value executes nothing.",
+    },
+    "workflow": {"type": "string", "description": "Active workflow id (server-validated)."},
+    "name": {"type": "string", "description": "Display name (never the task directory)."},
+    "input": {"type": "object", "description": "Workflow input descriptor."},
+    "method": {"type": "object", "description": "Method/parameter descriptor."},
+    "resources": {"type": "object", "description": "Optional resource request (e.g. cores)."},
+    "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter tags."},
+    "node_tags": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Required node capability tags (AND semantics).",
+    },
+    "project_id": {
+        "type": "string",
+        "description": "Requested Workspace hint (never the tenant).",
+    },
+    "execution_mode": {
+        "type": "string",
+        "enum": ["local", "remote"],
+        "description": "Per-request execution preference.",
+    },
+    "target_node": {
+        "type": "string",
+        "description": "Pin one execution target ('local' or a configured remote node).",
+    },
+    "molecule_name": {"type": "string", "description": "v2 task-directory molecule part."},
+    "task_name": {"type": "string", "description": "v2 task-directory task part."},
+    "remark": {"type": "string", "description": "v2 task-directory remark part."},
+    "preflight_fingerprint": {
+        "type": "string",
+        "description": "Optional binding to the plan digest a preflight returned.",
+    },
+    "idempotency_key": {
+        "type": "string",
+        "description": (
+            "REQUIRED. Client retry key, forwarded unchanged to the Controller ledger. "
+            "The raw key is a global namespace per action (across projects/users): use a "
+            "high-entropy UUID or a namespaced key (e.g. "
+            "'<client>:<project>:<round>:<call>'). A short human key reused by two "
+            "tenants is a typed conflict (revision_conflict), never a replay. Same key + "
+            "same verified identity + same request = exactly one operation. Omitting it "
+            "is refused with input_invalid (rule=idempotency_key_required)."
+        ),
+    },
+    "extensions": {
+        "type": "object",
+        "description": "Namespaced extension metadata (never used for execution).",
+    },
+    "plan_digest": {
+        "type": "string",
+        "description": (
+            "Research-launch switch (sha256:<64 hex>). Its presence makes this a research "
+            "submit, which requires proposal_ref plus a matching server approval; a bare "
+            "plan_digest without proposal_ref is denied with 403 approval_required. Omit "
+            "it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+        ),
+    },
+    "proposal_ref": {
+        "type": "string",
+        "description": (
+            "Approval-bound proposal reference required for a research launch; must have "
+            "an approved record for this plan_digest and project (server-verified)."
+        ),
+    },
+    "proposal_digest": {
+        "type": "string",
+        "description": (
+            "Optional research binding (sha256:<64 hex>); when supplied it must equal the "
+            "approved proposal projection digest."
+        ),
+    },
+    "budget": {
+        "type": "object",
+        "description": (
+            "Optional research budget request; when supplied it must equal the approved "
+            "budget binding (the effective limits come from the approval, never the client)."
+        ),
+    },
+}
+
+_SUBMIT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Submit descriptor. Legacies and research launches share this schema; the field "
+        "relations below are documented for callers, never enforced here — the Controller "
+        "remains the gate. idempotency_key is required (M1-01b): an undeclared field is a "
+        "typed input_invalid (rule=unknown_field) and a missing key is "
+        "input_invalid (rule=idempotency_key_required) before any budget or Controller "
+        "call. plan_digest is the research-launch switch: supplying it (or any of "
+        "proposal_ref/proposal_digest/budget) makes the submit a research launch, which "
+        "additionally requires proposal_ref bound to a server-side approval and optionally "
+        "proposal_digest/budget. Omitting all four keeps the legacy path. A research submit "
+        "without proposal_ref is refused by the Controller with access_denied "
+        "(rule=approval_required) before idempotency or admission."
+    ),
+    "properties": dict(_SUBMIT_PROPERTIES),
+    "required": ["workflow", "input", "idempotency_key"],
+    "additionalProperties": False,
+}
+
+#: Preflight is the zero-side-effect dry run of the same request body, so it
+#: accepts the identical field table but does not require a retry key (it creates
+#: nothing to retry).
+_PREFLIGHT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Preflight/estimate descriptor: the same declared fields as acp_submit, with zero "
+        "side effects (no task, no reservation, no metering). idempotency_key is optional "
+        "here because nothing is created."
+    ),
+    "properties": dict(_SUBMIT_PROPERTIES),
+    "required": ["workflow", "input"],
+    "additionalProperties": False,
+}
+
+#: Artifact reference shared by read/analyze (frozen ``acp2.artifact-ref.v1``
+#: identity fields).  Any subset is insufficient: a read/analyze without the full
+#: (task_id, attempt, artifact_id, generation, digest) tuple is refused.
+_ARTIFACT_REF_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["task_id", "attempt", "artifact_id", "generation", "digest"],
+    "properties": {
+        "task_id": {"type": "string"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "artifact_id": {"type": "string"},
+        "generation": {"type": "integer", "minimum": 1},
+        "digest": {"type": "string"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "media_type": {"type": "string"},
+        "relative_path": {"type": "string"},
+    },
+}
+
+_READ_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Bounded read of an already-prepared artifact. artifact_ref is required; a miss is "
+        "resource_not_ready and a read never fetches, prepares or starts computation "
+        "(M1-01b)."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "artifact_ref": _ARTIFACT_REF_SCHEMA,
+        "max_bytes": {"type": "integer", "minimum": 1},
+        "encoding": {"type": "string", "enum": ["identity", "base64"]},
+        "extensions": {
+            "type": "object",
+            "description": "Namespaced extension metadata (never used for execution).",
+        },
+    },
+    "required": ["artifact_ref"],
+    "additionalProperties": False,
+}
+
+_ANALYZE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Explicit analysis request. analysis_id, input_refs and explicit=true are "
+        "required: an implicit/heuristic trigger is refused (input_invalid, "
+        "rule=explicit_required); an unregistered capability is unsupported_capability "
+        "(rule=analysis_capability_not_registered) and a declared-but-not-executable one is "
+        "unsupported_capability (rule=analysis_capability_not_executable). vibration.analyze "
+        "reads existing evidence and starts no QC."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "analysis_id": {"type": "string"},
+        "input_refs": {
+            "type": "array",
+            "items": _ARTIFACT_REF_SCHEMA,
+            "minItems": 1,
+            "description": "Frozen ArtifactRef inputs (full identity tuple).",
+        },
+        "explicit": {
+            "type": "boolean",
+            "description": "Must be exactly true; there is no implicit analysis.",
+        },
+        "parameters": {"type": "object"},
+        "plan_digest": {
+            "type": "string",
+            "description": "Required for vibration.compute (it starts exactly one task).",
+        },
+        "idempotency_key": {
+            "type": "string",
+            "description": "Optional retry key for analysis; omitting it is not idempotent.",
+        },
+        "extensions": {
+            "type": "object",
+            "description": "Namespaced extension metadata (never used for execution).",
+        },
+    },
+    "required": ["analysis_id", "input_refs", "explicit"],
+    "additionalProperties": False,
+}
+
+#: Status is a historical read: extra query fields are preserved (unknown-field
+#: policy U2), so its declared table stays permissive.
+_STATUS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "reference": {
@@ -617,90 +838,20 @@ _REFERENCE_SCHEMA: dict[str, Any] = {
     "required": ["reference"],
     "additionalProperties": True,
 }
-_SUBMIT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "description": (
-        "Submit descriptor. Legacies and research launches share this schema; the field "
-        "relations below are documented for callers, never enforced here — the Controller "
-        "remains the gate. plan_digest is the research-launch switch: supplying it (or any "
-        "of proposal_ref/proposal_digest/budget) makes the submit a research launch, which "
-        "additionally requires proposal_ref bound to a server-side approval and optionally "
-        "proposal_digest/budget. Omitting all four keeps the legacy path. A research submit "
-        "without proposal_ref is refused by the Controller with access_denied "
-        "(rule=approval_required) before idempotency or admission."
-    ),
-    "properties": {
-        "workflow": {"type": "string", "description": "Active workflow id (server-validated)."},
-        "input": {"type": "object", "description": "Workflow input descriptor."},
-        "method": {"type": "object", "description": "Method/parameter descriptor."},
-        "project_id": {
-            "type": "string",
-            "description": "Requested Workspace hint (never the tenant).",
-        },
-        "resources": {"type": "object", "description": "Optional resource request (e.g. cores)."},
-        "idempotency_key": {
-            "type": "string",
-            "description": (
-                "Client retry key, forwarded unchanged to the Controller ledger. Same key "
-                "+ same verified identity = exactly one operation and the same complete "
-                "TaskRef. A raw key is global per action (across projects/users): use a "
-                "high-entropy, namespaced key (e.g. '<client>:<project>:<round>:<call>'). "
-                "A key reused with different content is an explicit conflict. OMITTING "
-                "the key is NOT idempotent: a retry may create a new task (the frozen "
-                "legacy 'auto_' lookup only covers pre-existing local-single rows)."
-            ),
-        },
-        "plan_digest": {
-            "type": "string",
-            "description": (
-                "Research-launch switch (sha256:<64 hex>). Its presence makes this a research "
-                "submit, which requires proposal_ref plus a matching server approval; a bare "
-                "plan_digest without proposal_ref is denied with 403 approval_required. Omit "
-                "it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
-            ),
-        },
-        "proposal_ref": {
-            "type": "string",
-            "description": (
-                "Approval-bound proposal reference required for a research launch; must have "
-                "an approved record for this plan_digest and project (server-verified)."
-            ),
-        },
-        "proposal_digest": {
-            "type": "string",
-            "description": (
-                "Optional research binding (sha256:<64 hex>); when supplied it must equal the "
-                "approved proposal projection digest."
-            ),
-        },
-        "budget": {
-            "type": "object",
-            "description": (
-                "Optional research budget request; when supplied it must equal the approved "
-                "budget binding (the effective limits come from the approval, never the client)."
-            ),
-        },
-    },
-    "required": ["workflow"],
-    "additionalProperties": True,
-}
-_ARTIFACT_SCHEMA: dict[str, Any] = {
+
+#: Cancel writes one control intent, so it follows the execution-field policy U1:
+#: exactly ``reference`` (+ an optional CAS guard).
+_CANCEL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "job_id": {"type": "string"},
-        "resource_id": {"type": "string"},
-        "relative_path": {"type": "string"},
-        "attempt": {"type": "integer"},
-        "idempotency_key": {
-            "type": "string",
-            "description": (
-                "Client retry key for the prepare operation, forwarded unchanged. The "
-                "server derives the versioned key from (principal, project, client key, "
-                "epoch). Omitting it is NOT idempotent: a retry may re-prepare."
-            ),
+        "reference": {
+            "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
+            "oneOf": [{"type": "string"}, {"type": "object"}],
         },
+        "expected_revision": {"type": "integer", "minimum": 0},
     },
-    "additionalProperties": True,
+    "required": ["reference"],
+    "additionalProperties": False,
 }
 #: ``acp_prepare_artifact`` is the one call surface whose arguments are the v1
 #: prepare request body verbatim (D-IDENT-10, M0-11).  The adapter validates the
@@ -714,7 +865,8 @@ _PREPARE_SCHEMA: dict[str, Any] = {
     "description": (
         "Explicit prepare request, identical to POST /api/v1/jobs/{job_id}/prepare. "
         "purpose is required; artifact_id is required when purpose=artifact. The "
-        "Controller derives resource_id from artifact_id, never from the caller."
+        "Controller derives resource_id from artifact_id, never from the caller. A "
+        "prepare never starts science and is never implied by a read or a status query."
     ),
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
@@ -783,6 +935,64 @@ _PREPARE_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+#: The declared argument tables the adapter enforces itself (required fields +
+#: ``additionalProperties: false``).  Status is absent on purpose: a historical
+#: read preserves unknown fields (unknown_field_policy U2).
+_ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
+    McpTool.PREFLIGHT: _PREFLIGHT_SCHEMA,
+    McpTool.SUBMIT: _SUBMIT_SCHEMA,
+    McpTool.CANCEL: _CANCEL_SCHEMA,
+    McpTool.PREPARE_ARTIFACT: _PREPARE_SCHEMA,
+    McpTool.READ_ARTIFACT: _READ_SCHEMA,
+    McpTool.ANALYZE: _ANALYZE_SCHEMA,
+}
+
+
+def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
+    """Reject an undeclared or missing argument *before* any port is touched.
+
+    This is the adapter half of M1-01b: ``acp_submit`` requires
+    ``idempotency_key``, every execution-family schema is
+    ``additionalProperties: false``, and both failures are typed ``input_invalid``
+    results (never a transport error, never a silently forwarded field).  Unknown
+    fields are judged first so a misspelt field is reported as the typo it is.
+
+    Raises:
+        McpToolError: ``input_invalid`` with ``params.rule``
+            ``unknown_field`` or ``missing_required_field``
+            (``idempotency_key_required`` for the submit key).
+    """
+    spec = _ARGUMENT_SCHEMAS.get(tool)
+    if spec is None:
+        return
+    declared = spec.get("properties") or {}
+    unknown = sorted(str(name) for name in arguments if str(name) not in declared)
+    if unknown:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} does not accept the field {unknown[0]!r}",
+            params={
+                "field": unknown[0],
+                "rule": "unknown_field",
+                "fields": unknown,
+                "tool": tool,
+            },
+            retryable=False,
+        )
+    missing = [str(name) for name in spec.get("required") or () if name not in arguments]
+    if missing:
+        rule = (
+            "idempotency_key_required"
+            if missing[0] == "idempotency_key"
+            else "missing_required_field"
+        )
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} requires the field {missing[0]!r}",
+            params={"field": missing[0], "rule": rule, "missing": missing, "tool": tool},
+            retryable=False,
+        )
+
 
 def _tool_specs() -> tuple[dict[str, Any], ...]:
     return (
@@ -798,7 +1008,7 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         _tool_spec(
             McpTool.PREFLIGHT,
             "Preflight/estimate a request with zero side effects (no science, no metering).",
-            _SUBMIT_SCHEMA,
+            _PREFLIGHT_SCHEMA,
         ),
         _tool_spec(
             McpTool.SUBMIT,
@@ -808,12 +1018,12 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         _tool_spec(
             McpTool.STATUS,
             "Query the status of an operation/job reference. Holds no connection state.",
-            _REFERENCE_SCHEMA,
+            _STATUS_SCHEMA,
         ),
         _tool_spec(
             McpTool.CANCEL,
             "Request cancellation of an operation/job reference.",
-            _REFERENCE_SCHEMA,
+            _CANCEL_SCHEMA,
         ),
         _tool_spec(
             McpTool.PREPARE_ARTIFACT,
@@ -823,15 +1033,12 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         _tool_spec(
             McpTool.READ_ARTIFACT,
             "Read an already-prepared artifact (bounded; no fetch on miss).",
-            _ARTIFACT_SCHEMA,
+            _READ_SCHEMA,
         ),
         _tool_spec(
             McpTool.ANALYZE,
-            "Run an explicit analysis request (must opt in with explicit=true).",
-            {
-                **_SUBMIT_SCHEMA,
-                "properties": {**_SUBMIT_SCHEMA["properties"], "explicit": {"type": "boolean"}},
-            },
+            "Run an explicit analysis request (requires analysis_id, input_refs, explicit=true).",
+            _ANALYZE_SCHEMA,
         ),
     )
 
@@ -1718,6 +1925,9 @@ class McpServer:
             self._identity.refresh()
             context = self._identity.map(meta)
             self._authorize(name, context)
+            # M1-01b: the declared argument table is enforced here, before any
+            # port sees the request (an undeclared field is never forwarded).
+            _validate_arguments(name, arguments)
             result = handler(arguments, context)
         except McpToolError as exc:
             error = exc.to_error_object()
@@ -1773,6 +1983,10 @@ class McpServer:
         data = dict(self._backends.capabilities.capabilities())
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
         data.setdefault("tools", sorted(TOOL_ALLOWLIST))
+        # M1-01b: the frozen three-state analysis-capability projection.  A
+        # descriptor is never "available": registered/executable/unavailable are
+        # the only states, and analyze refuses anything that is not executable.
+        data.setdefault("analysis_capabilities", list(capability_projection()))
 
         raw_extension = arguments.get("research_extension")
         if raw_extension is not None and not isinstance(raw_extension, Mapping):
@@ -1894,6 +2108,22 @@ class McpServer:
         forwarded, so a replay carries the same complete TaskRef as the first
         call.
         """
+        raw_key = arguments.get("idempotency_key")
+        if not isinstance(raw_key, str) or not raw_key.strip():
+            # M1-01b: a key-less submit is refused, never silently non-idempotent.
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "acp_submit requires a non-empty idempotency_key",
+                params={
+                    "field": "idempotency_key",
+                    "rule": "idempotency_key_required",
+                    "why": (
+                        "a retry without a key may create a second task; use a high-entropy "
+                        "UUID or a namespaced key"
+                    ),
+                },
+                retryable=False,
+            )
         resolution = self._resolve_idempotency(arguments, context)
         cores = _requested_cores(arguments)
         if self._budget is not None:
@@ -2078,9 +2308,10 @@ class McpServer:
         2. otherwise the frozen legacy ``auto_`` derivation is recomputed so a
            pre-M0-05 client's retry finds its row.  Only the explicit
            ``local-single`` operator binding may claim that namespace (it is the
-           only writer of it); an authenticated binding stays key-less, which is
-           the documented non-idempotent behaviour until the key becomes
-           mandatory (M1-01);
+           only writer of it); an authenticated binding stays key-less.  M1-01b
+           made the key mandatory for ``acp_submit`` (a key-less submit is a typed
+           refusal), so this lookup now covers the remaining optional-key surface
+           (prepare) and historical rows only;
         3. the derived key is never folded with a permission scope: an
            ``op_``-shaped string is an operation reference, never a ledger key.
         """

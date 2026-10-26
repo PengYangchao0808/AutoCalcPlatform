@@ -51,6 +51,20 @@ MCP_TOOL_NAMES = {
     "acp_read_artifact",
     "acp_analyze",
 }
+#: The ten P2 research promise names (M1-01a).  A promise is not implemented:
+#: none of them is in the P1 allowlist, so the extension never reports negotiated.
+RESEARCH_TOOL_NAMES = {
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_wait_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_resume_v1",
+}
 DIGEST_FIELDS = {"plan_digest", "proposal_digest", "contract_digest", "artifact_digest"}
 
 
@@ -347,6 +361,78 @@ def test_mcp_launch_schema_freezes_protocol_and_tools(launch_schema: dict[str, A
     assert constraints["properties"]["tool_call_state_authority"]["const"] == "none"
 
 
+def test_mcp_launch_tool_inputs_match_the_runtime_and_application_tables() -> None:
+    """M1-01b 1:1 guard: one declared table per tool, three readers.
+
+    The launch descriptor (``$defs.tool_inputs`` + the template instance), the
+    runtime ``tools/list`` schemas and the application request tables must name
+    the same fields, so a client cannot discover a schema the adapter does not
+    enforce (or vice versa).
+    """
+    from acp_services.entrypoints import mcp
+
+    schema = load_json(RUNTIME / "mcp-launch.schema.json")
+    template = load_json(RUNTIME / "mcp-launch.template.json")
+    api = load_json(RUNTIME / "application-api.v1.json")
+    tool_inputs = schema["$defs"]["tool_inputs"]
+    runtime = {tool["name"]: tool["inputSchema"] for tool in mcp._tool_specs()}
+
+    submit = tool_inputs["acp_submit"]
+    assert set(submit["properties"]) == set(runtime["acp_submit"]["properties"])
+    assert (
+        submit["required"]
+        == runtime["acp_submit"]["required"]
+        == [
+            "workflow",
+            "input",
+            "idempotency_key",
+        ]
+    )
+    assert submit["additionalProperties"] is False
+    assert runtime["acp_submit"]["additionalProperties"] is False
+    assert "idempotency_key" in api["operations"]["submit"]["request"]["required"]
+
+    prepare = tool_inputs["acp_prepare_artifact"]
+    prepare_fields = set(api["operations"]["prepare"]["request"]["fields"])
+    assert len(prepare_fields) == 17
+    assert (
+        set(prepare["properties"])
+        == set(runtime["acp_prepare_artifact"]["properties"])
+        == (prepare_fields)
+    )
+    assert prepare["required"] == runtime["acp_prepare_artifact"]["required"] == ["purpose"]
+    assert prepare["additionalProperties"] is False
+
+    for name, required in (
+        ("acp_read_artifact", ["artifact_ref"]),
+        ("acp_analyze", ["analysis_id", "input_refs", "explicit"]),
+    ):
+        assert tool_inputs[name]["required"] == runtime[name]["required"] == required
+        assert set(tool_inputs[name]["properties"]) == set(runtime[name]["properties"])
+        assert tool_inputs[name]["additionalProperties"] is False
+
+    # Per-tool input table version: the four moved tables say 2, the rest 1.
+    versions = {
+        tool["name"]: tool.get("input_schema_version") for tool in template["instance"]["tools"]
+    }
+    assert versions == {
+        "acp_capabilities": 1,
+        "acp_preflight": 1,
+        "acp_submit": 2,
+        "acp_status": 1,
+        "acp_cancel": 1,
+        "acp_prepare_artifact": 2,
+        "acp_read_artifact": 2,
+        "acp_analyze": 2,
+    }
+    declared = schema["$defs"]["tool"]["properties"]["input_schema_version"]
+    assert declared["type"] == "integer"
+    assert declared["minimum"] == 1
+    # The value lives on the tool entry, the input table stays the pure schema.
+    for tool in template["instance"]["tools"]:
+        assert tool["inputSchema"] == tool_inputs[tool["name"]]
+
+
 def test_mcp_tool_names_match_the_runtime_allowlist() -> None:
     from acp_services.entrypoints.mcp import McpTool
 
@@ -531,6 +617,34 @@ def test_p2_research_operations_are_complete_and_owned() -> None:
         "task/approval/budget waiting",
         "research resume",
     }
+    # M1-01a: the existing implementation_status field is reused; ``verified`` is
+    # the only additive value (no 'implemented' migration, no second field).
+    vocabulary = contract["implementation_status_vocabulary"]
+    assert vocabulary["field"] == "rows[].implementation_status"
+    assert vocabulary["values"] == ["planned", "delivered", "verified"]
+    assert vocabulary["required_fields"] == {
+        "delivered": ["delivered_by"],
+        "verified": ["delivered_by", "verified_by", "evidence"],
+    }
+    for row in rows:
+        assert row["implementation_status"] in vocabulary["values"], row["id"]
+        assert "implemented" not in row, row["id"]
+        if row["implementation_status"] in {"delivered", "verified"}:
+            assert row["delivered_by"], row["id"]
+    # Advertised is never implemented: only a covering registered set negotiates.
+    tool_sets = contract["client_path"]["tool_sets"]
+    assert len(tool_sets["p1_advertised"]) == 8
+    assert set(tool_sets["p1_advertised"]) == MCP_TOOL_NAMES
+    promised = tool_sets["p2_promised"]
+    assert len(promised) == 10
+    assert set(promised) == set(RESEARCH_TOOL_NAMES)
+    assert not set(promised) & set(MCP_TOOL_NAMES)
+    assert (
+        "implemented=true AND the requested version equals extension_version"
+        in (tool_sets["negotiated"])
+    )
+    assert "implemented=false" in tool_sets["implemented"]
+    assert tool_sets["partial_implementation"].startswith("refused with unsupported_capability")
 
 
 def test_fallback_deferral_records_cdxml_scope_change() -> None:
@@ -822,8 +936,10 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
     # existing delivery set, so the manifest contract version moved to 1.4.0.
     # M0-12 (2026-10-27): the decision-freeze registrations and the
     # application-api 1.3.0 prepare table move it to 1.5.0.
+    # M1-01/M1-02 (2026-10-27): contract unification + research-session
+    # registration move it to 1.6.0.
     # Kept as an explicit expectation instead of reading the value back.
-    assert manifest["contract_version"] == "1.5.0"
+    assert manifest["contract_version"] == "1.6.0"
     delivered = {entry["id"]: entry for entry in manifest["contracts"]}
     b03_ids = {
         "application-api",
@@ -864,6 +980,7 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
                 "B19",
                 "M0-07",
                 "M0-12",
+                "M1-02",
             }
         else:
             assert "sha256" not in entry
@@ -915,8 +1032,11 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     # authority the HTTP route consumes (additive: job_id/relative_path/
     # expected_*/schema_ref/source_refs/evidence_report/media_type/
     # expected_revision; ``extensions`` was never a prepare field and is gone).
+    # 1.4.0 (M1-01a/b): the research-extension projection names the
+    # advertised/implemented/negotiated relation and submit requires the
+    # idempotency key (client-visible request-schema change).
     # 1.1.0's research fields stay untouched.
-    assert api["contract_version"] == "1.3.0"
+    assert api["contract_version"] == "1.4.0"
     submit = api["operations"]["submit"]
     for name in ("proposal_ref", "plan_digest", "budget"):
         assert name in submit["request"]["fields"], name
@@ -1210,9 +1330,30 @@ def _control_data_violations(
     if operation == "read" and payload.get("served_digest"):
         if payload["served_digest"] != payload["artifact_ref"]["digest"]:
             return [("digest_mismatch", "artifact_ref.digest")]
+    if operation == "read" and "artifact_ref" not in payload:
+        # M1-01b: a read is addressed by the frozen artifact_ref tuple only.
+        return [("missing_artifact_ref", "artifact_ref")]
     if payload.get("idempotency_key") and payload.get("existing_plan_digest"):
         if payload["plan_digest"] != payload["existing_plan_digest"]:
             return [("idempotency_key_reuse", "idempotency_key")]
+    if (
+        payload.get("key_entropy")
+        and payload.get("namespace") == "global-per-action"
+        and payload.get("existing_owner_project") != payload.get("requesting_project")
+    ):
+        # M1-01b: one global key namespace per action — a short key reused by
+        # another tenant is a typed conflict, never a replay.
+        return [("idempotency_scope_conflict", "idempotency_key")]
+    if operation == "submit" and payload.get("entry") == "http-manual-legacy":
+        if "idempotency_key" not in payload:
+            return [("keyless_submit_non_idempotent_duplicate", "idempotency_key")]
+    if operation == "analyze":
+        states = contract["analyze"]["capability_states"]["values"]
+        state = payload.get("capability_state", "executable")
+        if state not in states:
+            return [("unknown_capability_state", "capability_state")]
+        if state != "executable":
+            return [("analysis_capability_not_executable", "analysis_id")]
     if operation == "prepare":
         return _required_field_violations(
             payload, contract["artifacts"]["prepare"]["request_fields"]

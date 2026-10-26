@@ -51,6 +51,37 @@ def _is_acp_module(name: str) -> bool:
     return name == "acp" or name.startswith("acp.")
 
 
+#: The one reviewed station for ``acp.*`` wire literals (M1-01c).  This file keeps
+#: its own copy of the scanner on purpose (defence in depth), so it reads the
+#: allowlist from the live module and applies the same value+module rule: a
+#: reviewed literal is accepted only inside the station and never exempts an
+#: import, lazy import, ``importlib``/``__import__`` load, ``getattr`` or
+#: ``sys.modules`` lookup.
+try:  # pragma: no cover - covered by tests/test_acp_services_isolation.py
+    from acp_services.entrypoints import wire_identifiers as _wire_identifiers
+except ImportError:  # pragma: no cover
+    _wire_identifiers = None
+
+WIRE_IDENTIFIER_STATION = (
+    _wire_identifiers.WIRE_IDENTIFIERS_MODULE
+    if _wire_identifiers is not None
+    else "acp_services.entrypoints.wire_identifiers"
+)
+WIRE_IDENTIFIER_VALUES = (
+    frozenset(_wire_identifiers.REVIEWED_WIRE_IDENTIFIERS)
+    if _wire_identifiers is not None
+    else frozenset()
+)
+
+
+def _is_allowed_wire_literal(value: str, module: str | None) -> bool:
+    return (
+        module is not None
+        and module == WIRE_IDENTIFIER_STATION
+        and value.strip() in WIRE_IDENTIFIER_VALUES
+    )
+
+
 def _docstring_node_ids(tree: ast.AST) -> set[int]:
     ids: set[int] = set()
     for node in ast.walk(tree):
@@ -118,7 +149,7 @@ def _code_only_text(source: str) -> str:
     return " ".join(tokens)
 
 
-def scan_for_acp_imports(source: str) -> list[str]:
+def scan_for_acp_imports(source: str, *, module: str | None = None) -> list[str]:
     """Return a list of forbidden-``acp``-access descriptions (empty == clean)."""
     violations: list[str] = []
     tree = ast.parse(source)
@@ -130,9 +161,9 @@ def scan_for_acp_imports(source: str) -> list[str]:
                 if _is_acp_module(alias.name):
                     violations.append(f"import {alias.name}")
         elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            if _is_acp_module(module):
-                violations.append(f"from {'.' * node.level}{module} import ...")
+            imported = node.module or ""
+            if _is_acp_module(imported):
+                violations.append(f"from {'.' * node.level}{imported} import ...")
         elif isinstance(node, ast.Call):
             func = node.func
             attr = func.attr if isinstance(func, ast.Attribute) else None
@@ -159,10 +190,14 @@ def scan_for_acp_imports(source: str) -> list[str]:
             if id(node) in doc_ids:
                 continue
             if _is_acp_module(node.value.strip()):
+                if _is_allowed_wire_literal(node.value, module):
+                    continue
                 violations.append(f"string {node.value!r}")
         elif isinstance(node, (ast.BinOp, ast.JoinedStr)):
             folded = _fold_string(node)
             if folded is not None and _is_acp_module(folded.strip()):
+                if _is_allowed_wire_literal(folded, module):
+                    continue
                 violations.append(f"folded string {folded!r}")
 
     code = _code_only_text(source)
@@ -192,10 +227,19 @@ def test_package_skeleton_present() -> None:
         assert (_SERVICES_ROOT / rel).is_file(), f"missing {rel}"
 
 
+def _module_name(path: Path) -> str:
+    parts = list(path.relative_to(_SERVICES_ROOT).with_suffix("").parts)
+    if parts and parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(("acp_services", *parts)) if parts else "acp_services"
+
+
 def test_services_side_has_no_acp_import() -> None:
     offenders: dict[str, list[str]] = {}
     for path in _services_python_files():
-        violations = scan_for_acp_imports(path.read_text(encoding="utf-8"))
+        violations = scan_for_acp_imports(
+            path.read_text(encoding="utf-8"), module=_module_name(path)
+        )
         if violations:
             offenders[str(path.relative_to(_REPO_ROOT))] = violations
     assert not offenders, f"acp imports detected on the Services side: {offenders}"

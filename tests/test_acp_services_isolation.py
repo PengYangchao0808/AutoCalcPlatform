@@ -39,9 +39,43 @@ _PYPROJECT = _REPO_ROOT / "pyproject.toml"
 # (a) acp-import scanner (AST + raw text; same defence-in-depth as todo 72)
 # ---------------------------------------------------------------------------
 
+#: The single reviewed station for ``acp.*`` wire literals (M1-01c).  The
+#: allowlist is read from the live module so governance is data, not prose: a new
+#: literal is permitted only after it is declared there and reviewed.
+try:  # pragma: no cover - import failure is exercised by test_wire_* tests
+    from acp_services.entrypoints import wire_identifiers as _wire_identifiers
+except ImportError:  # pragma: no cover - the module is part of the deliverable
+    _wire_identifiers = None
+
+WIRE_IDENTIFIER_STATION = (
+    _wire_identifiers.WIRE_IDENTIFIERS_MODULE
+    if _wire_identifiers is not None
+    else "acp_services.entrypoints.wire_identifiers"
+)
+WIRE_IDENTIFIER_VALUES = (
+    frozenset(_wire_identifiers.REVIEWED_WIRE_IDENTIFIERS)
+    if _wire_identifiers is not None
+    else frozenset()
+)
+
 
 def _is_acp_module(name: str) -> bool:
     return name == "acp" or name.startswith("acp.")
+
+
+def _is_allowed_wire_literal(value: str, module: str | None) -> bool:
+    """Whether *value* is a reviewed wire literal in its single allowed station.
+
+    Governance (M1-01c) is deliberately value **and** module scoped: the literal
+    is accepted only inside :data:`WIRE_IDENTIFIER_STATION`.  It is never an
+    import exemption, so :func:`scan_for_acp_imports` still reports every
+    import/reflection/lookup form everywhere, including in that module.
+    """
+    return (
+        module is not None
+        and module == WIRE_IDENTIFIER_STATION
+        and value.strip() in WIRE_IDENTIFIER_VALUES
+    )
 
 
 def _docstring_node_ids(tree: ast.AST) -> set[int]:
@@ -106,8 +140,16 @@ def _code_only_text(source: str) -> str:
     return " ".join(tokens)
 
 
-def scan_for_acp_imports(source: str) -> list[str]:
-    """Return descriptors of any forbidden ``acp`` access (empty == clean)."""
+def scan_for_acp_imports(source: str, *, module: str | None = None) -> list[str]:
+    """Return descriptors of any forbidden ``acp`` access (empty == clean).
+
+    Args:
+        source: Python source text to inspect.
+        module: Dotted module name of *source* when known.  Only
+            :data:`WIRE_IDENTIFIER_STATION` may carry a reviewed wire literal;
+            omitting the name means "no wire-literal allowance" (the strictest
+            reading, used by the snippet self-tests).
+    """
     violations: list[str] = []
     tree = ast.parse(source)
     doc_ids = _docstring_node_ids(tree)
@@ -118,9 +160,9 @@ def scan_for_acp_imports(source: str) -> list[str]:
                 if _is_acp_module(alias.name):
                     violations.append(f"import {alias.name}")
         elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            if _is_acp_module(module):
-                violations.append(f"from {'.' * node.level}{module} import ...")
+            imported = node.module or ""
+            if _is_acp_module(imported):
+                violations.append(f"from {'.' * node.level}{imported} import ...")
         elif isinstance(node, ast.Call):
             func = node.func
             attr = func.attr if isinstance(func, ast.Attribute) else None
@@ -147,10 +189,14 @@ def scan_for_acp_imports(source: str) -> list[str]:
             if id(node) in doc_ids:
                 continue
             if _is_acp_module(node.value.strip()):
+                if _is_allowed_wire_literal(node.value, module):
+                    continue
                 violations.append(f"string {node.value!r}")
         elif isinstance(node, (ast.BinOp, ast.JoinedStr)):
             folded = _fold_string(node)
             if folded is not None and _is_acp_module(folded.strip()):
+                if _is_allowed_wire_literal(folded, module):
+                    continue
                 violations.append(f"folded string {folded!r}")
 
     code = _code_only_text(source)
@@ -165,13 +211,81 @@ def _services_python_files() -> list[Path]:
     return sorted(p for p in _SERVICES_ROOT.rglob("*.py") if "__pycache__" not in p.parts)
 
 
+def _module_name(path: Path, *, root: Path = _SERVICES_ROOT, package: str = "acp_services") -> str:
+    parts = list(path.relative_to(root).with_suffix("").parts)
+    if parts and parts[-1] == "__init__":
+        parts.pop()
+    return ".".join((package, *parts)) if parts else package
+
+
 def test_services_package_has_no_acp_import() -> None:
     offenders: dict[str, list[str]] = {}
     for path in _services_python_files():
-        violations = scan_for_acp_imports(path.read_text(encoding="utf-8"))
+        violations = scan_for_acp_imports(
+            path.read_text(encoding="utf-8"), module=_module_name(path)
+        )
         if violations:
             offenders[str(path.relative_to(_REPO_ROOT))] = violations
     assert not offenders, f"acp imports detected on the Services side: {offenders}"
+
+
+def test_wire_identifier_station_holds_the_reviewed_literals() -> None:
+    """M1-01c: one reviewed station, one literal per constant, no assembly."""
+    station = _SERVICES_ROOT / "entrypoints" / "wire_identifiers.py"
+    assert station.is_file(), "the reviewed wire-id station is missing"
+    source = station.read_text(encoding="utf-8")
+    assert scan_for_acp_imports(source, module=_module_name(station)) == []
+    tree = ast.parse(source)
+    assert not [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "chr"
+    ], "the wire id must be a plain reviewed literal, never assembled"
+    module = _wire_identifiers
+    assert module is not None
+    assert module.WIRE_IDENTIFIERS_MODULE == _module_name(station)
+    assert module.REVIEWED_WIRE_IDENTIFIERS
+    for value in module.REVIEWED_WIRE_IDENTIFIERS:
+        # Each reviewed value is declared exactly once, as a plain literal.
+        assert source.count(f'"{value}"') == 1, value
+        assert module.is_reviewed_wire_identifier(value)
+    assert module.is_reviewed_wire_identifier(module.NEGOTIATION_EXTENSION_ID)
+
+
+def test_wire_literal_outside_the_station_is_rejected() -> None:
+    """A second copy of a reviewed wire literal in another module is a failure."""
+    value = next(iter(WIRE_IDENTIFIER_VALUES))
+    table = {
+        "acp_services.entrypoints.mcp": [
+            f'ID = "{value}"',
+            'ID = "ac" + "p.negotiation.v1"',
+        ]
+    }
+    for module_name, snippets in table.items():
+        for snippet in snippets:
+            assert scan_for_acp_imports(snippet, module=module_name), snippet
+    # The same value is accepted only in the reviewed station.
+    assert scan_for_acp_imports(f'ID = "{value}"', module=WIRE_IDENTIFIER_STATION) == []
+
+
+def test_wire_allowlist_never_exempts_imports_or_reflection() -> None:
+    """The station allowance is literal-only: every bypass stays a hard failure."""
+    value = next(iter(WIRE_IDENTIFIER_VALUES))
+    snippets = (
+        f'ID = "{value}"\nimport acp\n',
+        f'ID = "{value}"\nimport importlib\nimportlib.import_module("acp.scheduler.store")\n',
+        f'ID = "{value}"\nx = __import__("acp")\n',
+        f'ID = "{value}"\nimport sys\nsys.modules["acp.scheduler.store"]\n',
+        f'ID = "{value}"\nimport os\ngetattr(os, "acp.scheduler.store")\n',
+    )
+    for snippet in snippets:
+        for module_name in (WIRE_IDENTIFIER_STATION, "acp_services.entrypoints.mcp", None):
+            assert scan_for_acp_imports(snippet, module=module_name), (snippet, module_name)
+
+
+def test_wire_literal_shipped_without_a_reviewed_constant_is_rejected() -> None:
+    """An unreviewed ``acp.*`` literal is still a violation in the station."""
+    assert scan_for_acp_imports('ID = "acp.unreviewed.v9"', module=WIRE_IDENTIFIER_STATION)
 
 
 def test_workspace_skeleton_present() -> None:

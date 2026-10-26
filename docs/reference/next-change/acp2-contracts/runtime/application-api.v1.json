@@ -1,7 +1,9 @@
 {
   "schema": "acp2.runtime.application-api.v1",
-  "contract_version": "1.3.0",
+  "contract_version": "1.4.0",
   "frozen_at": "2026-10-27",
+  "supersedes": "1.3.0",
+  "change_note": "1.4.0 (M1-01a/b): the research-extension projection names the advertised/implemented/negotiated relation (no version change: acp.research.v1@1.0.0 stays the authority) and submit.idempotency_key becomes required while unknown request fields are rejected at the MCP adapter before any port is touched. Additive for every other operation; prepare/read/analyze keep their D-IDENT-10 field tables.",
   "owner": "B",
   "status": "delivered",
   "scope": "The single ACP 2.0 application command surface. Every entry (CLI `acp task`, `acp run`, HTTP `/api/v1/*`, MCP tools, ControllerClient) maps to exactly one command in this document; no entry owns its own Submit/Cancel/Result implementation.",
@@ -1073,12 +1075,9 @@
             "description": "Optional canonical Proposal/ResearchRecord semantic projection; when present it must match the referenced record."
           },
           "idempotency_key": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": "string",
             "pattern": "^[A-Za-z0-9._:-]{8,128}$",
-            "description": "Client retry key. When absent the server derives it as sha256 over (plan_digest, entry id, resolved principal) and echoes it."
+            "description": "Optional on preflight (it creates nothing to retry). Submit requires it (M1-01b); the pre-M0-05 server-side derivation survives only as a read-only lookup namespace for historical local-single rows."
           },
           "extensions": {
             "type": [
@@ -1210,7 +1209,8 @@
         "required": [
           "workflow",
           "input",
-          "plan_digest"
+          "plan_digest",
+          "idempotency_key"
         ],
         "fields": {
           "schema_version": {
@@ -2961,8 +2961,28 @@
       "version": "1.0.0",
       "tool_name_prefix": "acp_research_",
       "p1_tool_allowlist_unchanged": true,
+      "advertised": true,
+      "promised_tools": [
+        "acp_research_proposal_create_v1",
+        "acp_research_proposal_read_v1",
+        "acp_research_proposal_update_cas_v1",
+        "acp_research_approval_request_v1",
+        "acp_research_approval_query_v1",
+        "acp_research_approval_decide_v1",
+        "acp_research_approval_revoke_v1",
+        "acp_research_wait_v1",
+        "acp_research_snapshot_v1",
+        "acp_research_resume_v1"
+      ],
+      "implemented_tools": [],
       "implemented": false,
       "negotiated_default": false,
+      "negotiated_requires": [
+        "implemented",
+        "requested_version == version"
+      ],
+      "partial_implementation_negotiated": false,
+      "tool_sets_authority": "runtime/p2-research-operations.v1.json::client_path.tool_sets",
       "descriptor_schema": "runtime/mcp-launch.schema.json",
       "note": "The eight P1 tool names and input schemas are unchanged. M0-09 (ADR-006 D7) removed the initialize claim: the frozen DSH client hard-codes capabilities:{} and drops a top-level extensions block, so the extension is negotiated by calling acp_capabilities (tools/call) with research_extension{id,version}. Advertising is not implementing: the ten P2 tools are not in the allowlist, so implemented/negotiated stay false and a research request is refused with unsupported_capability."
     }
@@ -2987,6 +3007,21 @@
   },
   "submit_field_policy": {
     "authority": "src/acp_services/entrypoints/application_params.py::SUBMIT_FIELD_POLICY",
+    "policy_version": "2",
+    "submit_key_policy": {
+      "version": "2",
+      "mcp": "REQUIRED: a key-less acp_submit is input_invalid with params.rule=idempotency_key_required and creates nothing (M1-01b)",
+      "http": "optional on the manual/legacy path; a key-less HTTP submit is an explicitly NON-IDEMPOTENT call (a retry may create a second task) and never reports idempotent_replay=true",
+      "cli": "same as HTTP: the operator-supplied key is forwarded; omitting it is non-idempotent",
+      "namespace_rule": "the raw key is a global namespace per action (across projects/principals/entries); use a high-entropy UUID or a namespaced key embedding project/research/round",
+      "cross_tenant_rule": "two tenants reusing one short key is a typed conflict (revision_conflict, params.rule=idempotency_scope_conflict), never a replay",
+      "migration_note": "1.3.0 clients that sent no key now receive input_invalid/idempotency_key_required instead of a created task; mint a UUID or '<client>:<project>:<round>:<call>' before the first submit. Unknown execution fields were already rejected (rule=unknown_field) and remain so.",
+      "negative_samples": [
+        "runtime/samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
+        "runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json",
+        "runtime/samples/application-api/submit-missing-idempotency-key.negative.json"
+      ]
+    },
     "entries": [
       "http",
       "mcp",

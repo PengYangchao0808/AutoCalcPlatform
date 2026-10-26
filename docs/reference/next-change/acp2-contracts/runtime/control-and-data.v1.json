@@ -1,7 +1,9 @@
 {
   "schema": "acp2.runtime.control-and-data.v1",
-  "contract_version": "1.1.0",
-  "frozen_at": "2026-10-23",
+  "contract_version": "1.2.0",
+  "frozen_at": "2026-10-27",
+  "supersedes": "1.1.0",
+  "change_note": "1.2.0 (M1-01b): acp_submit requires the idempotency key (high-entropy/namespaced, one global namespace per action), the HTTP manual legacy path documents missing-key = non-idempotent call with a permanent duplicate-task negative, read/status/prepare may never start computation, and the analysis capability projection/errors are frozen to registered|executable|unavailable.",
   "owner": "B",
   "status": "delivered",
   "scope": "P1 control, artifact, idempotency and budget fields. P2 adds approval/budget accumulation in runtime/admission-approval.v1.json; this file stays the P1 subset. B12 freezes the ArtifactRef and the explicit prepare/read/analyze operation lifecycle. B15 adds the stdio proxy identity binding/permission ceiling and the project-scoped API-key revocation semantics; local-single stays the default.",
@@ -416,6 +418,7 @@
         }
       },
       "rule": "prepare is explicit, idempotent, budget-checked and never triggered by a read or a list",
+      "no_implicit_compute": "prepare may allocate/fetch/commit an artifact but never starts science (no QC task, no model call); if a purpose would need computation it is refused instead",
       "rules": [
         "prepare is explicit, idempotent per (job, attempt, resource, content identity), budget-checked and never triggered by a read or a list",
         "the same (job, attempt, resource, generation, expected digest) returns the same persistent operation ref; a different generation/digest/payload is a new operation",
@@ -509,6 +512,7 @@
         }
       },
       "rule": "a read never fetches; a miss is not-prepared (resource_not_ready) with retryable=true and a prepare hint",
+      "no_implicit_compute": "read/status/prepare never start a calculation: no task, no attempt, no analysis. A read that would need a prepare returns not-prepared instead of enqueuing one.",
       "digest_rule": "the response digest MUST equal the requested artifact_ref.digest; a mismatch is conflict, never a silent serve",
       "route": "GET /api/v1/jobs/{job_id}/prepared/{artifact_id}?attempt=&expected_revision=&digest=",
       "rules": [
@@ -525,6 +529,15 @@
       "schema": "acp2.artifact-ref.v1",
       "version": 1,
       "description": "The only verifiable artifact reference. Every read validates all five identity fields and never serves on a partial match.",
+      "semantics": {
+        "task": "the durable task (job) identity; task_id is authoritative and job_id is its legacy alias for the same value (never a second task)",
+        "job": "alias of task; a response emits task_ref.task_id and emits task_ref.job_id only while the legacy job row exists",
+        "attempt": "1-based attempt of that task; a body published for attempt N is never served for another attempt",
+        "resource": "the prepared cache resource id; resource_id is the platform-derived name (artifact_id for purpose=artifact) and is never a client-chosen request field",
+        "artifact": "the published artifact identity within the attempt (artifact_id); rerunning the producer increments generation instead of reusing the id",
+        "generation": "monotonic revision of one artifact within one attempt; a newer generation supersedes older ones and an old generation read is revision_conflict/generation_stale",
+        "digest": "sha256:<64 hex> over the artifact bytes (never plan_digest/proposal_digest/contract_digest); a mismatch is revision_conflict/digest_mismatch and zero bytes are served"
+      },
       "fields": {
         "schema": {
           "type": "string",
@@ -641,7 +654,43 @@
   },
   "idempotency": {
     "scope": "one key per (resolved principal, command, key). A key from another principal is a different operation.",
-    "key_source": "client-supplied or server-derived: sha256 over (plan_digest, entry id, resolved principal)",
+    "key_source": "client-supplied; the pre-M0-05 server derivation (sha256 over plan_digest, entry id, resolved principal) survives only as a read-only lookup namespace for historical local-single rows",
+    "key_policy": {
+      "mcp_submit": {
+        "required": true,
+        "missing_key_result": {
+          "class": "invalid-parameter",
+          "code": "input_invalid",
+          "params": {
+            "field": "idempotency_key",
+            "rule": "idempotency_key_required"
+          },
+          "side_effects": "none: no task, no attempt, no reservation, no ledger row"
+        },
+        "entropy_rule": "the raw key is a GLOBAL namespace per action (across projects, principals and entries), so a client MUST send a high-entropy UUID or a namespaced key that embeds project/research/round (e.g. '<client>:<project>:<round>:<call>'). A short human key is never safe.",
+        "short_key_cross_tenant_result": {
+          "class": "conflict",
+          "code": "revision_conflict",
+          "params": {
+            "rule": "idempotency_scope_conflict",
+            "field": "idempotency_key"
+          },
+          "rule": "two tenants that reuse one short key are a typed conflict to reconcile, never a replay of the other tenant's operation"
+        },
+        "actionable_message": "reuse the key with the identical request, or mint a new namespaced key; do not rename the payload under the same key"
+      },
+      "http_manual_legacy": {
+        "allowed_without_key": true,
+        "contract_statement": "MISSING KEY = NON-IDEMPOTENT CALL. The HTTP manual/legacy submit path may omit the key (hand-run operators, pre-M1 scripts); such a call is explicitly non-idempotent: a retry may create a SECOND task.",
+        "never": [
+          "silently deriving a submit key for a caller that omitted it",
+          "treating a retry of a key-less call as a replay",
+          "reporting idempotent_replay=true for a key-less call"
+        ],
+        "negative_sample": "runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json"
+      },
+      "samples_rule": "the short-key cross-tenant conflict and the key-less duplicate-task case are permanent negatives; removing either re-opens the 'silent compatibility' failure M1-01b closed"
+    },
     "window": {
       "ttl_s": 604800,
       "durable": true,
@@ -657,8 +706,16 @@
         "outcome": "conflict (revision_conflict, params.rule=idempotency_key_reuse)"
       },
       {
-        "case": "no key supplied",
-        "outcome": "server derives and echoes a key; retry requires the echoed key"
+        "case": "no key supplied (MCP submit)",
+        "outcome": "refused with invalid-parameter/input_invalid (params.rule=idempotency_key_required); nothing is created"
+      },
+      {
+        "case": "no key supplied (HTTP manual/legacy submit)",
+        "outcome": "allowed and explicitly NON-IDEMPOTENT: a retry may create a second task; the response never reports idempotent_replay=true"
+      },
+      {
+        "case": "one short key reused by two tenants",
+        "outcome": "conflict (revision_conflict, params.rule=idempotency_scope_conflict); the second caller never receives the first caller's task"
       },
       {
         "case": "client reconnects",
@@ -759,7 +816,11 @@
     "negative": [
       "prepare-without-purpose.negative.json",
       "read-digest-mismatch.negative.json",
-      "idempotency-key-reuse.negative.json"
+      "read-without-artifact-ref.negative.json",
+      "analyze-capability-not-executable.negative.json",
+      "idempotency-key-reuse.negative.json",
+      "idempotency-key-short-cross-tenant.negative.json",
+      "submit-keyless-duplicate-task.negative.json"
     ]
   },
   "analyze": {
@@ -806,6 +867,25 @@
       }
     },
     "registry": "src/acp_services/runtime/analysis_capabilities.py::DEFAULT_ANALYSIS_REGISTRY",
+    "capability_states": {
+      "values": [
+        "registered",
+        "executable",
+        "unavailable"
+      ],
+      "projection": "acp_capabilities.analysis_capabilities[]: one entry per frozen analysis id with {analysis_id, state, registered, executable, version, owner}; there is deliberately no available/ready state",
+      "executable": "registered AND a handler exists; only this state may run",
+      "registered": "declared without a handler: analyze refuses it with unsupported_capability",
+      "unavailable": "not registered at all: analyze refuses it with unsupported_capability",
+      "rule": "advertising a capability descriptor is never an execution promise"
+    },
+    "error_freeze": {
+      "implicit": "input_invalid (params.field=explicit, params.rule=explicit_required), status 400, nothing started",
+      "unknown_id": "unsupported_capability (params.field=analysis_id), status 422, nothing started",
+      "not_registered": "unsupported_capability (params.rule=analysis_capability_not_registered), status 422, nothing started",
+      "registered_not_executable": "unsupported_capability (params.rule=analysis_capability_not_executable), status 422, nothing started",
+      "reads_existing_evidence": "vibration.analyze reads prepared evidence only and never starts QC; vibration.compute starts exactly one frequency task and requires plan_digest"
+    },
     "implicit_result": {
       "status": 400,
       "code": "input_invalid",
@@ -822,7 +902,16 @@
         "rule": "analysis_capability_not_registered"
       }
     },
-    "rule": "explicit-only and registry-gated; until A registers a capability handler exactly zero science is started and no task/prepare is created"
+    "rule": "explicit-only and registry-gated; until A registers a capability handler exactly zero science is started and no task/prepare is created",
+    "registered_not_executable_result": {
+      "status": 422,
+      "code": "unsupported_capability",
+      "params": {
+        "owner": "A",
+        "rule": "analysis_capability_not_executable"
+      },
+      "note": "a declared capability without a handler; the projection reports state=registered and analyze refuses it instead of starting science"
+    }
   },
   "stdio_identity": {
     "owner": "B15",

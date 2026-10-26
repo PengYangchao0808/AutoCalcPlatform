@@ -1,0 +1,28 @@
+{
+  "sample_id": "analyze-capability-not-executable.negative",
+  "contract": "control-and-data.v1.json",
+  "kind": "negative",
+  "operation": "analyze",
+  "payload": {
+    "analysis_id": "vibration.analyze",
+    "input_refs": [
+      {
+        "task_id": "20261022_001_demo",
+        "attempt": 1,
+        "artifact_id": "freq_log",
+        "generation": 1,
+        "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ],
+    "explicit": true,
+    "capability_state": "registered"
+  },
+  "expected": {
+    "valid": false,
+    "class": "unsupported",
+    "code": "unsupported_capability",
+    "violation": "analysis_capability_not_executable",
+    "field": "analysis_id",
+    "note": "A registered capability without a handler is not executable: analyze refuses it with unsupported_capability and starts nothing. Only state=executable may run."
+  }
+}

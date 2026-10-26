@@ -1,13 +1,13 @@
 {
   "schema": "acp2.runtime.samples.v1",
-  "contract_version": "1.0.0",
+  "contract_version": "1.1.0",
   "frozen_at": "2026-10-22",
   "owner": "B",
   "status": "delivered",
   "digest_rule": "sha256 over the file bytes",
   "sample_rule": "every frozen contract has at least one positive and one negative sample; a contract without a negative sample may not be frozen",
   "counts": {
-    "total": 58,
+    "total": 63,
     "by_contract": {
       "admission-approval.v1.json": {
         "positive": 2,
@@ -15,11 +15,11 @@
       },
       "application-api.v1.json": {
         "positive": 12,
-        "negative": 10
+        "negative": 11
       },
       "control-and-data.v1.json": {
         "positive": 4,
-        "negative": 3
+        "negative": 7
       },
       "dependencies.json": {
         "positive": 1,
@@ -319,6 +319,21 @@
       }
     },
     {
+      "path": "samples/application-api/submit-missing-idempotency-key.negative.json",
+      "contract": "application-api.v1.json",
+      "kind": "negative",
+      "size_bytes": 747,
+      "sha256": "a6626f9a6943794560fbd39b4ad360ee388ff6176e21b795a7afb47a395c5ffe",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_required",
+        "field": "idempotency_key",
+        "note": "M1-01b: acp_submit requires the retry key; a key-less submit is refused with params.rule=idempotency_key_required and creates nothing."
+      }
+    },
+    {
       "path": "samples/application-api/submit-missing-plan-digest.negative.json",
       "contract": "application-api.v1.json",
       "kind": "negative",
@@ -371,6 +386,21 @@
       }
     },
     {
+      "path": "samples/control-and-data/analyze-capability-not-executable.negative.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "negative",
+      "size_bytes": 893,
+      "sha256": "68fc73da93dd2090ca66e854d28b852dee90112959ec997868bcf7571cc1ebb2",
+      "expected": {
+        "valid": false,
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "violation": "analysis_capability_not_executable",
+        "field": "analysis_id",
+        "note": "A registered capability without a handler is not executable: analyze refuses it with unsupported_capability and starts nothing. Only state=executable may run."
+      }
+    },
+    {
       "path": "samples/control-and-data/cancel.positive.json",
       "contract": "control-and-data.v1.json",
       "kind": "positive",
@@ -402,6 +432,21 @@
         "code": "revision_conflict",
         "violation": "idempotency_key_reuse",
         "field": "idempotency_key"
+      }
+    },
+    {
+      "path": "samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "negative",
+      "size_bytes": 818,
+      "sha256": "cec59e233363d3362dd2fc32efc3a9fcf840546eb267ad4249b6d06c83394f6c",
+      "expected": {
+        "valid": false,
+        "class": "conflict",
+        "code": "revision_conflict",
+        "violation": "idempotency_scope_conflict",
+        "field": "idempotency_key",
+        "note": "A short key reused by another tenant is a typed conflict to reconcile (never a replay of the other tenant's task). Clients must use a high-entropy UUID or a namespaced key."
       }
     },
     {
@@ -443,6 +488,21 @@
       }
     },
     {
+      "path": "samples/control-and-data/read-without-artifact-ref.negative.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "negative",
+      "size_bytes": 567,
+      "sha256": "6b8a1627d6cf9448663419d3eca93eb99d949bd5f50a5345a135a69f61f767da",
+      "expected": {
+        "valid": false,
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "missing_artifact_ref",
+        "field": "artifact_ref",
+        "note": "M1-01b: a read is addressed by the frozen artifact_ref tuple only; a legacy job_id/relative_path read is refused and never starts a prepare."
+      }
+    },
+    {
       "path": "samples/control-and-data/read.positive.json",
       "contract": "control-and-data.v1.json",
       "kind": "positive",
@@ -450,6 +510,21 @@
       "sha256": "716438428444372efb593fc218350886c0a9b47abb7e8aef52b77008a248440e",
       "expected": {
         "valid": true
+      }
+    },
+    {
+      "path": "samples/control-and-data/submit-keyless-duplicate-task.negative.json",
+      "contract": "control-and-data.v1.json",
+      "kind": "negative",
+      "size_bytes": 761,
+      "sha256": "bc18075449901af69bd21768727c67306523d9dca20803b13681ae4475c1a2ae",
+      "expected": {
+        "valid": false,
+        "class": "conflict",
+        "code": "revision_conflict",
+        "violation": "keyless_submit_non_idempotent_duplicate",
+        "field": "idempotency_key",
+        "note": "HTTP manual/legacy submit may omit the key, but the call is explicitly non-idempotent: a retry creates a SECOND task and the response never reports idempotent_replay=true."
       }
     },
     {
@@ -772,5 +847,6 @@
   "ownership": {
     "B03": "samples/* excluding acceptance/**",
     "B01": "samples/acceptance/**"
-  }
+  },
+  "change_note": "M1-01b adds five negatives: submit-missing-idempotency-key (application-api), read-without-artifact-ref, idempotency-key-short-cross-tenant, submit-keyless-duplicate-task and analyze-capability-not-executable (control-and-data). Every pre-existing entry keeps its bytes and hash."
 }

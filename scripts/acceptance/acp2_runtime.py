@@ -2606,6 +2606,29 @@ class _McpStdioProbe:
         return "".join(self._stderr)
 
 
+def research_extension_authority() -> dict[str, Any]:
+    """Read the one frozen extension id/version pair (M1-01a).
+
+    The extension version is *not* hardcoded in this harness: it is read from the
+    P2 authority (``p2-research-operations.v1.json::client_path.negotiation``) and
+    the application projection is checked against it, so a partial bump fails
+    here instead of silently asserting a stale value (the B06 1.1.0 drift).
+    """
+    path = CONTRACT_ROOT / "runtime" / "p2-research-operations.v1.json"
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    negotiation = (contract.get("client_path") or {}).get("negotiation") or {}
+    api = json.loads((CONTRACT_ROOT / "runtime" / "application-api.v1.json").read_text())
+    projection = (api.get("mcp_extensions") or {}).get(negotiation.get("extension_id") or "") or {}
+    return {
+        "id": negotiation.get("extension_id"),
+        "version": negotiation.get("extension_version"),
+        "request_field": negotiation.get("request_field"),
+        "projection_version": projection.get("version"),
+        "implemented": negotiation.get("implemented"),
+        "negotiated_default": negotiation.get("negotiated_default"),
+    }
+
+
 def _run_mcp_stdio(
     controller: str, launch_path: str, timeout: float
 ) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
@@ -2699,6 +2722,25 @@ def _run_mcp_stdio(
                 },
             },
         )
+        authority = research_extension_authority()
+        extension_advertised = probe.request(
+            9,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {}},
+        )
+        extension_refused = probe.request(
+            10,
+            "tools/call",
+            {
+                "name": "acp_capabilities",
+                "arguments": {
+                    "research_extension": {
+                        "id": authority["id"],
+                        "version": authority["version"],
+                    }
+                },
+            },
+        )
         after = _controller_task_count(base, timeout)
         exit_code = probe.close()
         probe = None
@@ -2757,6 +2799,27 @@ def _run_mcp_stdio(
     analyze_unsupported_ok = analyze_unsupported.get("isError") is True and analyze_unsupported.get(
         "structuredContent", {}
     ).get("error", {}).get("code") in {"unsupported_capability", "resource_not_ready"}
+    advertised_entries = _extension_entries(extension_advertised)
+    advertised_entry = advertised_entries[0] if advertised_entries else {}
+    extension_authority_ok = (
+        bool(authority["id"])
+        and bool(authority["version"])
+        and authority["version"] == authority["projection_version"]
+        and advertised_entry.get("id") == authority["id"]
+        and advertised_entry.get("version") == authority["version"]
+        and advertised_entry.get("implemented") is authority["implemented"] is False
+        and advertised_entry.get("negotiated") is False
+    )
+    refused_error = (extension_refused.get("structuredContent") or {}).get("error") or {}
+    refused_entries = _extension_entries(extension_refused)
+    refused_entry = refused_entries[0] if refused_entries else {}
+    extension_not_negotiated_ok = (
+        extension_refused.get("isError") is True
+        and refused_error.get("code") == "unsupported_capability"
+        and (refused_error.get("params") or {}).get("rule") == "extension_not_implemented"
+        and refused_entry.get("implemented") is False
+        and refused_entry.get("negotiated") is False
+    )
     assertions.extend(
         [
             {
@@ -2803,6 +2866,23 @@ def _run_mcp_stdio(
                 "detail": "unregistered analysis did not run science",
             },
             {
+                "name": "research_extension_authority",
+                "status": "PASS" if extension_authority_ok else "FAIL",
+                "detail": (
+                    f"advertised {advertised_entry.get('id')}@{advertised_entry.get('version')} "
+                    f"== P2 authority {authority['id']}@{authority['version']}; "
+                    "implemented/negotiated false"
+                ),
+            },
+            {
+                "name": "research_extension_not_negotiated",
+                "status": "PASS" if extension_not_negotiated_ok else "FAIL",
+                "detail": (
+                    "a matching-version request is refused in-band as "
+                    "unsupported_capability/extension_not_implemented (advertising is not delivery)"
+                ),
+            },
+            {
                 "name": "task_count_unchanged",
                 "status": "PASS" if before == after else "FAIL",
                 "detail": f"before={before} after={after}",
@@ -2816,6 +2896,8 @@ def _run_mcp_stdio(
             "b06.adapter_exit_code": exit_code,
             "b06.tools": sorted(tool_names),
             "b06.protocol_version": initialized.get("protocolVersion"),
+            "b06.research_extension": authority,
+            "b06.research_extension_advertised": dict(advertised_entry),
         }
     )
     passed = (
@@ -2827,10 +2909,19 @@ def _run_mcp_stdio(
         and read_ok
         and analyze_implicit_ok
         and analyze_unsupported_ok
+        and extension_authority_ok
+        and extension_not_negotiated_ok
         and before == after
         and exit_code == 0
     )
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
+
+
+def _extension_entries(result: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return the ``extensions[]`` projection of an acp_capabilities result."""
+    data = (result.get("structuredContent") or {}).get("data") or {}
+    entries = data.get("extensions") if isinstance(data, Mapping) else None
+    return [dict(entry) for entry in entries or [] if isinstance(entry, Mapping)]
 
 
 def _submit_arguments(xyz_text: str, key: str, *, project_id: str | None = None) -> dict[str, Any]:

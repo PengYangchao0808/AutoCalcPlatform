@@ -10,6 +10,15 @@
     "reason": "C's MCP Bridge only calls tools registered on the DSH MCP server; a server-side data interface is not reachable from RPH. The extension keeps one controlled path instead of adding a second client protocol.",
     "p1_contract_preserved": "the eight frozen P1 tools (acp_capabilities, acp_preflight, acp_submit, acp_status, acp_cancel, acp_prepare_artifact, acp_read_artifact, acp_analyze) remain the P1 allowlist and never change names or schemas",
     "extension_rule": "P2 tools are promised by the versioned extension acp.research.v1 but are not callable until they are registered: tools/list is the whole model-visible surface, so an unregistered research tool is refused as unknown_tool and an extension request is answered in-band by acp_capabilities with implemented=false / negotiated=false. Advertising an extension is never a delivery claim (M0-09/ADR-006 D7).",
+    "tool_sets": {
+      "p1_advertised": ["acp_capabilities", "acp_preflight", "acp_submit", "acp_status", "acp_cancel", "acp_prepare_artifact", "acp_read_artifact", "acp_analyze"],
+      "p2_promised": ["acp_research_proposal_create_v1", "acp_research_proposal_read_v1", "acp_research_proposal_update_cas_v1", "acp_research_approval_request_v1", "acp_research_approval_query_v1", "acp_research_approval_decide_v1", "acp_research_approval_revoke_v1", "acp_research_wait_v1", "acp_research_snapshot_v1", "acp_research_resume_v1"],
+      "advertised": "the eight P1 tools in tools/list plus the extension entry acp_capabilities always reports; advertising never implies delivery",
+      "implemented": "derived, never asserted: the registered tool allowlist must cover the whole p2_promised set (ten names). A partial registration is implemented=false.",
+      "negotiated": "derived: implemented=true AND the requested version equals extension_version. Only a covering implementation set may report negotiated=true; an advertised-but-unimplemented extension stays negotiated=false with the typed refusal extension_not_implemented.",
+      "partial_implementation": "refused with unsupported_capability/params.rule=extension_not_implemented, never a negotiated=true over a subset",
+      "p1_is_unchanged": "the eight P1 names and input schemas are frozen (M1-01b changes only acp_submit/acp_prepare_artifact/acp_read_artifact/acp_analyze request schemas, never names)"
+    },
     "negotiation": {
       "request_carrier": "tools/call",
       "request_tool": "acp_capabilities",
@@ -155,6 +164,21 @@
     "B16": ["P2-R2", "P2-R3", "P2-R4"],
     "B18": ["P2-R1", "P2-R5"],
     "rule": "the binding owner ships the live tool, the ControllerClient method and the application use case together; a Data interface delivered without a live tool is not closure of R3-02"
+  },
+  "implementation_status_vocabulary": {
+    "field": "rows[].implementation_status",
+    "values": ["planned", "delivered", "verified"],
+    "m1_01_rule": "the field and its planned|delivered values are reused as-is; M1-01 adds only the verified value (cross-track evidence signed off). delivered is never migrated to a new 'implemented' value and no second status field is introduced.",
+    "semantics": {
+      "planned": "the contract row is frozen but no implementation exists yet; no closure may be claimed",
+      "delivered": "the named binding_owner shipped the live path; delivered_by names the stage",
+      "verified": "delivered AND the cross-track evidence gate was signed off; verified_by + evidence are mandatory and an unverified row is never reported as verified"
+    },
+    "required_fields": {
+      "delivered": ["delivered_by"],
+      "verified": ["delivered_by", "verified_by", "evidence"]
+    },
+    "machine_checked_by": "scripts/acceptance/validate_acp2_contracts.py::validate_p2_implementation_status"
   },
   "p1_allowlist_unchanged": {
     "tools": ["acp_capabilities", "acp_preflight", "acp_submit", "acp_status", "acp_cancel", "acp_prepare_artifact", "acp_read_artifact", "acp_analyze"],

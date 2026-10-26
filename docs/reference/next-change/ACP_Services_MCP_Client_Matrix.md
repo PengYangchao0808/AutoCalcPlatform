@@ -41,9 +41,35 @@ connection never decides the job's fate (`test_disconnect_does_not_affect_operat
 
 **Permission scope (explicit).** The stdio transport runs with the local process
 scope only. No long-lived API key / bearer token is accepted or forwarded to a
-tool. The permission scope is folded into every idempotency key
-(`acp_services.data.operations.idempotency_key_for`), so one scope's retry can
-never shadow another's operation.
+tool. Idempotency is *one* authority since M0-05: the client's raw key is
+forwarded unchanged and the Controller's persistent ledger claims it under the
+server-resolved identity (`JobStore.claim_idempotency`); the transport permission
+scope is no longer folded into the key, and a raw key is a **global namespace per
+action** (M1-01b — see the client-visible changes below).
+
+## M1-01b client-visible changes (2026-10-27)
+
+These are breaking for a client written against the pre-M1-01 schemas. The tool
+**names** and the six families are unchanged; four *input tables* moved and each
+tool entry now carries `input_schema_version`.
+
+| Surface | Change | What a client must do |
+|---|---|---|
+| `acp_submit` | `idempotency_key` is **required**; `additionalProperties: false`; unknown fields are a typed `input_invalid` (`params.rule=unknown_field`) decided by the adapter before any port call; a missing/blank key is `input_invalid` (`params.rule=idempotency_key_required`) with zero side effects | mint a high-entropy UUID or a namespaced key (`<client>:<project>:<round>:<call>`) and persist it **before** the call; never reuse a short key across tenants (that is `revision_conflict`/`idempotency_scope_conflict`, never a replay) |
+| `acp_prepare_artifact` | declared table is the D-IDENT-10 17-field prepare body (`purpose` required, `artifact_id` names the artifact, `resource_id` and `extensions` are not request fields) | send `purpose` + `job_id`/`task_ref` + `artifact_id` (+ the digest/size expectation you trust) |
+| `acp_read_artifact` | `artifact_ref{task_id,attempt,artifact_id,generation,digest}` is the only addressing form; a legacy `job_id`/`relative_path` read is `unknown_field` | build the full ArtifactRef from the prepare/submit response |
+| `acp_analyze` | `analysis_id`, `input_refs` (full ArtifactRef, ≥1) and `explicit=true` are required; a capability that is not `executable` is `unsupported_capability` (`params.rule=analysis_capability_not_registered` / `analysis_capability_not_executable`) and starts nothing | pass the frozen capability id and the frozen references; `vibration.analyze` reads evidence only |
+| `acp_status` / `acp_cancel` | status stays a permissive historical read (unknown query fields preserved); cancel rejects unknown fields (`reference` + optional `expected_revision`) | no change beyond not sending extra cancel fields |
+| `acp_capabilities` | adds `analysis_capabilities[]` with the frozen `registered`/`executable`/`unavailable` states and keeps `extensions[]` (`implemented`/`negotiated` always false while the promise set is unregistered) | read the states instead of guessing; advertising is never delivery |
+
+Contract versions: `application-api.v1.json` 1.3.0 → 1.4.0 and
+`control-and-data.v1.json` 1.1.0 → 1.2.0 carry the same change; the extension
+version is untouched (`acp.research.v1@1.0.0`, authority
+`p2-research-operations.v1.json`). HTTP manual/legacy submit may still omit the
+key, but that call is **explicitly non-idempotent**: a retry may create a second
+task and the response never reports `idempotent_replay=true`. Old MCP clients that
+send no key now fail closed with `idempotency_key_required` instead of silently
+creating tasks.
 
 ## Tool allowlist (six families, eight tools)
 
@@ -75,9 +101,10 @@ in the test module enforces this.
 - **Idempotency key.** Since M0-05 the MCP entry has no registry of its own:
   the raw client key is forwarded verbatim to the Controller's persistent
   ledger (`JobStore.claim_idempotency`), which collapses replays onto one
-  attributed operation. Authenticated submissions without a client key are
-  documented non-idempotent; only the explicit local-operator binding
-  recomputes the frozen `auto_` legacy key, lookup-only.
+  attributed operation. **M1-01b:** `acp_submit` now *requires* the key, so a
+  key-less submit is refused (`input_invalid`/`idempotency_key_required`) and the
+  frozen `auto_` derivation survives only as a lookup namespace for historical
+  rows and the remaining optional-key prepare surface.
 
 ## Integration record
 

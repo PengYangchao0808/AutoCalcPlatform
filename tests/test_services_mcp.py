@@ -17,10 +17,11 @@ Proves the acceptance clauses of ``acp_services.entrypoints.mcp``:
    ``access_denied``.
 4. **Server-enforced budget** — an over-cap submission is refused before the
    backend is reached (``access_denied`` with structured ``exceeded``).
-5. **One idempotency authority (M0-05)** — the client's raw key is forwarded
-   unchanged to the Controller ledger (no adapter cache, no ``op_`` scope fold);
-   a missing key is non-idempotent except for the frozen ``auto_`` lookup on the
-   explicit local-operator binding.
+5. **One idempotency authority (M0-05/M1-01b)** — ``acp_submit`` requires the
+   client's raw key and forwards it unchanged to the Controller ledger (no
+   adapter cache, no ``op_`` scope fold); a key-less submit is refused, and the
+   frozen ``auto_`` lookup survives only for historical rows / optional-key
+   prepare.
 6. **Long-task references** — ``acp_submit`` returns immediately; ``acp_status``
    queries it; a *dropped connection* (a fresh server sharing the ports) still
    queries the same operation.
@@ -181,6 +182,14 @@ class _FakeAnalysis:
     def analyze(self, request: dict[str, Any], *, workspace_id: str) -> dict[str, Any]:
         self.calls.append(dict(request))
         return {"analysed": True, "job_id": "analysis-job-1"}
+
+
+#: The minimum declared submit body (M1-01b: input + idempotency_key required).
+_SUBMIT_BODY: dict[str, Any] = {
+    "workflow": "singlepoint",
+    "input": {"source": "CCO"},
+    "idempotency_key": "m1-submit-0001",
+}
 
 
 class _Fakes:
@@ -440,7 +449,7 @@ def test_tools_call_maps_identity_and_records_workspace() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes)
     result = _call_tool(
-        server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint"}, meta={"project_id": "proj-7"}
+        server, mcp.McpTool.SUBMIT, dict(_SUBMIT_BODY), meta={"project_id": "proj-7"}
     )
     assert result["isError"] is False
     assert fakes.submit.calls[0][2] == "proj-7"
@@ -457,7 +466,9 @@ def test_budget_cap_refuses_over_cap_submission() -> None:
         fakes=fakes, budget=mcp.WorkspaceBudget(mcp.BudgetCaps(max_cores_per_submission=4))
     )
     result = _call_tool(
-        server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "resources": {"cores": 8}}
+        server,
+        mcp.McpTool.SUBMIT,
+        {**_SUBMIT_BODY, "resources": {"cores": 8}},
     )
     assert result["isError"] is True
     envelope = result["structuredContent"]
@@ -469,13 +480,9 @@ def test_budget_cap_refuses_over_cap_submission() -> None:
 def test_budget_in_flight_cap_refuses_second_submission() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes, budget=mcp.WorkspaceBudget(mcp.BudgetCaps(max_in_flight=1)))
-    first = _call_tool(
-        server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k1"}
-    )
+    first = _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "k1"})
     assert first["isError"] is False
-    second = _call_tool(
-        server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k2"}
-    )
+    second = _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "k2"})
     assert second["isError"] is True
     assert second["structuredContent"]["error"]["code"] == mo.ErrorCode.ACCESS_DENIED
     assert len(fakes.submit.calls) == 1
@@ -484,24 +491,20 @@ def test_budget_in_flight_cap_refuses_second_submission() -> None:
 def test_cancel_releases_in_flight_budget() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes, budget=mcp.WorkspaceBudget(mcp.BudgetCaps(max_in_flight=1)))
-    _call_tool(server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k1"})
+    _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "k1"})
     reference = fakes.submit.calls[0][0].get("workflow") and "job-1"
     _call_tool(server, mcp.McpTool.CANCEL, {"reference": reference})
-    again = _call_tool(
-        server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k2"}
-    )
+    again = _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "k2"})
     assert again["isError"] is False
 
 
 def test_status_terminal_releases_in_flight_budget() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes, budget=mcp.WorkspaceBudget(mcp.BudgetCaps(max_in_flight=1)))
-    _call_tool(server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k1"})
+    _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "k1"})
     fakes.store.put("job-1", {"state": "completed", "reference": "job-1"})
     _call_tool(server, mcp.McpTool.STATUS, {"reference": "job-1"})
-    again = _call_tool(
-        server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k2"}
-    )
+    again = _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "k2"})
     assert again["isError"] is False
 
 
@@ -514,7 +517,7 @@ def test_same_key_is_forwarded_unchanged_and_the_server_replays() -> None:
     """M0-05: no adapter cache. Both calls reach the port; one operation exists."""
     fakes = _Fakes()
     server = _server(fakes=fakes)
-    args = {"workflow": "singlepoint", "idempotency_key": "retry-1"}
+    args = {**_SUBMIT_BODY, "idempotency_key": "retry-1"}
 
     first = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
     second = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
@@ -527,8 +530,8 @@ def test_same_key_is_forwarded_unchanged_and_the_server_replays() -> None:
     assert second["task_ref"]["task_id"] == first["task_ref"]["task_id"]
 
 
-def test_missing_key_is_non_idempotent_for_a_bound_user() -> None:
-    """Without a key a bound (non-operator) caller creates a new task per call."""
+def test_missing_key_is_refused_for_a_bound_user() -> None:
+    """M1-01b: a key-less submit is a typed refusal, never a silent new task."""
     bound = Principal(
         principal_id="principal_bound", kind="user", tenant_id="tenant-bound", roles=("member",)
     )
@@ -546,30 +549,48 @@ def test_missing_key_is_non_idempotent_for_a_bound_user() -> None:
     server = _server(fakes=fakes, identity=identity)
     args = {"workflow": "optimize", "input": {"source": "CCO"}}
 
-    first = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
-    second = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
+    refused = _call_tool(server, mcp.McpTool.SUBMIT, args)
+    assert refused["isError"] is True
+    error = refused["structuredContent"]["error"]
+    assert error["code"] == mo.ErrorCode.INPUT_INVALID
+    assert error["params"]["rule"] == "idempotency_key_required"
+    assert error["params"]["field"] == "idempotency_key"
+    # Nothing reached the port: a refused submit creates no task at all.
+    assert fakes.submit.calls == []
 
-    assert fakes.submit.calls[0][1] == "" and fakes.submit.calls[1][1] == ""
-    assert first["idempotency_key_origin"] == mcp.IDEMPOTENCY_KEY_ORIGIN_NONE
-    assert first["reference"] != second["reference"]
-    assert len(fakes.submit.calls) == 2
 
+def test_operator_without_a_key_is_refused_on_submit_and_legacy_lookup_stays_prepare_only() -> None:
+    """M1-01b: submit requires the key; the frozen ``auto_`` lookup is not submit's path.
 
-def test_operator_without_a_key_uses_the_frozen_legacy_derivation() -> None:
-    """The local operator still resolves the pre-M0-05 ``auto_`` lookup key."""
+    The formula is still exported and still names the pre-M0-05 rows so a
+    historical ``auto_`` record stays inspectable, but a key-less submit no longer
+    claims that namespace: it is refused before any port call.
+    """
     fakes = _Fakes()
     server = _server(fakes=fakes)
     args = {"workflow": "optimize", "input": {"source": "CCO"}}
 
-    first = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
-    second = _call_tool(server, mcp.McpTool.SUBMIT, args)["structuredContent"]["data"]
+    refused = _call_tool(server, mcp.McpTool.SUBMIT, args)
+    assert refused["isError"] is True
+    assert refused["structuredContent"]["error"]["params"]["rule"] == "idempotency_key_required"
+    assert fakes.submit.calls == []
 
     expected = mcp.derive_idempotency_key(args)
     assert expected.startswith(mcp.LEGACY_DERIVED_KEY_PREFIX)
-    assert fakes.submit.calls[0][1] == expected
-    assert first["idempotency_key_origin"] == mcp.IDEMPOTENCY_KEY_ORIGIN_LEGACY
-    assert first["idempotency"]["legacy_rule_version"] == mcp.LEGACY_DERIVED_KEY_VERSION
-    assert first["reference"] == second["reference"]
+    # The optional-key surface still resolves it (prepare), unchanged by M1-01b.
+    prepared = _call_tool(
+        server,
+        mcp.McpTool.PREPARE_ARTIFACT,
+        {"purpose": "artifact", "job_id": "j1", "artifact_id": "freq_log"},
+    )
+    assert prepared["isError"] is False
+    assert fakes.artifacts.prepare_calls[0][1] == mcp.derive_idempotency_key(
+        {"purpose": "artifact", "job_id": "j1", "artifact_id": "freq_log"}
+    )
+    assert (
+        prepared["structuredContent"]["data"]["idempotency_key_origin"]
+        == mcp.IDEMPOTENCY_KEY_ORIGIN_LEGACY
+    )
 
 
 def test_permission_scope_never_folds_into_the_ledger_key() -> None:
@@ -581,7 +602,7 @@ def test_permission_scope_never_folds_into_the_ledger_key() -> None:
             fakes=fakes,
             identity=mcp.IdentityMapper(permission_scope=scope),
         )
-        _call_tool(server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "k"})
+        _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "k"})
         keys.append(fakes.submit.calls[0][1])
     assert keys == ["k", "k", "k"]
 
@@ -597,7 +618,13 @@ def test_derive_idempotency_key_ignores_volatile_key() -> None:
 def test_prepare_artifact_refuses_to_cache_and_uses_the_raw_key() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes)
-    args = {"job_id": "j1", "relative_path": "RESULT/x.json", "idempotency_key": "prep-1"}
+    args = {
+        "purpose": "artifact",
+        "job_id": "j1",
+        "artifact_id": "freq_log",
+        "relative_path": "RESULT/x.json",
+        "idempotency_key": "prep-1",
+    }
     first = _call_tool(server, mcp.McpTool.PREPARE_ARTIFACT, args)["structuredContent"]["data"]
     second = _call_tool(server, mcp.McpTool.PREPARE_ARTIFACT, args)["structuredContent"]["data"]
     assert [call[1] for call in fakes.artifacts.prepare_calls] == ["prep-1", "prep-1"]
@@ -614,7 +641,7 @@ def test_prepare_artifact_refuses_to_cache_and_uses_the_raw_key() -> None:
 def test_submit_returns_reference_immediately_and_status_queries_it() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes)
-    submitted = _call_tool(server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint"})
+    submitted = _call_tool(server, mcp.McpTool.SUBMIT, dict(_SUBMIT_BODY))
     data = submitted["structuredContent"]["data"]
     assert data["reference"] == {"kind": "job", "id": "job-1"}
     assert data["query_tool"] == mcp.McpTool.STATUS
@@ -641,7 +668,7 @@ def test_disconnect_does_not_affect_operation() -> None:
     connection_a = _server(fakes=fakes, budget=budget)
 
     submitted = _call_tool(
-        connection_a, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "drop-1"}
+        connection_a, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "drop-1"}
     )
     reference = submitted["structuredContent"]["data"]["reference"]["id"]
     del connection_a  # simulate the MCP connection dropping
@@ -655,7 +682,7 @@ def test_disconnect_does_not_affect_operation() -> None:
     # The same key on the new connection still collapses onto one operation —
     # decided by the server-side ledger, not by any adapter cache.
     replay = _call_tool(
-        connection_b, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "idempotency_key": "drop-1"}
+        connection_b, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "drop-1"}
     )
     assert replay["structuredContent"]["data"]["idempotent_replay"] is True
     assert replay["structuredContent"]["data"]["reference"]["id"] == reference
@@ -687,7 +714,11 @@ def test_capabilities_tool_reports_descriptor_and_tools() -> None:
 
 def test_preflight_is_zero_side_effect_dry_run() -> None:
     fakes = _Fakes()
-    result = _call_tool(_server(fakes=fakes), mcp.McpTool.PREFLIGHT, {"workflow": "singlepoint"})
+    result = _call_tool(
+        _server(fakes=fakes),
+        mcp.McpTool.PREFLIGHT,
+        {"workflow": "singlepoint", "input": {"source": "CCO"}},
+    )
     envelope = result["structuredContent"]
     assert envelope["dry_run"] is True
     assert envelope["data"]["executed"] is False
@@ -699,13 +730,30 @@ def test_preflight_is_zero_side_effect_dry_run() -> None:
 def test_analyze_requires_explicit_opt_in() -> None:
     fakes = _Fakes()
     server = _server(fakes=fakes)
-    refused = _call_tool(server, mcp.McpTool.ANALYZE, {"workflow": "singlepoint"})
+    reference = {
+        "task_id": "j1",
+        "attempt": 1,
+        "artifact_id": "freq_log",
+        "generation": 1,
+        "digest": "sha256:" + "a" * 64,
+    }
+    refused = _call_tool(
+        server,
+        mcp.McpTool.ANALYZE,
+        {"analysis_id": "vibration.analyze", "input_refs": [reference], "explicit": False},
+    )
     assert refused["isError"] is True
     assert refused["structuredContent"]["error"]["code"] == mo.ErrorCode.INPUT_INVALID
     assert fakes.analysis.calls == []
 
+    missing = _call_tool(server, mcp.McpTool.ANALYZE, {"workflow": "singlepoint"})
+    assert missing["isError"] is True
+    assert missing["structuredContent"]["error"]["params"]["rule"] == "unknown_field"
+
     accepted = _call_tool(
-        server, mcp.McpTool.ANALYZE, {"workflow": "singlepoint", "explicit": True}
+        server,
+        mcp.McpTool.ANALYZE,
+        {"analysis_id": "vibration.analyze", "input_refs": [reference], "explicit": True},
     )
     assert accepted["isError"] is False
     assert len(fakes.analysis.calls) == 1
@@ -713,18 +761,32 @@ def test_analyze_requires_explicit_opt_in() -> None:
 
 def test_read_artifact_returns_prepared_data() -> None:
     fakes = _Fakes()
+    artifact_ref = {
+        "task_id": "j1",
+        "attempt": 1,
+        "artifact_id": "catalog",
+        "generation": 1,
+        "digest": "sha256:" + "b" * 64,
+    }
     result = _call_tool(
-        _server(fakes=fakes), mcp.McpTool.READ_ARTIFACT, {"job_id": "j1", "relative_path": "a.json"}
+        _server(fakes=fakes), mcp.McpTool.READ_ARTIFACT, {"artifact_ref": artifact_ref}
     )
     assert result["isError"] is False
     assert result["structuredContent"]["data"]["data"] == "prepared"
-    assert fakes.artifacts.read_calls[0]["relative_path"] == "a.json"
+    assert fakes.artifacts.read_calls[0]["artifact_ref"] == artifact_ref
+
+    # artifact_ref is mandatory: a legacy job_id/relative_path read is refused.
+    legacy = _call_tool(
+        _server(fakes=fakes), mcp.McpTool.READ_ARTIFACT, {"job_id": "j1", "relative_path": "a.json"}
+    )
+    assert legacy["isError"] is True
+    assert legacy["structuredContent"]["error"]["params"]["rule"] == "unknown_field"
 
 
 def test_backend_tool_error_becomes_is_error_result() -> None:
     fakes = _Fakes()
     fakes.submit.fail_next = mo.ErrorCode.BACKEND_UNAVAILABLE
-    result = _call_tool(_server(fakes=fakes), mcp.McpTool.SUBMIT, {"workflow": "singlepoint"})
+    result = _call_tool(_server(fakes=fakes), mcp.McpTool.SUBMIT, dict(_SUBMIT_BODY))
     assert result["isError"] is True
     assert result["structuredContent"]["error"]["code"] == mo.ErrorCode.BACKEND_UNAVAILABLE
 
@@ -837,7 +899,7 @@ def test_protocol_level_client_session_record() -> None:
                     "method": "tools/call",
                     "params": {
                         "name": mcp.McpTool.SUBMIT,
-                        "arguments": {"workflow": "singlepoint"},
+                        "arguments": dict(_SUBMIT_BODY),
                     },
                 }
             )
@@ -902,3 +964,153 @@ def test_protocol_level_client_session_record() -> None:
     assert dsh["status"].startswith("PASS handshake")
     assert "NOT_VERIFIED" in dsh["status"]
     assert "full DSH Agent" in dsh["status"]
+
+
+# --------------------------------------------------------------------------- #
+# 9. M1-01b: declared argument tables, typed refusals, no implicit compute
+# --------------------------------------------------------------------------- #
+
+
+def _declared(name: str) -> dict[str, Any]:
+    tool = next(tool for tool in mcp._tool_specs() if tool["name"] == name)
+    return tool["inputSchema"]
+
+
+def test_submit_schema_requires_the_idempotency_key_and_forbids_unknown_fields() -> None:
+    schema = _declared(mcp.McpTool.SUBMIT)
+    assert schema["additionalProperties"] is False
+    assert schema["required"] == ["workflow", "input", "idempotency_key"]
+    assert "idempotency_key" in schema["properties"]
+    # The declared table is the submit field policy minus the server-path fields.
+    from acp_services.entrypoints.application_params import (
+        DISPOSITION_SERVER_PATH_REJECTED,
+        SUBMIT_FIELD_POLICY,
+    )
+
+    expected = {
+        name
+        for name, row in SUBMIT_FIELD_POLICY.items()
+        if row.disposition != DISPOSITION_SERVER_PATH_REJECTED
+    }
+    assert set(schema["properties"]) == expected
+
+
+def test_preflight_shares_the_table_but_not_the_required_key() -> None:
+    preflight = _declared(mcp.McpTool.PREFLIGHT)
+    submit = _declared(mcp.McpTool.SUBMIT)
+    assert set(preflight["properties"]) == set(submit["properties"])
+    assert preflight["additionalProperties"] is False
+    assert preflight["required"] == ["workflow", "input"]
+
+
+def test_prepare_schema_is_the_seventeen_field_authority() -> None:
+    schema = _declared(mcp.McpTool.PREPARE_ARTIFACT)
+    assert schema["additionalProperties"] is False
+    assert schema["required"] == ["purpose"]
+    assert set(schema["properties"]) == {
+        "schema_version",
+        "purpose",
+        "task_ref",
+        "job_id",
+        "artifact_id",
+        "attempt",
+        "generation",
+        "expected_revision",
+        "relative_path",
+        "expected_digest",
+        "content_digest",
+        "expected_size_bytes",
+        "schema_ref",
+        "source_refs",
+        "evidence_report",
+        "media_type",
+        "idempotency_key",
+    }
+    assert "resource_id" not in schema["properties"]
+    assert "extensions" not in schema["properties"]
+
+
+def test_read_and_analyze_declare_their_mandatory_identity_fields() -> None:
+    read = _declared(mcp.McpTool.READ_ARTIFACT)
+    assert read["required"] == ["artifact_ref"]
+    assert read["additionalProperties"] is False
+    assert set(read["properties"]["artifact_ref"]["required"]) == {
+        "task_id",
+        "attempt",
+        "artifact_id",
+        "generation",
+        "digest",
+    }
+    analyze = _declared(mcp.McpTool.ANALYZE)
+    assert analyze["required"] == ["analysis_id", "input_refs", "explicit"]
+    assert analyze["additionalProperties"] is False
+    assert analyze["properties"]["explicit"]["type"] == "boolean"
+
+
+def test_unknown_and_missing_arguments_are_typed_and_never_forwarded() -> None:
+    fakes = _Fakes()
+    server = _server(fakes=fakes)
+
+    unknown = _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "execution_mod": "remote"})
+    assert unknown["isError"] is True
+    error = unknown["structuredContent"]["error"]
+    assert error["code"] == mo.ErrorCode.INPUT_INVALID
+    assert error["params"]["rule"] == "unknown_field"
+    assert error["params"]["field"] == "execution_mod"
+
+    missing = _call_tool(
+        server, mcp.McpTool.SUBMIT, {"workflow": "singlepoint", "input": {"source": "CCO"}}
+    )
+    assert missing["isError"] is True
+    assert missing["structuredContent"]["error"]["params"]["rule"] == "idempotency_key_required"
+
+    blank = _call_tool(server, mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": "   "})
+    assert blank["isError"] is True
+    assert blank["structuredContent"]["error"]["params"]["rule"] == "idempotency_key_required"
+
+    # No refused call ever reached the submit port.
+    assert fakes.submit.calls == []
+
+
+def test_read_status_prepare_never_start_computation() -> None:
+    fakes = _Fakes()
+    server = _server(fakes=fakes)
+    artifact_ref = {
+        "task_id": "j1",
+        "attempt": 1,
+        "artifact_id": "catalog",
+        "generation": 1,
+        "digest": "sha256:" + "c" * 64,
+    }
+
+    _call_tool(server, mcp.McpTool.READ_ARTIFACT, {"artifact_ref": artifact_ref})
+    _call_tool(server, mcp.McpTool.STATUS, {"reference": "j1"})
+    _call_tool(
+        server,
+        mcp.McpTool.PREPARE_ARTIFACT,
+        {"purpose": "artifact", "job_id": "j1", "artifact_id": "catalog"},
+    )
+
+    assert fakes.submit.calls == []
+    assert fakes.analysis.calls == []
+    assert fakes.artifacts.read_calls and fakes.status.calls
+    assert fakes.artifacts.prepare_calls and len(fakes.artifacts.prepare_calls) == 1
+    assert len(fakes.artifacts.prepare_calls) == 1  # only the explicit prepare
+
+
+def test_capabilities_project_the_three_analysis_states() -> None:
+    from acp_services.runtime.analysis_capabilities import (
+        ANALYSIS_CAPABILITY_IDS,
+        ANALYSIS_CAPABILITY_STATES,
+    )
+
+    result = _call_tool(_server(), mcp.McpTool.CAPABILITIES)
+    assert result["isError"] is False
+    projection = result["structuredContent"]["data"]["analysis_capabilities"]
+    assert [entry["analysis_id"] for entry in projection] == list(ANALYSIS_CAPABILITY_IDS)
+    assert {entry["state"] for entry in projection} <= set(ANALYSIS_CAPABILITY_STATES)
+    # The default registry ships empty: nothing is executable, nothing is "ready".
+    assert {entry["state"] for entry in projection} == {"unavailable"}
+    for entry in projection:
+        assert entry["registered"] is False
+        assert entry["executable"] is False

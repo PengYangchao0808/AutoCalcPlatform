@@ -81,6 +81,9 @@ DELIVERED_IDS_BY_STAGE = {
         "decision-freeze-identity",
         "decision-freeze-integration",
     },
+    "M1-02": {
+        "research-session",
+    },
 }
 EXPECTED_TODOS = {
     "B00",
@@ -348,6 +351,78 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> None:
         fail("p2_entry.transport must freeze stdio JSON-RPC over loopback HTTP Controller")
 
 
+P2_IMPLEMENTATION_STATUS = {"planned", "delivered", "verified"}
+P2_TOOL_SETS_KEY = "client_path.tool_sets"
+
+
+def validate_p2_implementation_status(root: Path) -> None:
+    """Validate the P2 implementation-status vocabulary and tool-set relation.
+
+    M1-01a: the rows reuse the existing ``implementation_status`` field and the
+    ``planned|delivered`` values; ``verified`` is additive and demands evidence.
+    No second status field and no ``delivered -> implemented`` migration is
+    allowed, and the advertised/implemented/negotiated relation is closed: only a
+    registered set that covers the whole promise set may report ``negotiated``.
+    """
+    path = root / "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json"
+    contract = load_json(path, "p2-research-operations.v1.json")
+    vocabulary = require(contract, "implementation_status_vocabulary", "P2 vocabulary")
+    values = set(vocabulary.get("values") or [])
+    if values != P2_IMPLEMENTATION_STATUS:
+        fail(
+            "P2 implementation_status values must be planned|delivered|verified; "
+            f"got {sorted(values)}"
+        )
+    if vocabulary.get("field") != "rows[].implementation_status":
+        fail("P2 vocabulary must name rows[].implementation_status as the one reused field")
+    required_fields = vocabulary.get("required_fields") or {}
+    if set(required_fields.get("delivered") or []) != {"delivered_by"}:
+        fail("P2 delivered rows must require delivered_by only")
+    if set(required_fields.get("verified") or []) != {"delivered_by", "verified_by", "evidence"}:
+        fail("P2 verified rows must require delivered_by, verified_by and evidence")
+
+    rows = require(contract, "rows", "P2 rows")
+    if not isinstance(rows, list) or not rows:
+        fail("P2 rows must be a non-empty array")
+    for row in rows:
+        row_id = require(row, "id", "rows[].id")
+        status = require(row, "implementation_status", f"rows[{row_id}].implementation_status")
+        if status not in P2_IMPLEMENTATION_STATUS:
+            fail(f"{row_id}.implementation_status is invalid: {status}")
+        if "implemented" in row:
+            fail(f"{row_id} must not add a second 'implemented' status field")
+        if status in {"delivered", "verified"} and not row.get("delivered_by"):
+            fail(f"{row_id} is {status} but names no delivered_by")
+        if status == "verified":
+            for field in ("verified_by", "evidence"):
+                if not row.get(field):
+                    fail(f"{row_id} is verified but names no {field}")
+        if status == "planned" and row.get("verified_by"):
+            fail(f"{row_id} is planned but names a verified_by")
+
+    client_path = contract.get("client_path")
+    tool_sets = client_path.get("tool_sets") if isinstance(client_path, dict) else None
+    if not isinstance(tool_sets, dict):
+        fail(f"P2 {P2_TOOL_SETS_KEY} is missing")
+    advertised = list(tool_sets.get("p1_advertised") or [])
+    promised = list(tool_sets.get("p2_promised") or [])
+    if len(advertised) != 8:
+        fail(f"P2 p1_advertised must list the eight P1 tools; got {len(advertised)}")
+    if len(promised) != 10:
+        fail(f"P2 p2_promised must list the ten research tools; got {len(promised)}")
+    if set(advertised) & set(promised):
+        fail("P2 p1_advertised and p2_promised must be disjoint")
+    for row in rows:
+        for tool in row.get("tools") or []:
+            if tool.get("name") not in promised:
+                fail(f"{row['id']} promises {tool.get('name')!r} outside p2_promised")
+    negotiation = (contract.get("client_path") or {}).get("negotiation") or {}
+    if negotiation.get("implemented") is not False:
+        fail("P2 negotiation.implemented must stay false while the promise set is unregistered")
+    if negotiation.get("negotiated_default") is not False:
+        fail("P2 negotiation.negotiated_default must stay false")
+
+
 def validate_dependencies(root: Path, manifest_path: Path) -> None:
     dep_path = manifest_path.parent / "runtime" / "dependencies.json"
     deps = load_json(dep_path, "dependencies.json")
@@ -509,6 +584,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest = load_json(args.manifest, "manifest.json")
         validate_manifest(root, manifest)
         validate_dependencies(root, args.manifest.resolve())
+        validate_p2_implementation_status(root)
     except InvalidContractError as exc:
         print(f"INVALID: {exc}", file=sys.stderr)
         return 1

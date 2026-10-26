@@ -501,8 +501,16 @@ def _seed_legacy_auto_row(
     return auto_key
 
 
-def test_legacy_auto_row_replays_on_the_same_binding_only(tmp_path: Path) -> None:
-    # -- same binding: the local operator entry replays the old task ----------
+def test_legacy_auto_row_is_never_claimed_by_a_keyless_submit(tmp_path: Path) -> None:
+    """M1-01b supersedes the M0-05 submit fallback: a key-less submit is refused.
+
+    The frozen ``auto_`` derivation is still the lookup formula for rows written
+    before M0-05 (and for the remaining optional-key prepare surface), but the MCP
+    submit surface no longer claims that namespace: the request is refused with
+    ``input_invalid``/``idempotency_key_required`` before any port is touched, the
+    task count does not move and the historical row stays exactly as recorded.
+    """
+    # -- local operator binding ---------------------------------------------
     run_root = tmp_path / "local-run-root"
     run_root.mkdir(parents=True, exist_ok=True)
     legacy_task = "legacy-auto-task-" + uuid.uuid4().hex[:8]
@@ -517,19 +525,16 @@ def test_legacy_auto_row_replays_on_the_same_binding_only(tmp_path: Path) -> Non
         before = _task_count(base)
         probe = _McpProcess(run_root, base)
         probe.initialize()
-        replayed = probe.submit(dict(body))
-        assert replayed.get("isError") is not True, replayed
-        data = _data(replayed)
-        task_id = str((data.get("task_ref") or {}).get("task_id") or "")
-        assert task_id == legacy_task, data
-        assert data.get("idempotency_key_origin") == mcp.IDEMPOTENCY_KEY_ORIGIN_LEGACY
-        assert data.get("idempotency", {}).get("origin") == mcp.IDEMPOTENCY_KEY_ORIGIN_LEGACY
-        assert (
-            data.get("idempotency", {}).get("legacy_rule_version") == mcp.LEGACY_DERIVED_KEY_VERSION
-        )
+        refused = probe.submit(dict(body))
+        assert refused.get("isError") is True, refused
+        error = (refused.get("structuredContent") or {}).get("error") or {}
+        assert error.get("code") == "input_invalid"
+        assert (error.get("params") or {}).get("rule") == "idempotency_key_required"
+        assert (error.get("params") or {}).get("field") == "idempotency_key"
+        # Nothing was created and the frozen lookup namespace is untouched.
         assert _task_count(base) == before
         keys = _ledger_keys(run_root / "acp_jobs.db")
-        assert auto_key in keys
+        assert keys == [auto_key]
         assert not any(key.startswith("op_") for key in keys)
     finally:
         if probe is not None:
@@ -537,7 +542,7 @@ def test_legacy_auto_row_replays_on_the_same_binding_only(tmp_path: Path) -> Non
         _stop(controller)
     _wait_port_free(port)
 
-    # -- another binding: an authenticated principal never adopts it ---------
+    # -- another binding: an authenticated principal is refused the same way --
     bound_root = tmp_path / "bound-run-root"
     bound_root.mkdir(parents=True, exist_ok=True)
     bound_task = "legacy-bound-task-" + uuid.uuid4().hex[:8]
@@ -559,16 +564,11 @@ def test_legacy_auto_row_replays_on_the_same_binding_only(tmp_path: Path) -> Non
         _seed_legacy_auto_row(bound_root, body=bound_body, project_id=ALPHA, task_id=bound_task)
         probe = _McpProcess(bound_root, base, api_key=alice.key)
         probe.initialize()
-        fresh = probe.submit(dict(bound_body))
-        assert fresh.get("isError") is not True, fresh
-        data = _data(fresh)
-        task_id = str((data.get("task_ref") or {}).get("task_id") or "")
-        assert task_id and task_id != bound_task, data
-        # The bound identity is key-less (non-idempotent), so it never claims
-        # the legacy ``auto_`` namespace.
-        assert data.get("idempotency_key_origin") == mcp.IDEMPOTENCY_KEY_ORIGIN_NONE
-        assert data.get("idempotency_key") is None
-        # The legacy row is untouched and still replayable by its own binding.
+        refused = probe.submit(dict(bound_body))
+        assert refused.get("isError") is True, refused
+        error = (refused.get("structuredContent") or {}).get("error") or {}
+        assert (error.get("params") or {}).get("rule") == "idempotency_key_required"
+        # The legacy row is untouched and still verifiable by its own formula.
         conn = sqlite3.connect(bound_root / "acp_jobs.db")
         try:
             row = conn.execute(

@@ -9026,15 +9026,30 @@ def analyze_job(
         )
     capability = DEFAULT_ANALYSIS_REGISTRY.get(req.analysis_id)
     if capability is None or capability.handler is None:
+        # M1-01b freezes two distinct refusals: an id that was never registered is
+        # ``not_registered``; a declared capability without a handler is
+        # ``not_executable``.  Both are 422 unsupported_capability and start
+        # nothing; only state=executable may run.
+        registered = capability is not None
+        rule = (
+            "analysis_capability_not_registered"
+            if not registered
+            else "analysis_capability_not_executable"
+        )
         raise _command_error(
             422,
             "unsupported_capability",
-            f"analysis capability {req.analysis_id!r} is not registered",
+            (
+                f"analysis capability {req.analysis_id!r} is not registered"
+                if not registered
+                else f"analysis capability {req.analysis_id!r} is not executable"
+            ),
             params={
                 "analysis_id": req.analysis_id,
-                "registered": capability is not None,
-                "owner": "A",
-                "rule": "analysis_capability_not_registered",
+                "registered": registered,
+                "state": "unavailable" if not registered else capability.state,
+                "owner": capability.owner if registered else "A",
+                "rule": rule,
             },
         )
     record = manager.get(job_id)

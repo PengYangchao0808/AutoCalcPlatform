@@ -265,7 +265,14 @@ def test_unknown_remote_node_is_one_application_error_everywhere(
     result = _tool(
         mcp_runtime,
         "acp_submit",
-        {"workflow": "fake", "input": {"source": "C"}, "target_node": "ghost"},
+        {
+            "workflow": "fake",
+            "input": {"source": "C"},
+            "target_node": "ghost",
+            # M1-01b: the MCP submit surface requires the retry key; the key is a
+            # control field and never enters the normalized JobSpec/digest.
+            "idempotency_key": "m0-06-target-node-0001",
+        },
     )
     assert result["isError"] is True
     mcp_error = result["structuredContent"]["error"]

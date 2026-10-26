@@ -37,6 +37,8 @@ _SUBMIT = {
     "input": {"xyz_text": _XYZ},
     "method": _METHOD,
     "resources": {"cores": 1},
+    # M1-01b: acp_submit requires the retry key; the HTTP body does not.
+    "idempotency_key": "b06-submit-parity-0001",
 }
 
 
@@ -327,10 +329,16 @@ def test_mcp_and_http_submit_parameters_match(live_controller: _LiveController) 
     manager.submit = capture  # type: ignore[method-assign]
     try:
         payload = dict(_SUBMIT, name="parity")
-        normalized = normalize_submit(payload)
+        # M1-01b: both entries need their own retry key; the two bodies are the
+        # same logical request but the HTTP normaliser does not carry ``name``
+        # into the digest material, so reusing one key across the two entries
+        # would be a (correct) idempotency conflict rather than a parity check.
+        normalized = normalize_submit({**payload, "idempotency_key": "b06-http-parity-0001"})
         http_created = _client(live_controller).submit(normalized)
         mcp_runtime = _runtime(live_controller)
-        mcp_created = _tool(mcp_runtime, "acp_submit", payload)
+        mcp_created = _tool(
+            mcp_runtime, "acp_submit", {**payload, "idempotency_key": "b06-mcp-parity-0001"}
+        )
     finally:
         manager.submit = original_submit  # type: ignore[method-assign]
 

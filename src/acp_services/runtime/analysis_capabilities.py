@@ -24,14 +24,23 @@ from typing import Any
 
 __all__ = [
     "ANALYSIS_CAPABILITY_IDS",
+    "ANALYSIS_CAPABILITY_STATES",
     "AnalysisCapability",
     "AnalysisCapabilityRegistry",
     "DEFAULT_ANALYSIS_REGISTRY",
+    "capability_projection",
     "register_analysis_capability",
 ]
 
 #: The frozen science ids from the application contract.
 ANALYSIS_CAPABILITY_IDS: tuple[str, ...] = ("vibration.compute", "vibration.analyze")
+
+#: The frozen capability-descriptor states (M1-01b).  There is deliberately no
+#: "available"/"ready" state: a descriptor says whether the capability is
+#: registered, executable or unavailable, and ``analyze`` runs only the
+#: executable set.
+ANALYSIS_CAPABILITY_STATES: tuple[str, ...] = ("registered", "executable", "unavailable")
+
 
 #: A handler receives the normalised request and returns a JSON-safe mapping.
 AnalysisHandler = Callable[[Mapping[str, Any]], Mapping[str, Any]]
@@ -57,11 +66,18 @@ class AnalysisCapability:
     handler: AnalysisHandler | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    @property
+    def state(self) -> str:
+        """The frozen descriptor state of this registration."""
+        return "executable" if self.handler is not None else "registered"
+
     def describe(self) -> dict[str, Any]:
         return {
             "analysis_id": self.analysis_id,
             "version": self.version,
             "owner": self.owner,
+            "state": self.state,
+            "registered": True,
             "executable": self.handler is not None,
             "metadata": dict(self.metadata),
         }
@@ -109,3 +125,42 @@ DEFAULT_ANALYSIS_REGISTRY = AnalysisCapabilityRegistry()
 def register_analysis_capability(capability: AnalysisCapability) -> AnalysisCapability:
     """Register a capability on the process-local default registry."""
     return DEFAULT_ANALYSIS_REGISTRY.register(capability)
+
+
+def capability_projection(
+    registry: AnalysisCapabilityRegistry | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Project the frozen ``registered/executable/unavailable`` descriptor states.
+
+    One entry per frozen science id, never a "ready/available" state: an id that
+    is not registered is ``unavailable`` (so ``analyze`` refuses it with
+    ``unsupported_capability``), a registered id without a handler is
+    ``registered`` (declared, still refused), and only a handler makes it
+    ``executable``.  The projection is read-only and starts nothing.
+    """
+    table = registry if registry is not None else DEFAULT_ANALYSIS_REGISTRY
+    entries: list[dict[str, Any]] = []
+    for analysis_id in ANALYSIS_CAPABILITY_IDS:
+        capability = table.get(analysis_id)
+        if capability is None:
+            entries.append(
+                {
+                    "analysis_id": analysis_id,
+                    "state": "unavailable",
+                    "registered": False,
+                    "executable": False,
+                    "version": None,
+                    "owner": None,
+                }
+            )
+            continue
+        entry = {
+            "analysis_id": analysis_id,
+            "state": capability.state,
+            "registered": True,
+            "executable": capability.handler is not None,
+            "version": capability.version,
+            "owner": capability.owner,
+        }
+        entries.append(entry)
+    return tuple(entries)
