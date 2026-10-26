@@ -284,32 +284,168 @@ PREFLIGHT_FIELD_POLICY: dict[str, FieldPolicy] = {
     for name, row in SUBMIT_FIELD_POLICY.items()
 }
 
-#: The explicit prepare policy: the MCP adapter forwards the request unchanged
+#: The explicit prepare policy.  The MCP adapter forwards the request unchanged
 #: (M0-06) and this table is the drift guard that says every prepare DTO field
 #: is a known one.  Prepare has no execution-field semantics.
+#:
+#: **Authority (D-IDENT-10, M0-11)**: the live HTTP route
+#: ``POST /api/v1/jobs/{job_id}/prepare`` (``src/acp/api/v1_routes.py::
+#: prepare_artifact``) is the one authority for *which prepare fields exist and
+#: what they mean*: it accepts exactly ``V1PrepareRequest`` (``extra="forbid"``),
+#: normalises it once through :func:`normalize_prepare`, and forwards the result
+#: into ``acp_services.data.operations.PrepareRequest``.  Every row below names
+#: the field the route actually reads; a field the route does not read is not a
+#: prepare field.
+#:
+#: Consequences that are easy to get backwards:
+#:
+#: * ``resource_id`` is **not** a wire field.  The route derives it
+#:   (``artifact_id`` for ``purpose=artifact``, ``structure-input:<relative_path>``
+#:   otherwise) and passes it as ``PrepareRequest.resource_id``; a caller that
+#:   sends ``resource_id`` is rejected as ``unknown_field`` like any other
+#:   undeclared field.  An MCP adapter / SDK bridge argument must be named
+#:   ``artifact_id``.
+#: * ``purpose`` is required (``artifact`` | ``structure-input``) and
+#:   ``artifact_id`` is required when ``purpose=artifact``.
+#: * ``extensions`` is a *submit* control field; prepare does not accept it.
 PREPARE_FIELD_POLICY: dict[str, FieldPolicy] = {
     field.name: field
     for field in (
-        _entry(name, DISPOSITION_REQUEST_CONTROL, request_kinds=(REQUEST_PREPARE,))
-        for name in (
+        _entry(
             "schema_version",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note="Contract major version; any value other than 1 executes nothing.",
+        ),
+        _entry(
             "purpose",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Required. artifact = fetch/commit one artifact revision; "
+                "structure-input = local parse+register with no task."
+            ),
+        ),
+        _entry(
             "task_ref",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Alternate task reference ({task_id, attempt, ...}); task_id must equal the "
+                "job id in the route path and supplies the default attempt."
+            ),
+        ),
+        _entry(
             "job_id",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "The route path is authoritative; a body job_id that differs is "
+                "revision_conflict, never a second target."
+            ),
+        ),
+        _entry(
             "artifact_id",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Required when purpose=artifact. Safe artifact token; becomes "
+                "PrepareRequest.resource_id (server-derived, never client-sent)."
+            ),
+        ),
+        _entry(
             "attempt",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "1-based attempt; defaults to the current attempt and may never be newer "
+                "than it (attempt_not_current)."
+            ),
+        ),
+        _entry(
             "generation",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Artifact generation; defaults to 1 for artifact / 0 for structure-input "
+                "and is re-checked by the completion CAS."
+            ),
+        ),
+        _entry(
             "expected_revision",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Declared and normalised for CAS-style callers; the prepare route does not "
+                "act on it (an artifact prepare is deduplicated by content identity)."
+            ),
+        ),
+        _entry(
             "relative_path",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Relative path inside the attempt work dir; traversal is refused, and for "
+                "purpose=structure-input it names the parsed structure source."
+            ),
+        ),
+        _entry(
             "expected_digest",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Trusted digest expectation (sha256:); a mismatch is a conflict and the "
+                "committed value is always re-derived."
+            ),
+        ),
+        _entry(
             "content_digest",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note="Fallback spelling of expected_digest (expected_digest wins).",
+        ),
+        _entry(
             "expected_size_bytes",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note="Trusted size expectation; the committed size is re-derived.",
+        ),
+        _entry(
             "schema_ref",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note="Source schema reference, recorded as the operation payload source_schema.",
+        ),
+        _entry(
             "source_refs",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note="Source references recorded verbatim in the operation payload.",
+        ),
+        _entry(
             "evidence_report",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Evidence report attached to the artifact; when present the relative path is "
+                "taken as declared evidence rather than re-validated as a fetch target."
+            ),
+        ),
+        _entry(
             "media_type",
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note="Recorded media type of the prepared body.",
+        ),
+        _entry(
             "idempotency_key",
-        )
+            DISPOSITION_REQUEST_CONTROL,
+            request_kinds=(REQUEST_PREPARE,),
+            note=(
+                "Raw client retry key; the server derives the versioned key from "
+                "(principal, project, client key, epoch)."
+            ),
+        ),
     )
 }
 

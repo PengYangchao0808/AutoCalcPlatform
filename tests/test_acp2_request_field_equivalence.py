@@ -527,6 +527,83 @@ def test_same_key_with_a_changed_legal_target_is_a_conflict_not_a_replay(
 # ---------------------------------------------------------------------------
 
 
+def test_prepare_field_authority_is_one_table() -> None:
+    """D-IDENT-10: HTTP prepare body == policy == DTO == contract == bridge args.
+
+    The live route (``POST /api/v1/jobs/{job_id}/prepare`` over
+    ``V1PrepareRequest`` + ``normalize_prepare`` into ``PrepareRequest``) is the
+    authority.  The bridge must speak that body: ``purpose``/``artifact_id``, and
+    never ``resource_id`` (server-derived).
+    """
+    from acp.api.v1_schemas import V1PrepareRequest
+    from acp_services.entrypoints.application_params import PREPARE_FIELD_POLICY
+
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    request = contract["operations"]["prepare"]["request"]
+    contract_fields = set(request["fields"])
+    dto_fields = set(V1PrepareRequest.model_fields)
+    policy_fields = set(PREPARE_FIELD_POLICY)
+
+    assert request["additional_properties"] is False
+    assert request["required"] == ["purpose"]
+    assert V1PrepareRequest.model_config.get("extra") == "forbid"
+    assert dto_fields == policy_fields == contract_fields
+    for name, row in PREPARE_FIELD_POLICY.items():
+        assert row.request_kinds == {REQUEST_PREPARE}, name
+        assert row.disposition != "server_path_rejected", name
+        assert request["fields"][name]["description"].strip(), name
+
+    # `resource_id` is derived by the route (artifact_id / relative_path) and is
+    # not a request field; `extensions` is submit-only.
+    assert "resource_id" not in contract_fields
+    assert "resource_id" in request["server_derived_fields"]
+    assert "extensions" not in contract_fields
+
+    # The bridge's prepare arguments are that same body (names included).
+    bridge = (REPO_ROOT / "rph/packages/bridge/src/index.ts").read_text(encoding="utf-8")
+    prepare_block = bridge.split('case "prepare":', 1)[1].split('case "read":', 1)[0]
+    bridge_keys = set(re.findall(r'put\("([a-z_]+)"', prepare_block))
+    assert bridge_keys == {"purpose", "job_id", "attempt", "artifact_id", "idempotency_key"}
+    assert bridge_keys <= contract_fields
+
+
+def test_http_prepare_route_consumes_exactly_that_table(tmp_path: Path) -> None:
+    """The authority is the route: declared fields pass validation, `resource_id` is 422."""
+    from acp.api.server import create_app
+
+    run_root = tmp_path / "http"
+    run_root.mkdir(parents=True, exist_ok=True)
+    with TestClient(create_app(run_root=run_root, max_running=1)) as client:
+        accepted = client.post(
+            "/api/v1/jobs/ghost-job/prepare",
+            json={
+                "schema_version": 1,
+                "purpose": "artifact",
+                "job_id": "ghost-job",
+                "artifact_id": "freq.out",
+                "attempt": 1,
+                "generation": 1,
+                "relative_path": "RESULT/freq.out",
+                "expected_digest": "sha256:" + "a" * 64,
+                "content_digest": "sha256:" + "a" * 64,
+                "expected_size_bytes": 10,
+                "schema_ref": "acp2.artifact.freq.v1",
+                "source_refs": [{"task_id": "ghost-job"}],
+                "media_type": "text/plain",
+                "expected_revision": 0,
+                "idempotency_key": "m0-11-prepare",
+            },
+        )
+        # The body passed DTO validation: the unknown *job* is the only failure.
+        assert accepted.status_code == 404, accepted.text
+        rejected = client.post(
+            "/api/v1/jobs/ghost-job/prepare",
+            json={"purpose": "artifact", "artifact_id": "freq.out", "resource_id": "freq.out"},
+        )
+        assert rejected.status_code == 422, rejected.text
+        assert "resource_id" in rejected.text
+
+
 def test_prepare_forwards_the_callers_request_unchanged() -> None:
     from acp.services_mcp_bootstrap import _ControllerArtifacts
 

@@ -702,6 +702,86 @@ _ARTIFACT_SCHEMA: dict[str, Any] = {
     },
     "additionalProperties": True,
 }
+#: ``acp_prepare_artifact`` is the one call surface whose arguments are the v1
+#: prepare request body verbatim (D-IDENT-10, M0-11).  The adapter validates the
+#: raw MCP arguments against ``PREPARE_FIELD_POLICY``, so the declared schema is
+#: that same authoritative table: ``purpose`` is required, ``artifact_id`` (not
+#: ``resource_id``) names the artifact, and ``extensions`` is a submit-only
+#: control field.  ``resource_id`` is derived by the Controller route from
+#: ``artifact_id`` and is therefore never an argument here.
+_PREPARE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Explicit prepare request, identical to POST /api/v1/jobs/{job_id}/prepare. "
+        "purpose is required; artifact_id is required when purpose=artifact. The "
+        "Controller derives resource_id from artifact_id, never from the caller."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "purpose": {
+            "type": "string",
+            "enum": ["artifact", "structure-input"],
+            "description": (
+                "Required. artifact = fetch/commit one artifact revision; "
+                "structure-input = local parse+register with no task."
+            ),
+        },
+        "task_ref": {
+            "type": "object",
+            "description": (
+                "Alternate task reference; task_ref.task_id must equal the job id in the "
+                "route path and supplies the default attempt."
+            ),
+        },
+        "job_id": {
+            "type": "string",
+            "description": (
+                "Must equal the job id in the route path; a mismatch is revision_conflict."
+            ),
+        },
+        "artifact_id": {
+            "type": "string",
+            "description": (
+                "Required when purpose=artifact. Safe artifact token; the Controller derives "
+                "resource_id from it."
+            ),
+        },
+        "attempt": {"type": "integer", "minimum": 1},
+        "generation": {"type": "integer", "minimum": 1},
+        "expected_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": (
+                "Declared and normalised for CAS-style callers; the prepare route does not "
+                "act on it."
+            ),
+        },
+        "relative_path": {"type": "string"},
+        "expected_digest": {
+            "type": "string",
+            "description": "Trusted sha256:<64 hex> expectation; a mismatch is conflict.",
+        },
+        "content_digest": {
+            "type": "string",
+            "description": "Fallback spelling of expected_digest (expected_digest wins).",
+        },
+        "expected_size_bytes": {"type": "integer", "minimum": 0},
+        "schema_ref": {"type": "string"},
+        "source_refs": {"type": "array", "items": {"type": "object"}},
+        "evidence_report": {"type": "object"},
+        "media_type": {"type": "string"},
+        "idempotency_key": {
+            "type": "string",
+            "description": (
+                "Client retry key for the prepare operation, forwarded unchanged. The "
+                "server derives the versioned key from (principal, project, client key, "
+                "epoch). Omitting it is NOT idempotent: a retry may re-prepare."
+            ),
+        },
+    },
+    "required": ["purpose"],
+    "additionalProperties": False,
+}
 
 
 def _tool_specs() -> tuple[dict[str, Any], ...]:
@@ -738,7 +818,7 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         _tool_spec(
             McpTool.PREPARE_ARTIFACT,
             "Prepare an artifact for read; idempotent and budget-checked server-side.",
-            _ARTIFACT_SCHEMA,
+            _PREPARE_SCHEMA,
         ),
         _tool_spec(
             McpTool.READ_ARTIFACT,

@@ -161,12 +161,13 @@ def test_pending_decisions_are_never_frozen(freeze: dict[str, Any]) -> None:
     for decision in _decisions(freeze):
         if decision["id"] in listed:
             assert listed[decision["id"]] == decision["status"]
-    # The three forward conventions and the one discovered conflict are pending.
+    # The three forward conventions stay pending; the prepare conflict was
+    # resolved by D-IDENT-10 (M0-11) and is frozen.
     for identifier in ("D-IDENT-04", "D-IDENT-05", "D-IDENT-07"):
         assert _decision(freeze, identifier)["status"] == PENDING_IMPLEMENTATION
         assert _decision(freeze, identifier)["frozen_forward_convention"] is True
-    assert _decision(freeze, "D-IDENT-10")["status"] == PENDING_CONFLICT
-    assert _decision(freeze, "D-IDENT-10")["blocking"] is True
+    assert set(listed) == {"D-IDENT-04", "D-IDENT-05", "D-IDENT-07"}
+    assert _decision(freeze, "D-IDENT-10")["status"] == FROZEN
 
 
 def test_status_vocabulary_is_frozen(freeze: dict[str, Any]) -> None:
@@ -263,29 +264,50 @@ def test_scanner_reports_the_rph_build_tool_arguments(report: dict[str, Any]) ->
     assert evidence["disposition"] == scanner.DISPOSITION_OTHER_KIND
 
 
-def test_prepare_resource_id_is_recorded_as_a_conflict(
+def test_prepare_field_authority_is_frozen_and_not_breaking(
     freeze: dict[str, Any], report: dict[str, Any]
 ) -> None:
-    """The prepare argument vocabulary disagrees with the prepare field policy."""
+    """D-IDENT-10 is resolved: one prepare field table, no breaking consumer.
+
+    The bridge now sends the v1 HTTP prepare body (``purpose``/``artifact_id``),
+    so the scan is clean; ``resource_id`` remains a server-derived identity and is
+    still refused as a request field (the frozen rule that caused the conflict).
+    """
     prepare = _consumer(report, "rph:buildToolArguments:prepare")
-    assert prepare["keys"] == ["attempt", "idempotency_key", "job_id", "resource_id"]
-    assert prepare["extra_keys"] == ["resource_id"]
-    assert prepare["disposition"] == scanner.DISPOSITION_BREAKING
+    assert prepare["keys"] == [
+        "artifact_id",
+        "attempt",
+        "idempotency_key",
+        "job_id",
+        "purpose",
+    ]
+    assert prepare["extra_keys"] == []
+    assert prepare["disposition"] == scanner.DISPOSITION_COMPLIANT
+    assert report["summary"]["breaking_consumers"] == []
+    assert report["summary"]["counts"][scanner.DISPOSITION_CONTRACT_DIVERGENCE] == 0
     with pytest.raises(ApplicationParamError) as info:
         validate_request_fields(
-            {"job_id": "job-1", "attempt": 1, "resource_id": "freq.out"},
+            {"purpose": "artifact", "job_id": "job-1", "attempt": 1, "resource_id": "freq.out"},
             request_kind=REQUEST_PREPARE,
             entry=ENTRY_MCP,
         )
     assert info.value.params["rule"] == "unknown_field"
     assert info.value.params["field"] == "resource_id"
-    conflict = _decision(freeze, "D-IDENT-10")
-    assert conflict["status"] == PENDING_CONFLICT
-    assert "resource_id" in conflict["decision"]
-    assert any(
-        client["consumer"] == "rph:buildToolArguments:prepare"
-        for client in conflict["compatible_clients"]
+    decision = _decision(freeze, "D-IDENT-10")
+    assert decision["status"] == FROZEN
+    assert "artifact_id" in decision["decision"]
+    for field in ("pending_reason", "consumer_task", "frozen_forward_convention", "blocking"):
+        assert field not in decision, field
+    clients = {
+        (item["consumer"], item["path"]): item["disposition"]
+        for item in decision["compatible_clients"]
+    }
+    assert clients[("rph:buildToolArguments:prepare", "rph/packages/bridge/src/index.ts")] == (
+        scanner.DISPOSITION_COMPLIANT
     )
+    vector_names = " ".join(item["test"] for item in decision["vectors"])
+    assert "test_prepare_field_authority_is_one_table" in vector_names
+    assert "prepare registers the artifact" in vector_names
 
 
 # ---------------------------------------------------------------------------
@@ -418,10 +440,10 @@ def test_scanner_check_mode_exit_codes(tmp_path: Path, capsys: pytest.CaptureFix
     assert scanner.main(["--out", str(out)]) == scanner.EXIT_OK
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["schema"] == scanner.SCHEMA
-    assert payload["summary"]["breaking_consumers"] == ["rph:buildToolArguments:prepare"]
+    assert payload["summary"]["breaking_consumers"] == []
     capsys.readouterr()
-    assert scanner.main(["--check"]) == scanner.EXIT_BREAKING
-    assert "BREAKING rph:buildToolArguments:prepare" in capsys.readouterr().err
+    assert scanner.main(["--check"]) == scanner.EXIT_OK
+    assert "BREAKING" not in capsys.readouterr().err
     empty = tmp_path / "empty-root"
     empty.mkdir()
     assert scanner.main(["--check", "--repo-root", str(empty)]) == scanner.EXIT_ERROR

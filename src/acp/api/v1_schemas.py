@@ -1917,9 +1917,25 @@ class V1PreflightRequest(V1JobCreateRequest):
 
 
 class V1PrepareRequest(BaseModel):
-    # M0-06: the MCP adapter forwards the prepare request unchanged, so both
-    # entries must agree on what a declared field is (unknown_field_policy U1
-    # applies to prepare too).
+    """The one prepare request body accepted by ``POST /api/v1/jobs/{id}/prepare``.
+
+    D-IDENT-10 (M0-11): this model, ``application_params.PREPARE_FIELD_POLICY``
+    and ``runtime/application-api.v1.json#operations.prepare.request.fields``
+    are the same table (anti-drift test:
+    ``tests/test_acp2_request_field_equivalence.py``).
+
+    ``purpose`` is required and ``artifact_id`` is required when
+    ``purpose="artifact"`` (``normalize_prepare`` enforces it).  ``resource_id``
+    is deliberately **not** a field: the route derives it from ``artifact_id``
+    (or from ``relative_path`` for a structure input) and hands it to
+    ``PrepareRequest.resource_id``.  MCP/bridge callers therefore send
+    ``artifact_id``, never ``resource_id``.
+
+    M0-06: the MCP adapter forwards the prepare request unchanged, so both
+    entries must agree on what a declared field is (unknown_field_policy U1
+    applies to prepare too).
+    """
+
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
     schema_version: int = 1

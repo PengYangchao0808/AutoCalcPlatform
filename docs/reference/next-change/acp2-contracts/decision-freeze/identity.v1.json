@@ -6,7 +6,7 @@
   "task": "M0-11",
   "title": "Identity, field and migration decisions (G02/G03/G12/G13/G20)",
   "branch": "acp2/integration-remediation",
-  "head": "96d6c81",
+  "head": "e82cd8a",
   "closes": [
     "G02",
     "G03",
@@ -68,7 +68,7 @@
   "client_inventory": {
     "authority": "scripts/acceptance/check_v1_request_field_consumers.py",
     "schema": "acp2.identity.v1.request-field-consumers",
-    "digest": "sha256:abc86d6f8bfe0625091fdaa09f39e165c735d76853ba393df61e732e88acc7ea",
+    "digest": "sha256:5653d89d8c6f8026f6cf8a9a677d5e0abee0cd228b208a4b04a66956e23ca560",
     "scanned_roots": [
       "frontend/js",
       "rph/packages",
@@ -84,28 +84,15 @@
     "summary": {
       "consumers": 32,
       "counts": {
-        "breaking": 1,
-        "compliant": 18,
-        "contract_divergence": 3,
+        "breaking": 0,
+        "compliant": 22,
+        "contract_divergence": 0,
         "expected_rejection": 7,
         "other_request_kind": 3
       },
-      "breaking_consumers": [
-        "rph:buildToolArguments:prepare"
-      ]
+      "breaking_consumers": []
     },
-    "breaking": [
-      {
-        "consumer": "rph:buildToolArguments:prepare",
-        "path": "rph/packages/bridge/src/index.ts",
-        "keys": [
-          "attempt",
-          "idempotency_key",
-          "job_id",
-          "resource_id"
-        ]
-      }
-    ],
+    "breaking": [],
     "consumers": [
       {
         "consumer": "acceptance:_execute_m1",
@@ -144,14 +131,8 @@
         "request_kind": "prepare",
         "extra_keys": [],
         "rejected_keys": [],
-        "contract_extra_keys": [
-          "expected_digest",
-          "expected_size_bytes",
-          "job_id",
-          "media_type",
-          "relative_path"
-        ],
-        "disposition": "contract_divergence"
+        "contract_extra_keys": [],
+        "disposition": "compliant"
       },
       {
         "consumer": "acceptance:_run_artifact",
@@ -160,13 +141,8 @@
         "request_kind": "prepare",
         "extra_keys": [],
         "rejected_keys": [],
-        "contract_extra_keys": [
-          "expected_digest",
-          "expected_size_bytes",
-          "job_id",
-          "relative_path"
-        ],
-        "disposition": "contract_divergence"
+        "contract_extra_keys": [],
+        "disposition": "compliant"
       },
       {
         "consumer": "acceptance:_run_artifact",
@@ -175,15 +151,8 @@
         "request_kind": "prepare",
         "extra_keys": [],
         "rejected_keys": [],
-        "contract_extra_keys": [
-          "evidence_report",
-          "expected_digest",
-          "expected_size_bytes",
-          "job_id",
-          "schema_ref",
-          "source_refs"
-        ],
-        "disposition": "contract_divergence"
+        "contract_extra_keys": [],
+        "disposition": "compliant"
       },
       {
         "consumer": "acceptance:_run_multitenant_authz",
@@ -414,15 +383,10 @@
         "path": "rph/packages/bridge/src/index.ts",
         "kind": "rph-typescript",
         "request_kind": "prepare",
-        "extra_keys": [
-          "resource_id"
-        ],
+        "extra_keys": [],
         "rejected_keys": [],
-        "contract_extra_keys": [
-          "job_id",
-          "resource_id"
-        ],
-        "disposition": "breaking"
+        "contract_extra_keys": [],
+        "disposition": "compliant"
       },
       {
         "consumer": "rph:buildToolArguments:read",
@@ -564,7 +528,7 @@
           "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#submit_field_policy"
         ]
       },
-      "wire_version": "application-api.v1 (contract_version 1.2.0)",
+      "wire_version": "application-api.v1 (contract_version 1.3.0; submit field table unchanged since 1.2.0)",
       "migration_version": null,
       "rollback": "Revert = add the field to SUBMIT_FIELD_POLICY and, only if a shipped client needs a transition window, add a legacy_allowlist row with removal_version + exit_condition. No DB change. Re-introducing a silent 'ignore unknown' mode is not a legal rollback: it was the defect U1 removes.",
       "field_decision": {
@@ -631,17 +595,17 @@
         {
           "consumer": "acceptance:_run_artifact",
           "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "contract_divergence"
+          "disposition": "compliant"
         },
         {
           "consumer": "acceptance:_run_artifact",
           "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "contract_divergence"
+          "disposition": "compliant"
         },
         {
           "consumer": "acceptance:_run_artifact",
           "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "contract_divergence"
+          "disposition": "compliant"
         },
         {
           "consumer": "acceptance:_run_multitenant_authz",
@@ -751,7 +715,7 @@
         {
           "consumer": "rph:buildToolArguments:prepare",
           "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "breaking"
+          "disposition": "compliant"
         },
         {
           "consumer": "rph:buildToolArguments:read",
@@ -1167,19 +1131,16 @@
     },
     {
       "id": "D-IDENT-10",
-      "title": "Prepare surface conflict: MCP acp_prepare_artifact resource_id is not a prepare field",
-      "status": "pending_conflict",
+      "title": "One prepare field table: the HTTP prepare body; resource_id is server-derived and the bridge sends artifact_id",
+      "status": "frozen",
       "owner": "B",
       "signoff": [
         "B",
-        "C-RPH"
+        "C-RPH",
+        "INT"
       ],
-      "decision": "Recorded, not resolved here: the RPH bridge requires resource_id for the prepare operation (OPERATION_FIELDS.prepare = task, attempt, resource) and the frozen bridge test asserts {job_id, attempt, resource_id}; the MCP tool schema declares resource_id; but PREPARE_FIELD_POLICY / V1PrepareRequest do not declare it, and since M0-06 services_mcp_bootstrap._ControllerArtifacts.prepare validates the raw MCP arguments against that policy, a prepare call that carries resource_id is rejected as input_invalid/unknown_field. The registered contract's prepare field list is also stale in the other direction (it lacks job_id/relative_path/expected_*/schema_ref/source_refs/evidence_report/media_type and declares extensions, which the policy does not). One owner must choose: add resource_id (and extensions?) to the prepare contract/DTO, or rename the bridge argument to artifact_id.",
-      "pending_reason": "Two frozen surfaces disagree and choosing one is a contract change, not a freeze: the scan proves the client is rejected today (breaking: rph:buildToolArguments:prepare, contract_divergence: acceptance prepare bodies).",
-      "consumer_task": "M1-01 (application/MCP/artifact contract unification)",
-      "frozen_forward_convention": false,
-      "blocking": true,
-      "rationale": "A prepare path that answers 422 for its own documented argument is a live regression of the v1 field cut, so it must be named before M1-01 freezes the artifact contract.",
+      "decision": "Resolved by the HTTP route being the only authority. POST /api/v1/jobs/{job_id}/prepare accepts exactly V1PrepareRequest (extra=forbid), normalises it once through acp_services.entrypoints.application_params.normalize_prepare and consumes it into acp_services.data.operations.PrepareRequest; the prepare field table is therefore that route body: schema_version, purpose (required), task_ref, job_id, artifact_id (required when purpose=artifact), attempt, generation, expected_revision, relative_path, expected_digest, content_digest, expected_size_bytes, schema_ref, source_refs, evidence_report, media_type, idempotency_key. resource_id is NOT a request field: the route derives it (artifact_id for purpose=artifact, structure-input:<relative_path> otherwise) and passes it as PrepareRequest.resource_id, so a client-sent resource_id stays input_invalid/unknown_field. extensions is a submit-only control field and was removed from the prepare table. The RPH bridge now sends that body (purpose=artifact, job_id, attempt, artifact_id, idempotency_key) instead of the bridge-local resource_id name, and the acp_prepare_artifact input schema declares the same field set. PREPARE_FIELD_POLICY, V1PrepareRequest, application-api.v1.json#operations.prepare.request.fields (contract_version 1.2.0 -> 1.3.0) and the bridge arguments are one table, pinned by tests/test_acp2_request_field_equivalence.py.",
+      "rationale": "The conflict was a live regression of the v1 field cut: the bridge documented an argument the Controller rejects (422 input_invalid/unknown_field), and the registered prepare field list had drifted in both directions (missing the eight fields the route consumes, declaring submit-only extensions). Aligning on the route - rather than widening the HTTP DTO to accept resource_id - keeps one identity for a prepared artifact (the server-derived resource_id) and one name on the wire (artifact_id).",
       "impact": {
         "files": [
           "src/acp_services/entrypoints/application_params.py",
@@ -1199,36 +1160,45 @@
           "rph/test/bridge-contract.test.ts"
         ]
       },
-      "wire_version": "application-api.v1#operations.prepare.request (declared field list)",
+      "wire_version": "application-api.v1 1.3.0#operations.prepare.request (17-field table, purpose required)",
       "migration_version": null,
-      "rollback": "Nothing was changed, so there is nothing to roll back; the resolution (M1-01) must either widen the prepare field policy (a v1.3 additive field) or rename the bridge argument, and either choice carries its own vector.",
+      "rollback": "Revert the four aligned surfaces together: bridge prepare arguments back to resource_id (the scan then reports rph:buildToolArguments:prepare as breaking again), application-api.v1.json#operations.prepare.request.fields back to its 1.2.0 list and contract_version back to 1.2.0, the acp_prepare_artifact input schema back to the shared artifact schema, and PREPARE_FIELD_POLICY/V1PrepareRequest docstrings; then regenerate the consumer inventory digest. No stored row, operation key or receipt changes, so there is no data migration to roll back.",
       "compatible_clients": [
         {
           "consumer": "rph:buildToolArguments:prepare",
           "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "breaking"
+          "disposition": "compliant"
         },
         {
           "consumer": "rph:buildToolArguments:read",
           "path": "rph/packages/bridge/src/index.ts",
           "disposition": "other_request_kind"
+        },
+        {
+          "consumer": "acceptance:_run_artifact",
+          "path": "scripts/acceptance/acp2_runtime.py",
+          "disposition": "compliant"
         }
       ],
       "vectors": [
         {
-          "test": "rph/test/bridge-contract.test.ts::project and attempt ownership are forwarded and never inferred",
-          "asserts": "the frozen bridge prepare arguments are {job_id, attempt, resource_id}"
+          "test": "tests/test_acp2_request_field_equivalence.py::test_prepare_field_authority_is_one_table",
+          "asserts": "PREPARE_FIELD_POLICY, V1PrepareRequest, the registered prepare field table and the bridge prepare arguments are the same 17-field table and never contain resource_id/extensions"
         },
         {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_prepare_resource_id_is_recorded_as_a_conflict",
-          "asserts": "the scanner reports the prepare consumer as breaking and the freeze records it as pending_conflict"
+          "test": "tests/test_acp2_request_field_equivalence.py::test_http_prepare_route_consumes_exactly_that_table",
+          "asserts": "the live HTTP prepare route accepts every declared field (path reaches the 404 for an unknown job) and rejects resource_id with 422"
         },
         {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_prepare_forwards_the_callers_request_unchanged",
-          "asserts": "the MCP adapter validates raw arguments against the prepare policy"
+          "test": "rph/test/bridge-contract.test.ts::prepare registers the artifact and read forwards the artifact identity",
+          "asserts": "the bridge sends {purpose: artifact, job_id, attempt, artifact_id, idempotency_key} to acp_prepare_artifact while read keeps the resource_id identity"
+        },
+        {
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_prepare_field_authority_is_frozen_and_not_breaking",
+          "asserts": "the regenerated inventory has no breaking consumer, the MCP policy still refuses resource_id, and the freeze carries the resolution with no pending fields"
         }
       ],
-      "notes": "The read path uses the same resource_id vocabulary and is not judged by the submit policy (other_request_kind)."
+      "notes": "The read path keeps the resource_id identity (GET /jobs/{id}/prepared/{resource}); it is not judged by the submit policy (other_request_kind). The MCP launch contract mcp-launch.schema.json declares a strict subset of the prepare fields; widening it is left to M1-01."
     }
   ],
   "pending_summary": [
@@ -1252,13 +1222,6 @@
       "reason": "The plan_digest segment has no producer: researchRoundKey/researchEventKey contain no plan_digest, and the bridge forwards request.idempotencyKey unchanged. Freezing it would document a key shape no code emits.",
       "consumer_task": "M1-02 (research submit intent persisted before the call; plan_digest invalidation)",
       "blocking": false
-    },
-    {
-      "id": "D-IDENT-10",
-      "status": "pending_conflict",
-      "reason": "Two frozen surfaces disagree and choosing one is a contract change, not a freeze: the scan proves the client is rejected today (breaking: rph:buildToolArguments:prepare, contract_divergence: acceptance prepare bodies).",
-      "consumer_task": "M1-01 (application/MCP/artifact contract unification)",
-      "blocking": true
     }
   ],
   "observations": [
@@ -1292,7 +1255,7 @@
   "scope_notes": [
     "This file freezes decisions; it does not register itself in the contract manifest (M0-12 decides the registration rule).",
     "legacy_allowlist is empty and must stay empty until a named consumer needs a transition window.",
-    "Nothing in this file changes runtime behaviour: M0-11 is a freeze, not a fix.",
+    "Nothing in this file changes science or execution behaviour: M0-11 is a freeze, not a fix. The one exception is D-IDENT-10, whose resolution is a field-contract alignment (bridge prepare arguments, the acp_prepare_artifact input schema and the registered prepare field table) and is pinned by its own vectors and the regenerated client inventory.",
     "Boundary with M0-12: research-extension version authority, the negotiated request field position/source, the external_change_required/scope_change branches and the CI/Ruff required scope are NOT decided here. D-IDENT-03 fixes only the implementation_status vocabulary those decisions must use, not the negotiation carrier.",
     "Boundary with M0-12 registration: docs/reference/next-change/acp2-contracts/manifest.json is intentionally untouched; whether decision-freeze/ is registered, and with which owner/digest rule, is M0-12's call."
   ],
@@ -1439,11 +1402,19 @@
         "artifact_id",
         "attempt",
         "content_digest",
-        "extensions",
+        "evidence_report",
+        "expected_digest",
+        "expected_revision",
+        "expected_size_bytes",
         "generation",
         "idempotency_key",
+        "job_id",
+        "media_type",
         "purpose",
+        "relative_path",
+        "schema_ref",
         "schema_version",
+        "source_refs",
         "task_ref"
       ],
       "read": [

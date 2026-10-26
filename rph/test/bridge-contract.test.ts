@@ -373,6 +373,16 @@ test("prepare registers the artifact and read forwards the artifact identity", T
     attempt: 1,
     resource_id: "freq.out",
   });
+  // D-IDENT-10 (M0-11): the prepare arguments are the v1 HTTP prepare body. The
+  // artifact is `artifact_id` (`resource_id` is server-derived and would be an
+  // unknown field), and `purpose` is the Controller-required field.
+  assert.deepEqual(client.calls[0]?.params, {
+    purpose: "artifact",
+    job_id: "job-1",
+    attempt: 1,
+    artifact_id: "freq.out",
+    idempotency_key: "idem-prepare",
+  });
   assert.equal(artifactKey({ task: "job-1", attempt: 1, resource: "freq.out" }), artifactKey({ task: "job-1", attempt: 1, resource: "freq.out" }));
 });
 
@@ -454,7 +464,7 @@ test("project and attempt ownership are forwarded and never inferred", TEST_OPTI
       attempt: 3,
       resource: "freq.out",
     }),
-    { job_id: "job-1", attempt: 3, resource_id: "freq.out" },
+    { purpose: "artifact", job_id: "job-1", attempt: 3, artifact_id: "freq.out" },
   );
 });
 

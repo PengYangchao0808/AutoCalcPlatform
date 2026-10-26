@@ -898,8 +898,12 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     # 1.2.0 (M0-06/G23): additive execution-decision fields (name/tags/node_tags/
     # execution_mode/target_node/molecule_name/task_name/remark/
     # preflight_fingerprint) plus the exhaustive ``submit_field_policy`` block.
+    # 1.3.0 (D-IDENT-10/M0-11): the prepare request field table becomes the one
+    # authority the HTTP route consumes (additive: job_id/relative_path/
+    # expected_*/schema_ref/source_refs/evidence_report/media_type/
+    # expected_revision; ``extensions`` was never a prepare field and is gone).
     # 1.1.0's research fields stay untouched.
-    assert api["contract_version"] == "1.2.0"
+    assert api["contract_version"] == "1.3.0"
     submit = api["operations"]["submit"]
     for name in ("proposal_ref", "plan_digest", "budget"):
         assert name in submit["request"]["fields"], name
@@ -926,6 +930,32 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     for name in ("execution_mode", "target_node", "node_tags"):
         assert name in api["operations"]["preflight"]["request"]["fields"], name
     assert submit["request"]["fields"]["budget"]["required"] == ["unit", "timeout_s"]
+    # D-IDENT-10 (M0-11): the prepare field table is the HTTP route's own body.
+    prepare = api["operations"]["prepare"]["request"]
+    assert prepare["required"] == ["purpose"]
+    assert prepare["additional_properties"] is False
+    assert set(prepare["fields"]) == {
+        "schema_version",
+        "purpose",
+        "task_ref",
+        "job_id",
+        "artifact_id",
+        "attempt",
+        "generation",
+        "expected_revision",
+        "relative_path",
+        "expected_digest",
+        "content_digest",
+        "expected_size_bytes",
+        "schema_ref",
+        "source_refs",
+        "evidence_report",
+        "media_type",
+        "idempotency_key",
+    }
+    assert "resource_id" not in prepare["fields"]
+    assert "extensions" not in prepare["fields"]
+    assert "resource_id" in prepare["server_derived_fields"]
     for name in ("task_ref", "result", "approval_ref"):
         assert name in submit["response"]["fields"], name
     extension = api["mcp_extensions"]["acp.research.v1"]

@@ -1,6 +1,6 @@
 {
   "schema": "acp2.runtime.application-api.v1",
-  "contract_version": "1.2.0",
+  "contract_version": "1.3.0",
   "frozen_at": "2026-10-27",
   "owner": "B",
   "status": "delivered",
@@ -1767,6 +1767,14 @@
         "required": [
           "purpose"
         ],
+        "authority": "src/acp/api/v1_routes.py::prepare_artifact accepts exactly V1PrepareRequest (extra=forbid), normalises it through acp_services.entrypoints.application_params.normalize_prepare, and consumes it into acp_services.data.operations.PrepareRequest (D-IDENT-10, M0-11). This field list, PREPARE_FIELD_POLICY and V1PrepareRequest are one table (tests/test_acp2_request_field_equivalence.py).",
+        "conditional_requirements": {
+          "artifact_id": "required when purpose=artifact",
+          "task_ref_or_job_id": "one of task_ref.task_id / job_id is required when purpose=artifact; the route path job id is authoritative and a differing body value is revision_conflict"
+        },
+        "server_derived_fields": {
+          "resource_id": "never a request field: the route derives it (artifact_id for purpose=artifact, structure-input:<relative_path> otherwise) and passes it as PrepareRequest.resource_id; sending it is input_invalid/unknown_field"
+        },
         "fields": {
           "schema_version": {
             "type": "integer",
@@ -1782,22 +1790,29 @@
               "artifact",
               "structure-input"
             ],
-            "description": "artifact = remote/expensive artifact fetch; structure-input = local parse+register with no task."
+            "description": "Required. artifact = fetch/commit one artifact revision; structure-input = local parse+register with no task."
           },
           "task_ref": {
             "type": [
               "object",
               "null"
             ],
-            "description": "Required when purpose=artifact.",
+            "description": "Alternate task reference; task_ref.task_id must equal the job id in the route path and supplies the default attempt.",
             "ref": "task_ref"
+          },
+          "job_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The route path is authoritative; a body job_id that differs is revision_conflict, never a second target."
           },
           "artifact_id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Required when purpose=artifact."
+            "description": "Required when purpose=artifact. Safe artifact token; becomes PrepareRequest.resource_id (server-derived, never client-sent)."
           },
           "attempt": {
             "type": [
@@ -1805,7 +1820,7 @@
               "null"
             ],
             "minimum": 1,
-            "description": "1-based attempt number; defaults to the current attempt."
+            "description": "1-based attempt number; defaults to the current attempt and may never be newer than it (attempt_not_current)."
           },
           "generation": {
             "type": [
@@ -1813,7 +1828,30 @@
               "null"
             ],
             "minimum": 1,
-            "description": "Artifact generation; defaults to the latest generation."
+            "description": "Artifact generation; defaults to 1 for purpose=artifact and 0 for structure-input; re-checked by the completion CAS."
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Declared and normalised for CAS-style callers; the prepare route does not act on it (an artifact prepare is deduplicated by content identity)."
+          },
+          "relative_path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Relative path inside the attempt work dir; traversal is refused, and for purpose=structure-input it names the parsed structure source."
+          },
+          "expected_digest": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Trusted digest expectation; a mismatch is conflict and the committed value is always re-derived."
           },
           "content_digest": {
             "type": [
@@ -1821,7 +1859,46 @@
               "null"
             ],
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "description": "Optional expected digest; a mismatch is conflict."
+            "description": "Fallback spelling of expected_digest (expected_digest wins)."
+          },
+          "expected_size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Trusted size expectation; the committed size is always re-derived."
+          },
+          "schema_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Source schema reference, recorded as the operation payload source_schema."
+          },
+          "source_refs": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object"
+            },
+            "description": "Source references recorded verbatim in the operation payload."
+          },
+          "evidence_report": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Evidence report attached to the artifact; when present the relative path is taken as declared evidence rather than re-validated as a fetch target."
+          },
+          "media_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Recorded media type of the prepared body."
           },
           "idempotency_key": {
             "type": [
@@ -1829,14 +1906,7 @@
               "null"
             ],
             "pattern": "^[A-Za-z0-9._:-]{8,128}$",
-            "description": "Client retry key; the same key with a different payload or plan_digest is a conflict."
-          },
-          "extensions": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Namespaced extension metadata (unknown_field_policy U4); opaque to the platform and never influences execution."
+            "description": "Client retry key; the server derives the versioned key from (principal, project, client key, epoch)."
           }
         }
       },

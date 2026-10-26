@@ -1329,6 +1329,10 @@ export interface P2BridgeResult {
  * or switches `method`, charge, spin or resources; an absent value stays
  * absent so the server decides. `generation` is never a server argument: it is
  * a client staleness counter (`tool-semantics.md` §5).
+ *
+ * `prepare` is built as the v1 HTTP prepare body (`purpose`/`artifact_id`), so
+ * the RPH `resource` is sent as `artifact_id` and never as `resource_id`
+ * (D-IDENT-10: `resource_id` is server-derived and an unknown request field).
  */
 export function buildToolArguments(
   request: BridgeRequest,
@@ -1359,9 +1363,16 @@ export function buildToolArguments(
       put("reference", request.task);
       return Object.freeze(args);
     case "prepare":
+      // D-IDENT-10 (M0-11): the prepare arguments are the v1 HTTP prepare body,
+      // not a bridge-local vocabulary. `purpose` is required by the Controller
+      // (the RPH prepare operation is always the artifact prepare), the artifact
+      // is named `artifact_id` (the Controller derives `resource_id` from it and
+      // rejects a client-sent `resource_id` as an unknown field), and
+      // `generation` stays client-only.
+      put("purpose", "artifact");
       put("job_id", request.task);
       put("attempt", request.attempt);
-      put("resource_id", request.resource);
+      put("artifact_id", request.resource);
       put("idempotency_key", request.idempotencyKey);
       return Object.freeze(args);
     case "read":
