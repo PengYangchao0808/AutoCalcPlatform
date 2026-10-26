@@ -114,6 +114,65 @@ def sample_payloads() -> dict[str, dict[str, Any]]:
     }
 
 
+def _evidence_projection_violations(
+    payload: dict[str, Any], expected: dict[str, Any]
+) -> list[tuple[str, str]]:
+    """Corpus validator for the ADR-003 evidence-projection sample set.
+
+    Dispatches by payload family exactly as ADR-003 §D1–D4 defines them and
+    replays each vector through the single platform projection module — no
+    second report model (the corpus test itself is one of the guards).
+    """
+    from acp_services.runtime import evidence_projection as ep
+    from acp_services.runtime.research_session import ResearchIdentity
+
+    def run(fn: Any) -> list[tuple[str, str]]:
+        try:
+            fn()
+        except ep.TaskRefError as exc:
+            return [(exc.code, "task_ref")]
+        except ep.EvidenceProjectionError as exc:
+            return [(exc.code, "evidence_view")]
+        except ep.ResearchDecisionError as exc:
+            return [(exc.code, "decision")]
+        return []
+
+    # Decision family: an evidence view plus a decision (or a decision record).
+    if "evidence_view" in payload:
+        view = ep.EvidenceView.from_dict(payload["evidence_view"])
+        if "decision_record" in payload:
+            return run(lambda: ep.decision_from_dict(payload["decision_record"], view=view))
+        return run(lambda: ep.decide_evidence(view, payload["decision"]))
+
+    # Evidence-view family: a full projection document (digest re-checked by
+    # from_dict); negatives are attribution failures verified against the
+    # trusted research identity the sample declares.
+    if "report" in payload:
+        view = ep.EvidenceView.from_dict(payload)
+        research = expected.get("research") or payload.get("research") or {}
+        identity = ResearchIdentity(
+            principal_id=research["principal_id"],
+            project_id=research["project_id"],
+            research_id=research["research_id"],
+            session_id=research["session_id"],
+        )
+        return run(lambda: ep.verify_attribution(view, identity, research.get("round", 0)))
+
+    # Attribution family: research identity + task ref; the project must match
+    # (ADR-003 D1: foreign attribution is refused, never silently adopted).
+    if "research" in payload and "task_ref" in payload:
+        violations = run(lambda: ep.parse_task_ref(payload["task_ref"]))
+        if violations:
+            return violations
+        ref = ep.parse_task_ref(payload["task_ref"])
+        if ref.project_id != payload["research"]["project_id"]:
+            return [("foreign_project", "task_ref")]
+        return []
+
+    # Bare TaskRef vectors (ADR-003 D1 normalisation table).
+    return run(lambda: ep.parse_task_ref(payload))
+
+
 # ---------------------------------------------------------------------------
 # application-api
 # ---------------------------------------------------------------------------
@@ -1456,6 +1515,8 @@ def test_samples_accept_or_reject_exactly_as_declared() -> None:
         elif contract == "dependencies.json":
             errors = _graph_errors(payload)
             violations = [(error, "") for error in sorted(errors)]
+        elif contract == "ADR-003-taskref-evidence-decision.md":
+            violations = _evidence_projection_violations(payload, data["expected"])
         else:
             raise AssertionError(f"no validator for {contract}")
         violations_by_contract.setdefault(contract, {})[path] = violations

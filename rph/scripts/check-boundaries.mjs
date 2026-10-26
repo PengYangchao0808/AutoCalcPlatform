@@ -42,6 +42,60 @@ const DIRECT_NET_RULE = {
   test: (text) => /node:net|["']net["']/.test(text),
 };
 
+// ---------------------------------------------------------------------------
+// M1-03 — exactly one evidence/report model per layer
+// ---------------------------------------------------------------------------
+//
+// Three authorities exist and no fourth may appear:
+//   1. `src/cccp/analysis/research/evidence.py` (Python, science schema — A),
+//   2. `src/acp_services/runtime/evidence_projection.py` (Python, projection — B),
+//   3. `packages/research/src/evidence.ts` (TypeScript, the RPH view — C).
+// `packages/dsh-bundle/skills/models.ts` is a *declared legacy* model-facing
+// skill I/O schema (`acp2.evidence.report.v1`, owner M3-04). It is never
+// persisted, never digest-bound and can never be imported by bridge/research
+// (the import-direction rule above already forbids that direction). Converging
+// it onto the single view is tracked by ADR-003 as a leftover, not silently
+// allowlisted: any *new* module fails this check until the guard and the ADR
+// are changed deliberately.
+const EVIDENCE_MODEL_ALLOWLIST = new Map([
+  [
+    "packages/research/src/evidence.ts",
+    "the single RPH EvidenceView/ResearchDecision model (M1-03)",
+  ],
+  [
+    "packages/dsh-bundle/skills/models.ts",
+    "declared legacy skill I/O schema acp2.evidence.report.v1 (owner M3-04)",
+  ],
+]);
+
+const EVIDENCE_MODEL_MARKERS = [
+  { id: "claim_status_vocabulary", test: (text) => /EVIDENCE_CLAIM_STATUSES/.test(text) },
+  { id: "report_interface", test: (text) => /export interface EvidenceReport\b/.test(text) },
+  {
+    id: "report_validator",
+    test: (text) => /export function (validate|assert)EvidenceReport\s*\(/.test(text),
+  },
+];
+
+// The bridge is a parse/attribute adapter: it must import the model, not
+// restate it.
+const BRIDGE_MODEL_REDECLARATION = [
+  {
+    id: "bridge_evidence_model",
+    test: (text) =>
+      /export (interface|type|class) (EvidenceView|TaskRef|ResearchDecision|DecisionRecord)\b/.test(
+        text,
+      ),
+  },
+  {
+    id: "bridge_evidence_policy",
+    test: (text) =>
+      /export (const|function) (validateEvidenceView|buildDecisionRecord|parseTaskRef)\b/.test(
+        text,
+      ),
+  },
+];
+
 function walk(dir) {
   const out = [];
   let entries;
@@ -114,6 +168,28 @@ for (const pkg of PACKAGES) {
       findings.push({ package: pkg, file: rel, rule: "direct_net", detail: "bridge/research must not open sockets" });
     }
 
+    const modelMarkers = EVIDENCE_MODEL_MARKERS.filter((marker) => marker.test(text));
+    if (modelMarkers.length > 0 && !EVIDENCE_MODEL_ALLOWLIST.has(rel)) {
+      findings.push({
+        package: pkg,
+        file: rel,
+        rule: "duplicate_evidence_model",
+        detail: `declares ${modelMarkers.map((marker) => marker.id).join(", ")}; only packages/research/src/evidence.ts may own the evidence model`,
+      });
+    }
+    if (pkg === "bridge") {
+      for (const rule of BRIDGE_MODEL_REDECLARATION) {
+        if (rule.test(text)) {
+          findings.push({
+            package: pkg,
+            file: rel,
+            rule: rule.id,
+            detail: "bridge parses and attributes the research evidence model; it never redeclares it",
+          });
+        }
+      }
+    }
+
     for (const specifier of importSpecifiers(text)) {
       if (specifier.startsWith("@deepseek-ai/dsh-")) {
         const allowed = pkg === "dsh-bundle" && specifier === "@deepseek-ai/dsh-mcp-client";
@@ -145,7 +221,9 @@ for (const pkg of PACKAGES) {
   console.log(`  ${pkg}: ${own.length} file(s), imports -> ${[...ALLOWED_IMPORTS[pkg]].join(", ")}`);
 }
 console.log("  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),");
-console.log("             DSH private source paths, platform store imports, wrong-direction imports");
+console.log("             DSH private source paths, platform store imports, wrong-direction imports,");
+console.log("             duplicate evidence models (only packages/research/src/evidence.ts),");
+console.log("             bridge re-declaring the evidence model or its decision policy");
 
 if (findings.length > 0) {
   console.error("\nBOUNDARY CHECK FAILED");

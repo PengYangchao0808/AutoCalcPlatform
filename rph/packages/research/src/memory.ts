@@ -8,6 +8,10 @@
  * prompt or a hidden chain-of-thought — those fields are rejected by
  * `validateMemoryEntry`.
  *
+ * The evidence/decision types are **not** duplicated here: they live in
+ * `./evidence.ts` (`EvidenceView`, `ResearchDecision`, `DecisionRecord`) and
+ * this module only persists projection references and decisions.
+ *
  * Retrieval is scoped on three axes at once:
  *   * authorization — the principal must be granted `read` on the queried
  *     project inside its tenant (mirrors the frozen platform access contract);
@@ -26,6 +30,7 @@
 
 import type { ResearchMemoryKind } from "./index.js";
 import { memoryKey } from "./index.js";
+import { FORBIDDEN_ARCHIVE_FIELDS } from "./evidence.js";
 import {
   researchRecordId,
   type ResearchRecord,
@@ -252,31 +257,6 @@ export const MEMORY_ENTRY_FIELDS: readonly string[] = Object.freeze([
   "created_at",
 ] as const);
 
-/**
- * Fields that would archive a prompt or a hidden chain-of-thought.
- *
- * A memory entry and an EvidenceReport evidence field must never carry these:
- * the auditable artifact is the decision summary and its references, not the
- * model's internal text.
- */
-export const FORBIDDEN_ARCHIVE_FIELDS: readonly string[] = Object.freeze([
-  "prompt",
-  "prompts",
-  "system_prompt",
-  "chain_of_thought",
-  "cot",
-  "reasoning",
-  "scratchpad",
-  "thoughts",
-  "hidden_state",
-  "messages",
-  "transcript",
-  "conversation",
-  "completion",
-  "model_output",
-  "raw_model_output",
-] as const);
-
 /** Validate one memory entry; prompt/CoT archive fields are rejected. */
 export function validateMemoryEntry(value: unknown): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -430,209 +410,6 @@ export function memoryEntryFromProposal(
 /** One-line reference-only decision summary (never model text). */
 export function decisionSummary(entry: MemoryEntry): string {
   return `${entry.kind}:${entry.id}@${entry.revision} decision=${entry.decision} refs=${entry.references.length}`;
-}
-
-// ---------------------------------------------------------------------------
-// EvidenceReport: a model assumption can never be evidence
-// ---------------------------------------------------------------------------
-
-export const EVIDENCE_CLAIM_STATUSES = [
-  "supported",
-  "refuted",
-  "inconclusive",
-  "not_evaluated",
-] as const;
-
-export type EvidenceClaimStatus = (typeof EVIDENCE_CLAIM_STATUSES)[number];
-
-/** Source kinds that denote a model/agent conclusion, never scientific data. */
-export const FORBIDDEN_MODEL_EVIDENCE_SOURCES: readonly string[] = Object.freeze([
-  "model_assumption",
-  "model",
-  "llm",
-  "agent",
-  "reasoning",
-  "chain_of_thought",
-  "prompt",
-] as const);
-
-const ASSUMPTION_KEYS: readonly string[] = Object.freeze([
-  "assumption",
-  "model_assumption",
-  "llm_conclusion",
-  "model_conclusion",
-] as const);
-
-export interface EvidenceItem {
-  readonly source_kind: string;
-  readonly sha256?: string | null;
-  readonly ref?: string | null;
-}
-
-export interface EvidenceReportClaim {
-  readonly claim_id: string;
-  readonly status: EvidenceClaimStatus;
-  readonly validator_id: string;
-  readonly validator_version: string;
-  readonly source_refs: readonly string[];
-  readonly evidence: readonly EvidenceItem[];
-  readonly limitations?: readonly string[];
-}
-
-export interface EvidenceReport {
-  readonly report_id: string;
-  readonly project_id: string;
-  readonly claims: readonly EvidenceReportClaim[];
-}
-
-function flagArchiveFields(
-  value: Readonly<Record<string, unknown>>,
-  path: string,
-  issues: ValidationIssue[],
-): void {
-  for (const key of FORBIDDEN_ARCHIVE_FIELDS) {
-    if (Object.hasOwn(value, key)) {
-      issue(
-        issues,
-        `${path}.${key}`,
-        "prompt_archive_forbidden",
-        "an EvidenceReport must not archive prompts or hidden chain-of-thought",
-      );
-    }
-  }
-  for (const key of ASSUMPTION_KEYS) {
-    if (Object.hasOwn(value, key)) {
-      issue(
-        issues,
-        `${path}.${key}`,
-        "model_assumption_not_evidence",
-        "a model assumption is not validator evidence",
-      );
-    }
-  }
-}
-
-function validateEvidenceItem(
-  value: unknown,
-  path: string,
-  issues: ValidationIssue[],
-): void {
-  if (!isRecord(value)) {
-    issue(issues, path, "type", "must be an object");
-    return;
-  }
-  flagArchiveFields(value, path, issues);
-  const sourceKind = value["source_kind"];
-  if (!isText(sourceKind)) {
-    issue(issues, `${path}.source_kind`, "type", "must be a non-empty string");
-  } else if (FORBIDDEN_MODEL_EVIDENCE_SOURCES.includes(sourceKind)) {
-    issue(
-      issues,
-      `${path}.source_kind`,
-      "model_assumption_not_evidence",
-      `source_kind ${sourceKind} is model output, not scientific evidence`,
-    );
-  }
-}
-
-function validateEvidenceClaim(
-  value: unknown,
-  path: string,
-  issues: ValidationIssue[],
-): void {
-  if (!isRecord(value)) {
-    issue(issues, path, "type", "must be an object");
-    return;
-  }
-  flagArchiveFields(value, path, issues);
-  if (!isText(value["claim_id"])) {
-    issue(issues, `${path}.claim_id`, "type", "must be a non-empty string");
-  }
-  const status = value["status"];
-  if (
-    typeof status !== "string" ||
-    !(EVIDENCE_CLAIM_STATUSES as readonly string[]).includes(status)
-  ) {
-    issue(
-      issues,
-      `${path}.status`,
-      "enum",
-      `must be one of ${EVIDENCE_CLAIM_STATUSES.join(", ")}`,
-    );
-  }
-  if (!isText(value["validator_id"])) {
-    issue(issues, `${path}.validator_id`, "type", "must be a non-empty string");
-  }
-  if (!isText(value["validator_version"])) {
-    issue(
-      issues,
-      `${path}.validator_version`,
-      "type",
-      "must be a non-empty string",
-    );
-  }
-  const sourceRefs = value["source_refs"];
-  if (!Array.isArray(sourceRefs)) {
-    issue(issues, `${path}.source_refs`, "type", "must be an array of strings");
-  }
-  const evidence = value["evidence"];
-  if (!Array.isArray(evidence)) {
-    issue(issues, `${path}.evidence`, "type", "must be an array");
-  } else {
-    evidence.forEach((item, index) =>
-      validateEvidenceItem(item, `${path}.evidence[${index}]`, issues),
-    );
-  }
-}
-
-/**
- * Validate an EvidenceReport-shaped value.
- *
- * Rejects any evidence item whose `source_kind` is a model/agent conclusion and
- * any claim/evidence key that carries a model assumption or an archived
- * prompt/chain-of-thought.  The scientific verdict vocabulary is fixed; a model
- * can never author a `supported` claim through this surface.
- */
-export function validateEvidenceReport(value: unknown): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  if (!isRecord(value)) {
-    issue(issues, "$", "type", "must be an object");
-    return issues;
-  }
-  flagArchiveFields(value, "$", issues);
-  if (!isText(value["report_id"])) {
-    issue(issues, "$.report_id", "type", "must be a non-empty string");
-  }
-  if (!isText(value["project_id"])) {
-    issue(issues, "$.project_id", "type", "must be a non-empty string");
-  }
-  const claims = value["claims"];
-  if (!Array.isArray(claims)) {
-    issue(issues, "$.claims", "type", "must be an array");
-  } else {
-    claims.forEach((claim, index) =>
-      validateEvidenceClaim(claim, `$.claims[${index}]`, issues),
-    );
-  }
-  return issues;
-}
-
-/** True when a value validates as an EvidenceReport. */
-export function isEvidenceReport(value: unknown): value is EvidenceReport {
-  return validateEvidenceReport(value).length === 0;
-}
-
-/** Assert an EvidenceReport-shaped value; throws with the violation list. */
-export function assertEvidenceReport(value: unknown): EvidenceReport {
-  const issues = validateEvidenceReport(value);
-  if (issues.length > 0) {
-    throw new TypeError(
-      `invalid EvidenceReport: ${issues
-        .map((item) => `${item.path}: [${item.code}] ${item.message}`)
-        .join("; ")}`,
-    );
-  }
-  return value as EvidenceReport;
 }
 
 // ---------------------------------------------------------------------------

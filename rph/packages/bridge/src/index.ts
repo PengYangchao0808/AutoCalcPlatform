@@ -15,6 +15,13 @@ import {
   type SubmitIntentStore,
 } from "@rph/research";
 import type { ResearchRecordRef } from "@rph/research";
+import {
+  assertEvidenceView,
+  parseTaskRef,
+  taskRefKey,
+  type EvidenceView,
+  type TaskRef,
+} from "@rph/research";
 
 /** DSH exposes MCP tools to the model with exactly this prefix. */
 export const BRIDGE_MODEL_PREFIX = "mcp__acp__";
@@ -1827,4 +1834,80 @@ export async function callP2Operation(
     structuredContent: result.structuredContent,
     projection: projectToolResult(raw, result),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Evidence attribution (M1-03, G07/G08): parse and attribute — nothing else
+// ---------------------------------------------------------------------------
+//
+// The bridge is not an evidence model. It parses the platform's
+// `acp2.runtime.evidence-projection.v1` payload into the single
+// `@rph/research` `EvidenceView` and refuses any view that names a foreign
+// project / research / round / task attempt. It never derives a claim status,
+// never upgrades an execution status and never persists anything.
+
+/** Attribution the caller knows before it has seen the view. */
+export interface EvidenceAttribution {
+  readonly project_id: string;
+  readonly research_id: string;
+  readonly round: number;
+}
+
+/**
+ * Attribute a task reference to the expected research scope.
+ *
+ * A foreign project is a typed conflict, never a projection the caller may
+ * silently adopt.
+ */
+export function attributeTaskRef(
+  ref: TaskRef,
+  expected: EvidenceAttribution,
+): TaskRef {
+  if (ref.project_id !== expected.project_id) {
+    contractError("authorization", "foreign_project", {
+      expected_project: expected.project_id,
+      observed_project: ref.project_id,
+    });
+  }
+  return ref;
+}
+
+/**
+ * Parse and attribute one evidence-projection payload.
+ *
+ * The view must already carry a digest-bound task reference; a foreign
+ * project/research/round is refused before any consumer sees a status.
+ */
+export function attributeEvidenceView(
+  payload: unknown,
+  expected: EvidenceAttribution,
+): EvidenceView {
+  const view = assertEvidenceView(payload);
+  attributeTaskRef(view.task_ref, expected);
+  if (view.research.research_id !== expected.research_id) {
+    contractError("authorization", "foreign_research", {
+      expected_research: expected.research_id,
+      observed_research: view.research.research_id,
+    });
+  }
+  if (view.research.round !== expected.round) {
+    contractError("conflict", "foreign_round", {
+      expected_round: expected.round,
+      observed_round: view.research.round,
+    });
+  }
+  return view;
+}
+
+/** Stable key of the attributed attempt (`project|task|attempt|release|digest`). */
+export function attributedTaskRefKey(ref: TaskRef): string {
+  return taskRefKey(ref);
+}
+
+/** Parse a platform task reference through the single normalisation. */
+export function parsePlatformTaskRef(
+  payload: unknown,
+  projectId = "",
+): TaskRef {
+  return parseTaskRef(payload, projectId);
 }

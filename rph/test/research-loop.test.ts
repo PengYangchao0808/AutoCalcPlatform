@@ -61,6 +61,7 @@ import {
   type SupervisorResult,
   type SupervisorSkills,
   type SynthesizerInput,
+  type ScienceSeed,
   type TaskRef,
   type WaitEvent,
   type WaitResult,
@@ -77,6 +78,32 @@ const TASK: TaskRef = {
   attempt: 1,
   release_id: "release-1",
 };
+
+// M1-04a: a charged, open-shell science seed.  The planner must carry it
+// verbatim (charge -1 / multiplicity 2), never default it to 0/1.
+const SCIENCE_SEED: ScienceSeed = {
+  method: "r2SCAN-3c",
+  mapping: "identity",
+  charge: -1,
+  multiplicity: 2,
+  electronic_state: {
+    charge: -1,
+    multiplicity: 2,
+    state_label: "doublet",
+    spin_polarization: 1,
+  },
+  structure_provenance: [
+    {
+      input_id: "reactant-complex",
+      sha256: DIGEST,
+      format: "xyz",
+      role: "reactant_complex",
+    },
+  ],
+  constraints: [
+    { kind: "bond" as const, atoms: [0, 1], target: "1.4", unit: "angstrom" },
+  ],
+} as const;
 
 function budget(overrides: Partial<PlanBudget> = {}): PlanBudget {
   return {
@@ -134,6 +161,7 @@ function supervisorInput(
       format: "xyz",
       role: "reactant_complex",
     },
+    science_seed: SCIENCE_SEED,
     limits: { max_rounds: 3, budget: budget() },
     plan_definition_digest: () => DIGEST,
     ...overrides,
@@ -281,11 +309,22 @@ test("interpreter: versioned input/output schema accepts a valid request", TEST_
     question_ref: null,
     constraints: ["no_ts_seed"],
     available_inputs: ["diene"],
+    science_seed: SCIENCE_SEED,
   };
   assert.deepEqual(validateInterpreterInput(input), []);
   const output = runInterpreter(input);
   assert.deepEqual(validateInterpreterOutput(output), []);
   assert.equal(output.intent, "research");
+  assert.deepEqual(output.missing_science, []);
+
+  // M1-04a: without a typed science seed the intent is `clarify` and the
+  // missing critical values are named — never filled with 0/1.
+  const withoutScience = runInterpreter({
+    ...input,
+    science_seed: null,
+  });
+  assert.equal(withoutScience.intent, "clarify");
+  assert.deepEqual(withoutScience.missing_science, ["charge", "multiplicity"]);
 
   assert.notDeepEqual(
     validateInterpreterInput({ ...input, schema: "acp2.skill.interpreter.input.v2" }),
@@ -370,6 +409,7 @@ test("planner: output is a complete plan with a digest, science and budget", TES
       format: "xyz",
       role: "reactant_complex",
     },
+    science_seed: SCIENCE_SEED,
     critique_findings: [],
     evidence: null,
     remaining_budget: budget(),
@@ -379,6 +419,13 @@ test("planner: output is a complete plan with a digest, science and budget", TES
   assert.deepEqual(validatePlannerOutput(output), []);
   assert.equal(output.science.method, "r2SCAN-3c");
   assert.equal(output.budget.task_refs, 1);
+  // M1-04a: the typed block carries the seed values (charged/open-shell kept).
+  assert.equal(output.science_inputs.charge, -1);
+  assert.equal(output.science_inputs.multiplicity, 2);
+  assert.deepEqual(
+    output.science_inputs.structure_provenance.map((item) => item.role),
+    ["reactant_complex"],
+  );
 
   assert.notDeepEqual(validatePlannerOutput({ ...output, budget: {} }), []);
   assert.notDeepEqual(

@@ -1,0 +1,16 @@
+{
+  "sample_id": "task-ref-missing-release.negative",
+  "contract": "ADR-003-taskref-evidence-decision.md",
+  "kind": "negative",
+  "payload": {
+    "project_id": "proj-m1-03",
+    "task_id": "job-m1-03-static",
+    "attempt": 1
+  },
+  "expected": {
+    "valid": false,
+    "code": "task_ref_missing_release",
+    "violation": "task_ref_missing_release",
+    "class": "invalid-parameter"
+  }
+}

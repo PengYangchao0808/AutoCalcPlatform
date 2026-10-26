@@ -102,6 +102,7 @@ __all__ = [
     "read_task_result",
     "read_task_result_qualification",
     "receipt_exit_code",
+    "task_result_content_digest",
     "task_result_path",
     "build_task_result_document",
     "write_receipt_atomic",
@@ -1091,6 +1092,17 @@ def write_task_result_document(work_dir: Path | str, document: Mapping[str, Any]
     """
     _write_json_atomic(task_result_path(work_dir), dict(document))
     return str(document.get("content_digest") or "")
+
+
+def task_result_content_digest(document: Mapping[str, Any]) -> str:
+    """Return the worker's canonical content digest of a ``task_result`` body.
+
+    This is the single canonicalisation used by :func:`build_task_result_document`
+    and :func:`read_task_result`; consumers (for example the M1-03 evidence
+    projection) re-verify a document through it instead of copying the rule.
+    The ``content_digest`` member itself must be excluded by the caller.
+    """
+    return _content_digest(document)
 
 
 def read_task_result(work_dir: Path | str) -> dict[str, Any] | None:
