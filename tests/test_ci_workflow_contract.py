@@ -1,4 +1,4 @@
-"""CI workflow contract guards for the M0-02a CI/package/frontend/contract fix.
+"""CI workflow contract guards for the M0-02a/M0-02b CI/package/frontend/contract fix.
 
 The 2026-10-26 delivery-gap audit found the pipeline structurally unable to
 prove what it claimed:
@@ -15,14 +15,17 @@ prove what it claimed:
   skip" could not even be observed.
 
 This module pins those structural facts by parsing ``.github/workflows/ci.yml``
-and ``pyproject.toml`` as data. It deliberately does NOT assert that the
-conformance gap is closed: the ``mcp-conformance`` job is a skeleton running a
-non-empty placeholder selection until the M0-02b contract suite lands.
-:func:`test_conformance_placeholder_is_never_vacuous` rejects both an empty
-selector and a ``-m contract`` selector while no test actually carries that
-marker, and :func:`test_conformance_lane_declares_itself_open` pins the
-``NOT_CLOSED`` / ``TODO(M0-02b)`` markers so the lane cannot be cited as
-evidence of closure.
+and ``pyproject.toml`` as data.
+
+M0-02b wires the ``mcp-conformance`` lane to the real cross-stack suite
+(``tests/test_acp2_mcp_sdk_contract.py``, ``-m contract``) and this module pins
+that wiring: the contract selection has exactly one owner, the lane keeps a
+non-contract structural subset so it is never empty, and the contract step
+cannot pass vacuously — an empty selector (pytest exit 5) fails, every skip is
+accounted for, and the external frozen DSH tree is an explicit workflow
+variable (``ACP2_DSH_SOURCE``) whose absence is reported as ``NOT_VERIFIED``
+rather than silently green. The retired skeleton markers (``TODO(M0-02b)``,
+``NOT_CLOSED``) must not come back.
 """
 
 from __future__ import annotations
@@ -161,10 +164,25 @@ def _contract_marked_test_files() -> list[Path]:
     ]
 
 
-def _conformance_pytest_step() -> str:
-    runs = [text for text in _runs("mcp-conformance") if "pytest " in text]
-    assert len(runs) == 1, f"expected exactly one pytest invocation, got {runs!r}"
-    return runs[0]
+def _conformance_step(needle: str) -> dict[str, Any]:
+    """Return the single ``mcp-conformance`` step whose name contains *needle*."""
+    hits = [step for step in _steps("mcp-conformance") if needle in str(step.get("name", ""))]
+    assert len(hits) == 1, (
+        f"expected exactly one mcp-conformance step named *{needle}*, "
+        f"got {[step.get('name') for step in hits]!r}"
+    )
+    return hits[0]
+
+
+def _conformance_pytest_steps() -> list[str]:
+    return [text for text in _runs("mcp-conformance") if "pytest " in text]
+
+
+CONTRACT_SUITE = ROOT / "tests" / "test_acp2_mcp_sdk_contract.py"
+STRUCTURAL_SUITES = (
+    ROOT / "tests" / "test_acp2_runtime_mcp_process.py",
+    ROOT / "tests" / "test_acp2_runtime_mcp_backends.py",
+)
 
 
 def test_workflow_declares_expected_jobs() -> None:
@@ -299,19 +317,67 @@ def test_mcp_conformance_job_installs_full_toolchain() -> None:
     assert build <= min(dist_guards)
 
 
-def test_conformance_placeholder_is_never_vacuous() -> None:
-    step = _conformance_pytest_step()
-    assert "--strict-markers" in step
-    if _CONTRACT_SELECTION_RE.search(step):
-        # `-m contract` only becomes a real gate once a contract-marked test exists.
-        assert _contract_marked_test_files(), (
-            "mcp-conformance selects `-m contract` while no test carries the marker"
-        )
-        return
-    targets = _TEST_TARGET_RE.findall(step)
-    assert targets, "the placeholder selection must name explicit test files"
+def test_conformance_structural_subset_is_non_empty_and_explicit() -> None:
+    """The lane keeps a real non-contract floor that needs no external tool tree."""
+    step = _conformance_step("structural MCP conformance subset")
+    text = _flat(step.get("run", ""))
+    assert "--strict-markers" in text
+    assert '-m "not slow and not contract"' in text, text
+    targets = _TEST_TARGET_RE.findall(text)
+    assert targets, "the structural subset must name explicit test files"
     for target in targets:
-        assert (ROOT / target).is_file(), f"placeholder selector target is missing: {target}"
+        assert (ROOT / target).is_file(), f"structural selector target is missing: {target}"
+    for suite in STRUCTURAL_SUITES:
+        assert suite.is_file(), f"missing structural suite {suite}"
+    # It must run before the contract gate, so a missing DSH tree can never
+    # leave the job with zero executed tests.
+    contract = _conformance_step("contract suite")
+    runs = _runs("mcp-conformance")
+    assert runs.index(_flat(step.get("run", ""))) < runs.index(_flat(contract.get("run", "")))
+
+
+def test_conformance_contract_gate_runs_the_marked_suite() -> None:
+    step = _conformance_step("contract suite")
+    text = _flat(step.get("run", ""))
+    assert "tests/test_acp2_mcp_sdk_contract.py" in text, text
+    assert _CONTRACT_SELECTION_RE.search(text), text
+    assert "--strict-markers" in text
+    # `-m contract` only selects anything while the suite actually carries the
+    # marker: pin the file that does, not just the selector text.
+    assert CONTRACT_SUITE.is_file(), f"missing contract suite {CONTRACT_SUITE}"
+    assert CONTRACT_SUITE in _contract_marked_test_files(), (
+        f"{CONTRACT_SUITE} must carry `pytestmark = pytest.mark.contract`"
+    )
+
+
+def test_conformance_contract_gate_cannot_pass_by_skipping() -> None:
+    step = _conformance_step("contract suite")
+    text = _flat(step.get("run", ""))
+    # An empty selection fails by name (pytest exit 5), never as a green gate.
+    assert "-eq 5" in text and "EMPTY_CONTRACT_SELECTION" in text, text
+    assert "--junitxml" in text, "the gate needs machine-readable counts, not log scraping"
+    for code in ("PARTIAL_CONTRACT_SKIP", "DSH_AVAILABLE_BUT_SKIPPED", "NOT_VERIFIED"):
+        assert code in text, f"missing skip-accounting branch {code!r}"
+    assert "exit 1" in text
+    # The external DSH tree is a declared workflow input, never an implicit
+    # local path (the suite would otherwise skip and pass).
+    env = step.get("env") or {}
+    assert "vars.ACP2_DSH_SOURCE" in str(env.get("ACP2_DSH_SOURCE", "")), env
+
+
+def test_conformance_resolves_the_frozen_dsh_tree_explicitly() -> None:
+    step = _conformance_step("Resolve frozen DSH harness")
+    text = _flat(step.get("run", ""))
+    assert "_acp2_mcp_live_harness" in text, (
+        "the preflight must reuse the suite's own prerequisite resolver"
+    )
+    assert "prerequisites" in text
+    assert "GITHUB_ENV" in text, "availability flags must reach the contract step"
+    assert "DSH_DECLARED_BUT_UNRESOLVED" in text, (
+        "a declared-but-unusable DSH path must fail by name"
+    )
+    env = step.get("env") or {}
+    assert "vars.ACP2_DSH_SOURCE" in str(env.get("ACP2_DSH_SOURCE", "")), env
 
 
 def test_contract_selection_is_owned_by_the_conformance_lane() -> None:
@@ -320,17 +386,28 @@ def test_contract_selection_is_owned_by_the_conformance_lane() -> None:
         for name in _ci()["jobs"]
         if any(_CONTRACT_SELECTION_RE.search(text) for text in _runs(name))
     ]
-    assert owners in ([], ["mcp-conformance"]), (
-        f"`-m contract` must be selected by mcp-conformance only, got {owners!r}"
+    assert owners == ["mcp-conformance"], (
+        f"`-m contract` must be selected by mcp-conformance and no other job, got {owners!r}"
     )
 
 
-def test_conformance_lane_declares_itself_open() -> None:
+def test_conformance_pytest_invocations_are_explicit_and_strict() -> None:
+    steps = _conformance_pytest_steps()
+    assert len(steps) == 2, f"expected the structural and contract runs, got {steps!r}"
+    for text in steps:
+        assert "--strict-markers" in text
+        assert re.search(r"-m\s+['\"]?(?:not slow and (?:not )?)?contract", text), (
+            f"a conformance pytest run without an explicit marker selection: {text}"
+        )
+
+
+def test_conformance_lane_carries_no_placeholder_or_open_banner() -> None:
     raw = CI_PATH.read_text(encoding="utf-8")
-    assert "TODO(M0-02b)" in raw, "the skeleton must carry an explicit contract-suite TODO"
-    runs = " ".join(_runs("mcp-conformance"))
-    assert "NOT_CLOSED" in runs, "the lane must print its open status on every run"
-    assert "gap closed" not in runs.lower(), "the skeleton must never claim the gap is closed"
+    assert "TODO(M0-02b)" not in raw, "the gate is wired; the skeleton TODO must not return"
+    assert "NOT_CLOSED" not in raw, "the lane must not print an open-gap banner"
+    runs = " ".join(_runs("mcp-conformance")).lower()
+    assert "placeholder" not in runs, "the lane must not fall back to a placeholder selection"
+    assert "gap closed" not in runs
 
 
 def test_contract_nightly_pre_release_markers_are_registered() -> None:

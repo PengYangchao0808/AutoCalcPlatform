@@ -16,10 +16,20 @@ name: CI
 #     non-empty job (empty/failing module runs are rejected by the harness);
 #   * the ordinary py3.10/3.11/3.12 matrix EXCLUDES `-m contract`; contract
 #     tests belong to the dedicated `mcp-conformance` lane;
-#   * `mcp-conformance` (Python 3.11 + Node 22.19.0) is a SKELETON: it wires
-#     the full toolchain but still runs a non-empty placeholder selection.
-#     The real cross-stack contract suite is M0-02b scope — that gap is
-#     NOT_CLOSED and must never be reported as closed from this file.
+#   * `mcp-conformance` (Python 3.11 + Node 22.19.0) now runs the real
+#     cross-stack contract suite (`pytest tests/test_acp2_mcp_sdk_contract.py
+#     --strict-markers -m contract`) instead of a placeholder selection, and is
+#     the only owner of that marker. A non-contract structural subset runs
+#     first so the lane stays non-vacuous even when the external tool tree is
+#     absent.
+#     Remaining prerequisite: the frozen DSH tree is NOT vendored (AGENTS
+#     anti-pattern 36) — provision `deepseek-harness` at rev
+#     687f282e8625c6b8d11ff58211a90524be2e4317 (Node 22.19.0,
+#     `pnpm install --frozen-lockfile` + `pnpm run build`, runbook
+#     docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md
+#     §3.2) and expose its path as the repository variable `ACP2_DSH_SOURCE`.
+#     Without the variable the contract run reports NOT_VERIFIED with its exact
+#     skip counts; with the variable set but unusable the job fails.
 # Job wall-clock is recorded per job (mechanism only, no threshold yet); a job
 # over 20 minutes must be split, never skipped (EXECUTION_PLAN §11).
 on:
@@ -204,20 +214,28 @@ jobs:
         if: always()
         run: echo "ACP2_JOB_WALL_CLOCK_SECONDS=$(( $(date -u +%s) - ACP2_JOB_START_EPOCH ))"
 
-  # M0-02a skeleton for the L1 conformance lane (Python 3.11 + Node 22.19).
+  # L1 conformance lane (Python 3.11 + Node 22.19.0), two sequential gates:
   #
-  # STATUS: NOT_CLOSED. The real cross-stack contract suite (exported entry
-  # contracts, real MCP SDK handshake, Bridge↔normalizer, HTTP↔frontend) is
-  # M0-02b scope. This job wires the full toolchain (complete extras + nmrglue,
-  # frozen RPH install + build with verified dist output) and runs a non-empty
-  # placeholder selection so the lane itself is exercised today.
+  #   1. a non-contract structural subset (`test_acp2_runtime_mcp_process.py`,
+  #      `test_acp2_runtime_mcp_backends.py`) that needs no external tool tree,
+  #      so the lane is never empty even when the frozen DSH checkout is not
+  #      mounted;
+  #   2. the real cross-stack contract suite (`-m contract`,
+  #      tests/test_acp2_mcp_sdk_contract.py): the unmodified frozen
+  #      `@deepseek-ai/dsh-mcp-client` → `@modelcontextprotocol/client` 2.2.0
+  #      → real `acp mcp serve` stdio handshake. This job is the only owner of
+  #      the `contract` marker selection.
   #
-  # TODO(M0-02b): replace the placeholder selection in "Run conformance lane"
-  # with `pytest tests/ --strict-markers -m contract -q` and drop the
-  # NOT_CLOSED banner. G01/G20 stay OPEN until then — this job must never be
-  # cited as evidence that the contract gap is closed.
-  #
-  # An empty selection (pytest exit 5) fails the job; it never passes silently.
+  # The frozen DSH tree is NOT vendored, so its availability is an explicit
+  # workflow input: repository variable `ACP2_DSH_SOURCE` must point at a
+  # provisioned `deepseek-harness` checkout (runbook §3.2: rev 687f282e…,
+  # Node 22.19.0, `pnpm install --frozen-lockfile` + `pnpm run build`). The
+  # suite turns a missing tree into a `NOT_VERIFIED` skip, so the lane never
+  # trusts it: the preflight step below records availability, and the contract
+  # step fails whenever the tree is declared but unusable, when the selection is
+  # empty, or when only part of the suite skipped. An undeclared tree yields an
+  # explicitly reported `NOT_VERIFIED` (skip counts in the job summary) on top
+  # of the always-run structural subset — never an invisible pass.
   mcp-conformance:
     runs-on: ubuntu-latest
     steps:
@@ -266,13 +284,122 @@ jobs:
             fi
           done
 
-      - name: Run conformance lane (placeholder; gap NOT_CLOSED)
+      - name: Run structural MCP conformance subset (non-contract)
+        # Non-vacuous floor: these suites exercise the MCP adapter/backend
+        # seams without Node or the frozen DSH client, so the lane still runs
+        # real assertions when the external tool tree is not mounted.
         run: |
-          echo "NOT_CLOSED: cross-stack contract suite (pytest marker 'contract') lands in M0-02b"
           pytest \
             tests/test_acp2_runtime_mcp_process.py \
             tests/test_acp2_runtime_mcp_backends.py \
-            --strict-markers -m "not slow" -q
+            --strict-markers -m "not slow and not contract" -q
+
+      - name: Resolve frozen DSH harness (repository variable ACP2_DSH_SOURCE)
+        env:
+          # Availability is a declared input, never an implicit local path:
+          # an unset variable means "not provisioned here" (reported
+          # NOT_VERIFIED), a set-but-broken path fails this step by name.
+          ACP2_DSH_SOURCE: ${{ vars.ACP2_DSH_SOURCE }}
+        run: |
+          python - <<'PY'
+          """Record DSH availability for the contract gate (same resolver as the suite)."""
+          import os
+          from pathlib import Path
+
+          from tests import _acp2_mcp_live_harness as harness
+
+          facts = harness.prerequisites()
+          declared = bool(os.environ.get("ACP2_DSH_SOURCE"))
+          available = facts.available
+          detail = facts.problem or "prerequisites satisfied"
+          with Path(os.environ["GITHUB_ENV"]).open("a") as handle:
+              handle.write(f"ACP2_DSH_AVAILABLE={'true' if available else 'false'}\n")
+              handle.write(f"ACP2_DSH_DECLARED={'true' if declared else 'false'}\n")
+          print(f"DSH available={available} declared={declared} node={facts.node}: {detail}")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with Path(summary_path).open("a") as handle:
+                  handle.write(f"- DSH harness: available={available} declared={declared} ({detail})\n")
+          if declared and not available:
+              print(f"::error::DSH_DECLARED_BUT_UNRESOLVED: ACP2_DSH_SOURCE is set but unusable ({detail})")
+              raise SystemExit(1)
+          PY
+
+      - name: Run cross-stack contract suite (`-m contract`)
+        env:
+          # The suite resolves the tree itself (harness.prerequisites), so the
+          # pytest process needs the same variable as the preflight step.
+          ACP2_DSH_SOURCE: ${{ vars.ACP2_DSH_SOURCE }}
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/mcp-contract-junit.xml"
+          # pytest exit 5 means "no tests collected": an empty selection must
+          # fail loudly instead of looking like a green gate.
+          set +e
+          pytest tests/test_acp2_mcp_sdk_contract.py \
+            --strict-markers -m contract -q -rs \
+            --junitxml="$report"
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "::error::EMPTY_CONTRACT_SELECTION — \`-m contract\` collected zero tests"
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          # Skip accounting: a skipped contract suite is only acceptable when
+          # the DSH tree was never declared, and it must be reported by name
+          # with its exact counts. Anything else fails.
+          python - "$report" <<'PY'
+          """Gate the contract run's skip count so the lane can never pass vacuously."""
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          suite = ET.parse(sys.argv[1]).getroot().find("testsuite")
+          if suite is None:
+              print("::error::CONTRACT_REPORT_MISSING: no <testsuite> in the JUnit report")
+              raise SystemExit(1)
+          total = int(suite.get("tests", "0"))
+          skipped = int(suite.get("skipped", "0"))
+          failed = int(suite.get("failures", "0")) + int(suite.get("errors", "0"))
+          available = os.environ.get("ACP2_DSH_AVAILABLE") == "true"
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          def record(line: str) -> None:
+              print(line)
+              if summary_path:
+                  with Path(summary_path).open("a") as handle:
+                      handle.write(line + "\n")
+
+          def fail(code: str, message: str) -> None:
+              print(f"::error::{code}: {message}")
+              record(f"- FAIL {code}: {message}")
+              raise SystemExit(1)
+
+          if total == 0:
+              fail("EMPTY_CONTRACT_SELECTION", "collected 0 contract tests")
+          if failed:
+              fail("CONTRACT_FAILURES", f"{failed} failing contract test(s)")
+          if skipped == 0:
+              record(f"- PASS contract gate: {total} contract tests, 0 skipped")
+              raise SystemExit(0)
+          if skipped != total:
+              fail("PARTIAL_CONTRACT_SKIP", f"{skipped}/{total} contract tests skipped")
+          if available:
+              fail(
+                  "DSH_AVAILABLE_BUT_SKIPPED",
+                  f"the DSH tree resolved yet {skipped}/{total} contract tests skipped",
+              )
+          record(f"- NOT_VERIFIED contract gate: {skipped}/{total} skipped (DSH harness not provisioned)")
+          print(
+              "::warning::CONTRACT_NOT_VERIFIED — the frozen DSH tree was not declared "
+              "(repository variable ACP2_DSH_SOURCE); see "
+              "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md §3.2"
+          )
+          PY
 
       - name: Report job wall-clock
         # Mechanism only (M0-02a); over 20 minutes means split, not skip.
