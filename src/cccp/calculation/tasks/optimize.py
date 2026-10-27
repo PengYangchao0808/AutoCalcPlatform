@@ -626,7 +626,9 @@ def _run_attempt(
         )
         attempt_kwargs["output_callback"] = recorder.feed_line
     try:
-        result = call_capability(backend, capability, inputs, target_dir, attempt_kwargs)
+        result = call_capability(
+            backend, capability, inputs, target_dir, attempt_kwargs, context=ctx
+        )
         if recorder is not None:
             recorder.finish(
                 converged=bool(result.success),

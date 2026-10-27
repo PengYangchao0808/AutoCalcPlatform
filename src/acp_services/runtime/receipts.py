@@ -39,6 +39,7 @@ Author: ACP Services (B lane, todo 31).
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -48,6 +49,7 @@ from acp_services.contracts.envelope import (
     expected_submission_id,
 )
 from acp_services.contracts.injection import JobStateAdvancePort
+from acp_services.runtime.canonical_digest import canonical_digest
 from acp_services.runtime.errors import WorkerError
 from acp_services.runtime.receipt_identity import ReceiptIdentity
 from acp_services.runtime.receipt_identity import identity_digest as _identity_digest
@@ -58,8 +60,10 @@ __all__ = [
     "ReceiptVerdict",
     "advance_job_from_worker_result",
     "advance_job_state",
+    "chain_digest_of",
     "verify_historical_receipt",
     "verify_receipt",
+    "verify_step_execution_chain",
 ]
 
 
@@ -155,6 +159,59 @@ def verify_receipt(
         return _reject(
             "digest_mismatch",
             "receipt plan/step/release digests disagree with the frozen envelope",
+        )
+    chain_verdict = verify_step_execution_chain(receipt)
+    if not chain_verdict.accepted:
+        return chain_verdict
+    return ReceiptVerdict(accepted=True)
+
+
+def chain_digest_of(chain: Sequence[Mapping[str, Any]]) -> str:
+    """Return the canonical digest of a receipt's step execution chain."""
+    return canonical_digest({"step_execution_chain": [dict(entry) for entry in chain]})
+
+
+def verify_step_execution_chain(receipt: ExecutionReceipt) -> ReceiptVerdict:
+    """Verify the additive ``step_execution_chain`` + ``chain_digest`` pair (M2-04b).
+
+    Two independent facts are checked:
+
+    * every row carries a ``v2:`` execution identity and an ``identity_scheme``
+      — a row with an empty/placeholder identity is never accepted, and a
+      fixture scheme is never accepted as production evidence;
+    * ``chain_digest`` equals the canonical digest of the chain (a chain edited
+      after signing is a forged receipt).
+
+    The *definition* identity set (``step_identities``) was already verified
+    against the frozen envelope above; neither check compensates for the other.
+    """
+    chain = tuple(receipt.step_execution_chain)
+    if not chain:
+        if receipt.chain_digest:
+            return _reject(
+                "chain_mismatch",
+                "receipt carries a chain_digest but no step_execution_chain rows",
+            )
+        return ReceiptVerdict(accepted=True)
+    for entry in chain:
+        identity = str(entry.get("step_identity") or "")
+        scheme = str(entry.get("identity_scheme") or "")
+        if not identity.startswith("v2:"):
+            return _reject(
+                "chain_mismatch",
+                f"step {entry.get('step_id')!r} carries no v2: execution identity ({identity!r})",
+            )
+        if not scheme or scheme == "static-fixture.v0":
+            return _reject(
+                "chain_mismatch",
+                f"step {entry.get('step_id')!r} identity scheme {scheme!r} is not a "
+                "production execution scheme",
+            )
+    expected = chain_digest_of(chain)
+    if receipt.chain_digest != expected:
+        return _reject(
+            "chain_mismatch",
+            f"chain_digest {receipt.chain_digest!r} != recomputed {expected!r}",
         )
     return ReceiptVerdict(accepted=True)
 

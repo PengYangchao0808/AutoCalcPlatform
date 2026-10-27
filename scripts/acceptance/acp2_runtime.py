@@ -307,7 +307,7 @@ class PhaseSpec:
 
 @dataclass(frozen=True)
 class ScenarioSpec:
-    """One of the 15 immutable B scenario IDs."""
+    """One of the 16 immutable B scenario IDs (M2-04 adds the recipe DAG)."""
 
     scenario: str
     default_owner: str
@@ -666,6 +666,22 @@ B_SCENARIOS: dict[str, ScenarioSpec] = {
         ),
         "B24a migration/backup restore acceptance is not implemented in the B01 skeleton",
     ),
+    "bounded-recipe-dag": ScenarioSpec(
+        "bounded-recipe-dag",
+        "M2-04",
+        {
+            "integration:multi-step": _phase(
+                "M2-04",
+                "read",
+                "local",
+                600,
+                args=("fixture", "out"),
+                prerequisites=("fixture",),
+                side_effects=("no QC", "no controller", "no second task"),
+            ),
+        },
+        "M2-04 bounded recipe DAG production wiring is not implemented",
+    ),
     "package-install": ScenarioSpec(
         "package-install",
         "B25b",
@@ -695,6 +711,7 @@ EXPECTED_B_SCENARIOS = (
     "infra-plugin",
     "multitenant",
     "migration",
+    "bounded-recipe-dag",
     "package-install",
 )
 
@@ -1666,6 +1683,10 @@ def _evidence_kind_for_phase(phase: str, scenario: str | None = None) -> str:
         return "fixture"
     if phase == "aggregate":
         return "aggregate"
+    if scenario == "bounded-recipe-dag":
+        # M2-04 exercises the production adapter/fence/quota/receipt chain with a
+        # controlled CCCP stub: no QC binary, no controller, no real science.
+        return "fixture"
     if phase == "da-preflight":
         # B18 has no compute and creates no task; this is static/simulated
         # contract evidence, never a live DA execution (B20a owns that).
@@ -9116,6 +9137,329 @@ def _run_da_submit(
     )
 
 
+# ---------------------------------------------------------------------------
+# M2-04 — bounded recipe DAG production wiring (independent scenario)
+# ---------------------------------------------------------------------------
+
+M204_SCHEMA = "acp2.m204.bounded-recipe-dag.v1"
+
+
+def _m204_recipe() -> dict[str, Any]:
+    """Canonical two-step bounded recipe (optimize -> frequency), no parameters."""
+    selector = {"selector_kind": "whole_product"}
+
+    def ref(from_step: str, product_kind: str) -> dict[str, Any]:
+        return {
+            "from_step": from_step,
+            "product_kind": product_kind,
+            "selector": dict(selector),
+            "required": True,
+        }
+
+    return {
+        "schema_version": 1,
+        "recipe_id": "recipe.m204.relax_freq.v1",
+        "applicability": {"supported_reaction_classes": [], "preconditions": []},
+        "limits": {"max_steps": 4, "max_edges": 4},
+        "steps": [
+            {
+                "step_id": "relax",
+                "intent": "relax the frozen guess (controlled stub)",
+                "required": True,
+                "diagnostic_only": False,
+                "task_kind": "optimize",
+                "parameters": {},
+                "consumes": [],
+                "produces": [ref("relax", "geometry")],
+                "validators": [],
+                "alternatives": [],
+            },
+            {
+                "step_id": "freq",
+                "intent": "verify the relaxed structure (controlled stub)",
+                "required": True,
+                "diagnostic_only": False,
+                "task_kind": "frequency",
+                "parameters": {},
+                "consumes": [ref("relax", "geometry")],
+                "produces": [ref("freq", "frequencies")],
+                "validators": [],
+                "alternatives": [],
+            },
+        ],
+        "edges": [
+            {
+                "edge_id": "relax_to_freq_geometry",
+                "from_step": "relax",
+                "to_step": "freq",
+                "output_ref": ref("relax", "geometry"),
+            }
+        ],
+        "validators": [],
+        "alternatives": [],
+    }
+
+
+def _m204_stub_runner(calls: list[str]):
+    """Controlled CCCP stub: typed results, real artifacts, no QC binary."""
+    from cccp.calculation.contracts import ArtifactRef, Provenance
+    from cccp.calculation.requests import TaskKind
+    from cccp.calculation.results import FrequencyPayload, TaskResult
+
+    def factory(entrypoint: str):
+        def run(request, *, context=None):  # noqa: ANN001 - cccp task seam
+            calls.append(entrypoint)
+            out_dir = Path(request.output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            provenance = Provenance(
+                backend="stub", method="stub", version="0", input_signature="stub"
+            )
+            if request.task is TaskKind.OPTIMIZE:
+                artifact = out_dir / "final.xyz"
+                artifact.write_text("3\nstub\nO 0 0 0\nH 0 0 1\nH 1 0 0\n", encoding="utf-8")
+                return TaskResult(
+                    task=TaskKind.OPTIMIZE,
+                    status="completed",
+                    complete=True,
+                    converged=True,
+                    coordinates=((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)),
+                    symbols=("O", "H", "H"),
+                    artifacts=(ArtifactRef(path=artifact, type="geometry"),),
+                    provenance=provenance,
+                )
+            artifact = out_dir / "freq.json"
+            artifact.write_text('{"n_imaginary": 0}', encoding="utf-8")
+            return TaskResult(
+                task=TaskKind.FREQUENCY,
+                status="completed",
+                complete=True,
+                frequencies=(1600.0, 3700.0, 3800.0),
+                artifacts=(ArtifactRef(path=artifact, type="frequencies"),),
+                payload=FrequencyPayload(n_imaginary=0),
+                provenance=provenance,
+            )
+
+        return run
+
+    return factory
+
+
+def _run_bounded_recipe_dag(
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """M2-04 independent scenario: freeze -> DAG worker -> receipt chain.
+
+    Everything except the declared CCCP stub boundary is real: the freeze
+    builder, the Services frozen-group writer, the quota reservation/ledger, the
+    fenced commit port, the step dispatch adapter, the DONE truth table and the
+    controller-side receipt verification.  No QC binary, no controller process,
+    no second platform task, no jobs DB.
+    """
+    import hashlib
+    import json as _json
+    from types import SimpleNamespace
+
+    from acp.calculations import attempt_freeze as acp_freeze
+    from acp_services.contracts.envelope import ExecutionReceipt
+    from acp_services.runtime.attempt_freeze import write_frozen_attempt
+    from acp_services.runtime.execution_quota import (
+        QuotaReservation,
+    )
+    from acp_services.runtime.receipts import verify_receipt
+    from acp_services.runtime.resource_precheck import ExecutionResourcePrecheck
+    from acp_services.runtime.step_dag_worker import StepDagTaskExecutor
+    from acp_services.worker_bootstrap import assemble_worker
+
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "read",
+        "acceptance.target": "local",
+        "m204.schema": M204_SCHEMA,
+        "m204.fixture": str(fixture_path),
+        "m204.evidence_class": "CONTROLLED-STUB",
+        "m204.no_compute": True,
+        "m204.stub_boundaries": ["cccp.task_core"],
+    }
+
+    def record(name: str, ok: bool, detail: str) -> None:
+        assertions.append({"name": name, "status": "PASS" if ok else "FAIL", "detail": detail})
+
+    work = out_dir / "m204-work"
+    work.mkdir(parents=True, exist_ok=True)
+    structure = work / "in.xyz"
+    structure.write_text("3\nwater\nO 0 0 0\nH 0 0 1\nH 1 0 0\n", encoding="utf-8")
+
+    fixture = Path(fixture_path)
+    assert_context = "fixture file is optional for this scenario"
+    if fixture.is_file():
+        assert_context = f"fixture read ({fixture.stat().st_size} bytes)"
+    record("m204.fixture_context", True, assert_context)
+
+    record_obj = SimpleNamespace(
+        id="20260101_904_BoundedRecipe",
+        attempt=1,
+        spec=SimpleNamespace(
+            workflow=acp_freeze.BOUNDED_RECIPE_WORKFLOW,
+            input={
+                "bounded_recipe": {
+                    "recipe": _m204_recipe(),
+                    "inputs": {},
+                    "structure_role": "minimum",
+                    "step_requirements": [
+                        {"step_id": "relax", "executables": ["env"], "require_version": False}
+                    ],
+                }
+            },
+        ),
+    )
+    release = SimpleNamespace(
+        unversioned=True,
+        release_id="unversioned-shared",
+        release_digest="",
+        assert_current=lambda: None,
+    )
+    try:
+        spec = acp_freeze.build_bounded_recipe_freeze_spec(record_obj, work, structure, release)
+        group = write_frozen_attempt(work, spec)
+    except Exception as exc:  # noqa: BLE001 - acceptance reports, never crashes
+        record("m204.freeze_group", False, f"{type(exc).__name__}: {exc}")
+        extensions["m204.reason"] = "freeze failed"
+        return EXIT_FAIL, assertions, extensions
+    record(
+        "m204.freeze_group",
+        group.manifest.workflow == "BoundedRecipe",
+        f"group workflow {group.manifest.workflow}",
+    )
+
+    reservation = QuotaReservation.from_dict(
+        _json.loads(
+            (work / "WORK/00_RUNTIME/quota/quota_reservation.json").read_text(encoding="utf-8")
+        )
+    )
+    record(
+        "m204.worst_case_reservation",
+        reservation.limits.get("recipe_step") == 2 and reservation.limits.get("qc_invocation") == 2,
+        f"reservation {dict(reservation.limits)}",
+    )
+
+    calls: list[str] = []
+    runtime = assemble_worker(
+        envelope=spec.envelope,
+        plan=spec.plan,
+        work_dir=work,
+        execution_right=_M204Right(),
+    )
+    executor = StepDagTaskExecutor(
+        precheck=ExecutionResourcePrecheck(
+            resolver=lambda name, configured: Path("/usr/bin/env"),
+            version_probe=lambda name, path: "acceptance",
+        ),
+        runner_factory=_m204_stub_runner(calls),
+    )
+    original = runtime.worker.executor
+    runtime_object = runtime
+    # Inject the controlled stub through the assembled worker's executor port
+    # (the production assembly already selected the DAG executor).
+    assert isinstance(original, StepDagTaskExecutor)
+    from dataclasses import replace as _replace
+
+    runtime_object = _replace(
+        runtime_object,
+        worker=_replace(
+            runtime_object.worker,
+            executor=_replace(
+                original, precheck=executor.precheck, runner_factory=executor.runner_factory
+            ),
+        ),
+    )
+    result = runtime_object.run()
+    receipt = result if isinstance(result, ExecutionReceipt) else None
+    record(
+        "m204.receipt_completed",
+        receipt is not None and receipt.state == "completed",
+        f"receipt state {getattr(receipt, 'state', result)}",
+    )
+
+    chain = tuple(getattr(receipt, "step_execution_chain", ()) or ())
+    record(
+        "m204.execution_chain",
+        len(chain) == 2
+        and all(str(row.get("step_identity", "")).startswith("v2:") for row in chain),
+        f"{[row.get('step_id') for row in chain]}",
+    )
+    env = spec.envelope
+    verdict = (
+        verify_receipt(
+            receipt,
+            env,
+            current_attempt=env.attempt,
+            current_submission_id=env.submission_id,
+            current_release_id=env.release_id,
+            owner_token=env.owner,
+            fencing_token=env.fencing_token,
+        )
+        if receipt is not None
+        else None
+    )
+    record(
+        "m204.controller_verification",
+        bool(verdict and verdict.accepted),
+        f"verdict {getattr(verdict, 'code', 'n/a') or 'accepted'}",
+    )
+    record(
+        "m204.one_task_ref",
+        all(
+            (work / f"WORK/00_RUNTIME/steps/{step_id}/step_result.json").is_file()
+            for step_id in ("relax", "freq")
+        ),
+        "one attempt wrote both step results",
+    )
+    record(
+        "m204.no_jobs_db",
+        not list(work.rglob("*.db")),
+        "worker path opened no jobs database",
+    )
+
+    artifacts: list[dict[str, Any]] = []
+    for path in sorted(work.rglob("*.json")):
+        if "quota" in path.parts and path.name == "quota_ledger.jsonl":
+            continue
+        artifacts.append(
+            {
+                "path": str(path.relative_to(out_dir)),
+                "size_bytes": path.stat().st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+    extensions["m204.artifacts"] = artifacts
+    extensions["m204.chain_digest"] = getattr(receipt, "chain_digest", "")
+    extensions["m204.plan_definition_digest"] = _json.loads(
+        (work / "WORK/00_RUNTIME/frozen/plan.json").read_text(encoding="utf-8")
+    )["payload"]["bounded_step_dag"]["definition"]["plan_definition_digest"]
+    failed = [entry for entry in assertions if entry["status"] != "PASS"]
+    if failed:
+        extensions["m204.reason"] = f"{len(failed)} assertion(s) failed"
+        return EXIT_FAIL, assertions, extensions
+    extensions["m204.reason"] = None
+    return EXIT_PASS, assertions, extensions
+
+
+class _M204Right:
+    """Acceptance-local execution right (single holder, always the same worker)."""
+
+    def acquire(self, envelope):  # noqa: ANN001 - port shape
+        from acp_services.runtime.execution_right import ExecutionRightVerdict
+
+        return ExecutionRightVerdict()
+
+    def verify(self, envelope):  # noqa: ANN001 - port shape
+        from acp_services.runtime.execution_right import ExecutionRightVerdict
+
+        return ExecutionRightVerdict()
+
+
 def _run_da_preflight(
     controller: str | None,
     fixture_path: str,
@@ -15681,6 +16025,12 @@ def dry_run_commands(
             f"--scenario da-runtime --phase {phase_name} --controller "
             f"{shlex.quote(controller)} --fixture {shlex.quote(fixture)} --out {shlex.quote(out)}"
         )
+    elif spec.scenario == "bounded-recipe-dag":
+        commands.append(
+            f"{shlex.quote(sys.executable)} scripts/acceptance/acp2_runtime.py "
+            f"--scenario bounded-recipe-dag --phase {phase_name} "
+            f"--fixture {shlex.quote(fixture)} --out {shlex.quote(out)}"
+        )
     elif spec.scenario == "infra-plugin":
         commands.append(
             f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
@@ -16719,6 +17069,21 @@ def execute_scenario(
             return code_value
 
         handler = da_submit
+    elif spec.scenario == "bounded-recipe-dag":
+
+        def bounded_recipe_dag(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_bounded_recipe_dag(
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("m204.artifacts", [])
+            outcome["reason"] = extensions.get("m204.reason")
+            return code_value
+
+        handler = bounded_recipe_dag
     elif spec.scenario == "infra-plugin":
 
         def infra_plugin(_ledger: CleanupLedger) -> int:
@@ -16834,6 +17199,7 @@ def execute_scenario(
         "infra-plugin",
         "migration",
         "package-install",
+        "bounded-recipe-dag",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         result = (
             "PASS"
@@ -16870,6 +17236,7 @@ def execute_scenario(
         "infra-plugin",
         "migration",
         "package-install",
+        "bounded-recipe-dag",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -17090,7 +17457,7 @@ def run_check_only(path: Path) -> int:
 
 def _help_epilog() -> str:
     lines = [
-        "Registered B scenarios (15 immutable IDs):",
+        "Registered B scenarios (16 immutable IDs):",
     ]
     for scenario in EXPECTED_B_SCENARIOS:
         spec = B_SCENARIOS[scenario]

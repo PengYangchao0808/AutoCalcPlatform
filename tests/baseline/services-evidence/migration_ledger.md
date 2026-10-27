@@ -118,6 +118,13 @@
 | 首次规划预算预留与两阶段账本（M1-04c，2026-10-27） | `src/acp_services/runtime/planning_reservation.py:1`（复用 `research_session.planning_claim` + `ReservationLedger`） | 不新增账本/表；planning budget_id = project + `planning:<research>:<session>`，执行阶段仍为 project+proposal_ref | 尚未接线：模型 gateway（M3-03）是该预留的生产消费者；`reconcile_planning` 为对账只读面 | [OPEN] 模块级已验证：服务端派生 claim/request/receipt digest、不伪造 job/attempt、同 claim 重放同一 reservation、unknown/stream 中断保持 reserved 且不 release。真实 gateway 接线与真实模型调用未落，额度不得标 enforced | `tests/test_acp2_planning_reservation.py` |
 | MCP wire id 去混淆与隔离治理（M1-01c，2026-10-27） | `src/acp_services/entrypoints/wire_identifiers.py:1`（`NEGOTIATION_EXTENSION_ID` + `REVIEWED_WIRE_IDENTIFIERS` 唯一常量驻点） | `src/acp_services/entrypoints/mcp.py` 仅常量引用（`wire_identifiers.NEGOTIATION_EXTENSION_ID`），不再有 `chr(97)` 拼接与第二份字面量 | `src/acp_services/entrypoints/mcp.py:initialize`（`capabilities.extensions` 指引）；两个隔离扫描器 `tests/test_acp_services_isolation.py`、`tests/test_services_injection_contracts.py` 读取同一 allowlist | [CLOSED] 本行声明范围：删除 `chr(97)` 装配、wire 字面量集中到单一经审查模块、root `AGENTS.md` ANTI #29 例外范围收窄（ANTI #32 不新增例外）、扫描器改为按常量值+模块 allowlist（不按行号/函数位置豁免）并保留 import/importlib/getattr/sys.modules 负例。**退出条件**：新增 wire id 必须先在本模块常量+冻结契约登记并补越界负例；任何模块（含本模块）出现 import/反射仍失败；`REVIEWED_WIRE_IDENTIFIERS` 之外的 `acp.*` 字面量一律失败。扩展 id/version 语义仍属 P2 契约（不由本行声明） | `tests/test_acp_services_isolation.py`；`tests/test_services_injection_contracts.py`；`tests/test_services_worker_contract.py` |
 
+| M2-04a 唯一 StepDispatchAdapter（冻结 step→TaskRequest/TaskContext→run_*→完成资格→产物声明） | `src/acp_services/runtime/step_dispatch.py:1` | 无（新面，无 acp 旧路径） | `src/acp_services/runtime/step_dag_worker.py`（StepDagTaskExecutor） | [CLOSED] 单参 DispatchFn、typed request、decide_task_result 复用、产物/publish 分验；真实 QC 未执行 | `tests/test_acp2_runtime_bounded_recipe_dag_a.py` |
+| M2-04b 冻结定义身份与运行时执行身份分离（StepDagDefinition + 双 digest 校验） | `src/acp_services/runtime/step_definition.py:1` | 无（新面）；envelope `step_identities` wire 名保留 | `src/acp_services/runtime/step_dag.py`（materialize_execution_identity）；`src/acp_services/runtime/step_dag_worker.py` | [CLOSED] 转换在 freeze；runtime 只反序列化；运行时只用 CCCP materialize_step_identity；旧 DagRunState 拒绝收养 | `tests/test_acp2_runtime_bounded_recipe_dag_b.py` |
+| M2-04c 最坏额度持久预留 + CCCP TaskContext meter | `src/acp_services/runtime/execution_quota.py:1`；`src/cccp/calculation/context.py`（TaskMeter） | 无（新面） | `src/acp_services/runtime/step_dag_worker.py`（TaskMeterAdapter）；`src/cccp/calculation/_common.py:call_capability` | [CLOSED] 一次预留 worst case、每次后端调用前取额度、重启不得复用未扣减额度；rescue 超限预阻断 | `tests/test_acp2_runtime_bounded_recipe_dag_c.py` |
+| M2-04c FencedCommitPort / FileFencedCommit（staging→fence+执行权→原子提交） | `src/acp_services/runtime/fenced_commit.py:1` | 无（新面）；AlwaysHeld 仅测试 | `src/acp_services/runtime/step_dag_worker.py`（每 step 提交点） | [CLOSED] 提交点同时校验 attempt/owner/fencing 与当前执行权；生产禁 AlwaysHeld（守护测试） | `tests/test_acp2_runtime_bounded_recipe_dag_c.py` |
+| M2-04d ExecutionResourcePrecheck（二进制/版本/资产/lab 能力 dispatch 前验证） | `src/acp_services/runtime/resource_precheck.py:1` | 无（新面）；step_requirements 不冒充 | `src/acp_services/runtime/step_dag_worker.py`（首个 dispatch 前） | [CLOSED] 缺失即 blocked（不把昂贵失败留到后端调用后）；真实节点版本探测未执行 | `tests/test_acp2_runtime_bounded_recipe_dag_c.py` |
+| M2-04d BoundedRecipe envelope-only 工作流 + requires_envelope | `src/acp_services/runtime/execution_chain.py:1` | 无（新工作流无 legacy 实现） | `src/acp/scheduler/{runner,remote/runner,manager}.py`（DEFAULT_ENVELOPE_WORKFLOWS）；`src/acp/calculations/attempt_freeze.py:FREEZE_BUILDERS` | [CLOSED] closure=integrated、default freeze 集合、缺/坏冻结组 typed error（不回退 legacy） | `tests/test_acp2_runtime_bounded_recipe_dag_d.py` |
+
 ## 覆盖说明
 
 初版覆盖 30 行（≥20）；todo 70 收口时 53 行。必需覆盖面逐项对应：
@@ -132,7 +139,7 @@
 期限（矩阵收口切片）与退出条件（F0/F1×S0/S1 矩阵齐备且旧 GET 零消费者后删除）。
 旧读取根 GET 过渡适配器（todo 15 登记）在窗口内保留，其终态远端 `fetch_catalog` 副作用属已登记过渡项。
 
-## 当前台账摘要（2026-10-22；2026-10-24 追加 2 行 B1-1/B1-7；2026-10-27 M1-04 追加 3 行；保留 todo 70 的历史收口口径）
+## 当前台账摘要（2026-10-22；2026-10-24 追加 2 行 B1-1/B1-7；2026-10-27 M1-04 追加 3 行；2026-10-27 M2-04 追加 6 行；保留 todo 70 的历史收口口径）
 
 - **行数**：77（全部恰好 6 列；守护 `tests/test_services_first_slice_contracts.py` + `tests/test_acp_services_isolation.py`）。
 - **状态计数**：`[CLOSED]` 59 · `[RETAINED]` 5 · `[OPEN]` 13 · `[DEFERRED]` 0。

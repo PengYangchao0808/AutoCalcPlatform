@@ -154,7 +154,9 @@ def run_frequency(
     target_dir = request.output_dir
 
     try:
-        qc_result = call_capability(backend, selection.capability, inputs, target_dir, kwargs)
+        qc_result = call_capability(
+            backend, selection.capability, inputs, target_dir, kwargs, context=ctx
+        )
     except _BACKEND_FAILURES as error:
         return TaskResult(
             task=TaskKind.FREQUENCY,

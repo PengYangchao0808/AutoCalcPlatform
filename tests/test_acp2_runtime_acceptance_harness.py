@@ -65,7 +65,7 @@ def test_contract_version_tracks_delivered_manifest() -> None:
 
 def test_scenario_registry_completeness() -> None:
     assert tuple(harness.B_SCENARIOS) == harness.EXPECTED_B_SCENARIOS
-    assert len(harness.B_SCENARIOS) == 15
+    assert len(harness.B_SCENARIOS) == 16  # M2-04 adds bounded-recipe-dag
     assert "dsh-local-singlepoint" not in harness.B_SCENARIOS
     owners: set[str] = set()
     for scenario, spec in harness.B_SCENARIOS.items():
@@ -100,6 +100,7 @@ def test_scenario_registry_completeness() -> None:
         "B23",
         "B24a",
         "B25b",
+        "M2-04",
     }
     assert owners == expected_owners
 

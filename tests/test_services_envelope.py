@@ -76,7 +76,8 @@ _ENVELOPE_FIELDS = {
     "resource_budget",
     "scientific_closure",
 }
-# Frozen §5.2 receipt fields + B06-1 additive observation fields.
+# Frozen §5.2 receipt fields + B06-1 additive observation fields
+# + M2-04b additive execution chain (``step_execution_chain`` + ``chain_digest``).
 _RECEIPT_FIELDS = {
     "receipt_version",
     "job_id",
@@ -94,6 +95,8 @@ _RECEIPT_FIELDS = {
     "step_identities",
     "data_bindings",
     "evidence_digests",
+    "step_execution_chain",
+    "chain_digest",
 }
 
 

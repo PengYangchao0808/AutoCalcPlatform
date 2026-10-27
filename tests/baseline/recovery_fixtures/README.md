@@ -41,6 +41,23 @@ Loadability is smoke-checked by `tests/test_recovery_fixtures_smoke.py`
 `.omo/evidence` and depends on no wall-clock time or machine path —
 executor scenarios run on tmp copies of the fixtures).
 
+### (i) `dag_run_state_v1.json` — M2-04 bounded step DAG run state, pre-identity-scheme
+
+- Written as the pre-M2-04 wire shape (`acp2.runtime.step-dag-state.v1`): it has
+  **no** `identity_scheme`, no `attempt`/`owner`/`fencing`, and its completed
+  step carries a `sha256:` step fingerprint (the deleted Runtime-local
+  algorithm).
+- **Decision (frozen, M2-04b)**: adoption is **refused** by default
+  (`DagRunState.from_dict(..., adopt=True)` / `BoundedStepDagExecutor.recover` →
+  `unknown_run_state_schema` or `unknown_identity_scheme`).  Migration is an
+  explicit call (`DagRunState.migrate_v1(payload, identity_scheme=...)`) that
+  must name the production CCCP scheme (`acp2.step-execution.v2`) or the
+  explicit fixture scheme; step statuses and qualifications are preserved and
+  no execution identity is invented.  A migrated step whose identity is empty
+  is re-dispatched by the caller's decision, never adopted.
+- Guard: `tests/test_acp2_runtime_bounded_recipe_dag_b.py`
+  (`test_v1_run_state_fixture_requires_an_explicit_migration`).
+
 ## Fixtures
 
 ### (a) `checkpoint_mixed/` — checkpoint with completed + incomplete steps coexisting

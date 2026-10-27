@@ -591,6 +591,14 @@ class ExecutionSemantics:
     side_effects: SideEffects | str = SideEffects.NONE
     network_access: bool = False
     writes_artifacts: bool = False
+    #: Declared **worst case** subprocess invocations for one dispatch of this
+    #: capability (rescue/retry inside one task still counts).  The runtime
+    #: reserves this worst case *before* the dispatch and draws one unit
+    #: immediately before every backend call, so a task that would exceed the
+    #: reserved allowance is refused instead of over-spending it.  A pure
+    #: analysis capability starts no subprocess, so its worst case is 0.
+    #: ``-1`` (the default) derives the value from ``kind``.
+    worst_case_executions: int = -1
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -638,6 +646,25 @@ class ExecutionSemantics:
                 raise IncompatibleStateError("pure_analysis execution must not write artifacts")
         if self.network_access is not False:
             raise IncompatibleStateError("execution network_access must be false")
+        worst_case = self.worst_case_executions
+        if worst_case == -1:
+            worst_case = 0 if self.kind is CapabilityKind.PURE_ANALYSIS else 1
+            object.__setattr__(self, "worst_case_executions", worst_case)
+        if isinstance(worst_case, bool) or not isinstance(worst_case, int):
+            raise CapabilityContractError(
+                "execution worst_case_executions must be an integer, "
+                f"got {type(worst_case).__name__}"
+            )
+        if worst_case < 0:
+            raise CapabilityContractError("execution worst_case_executions must be >= 0")
+        if self.kind is CapabilityKind.COMPUTE and worst_case < 1:
+            raise CapabilityContractError(
+                "compute execution declares at least one worst-case subprocess invocation"
+            )
+        if self.kind is CapabilityKind.PURE_ANALYSIS and worst_case != 0:
+            raise CapabilityContractError(
+                "pure_analysis execution declares worst_case_executions == 0"
+            )
 
     def to_dict(self) -> dict[str, object]:
         """Return the schema-shaped JSON object."""

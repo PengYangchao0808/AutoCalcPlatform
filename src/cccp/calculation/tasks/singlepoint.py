@@ -159,7 +159,7 @@ def run_singlepoint(
 
     try:
         qc_result = call_capability(
-            backend, selection.capability, inputs, target_dir, kwargs
+            backend, selection.capability, inputs, target_dir, kwargs, context=ctx
         )
     except _BACKEND_FAILURES as error:
         return TaskResult(

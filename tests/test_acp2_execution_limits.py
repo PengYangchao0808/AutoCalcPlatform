@@ -235,10 +235,14 @@ def test_step_dag_has_no_implicit_recovery_allowance() -> None:
     signature = inspect.signature(BoundedStepDagExecutor.__init__)
     assert signature.parameters["recovery_allowance"].default == 0
     source = inspect.getsource(BoundedStepDagExecutor.__init__)
-    # The caps derive from the reservation plus an *explicit* allowance; the
-    # pre-M1-04 ``+ len(dag.steps)`` widening is gone.
-    assert "qc_invocations=sum(step.qc_invocations for step in dag.steps) + allowance" in source
-    assert "attempts=sum(step.max_attempts for step in dag.steps) + allowance" in source
+    # M2-04c completes the M1-04收尾: the QC/attempt caps derive from the
+    # compiled worst case plus an *explicit* allowance.  Neither a per-step
+    # ``+ len(dag.steps)`` widening nor a per-step ``step.qc_invocations`` sum
+    # may come back — the reservation is the only source of allowance.
+    assert "worst_case_total = sum(" in source
+    assert "qc_invocations=worst_case_total + allowance" in source
+    assert "qc_invocations=len(dag.steps)" not in source
+    assert "sum(step.qc_invocations for step in dag.steps)" not in source
 
 
 # ---------------------------------------------------------------------------

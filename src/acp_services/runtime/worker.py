@@ -226,6 +226,13 @@ class ExecutionScope:
     plan: FrozenPlan
     work_dir: Path
     storage_binding: StorageBinding | None = None
+    #: The current execution right, when the caller holds one (M2-04c).  An
+    #: executor that commits authoritative step/checkpoint documents fences on
+    #: it at the commit point; ``None`` means the executor must not commit.
+    execution_right: Any | None = None
+    #: Optional control-intent poll, re-read immediately before every step
+    #: dispatch (M2-04c).  ``None`` = no control channel attached.
+    control_poll: Callable[[], str] | None = None
 
 
 @dataclass(frozen=True)
@@ -244,6 +251,11 @@ class TaskExecutionOutcome:
     errors: tuple[ExecutionError | str, ...] = ()
     evidence_digests: Mapping[str, str] = field(default_factory=dict)
     pending_task_result: Mapping[str, Any] | None = None
+    #: M2-04b additive: the per-step execution identities that actually ran,
+    #: plus their canonical chain digest.  The *definition* identity set stays
+    #: on ``envelope.step_identities``; the Controller verifies both.
+    step_execution_chain: tuple[Mapping[str, Any], ...] = ()
+    chain_digest: str = ""
 
 
 # ── injected ports ──────────────────────────────────────────────────────────
@@ -1304,6 +1316,8 @@ def build_receipt(
         step_identities=envelope.step_identities,
         data_bindings=envelope.data_bindings,
         evidence_digests=outcome.evidence_digests,
+        step_execution_chain=tuple(outcome.step_execution_chain),
+        chain_digest=outcome.chain_digest,
     )
 
 
@@ -1396,6 +1410,8 @@ class FrozenWorker:
         prior_steps: Sequence[Any] = (),
         item_symbols: Sequence[str] | None = None,
         before_write: Callable[[], None] | None = None,
+        execution_right: Any | None = None,
+        control_poll: Callable[[], str] | None = None,
     ) -> ExecutionReceipt:
         """Execute the attempt once and return the (atomically written) receipt.
 
@@ -1425,6 +1441,8 @@ class FrozenWorker:
             plan=plan,
             work_dir=Path(work_dir),
             storage_binding=storage_binding,
+            execution_right=execution_right,
+            control_poll=control_poll,
         )
         outcome = self.executor.execute(scope)
         if before_write is not None:

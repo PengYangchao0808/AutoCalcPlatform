@@ -316,7 +316,7 @@ def run_casscf(
     target_dir = request.output_dir
 
     try:
-        qc_result = call_capability(backend, "casscf", inputs, target_dir, kwargs)
+        qc_result = call_capability(backend, "casscf", inputs, target_dir, kwargs, context=ctx)
     except _BACKEND_FAILURES as error:
         return TaskResult(
             task=TaskKind.CASSCF,

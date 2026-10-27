@@ -20,13 +20,42 @@ import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from cccp.calculation.contracts import JsonValue
+from cccp.calculation.errors import CalculationError
 from cccp.calculation.progress import ProgressEvent, TaskProgressSink
 from cccp.calculation.requests import TaskRequest
 
 logger = logging.getLogger(__name__)
+
+
+class TaskQuotaExceededError(CalculationError):
+    """The execution allowance reserved before dispatch cannot cover a backend call.
+
+    A quota exhaustion is a *platform* refusal, not a scientific failure: the
+    backend is never invoked, so the task cannot silently over-spend the
+    reservation (M2-04c).  The runtime records it as a typed failed step.
+    """
+
+
+@runtime_checkable
+class TaskMeter(Protocol):
+    """Draw-down interface the task core consults before **every** backend call.
+
+    The runtime reserves the worst case once (persistently) and injects an
+    implementation here.  ``take_execution`` must be a *persistent* deduction:
+    a restarted process must not be able to obtain an already-spent unit, and a
+    lost receipt must not refund it.
+    """
+
+    def take_execution(self, units: int = 1, *, task_kind: str, detail: str = "") -> None:
+        """Deduct *units* from the reservation or raise :class:`TaskQuotaExceededError`."""
+        ...
+
+    def remaining(self, *, task_kind: str = "") -> int:
+        """Return the units still available (advisory; never a spend authority)."""
+        ...
 
 
 @dataclass
@@ -51,6 +80,10 @@ class TaskContext:
       (``output_name``, ``scf_maxiter``, ``route_extras``, …) handed to
       ``render_backend_input`` unchanged until the translation-layer cleanup
       (plan todo 25).
+    * ``meter`` — M2-04c execution allowance.  ``call_capability`` (the single
+      backend-invocation seam) draws one unit from it *before* the operation
+      is invoked; a missing meter keeps the standalone behaviour (no
+      platform reservation to protect).
     """
 
     config: Mapping[str, JsonValue] | None = None
@@ -61,6 +94,7 @@ class TaskContext:
     cancelled: Callable[[], bool] | None = None
     backend: Any | None = None
     capability_extras: Mapping[str, Any] | None = None
+    meter: TaskMeter | None = None
     _progress_errors: list[str] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
@@ -105,6 +139,19 @@ class TaskContext:
         """Return the base directory for relative input paths (R2)."""
         return Path(self.input_base) if self.input_base is not None else Path.cwd()
 
+    def take_execution_quota(self, *, task_kind: str, units: int = 1, detail: str = "") -> None:
+        """Draw *units* of the execution allowance before a backend call (M2-04c).
+
+        The reservation belongs to the runtime, not to the task: this method can
+        only consume, never mint.  ``meter`` absent (standalone/legacy
+        invocation) keeps the previous behaviour, because no platform allowance
+        exists to protect.
+        """
+        meter = self.meter
+        if meter is None:
+            return
+        meter.take_execution(units, task_kind=task_kind, detail=detail)
+
 
 def resolve_context(request: TaskRequest, context: TaskContext | None = None) -> TaskContext:
     """Return the effective context for one task call (rule R1).
@@ -122,5 +169,7 @@ def resolve_context(request: TaskRequest, context: TaskContext | None = None) ->
 
 __all__ = [
     "TaskContext",
+    "TaskMeter",
+    "TaskQuotaExceededError",
     "resolve_context",
 ]

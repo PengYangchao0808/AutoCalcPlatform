@@ -236,8 +236,16 @@ def _record(workflow: str, *, attempt: int = 1, input_payload: dict | None = Non
 
 
 def test_capability_table_marks_c01_eight_enabled_and_seven_legacy() -> None:
-    assert set(chain.FROZEN_WORKFLOW_CAPABILITY_TABLE) == _C01_EIGHT | _LEGACY_SEVEN
-    assert set(chain.ENABLED_WORKFLOWS) == _C01_EIGHT
+    # M2-04d adds one envelope-only recipe workflow.  It is NOT a sixteenth
+    # catalog workflow and it does not change the C01 scientific closure: the
+    # C01 eight stay the enabled *catalog* scope, and the recipe row is
+    # envelope-only (``requires_envelope``), never a legacy fallback.
+    assert set(chain.FROZEN_WORKFLOW_CAPABILITY_TABLE) == (
+        _C01_EIGHT | _LEGACY_SEVEN | chain.RECIPE_WORKFLOWS
+    )
+    assert set(chain.ENABLED_WORKFLOWS) == _C01_EIGHT | chain.RECIPE_WORKFLOWS
+    for workflow in chain.RECIPE_WORKFLOWS:
+        assert chain.capability_for(workflow).requires_envelope is True
     for workflow in _C01_EIGHT:
         assert chain.capability_for(workflow).closure == "integrated"
     for workflow in _LEGACY_SEVEN:
@@ -546,9 +554,24 @@ def _legacy_cli_hits(source: str, rel: str = "<mem>") -> list[str]:
     code = _code_only_text(source)
     if "acp.cli" in code:
         hits.append(f"{rel}: code references the legacy CLI")
-    if "subprocess" in code:
-        hits.append(f"{rel}: code references subprocess")
     tree = ast.parse(source)
+    # "subprocess" is matched at the *usage* level, not as a substring: the
+    # frozen cccp plugin-manifest field ``requires_subprocess`` is data a
+    # service may legitimately read (cccp/plugin/metadata.py), while an
+    # import/attribute/name use is always a real spawn surface.
+    subprocess_used = any(
+        (isinstance(node, ast.Import) and any(alias.name == "subprocess" for alias in node.names))
+        or (isinstance(node, ast.ImportFrom) and node.module == "subprocess")
+        or (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "subprocess"
+        )
+        or (isinstance(node, ast.Name) and node.id == "subprocess")
+        for node in ast.walk(tree)
+    )
+    if subprocess_used:
+        hits.append(f"{rel}: code references subprocess")
     doc_ids = _docstring_ids(tree)
     for node in ast.walk(tree):
         if (
@@ -2575,8 +2598,11 @@ def test_t32_completed_job_is_rerun_not_continue(tmp_path: Path) -> None:
 
 
 def test_t29_default_envelope_scope_is_singlepoint_only() -> None:
-    assert chain.DEFAULT_ENVELOPE_WORKFLOWS == frozenset({"singlepoint"})
-    assert chain.ENABLED_WORKFLOWS == _C01_EIGHT  # scientific closure unchanged
+    # M2-04d adds the envelope-only recipe workflow to the default freeze scope;
+    # the ordinary singlepoint default is unchanged and the C01 catalog closure
+    # stays exactly the eight (``RECIPE_WORKFLOWS`` is not a catalog workflow).
+    assert chain.DEFAULT_ENVELOPE_WORKFLOWS == frozenset({"singlepoint"}) | chain.RECIPE_WORKFLOWS
+    assert chain.ENABLED_WORKFLOWS == _C01_EIGHT | chain.RECIPE_WORKFLOWS
     assert set(acp_freeze.FREEZE_BUILDERS) == {
         "singlepoint",
         "optimize",
@@ -2586,6 +2612,7 @@ def test_t29_default_envelope_scope_is_singlepoint_only() -> None:
         "casscf",
         "xtb_optimize",
         "OrcaGradient",
+        "BoundedRecipe",  # M2-04d envelope-only recipe builder
     }
 
 

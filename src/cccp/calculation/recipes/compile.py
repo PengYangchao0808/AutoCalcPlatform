@@ -730,6 +730,11 @@ class CompiledStep:
     request: TaskRequest | None
     request_view: Mapping[str, Any] | None
     parameters: Mapping[str, Any]
+    #: Declared worst-case subprocess invocations for ONE dispatch of this step
+    #: (A lane, M2-04c).  Reserved before the dispatch and drawn one unit at a
+    #: time before every backend call.  Execution-resource data, therefore
+    #: deliberately **not** part of either science identity.
+    worst_case_executions: int = 1
 
     @property
     def step_id(self) -> str:
@@ -792,6 +797,21 @@ class CompiledRecipe:
             if step.step_id == step_id:
                 return step
         raise UnknownCompiledStepError(step_id)
+
+    @property
+    def worst_case_executions(self) -> int:
+        """Sum of the declared per-step worst-case subprocess invocations.
+
+        This is the number the runtime reserves **once** for the whole recipe
+        dispatch (one reservation, drawn per backend call) instead of adding an
+        implicit allowance per step.  It is execution-resource data and never
+        enters a science identity.
+        """
+        return sum(int(step.worst_case_executions) for step in self.steps)
+
+    def worst_case_by_step(self) -> dict[str, int]:
+        """Return ``{step_id: worst_case_executions}`` (reservation view)."""
+        return {step.step_id: int(step.worst_case_executions) for step in self.steps}
 
     @property
     def definition_payload(self) -> dict[str, Any]:
@@ -944,6 +964,7 @@ def _compile_step(
     parameters = dict(step.parameters or {})
     if step.capability_ref is not None:
         descriptor = registry.require(step.capability_ref).descriptor
+        worst_case = int(descriptor.execution_semantics.worst_case_executions)
         if descriptor.kind is CapabilityKind.PURE_ANALYSIS:
             binding: TaskBinding = bind_capability(step.capability_ref, registry=registry)
             return CompiledStep(
@@ -957,6 +978,7 @@ def _compile_step(
                 request=None,
                 request_view=None,
                 parameters=_freeze_sorted_mapping(parameters),
+                worst_case_executions=0,
             )
         task_kind = descriptor.delegates_to_task_kind
         if task_kind is None:  # pragma: no cover - descriptor contract forbids it
@@ -968,6 +990,7 @@ def _compile_step(
         binding = bind_capability(step.capability_ref, request, registry=registry)
     else:
         task_kind = str(step.task_kind)
+        worst_case = 1
         request = _build_task_request(task_kind, inputs, step.parameters)
         binding = bind_task_kind(task_kind, request)
     return CompiledStep(
@@ -981,6 +1004,7 @@ def _compile_step(
         request=request,
         request_view=_request_view(request),
         parameters=_freeze_sorted_mapping(parameters),
+        worst_case_executions=worst_case if binding.dispatchable else 0,
     )
 
 

@@ -55,7 +55,6 @@ from acp_services.runtime.step_dag import (
     StepOutcome,
     StepSpec,
     StepStatus,
-    materialize_step_identity,
     verify_worker_chain,
 )
 from acp_services.runtime.workflow_enablement import (
@@ -516,16 +515,36 @@ def test_restart_recovers_only_unfinished_steps() -> None:
 
 
 def test_step_identity_requires_release_and_chains_receipt() -> None:
+    """M2-04b: the execution identity comes from CCCP, never from Runtime.
+
+    The former Runtime-local ``sha256:`` fingerprint is gone: a fixture DAG (no
+    frozen definition) carries an explicitly schemed **empty** identity, and a
+    definition-driven DAG gets the CCCP ``v2:`` execution identity.  Making a
+    digest up here is exactly what the checkpoint forbids.
+    """
+    from acp_services.runtime.step_dag import materialize_execution_identity
+
     step = _three_step_dag().steps[0]
     with pytest.raises(StepDagError) as excinfo:
-        materialize_step_identity(
-            step, step_index=0, plan_identity=_PLAN, upstream_digests=(), release_id=""
+        materialize_execution_identity(
+            _three_step_dag(),
+            step,
+            step_index=0,
+            plan_identity=_PLAN,
+            upstream_digests={},
+            release_id="",
         )
     assert excinfo.value.code == "missing_release"
-    identity = materialize_step_identity(
-        step, step_index=0, plan_identity=_PLAN, upstream_digests=(), release_id=_RELEASE
+    identity = materialize_execution_identity(
+        _three_step_dag(),
+        step,
+        step_index=0,
+        plan_identity=_PLAN,
+        upstream_digests={},
+        release_id=_RELEASE,
     )
-    assert identity.step_identity.startswith("sha256:")
+    assert identity.step_identity == ""
+    assert identity.identity_scheme == "static-fixture.v0"
     receipt = {
         "plan_identity": _PLAN,
         "release_id": _RELEASE,
