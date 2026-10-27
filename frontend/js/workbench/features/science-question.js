@@ -183,6 +183,7 @@ window.ACPScienceQuestion = (function () {
     submit: null,
     buildJobBody: null,
     catalog: null,
+    researchCommands: null,
   };
 
   var state = {
@@ -205,6 +206,14 @@ window.ACPScienceQuestion = (function () {
     detailError: null,
     submitCalls: 0,
     status: "",
+    // M3-05b research approval mode: when a bound approval is adopted, the same
+    // normalized submission request is submitted through the research commands
+    // with the approval attached. "direct" keeps the historical submit path.
+    research: {
+      mode: "direct",
+      approval: null,
+      proposal: null,
+    },
     // T-23 / C17a QuestionSpec binding: frozen P2 input range, conditions,
     // human confirmations/approximations and the input revision. Identity
     // values are never silently filled — absent stays null ("未指定").
@@ -234,6 +243,12 @@ window.ACPScienceQuestion = (function () {
     if (typeof next.submit === "function") deps.submit = next.submit;
     if (typeof next.buildJobBody === "function") deps.buildJobBody = next.buildJobBody;
     if (typeof next.catalog === "function") deps.catalog = next.catalog;
+    if (next.researchCommands && typeof next.researchCommands.submit === "function") {
+      deps.researchCommands = next.researchCommands;
+    }
+    if (next.researchApproval && typeof next.researchApproval === "object") {
+      setResearchApproval(next.researchApproval);
+    }
     if (next.projectId) state.projectId = String(next.projectId);
     if (next.fixtureMode != null) state.fixtureMode = next.fixtureMode === true;
     return getState();
@@ -378,7 +393,51 @@ window.ACPScienceQuestion = (function () {
     if (state.defaults.values.method == null || state.defaults.values.method === "") return false;
     if (!isIntLike(state.defaults.values.charge, -1000)) return false;
     if (!isIntLike(state.defaults.values.multiplicity, 1)) return false;
+    if (state.research.mode === "approval") {
+      var approval = state.research.approval;
+      if (!approval || approval.status !== "approved") return false;
+    }
     return true;
+  }
+
+  /** M3-05b: bind (or clear) the platform approval this question submits under.
+   * The question side never creates a second submit body: `researchSubmitBody`
+   * is the SAME `buildNormalizedSubmissionRequest` the direct path uses. */
+  function setResearchApproval(input) {
+    input = input || {};
+    if (input.approval) {
+      state.research = {
+        mode: "approval",
+        approval: Object.assign({}, input.approval),
+        proposal: input.proposal ? Object.assign({}, input.proposal) : null,
+      };
+    } else {
+      state.research = { mode: "direct", approval: null, proposal: null };
+    }
+    render();
+    return getState();
+  }
+
+  function researchSubmitBody() {
+    if (state.research.mode !== "approval") return null;
+    if (!state.question) return null;
+    var entry = resolveQuestionWorkflow(state.question.question_id, workflowCatalog());
+    var body = buildNormalizedSubmissionRequest(entry);
+    if (!body) return null;
+    if (state.preflight.fingerprint) body.preflight_fingerprint = state.preflight.fingerprint;
+    return body;
+  }
+
+  function researchCommandsFor() {
+    if (deps.researchCommands && typeof deps.researchCommands.submit === "function") {
+      return deps.researchCommands;
+    }
+    if (window.ACPClient && ACPClient.researchCommands &&
+        typeof ACPClient.researchCommands.submit === "function") {
+      deps.researchCommands = ACPClient.researchCommands;
+      return deps.researchCommands;
+    }
+    return null;
   }
 
   function adoptCapabilities(body, demo) {
@@ -786,6 +845,9 @@ window.ACPScienceQuestion = (function () {
     if (!canSubmit()) {
       return Promise.reject(new Error("science-question: submit disabled (preflight or required fields)"));
     }
+    if (state.research.mode === "approval") {
+      return submitUnderApproval();
+    }
     if (typeof deps.buildJobBody !== "function" || typeof deps.submit !== "function") {
       return Promise.reject(new Error("science-question: init({buildJobBody, submit}) required"));
     }
@@ -799,15 +861,73 @@ window.ACPScienceQuestion = (function () {
     }
     state.submitCalls += 1;
     return Promise.resolve(deps.submit(body)).then(function (response) {
-      state.taskRef = {
-        job_id: response && (response.job_id != null ? response.job_id : response.id),
-        attempt: (response && response.attempt) || 1,
-      };
-      state.phase = "submitted";
-      state.status = tr("manual.submitted", "已提交，任务详情如下");
-      render();
+      adoptSubmittedTask(response);
       return openTaskDetail();
     });
+  }
+
+  /** M3-05b: submit the SAME normalized body with the bound approval attached.
+   * Only a real job_id/attempt/TaskRef becomes "submitted"; a network failure
+   * is "unconfirmed" (unknown), never success. */
+  function submitUnderApproval() {
+    var commands = researchCommandsFor();
+    if (!commands) {
+      return Promise.reject(new Error(
+        "platform_transport_required: research mode needs ACPClient.researchCommands"
+      ));
+    }
+    var body = researchSubmitBody();
+    if (!body) {
+      return Promise.reject(new Error("science-question: normalized submission request unavailable"));
+    }
+    state.submitCalls += 1;
+    return Promise.resolve(commands.submit({ projectId: scope().projectId }, body, {
+      approval: state.research.approval,
+    })).then(function (result) {
+      var taskRef = result && result.task_ref;
+      var taskId = taskRef && (taskRef.task_id || taskRef.job_id);
+      if (!result || result.submitted !== true || !result.job_id || !result.attempt || !taskId) {
+        state.phase = "unconfirmed";
+        state.status = tr("manual.submit_unconfirmed",
+          "提交未确认：请刷新审批与任务视图后核对，不要重复提交");
+        render();
+        throw new Error("submit_unconfirmed: the Controller did not return a job_id, attempt and task_ref");
+      }
+      adoptSubmittedTask(result);
+      return openTaskDetail();
+    }, function (error) {
+      if (!error || error.httpStatus == null) {
+        state.phase = "unconfirmed";
+        state.status = tr("manual.submit_unconfirmed",
+          "提交未确认：请刷新审批与任务视图后核对，不要重复提交");
+        render();
+      } else {
+        state.phase = "failed";
+        state.status = String((error && error.message) || error);
+        render();
+      }
+      throw error;
+    });
+  }
+
+  function adoptSubmittedTask(response) {
+    var taskRef = response && response.task_ref;
+    var jobId = null;
+    if (response && response.job_id != null) {
+      jobId = response.job_id;
+    } else if (taskRef && (taskRef.task_id || taskRef.job_id)) {
+      jobId = taskRef.task_id || taskRef.job_id;
+    } else if (response && response.id != null) {
+      jobId = response.id;
+    }
+    state.taskRef = {
+      job_id: jobId,
+      attempt: (response && response.attempt) || (taskRef && taskRef.attempt) || 1,
+    };
+    state.phase = "submitted";
+    state.status = tr("manual.submitted", "已提交，任务详情如下");
+    render();
+    return state.taskRef;
   }
 
   function limitationList() {
@@ -886,6 +1006,11 @@ window.ACPScienceQuestion = (function () {
       },
       submitEnabled: canSubmit(),
       submitCalls: state.submitCalls,
+      research: {
+        mode: state.research.mode,
+        approval: state.research.approval ? Object.assign({}, state.research.approval) : null,
+        proposal: state.research.proposal ? Object.assign({}, state.research.proposal) : null,
+      },
       taskRef: state.taskRef ? Object.assign({}, state.taskRef) : null,
       detail: state.detail
         ? {
@@ -928,6 +1053,27 @@ window.ACPScienceQuestion = (function () {
     if (!root) return;
     root.innerHTML = renderForm();
     wireForm();
+  }
+
+  /** M3-05b research approval mode: the SAME normalized body is submitted
+   * under a platform approval. The panel shows the bound approval ref/status;
+   * the approval card owns decide/revoke. */
+  function renderResearchMode() {
+    if (state.research.mode !== "approval") return "";
+    var approval = state.research.approval || {};
+    var e = escapeHtml;
+    return '<div class="science-question-section" id="sq-research-approval">' +
+      e(tr("manual.research_approval_mode", "研究审批模式")) + "</div>" +
+      '<div class="science-question-row" id="sq-research-approval-row">' +
+      '<span class="science-question-label">' +
+      e(tr("manual.research_approval_ref", "审批单号")) + "</span>" +
+      '<span id="sq-research-approval-ref">' + e(approval.approval_ref || "—") + "</span>" +
+      '<span class="science-question-hint" id="sq-research-approval-status">' +
+      e(tr("manual.research_approval_status", "状态：{status}",
+        { status: approval.status || "—" })) + "</span></div>" +
+      '<div class="science-question-note" id="sq-research-approval-note">' +
+      e(tr("manual.research_approval_note",
+        "提交使用同一份标准化请求体，并附带该审批记录；审批由平台裁定")) + "</div>";
   }
 
   function renderSpecSummary() {
@@ -1100,6 +1246,7 @@ window.ACPScienceQuestion = (function () {
         '<input id="sq-standardState" class="modal-input" type="text" value="' +
         escapeHtml(fields.standardState.value == null ? "" : fields.standardState.value) + '">') +
       renderSpecSummary() +
+      renderResearchMode() +
       '<div class="science-question-actions" id="sq-actions">' +
       '<button type="button" class="btn ghost" id="sq-discover">' +
       escapeHtml(tr("manual.discover", "发现能力")) + "</button>" +
@@ -1238,6 +1385,10 @@ window.ACPScienceQuestion = (function () {
     preflightPlan: preflightPlan,
     buildNormalizedSubmissionRequest: buildNormalizedSubmissionRequest,
     jobBodySpec: jobBodySpec,
+    // M3-05b: the ONE normalized body of research mode (consumed by the
+    // approval card's submit button; never a second payload shape).
+    researchSubmitBody: researchSubmitBody,
+    setResearchApproval: setResearchApproval,
     getState: getState,
     demoBadgeVisible: demoBadgeVisible,
     render: render,
