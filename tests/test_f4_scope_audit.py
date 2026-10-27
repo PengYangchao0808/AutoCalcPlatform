@@ -2659,6 +2659,9 @@ MIGRATION_STATION_PREFIXES = (
     # to ``SERVICES_BOOTSTRAP_STATIONS`` (that tuple bans the calculation
     # package prefix for the pure port-wiring seams).
     "src/acp/services_analysis_bootstrap.py",
+    # M2-05: the third-party science plugin composition root (installed/enable
+    # facts -> registry injection); exact file only, same rule as above.
+    "src/acp/services_science_plugins_bootstrap.py",
     # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
     # station (unified answers/plan/persist + pure node validation); the
     # package-wide module-level-paramiko ban below is the added tooth.
