@@ -1,0 +1,79 @@
+{
+  "capability_id": "acp2_external_native_singlepoint",
+  "description": "Third-party (fixture) form shipped inside the installed distribution as cccp_ui_form.json. The platform validates it against acp2.ui-subset.v1 and serves it through discovery; the Workbench renders it with no frontend source change.",
+  "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+  "form_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "charge": {
+        "default": 0,
+        "maximum": 10,
+        "minimum": -10,
+        "title": "Charge",
+        "type": "integer",
+        "x-acp": {
+          "binding": "task.charge",
+          "widget": "number"
+        }
+      },
+      "multiplicity": {
+        "default": 1,
+        "maximum": 10,
+        "minimum": 1,
+        "title": "Multiplicity",
+        "type": "integer",
+        "x-acp": {
+          "binding": "task.multiplicity",
+          "widget": "number"
+        }
+      },
+      "nproc": {
+        "default": 1,
+        "maximum": 32,
+        "minimum": 1,
+        "title": "Processes",
+        "type": "integer",
+        "x-acp": {
+          "binding": "task.resources.nproc",
+          "widget": "number"
+        }
+      },
+      "source": {
+        "description": "Inline structure text the validator consumes.",
+        "minLength": 4,
+        "title": "Native record text",
+        "type": "string",
+        "x-acp": {
+          "binding": "task.structure.source",
+          "widget": "textarea"
+        }
+      }
+    },
+    "required": [
+      "source"
+    ],
+    "type": "object"
+  },
+  "request": {
+    "surface": "job_submit",
+    "template": {
+      "input": {
+        "source": "",
+        "source_type": "xyz_text"
+      },
+      "method": {
+        "levels": {
+          "single_point": {
+            "engine": "orca"
+          }
+        }
+      },
+      "resources": {}
+    },
+    "workflow": "singlepoint"
+  },
+  "schema": "acp2.ui.form.v1",
+  "schema_version": 1,
+  "subset_version": "acp2.ui-subset.v1",
+  "title": "Native single-point record validator"
+}

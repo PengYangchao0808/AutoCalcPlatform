@@ -48,6 +48,12 @@ FIXED_DATE_TIME = (2026, 10, 23, 0, 0, 0)
 ROOT = Path(__file__).resolve().parent
 PACKAGE_DIR = ROOT / "src" / MODULE_NAME
 FIXTURES_DIR = ROOT / "fixtures"
+#: Declarative UI form shipped in ``.dist-info`` (read metadata-only by the
+#: platform: ``Distribution.read_text("cccp_ui_form.json")``).  It is not part
+#: of the payload digest, so shipping it never changes the declared
+#: distribution digest — only the platform's UI contract decides whether the
+#: form is served.
+UI_FORM_PATH = ROOT / "cccp_ui_form.json"
 
 
 def _load_integrity() -> object:
@@ -137,6 +143,7 @@ def _wheel_members() -> dict[str, bytes]:
     members[f"{DIST_INFO}/WHEEL"] = _wheel_text().encode("utf-8")
     members[f"{DIST_INFO}/entry_points.txt"] = _entry_points_text().encode("utf-8")
     members[f"{DIST_INFO}/cccp_science_plugin.json"] = _manifest_text().encode("utf-8")
+    members[f"{DIST_INFO}/cccp_ui_form.json"] = UI_FORM_PATH.read_bytes()
     members[f"{DIST_INFO}/LICENSE"] = (ROOT / "LICENSE").read_bytes()
     return members
 
@@ -185,6 +192,7 @@ def prepare_metadata_for_build_wheel(
     (target / "WHEEL").write_text(_wheel_text(), encoding="utf-8")
     (target / "entry_points.txt").write_text(_entry_points_text(), encoding="utf-8")
     (target / "cccp_science_plugin.json").write_text(_manifest_text(), encoding="utf-8")
+    (target / "cccp_ui_form.json").write_bytes(UI_FORM_PATH.read_bytes())
     (target / "LICENSE").write_bytes((ROOT / "LICENSE").read_bytes())
     return DIST_INFO
 

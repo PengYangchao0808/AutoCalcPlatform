@@ -18,6 +18,7 @@ Endpoints (all project-scoped):
 
 ================================================================  ==============
 ``GET /science/capabilities``                                      capabilities
+``GET /science/capability-forms``                                  forms (M3-06)
 ``POST /science/preflight``                                        zero-side-effect plan
 ``GET /science/tasks/{job_id}/attempts/{attempt}/view``            attempt view model
 ``GET .../attempts/{attempt}/artifacts/{artifact_id:path}/read``    prepared bytes
@@ -40,7 +41,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from acp.api import science_catalog, science_projection
+from acp.api import capability_forms, science_catalog, science_projection
 from acp.api.v1_routes import (
     _artifact_authorization_projection,
     _command_error,
@@ -260,6 +261,42 @@ def get_science_capabilities(
         descriptors=descriptors,
         domain=domain,
         analysis=science_catalog.analysis_capabilities(request.app.state),
+    )
+
+
+@router.get("/science/capability-forms")
+def get_science_capability_forms(
+    request: Request,
+    project_id: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Return the frozen schema-driven capability forms (M3-06).
+
+    This is the *form* half of capability discovery: the same descriptors
+    ``GET /science/capabilities`` forwards, each paired with its
+    ``acp2.ui-subset.v1`` form document (or a typed ``unavailable`` state), plus
+    the frozen whitelist/binding/unit tables and their digest, plus one
+    ``read_only`` entry per historical plugin enablement discovery no longer
+    lists.  Read-only: no task, prepare, transfer, reservation or plugin import.
+    """
+
+    resolved = _scoped_read_project(request, project_id)
+    _require_verified_project(request, resolved)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=resolved,
+        action="read",
+        resource_id="science.capability-forms",
+    )
+    _research_project(_manager(request), resolved)
+
+    catalog = science_catalog.science_catalog(request.app.state)
+    registry = science_catalog.plugin_registry(request.app.state)
+    enablements = registry.enablements() if registry is not None else ()
+    return capability_forms.capability_forms(
+        descriptors=catalog.descriptor_entries(),
+        enablements=enablements,
+        etag=catalog.etag,
     )
 
 
