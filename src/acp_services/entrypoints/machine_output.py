@@ -347,6 +347,15 @@ _OPAQUE_RE = re.compile(
 )
 
 
+#: Public wire identifiers (MCP tool names, negotiation extension ids) are
+#: published on purpose and are longer than the opaque-token net.  They are not
+#: secrets, so the net must not rewrite them (M2-01c publishes ten research tool
+#: names in the capability/projection payloads).
+_WIRE_IDENTIFIER_RE = re.compile(
+    r"^acp[_a-z0-9]*$|^rph[_a-z0-9]*$|^acp\.[a-z0-9_.]+$|^rph\.[a-z0-9_.]+$"
+)
+
+
 def _redact_secrets(text: str) -> str:
     value = str(text)
     value = _PEM_RE.sub(REDACTED_SECRET, value)
@@ -354,7 +363,10 @@ def _redact_secrets(text: str) -> str:
     value = _BEARER_RE.sub("Bearer " + REDACTED_SECRET, value)
     value = _URL_SECRET_RE.sub(r"\1" + REDACTED_SECRET, value)
     value = _SECRET_ASSIGN_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED_SECRET}", value)
-    value = _OPAQUE_RE.sub(REDACTED_SECRET, value)
+    value = _OPAQUE_RE.sub(
+        lambda m: m.group(0) if _WIRE_IDENTIFIER_RE.match(m.group(0)) else REDACTED_SECRET,
+        value,
+    )
     return value
 
 

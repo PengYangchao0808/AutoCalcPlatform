@@ -57,6 +57,7 @@ from acp_services.entrypoints.controller_client import (
     Health,
     NotPreparedError,
 )
+from acp_services.entrypoints.research_port import ControllerResearchPort
 from acp_services.entrypoints.status_projection import (
     project_operation_status,
     project_task_status,
@@ -406,6 +407,9 @@ def build_mcp_runtime(
         cancel=_ControllerCancel(client),
         artifacts=_ControllerArtifacts(client),
         analysis=_ControllerAnalysis(client),
+        # M2-01c: the ten research tools reach the Controller application service
+        # through the one transport; the adapter holds no research store.
+        research=ControllerResearchPort(client),
     )
     identity = _stdio_identity_mapper(client, api_key)
     server = mcp.McpServer(

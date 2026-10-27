@@ -417,8 +417,21 @@ def validate_p2_implementation_status(root: Path) -> None:
             if tool.get("name") not in promised:
                 fail(f"{row['id']} promises {tool.get('name')!r} outside p2_promised")
     negotiation = (contract.get("client_path") or {}).get("negotiation") or {}
-    if negotiation.get("implemented") is not False:
-        fail("P2 negotiation.implemented must stay false while the promise set is unregistered")
+    # M2-01c: `implemented` is derived from the registered set, which the contract
+    # expresses as the delivered/verified rows.  Advertising alone never sets it,
+    # and a partial registration must still report implemented=false.
+    registered_tools = {
+        tool.get("name")
+        for row in rows
+        if row.get("implementation_status") in {"delivered", "verified"}
+        for tool in row.get("tools") or []
+    }
+    covering = set(promised) <= registered_tools
+    if negotiation.get("implemented") is not covering:
+        fail(
+            "P2 negotiation.implemented must equal whether the delivered rows cover "
+            f"the whole promise set (covered={covering})"
+        )
     if negotiation.get("negotiated_default") is not False:
         fail("P2 negotiation.negotiated_default must stay false")
 

@@ -68,6 +68,11 @@ from acp_services.runtime.evidence_projection import (
     project_evidence,
     verify_attribution,
 )
+from acp_services.runtime.research_saga import SagaStore
+from acp_services.runtime.research_service import (
+    ResearchOperationError,
+    ResearchOperations,
+)
 from acp_services.runtime.research_session import ResearchIdentity
 from acp_services.runtime.research_writer import (
     ResearchWriteError,
@@ -106,6 +111,9 @@ class ProposalWriteBody(BaseModel):
     plan: dict[str, Any]
     budget: dict[str, Any] | None = None
     expires_at: str | None = None
+    #: P2-R1: the same key with the same request replays; another request is a
+    #: typed ``idempotency_key_reuse`` conflict (never a second resource).
+    idempotency_key: str | None = None
 
 
 class ProposalCasBody(ProposalWriteBody):
@@ -177,6 +185,49 @@ def _writer(request: Request) -> ResearchWriter:
     )
 
 
+def _saga_store(request: Request) -> SagaStore:
+    """The research coordination database (saga intents + operation keys).
+
+    One file per run root, next to the research-resource database; created
+    idempotently.  It owns no research fact: the resource, approval and task
+    authorities stay where they are.
+    """
+    cached: SagaStore | None = getattr(request.app.state, "research_saga_store", None)
+    if cached is not None:
+        return cached
+    manager = _manager(request)
+    created = SagaStore(manager.run_root / "acp_research_saga.db")
+    request.app.state.research_saga_store = created
+    return created
+
+
+def _operations(request: Request) -> ResearchOperations:
+    """Build the P2 application service over the authorities of this app.
+
+    The submit port is deliberately **absent** here: the Controller does not
+    auto-submit a task from a resume in this checkpoint (the approval-bound
+    ``SubmitPolicy`` is M2-03).  A saga step that would need it answers a typed
+    ``resource_not_ready``/``submit_port_unavailable`` instead of creating a job.
+    """
+    return ResearchOperations(
+        writer=_writer(request),
+        resources=_resource_store(request),
+        approvals=_approval_service(request),
+        sagas=_saga_store(request),
+    )
+
+
+def _operation_error(exc: ResearchOperationError) -> HTTPException:
+    detail = exc.detail()
+    return _command_error(
+        exc.http_status,
+        str(detail["code"]),
+        str(detail["message"]),
+        params=dict(detail["params"]),
+        retryable=bool(detail.get("retryable")),
+    )
+
+
 def _write_error(exc: ResearchWriteError) -> HTTPException:
     detail = exc.detail()
     return _command_error(
@@ -224,17 +275,17 @@ def create_research_proposal(body: ProposalWriteBody, request: Request) -> dict[
     proposal = dict(body.proposal)
     proposal["project_id"] = project
     try:
-        result = _writer(request).create_proposal(
+        return _operations(request).proposal_create(
             command=_command_identity(request, project_id=project),
-            session_seed=body.session_seed,
             proposal=proposal,
             plan=body.plan,
+            session_seed=body.session_seed,
             budget=body.budget,
             expires_at=body.expires_at,
+            idempotency_key=body.idempotency_key,
         )
-    except ResearchWriteError as exc:
-        raise _write_error(exc)
-    return result.to_dict()
+    except ResearchOperationError as exc:
+        raise _operation_error(exc)
 
 
 @router.post("/research/proposals/{proposal_id}/cas")
@@ -247,19 +298,19 @@ def cas_research_proposal(
     proposal["project_id"] = project
     proposal["proposal_id"] = proposal_id
     try:
-        result = _writer(request).update_proposal(
+        return _operations(request).proposal_update_cas(
             command=_command_identity(request, project_id=project),
-            session_seed=body.session_seed,
-            proposal_id=proposal_id,
+            proposal_ref=proposal_id,
             expected_revision=body.expected_revision,
             proposal=proposal,
             plan=body.plan,
+            session_seed=body.session_seed,
             budget=body.budget,
             expires_at=body.expires_at,
+            idempotency_key=body.idempotency_key,
         )
-    except ResearchWriteError as exc:
-        raise _write_error(exc)
-    return result.to_dict()
+    except ResearchOperationError as exc:
+        raise _operation_error(exc)
 
 
 @router.post("/research/records", status_code=201)
@@ -444,6 +495,254 @@ def get_research_record(
         document_id=research_id,
         project_id=project_id,
     )
+
+
+#: The C ``Proposal``/``ResearchRecord`` bodies stay the writer's input; these
+#: additive request models only carry the P2 operation envelope (M2-01c).
+class RecordRoundBody(BaseModel):
+    """Round/evidence append payload (a new record revision of one round)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str | None = None
+    session_seed: str = ""
+    expected_revision: int = Field(ge=1)
+    record: dict[str, Any]
+    evidence_view: dict[str, Any] | None = None
+    idempotency_key: str | None = None
+
+
+class ResearchWaitBody(BaseModel):
+    """Bounded wait payload (``max_wait_s`` <= 60, ``limit`` <= 200)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kinds: list[str] = Field(min_length=1)
+    cursor: str | None = None
+    max_wait_s: float | None = None
+    limit: int | None = None
+    project_id: str | None = None
+
+
+class ResearchResumeBody(BaseModel):
+    """Resume payload; the saga id is derived from the identity, never supplied."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str | None = None
+    proposal_ref: str
+    plan_digest: str
+    task_ref: dict[str, Any] | None = None
+    cursor: str | None = None
+    diagnostic_only: bool = False
+
+
+class SagaReconcileBody(BaseModel):
+    """Explicit reconciliation action (the only mutating saga entry)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str | None = None
+    action: str
+    expected_revision: int = Field(ge=1)
+    reason: str = ""
+
+
+def _research_project_scope(request: Request, project_hint: str | None) -> str:
+    """Resolve the read/write project of one P2 operation (server identity wins)."""
+    resolved = _require_submit_access(request, project_hint)
+    manager = _manager(request)
+    project = resolved or project_hint or manager.default_project_id
+    if not project:
+        raise _command_error(
+            403,
+            "access_denied",
+            "a research operation requires a project",
+            params={"rule": "project_scope_mismatch"},
+        )
+    _research_project(manager, str(project))
+    _require_verified_project(request, str(project))
+    return str(project)
+
+
+# ---------------------------------------------------------------------------
+# Round/evidence append (P2-R1 additive write)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/research/records/{research_id}/rounds", status_code=201)
+def append_research_round(
+    research_id: str, body: RecordRoundBody, request: Request
+) -> dict[str, Any]:
+    """Append one round to an existing record (CAS on the observed revision)."""
+    project = _research_project_scope(request, body.project_id)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=project,
+        action="write",
+        resource_id=f"research.record:{research_id}",
+    )
+    try:
+        result = _operations(request).record_append_round(
+            command=_command_identity(request, project_id=project),
+            research_id=research_id,
+            expected_revision=body.expected_revision,
+            record=dict(body.record),
+            session_seed=body.session_seed,
+            evidence_view=body.evidence_view,
+            idempotency_key=body.idempotency_key,
+        )
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Bounded wait / snapshot (P2-R4)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/research/wait")
+def wait_research(body: ResearchWaitBody, request: Request) -> dict[str, Any]:
+    """Bounded wait over the authoritative snapshots (never an unbounded poll)."""
+    project = _research_project_scope(request, body.project_id)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=project,
+        action="read",
+        resource_id="research.wait",
+    )
+    try:
+        return _operations(request).research_wait(
+            command=_command_identity(request, project_id=project),
+            kinds=body.kinds,
+            cursor=body.cursor,
+            max_wait_s=body.max_wait_s,
+            limit=body.limit,
+            project_id=project,
+        )
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+
+
+@router.get("/research/snapshot")
+def snapshot_research(
+    request: Request,
+    refs: str = Query(..., min_length=1),
+    project_id: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Authoritative snapshot of ``kind:ref`` references (read-only)."""
+    project = _research_project_scope(request, project_id)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=project,
+        action="read",
+        resource_id="research.snapshot",
+    )
+    requested = [item.strip() for item in str(refs).split(",") if item.strip()]
+    if not requested:
+        raise _command_error(
+            400, "input_invalid", "refs must name at least one reference", params={"field": "refs"}
+        )
+    try:
+        return _operations(request).research_snapshot(
+            command=_command_identity(request, project_id=project),
+            refs=requested,
+            project_id=project,
+        )
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+
+
+# ---------------------------------------------------------------------------
+# Resume + saga reconciliation (P2-R5)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/research/resume")
+def resume_research(body: ResearchResumeBody, request: Request) -> dict[str, Any]:
+    """Resume the derived saga of ``(proposal, plan_digest)`` without a second task."""
+    project = _research_project_scope(request, body.project_id)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=project,
+        action="read",
+        resource_id="research.resume",
+    )
+    try:
+        return _operations(request).research_resume(
+            command=_command_identity(request, project_id=project),
+            proposal_ref=body.proposal_ref,
+            plan_digest=body.plan_digest,
+            task_ref=body.task_ref,
+            cursor=body.cursor,
+            diagnostic_only=body.diagnostic_only,
+        )
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+
+
+@router.get("/research/sagas/{saga_id}")
+def get_research_saga(saga_id: str, request: Request) -> dict[str, Any]:
+    """Read-only intent reconciliation of one saga (never retries anything)."""
+    store = _saga_store(request)
+    header = store.header(saga_id)
+    if header is None:
+        raise _command_error(404, "not_found", "no such research saga")
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=header.project_id,
+        action="read",
+        resource_id=f"research.saga:{saga_id}",
+    )
+    try:
+        return _operations(request).saga_reconcile(
+            command=_command_identity(request, project_id=header.project_id),
+            saga_id=saga_id,
+        )
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+
+
+@router.post("/research/sagas/{saga_id}/reconcile")
+def reconcile_research_saga(
+    saga_id: str, body: SagaReconcileBody, request: Request
+) -> dict[str, Any]:
+    """Apply one explicit reconciliation action (``advance``/``abandon``)."""
+    store = _saga_store(request)
+    header = store.header(saga_id)
+    if header is None:
+        raise _command_error(404, "not_found", "no such research saga")
+    project = _research_project_scope(request, body.project_id)
+    if project != header.project_id:
+        raise _command_error(
+            403,
+            "access_denied",
+            "the saga belongs to another project",
+            params={"rule": "project_scope_mismatch"},
+        )
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=project,
+        action="write",
+        resource_id=f"research.saga:{saga_id}",
+    )
+    try:
+        return _operations(request).saga_reconcile(
+            command=_command_identity(request, project_id=project),
+            saga_id=saga_id,
+            action=body.action,
+            expected_revision=body.expected_revision,
+            reason=body.reason,
+        )
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
 
 
 # ---------------------------------------------------------------------------

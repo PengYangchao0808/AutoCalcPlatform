@@ -32,6 +32,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from acp_services.contracts.events import EventScope, OwnerType
 from acp_services.data.research_resources import (
     PROPOSAL_SCHEMA,
     RESEARCH_RECORD_SCHEMA,
@@ -71,6 +72,8 @@ from acp_services.runtime.evidence_projection import (
     decide_evidence,
     verify_attribution,
 )
+from acp_services.runtime.local_outbox import ensure_research_outbox, research_outbox
+from acp_services.runtime.outbox import OutboxEventSpec
 from acp_services.runtime.research_session import (
     DECISION_VALUES,
     ResearchIdentity,
@@ -92,6 +95,8 @@ __all__ = [
     "ResearchWriter",
     "ProposalWriteResult",
     "RecordWriteResult",
+    "proposal_write_digests",
+    "record_authority_violations",
 ]
 
 #: The C ``Proposal.decision`` vocabulary (frozen by ``proposal.schema.json``).
@@ -374,6 +379,82 @@ def _digests_for(document: Mapping[str, Any], plan_digest: str) -> dict[str, str
     }
 
 
+def proposal_write_digests(
+    *, proposal: Mapping[str, Any], plan: Mapping[str, Any]
+) -> dict[str, str]:
+    """Return the science/plan/proposal digests one proposal write binds.
+
+    Public face of the *one* digest computation :meth:`ResearchWriter.create_proposal`
+    uses, so a saga/application service can persist the expected digests before
+    the write without re-deriving them (M2-01b).
+
+    Raises:
+        ResearchWriteError: the proposal or the plan violates the frozen rules.
+    """
+    document = dict(_require_proposal(proposal))
+    _require_typed_science(document["science"])
+    _workflow, plan_digest = _execution_plan(plan)
+    return dict(_digests_for(document, plan_digest))
+
+
+#: Keys that carry another authority's live row.  A research record stores
+#: *references* plus its own necessary projection — never a copy of a job status,
+#: a usage row, a reservation or a receipt (M2-01b guard).
+RECORD_AUTHORITY_KEYS: frozenset[str] = frozenset(
+    {
+        "status",
+        "state",
+        "job_status",
+        "task_status",
+        "task_state",
+        "current_stage",
+        "progress",
+        "pid",
+        "exit_code",
+        "host",
+        "node_id",
+        "remote_job_id",
+        "started_at",
+        "completed_at",
+        "usage",
+        "usage_rows",
+        "usage_totals",
+        "usage_by_job",
+        "budget_rows",
+        "reservations",
+        "receipt",
+        "receipts",
+        "receipt_rows",
+        "job_spec",
+        "task_result",
+        "result_manifest",
+    }
+)
+
+
+def record_authority_violations(document: Any, *, _path: str = "") -> list[str]:
+    """Return the dotted paths of authority copies inside a record document.
+
+    The record may cite a TaskRef (``job_id``/``attempt``/``release_id``) and a
+    digest-bound evidence reference, but never a live job/usage/budget row: those
+    have exactly one authority and a second copy drifts.  An empty result means
+    the document is a reference-only projection.
+    """
+    violations: list[str] = []
+    if isinstance(document, Mapping):
+        for key, value in document.items():
+            name = str(key)
+            path = f"{_path}.{name}" if _path else name
+            if name in RECORD_AUTHORITY_KEYS:
+                violations.append(path)
+                continue
+            violations.extend(record_authority_violations(value, _path=path))
+    elif isinstance(document, list | tuple):
+        for index, value in enumerate(document):
+            violations.extend(record_authority_violations(value, _path=f"{_path}[{index}]"))
+    return violations
+
+
 def _proposal_scope(command: CommandIdentity, document: Mapping[str, Any]) -> str:
     """Resolve the effective project of one write (server identity wins)."""
     project = str(command.project_id or "")
@@ -430,6 +511,9 @@ class ResearchWriter:
             raise ResearchWriteError("invalid_writer", "an ApprovalService is required")
         self._resources = resources
         self._approvals = approvals
+        # The research database's local outbox must exist before the first write
+        # so a rolled-back write still leaves a readable (empty) outbox table.
+        ensure_research_outbox(resources)
 
     # -- proposal ----------------------------------------------------------
 
@@ -651,6 +735,135 @@ class ResearchWriter:
             raise ResearchWriteDeniedError(
                 "invalid_identity", "a verified CommandIdentity is required"
             )
+        identity, document, decision, projection_digest = self._assemble_record(
+            command=command,
+            session_seed=session_seed,
+            record=record,
+            evidence_view=evidence_view,
+        )
+        resource_id = research_resource_key(document["project_id"], "record", identity.research_id)
+        try:
+            written = self._resources.create(
+                ResearchResourceRequest(
+                    resource_id=resource_id,
+                    schema=RESEARCH_RECORD_SCHEMA,
+                    document=document,
+                    principal_id=command.principal_id,
+                    project_id=document["project_id"],
+                )
+            )
+        except ResearchResourceError as exc:
+            raise _store_error(exc) from exc
+        return RecordWriteResult(
+            identity=identity,
+            round=int(document["round"]),
+            record=written,
+            decision=decision,
+            projection_digest=projection_digest,
+        )
+
+    def append_record_round(
+        self,
+        *,
+        command: CommandIdentity,
+        session_seed: str,
+        research_id: str,
+        expected_revision: int,
+        record: Mapping[str, Any],
+        evidence_view: Mapping[str, Any] | None = None,
+    ) -> RecordWriteResult:
+        """Append one new round to an existing record (CAS, one transaction).
+
+        A round is a new *record revision* of the same ``research_id``: the round
+        index advances by one, the evidence refs are extended, and the write is an
+        optimistic CAS on the observed ``expected_revision``.  The resource
+        revision and its local outbox row commit together
+        (:func:`acp_services.runtime.local_outbox.research_outbox`), so a crash can
+        never leave a round without its event — or an event without its round.
+        """
+        if not isinstance(command, CommandIdentity):
+            raise ResearchWriteDeniedError(
+                "invalid_identity", "a verified CommandIdentity is required"
+            )
+        identity = ResearchIdentity.allocate(command, session_seed=session_seed)
+        if str(research_id) != identity.research_id:
+            raise ResearchWriteDeniedError(
+                "research_identity_mismatch",
+                "the addressed record is not the identity derived for this session",
+            )
+        current = self.read_record(
+            principal_id=command.principal_id,
+            project_id=str(command.project_id or ""),
+            research_id=str(research_id),
+        )
+        merged = dict(record)
+        merged.setdefault("research_id", research_id)
+        merged.setdefault("project_id", current.document.get("project_id"))
+        merged.setdefault("approval_ref", current.document.get("approval_ref"))
+        merged.setdefault("plan_definition_digest", current.document.get("plan_definition_digest"))
+        merged["round"] = int(current.document.get("round") or 0) + 1
+        merged["created_at"] = str(
+            merged.get("created_at") or current.document.get("created_at") or ""
+        )
+        _identity, document, decision, projection_digest = self._assemble_record(
+            command=command,
+            session_seed=session_seed,
+            record=merged,
+            evidence_view=evidence_view,
+            record_revision=int(current.document.get("record_revision") or 1) + 1,
+        )
+        try:
+            written = research_outbox(
+                self._resources,
+                events=[
+                    OutboxEventSpec(
+                        event_type="research.record.round_appended",
+                        payload={
+                            "resource_id": current.resource_id,
+                            "research_id": str(research_id),
+                            "round": int(document["round"]),
+                            "decision": decision,
+                            "record_revision": int(document["record_revision"]),
+                        },
+                        scope=EventScope.PROJECT,
+                        owner_type=OwnerType.DATA,
+                    )
+                ],
+                owner_id=current.resource_id,
+                business=lambda conn: self._resources.compare_and_swap_in_transaction(
+                    conn,
+                    current.resource_id,
+                    expected_revision=int(expected_revision),
+                    document=document,
+                    principal_id=command.principal_id,
+                    project_id=str(command.project_id or ""),
+                ),
+                revision=int(document["record_revision"]),
+            )
+        except ResearchResourceError as exc:
+            raise _store_error(exc) from exc
+        return RecordWriteResult(
+            identity=identity,
+            round=int(document["round"]),
+            record=written,
+            decision=decision,
+            projection_digest=projection_digest,
+        )
+
+    def _assemble_record(
+        self,
+        *,
+        command: CommandIdentity,
+        session_seed: str,
+        record: Mapping[str, Any],
+        evidence_view: Mapping[str, Any] | None,
+        record_revision: int = 1,
+    ) -> tuple[ResearchIdentity, dict[str, Any], str, str]:
+        """Validate one record payload and build its frozen document.
+
+        The single implementation shared by :meth:`create_record` and
+        :meth:`append_record_round`; every refusal keeps its named rule.
+        """
         if not isinstance(record, Mapping):
             raise ResearchWriteError("invalid_record", "the record must be an object")
         project = str(command.project_id or "")
@@ -753,30 +966,18 @@ class ResearchWriter:
             "human_edits": list(record.get("human_edits") or []),
             "approval_ref": record.get("approval_ref"),
             "created_at": str(record.get("created_at") or ""),
-            "record_revision": 1,
+            "record_revision": int(record_revision),
         }
         if not document["created_at"]:
             raise ResearchWriteError("missing_created_at", "record.created_at is required")
-        resource_id = research_resource_key(project, "record", identity.research_id)
-        try:
-            written = self._resources.create(
-                ResearchResourceRequest(
-                    resource_id=resource_id,
-                    schema=RESEARCH_RECORD_SCHEMA,
-                    document=document,
-                    principal_id=command.principal_id,
-                    project_id=project,
-                )
+        violations = record_authority_violations(document)
+        if violations:
+            # A record cites another authority's *reference*, never its live row.
+            raise ResearchWriteError(
+                "authority_copy_in_record",
+                "the record copies authority field(s): " + ", ".join(sorted(violations)),
             )
-        except ResearchResourceError as exc:
-            raise _store_error(exc) from exc
-        return RecordWriteResult(
-            identity=identity,
-            round=round_index,
-            record=written,
-            decision=decision,
-            projection_digest=projection_digest,
-        )
+        return identity, document, decision, projection_digest
 
     # -- reads -------------------------------------------------------------
 

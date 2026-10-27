@@ -147,12 +147,12 @@ def test_real_sdk_capabilities_call_returns_the_research_handshake(
     handshake = document.get("research_handshake") or {}
     assert handshake.get("tool") == "acp_capabilities"
     assert handshake.get("error") is None, handshake
-    # The request is an in-band typed refusal today: the ten research tools are
-    # promised, not registered, so the server must not claim a negotiation.
-    assert handshake["isError"] is True
-    assert handshake["status"] == "error"
-    assert handshake["error_code"] == "unsupported_capability"
-    assert handshake["error_params"]["rule"] == "extension_not_implemented"
+    # M2-01c registers the ten promised tools, so the exact-version request is a
+    # successful negotiation — and only a covering implementation may say so.
+    assert handshake["isError"] is False
+    assert handshake["status"] == "ok"
+    assert handshake["error_code"] is None
+    assert handshake["error_params"] is None
     entries = handshake["extensions"]
     assert isinstance(entries, list) and len(entries) == 1, entries
     entry = entries[0]
@@ -161,9 +161,9 @@ def test_real_sdk_capabilities_call_returns_the_research_handshake(
     assert entry["supported"] is True
     assert entry["requested"] == {"id": "acp.research.v1", "version": "1.0.0"}
     assert entry["negotiated_by"] == "tools/call:acp_capabilities"
-    assert entry["implemented"] is False
-    assert entry["negotiated"] is False
-    assert entry["refusal"]["code"] == "unsupported_capability"
+    assert entry["implemented"] is True
+    assert entry["negotiated"] is True
+    assert entry["refusal"] is None
 
     # The machine envelope (including extensions[]) survives as JSON text, which
     # is what the DSH plugin turns into a thrown tool failure: the typed refusal
@@ -173,7 +173,10 @@ def test_real_sdk_capabilities_call_returns_the_research_handshake(
     # The plain discovery call advertises the same extension without a request.
     plain = document["capabilities_call"]
     assert plain["isError"] is False
-    assert plain["extensions"][0]["implemented"] is False
+    # A plain discovery read makes no negotiated claim: implemented describes the
+    # registered set, negotiated describes *this* session.
+    assert plain["extensions"][0]["implemented"] is True
+    assert plain["extensions"][0]["negotiated"] is False
     assert plain["extensions"][0]["requested"] is None
 
     # Two `tools/call` frames, still no task and no storage effect.

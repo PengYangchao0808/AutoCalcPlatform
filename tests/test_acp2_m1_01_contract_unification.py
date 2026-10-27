@@ -63,7 +63,9 @@ def test_implementation_status_validator_rejects_a_delivered_row_without_owner(
     tmp_path: Path,
 ) -> None:
     def mutate(contract: dict[str, Any]) -> None:
-        contract["rows"][0]["implementation_status"] = "delivered"
+        row = contract["rows"][0]
+        row["implementation_status"] = "delivered"
+        row.pop("delivered_by", None)
 
     _assert_invalid(_mutated_root(tmp_path, mutate), "names no delivered_by")
 
@@ -117,10 +119,11 @@ def test_only_a_covering_implementation_set_negotiates() -> None:
     )
     requested = {"id": negotiation["extension_id"], "version": negotiation["extension_version"]}
 
-    # Advertising only: the registered set is the eight P1 tools.
+    # Advertising only: the registered set covers the promise set since M2-01c, so
+    # `implemented` is true — but a session that never asked is never negotiated.
     advertised = mcp.negotiate_research_extension(spec, None)
     entry = advertised.entries[0]
-    assert (entry["implemented"], entry["negotiated"]) == (False, False)
+    assert (entry["implemented"], entry["negotiated"]) == (True, False)
 
     # A partial registration never negotiates and is refused by name.
     partial = frozenset(set(mcp.TOOL_ALLOWLIST) | set(spec.promised_tools[:-1]))

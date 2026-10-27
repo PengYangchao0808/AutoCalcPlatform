@@ -288,6 +288,7 @@ def _capabilities_payload(
     """
     from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
     from acp_services.entrypoints.mcp import (
+        RESEARCH_TOOL_NAMES,
         negotiate_research_extension,
         normalize_extension_request,
     )
@@ -331,7 +332,14 @@ def _capabilities_payload(
         "backends": _backend_capability_summary(),
         "capability_descriptors": None,
         "limits": dict(_CONTROLLER_LIMITS),
-        "tools": list(_MCP_TOOLS),
+        # M2-01c: the HTTP surface mirrors tools/list — the eight P1 tools, plus
+        # the ten research tools only for a request that negotiated the extension.
+        "tools": list(_MCP_TOOLS) + ([*RESEARCH_TOOL_NAMES] if handshake.negotiated else []),
+        "research_tools": {
+            "registered": [*RESEARCH_TOOL_NAMES],
+            "visible": bool(handshake.negotiated),
+            "negotiated": bool(handshake.negotiated),
+        },
         "protocol_version": _MCP_PROTOCOL_VERSION,
         "extensions": [dict(entry) for entry in handshake.entries],
         "capability_request": {

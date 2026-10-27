@@ -154,17 +154,22 @@ def test_extension_identity_has_one_authority() -> None:
     )
     # The application contract *version* is not the extension version (B06 drift).
     # M0-06 -> 1.2.0 (field policy); D-IDENT-10 -> 1.3.0 (prepare field table);
-    # M1-01 -> 1.4.0 (negotiation relation projection + required submit key).
-    assert api["contract_version"] == "1.4.0"
+    # M1-01 -> 1.4.0 (negotiation relation projection + required submit key);
+    # M2-01c -> 1.5.0 (implemented projection + research tool visibility rule).
+    assert api["contract_version"] == "1.5.0"
     assert api["contract_version"] != mcp_extension.RESEARCH_EXTENSION_VERSION
     # M1-01a: the projection states the advertised/implemented relation and never
-    # promotes advertising to delivery.
+    # promotes advertising to delivery.  M2-01c registers all ten promised tools,
+    # so the projection flips to implemented=true with the tool visibility rule.
     projection = api["mcp_extensions"]["acp.research.v1"]
     assert projection["advertised"] is True
-    assert projection["implemented"] is False
-    assert projection["implemented_tools"] == []
+    assert projection["implemented"] is True
+    assert set(projection["implemented_tools"]) == set(mcp.RESEARCH_TOOL_NAMES)
+    assert projection["implemented_by"] == "M2-01c"
+    assert projection["negotiated_default"] is False
     assert projection["negotiated_requires"] == ["implemented", "requested_version == version"]
     assert projection["partial_implementation_negotiated"] is False
+    assert "extension_not_negotiated" in projection["tool_visibility"]
     assert set(projection["promised_tools"]) == set(mcp.RESEARCH_TOOL_NAMES)
 
 
@@ -174,9 +179,12 @@ def test_research_promise_set_matches_the_contract_rows() -> None:
     )
     promised = {tool["name"] for row in p2["rows"] for tool in row["tools"]}
     assert set(mcp.RESEARCH_TOOL_NAMES) == promised
-    # Ten unique names, none of them registered: a promise is not delivery.
+    # Ten unique names, all registered by M2-01c, none of them a P1 name: the
+    # registered set covers the promise set without widening the P1 allowlist.
     assert len(mcp.RESEARCH_TOOL_NAMES) == 10
+    assert mcp.RESEARCH_TOOL_SET <= mcp.REGISTERED_TOOL_NAMES
     assert not (set(mcp.RESEARCH_TOOL_NAMES) & mcp.TOOL_ALLOWLIST)
+    assert set(mcp.RESEARCH_TOOL_OPERATIONS) == set(mcp.RESEARCH_TOOL_NAMES)
 
 
 def test_carrier_is_the_p1_discovery_tool_not_initialize() -> None:
@@ -210,25 +218,35 @@ def test_capabilities_always_advertises_the_extension_without_claiming_it() -> N
     assert entry["supported_versions"] == ["1.0.0"]
     assert entry["requested"] is None
     assert entry["negotiated_by"] == "tools/call:acp_capabilities"
-    assert entry["implemented"] is False
+    # M2-01c registers the ten promised tools, so `implemented` is true — while a
+    # plain discovery read still makes no negotiated claim.
+    assert entry["implemented"] is True
     assert entry["negotiated"] is False
     assert entry["refusal"] is None
+    data = result["structuredContent"]["data"]
+    assert data["research_tools"]["visible"] is False
+    assert len(data["tools"]) == 8
 
 
-def test_exact_version_request_is_still_not_negotiated_when_unimplemented() -> None:
+def test_exact_version_request_negotiates_only_a_covering_implementation() -> None:
+    server = _server()
+    before = server.visible_tool_names()
+    assert len(before) == 8
     result = _call_tool(
-        _server(), {"research_extension": {"id": "acp.research.v1", "version": "1.0.0"}}
+        server, {"research_extension": {"id": "acp.research.v1", "version": "1.0.0"}}
     )
-    # The request is well formed and the version matches, but the promise set is
-    # not registered: the answer is a typed refusal, never `negotiated: true`.
-    assert result["isError"] is True
-    assert result["structuredContent"]["error"]["code"] == "unsupported_capability"
+    # The covering registration plus the matching version is the only way to
+    # negotiate; the P1 allowlist itself is untouched.
+    assert result["isError"] is False
     entry = _entry(result)
     assert entry["requested"] == {"id": "acp.research.v1", "version": "1.0.0"}
-    assert entry["implemented"] is False
-    assert entry["negotiated"] is False
-    assert entry["refusal"]["code"] == "unsupported_capability"
-    assert entry["refusal"]["params"]["rule"] == "extension_not_implemented"
+    assert entry["implemented"] is True
+    assert entry["negotiated"] is True
+    assert entry["refusal"] is None
+    assert len(mcp.TOOL_ALLOWLIST) == 8
+    # Only now does the model-visible surface grow.
+    assert server.research_negotiated is True
+    assert len(server.visible_tool_names()) == 18
 
 
 def test_a_covering_implementation_set_is_the_only_way_to_negotiate() -> None:
@@ -396,13 +414,13 @@ def test_http_query_and_body_surfaces_are_equivalent(api_client: Any) -> None:
         "/api/capabilities",
         params={"research_extension": "acp.research.v1@1.0.0", "client": "rph/0.0.0"},
     )
-    assert body.status_code == query.status_code == 422
-    body_detail = _http_detail(body)
-    query_detail = _http_detail(query)
-    assert body_detail["code"] == query_detail["code"] == "unsupported_capability"
-    assert body_detail["params"] == query_detail["params"]
-    assert body_detail["extensions"] == query_detail["extensions"]
-    assert body_detail["params"]["rule"] == "extension_not_implemented"
+    assert body.status_code == query.status_code == 200
+    body_json = body.json()
+    query_json = query.json()
+    assert body_json["extensions"] == query_json["extensions"]
+    assert body_json["extensions"][0]["implemented"] is True
+    assert body_json["extensions"][0]["negotiated"] is True
+    assert body_json["extensions"][0]["refusal"] is None
 
 
 def test_http_plain_read_still_answers_the_advertisement(api_client: Any) -> None:
@@ -410,10 +428,10 @@ def test_http_plain_read_still_answers_the_advertisement(api_client: Any) -> Non
     assert response.status_code == 200
     payload = response.json()
     assert payload["extensions"][0]["id"] == "acp.research.v1"
-    assert payload["extensions"][0]["implemented"] is False
+    assert payload["extensions"][0]["implemented"] is True
+    # No request in this read: nothing is negotiated, so the P1 surface stands.
     assert payload["extensions"][0]["negotiated"] is False
     assert payload["capability_request"]["research_extension"] is None
-    # The eight-tool allowlist is untouched by the handshake.
     assert len(payload["tools"]) == 8
 
 

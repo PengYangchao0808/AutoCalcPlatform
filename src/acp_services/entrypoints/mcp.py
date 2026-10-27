@@ -16,22 +16,23 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
   ``-32602``. The private ``protocolVersions`` list is recorded for diagnostics
   and is never a gate. The result carries no top-level ``extensions`` and makes
   no ``negotiated`` claim: extension negotiation is the M0-09/M1-01 decision.
-* ``tools/list`` advertises a **closed allowlist** of eight tools; ``tools/call``
-  dispatches through a *literal* table keyed by those names.  There is **no**
-  arbitrary shell, no ``getattr``/``eval``/``exec``/``importlib`` function-name
-  dispatch and no path/command string ever reaches a subprocess.
+* ``tools/list`` advertises a **closed allowlist**: the eight frozen P1 tools,
+  plus the ten research tools **only after this session negotiated the research
+  extension** (M2-01c).  ``tools/call`` dispatches through a *literal* table keyed
+  by those names.  There is **no** arbitrary shell, no
+  ``getattr``/``eval``/``exec``/``importlib`` function-name dispatch and no
+  path/command string ever reaches a subprocess.
 * **Application-level extension handshake (M0-09 / ADR-006 D7).**  ``initialize``
   makes no extension claim of any kind; a capability extension is negotiated with
   a ``tools/call`` to :data:`McpTool.CAPABILITIES`, whose result always carries
   ``extensions[]`` (``id``/``version``/``supported``/``requested``/
   ``negotiated_by``/``implemented``/``negotiated``/``refusal``).  Advertising an
-  extension id is **not** implementing it: the frozen research promise set
-  (:data:`RESEARCH_TOOL_NAMES`, ten names) is absent from the allowlist, so
-  ``implemented`` and ``negotiated`` stay ``false`` and a research request is an
-  in-band ``unsupported_capability`` result (never a transport error, never a
-  silently accepted claim).  Because ``tools/list`` is the whole model-visible
-  surface, an unregistered research tool is also *uncallable* — the guarantee
-  comes from the allowlist, not from a per-tool negotiation flag.
+  extension id is **not** implementing it: ``implemented`` is *derived* from the
+  registered set covering the whole promise set (:data:`RESEARCH_TOOL_NAMES`,
+  ten names — registered since M2-01c), and ``negotiated`` additionally requires
+  this session to have asked.  A research call from an unnegotiated session is an
+  in-band ``unsupported_capability`` result (``rule=extension_not_negotiated``),
+  never a transport error and never a silently accepted claim.
 * **Identity is server-enforced.**  The client may only *hint* a project id; the
   tenant/tier/principal are derived from the verified local principal
   (:func:`acp_services.contracts.access.resolve_scope`) and any client-supplied
@@ -146,6 +147,11 @@ __all__ = [
     "TOOL_ALLOWLIST",
     "TOOL_FAMILIES",
     "RESEARCH_TOOL_NAMES",
+    "RESEARCH_TOOL_OPERATIONS",
+    "RESEARCH_TOOL_SET",
+    "RESEARCH_TOOL_FAMILIES",
+    "RESEARCH_TOOL_REQUIRED_ACTION",
+    "REGISTERED_TOOL_NAMES",
     "EXTENSION_HANDSHAKE_CARRIER",
     # Extension handshake (M0-09 / ADR-006 D7)
     "ExtensionSpec",
@@ -160,6 +166,7 @@ __all__ = [
     "CancelPort",
     "ArtifactPort",
     "AnalysisPort",
+    "ResearchPort",
     "McpBackends",
     # Identity
     "WorkspaceContext",
@@ -336,10 +343,10 @@ TOOL_REQUIRED_ACTION: dict[str, str] = {
 TOOL_ALLOWLIST = frozenset(McpTool.ALL)
 
 #: The frozen P2 research promise set (``p2-research-operations.v1.json`` rows
-#: P2-R1…P2-R5, ten unique names).  A **promise** is not an implementation: none
-#: of these names is in :data:`TOOL_ALLOWLIST`, so the research extension reports
-#: ``implemented=False`` until the registered set covers the whole promise set
-#: (the M1-01 "only a covering implementation may say negotiated" rule).
+#: P2-R1…P2-R5, ten unique names).  M2-01c registers all ten, so the extension
+#: reports ``implemented=True`` and ``negotiated=True`` for a matching version —
+#: but only :attr:`McpServer.research_tools_visible` (negotiated session) puts them
+#: in ``tools/list``.  P1's eight names stay in :data:`TOOL_ALLOWLIST` unchanged.
 RESEARCH_TOOL_NAMES: tuple[str, ...] = (
     "acp_research_proposal_create_v1",
     "acp_research_proposal_read_v1",
@@ -352,6 +359,57 @@ RESEARCH_TOOL_NAMES: tuple[str, ...] = (
     "acp_research_snapshot_v1",
     "acp_research_resume_v1",
 )
+
+#: Tool name → P2 operation.  The M2-01c guard asserts this map is exactly the ten
+#: promised names and that every operation has a ``ControllerClient`` method
+#: (``P2_OPERATION_METHODS``), so a live tool can never exist without transport.
+RESEARCH_TOOL_OPERATIONS: dict[str, str] = {
+    "acp_research_proposal_create_v1": "proposal_create",
+    "acp_research_proposal_read_v1": "proposal_read",
+    "acp_research_proposal_update_cas_v1": "proposal_update_cas",
+    "acp_research_approval_request_v1": "approval_request",
+    "acp_research_approval_query_v1": "approval_query",
+    "acp_research_approval_decide_v1": "approval_decide",
+    "acp_research_approval_revoke_v1": "approval_revoke",
+    "acp_research_wait_v1": "wait",
+    "acp_research_snapshot_v1": "snapshot",
+    "acp_research_resume_v1": "resume",
+}
+
+#: The registered research tool set (the *implementation*, not the promise).
+RESEARCH_TOOL_SET: frozenset[str] = frozenset(RESEARCH_TOOL_NAMES)
+
+#: Every tool the adapter can dispatch.  ``implemented`` is derived from this set
+#: covering the whole promise set — never asserted by a caller.
+REGISTERED_TOOL_NAMES: frozenset[str] = frozenset(TOOL_ALLOWLIST) | RESEARCH_TOOL_SET
+
+#: Family label per research tool (documentation / client matrix).
+RESEARCH_TOOL_FAMILIES: dict[str, str] = {
+    "acp_research_proposal_create_v1": "proposal_read_write",
+    "acp_research_proposal_read_v1": "proposal_read_write",
+    "acp_research_proposal_update_cas_v1": "proposal_read_write",
+    "acp_research_approval_request_v1": "approval_request_query",
+    "acp_research_approval_query_v1": "approval_request_query",
+    "acp_research_approval_decide_v1": "approval_decision",
+    "acp_research_approval_revoke_v1": "approval_decision",
+    "acp_research_wait_v1": "bounded_wait_snapshot",
+    "acp_research_snapshot_v1": "bounded_wait_snapshot",
+    "acp_research_resume_v1": "research_resume",
+}
+
+#: Access action each research tool requires (enforced against the resolved scope).
+RESEARCH_TOOL_REQUIRED_ACTION: dict[str, str] = {
+    "acp_research_proposal_create_v1": AccessAction.WRITE,
+    "acp_research_proposal_read_v1": AccessAction.READ,
+    "acp_research_proposal_update_cas_v1": AccessAction.WRITE,
+    "acp_research_approval_request_v1": AccessAction.WRITE,
+    "acp_research_approval_query_v1": AccessAction.READ,
+    "acp_research_approval_decide_v1": AccessAction.CONTROL,
+    "acp_research_approval_revoke_v1": AccessAction.CONTROL,
+    "acp_research_wait_v1": AccessAction.READ,
+    "acp_research_snapshot_v1": AccessAction.READ,
+    "acp_research_resume_v1": AccessAction.WRITE,
+}
 
 #: Where an extension is negotiated.  **Not** ``initialize``: the frozen DSH
 #: client (``@deepseek-ai/dsh-mcp-client`` → ``@modelcontextprotocol/client``
@@ -463,7 +521,7 @@ def negotiate_research_extension(
     spec: ExtensionSpec | None,
     requested: Mapping[str, Any] | None,
     *,
-    registered: Mapping[str, Any] | frozenset[str] | set[str] = TOOL_ALLOWLIST,
+    registered: Mapping[str, Any] | frozenset[str] | set[str] = REGISTERED_TOOL_NAMES,
 ) -> ExtensionHandshake:
     """Negotiate one research extension request against the server's promise.
 
@@ -476,8 +534,9 @@ def negotiate_research_extension(
        → ``extension_version_mismatch``.  An omitted version means "whatever the
        server supports".
     4. the promise set is not covered by the registered tool set →
-       ``extension_not_implemented``.  This is the current state: advertising an
-       extension is not delivering it.
+       ``extension_not_implemented``.  Since M2-01c the default registered set
+       (:data:`REGISTERED_TOOL_NAMES`) covers the ten promised tools, so this
+       refusal only answers a *partial* registration.
     5. otherwise ``negotiated=True``.
 
     A request is **never** upgraded into a negotiated claim by the mere fact that
@@ -948,6 +1007,187 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 
+#: The ten research tool schemas (M2-01c).  The frozen M1-01b conventions apply
+#: unchanged: ``additionalProperties: false`` and an explicit required set, so a
+#: research call can never smuggle an identity, an approver or a task fact.
+_PROPOSAL_CREATE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "project_id": {"type": "string", "description": "Project scope (server-verified)."},
+        "proposal": {
+            "type": "object",
+            "description": (
+                "C-shaped Proposal body (proposal_id/science/budget/recipe_digest/round)."
+            ),
+        },
+        "plan": {
+            "type": "object",
+            "description": "Execution plan the approval binds as plan_digest.",
+        },
+        "session_seed": {"type": "string", "description": "Client-derived research session seed."},
+        "budget": {"type": "object", "description": "Launch budget bound by the approval."},
+        "expires_at": {"type": "string", "description": "Optional approval expiry (ISO-8601)."},
+        "idempotency_key": {"type": "string", "description": "Replay key of this create."},
+    },
+    "required": ["project_id", "proposal", "plan"],
+    "additionalProperties": False,
+}
+
+_PROPOSAL_READ_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "proposal_ref": {"type": "string", "description": "Stored proposal id."},
+        "project_id": {"type": "string", "description": "Project scope (server-verified)."},
+        "revision": {"type": "integer", "minimum": 1, "description": "Pinned revision."},
+    },
+    "required": ["proposal_ref"],
+    "additionalProperties": False,
+}
+
+_PROPOSAL_CAS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "proposal_ref": {"type": "string"},
+        "expected_revision": {"type": "integer", "minimum": 1},
+        "proposal": {"type": "object"},
+        "plan": {"type": "object", "description": "Execution plan (a change opens a new round)."},
+        "project_id": {"type": "string"},
+        "session_seed": {"type": "string"},
+        "budget": {"type": "object"},
+        "expires_at": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+    },
+    "required": ["proposal_ref", "expected_revision", "proposal", "plan"],
+    "additionalProperties": False,
+}
+
+_APPROVAL_REQUEST_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "proposal_ref": {"type": "string"},
+        "plan_digest": {"type": "string", "description": "Frozen plan digest (sha256:<64 hex>)."},
+        "plan": {"type": "object", "description": "Plan definition (digest re-verified)."},
+        "proposal": {"type": "object", "description": "Optional proposal body for the digests."},
+        "proposal_digest": {"type": "string"},
+        "science_digest": {"type": "string"},
+        "budget": {"type": "object"},
+        "allowed_change_range": {"type": "object"},
+        "expires_at": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+        "comment": {"type": "string", "description": "Recorded audit note; never a decision."},
+    },
+    "required": ["proposal_ref", "plan_digest"],
+    "additionalProperties": False,
+}
+
+_APPROVAL_QUERY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "approval_ref": {"type": "string"},
+        "proposal_ref": {"type": "string"},
+        "status": {
+            "type": "string",
+            "enum": ["draft", "pending", "approved", "rejected", "expired", "revoked"],
+        },
+        "cursor": {"type": "string", "description": "Opaque bounded-query cursor."},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+        "project_id": {"type": "string"},
+    },
+    "required": [],
+    "additionalProperties": False,
+}
+
+_APPROVAL_DECIDE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "approval_ref": {"type": "string"},
+        "decision": {"type": "string", "enum": ["approve", "reject"]},
+        "expected_revision": {"type": "integer", "minimum": 1},
+        "reason": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+    },
+    "required": ["approval_ref", "decision", "expected_revision"],
+    "additionalProperties": False,
+}
+
+_APPROVAL_REVOKE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "approval_ref": {"type": "string"},
+        "expected_revision": {"type": "integer", "minimum": 1},
+        "reason": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+    },
+    "required": ["approval_ref", "expected_revision"],
+    "additionalProperties": False,
+}
+
+_RESEARCH_WAIT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "kinds": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["approval", "saga", "proposal", "record"]},
+            "minItems": 1,
+        },
+        "cursor": {"type": "string", "description": "Opaque cursor (expires after 900 s)."},
+        "max_wait_s": {"type": "number", "minimum": 0, "maximum": 60},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+        "project_id": {"type": "string"},
+    },
+    "required": ["kinds"],
+    "additionalProperties": False,
+}
+
+_RESEARCH_SNAPSHOT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "refs": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "description": "kind:ref references (approval/saga/proposal/record).",
+        },
+        "project_id": {"type": "string"},
+    },
+    "required": ["refs"],
+    "additionalProperties": False,
+}
+
+_RESEARCH_RESUME_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "proposal_ref": {"type": "string"},
+        "plan_digest": {"type": "string"},
+        "task_ref": {"type": "object", "description": "Expected TaskRef (mismatch is a conflict)."},
+        "cursor": {"type": "string"},
+        "diagnostic_only": {
+            "type": "boolean",
+            "description": "Report the position without running the remaining idempotent steps.",
+        },
+        "project_id": {"type": "string"},
+    },
+    "required": ["proposal_ref", "plan_digest"],
+    "additionalProperties": False,
+}
+
+#: Research-only argument table (merged into :data:`_ARGUMENT_SCHEMAS` below).
+_RESEARCH_ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "acp_research_proposal_create_v1": _PROPOSAL_CREATE_SCHEMA,
+    "acp_research_proposal_read_v1": _PROPOSAL_READ_SCHEMA,
+    "acp_research_proposal_update_cas_v1": _PROPOSAL_CAS_SCHEMA,
+    "acp_research_approval_request_v1": _APPROVAL_REQUEST_SCHEMA,
+    "acp_research_approval_query_v1": _APPROVAL_QUERY_SCHEMA,
+    "acp_research_approval_decide_v1": _APPROVAL_DECIDE_SCHEMA,
+    "acp_research_approval_revoke_v1": _APPROVAL_REVOKE_SCHEMA,
+    "acp_research_wait_v1": _RESEARCH_WAIT_SCHEMA,
+    "acp_research_snapshot_v1": _RESEARCH_SNAPSHOT_SCHEMA,
+    "acp_research_resume_v1": _RESEARCH_RESUME_SCHEMA,
+}
+
+_ARGUMENT_SCHEMAS.update(_RESEARCH_ARGUMENT_SCHEMAS)
+
+
 def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
     """Reject an undeclared or missing argument *before* any port is touched.
 
@@ -1040,6 +1280,63 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
             "Run an explicit analysis request (requires analysis_id, input_refs, explicit=true).",
             _ANALYZE_SCHEMA,
         ),
+        *_research_tool_specs(),
+    )
+
+
+def _research_tool_specs() -> tuple[dict[str, Any], ...]:
+    """The ten P2 research tool specs (visible only after negotiation)."""
+    return (
+        _tool_spec(
+            "acp_research_proposal_create_v1",
+            "Create revision 1 of a research proposal and request its double-digest approval.",
+            _PROPOSAL_CREATE_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_proposal_read_v1",
+            "Read one stored proposal revision (verbatim document + digest).",
+            _PROPOSAL_READ_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_proposal_update_cas_v1",
+            "CAS one proposal revision; a changed plan digest opens a new round.",
+            _PROPOSAL_CAS_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_approval_request_v1",
+            "Request (or replay) the approval of one frozen plan; never decides it.",
+            _APPROVAL_REQUEST_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_approval_query_v1",
+            "Bounded query over the authoritative approval records.",
+            _APPROVAL_QUERY_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_approval_decide_v1",
+            "Approve or reject one approval; the approver is the authenticated principal.",
+            _APPROVAL_DECIDE_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_approval_revoke_v1",
+            "Revoke one approval; a revoked approval can no longer authorize a submit.",
+            _APPROVAL_REVOKE_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_wait_v1",
+            "Bounded wait (max_wait_s<=60, limit<=200) over approval/saga/proposal/record.",
+            _RESEARCH_WAIT_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_snapshot_v1",
+            "Authoritative snapshot of the requested kind:ref references (read-only).",
+            _RESEARCH_SNAPSHOT_SCHEMA,
+        ),
+        _tool_spec(
+            "acp_research_resume_v1",
+            "Resume the derived research saga without creating a second attempt.",
+            _RESEARCH_RESUME_SCHEMA,
+        ),
     )
 
 
@@ -1117,9 +1414,65 @@ class AnalysisPort(Protocol):
         ...
 
 
+@runtime_checkable
+class ResearchPort(Protocol):
+    """The ten P2 research operations (M2-01c), one method per operation.
+
+    The adapter never writes a research store: the implementation is the
+    Controller-backed port (:mod:`acp_services.entrypoints.research_port`) whose
+    methods are 1:1 with :data:`P2_OPERATION_METHODS`, and the Controller's
+    application service owns every write.
+    """
+
+    def proposal_create(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Create revision 1 of a proposal and request its approval."""
+        ...
+
+    def proposal_read(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Read one stored proposal revision."""
+        ...
+
+    def proposal_update_cas(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """CAS one proposal revision."""
+        ...
+
+    def approval_request(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Request (or replay) the approval of a frozen plan."""
+        ...
+
+    def approval_query(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Bounded query over the approval records."""
+        ...
+
+    def approval_decide(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Approve or reject one approval (the credential is the approver)."""
+        ...
+
+    def approval_revoke(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Revoke one approval."""
+        ...
+
+    def wait(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Bounded wait over the authoritative snapshots."""
+        ...
+
+    def snapshot(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Authoritative snapshot of the requested references."""
+        ...
+
+    def resume(self, arguments: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Resume the derived saga without creating a second attempt."""
+        ...
+
+
 @dataclass(frozen=True)
 class McpBackends:
-    """The injected Service use cases the MCP adapter forwards to (one owner)."""
+    """The injected Service use cases the MCP adapter forwards to (one owner).
+
+    ``research`` is optional so a Controller without the P2 application service
+    still answers the ten tools with a typed ``unsupported_capability`` refusal
+    (``research_service_unavailable``) instead of a transport error.
+    """
 
     capabilities: CapabilityPort
     preflight: PreflightPort
@@ -1128,6 +1481,7 @@ class McpBackends:
     cancel: CancelPort
     artifacts: ArtifactPort
     analysis: AnalysisPort
+    research: ResearchPort | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1700,10 +2054,13 @@ _ToolHandler = Callable[[Mapping[str, Any], WorkspaceContext], mo.MachineResult]
 class McpServer:
     """A stateless MCP adapter over injected Service use cases.
 
-    The server holds no per-connection state: the same instance (or a fresh one
-    sharing the same ports/registries) answers any request, and a dropped
-    connection has no bearing on a submitted operation.  ``handle`` is the only
-    entry point; the caller owns stdin/stdout framing.
+    The server holds no *task* state: the same instance (or a fresh one sharing
+    the same ports/registries) answers any request, and a dropped connection has
+    no bearing on a submitted operation.  The one per-session fact it keeps is
+    whether **this** session negotiated the research extension (M2-01c) — that is
+    what makes ``tools/list`` and the research tools fail-closed before
+    negotiation.  ``handle`` is the only entry point; the caller owns stdin/stdout
+    framing.
 
     Args:
         backends: The injected Service use cases.
@@ -1736,6 +2093,10 @@ class McpServer:
         self._budget = budget
         self._tier = str(configured_tier)
         self._extension = extension
+        # M2-01c: the ten research tools are registered but *not visible* until
+        # this session negotiated the extension (``tools/list`` is the model-visible
+        # surface; an unnegotiated call is refused in-band).
+        self._research_negotiated = False
         # A *literal* allowlist table — never resolved from client input.
         self._tool_dispatch: dict[str, _ToolHandler] = {
             McpTool.CAPABILITIES: self._tool_capabilities,
@@ -1747,6 +2108,30 @@ class McpServer:
             McpTool.READ_ARTIFACT: self._tool_read_artifact,
             McpTool.ANALYZE: self._tool_analyze,
         }
+        for tool_name in RESEARCH_TOOL_NAMES:
+            self._tool_dispatch[tool_name] = self._research_handler(tool_name)
+
+    def _research_handler(self, tool_name: str) -> _ToolHandler:
+        """Bind one dispatch entry to a research tool name (no client input)."""
+
+        def handler(arguments: Mapping[str, Any], context: WorkspaceContext) -> mo.MachineResult:
+            return self._tool_research(tool_name, arguments, context)
+
+        return handler
+
+    # -- research negotiation state (M2-01c) --------------------------------
+
+    @property
+    def research_negotiated(self) -> bool:
+        """Whether this session negotiated the research extension."""
+        return self._research_negotiated
+
+    def visible_tool_names(self) -> tuple[str, ...]:
+        """The tools ``tools/list`` advertises right now (P1 + negotiated P2)."""
+        names = sorted(TOOL_ALLOWLIST)
+        if self._research_negotiated:
+            names.extend(sorted(RESEARCH_TOOL_SET))
+        return tuple(names)
 
     # -- JSON-RPC transport ------------------------------------------------
 
@@ -1893,7 +2278,8 @@ class McpServer:
         }
 
     def _tools_list(self) -> dict[str, Any]:
-        return {"tools": [spec for spec in _tool_specs() if spec["name"] in TOOL_ALLOWLIST]}
+        visible = set(self.visible_tool_names())
+        return {"tools": [spec for spec in _tool_specs() if spec["name"] in visible]}
 
     def _tools_call(self, params: Mapping[str, Any]) -> dict[str, Any]:
         name = params.get("name")
@@ -1907,7 +2293,30 @@ class McpServer:
             raise McpProtocolError(
                 JsonRpcErrorCode.INVALID_PARAMS,
                 f"unknown or non-allowlisted tool {name!r}",
-                data={"code": "unknown_tool", "allowlist": sorted(TOOL_ALLOWLIST)},
+                data={"code": "unknown_tool", "allowlist": sorted(REGISTERED_TOOL_NAMES)},
+            )
+        if name in RESEARCH_TOOL_SET and not self._research_negotiated:
+            # M2-01c fail-closed: a research tool exists only for a session that
+            # negotiated the extension.  Never a transport error, never a silent
+            # downgrade to a P1 tool.
+            error = mo.error_object(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "the research extension is not negotiated in this session",
+                params={
+                    "rule": "extension_not_negotiated",
+                    "tool": name,
+                    "negotiation_tool": McpTool.CAPABILITIES,
+                    "negotiation_request_field": "research_extension",
+                },
+                retryable=False,
+            )
+            return self._result_payload(
+                mo.MachineResult(
+                    operation=name,
+                    status="error",
+                    exit_code=error.exit_code,
+                    error=error,
+                )
             )
         arguments = params.get("arguments")
         if arguments is not None and not isinstance(arguments, Mapping):
@@ -1951,7 +2360,9 @@ class McpServer:
     # -- authorization -----------------------------------------------------
 
     def _authorize(self, name: str, context: WorkspaceContext) -> None:
-        required = TOOL_REQUIRED_ACTION.get(name, AccessAction.READ)
+        required = TOOL_REQUIRED_ACTION.get(name) or RESEARCH_TOOL_REQUIRED_ACTION.get(
+            name, AccessAction.READ
+        )
         if required not in context.available_actions:
             raise McpToolError(
                 mo.ErrorCode.ACCESS_DENIED,
@@ -1982,7 +2393,6 @@ class McpServer:
         """
         data = dict(self._backends.capabilities.capabilities())
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
-        data.setdefault("tools", sorted(TOOL_ALLOWLIST))
         # M1-01b: the frozen three-state analysis-capability projection.  A
         # descriptor is never "available": registered/executable/unavailable are
         # the only states, and analyze refuses anything that is not executable.
@@ -2010,6 +2420,18 @@ class McpServer:
         # The Controller may project its own extension view; the handshake is the
         # server's answer and is never delegated to a downstream payload.
         data["extensions"] = [dict(entry) for entry in handshake.entries]
+        if handshake.negotiated:
+            # M2-01c: a negotiated session is the only one that may see/call the
+            # ten research tools.  Negotiation is a per-session fact, so it flips
+            # here and never in a shared module-level default.
+            self._research_negotiated = True
+        data["tools"] = list(self.visible_tool_names())
+        data["research_tools"] = {
+            "registered": sorted(RESEARCH_TOOL_SET),
+            "visible": self._research_negotiated,
+            "negotiated": bool(handshake.negotiated),
+            "promise_covers_registered": RESEARCH_TOOL_SET <= REGISTERED_TOOL_NAMES,
+        }
 
         client = arguments.get("client")
         if client is not None and not isinstance(client, Mapping):
@@ -2082,6 +2504,50 @@ class McpServer:
             operation=McpTool.CAPABILITIES,
             status="ok",
             data=data,
+            operation_identity=context.workspace_id,
+        )
+
+    def _tool_research(
+        self, tool_name: str, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        """Forward one P2 research tool to the research application service.
+
+        The adapter holds no research store and no business rule: it resolves the
+        operation from :data:`RESEARCH_TOOL_OPERATIONS` and calls the one port
+        method named after that operation, so a tool and its application use case
+        cannot drift.  A missing port is a typed refusal, never a transport error.
+        """
+        port = self._backends.research
+        if port is None:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "no research application service is wired for this Controller",
+                params={"rule": "research_service_unavailable", "tool": tool_name},
+                retryable=False,
+            )
+        operation = RESEARCH_TOOL_OPERATIONS[tool_name]
+        # A *literal* table of the port's methods (never resolved from client
+        # input, never a dynamic dispatch).
+        operations = {
+            "proposal_create": port.proposal_create,
+            "proposal_read": port.proposal_read,
+            "proposal_update_cas": port.proposal_update_cas,
+            "approval_request": port.approval_request,
+            "approval_query": port.approval_query,
+            "approval_decide": port.approval_decide,
+            "approval_revoke": port.approval_revoke,
+            "wait": port.wait,
+            "snapshot": port.snapshot,
+            "resume": port.resume,
+        }
+        result = operations[operation](dict(arguments), workspace_id=context.workspace_id)
+        payload = dict(result) if isinstance(result, Mapping) else {"result": result}
+        payload.setdefault("tool", tool_name)
+        payload.setdefault("operation", operation)
+        return mo.MachineResult(
+            operation=tool_name,
+            status="ok",
+            data=payload,
             operation_identity=context.workspace_id,
         )
 

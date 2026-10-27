@@ -30,13 +30,14 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "MCP_TOOLS",
+    "P2_OPERATION_METHODS",
     "TaskRef",
     "ArtifactRef",
     "Capabilities",
@@ -72,6 +73,23 @@ MCP_TOOLS: tuple[str, ...] = (
 
 #: Frozen control intents (``control`` command).
 CONTROL_INTENTS: frozenset[str] = frozenset({"pause", "unpause", "continue", "rerun", "edit"})
+
+#: The ten P2 research operations and the one client method each one owns
+#: (M2-01c).  The MCP research tools map a tool name to an operation here, so a
+#: tool without a ControllerClient method (or the reverse) fails the guard test
+#: instead of shipping a "delivered" surface with no transport.
+P2_OPERATION_METHODS: Mapping[str, str] = {
+    "proposal_create": "create_proposal",
+    "proposal_read": "read_proposal",
+    "proposal_update_cas": "update_proposal_cas",
+    "approval_request": "request_approval",
+    "approval_query": "query_approval",
+    "approval_decide": "decide_approval",
+    "approval_revoke": "revoke_approval",
+    "wait": "wait_research",
+    "snapshot": "snapshot_research",
+    "resume": "resume_research",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -722,6 +740,258 @@ class ControllerClient:
         quoted = urllib.parse.quote(task_id, safe="")
         data = self._request_json("POST", f"/api/v1/jobs/{quoted}/analyze", dict(request))
         return _as_mapping(data, "analyze")
+
+    # -- P2 research operations (M2-01c; one method per research tool) ------
+
+    def create_proposal(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Create (or replay) revision 1 of a proposal and its approval request."""
+        data = self._request_json("POST", "/api/v2/research/proposals", dict(request))
+        return _as_mapping(data, "create_proposal")
+
+    def read_proposal(
+        self,
+        proposal_ref: str,
+        *,
+        project_id: str | None = None,
+        revision: int | None = None,
+    ) -> Mapping[str, Any]:
+        """Read one stored proposal revision (verbatim document)."""
+        if not str(proposal_ref or "").strip():
+            raise InvalidParameterError(
+                "read_proposal requires proposal_ref", params={"field": "proposal_ref"}
+            )
+        query: dict[str, Any] = {}
+        if project_id:
+            query["project_id"] = str(project_id)
+        if revision is not None:
+            query["revision"] = int(revision)
+        quoted = urllib.parse.quote(str(proposal_ref), safe="")
+        path = f"/api/v2/research/proposals/{quoted}"
+        if query:
+            path += "?" + urllib.parse.urlencode(query)
+        return _as_mapping(self._request_json("GET", path), "read_proposal")
+
+    def update_proposal_cas(
+        self, proposal_ref: str, request: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        """CAS one proposal revision (the observed revision is mandatory)."""
+        if not str(proposal_ref or "").strip():
+            raise InvalidParameterError(
+                "update_proposal_cas requires proposal_ref", params={"field": "proposal_ref"}
+            )
+        if "expected_revision" not in request:
+            raise InvalidParameterError(
+                "update_proposal_cas requires expected_revision",
+                params={"field": "expected_revision"},
+            )
+        quoted = urllib.parse.quote(str(proposal_ref), safe="")
+        data = self._request_json("POST", f"/api/v2/research/proposals/{quoted}/cas", dict(request))
+        return _as_mapping(data, "update_proposal_cas")
+
+    def request_approval(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Request (or replay) the approval of one frozen plan."""
+        data = self._request_json("POST", "/api/v2/research/approvals", dict(request))
+        return _as_mapping(data, "request_approval")
+
+    def query_approval(
+        self,
+        *,
+        approval_ref: str | None = None,
+        proposal_ref: str | None = None,
+        status: str | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        project_id: str | None = None,
+    ) -> Mapping[str, Any]:
+        """Bounded query over the authoritative approval records."""
+        query: dict[str, Any] = {}
+        for name, value in (
+            ("approval_ref", approval_ref),
+            ("proposal_ref", proposal_ref),
+            ("status", status),
+            ("cursor", cursor),
+            ("project_id", project_id),
+        ):
+            if value:
+                query[name] = str(value)
+        if limit is not None:
+            query["limit"] = int(limit)
+        path = "/api/v2/research/approvals"
+        if query:
+            path += "?" + urllib.parse.urlencode(query)
+        return _as_mapping(self._request_json("GET", path), "query_approval")
+
+    def decide_approval(
+        self,
+        approval_ref: str,
+        *,
+        decision: str,
+        expected_revision: int,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Mapping[str, Any]:
+        """Approve or reject one approval (the credential is the approver)."""
+        normalized = str(decision or "").strip().lower()
+        normalized = {"approved": "approve", "rejected": "reject"}.get(normalized, normalized)
+        if normalized not in {"approve", "reject"}:
+            raise InvalidParameterError(
+                f"unsupported approval decision: {decision!r}", params={"field": "decision"}
+            )
+        return self._approval_decision(
+            approval_ref,
+            outcome="approve" if normalized == "approve" else "reject",
+            expected_revision=expected_revision,
+            reason=reason,
+            idempotency_key=idempotency_key,
+        )
+
+    def revoke_approval(
+        self,
+        approval_ref: str,
+        *,
+        expected_revision: int,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Mapping[str, Any]:
+        """Revoke one approval (terminal; it can no longer authorize a submit)."""
+        return self._approval_decision(
+            approval_ref,
+            outcome="revoke",
+            expected_revision=expected_revision,
+            reason=reason,
+            idempotency_key=idempotency_key,
+        )
+
+    def _approval_decision(
+        self,
+        approval_ref: str,
+        *,
+        outcome: str,
+        expected_revision: int,
+        reason: str | None,
+        idempotency_key: str | None,
+    ) -> Mapping[str, Any]:
+        if not str(approval_ref or "").strip():
+            raise InvalidParameterError(
+                "the approval decision requires approval_ref", params={"field": "approval_ref"}
+            )
+        if int(expected_revision) < 1:
+            raise InvalidParameterError(
+                "expected_revision must be >= 1", params={"field": "expected_revision"}
+            )
+        body: dict[str, Any] = {"expected_revision": int(expected_revision)}
+        if reason is not None:
+            body["reason"] = str(reason)
+        if idempotency_key is not None:
+            body["idempotency_key"] = str(idempotency_key)
+        quoted = urllib.parse.quote(str(approval_ref), safe="")
+        data = self._request_json("POST", f"/api/v2/research/approvals/{quoted}/{outcome}", body)
+        return _as_mapping(data, f"{outcome}_approval")
+
+    def wait_research(
+        self,
+        kinds: Sequence[str],
+        *,
+        cursor: str | None = None,
+        max_wait_s: float | int | None = None,
+        limit: int | None = None,
+        project_id: str | None = None,
+    ) -> Mapping[str, Any]:
+        """Bounded wait (``max_wait_s`` <= 60, ``limit`` <= 200)."""
+        body: dict[str, Any] = {"kinds": [str(kind) for kind in kinds]}
+        if cursor is not None:
+            body["cursor"] = str(cursor)
+        if max_wait_s is not None:
+            body["max_wait_s"] = float(max_wait_s)
+        if limit is not None:
+            body["limit"] = int(limit)
+        if project_id is not None:
+            body["project_id"] = str(project_id)
+        # The transport timeout must outlive the bounded wait, never the reverse.
+        timeout = self.timeout
+        if max_wait_s is not None:
+            timeout = max(timeout, float(max_wait_s) + 5.0)
+        data = self._request_json("POST", "/api/v2/research/wait", body, timeout=timeout)
+        return _as_mapping(data, "wait_research")
+
+    def snapshot_research(
+        self, refs: Sequence[str], *, project_id: str | None = None
+    ) -> Mapping[str, Any]:
+        """Authoritative snapshot of ``kind:ref`` references (read-only)."""
+        requested = [str(ref) for ref in refs if str(ref).strip()]
+        if not requested:
+            raise InvalidParameterError(
+                "snapshot_research requires at least one ref", params={"field": "refs"}
+            )
+        query: dict[str, Any] = {"refs": ",".join(requested)}
+        if project_id:
+            query["project_id"] = str(project_id)
+        path = "/api/v2/research/snapshot?" + urllib.parse.urlencode(query)
+        return _as_mapping(self._request_json("GET", path), "snapshot_research")
+
+    def resume_research(
+        self,
+        proposal_ref: str,
+        plan_digest: str,
+        *,
+        task_ref: Mapping[str, Any] | None = None,
+        cursor: str | None = None,
+        diagnostic_only: bool = False,
+        project_id: str | None = None,
+    ) -> Mapping[str, Any]:
+        """Resume the derived saga of ``(proposal, plan_digest)`` (no second task)."""
+        if not str(proposal_ref or "").strip():
+            raise InvalidParameterError(
+                "resume_research requires proposal_ref", params={"field": "proposal_ref"}
+            )
+        if not str(plan_digest or "").strip():
+            raise InvalidParameterError(
+                "resume_research requires plan_digest", params={"field": "plan_digest"}
+            )
+        body: dict[str, Any] = {
+            "proposal_ref": str(proposal_ref),
+            "plan_digest": str(plan_digest),
+            "diagnostic_only": bool(diagnostic_only),
+        }
+        if task_ref is not None:
+            body["task_ref"] = dict(task_ref)
+        if cursor is not None:
+            body["cursor"] = str(cursor)
+        if project_id is not None:
+            body["project_id"] = str(project_id)
+        data = self._request_json("POST", "/api/v2/research/resume", body)
+        return _as_mapping(data, "resume_research")
+
+    def reconcile_saga(
+        self,
+        saga_id: str,
+        *,
+        action: str,
+        expected_revision: int,
+        reason: str = "",
+        project_id: str | None = None,
+    ) -> Mapping[str, Any]:
+        """Apply one explicit saga reconciliation action (advance/abandon)."""
+        if not str(saga_id or "").strip():
+            raise InvalidParameterError(
+                "reconcile_saga requires saga_id", params={"field": "saga_id"}
+            )
+        body: dict[str, Any] = {
+            "action": str(action),
+            "expected_revision": int(expected_revision),
+            "reason": str(reason or ""),
+        }
+        if project_id is not None:
+            body["project_id"] = str(project_id)
+        quoted = urllib.parse.quote(str(saga_id), safe="")
+        data = self._request_json("POST", f"/api/v2/research/sagas/{quoted}/reconcile", body)
+        return _as_mapping(data, "reconcile_saga")
+
+    def read_saga(self, saga_id: str) -> Mapping[str, Any]:
+        """Read-only intent reconciliation of one saga."""
+        quoted = urllib.parse.quote(str(saga_id), safe="")
+        data = self._request_json("GET", f"/api/v2/research/sagas/{quoted}")
+        return _as_mapping(data, "read_saga")
 
     def recover(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         """Refuse HTTP recovery explicitly: it is not delivered in this contract.

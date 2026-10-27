@@ -1,9 +1,9 @@
 {
   "schema": "acp2.runtime.application-api.v1",
-  "contract_version": "1.4.0",
+  "contract_version": "1.5.0",
   "frozen_at": "2026-10-27",
   "supersedes": "1.3.0",
-  "change_note": "1.4.0 (M1-01a/b): the research-extension projection names the advertised/implemented/negotiated relation (no version change: acp.research.v1@1.0.0 stays the authority) and submit.idempotency_key becomes required while unknown request fields are rejected at the MCP adapter before any port is touched. Additive for every other operation; prepare/read/analyze keep their D-IDENT-10 field tables.",
+  "change_note": "M2-01c: the research extension projection flips to implemented=true (all ten p2_promised tools are registered) and records the tool-visibility rule (tools/list exposes them only after a session negotiates). Additive: no P1 name, schema or operation changes.",
   "owner": "B",
   "status": "delivered",
   "scope": "The single ACP 2.0 application command surface. Every entry (CLI `acp task`, `acp run`, HTTP `/api/v1/*`, MCP tools, ControllerClient) maps to exactly one command in this document; no entry owns its own Submit/Cancel/Result implementation.",
@@ -2974,8 +2974,19 @@
         "acp_research_snapshot_v1",
         "acp_research_resume_v1"
       ],
-      "implemented_tools": [],
-      "implemented": false,
+      "implemented_tools": [
+        "acp_research_proposal_create_v1",
+        "acp_research_proposal_read_v1",
+        "acp_research_proposal_update_cas_v1",
+        "acp_research_approval_request_v1",
+        "acp_research_approval_query_v1",
+        "acp_research_approval_decide_v1",
+        "acp_research_approval_revoke_v1",
+        "acp_research_wait_v1",
+        "acp_research_snapshot_v1",
+        "acp_research_resume_v1"
+      ],
+      "implemented": true,
       "negotiated_default": false,
       "negotiated_requires": [
         "implemented",
@@ -2984,7 +2995,9 @@
       "partial_implementation_negotiated": false,
       "tool_sets_authority": "runtime/p2-research-operations.v1.json::client_path.tool_sets",
       "descriptor_schema": "runtime/mcp-launch.schema.json",
-      "note": "The eight P1 tool names and input schemas are unchanged. M0-09 (ADR-006 D7) removed the initialize claim: the frozen DSH client hard-codes capabilities:{} and drops a top-level extensions block, so the extension is negotiated by calling acp_capabilities (tools/call) with research_extension{id,version}. Advertising is not implementing: the ten P2 tools are not in the allowlist, so implemented/negotiated stay false and a research request is refused with unsupported_capability."
+      "note": "The eight P1 tool names and input schemas are unchanged. M0-09 (ADR-006 D7) removed the initialize claim: the frozen DSH client hard-codes capabilities:{} and drops a top-level extensions block, so the extension is negotiated by calling acp_capabilities (tools/call) with research_extension{id,version}. M2-01c registers all ten promised tools, so implemented/negotiated can be true — but advertising is still not delivery: only a session that negotiated sees or calls the research tools.",
+      "implemented_by": "M2-01c",
+      "tool_visibility": "tools/list = the eight P1 tools before negotiation and the ten research tools after it; an unnegotiated research call is unsupported_capability with params.rule=extension_not_negotiated"
     }
   },
   "approval_events": {

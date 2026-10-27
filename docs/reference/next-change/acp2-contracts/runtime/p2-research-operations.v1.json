@@ -9,13 +9,33 @@
     "chosen": "versioned MCP extension",
     "reason": "C's MCP Bridge only calls tools registered on the DSH MCP server; a server-side data interface is not reachable from RPH. The extension keeps one controlled path instead of adding a second client protocol.",
     "p1_contract_preserved": "the eight frozen P1 tools (acp_capabilities, acp_preflight, acp_submit, acp_status, acp_cancel, acp_prepare_artifact, acp_read_artifact, acp_analyze) remain the P1 allowlist and never change names or schemas",
-    "extension_rule": "P2 tools are promised by the versioned extension acp.research.v1 but are not callable until they are registered: tools/list is the whole model-visible surface, so an unregistered research tool is refused as unknown_tool and an extension request is answered in-band by acp_capabilities with implemented=false / negotiated=false. Advertising an extension is never a delivery claim (M0-09/ADR-006 D7).",
+    "extension_rule": "P2 tools are promised by the versioned extension acp.research.v1 and are registered by M2-01c, but tools/list only exposes them after that session negotiated the extension (tools/call acp_capabilities with research_extension). Before negotiation a research tool call is refused in-band as unsupported_capability with params.rule=extension_not_negotiated; the eight P1 names are unchanged and always advertised.",
     "tool_sets": {
-      "p1_advertised": ["acp_capabilities", "acp_preflight", "acp_submit", "acp_status", "acp_cancel", "acp_prepare_artifact", "acp_read_artifact", "acp_analyze"],
-      "p2_promised": ["acp_research_proposal_create_v1", "acp_research_proposal_read_v1", "acp_research_proposal_update_cas_v1", "acp_research_approval_request_v1", "acp_research_approval_query_v1", "acp_research_approval_decide_v1", "acp_research_approval_revoke_v1", "acp_research_wait_v1", "acp_research_snapshot_v1", "acp_research_resume_v1"],
+      "p1_advertised": [
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_submit",
+        "acp_status",
+        "acp_cancel",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_analyze"
+      ],
+      "p2_promised": [
+        "acp_research_proposal_create_v1",
+        "acp_research_proposal_read_v1",
+        "acp_research_proposal_update_cas_v1",
+        "acp_research_approval_request_v1",
+        "acp_research_approval_query_v1",
+        "acp_research_approval_decide_v1",
+        "acp_research_approval_revoke_v1",
+        "acp_research_wait_v1",
+        "acp_research_snapshot_v1",
+        "acp_research_resume_v1"
+      ],
       "advertised": "the eight P1 tools in tools/list plus the extension entry acp_capabilities always reports; advertising never implies delivery",
-      "implemented": "derived, never asserted: the registered tool allowlist must cover the whole p2_promised set (ten names). A partial registration is implemented=false.",
-      "negotiated": "derived: implemented=true AND the requested version equals extension_version. Only a covering implementation set may report negotiated=true; an advertised-but-unimplemented extension stays negotiated=false with the typed refusal extension_not_implemented.",
+      "implemented": "derived, never asserted: the registered tool allowlist must cover the whole p2_promised set (ten names). M2-01c registers all ten, so implemented=true; a partial registration would still be implemented=false.",
+      "negotiated": "derived: implemented=true AND the requested version equals extension_version. Since M2-01c a matching-version negotiation succeeds; an advertised-but-partial set stays negotiated=false with the typed refusal extension_not_implemented.",
       "partial_implementation": "refused with unsupported_capability/params.rule=extension_not_implemented, never a negotiated=true over a subset",
       "p1_is_unchanged": "the eight P1 names and input schemas are frozen (M1-01b changes only acp_submit/acp_prepare_artifact/acp_read_artifact/acp_analyze request schemas, never names)"
     },
@@ -27,11 +47,31 @@
       "initialize_note": "M0-09 (ADR-006 D7): the frozen DSH client sends capabilities:{} and discards a top-level initialize extensions block, so this contract no longer negotiates in initialize. initialize only points at the carrier through capabilities.extensions['acp.negotiation.v1'].extension_handshake.",
       "extension_id": "acp.research.v1",
       "extension_version": "1.0.0",
-      "implemented": false,
+      "implemented": true,
       "negotiated_default": false,
-      "negotiated_rule": "negotiated=true requires the registered tool set to cover the whole promise set AND the requested version to equal extension_version; a partial implementation never reports negotiated.",
-      "refusal": {"class": "unsupported", "code": "unsupported_capability", "params": {"rule": "extension_not_negotiated"}, "rules": ["extension_not_advertised", "extension_version_mismatch", "extension_not_implemented", "extension_not_negotiated"]},
-      "access_refusal": {"class": "authorization", "code": "access_denied", "params": {"rule": "project_scope_mismatch"}}
+      "negotiated_rule": "negotiated=true requires the registered tool set to cover the whole promise set (it does since M2-01c) AND the requested version to equal extension_version AND that session to have asked; a session that never asked stays negotiated=false and its research tools stay invisible.",
+      "refusal": {
+        "class": "unsupported",
+        "code": "unsupported_capability",
+        "params": {
+          "rule": "extension_not_negotiated"
+        },
+        "rules": [
+          "extension_not_advertised",
+          "extension_version_mismatch",
+          "extension_not_implemented",
+          "extension_not_negotiated"
+        ]
+      },
+      "access_refusal": {
+        "class": "authorization",
+        "code": "access_denied",
+        "params": {
+          "rule": "project_scope_mismatch"
+        }
+      },
+      "implemented_by": "M2-01c",
+      "tool_visibility": "tools/list is the model-visible surface: eight P1 tools before negotiation, plus the ten research tools after it. A registration is never a visibility claim."
     },
     "rejected_alternative": "restricted HTTP client path - not chosen in Plan B; adding one would create a second client contract to keep in sync",
     "forbidden": [
@@ -48,14 +88,45 @@
   },
   "controller_client": {
     "path": "src/acp_services/entrypoints/controller_client.py",
-    "status": "planned",
+    "status": "delivered",
     "owner": "B04a",
-    "rule": "the ControllerClient is the only transport for these tools; it calls the application commands, never the manager, the store or a thread"
+    "rule": "the ControllerClient is the only transport for these tools; it calls the application commands, never the manager, the store or a thread",
+    "delivered_by": "M2-01c",
+    "methods": {
+      "proposal_create": "create_proposal",
+      "proposal_read": "read_proposal",
+      "proposal_update_cas": "update_proposal_cas",
+      "approval_request": "request_approval",
+      "approval_query": "query_approval",
+      "approval_decide": "decide_approval",
+      "approval_revoke": "revoke_approval",
+      "wait": "wait_research",
+      "snapshot": "snapshot_research",
+      "resume": "resume_research"
+    },
+    "reconcile_methods": {
+      "read": "read_saga",
+      "action": "reconcile_saga"
+    }
   },
   "waits": {
     "rule": "waiting is a bounded query plus an authoritative snapshot, never an unbounded long poll and never a chat-session timer",
-    "cursor": {"opaque": true, "max_age_s": 900, "expired_error": {"class": "not-prepared", "code": "resource_not_ready", "params": {"rule": "cursor_expired"}}},
-    "bounds": {"max_wait_s": 60, "max_limit": 200, "default_limit": 50}
+    "cursor": {
+      "opaque": true,
+      "max_age_s": 900,
+      "expired_error": {
+        "class": "not-prepared",
+        "code": "resource_not_ready",
+        "params": {
+          "rule": "cursor_expired"
+        }
+      }
+    },
+    "bounds": {
+      "max_wait_s": 60,
+      "max_limit": 200,
+      "default_limit": 50
+    }
   },
   "rows": [
     {
@@ -63,37 +134,165 @@
       "operation": "Proposal/ResearchRecord create/read/CAS",
       "authority": "Data (typed resource endpoint)",
       "tools": [
-        {"name": "acp_research_proposal_create_v1", "namespaced_id": "acp.research.proposal_create", "tool_version": "1.0.0", "arguments": {"required": ["project_id", "proposal"], "optional": ["idempotency_key", "extensions"]}, "returns": ["proposal_ref", "proposal_digest", "revision", "replayed"]},
-        {"name": "acp_research_proposal_read_v1", "namespaced_id": "acp.research.proposal_read", "tool_version": "1.0.0", "arguments": {"required": ["proposal_ref"], "optional": ["revision"]}, "returns": ["proposal", "proposal_digest", "revision", "unknown_fields_preserved"]},
-        {"name": "acp_research_proposal_update_cas_v1", "namespaced_id": "acp.research.proposal_update_cas", "tool_version": "1.0.0", "arguments": {"required": ["proposal_ref", "expected_revision", "proposal"], "optional": ["idempotency_key"]}, "returns": ["proposal_ref", "proposal_digest", "revision"]}
+        {
+          "name": "acp_research_proposal_create_v1",
+          "namespaced_id": "acp.research.proposal_create",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "project_id",
+              "proposal",
+              "plan"
+            ],
+            "optional": [
+              "idempotency_key",
+              "extensions"
+            ]
+          },
+          "returns": [
+            "proposal_ref",
+            "proposal_digest",
+            "revision",
+            "replayed"
+          ]
+        },
+        {
+          "name": "acp_research_proposal_read_v1",
+          "namespaced_id": "acp.research.proposal_read",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "proposal_ref"
+            ],
+            "optional": [
+              "revision"
+            ]
+          },
+          "returns": [
+            "proposal",
+            "proposal_digest",
+            "revision",
+            "unknown_fields_preserved"
+          ]
+        },
+        {
+          "name": "acp_research_proposal_update_cas_v1",
+          "namespaced_id": "acp.research.proposal_update_cas",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "proposal_ref",
+              "expected_revision",
+              "proposal",
+              "plan"
+            ],
+            "optional": [
+              "idempotency_key"
+            ]
+          },
+          "returns": [
+            "proposal_ref",
+            "proposal_digest",
+            "revision"
+          ]
+        }
       ],
-      "controller_client_methods": ["create_proposal", "read_proposal", "update_proposal_cas"],
-      "application_use_case": "Data typed resource: acp_services.data.operations.ProposalResourceService.{create,read,update_cas} over the published manifest/resource boundary",
+      "controller_client_methods": [
+        "create_proposal",
+        "read_proposal",
+        "update_proposal_cas"
+      ],
+      "application_use_case": "acp_services.runtime.research_service.ResearchOperations.{proposal_create,proposal_read,proposal_update_cas,record_append_round} over acp_services.data.research_resources.ResearchResourceStore (B18) and the M1-06 ResearchWriter",
       "authorization": "scope read for read, scope write for create/update; project and principal resolved server-side; CAS requires expected_revision and returns conflict on mismatch",
-      "error_classes": ["authorization", "invalid-parameter", "conflict", "not-prepared", "retryable"],
+      "error_classes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "not-prepared",
+        "retryable"
+      ],
       "idempotency": "create/update accept idempotency_key; the same key with a different proposal_digest is conflict (revision_conflict, params.rule=idempotency_key_reuse)",
       "binding_owner": "B18",
-      "implementation_status": "planned",
+      "implementation_status": "delivered",
       "live_tool_requirement": "visible in tools/list after acp.research.v1 negotiation and callable through tools/call; a Data interface alone is not a live DSH tool",
-      "evidence_gate": "headless RPH creates a proposal, reads it back, CAS-updates it once, and observes conflict on a stale revision"
+      "evidence_gate": "headless RPH creates a proposal, reads it back, CAS-updates it once, and observes conflict on a stale revision",
+      "plan_argument_note": "M2-01c additive: create/update-cas require the execution `plan` because the approval binds plan_digest; a proposal write without it could not produce a double-digest approval.",
+      "delivered_by": "M2-01c",
+      "http_paths": {
+        "create": "POST /api/v2/research/proposals",
+        "read": "GET /api/v2/research/proposals/{proposal_ref}",
+        "update_cas": "POST /api/v2/research/proposals/{proposal_ref}/cas",
+        "round_append": "POST /api/v2/research/records/{research_id}/rounds"
+      }
     },
     {
       "id": "P2-R2",
       "operation": "request/query approval",
       "authority": "Runtime",
       "tools": [
-        {"name": "acp_research_approval_request_v1", "namespaced_id": "acp.research.approval_request", "tool_version": "1.0.0", "arguments": {"required": ["proposal_ref", "plan_digest"], "optional": ["comment", "idempotency_key"]}, "returns": ["approval_ref", "status", "revision", "requested_at"]},
-        {"name": "acp_research_approval_query_v1", "namespaced_id": "acp.research.approval_query", "tool_version": "1.0.0", "arguments": {"required": [], "optional": ["approval_ref", "proposal_ref", "status", "cursor", "limit"]}, "returns": ["approvals", "cursor", "snapshot_revision"]}
+        {
+          "name": "acp_research_approval_request_v1",
+          "namespaced_id": "acp.research.approval_request",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "proposal_ref",
+              "plan_digest"
+            ],
+            "optional": [
+              "comment",
+              "idempotency_key"
+            ]
+          },
+          "returns": [
+            "approval_ref",
+            "status",
+            "revision",
+            "requested_at"
+          ]
+        },
+        {
+          "name": "acp_research_approval_query_v1",
+          "namespaced_id": "acp.research.approval_query",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [],
+            "optional": [
+              "approval_ref",
+              "proposal_ref",
+              "status",
+              "cursor",
+              "limit"
+            ]
+          },
+          "returns": [
+            "approvals",
+            "cursor",
+            "snapshot_revision"
+          ]
+        }
       ],
-      "controller_client_methods": ["request_approval", "query_approval"],
+      "controller_client_methods": [
+        "request_approval",
+        "query_approval"
+      ],
       "application_use_case": "acp_services.runtime.approval.ApprovalService.{request,query} (B16); request binds plan_digest, never a mutable plan",
       "authorization": "request: scope write as the resolved requesting principal; query: scope read on the resolved project. A client can request and query but can never approve through these tools.",
-      "error_classes": ["authorization", "invalid-parameter", "conflict", "retryable"],
+      "error_classes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable"
+      ],
       "idempotency": "one pending approval per (proposal_ref, plan_digest); a second request with the same pair returns the existing approval_ref (replayed=true), a different plan_digest is conflict",
       "binding_owner": "B16",
       "implementation_status": "delivered",
       "delivered_by": "B16",
-      "http_paths": {"request": "POST /api/v2/research/approvals", "query": "GET /api/v2/research/approvals", "read": "GET /api/v2/research/approvals/{approval_ref}"},
+      "http_paths": {
+        "request": "POST /api/v2/research/approvals",
+        "query": "GET /api/v2/research/approvals",
+        "read": "GET /api/v2/research/approvals/{approval_ref}"
+      },
       "live_tool_requirement": "visible only after extension negotiation; approving requires a different tool and a verified human principal",
       "evidence_gate": "a headless client requests and queries an approval; a second request for the same plan_digest is replayed, not duplicated"
     },
@@ -102,18 +301,70 @@
       "operation": "approve/reject/revoke",
       "authority": "Runtime with the verified approver",
       "tools": [
-        {"name": "acp_research_approval_decide_v1", "namespaced_id": "acp.research.approval_decide", "tool_version": "1.0.0", "arguments": {"required": ["approval_ref", "decision", "expected_revision"], "optional": ["reason", "idempotency_key"]}, "returns": ["approval_ref", "status", "revision", "approver_ref"]},
-        {"name": "acp_research_approval_revoke_v1", "namespaced_id": "acp.research.approval_revoke", "tool_version": "1.0.0", "arguments": {"required": ["approval_ref", "expected_revision"], "optional": ["reason", "idempotency_key"]}, "returns": ["approval_ref", "status", "revision"]}
+        {
+          "name": "acp_research_approval_decide_v1",
+          "namespaced_id": "acp.research.approval_decide",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "approval_ref",
+              "decision",
+              "expected_revision"
+            ],
+            "optional": [
+              "reason",
+              "idempotency_key"
+            ]
+          },
+          "returns": [
+            "approval_ref",
+            "status",
+            "revision",
+            "approver_ref"
+          ]
+        },
+        {
+          "name": "acp_research_approval_revoke_v1",
+          "namespaced_id": "acp.research.approval_revoke",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "approval_ref",
+              "expected_revision"
+            ],
+            "optional": [
+              "reason",
+              "idempotency_key"
+            ]
+          },
+          "returns": [
+            "approval_ref",
+            "status",
+            "revision"
+          ]
+        }
       ],
-      "controller_client_methods": ["decide_approval", "revoke_approval"],
+      "controller_client_methods": [
+        "decide_approval",
+        "revoke_approval"
+      ],
       "application_use_case": "acp_services.runtime.approval.ApprovalService.{approve,reject,revoke} (B16), bound to the frozen plan_digest; the persistence is B16's approval store, not a second authority",
       "authorization": "approver identity MUST come from the authenticated Controller channel (token/session principal) and MUST hold the approval permission. A payload field naming an approver, role or tenant is refused with authorization (access_denied, params.rule=approver_identity_from_payload). A model cannot substitute itself for the human approver.",
-      "error_classes": ["authorization", "invalid-parameter", "conflict", "retryable"],
+      "error_classes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable"
+      ],
       "idempotency": "a repeated decision with the same expected_revision and the same outcome is replayed; a different outcome on a decided approval is conflict",
       "binding_owner": "B16",
       "implementation_status": "delivered",
       "delivered_by": "B16",
-      "http_paths": {"approve": "POST /api/v2/research/approvals/{approval_ref}/approve", "reject": "POST /api/v2/research/approvals/{approval_ref}/reject", "revoke": "POST /api/v2/research/approvals/{approval_ref}/revoke"},
+      "http_paths": {
+        "approve": "POST /api/v2/research/approvals/{approval_ref}/approve",
+        "reject": "POST /api/v2/research/approvals/{approval_ref}/reject",
+        "revoke": "POST /api/v2/research/approvals/{approval_ref}/revoke"
+      },
       "live_tool_requirement": "advertised only to authorized clients; the decision tool is never offered to an unauthenticated client",
       "evidence_gate": "approve/reject/revoke each move revision exactly once; a payload-claimed approver is denied; a revoked approval cannot authorize a submit"
     },
@@ -122,52 +373,169 @@
       "operation": "task/approval/budget waiting",
       "authority": "Runtime cursor/bounded query + authoritative snapshot",
       "tools": [
-        {"name": "acp_research_wait_v1", "namespaced_id": "acp.research.wait", "tool_version": "1.0.0", "arguments": {"required": ["kinds"], "optional": ["cursor", "max_wait_s", "limit", "project_id"]}, "returns": ["events", "cursor", "snapshot", "snapshot_revision", "timed_out"]},
-        {"name": "acp_research_snapshot_v1", "namespaced_id": "acp.research.snapshot", "tool_version": "1.0.0", "arguments": {"required": ["refs"], "optional": ["project_id"]}, "returns": ["snapshot", "snapshot_revision"]}
+        {
+          "name": "acp_research_wait_v1",
+          "namespaced_id": "acp.research.wait",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "kinds"
+            ],
+            "optional": [
+              "cursor",
+              "max_wait_s",
+              "limit",
+              "project_id"
+            ]
+          },
+          "returns": [
+            "events",
+            "cursor",
+            "snapshot",
+            "snapshot_revision",
+            "timed_out"
+          ]
+        },
+        {
+          "name": "acp_research_snapshot_v1",
+          "namespaced_id": "acp.research.snapshot",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "refs"
+            ],
+            "optional": [
+              "project_id"
+            ]
+          },
+          "returns": [
+            "snapshot",
+            "snapshot_revision"
+          ]
+        }
       ],
-      "controller_client_methods": ["wait_research", "snapshot_research"],
-      "application_use_case": "Runtime bounded query: acp_services.runtime.projections + events cursor over the authoritative task/approval/budget facts",
+      "controller_client_methods": [
+        "wait_research",
+        "snapshot_research"
+      ],
+      "application_use_case": "acp_services.runtime.research_service.ResearchOperations.{research_wait,research_snapshot} over the authoritative approval / saga / research-resource projections (no second event store)",
       "authorization": "scope read on the resolved project; the cursor is bound to the principal and cannot be replayed across principals",
-      "error_classes": ["authorization", "invalid-parameter", "not-prepared", "retryable"],
+      "error_classes": [
+        "authorization",
+        "invalid-parameter",
+        "not-prepared",
+        "retryable"
+      ],
       "idempotency": "wait/snapshot are read-only; replaying a cursor returns the same event window and never mutates state",
       "binding_owner": "B16",
-      "implementation_status": "planned",
+      "implementation_status": "delivered",
       "live_tool_requirement": "bounded by max_wait_s<=60 and limit<=200; an unbounded wait is invalid-parameter",
-      "evidence_gate": "disconnect the client mid-wait, reconnect with the cursor, and observe the same authoritative snapshot_revision"
+      "evidence_gate": "disconnect the client mid-wait, reconnect with the cursor, and observe the same authoritative snapshot_revision",
+      "delivered_by": "M2-01c",
+      "http_paths": {
+        "wait": "POST /api/v2/research/wait",
+        "snapshot": "GET /api/v2/research/snapshot?refs=kind:ref,..."
+      },
+      "cursor": {
+        "opaque": true,
+        "max_age_s": 900,
+        "format": "base64url({v,rev,project,at})",
+        "expired_error": {
+          "class": "not-prepared",
+          "code": "resource_not_ready",
+          "params": {
+            "rule": "cursor_expired"
+          }
+        }
+      }
     },
     {
       "id": "P2-R5",
       "operation": "research resume",
       "authority": "C research semantics + B resource facts",
       "tools": [
-        {"name": "acp_research_resume_v1", "namespaced_id": "acp.research.resume", "tool_version": "1.0.0", "arguments": {"required": ["proposal_ref", "plan_digest"], "optional": ["task_ref", "cursor", "diagnostic_only"]}, "returns": ["resumed_from", "task_ref", "plan_digest", "blocked_steps", "snapshot_revision"]}
+        {
+          "name": "acp_research_resume_v1",
+          "namespaced_id": "acp.research.resume",
+          "tool_version": "1.0.0",
+          "arguments": {
+            "required": [
+              "proposal_ref",
+              "plan_digest"
+            ],
+            "optional": [
+              "task_ref",
+              "cursor",
+              "diagnostic_only"
+            ]
+          },
+          "returns": [
+            "resumed_from",
+            "task_ref",
+            "plan_digest",
+            "blocked_steps",
+            "snapshot_revision"
+          ]
+        }
       ],
-      "controller_client_methods": ["resume_research"],
-      "application_use_case": "recover command over B resource facts; C supplies the research semantics of what is resumable",
+      "controller_client_methods": [
+        "resume_research"
+      ],
+      "application_use_case": "acp_services.runtime.research_saga.ResearchSaga (five-step intent chain) + acp_services.runtime.research_service.ResearchOperations.research_resume; the saga id is derived from (project, proposal_ref, plan_digest) so a resume in a new process addresses the same chain and never creates a second attempt",
       "authorization": "scope write plus a valid unrevoked approval bound to plan_digest; a chat session is never authority for task facts",
-      "error_classes": ["authorization", "invalid-parameter", "conflict", "retryable", "not-prepared"],
+      "error_classes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable",
+        "not-prepared"
+      ],
       "idempotency": "resume is idempotent per (proposal_ref, plan_digest, task_ref); a mismatched plan_digest forces full recompute rather than adoption",
       "binding_owner": "B18",
-      "implementation_status": "planned",
+      "implementation_status": "delivered",
       "live_tool_requirement": "resume never creates a second attempt for an existing valid one and never adopts a partial/diagnostic result as normal",
-      "evidence_gate": "terminate the DSH session, resume in a new session, and observe the same resource revision and task reference"
+      "evidence_gate": "terminate the DSH session, resume in a new session, and observe the same resource revision and task reference",
+      "delivered_by": "M2-01c",
+      "http_paths": {
+        "resume": "POST /api/v2/research/resume",
+        "reconcile_read": "GET /api/v2/research/sagas/{saga_id}",
+        "reconcile_action": "POST /api/v2/research/sagas/{saga_id}/reconcile"
+      }
     }
   ],
   "approval_lifecycle": {
-    "states": ["draft", "pending", "approved", "rejected", "expired", "revoked"],
+    "states": [
+      "draft",
+      "pending",
+      "approved",
+      "rejected",
+      "expired",
+      "revoked"
+    ],
     "note": "draft is the pre-request state; the wire status for a requested but undecided approval is pending (frozen C01/B03 status enum).",
     "authority": "acp_services.runtime.approvals.ApprovalService",
     "binding": "plan_digest + proposal_digest + project_id + budget_digest + allowed_change_range",
     "separate_from_execution": "approval state never changes a JobStatus; resume() remains review-only"
   },
   "binding_ownership": {
-    "B16": ["P2-R2", "P2-R3", "P2-R4"],
-    "B18": ["P2-R1", "P2-R5"],
+    "B16": [
+      "P2-R2",
+      "P2-R3",
+      "P2-R4"
+    ],
+    "B18": [
+      "P2-R1",
+      "P2-R5"
+    ],
     "rule": "the binding owner ships the live tool, the ControllerClient method and the application use case together; a Data interface delivered without a live tool is not closure of R3-02"
   },
   "implementation_status_vocabulary": {
     "field": "rows[].implementation_status",
-    "values": ["planned", "delivered", "verified"],
+    "values": [
+      "planned",
+      "delivered",
+      "verified"
+    ],
     "m1_01_rule": "the field and its planned|delivered values are reused as-is; M1-01 adds only the verified value (cross-track evidence signed off). delivered is never migrated to a new 'implemented' value and no second status field is introduced.",
     "semantics": {
       "planned": "the contract row is frozen but no implementation exists yet; no closure may be claimed",
@@ -175,18 +543,118 @@
       "verified": "delivered AND the cross-track evidence gate was signed off; verified_by + evidence are mandatory and an unverified row is never reported as verified"
     },
     "required_fields": {
-      "delivered": ["delivered_by"],
-      "verified": ["delivered_by", "verified_by", "evidence"]
+      "delivered": [
+        "delivered_by"
+      ],
+      "verified": [
+        "delivered_by",
+        "verified_by",
+        "evidence"
+      ]
     },
     "machine_checked_by": "scripts/acceptance/validate_acp2_contracts.py::validate_p2_implementation_status"
   },
   "p1_allowlist_unchanged": {
-    "tools": ["acp_capabilities", "acp_preflight", "acp_submit", "acp_status", "acp_cancel", "acp_prepare_artifact", "acp_read_artifact", "acp_analyze"],
+    "tools": [
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_submit",
+      "acp_status",
+      "acp_cancel",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_analyze"
+    ],
     "rule": "these eight names and their input schemas are the frozen P1 contract; the P2 extension adds names instead of widening them"
   },
   "samples": [
-    {"kind": "positive", "row": "P2-R1", "payload": {"tool": "acp_research_proposal_create_v1", "arguments": {"project_id": "proj-demo", "proposal": {"proposal_id": "prop-1", "title": "DA selectivity", "capability_ids": ["vibration.analyze"]}, "idempotency_key": "idem-prop-1"}}},
-    {"kind": "negative", "row": "P2-R3", "expected": {"class": "authorization", "code": "access_denied", "violation": "approver_identity_from_payload"}, "payload": {"tool": "acp_research_approval_decide_v1", "arguments": {"approval_ref": "ap-1", "decision": "approve", "expected_revision": 1, "approver": "model"}}},
-    {"kind": "negative", "row": "P2-R4", "expected": {"class": "invalid-parameter", "code": "input_invalid", "violation": "bound_exceeded"}, "payload": {"tool": "acp_research_wait_v1", "arguments": {"kinds": ["approval"], "max_wait_s": 600}}}
-  ]
+    {
+      "kind": "positive",
+      "row": "P2-R1",
+      "payload": {
+        "tool": "acp_research_proposal_create_v1",
+        "arguments": {
+          "project_id": "proj-demo",
+          "proposal": {
+            "proposal_id": "prop-1",
+            "title": "DA selectivity",
+            "capability_ids": [
+              "vibration.analyze"
+            ]
+          },
+          "idempotency_key": "idem-prop-1"
+        }
+      }
+    },
+    {
+      "kind": "negative",
+      "row": "P2-R3",
+      "expected": {
+        "class": "authorization",
+        "code": "access_denied",
+        "violation": "approver_identity_from_payload"
+      },
+      "payload": {
+        "tool": "acp_research_approval_decide_v1",
+        "arguments": {
+          "approval_ref": "ap-1",
+          "decision": "approve",
+          "expected_revision": 1,
+          "approver": "model"
+        }
+      }
+    },
+    {
+      "kind": "negative",
+      "row": "P2-R4",
+      "expected": {
+        "class": "invalid-parameter",
+        "code": "input_invalid",
+        "violation": "bound_exceeded"
+      },
+      "payload": {
+        "tool": "acp_research_wait_v1",
+        "arguments": {
+          "kinds": [
+            "approval"
+          ],
+          "max_wait_s": 600
+        }
+      }
+    }
+  ],
+  "saga": {
+    "schema": "acp2.runtime.research-saga.v1",
+    "steps": [
+      "proposal",
+      "approval",
+      "submit",
+      "task_ref",
+      "evidence_ref"
+    ],
+    "intent_states": [
+      "prepared",
+      "committed",
+      "failed",
+      "superseded"
+    ],
+    "retry_owner": {
+      "proposal": "requester",
+      "approval": "approver",
+      "submit": "requester",
+      "task_ref": "controller",
+      "evidence_ref": "requester"
+    },
+    "atomicity": "no cross-database transaction and no 2PC: every step persists its intent before the business call, the business call is idempotent by that intent, and the intent commit plus its local outbox row share one commit",
+    "reconcile": {
+      "read": "GET /api/v2/research/sagas/{saga_id}",
+      "action": "POST /api/v2/research/sagas/{saga_id}/reconcile",
+      "actions": [
+        "advance",
+        "abandon"
+      ]
+    },
+    "implemented_by": "M2-01c"
+  },
+  "implementation_status_note": "M2-01c delivers the application service, the ten live tools, the ControllerClient methods and the HTTP backing routes together; a row is only delivered when those three exist (binding_ownership rule). Cross-track live DSH evidence keeps every row short of verified."
 }

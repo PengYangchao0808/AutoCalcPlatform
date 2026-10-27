@@ -396,7 +396,9 @@ def test_unknown_tool_rejected_at_protocol_layer() -> None:
         response = _call(_server(), "tools/call", {"name": name, "arguments": {}})
         assert response["error"]["code"] == mcp.JsonRpcErrorCode.INVALID_PARAMS, name
         assert response["error"]["data"]["code"] == "unknown_tool"
-        assert set(response["error"]["data"]["allowlist"]) == set(mcp.TOOL_ALLOWLIST)
+        # The refusal names the registered set (P1 + the ten research tools); the
+        # research names stay invisible in tools/list until negotiated.
+        assert set(response["error"]["data"]["allowlist"]) == set(mcp.REGISTERED_TOOL_NAMES)
 
 
 def test_tools_call_requires_a_name() -> None:
@@ -406,7 +408,10 @@ def test_tools_call_requires_a_name() -> None:
 
 def test_dispatch_table_is_exactly_the_allowlist() -> None:
     server = _server()
-    assert set(server._tool_dispatch) == set(mcp.TOOL_ALLOWLIST)
+    # M2-01c: the P1 allowlist plus the ten registered research tools; the two
+    # sets are disjoint and neither widens the other.
+    assert set(server._tool_dispatch) == set(mcp.TOOL_ALLOWLIST) | set(mcp.RESEARCH_TOOL_SET)
+    assert set(mcp.TOOL_ALLOWLIST) & set(mcp.RESEARCH_TOOL_SET) == set()
 
 
 # --------------------------------------------------------------------------- #

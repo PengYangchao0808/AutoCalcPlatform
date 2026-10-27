@@ -14,7 +14,20 @@
           "vibration.analyze"
         ]
       },
-      "idempotency_key": "idem-prop-1"
+      "idempotency_key": "idem-prop-1",
+      "plan": {
+        "workflow": "singlepoint",
+        "input": {
+          "source": "CCO",
+          "source_type": "smiles"
+        },
+        "method": {
+          "method": "r2SCAN-3c"
+        },
+        "resources": {
+          "cores": 1
+        }
+      }
     }
   },
   "expected": {
