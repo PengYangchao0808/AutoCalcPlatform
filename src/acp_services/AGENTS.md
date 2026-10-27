@@ -1,7 +1,7 @@
 # acp_services/ — Platform Services Layer
 
 ## OVERVIEW
-Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **109 `.py`** (102 modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
+Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **110 `.py`** (103 modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
 
 **Status (verified 2026-10-26):** legacy module/contract slices plus the ACP 2.0 capability slices are delivered and covered by guard families — `test_acp_services_isolation.py`, `test_services_worker_contract.py` and `test_services_{attempt_recovery,cgroup_attempt_recovery,standalone_recipe,packaging_roles,release_prep,worker_bootstrap,doc_sync,closure_record}.py`. Real browser / scientific software / LSF / production remain `NOT_VERIFIED` (see `docs/reference/current/ACP_Services_Closure_20261019.md`). `acp` old import paths are retained as identity forwarders — never re-add an implementation on the `acp` side.
 
@@ -17,7 +17,7 @@ acp_services/                             # 103 .py
 ├── data/                 # 13 modules: contracts, operations (prepare), artifacts (B12 artifact lifecycle + ArtifactRef), transfer,
 │                         #   resource_read, read_root, storage_binding, namespaces, archive, import_, budget (storage reservation),
 │                         #   research_resources (B18 Proposal/ResearchRecord CAS), helpers
-├── runtime/              # 53 modules: commands, execution_chain, worker, receipts, recovery, plan_contracts, step_result,
+├── runtime/              # 54 modules: commands, execution_chain, worker, receipts, recovery, plan_contracts, step_result,
 │                         #   step_requirements, admission, quota, usage, usage_units, metering_policy, metering_decoupling,
 │                         #   freshness, projections, events, outbox, provisioning, workflow_enablement, isolation,
 │                         #   lab_capabilities, lineage, helpers, method_flags, research_budget (B17), research_events (B19),
