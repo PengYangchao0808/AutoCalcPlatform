@@ -21,7 +21,6 @@ import {
   PLAN_BUDGET_SPEC,
   PLAN_SCIENCE_SPEC,
   SCIENCE_SEED_SPEC,
-  toPlanScienceInputs,
 } from "./models.js";
 import type { FieldSpec, SkillSpec, ValidationIssue } from "./schema.js";
 import { validateSkillObject } from "./schema.js";
@@ -200,67 +199,28 @@ export function clampBudget(
   return Object.freeze(out as unknown as PlanBudget);
 }
 
-/** Deterministic offline planner; a live model may replace it only via validation. */
-export function runPlanner(input: PlannerInput): PlannerOutput {
-  const issues = validatePlannerInput(input);
-  if (issues.length > 0) {
-    throw new TypeError(
-      `planner input invalid: ${issues.map((item) => item.path).join(",")}`,
-    );
+// The deterministic offline planner is a **fixture**, not a product fallback.
+// It lives in `fixture-planner.ts` (explicit fixture module) and is rejected by
+// `composition.ts`; a product composition must inject the model adapter.
+
+/**
+ * No production planner was composed.  Thrown instead of falling back to the
+ * deterministic fixture planner (M3-03: a product start must never silently
+ * plan with a placeholder).
+ */
+export class ProductionPlannerRequiredError extends Error {
+  constructor(message = "a production (model) planner must be composed before starting") {
+    super(message);
+    this.name = "ProductionPlannerRequiredError";
   }
-  // The typed science block is derived from the seed: charge/multiplicity are
-  // never fabricated (a missing value throws ScienceClarificationError).
-  const scienceInputs = toPlanScienceInputs(input.science_seed);
-  const requested: PlanBudget = {
-    model_requests: 1,
-    input_tokens: 1000,
-    output_tokens: 500,
-    task_refs: 1,
-    recipe_steps: 1,
-    qc_invocations: 1,
-    wall_seconds: 600,
-    queue_seconds: 60,
-  };
-  const budget = clampBudget(requested, input.remaining_budget);
-  return Object.freeze({
-    schema: PLANNER_OUTPUT_SCHEMA,
-    skill: PLANNER_SKILL,
-    skill_version: PLANNER_SKILL_VERSION,
-    plan_id: `plan-${input.project_id}-r${input.round}`,
-    project_id: input.project_id,
-    round: input.round,
-    hypothesis: input.hypothesis,
-    recipe_digest: input.recipe_digest,
-    plan_definition_digest: input.plan_definition_digest,
-    science: Object.freeze({
-      capability_steps: Object.freeze([
-        Object.freeze({
-          step_index: 0,
-          capability: "geometry_optimization",
-          version: "1.0.0",
-          parameters: Object.freeze({ max_cycles: 100 }),
-        }),
-      ]),
-      initial_inputs: Object.freeze([
-        Object.freeze({
-          input_id: input.initial_input.input_id,
-          sha256: input.initial_input.sha256,
-          format: input.initial_input.format,
-          role: input.initial_input.role,
-        }),
-      ]),
-      method: input.science_seed.method,
-      mapping: input.science_seed.mapping,
-      charge: scienceInputs.charge,
-      multiplicity: scienceInputs.multiplicity,
-      allowed_substitutions: Object.freeze([]),
-    }),
-    science_inputs: scienceInputs,
-    budget,
-    notes: Object.freeze([
-      "budget is clamped to the remaining admission budget",
-      "charge/multiplicity come from the typed science seed (never defaulted)",
-      ...input.critique_findings,
-    ]),
-  });
+}
+
+/** A composition handed the fixture planner to a product surface (fail-fast). */
+export class FixturePlannerRejectedError extends Error {
+  constructor(
+    message = "the fixture planner is test/demo-only and cannot be a product fallback",
+  ) {
+    super(message);
+    this.name = "FixturePlannerRejectedError";
+  }
 }

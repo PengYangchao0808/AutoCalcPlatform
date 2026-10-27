@@ -47,8 +47,8 @@ import {
   PLANNER_INPUT_SCHEMA,
   PLANNER_SKILL,
   PLANNER_SKILL_VERSION,
-  runPlanner,
 } from "./planner.js";
+import { runFixturePlanner } from "./fixture-planner.js";
 import type {
   ReviewerFinding,
   ReviewerInput,
@@ -90,7 +90,10 @@ export type SupervisorStopReason =
   | "inconclusive"
   | "report_stop"
   | "round_cap"
-  | "budget_cap";
+  | "budget_cap"
+  | "fixture_planner_rejected"
+  | "model_gateway_unavailable"
+  | "model_usage_mismatch";
 
 export interface PhaseRecord {
   readonly phase: SupervisorPhase;
@@ -118,6 +121,19 @@ export interface SupervisorInput {
   /** Approval-bound digest for a round; a constant is valid for a fixture. */
   readonly plan_definition_digest?: (round: number) => string;
   readonly prior_evidence?: EvidenceReport | null;
+  /**
+   * Product mode (M3-03): require the platform model gateway and reject the
+   * deterministic fixture planner.  A product composition sets this; a fixture
+   * run leaves it unset.
+   */
+  readonly require_model_gateway?: boolean;
+}
+
+/** Authoritative model usage read from the platform (receipts, not memory). */
+export interface ModelGatewayUsage {
+  readonly model_requests: number;
+  readonly receipts: readonly string[];
+  readonly source: "platform-receipt";
 }
 
 /** Four skills, each with its own explicit input/output contract. */
@@ -126,13 +142,34 @@ export interface SupervisorSkills {
   synthesize(input: SynthesizerInput): Promise<SynthesizerOutput>;
   review(input: ReviewerInput): Promise<ReviewerOutput>;
   plan(input: PlannerInput): Promise<PlannerOutput>;
+  /** `fixture` is test/demo-only; product composition accepts only `model`. */
+  readonly planner_kind?: "fixture" | "model";
+  /**
+   * Phases that actually spend a platform model request.  A product planner
+   * declares `["plan"]`; legacy/fixture skills omit it and keep the historical
+   * "every skill call counts" behaviour.
+   */
+  readonly model_phases?: readonly SupervisorPhase[];
 }
 
-export const DEFAULT_SUPERVISOR_SKILLS: SupervisorSkills = Object.freeze({
+/** The three deterministic, non-planning helpers (safe in product too). */
+export const DEFAULT_SKILL_HELPERS = Object.freeze({
   interpret: async (input: InterpreterInput) => runInterpreter(input),
   synthesize: async (input: SynthesizerInput) => runSynthesizer(input),
   review: async (input: ReviewerInput) => runReviewer(input),
-  plan: async (input: PlannerInput) => runPlanner(input),
+});
+
+/**
+ * Explicit fixture binding (M3-03): offline tests, the thin slice and demos.
+ *
+ * It is *not* the product default.  `composition.ts::composeProductionSkills`
+ * rejects `planner_kind: "fixture"`, and `runSupervisor` refuses it when
+ * `require_model_gateway` is set.
+ */
+export const FIXTURE_SUPERVISOR_SKILLS: SupervisorSkills = Object.freeze({
+  ...DEFAULT_SKILL_HELPERS,
+  planner_kind: "fixture" as const,
+  plan: async (input: PlannerInput) => runFixturePlanner(input),
 });
 
 export interface PreflightRequest {
@@ -217,6 +254,12 @@ export interface SupervisorPorts {
   wait(request: WaitRequest): Promise<WaitResult>;
   persistTaskRef?(ref: TaskRef): Promise<void>;
   persistReport?(report: EvidenceReport): Promise<void>;
+  /**
+   * The platform gateway's authoritative usage read (M3-03).  The Supervisor
+   * syncs `used.model_requests` from here; it never settles from its own
+   * in-memory counter.
+   */
+  modelGateway?(): Promise<ModelGatewayUsage>;
 }
 
 export interface SupervisorResult {
@@ -228,6 +271,7 @@ export interface SupervisorResult {
   readonly reports: readonly EvidenceReport[];
   readonly phases: readonly PhaseRecord[];
   readonly model_invocations: number;
+  readonly model_requests_used: number;
   readonly wait_invocations: number;
   readonly duplicate_terminal_events: number;
   readonly last_report: EvidenceReport | null;
@@ -281,6 +325,46 @@ function budgetExhausted(remaining: PlanBudget): boolean {
   return remaining.model_requests <= 0;
 }
 
+type ModelSyncOutcome =
+  | { readonly ok: true; readonly used: number }
+  | {
+      readonly ok: false;
+      readonly reason: "model_gateway_unavailable" | "model_usage_mismatch";
+    };
+
+/**
+ * Read the authoritative model-request count from the platform gateway.
+ *
+ * The Supervisor's own `used.model_requests` is a reservation counter, not a
+ * settlement.  When a gateway port exists, the platform receipt count wins in
+ * both directions: a lower count is legitimate when some phases are
+ * deterministic helpers (no provider call, no receipt), and a higher count is
+ * external/previous spend that must reduce the remaining allowance.  A
+ * malformed count (negative/non-integer) fails closed instead of resetting.
+ */
+async function syncModelRequests(
+  ports: SupervisorPorts,
+  reserved: number,
+  requireGateway: boolean,
+): Promise<ModelSyncOutcome> {
+  const gateway = ports.modelGateway;
+  if (gateway === undefined) {
+    return requireGateway
+      ? { ok: false, reason: "model_gateway_unavailable" }
+      : { ok: true, used: reserved };
+  }
+  let usage: ModelGatewayUsage;
+  try {
+    usage = await gateway();
+  } catch {
+    return { ok: false, reason: "model_gateway_unavailable" };
+  }
+  if (!Number.isSafeInteger(usage.model_requests) || usage.model_requests < 0) {
+    return { ok: false, reason: "model_usage_mismatch" };
+  }
+  return { ok: true, used: usage.model_requests };
+}
+
 function submitBudgetExceeded(remaining: PlanBudget, plan: PlannerOutput): boolean {
   return (
     remaining.task_refs < plan.budget.task_refs ||
@@ -315,6 +399,7 @@ function stopResult(
     reports: EvidenceReport[];
     phases: PhaseRecord[];
     modelInvocations: number;
+    modelRequestsUsed: number;
     waitInvocations: number;
     duplicateTerminals: number;
     lastReport: EvidenceReport | null;
@@ -331,6 +416,7 @@ function stopResult(
     reports: Object.freeze([...state.reports]),
     phases: Object.freeze([...state.phases]),
     model_invocations: state.modelInvocations,
+    model_requests_used: state.modelRequestsUsed,
     wait_invocations: state.waitInvocations,
     duplicate_terminal_events: state.duplicateTerminals,
     last_report: state.lastReport,
@@ -384,7 +470,7 @@ export function decideFromReport(
 export async function runSupervisor(
   input: SupervisorInput,
   ports: SupervisorPorts,
-  skills: SupervisorSkills = DEFAULT_SUPERVISOR_SKILLS,
+  skills: SupervisorSkills,
 ): Promise<SupervisorResult> {
   const phases: PhaseRecord[] = [];
   const used: MutableBudget = zeroBudget();
@@ -398,6 +484,36 @@ export async function runSupervisor(
   let lastReport: EvidenceReport | null = input.prior_evidence ?? null;
   let lastAdvice: SynthesizerOutput["advice"] | null = null;
   let round = 0;
+  let gatewayStop: "model_gateway_unavailable" | "model_usage_mismatch" | null = null;
+
+  if (skills.planner_kind === "fixture" && input.require_model_gateway === true) {
+    return stopResult("fixture_planner_rejected", 0, {
+      submits,
+      taskRefs,
+      reports,
+      phases,
+      modelInvocations,
+      modelRequestsUsed: used.model_requests,
+      waitInvocations,
+      duplicateTerminals,
+      lastReport,
+      lastAdvice,
+    });
+  }
+  if (input.require_model_gateway === true && ports.modelGateway === undefined) {
+    return stopResult("model_gateway_unavailable", 0, {
+      submits,
+      taskRefs,
+      reports,
+      phases,
+      modelInvocations,
+      modelRequestsUsed: used.model_requests,
+      waitInvocations,
+      duplicateTerminals,
+      lastReport,
+      lastAdvice,
+    });
+  }
 
   const state = () => ({
     submits,
@@ -405,11 +521,22 @@ export async function runSupervisor(
     reports,
     phases,
     modelInvocations,
+    modelRequestsUsed: used.model_requests,
     waitInvocations,
     duplicateTerminals,
     lastReport,
     lastAdvice,
   });
+
+  const initialSync = await syncModelRequests(
+    ports,
+    used.model_requests,
+    input.require_model_gateway === true,
+  );
+  if (!initialSync.ok) {
+    return stopResult(initialSync.reason, round, state());
+  }
+  used.model_requests = initialSync.used;
 
   const remaining = (): PlanBudget =>
     remainingBudget(input.limits.budget, used);
@@ -420,13 +547,49 @@ export async function runSupervisor(
     detail: string,
     body: () => Promise<T>,
   ): Promise<T | null> => {
-    if (budgetExhausted(remaining())) {
+    const spendsModelRequest =
+      skills.model_phases === undefined
+        ? true
+        : skills.model_phases.includes(phase);
+    if (ports.modelGateway !== undefined || input.require_model_gateway === true) {
+      // Before each phase, the platform count replaces the local reservation
+      // counter: deterministic helpers do not consume a model receipt.
+      const gatewaySync = await syncModelRequests(
+        ports,
+        used.model_requests,
+        input.require_model_gateway === true,
+      );
+      if (!gatewaySync.ok) {
+        gatewayStop = gatewaySync.reason;
+        return null;
+      }
+      gatewayStop = null;
+      used.model_requests = gatewaySync.used;
+    }
+    if (spendsModelRequest && budgetExhausted(remaining())) {
       return null;
     }
     addPhase(phases, phase, roundForCall, detail);
     modelInvocations += 1;
-    used.model_requests += 1;
-    return body();
+    if (spendsModelRequest) {
+      used.model_requests += 1;
+    }
+    const value = await body();
+    if (ports.modelGateway !== undefined || input.require_model_gateway === true) {
+      // A completed phase is reflected by its platform receipt immediately;
+      // the reported `model_requests_used` therefore never lags a real call.
+      const postCall = await syncModelRequests(
+        ports,
+        used.model_requests,
+        input.require_model_gateway === true,
+      );
+      if (!postCall.ok) {
+        gatewayStop = postCall.reason;
+      } else {
+        used.model_requests = postCall.used;
+      }
+    }
+    return value;
   };
 
   // Understand.
@@ -448,7 +611,7 @@ export async function runSupervisor(
       }),
   );
   if (interpretation === null) {
-    return stopResult("budget_cap", round, state());
+    return stopResult(gatewayStop ?? "budget_cap", round, state());
   }
   if (interpretation.intent === "reject") {
     return stopResult("intent_reject", round, state());
@@ -458,6 +621,15 @@ export async function runSupervisor(
   }
 
   while (true) {
+    const roundSync = await syncModelRequests(
+      ports,
+      used.model_requests,
+      input.require_model_gateway === true,
+    );
+    if (!roundSync.ok) {
+      return stopResult(roundSync.reason, round, state());
+    }
+    used.model_requests = roundSync.used;
     if (round >= input.limits.max_rounds) {
       return stopResult("round_cap", round, state());
     }
@@ -494,7 +666,7 @@ export async function runSupervisor(
         }),
     );
     if (hypothesis === null) {
-      return stopResult("budget_cap", round, state());
+      return stopResult(gatewayStop ?? "budget_cap", round, state());
     }
     if (hypothesis.hypothesis === null) {
       return stopResult("no_hypothesis", round, state());
@@ -519,7 +691,7 @@ export async function runSupervisor(
         }),
     );
     if (critique === null) {
-      return stopResult("budget_cap", round, state());
+      return stopResult(gatewayStop ?? "budget_cap", round, state());
     }
     if (critique.verdict === "stop") {
       return stopResult("critique_stop", round, state());
@@ -549,7 +721,7 @@ export async function runSupervisor(
         }),
     );
     if (plan === null) {
-      return stopResult("budget_cap", round, state());
+      return stopResult(gatewayStop ?? "budget_cap", round, state());
     }
     if (submitBudgetExceeded(remaining(), plan)) {
       return stopResult("budget_cap", round, state());
@@ -596,7 +768,17 @@ export async function runSupervisor(
       return stopResult("submit_failed", round, state());
     }
     submits += 1;
-    used.model_requests = used.model_requests;
+    // The dead `used.model_requests = used.model_requests` assignment is
+    // replaced by the real platform sync: the receipt count, not memory.
+    const submitSync = await syncModelRequests(
+      ports,
+      used.model_requests,
+      input.require_model_gateway === true,
+    );
+    if (!submitSync.ok) {
+      return stopResult(submitSync.reason, round, state());
+    }
+    used.model_requests = submitSync.used;
     used.task_refs += plan.budget.task_refs;
     used.recipe_steps += plan.budget.recipe_steps;
     used.qc_invocations += plan.budget.qc_invocations;
@@ -696,7 +878,7 @@ export async function runSupervisor(
         }),
     );
     if (advice === null) {
-      return stopResult("budget_cap", round, state());
+      return stopResult(gatewayStop ?? "budget_cap", round, state());
     }
     lastAdvice = advice.advice;
 
