@@ -246,6 +246,7 @@ class FullChain:
         self.controller_data: dict[str, Any] = {}
         self.prepare_baseline: dict[str, Any] = {}
         self.projection: dict[str, Any] = {}
+        self.model_gateway_data: dict[str, Any] = {}
 
     # -- step runner -------------------------------------------------------
 
@@ -440,6 +441,7 @@ class FullChain:
         approval_ref: str | None,
         prepare_key: str,
         budget: dict[str, Any] | None = None,
+        evidence_report: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         out_dir = self.out / f"mcp-round{round_index}"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -484,18 +486,35 @@ class FullChain:
             "research": research or {"research_id": "", "round": round_index},
             "digests": digests or {},
         }
+        if evidence_report is not None:
+            # M4-02: the previous round's platform-published evidence report, as
+            # data for the Supervisor's plan phase (the evidence-feedback round).
+            config["evidence"] = evidence_report
         if proposal is not None:
             config["proposal"] = proposal
         if plan is not None:
             config["plan"] = plan
             config["budget"] = budget or BUDGET
         if self.model == "model-gateway":
+            # M4-02: the live product branch talks to the Controller model
+            # gateway (M3-03).  The provider credential stays in the Controller
+            # process environment: this client payload carries no key and the
+            # config document written to the evidence root never holds one.
+            gateway_url = os.environ.get("ACP2_MODEL_GATEWAY_URL") or (
+                f"{self.controller.base_url}/api/v2/model/plan"
+            )
+            usage_url = os.environ.get("ACP2_MODEL_USAGE_URL") or (
+                # No session seed: the DSH planner request carries none, so the
+                # Controller allocates one stable planning session per project.
+                f"{self.controller.base_url}/api/v2/model/usage?project_id={self.project}"
+            )
             config["model"] = {
                 "adapter": "model-gateway",
-                "gateway_url": os.environ.get("ACP2_MODEL_GATEWAY_URL", ""),
-                "model": os.environ.get("ACP2_MODEL_NAME", ""),
-                "api_key": os.environ.get("ACP2_MODEL_API_KEY", ""),
-                "usage_url": os.environ.get("ACP2_MODEL_USAGE_URL", ""),
+                "gateway_url": gateway_url,
+                "usage_url": usage_url,
+                "model": os.environ.get("ACP2_MODEL_ID", ""),
+                "max_output_tokens": int(os.environ.get("ACP2_MODEL_MAX_OUTPUT_TOKENS", "1200")),
+                "repair_attempts": int(os.environ.get("ACP2_MODEL_REPAIR_ATTEMPTS", "2")),
             }
         config_path = out_dir / "config.json"
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
@@ -532,6 +551,8 @@ class FullChain:
             "supervisor": runner.get("supervisor"),
             "model_adapter": runner.get("model_adapter"),
             "evidence_kind": runner.get("evidence_kind"),
+            "model_calls": runner.get("model_calls"),
+            "evidence_feedback": runner.get("evidence_feedback"),
             "errors": runner.get("errors"),
             "findings": runner.get("findings"),
             "closed_findings": runner.get("closed_findings"),
@@ -803,6 +824,85 @@ class FullChain:
 
     # -- round 1 (revise) --------------------------------------------------
 
+    def evidence_report_for_feedback(self, round_index: int) -> dict[str, Any]:
+        """Project round ``round_index``'s platform evidence into the DSH report.
+
+        Every value is copied mechanically from platform facts: the digest-bound
+        science report body (claims/statements/statuses/source refs), the M1-03
+        projection (status, ids, digests) and the platform decision.  No shipped
+        DSH builder exists for the experience report shape, so the projection is
+        performed here and explicitly annotated with its sources.
+        """
+        round0 = self.round0
+        stub = round0.get("stub") or {}
+        view = (round0.get("evidence") or {}).get("view") or {}
+        report = stub.get("report") or {}
+        claims: list[dict[str, Any]] = []
+        all_refs: list[str] = []
+        for claim in report.get("claims") or []:
+            refs: list[str] = []
+            for source in claim.get("source_refs") or []:
+                artifact = str(source.get("artifact_path") or "")
+                digest = (source.get("digest") or {}).get("value") or ""
+                if artifact:
+                    refs.append(f"{artifact}@{digest}" if digest else artifact)
+            refs = list(dict.fromkeys(refs)) or [f"claim:{claim.get('claim_id')}"]
+            claims.append(
+                {
+                    "claim_id": str(claim.get("claim_id") or ""),
+                    "statement": str(claim.get("statement") or ""),
+                    "status": str(claim.get("status") or "not_evaluated"),
+                    "evidence_refs": refs,
+                    "reason": claim.get("reason"),
+                }
+            )
+            all_refs.extend(refs)
+        all_refs = list(dict.fromkeys(all_refs)) or [f"report:{view.get('report_id')}"]
+        research = round0.get("research") or {}
+        report_view = view.get("report") or {}
+        task_ref = view.get("task_ref") or {}
+        status = str(view.get("evidence_status") or "missing")
+        document = {
+            "schema": "acp2.evidence.report.v1",
+            "report_id": str(report_view.get("report_id") or ""),
+            "project_id": self.project,
+            "research_id": str(research.get("research_id") or ""),
+            "round": int(round_index),
+            "task_ref": {
+                "project_id": self.project,
+                "job_id": str(task_ref.get("job_id") or task_ref.get("task_id") or ""),
+                "attempt": int(task_ref.get("attempt") or 1),
+                "release_id": str((task_ref.get("release") or {}).get("release_id") or ""),
+            },
+            "status": status
+            if status in {"complete", "partial", "missing", "failed"}
+            else "partial",
+            "decision": "revise",
+            "claims": claims,
+            "evidence_refs": all_refs,
+            "terminal_event_key": None,
+        }
+        self.trace.record(
+            "evidence.feedback.report",
+            response={
+                "report_id": document["report_id"],
+                "round": document["round"],
+                "claims": len(claims),
+                "status": document["status"],
+            },
+            digest=digest_of(document),
+        )
+        self.round0["feedback_report_sources"] = {
+            "science_report_digest": stub.get("report_digest"),
+            "projection_digest": view.get("projection_digest"),
+            "schema_note": (
+                "acp2.evidence.report.v1 is an experience-client shape with no shipped DSH "
+                "builder; the harness projects the platform facts mechanically and the "
+                "Supervisor still validates the document before using it as advice input"
+            ),
+        }
+        return document
+
     def round_one(self) -> None:
         def body() -> dict[str, Any]:
             current = self.round0["proposal_http"]
@@ -859,6 +959,7 @@ class FullChain:
                 approval_ref=approval["approval_ref"],
                 prepare_key="m4-01-prepare-r1",
                 budget=BUDGET_ROUND_1,
+                evidence_report=self.evidence_report_for_feedback(0),
             )
             self.round1["runner"] = runner
             self.round1["approval"] = runner["approval"]
@@ -2249,6 +2350,83 @@ class FullChain:
             "- `controller.log`, `controller.restart.log` — the real Controller logs\n"
         )
 
+    def capture_model_evidence(self) -> dict[str, Any]:
+        """Read the live gateway usage/statement while the Controller is running."""
+        self.model_gateway_data = self.model_gateway_evidence()
+        return {
+            "call_count": self.model_gateway_data["call_count"],
+            "within_call_cap": self.model_gateway_data["within_call_cap"],
+            "budget_id": (self.model_gateway_data.get("budget") or {}).get("budget_id"),
+            "model_requests": (self.model_gateway_data.get("budget") or {}).get("model_requests"),
+        }
+
+    def model_gateway_evidence(self) -> dict[str, Any]:
+        """M4-02: the real model-call trail of this chain (no secret, no price)."""
+        cap = int(os.environ.get("ACP2_MODEL_REQUEST_LIMIT", "20") or "20")
+        calls: list[dict[str, Any]] = []
+        for label, holder in (("round0", self.round0), ("round1", self.round1)):
+            for entry in (holder.get("runner") or {}).get("model_calls") or []:
+                calls.append({"round_leg": label, **entry})
+        code, usage = self.http(
+            "GET",
+            f"/api/v2/model/usage?project_id={self.project}",
+        )
+        code_statement, statement = self.http("GET", "/api/v2/model/statement")
+        receipts = (usage or {}).get("receipt_rows") if isinstance(usage, dict) else None
+        input_tokens = 0
+        output_tokens = 0
+        unknown_usage = 0
+        for entry in calls:
+            block = entry.get("usage") or {}
+            if block.get("input_tokens") is None or block.get("output_tokens") is None:
+                unknown_usage += 1
+            input_tokens += int(block.get("input_tokens") or 0)
+            output_tokens += int(block.get("output_tokens") or 0)
+        # Upper bound only (no provider invoice is read): the published deepseek
+        # chat price plus the per-request output cap and the call cap.
+        max_out = int(os.environ.get("ACP2_MODEL_MAX_OUTPUT_TOKENS", "1200") or "1200")
+        input_price = float(os.environ.get("ACP2_MODEL_INPUT_USD_PER_MTOK", "0.28") or "0.28")
+        output_price = float(os.environ.get("ACP2_MODEL_OUTPUT_USD_PER_MTOK", "0.42") or "0.42")
+        cost_upper_bound = round(
+            (len(calls) * 8000 * input_price + len(calls) * max_out * output_price) / 1_000_000,
+            4,
+        )
+        return {
+            "schema": "acp2.m4-02.model-gateway-calls.v1",
+            "gateway": "Controller /api/v2/model/plan (M3-03 ModelGateway)",
+            "credential_holder": "Controller process environment (never in this document)",
+            "credential_env_names": ["ACP2_MODEL_API_KEY", "DEEPSEEK_API_KEY"],
+            "credential_values_recorded": False,
+            "model": (statement or {}).get("credential", {}).get("model")
+            if isinstance(statement, dict)
+            else None,
+            "credential_state": (statement or {}).get("credential")
+            if isinstance(statement, dict)
+            else None,
+            "call_cap": cap,
+            "calls": calls,
+            "call_count": len(calls),
+            "within_call_cap": len(calls) <= cap,
+            "max_output_tokens_per_call": max_out,
+            "tokens": {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "calls_with_unknown_usage": unknown_usage,
+            },
+            "cost": {
+                "basis": "upper bound from the call cap and the per-call output cap",
+                "input_usd_per_mtok": input_price,
+                "output_usd_per_mtok": output_price,
+                "upper_bound_usd": cost_upper_bound,
+                "invoice_read": False,
+            },
+            "budget": usage if isinstance(usage, dict) else None,
+            "receipts": receipts,
+            "statement_http_status": code_statement,
+            "statement": statement if isinstance(statement, dict) else None,
+            "usage_http_status": code,
+        }
+
     def write_evidence(self, duration: float) -> None:
         matrix = [
             {
@@ -2297,7 +2475,9 @@ class FullChain:
         )
         boundaries = {
             "schema": "acp2.m4-01.stub-boundaries.v1",
-            "evidence_kind": EVIDENCE_KIND,
+            # The model branch is live in this mode; the scientific dispatch
+            # seam stays declared (M4-02 runs the real science in its own leg).
+            "evidence_kind": "live" if self.model == "model-gateway" else EVIDENCE_KIND,
             "boundaries": [
                 {
                     "id": "cccp.dispatch",
@@ -2316,27 +2496,51 @@ class FullChain:
                     ],
                     "why": "M4-01 proves the product chain and the failure matrix, not science.",
                 },
-                {
-                    "id": "model.adapter",
-                    "declared": True,
-                    "real": [
-                        "the Supervisor state machine "
-                        "(rph/packages/dsh-bundle/skills/supervisor.ts)",
-                        "its approve/admission ports read the real P2 approval over MCP",
-                        "its submit port replays the same M1-02 intent "
-                        "(one TaskRef, no second task)",
-                        "its wait port is a bounded read of the authoritative job status",
-                    ],
-                    "stubbed": [
-                        "the four skills are the explicit test adapter (deterministic skills plus "
-                        "adversarial model text); no provider is called",
-                        "the Supervisor's evidence/decision ports are not wired in this run: the "
-                        "platform writer persists the digest-bound decision, and with no evidence "
-                        "port the Supervisor must stop (never accept) instead of inventing one",
-                    ],
-                    "why": "evidence_kind=fixture; the real model branch is implemented and is "
-                    "selected by M4-02 (--model model-gateway).",
-                },
+                (
+                    {
+                        "id": "model.adapter",
+                        "declared": False,
+                        "real": [
+                            "the Supervisor state machine "
+                            "(rph/packages/dsh-bundle/skills/supervisor.ts)",
+                            "its approve/admission ports read the real P2 approval over MCP",
+                            "its submit port replays the same M1-02 intent "
+                            "(one TaskRef, no second task)",
+                            "its wait port is a bounded read of the authoritative job status",
+                            "the product planner branch (skills/model-planner.ts) validated the "
+                            "live model answer; the platform gateway reserved and settled each "
+                            "planning model_request before the provider call",
+                            "the provider call went through the Controller model gateway "
+                            "(POST /api/v2/model/plan) with the credential held only in the "
+                            "Controller process environment",
+                        ],
+                        "stubbed": [],
+                        "why": "evidence_kind=live: M4-02 selected the real model branch.",
+                    }
+                    if self.model == "model-gateway"
+                    else {
+                        "id": "model.adapter",
+                        "declared": True,
+                        "real": [
+                            "the Supervisor state machine "
+                            "(rph/packages/dsh-bundle/skills/supervisor.ts)",
+                            "its approve/admission ports read the real P2 approval over MCP",
+                            "its submit port replays the same M1-02 intent "
+                            "(one TaskRef, no second task)",
+                            "its wait port is a bounded read of the authoritative job status",
+                        ],
+                        "stubbed": [
+                            "the four skills are the explicit test adapter (deterministic skills "
+                            "plus adversarial model text); no provider is called",
+                            "the Supervisor's evidence/decision ports are not wired in this run: "
+                            "the platform writer persists the digest-bound decision, and with no "
+                            "evidence port the Supervisor must stop (never accept) instead of "
+                            "inventing one",
+                        ],
+                        "why": "evidence_kind=fixture; the real model branch is implemented and "
+                        "is selected by M4-02 (--model model-gateway).",
+                    }
+                ),
             ],
         }
         (self.out / "stub-boundaries.json").write_text(
@@ -2419,6 +2623,7 @@ class FullChain:
                         "supervisor",
                         "evidence_kind",
                         "model_adapter",
+                        "evidence_feedback",
                     )
                 },
                 "round1": {
@@ -2431,6 +2636,7 @@ class FullChain:
                         "supervisor",
                         "evidence_kind",
                         "model_adapter",
+                        "evidence_feedback",
                     )
                 },
             },
@@ -2483,6 +2689,18 @@ class FullChain:
             ],
             "files": sorted(path.name for path in self.out.iterdir() if path.is_file()),
         }
+        if self.model == "model-gateway":
+            summary["evidence_kind"] = "live"
+            summary["model_gateway"] = self.model_gateway_data or self.model_gateway_evidence()
+            summary["limitations"] = [
+                line
+                for line in summary["limitations"]
+                if not line.startswith("real model / DSH provider")
+            ] + [
+                "real model: LIVE through the Controller model gateway (M3-03); the "
+                "scientific dispatch is still the declared CCCP-dispatch seam of this "
+                "chain (M4-02 runs real Local science in its own leg)",
+            ]
         (self.out / "summary.json").write_text(
             json.dumps(summary, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
         )
@@ -2502,6 +2720,10 @@ class FullChain:
             self.workbench_adapter()
             self.data_idempotency()
             self.fault_matrix()
+            if self.model == "model-gateway":
+                # Read the authoritative planning usage while the Controller is
+                # still alive; the evidence writer is off-line afterwards.
+                self.step("model.gateway.evidence", self.capture_model_evidence)
         except SliceError:
             pass
         except Exception as exc:  # noqa: BLE001 - the trace is the evidence

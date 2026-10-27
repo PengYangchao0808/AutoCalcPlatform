@@ -169,39 +169,156 @@ function testSkills(supervisorModule) {
   };
 }
 
-/** The real product planner branch (M3-03/M3-02 composition root). */
-async function productSkills(model, researchId) {
-  const { createModelPlanner } = await import(
+/**
+ * The real product planner branch (M3-03/M3-02 composition root).
+ *
+ * M4-02 additions, all on the *client* side and none of them a platform
+ * authority:
+ *
+ *   - the gateway is called with **no provider credential** (the Controller
+ *     gateway owns the key); an optional ``gateway_token`` is a transport
+ *     credential for a key-authenticated Controller, never the provider key;
+ *   - every call is recorded (phase/round/attempt/receipt id/token usage/latency)
+ *     so the evidence root holds the raw call receipt trail;
+ *   - a rejected candidate is repaired with a **bounded** number of extra calls
+ *     (each one is a separate charged planning request).  A clarification is
+ *     never repaired: the missing value must come from a human.  The planner
+ *     still throws ``ModelPlanRejectedError`` when the bound is exhausted, so
+ *     nothing is submitted on a rejected plan.
+ */
+async function productSkills(model, researchId, callLog) {
+  const { planCandidate, ModelPlanRejectedError } = await import(
     pathToFileURL(join(DSH_DIST, "skills", "model-planner.js")).href
   );
-  const transport = {
-    async plan(request) {
-      const response = await fetch(model.gateway_url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(model.api_key === undefined ? {} : { Authorization: `Bearer ${model.api_key}` }),
-        },
-        body: JSON.stringify(request),
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        throw new Error(`model gateway answered HTTP ${response.status}: ${text.slice(0, 400)}`);
-      }
-      const body = JSON.parse(text);
-      return {
-        output: String(body.output ?? ""),
-        usage: body.usage ?? null,
-        receipt_id: String(body.receipt_id ?? ""),
+  const { PLANNER_OUTPUT_SPEC } = await import(
+    pathToFileURL(join(DSH_DIST, "skills", "planner.js")).href
+  );
+  const maxOutputTokens = Number(model.max_output_tokens ?? 1200);
+  const repairBudget = Math.max(0, Number(model.repair_attempts ?? 2));
+
+  let lastOutput = "";
+  const call = async (request) => {
+    const started = Date.now();
+    const headers = { "Content-Type": "application/json" };
+    if (model.gateway_token !== undefined && model.gateway_token !== "") {
+      headers.Authorization = `Bearer ${model.gateway_token}`;
+    }
+    const response = await fetch(model.gateway_url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
+    const text = await response.text();
+    const userMessages = request.messages.filter((message) => message.role === "user");
+    const userText = userMessages.map((message) => String(message.content)).join("\n");
+    const entry = {
+      phase: request.phase,
+      round: request.round,
+      attempt: callLog.length + 1,
+      evidence_in_prompt: /"evidence":\s*\{/.test(userText),
+      http_status: response.status,
+      duration_ms: Date.now() - started,
+      receipt_id: "",
+      usage: null,
+      identity: null,
+      budget: null,
+      refusal: null,
+    };
+    if (!response.ok) {
+      callLog.push({ ...entry, refusal: { status: response.status, body: text.slice(0, 800) } });
+      throw new Error(`model gateway answered HTTP ${response.status}: ${text.slice(0, 400)}`);
+    }
+    const body = JSON.parse(text);
+    const output = String(body.output ?? "");
+    lastOutput = output;
+    callLog.push({
+      ...entry,
+      receipt_id: String(body.receipt_id ?? ""),
+      usage: body.usage ?? null,
+      identity: body.identity ?? null,
+      budget: body.budget ?? null,
+      // Response summary only: never the credential, never a whole plan body.
+      output_chars: output.length,
+      output_sha256: createHash("sha256").update(output).digest("hex"),
+      output_head: output.slice(0, 300),
+      output_tail: output.slice(-200),
+    });
+    return {
+      output,
+      usage: body.usage ?? null,
+      receipt_id: String(body.receipt_id ?? ""),
+    };
+  };
+
+  const promptModule = await import(pathToFileURL(join(HERE, "acp2_model_prompt.mjs")).href);
+
+  const feedbackOf = (candidate) => {
+    if (candidate.status === "clarification") {
+      return `the plan is a clarification request for: ${candidate.missing.join(", ")}`;
+    }
+    const issues = (candidate.issues ?? [])
+      .map((issue) => `${issue.path} ${issue.code}: ${issue.message}`)
+      .join("; ");
+    return `${candidate.reason}${issues === "" ? "" : ` (${issues})`}`;
+  };
+
+  // A missing value that the seed *does* carry is a formatting failure, not a
+  // science question, so it is repairable.  A value the seed lacks is a real
+  // clarification: the harness never repairs (and never guesses) it.
+  const planner = {
+    kind: "model",
+    async plan(input) {
+      let note = "";
+      let last = null;
+      const seed = input.science_seed ?? {};
+      const seedHas = (field) => {
+        if (field === "charge") return seed.charge !== undefined && seed.charge !== null;
+        if (field === "multiplicity") {
+          return seed.multiplicity !== undefined && seed.multiplicity !== null;
+        }
+        if (field === "method") return typeof seed.method === "string" && seed.method !== "";
+        if (field === "mapping") return typeof seed.mapping === "string" && seed.mapping !== "";
+        if (field === "structure_provenance") {
+          return Array.isArray(seed.structure_provenance) && seed.structure_provenance.length > 0;
+        }
+        return false;
       };
+      const contract = promptModule.plannerFormatContract(PLANNER_OUTPUT_SPEC, input);
+      for (let attempt = 0; attempt <= repairBudget; attempt += 1) {
+        const transport =
+          note === ""
+            ? promptModule.withFormatContract({ plan: call }, contract)
+            : promptModule.withRepairNote(
+                promptModule.withFormatContract({ plan: call }, contract),
+                note,
+              );
+        const candidate = await planCandidate(input, {
+          research_id: researchId,
+          model: String(model.model ?? "gateway-default"),
+          transport,
+          max_output_tokens: maxOutputTokens,
+        });
+        if (candidate.status === "ok") return candidate.plan;
+        last = candidate;
+        const repairable =
+          candidate.status === "invalid" ||
+          (candidate.status === "clarification" && candidate.missing.every(seedHas));
+        if (callLog.length > 0) {
+          callLog[callLog.length - 1].rejected_reason =
+            candidate.reason ?? `clarification:${candidate.missing.join(",")}`;
+          callLog[callLog.length - 1].repairable = repairable;
+          callLog[callLog.length - 1].rejected_issues = candidate.issues ?? candidate.missing ?? [];
+          callLog[callLog.length - 1].output_body = String(lastOutput ?? "").slice(0, 4000);
+        }
+        if (!repairable) break;
+        note = feedbackOf(candidate);
+      }
+      throw new ModelPlanRejectedError(last);
     },
   };
+
   return {
-    planner: createModelPlanner({
-      research_id: researchId,
-      model: String(model.model ?? "gateway-default"),
-      transport,
-    }),
+    planner,
     ...(model.usage_url === undefined
       ? {}
       : {
@@ -289,6 +406,9 @@ async function main() {
 
   const launched = launchMcpStdio(config.launch);
   let session = null;
+  // Product-branch model calls (declared at leg scope so a failing supervisor
+  // still reports the charged calls).
+  const modelCalls = [];
 
   try {
     // 1. protocol + tool surface (before negotiation).
@@ -912,7 +1032,10 @@ async function main() {
                         ),
                         project_id: config.project_id,
                       },
-                      report: null,
+                      // M4-02 evidence-feedback round: the platform-published
+                      // report of the previous round is handed to the Supervisor
+                      // *as data*.  Round 0 has none (no evidence yet).
+                      report: config.evidence ?? null,
                     },
                   ];
             return {
@@ -936,11 +1059,18 @@ async function main() {
           science_seed: config.science_seed,
           limits: { max_rounds: 1, budget: planBudget },
           plan_definition_digest: () => String(digests["science_digest"] ?? ""),
+          // M4-02 evidence-feedback round: the previous round's platform
+          // evidence becomes the Supervisor's `lastReport`, so the model's plan
+          // call is conditioned on the real platform evidence (not a summary).
+          prior_evidence:
+            config.evidence === undefined || config.evidence === null
+              ? null
+              : config.evidence,
         };
 
         let supervisorResult;
         if (config.model.adapter === "model-gateway") {
-          const parts = await productSkills(config.model, supervisorInput.research_id);
+          const parts = await productSkills(config.model, supervisorInput.research_id, modelCalls);
           if (parts.modelGateway !== undefined) ports.modelGateway = parts.modelGateway;
           supervisorResult = await compositionModule.runProductionSupervisor(
             supervisorInput,
@@ -967,11 +1097,29 @@ async function main() {
           decision: supervisorResult.decision,
           reports: supervisorResult.reports.length,
         };
+        result.model_calls = modelCalls;
+        result.evidence_feedback = {
+          provided: config.evidence !== undefined && config.evidence !== null,
+          report_id:
+            config.evidence !== undefined && config.evidence !== null
+              ? String(config.evidence.report_id ?? "")
+              : null,
+        };
         trace.record("supervisor", {
           request: { model_adapter: config.model.adapter, max_rounds: 1 },
           response: result.supervisor,
           digest: digestOf(result.supervisor),
         });
+        if (modelCalls.length > 0) {
+          trace.record("model.calls", {
+            request: { adapter: config.model.adapter, calls: modelCalls.length },
+            response: {
+              receipt_ids: modelCalls.map((entry) => entry.receipt_id),
+              usage: modelCalls.map((entry) => entry.usage),
+            },
+            digest: digestOf(modelCalls),
+          });
+        }
         if (supervisorResult.status === "completed" || supervisorResult.stop_reason === "accepted") {
           errors.push("supervisor: accepted without a bound evidence view");
         }
@@ -983,10 +1131,12 @@ async function main() {
           errors.push("supervisor: the submit port created a second task");
         }
       } catch (error) {
+        result.model_calls = modelCalls;
         recordError("supervisor", error);
       }
     }
 
+    if (modelCalls.length > 0) result.model_calls = modelCalls;
     result.status = errors.length === 0 ? "ok" : "error";
     writeFileSync(join(outDir, "runner.json"), JSON.stringify(result, null, 2) + "\n");
     return errors.length === 0 ? EXIT_OK : EXIT_FAIL;

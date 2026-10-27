@@ -376,7 +376,13 @@ _PUBLIC_IDENTIFIER_RE = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     r"|(?:ap|rsv|res|proj|project|proposal|prop|approval|reservation|research|"
     r"session|principal|account|workspace|record|release|rel|attempt|epoch|"
-    r"idc|key)_[A-Za-z0-9_]+"
+    r"idc|key|sub|trace|diag)_[A-Za-z0-9_]+"
+    # M4-02: the platform task id (`YYYYMMDD_HHMMSS_NNN_<name>`).  Shape
+    # authority: `acp_services/store/naming.py::_JOB_ID_RE`.  A TaskRef id is a
+    # platform identifier that CLI, MCP and the Workbench must all read
+    # verbatim to name *the same* task; the opaque-token net used to rewrite it
+    # (it is longer than 32 characters), which made the MCP read unattributable.
+    r"|\d{8}_\d{6}_\d{3}_[A-Za-z0-9][A-Za-z0-9._\-]*"
     r")$"
 )
 
