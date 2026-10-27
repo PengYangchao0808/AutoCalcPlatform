@@ -304,10 +304,10 @@
           "why": "an unimplemented promise set never reports negotiated"
         },
         {
-          "equals": false,
+          "equals": true,
           "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
           "pointer": "/client_path/negotiation/implemented",
-          "why": "advertising is not delivery"
+          "why": "M2-01c registers the ten promised tools, so the derived implemented flag is true; the negotiated claim still requires a requesting session"
         },
         {
           "equals": "unsupported_capability",

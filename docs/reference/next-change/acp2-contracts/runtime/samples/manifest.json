@@ -1,5 +1,5 @@
 {
-  "change_note": "M1-03: evidence-projection sample set (TaskRef normalisation, digest-bound evidence views, research decisions; positive/negative incl. foreign-* and model-text refusals).",
+  "change_note": "M2-01: proposal-create sample carries the required plan projection.",
   "contract_version": "1.2.0",
   "counts": {
     "by_contract": {
@@ -931,8 +931,8 @@
       },
       "kind": "positive",
       "path": "samples/p2-research-operations/proposal-create.positive.json",
-      "sha256": "c8f9c3e9e9f31820f46e5940f2e5ea22587ea325a85c18906ed92a0c9285527b",
-      "size_bytes": 508
+      "sha256": "d87c16d8a74f4724979f657660d204a059499c7dc31961ba076b5a282dd249f1",
+      "size_bytes": 776
     },
     {
       "contract": "p2-research-operations.v1.json",

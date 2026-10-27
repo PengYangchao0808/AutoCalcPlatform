@@ -247,15 +247,24 @@ def test_scanner_reports_the_frontend_structure_body_builder(report: dict[str, A
 
 
 def test_scanner_reports_the_rph_build_tool_arguments(report: dict[str, Any]) -> None:
-    """The bridge's P1 submit arguments are exactly the frozen six keys."""
+    """The bridge's P1 submit arguments are exactly the registered keys.
+
+    M1-06/M2-01 widened the bridge submit body with the research binding
+    (budget/plan_digest/proposal_digest/proposal_ref) — all declared in the
+    policy table, so the scan stays compliant.
+    """
     submit = _consumer(report, "rph:buildToolArguments:submit")
     assert submit["path"] == "rph/packages/bridge/src/index.ts"
     assert submit["entry"] == "mcp"
     assert submit["keys"] == [
+        "budget",
         "idempotency_key",
         "input",
         "method",
+        "plan_digest",
         "project_id",
+        "proposal_digest",
+        "proposal_ref",
         "resources",
         "workflow",
     ]
@@ -284,6 +293,7 @@ def test_prepare_field_authority_is_frozen_and_not_breaking(
         "idempotency_key",
         "job_id",
         "purpose",
+        "relative_path",
     ]
     assert prepare["extra_keys"] == []
     assert prepare["disposition"] == scanner.DISPOSITION_COMPLIANT
@@ -353,12 +363,14 @@ def test_p2_rows_use_the_frozen_status_enum(freeze: dict[str, Any]) -> None:
         for row in contract["rows"]
         if isinstance(row, dict) and "implementation_status" in row
     }
+    # M2-01c delivers the three remaining rows (live tool + client method +
+    # application use case); no row is verified until the cross-track evidence lands.
     assert observed == {
-        "P2-R1": "planned",
+        "P2-R1": "delivered",
         "P2-R2": "delivered",
         "P2-R3": "delivered",
-        "P2-R4": "planned",
-        "P2-R5": "planned",
+        "P2-R4": "delivered",
+        "P2-R5": "delivered",
     }
     assert all(status in {"planned", "delivered", "verified"} for status in observed.values())
     recorded = _decision(freeze, "D-IDENT-03")["current_values"]

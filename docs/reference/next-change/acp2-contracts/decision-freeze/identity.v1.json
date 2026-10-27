@@ -1,12 +1,846 @@
 {
-  "schema": "acp2.decision-freeze.identity.v1",
-  "contract_version": "1.0.0",
-  "frozen_at": "2026-10-27",
-  "owner": "INT",
-  "task": "M0-11 (M1-02 flipped D-IDENT-04/05/07 after landing their producers and vectors)",
-  "title": "Identity, field and migration decisions (G02/G03/G12/G13/G20)",
+  "approval_protocol": {
+    "aggregated_by": "INT",
+    "note": "Signoff is recorded per decision under signoff[]; an unsigned decision keeps its status and cannot be consumed as frozen by M1-02/M1-04.",
+    "signoff_pending": [
+      "B (protocol/runtime owner) — D-IDENT-01/02/03/04/05/08/09/10",
+      "A (science owner) — D-IDENT-01/02/08",
+      "C-RPH — D-IDENT-03/06/07/10",
+      "C-Web — D-IDENT-02"
+    ]
+  },
   "branch": "acp2/integration-remediation",
-  "head": "e82cd8a",
+  "client_inventory": {
+    "authority": "scripts/acceptance/check_v1_request_field_consumers.py",
+    "breaking": [],
+    "consumers": [
+      {
+        "consumer": "acceptance:_execute_m1",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 206,
+        "note": "",
+        "path": "scripts/acceptance/real_environment.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_package_install_scheduler_probe",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "name",
+          "resources",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 381,
+        "note": "",
+        "path": "scripts/acceptance/acp2_package_install.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_run_approval_budget",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "budget",
+          "input",
+          "method",
+          "name",
+          "plan_digest",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 10292,
+        "note": "",
+        "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_run_artifact",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "attempt",
+          "expected_digest",
+          "expected_size_bytes",
+          "generation",
+          "job_id",
+          "media_type",
+          "purpose",
+          "relative_path",
+          "schema_version"
+        ],
+        "kind": "acceptance-python",
+        "line": 5031,
+        "note": "",
+        "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:_run_artifact",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "attempt",
+          "expected_digest",
+          "expected_size_bytes",
+          "generation",
+          "job_id",
+          "purpose",
+          "relative_path",
+          "schema_version"
+        ],
+        "kind": "acceptance-python",
+        "line": 5143,
+        "note": "",
+        "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:_run_artifact",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "attempt",
+          "evidence_report",
+          "expected_digest",
+          "expected_size_bytes",
+          "generation",
+          "job_id",
+          "purpose",
+          "schema_ref",
+          "schema_version",
+          "source_refs"
+        ],
+        "kind": "acceptance-python",
+        "line": 5187,
+        "note": "",
+        "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:_run_multitenant_authz",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "purpose"
+        ],
+        "kind": "acceptance-python",
+        "line": 14121,
+        "note": "",
+        "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:_run_multitenant_authz",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "project_id",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 14169,
+        "note": "",
+        "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_run_multitenant_two_project",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "purpose"
+        ],
+        "kind": "acceptance-python",
+        "line": 15162,
+        "note": "",
+        "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:injection_and_revocation",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "budget",
+          "idempotency_key",
+          "input",
+          "method",
+          "plan_digest",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 1503,
+        "note": "",
+        "path": "scripts/acceptance/acp2_thin_slice.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "cli:_handle_task_execute",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "cli",
+        "extra_keys": [],
+        "keys": [
+          "execution_mode",
+          "idempotency_key",
+          "input",
+          "method",
+          "molecule_name",
+          "name",
+          "node_tags",
+          "project_id",
+          "remark",
+          "tags",
+          "target_node",
+          "task_name",
+          "workflow"
+        ],
+        "kind": "acp-cli",
+        "line": 2879,
+        "note": "",
+        "path": "src/acp/cli.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:idempotency-key-reuse.negative",
+        "contract_extra_keys": [
+          "existing_plan_digest"
+        ],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [
+          "existing_plan_digest"
+        ],
+        "keys": [
+          "existing_plan_digest",
+          "idempotency_key",
+          "plan_digest"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-reuse.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:idempotency-key-short-cross-tenant.negative",
+        "contract_extra_keys": [
+          "existing_owner_project",
+          "key_entropy",
+          "namespace",
+          "requesting_project"
+        ],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [
+          "existing_owner_project",
+          "key_entropy",
+          "namespace",
+          "requesting_project"
+        ],
+        "keys": [
+          "existing_owner_project",
+          "idempotency_key",
+          "key_entropy",
+          "namespace",
+          "plan_digest",
+          "requesting_project"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:preflight.positive",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "schema_version",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/preflight.positive.json",
+        "rejected_keys": [],
+        "request_kind": "preflight"
+      },
+      {
+        "consumer": "docs:prepare-missing-purpose.negative",
+        "contract_extra_keys": [],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "schema_version",
+          "task_ref"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare-missing-purpose.negative.json",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "docs:prepare-without-purpose.negative",
+        "contract_extra_keys": [],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "task_ref"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare-without-purpose.negative.json",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "docs:prepare.positive",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "attempt",
+          "generation",
+          "idempotency_key",
+          "purpose",
+          "schema_version",
+          "task_ref"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare.positive.json",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "docs:prepare.positive",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "attempt",
+          "generation",
+          "idempotency_key",
+          "purpose",
+          "task_ref"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare.positive.json",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "docs:submit-invalid-workflow.negative",
+        "contract_extra_keys": [],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "plan_digest",
+          "schema_version",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-invalid-workflow.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:submit-keyless-duplicate-task.negative",
+        "contract_extra_keys": [
+          "entry"
+        ],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [
+          "entry"
+        ],
+        "keys": [
+          "entry",
+          "input",
+          "plan_digest",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:submit-missing-idempotency-key.negative",
+        "contract_extra_keys": [],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "plan_digest",
+          "schema_version",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-idempotency-key.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:submit-missing-plan-digest.negative",
+        "contract_extra_keys": [],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "schema_version",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-plan-digest.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:submit-unknown-field.negative",
+        "contract_extra_keys": [
+          "speedy"
+        ],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [
+          "speedy"
+        ],
+        "keys": [
+          "input",
+          "plan_digest",
+          "schema_version",
+          "speedy",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unknown-field.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:submit-unsupported-version.negative",
+        "contract_extra_keys": [],
+        "disposition": "expected_rejection",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "plan_digest",
+          "schema_version",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unsupported-version.negative.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "docs:submit.positive",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "idempotency_key",
+          "input",
+          "method",
+          "plan_digest",
+          "schema_version",
+          "workflow"
+        ],
+        "kind": "docs-json",
+        "line": 1,
+        "note": "contract sample payload",
+        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit.positive.json",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "frontend:buildStructureJobBody",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "molecule_name",
+          "project_id",
+          "remark",
+          "resources",
+          "task_name",
+          "workflow"
+        ],
+        "kind": "frontend-js",
+        "line": 927,
+        "note": "body builder (returned literal; injected into a submit path)",
+        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "frontend:submit",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "name",
+          "workflow"
+        ],
+        "kind": "frontend-js",
+        "line": 845,
+        "note": "POST /api/v1/jobs body body",
+        "path": "frontend/js/tsmode_editor.js",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "frontend:submitJobModal",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "molecule_name",
+          "node_tags",
+          "project_id",
+          "remark",
+          "resources",
+          "target_node",
+          "task_name",
+          "workflow"
+        ],
+        "kind": "frontend-js",
+        "line": 557,
+        "note": "POST /api/v1/jobs body nmrBody",
+        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "frontend:submitPESsearchTask",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "molecule_name",
+          "name",
+          "node_tags",
+          "project_id",
+          "remark",
+          "resources",
+          "target_node",
+          "task_name",
+          "workflow"
+        ],
+        "kind": "frontend-js",
+        "line": 268,
+        "note": "POST /api/v1/jobs body body",
+        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "frontend:submitStageWorkflowJob",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "node_tags",
+          "project_id",
+          "remark",
+          "resources",
+          "target_node",
+          "task_name",
+          "workflow"
+        ],
+        "kind": "frontend-js",
+        "line": 49,
+        "note": "POST /api/v1/jobs body body",
+        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "rph:buildToolArguments:evidence",
+        "contract_extra_keys": [
+          "budget",
+          "input",
+          "method",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "disposition": "other_request_kind",
+        "entry": "mcp",
+        "extra_keys": [],
+        "keys": [
+          "budget",
+          "explicit",
+          "idempotency_key",
+          "input",
+          "method",
+          "plan_digest",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "kind": "rph-typescript",
+        "line": 1422,
+        "note": "bridge operation evidence",
+        "path": "rph/packages/bridge/src/index.ts",
+        "rejected_keys": [],
+        "request_kind": "analyze"
+      },
+      {
+        "consumer": "rph:buildToolArguments:prepare",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "mcp",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "attempt",
+          "idempotency_key",
+          "job_id",
+          "purpose",
+          "relative_path"
+        ],
+        "kind": "rph-typescript",
+        "line": 1422,
+        "note": "bridge operation prepare",
+        "path": "rph/packages/bridge/src/index.ts",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "rph:buildToolArguments:read",
+        "contract_extra_keys": [
+          "attempt",
+          "job_id",
+          "resource_id"
+        ],
+        "disposition": "other_request_kind",
+        "entry": "mcp",
+        "extra_keys": [],
+        "keys": [
+          "artifact_ref",
+          "attempt",
+          "job_id",
+          "resource_id"
+        ],
+        "kind": "rph-typescript",
+        "line": 1422,
+        "note": "bridge operation read",
+        "path": "rph/packages/bridge/src/index.ts",
+        "rejected_keys": [],
+        "request_kind": "read"
+      },
+      {
+        "consumer": "rph:buildToolArguments:status",
+        "contract_extra_keys": [
+          "reference"
+        ],
+        "disposition": "other_request_kind",
+        "entry": "mcp",
+        "extra_keys": [],
+        "keys": [
+          "reference"
+        ],
+        "kind": "rph-typescript",
+        "line": 1422,
+        "note": "bridge operation status",
+        "path": "rph/packages/bridge/src/index.ts",
+        "rejected_keys": [],
+        "request_kind": "status"
+      },
+      {
+        "consumer": "rph:buildToolArguments:submit",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "mcp",
+        "extra_keys": [],
+        "keys": [
+          "budget",
+          "idempotency_key",
+          "input",
+          "method",
+          "plan_digest",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "kind": "rph-typescript",
+        "line": 1422,
+        "note": "bridge operation submit",
+        "path": "rph/packages/bridge/src/index.ts",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "rph:buildToolArguments:validate",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "mcp",
+        "extra_keys": [],
+        "keys": [
+          "budget",
+          "idempotency_key",
+          "input",
+          "method",
+          "plan_digest",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "kind": "rph-typescript",
+        "line": 1422,
+        "note": "bridge operation validate",
+        "path": "rph/packages/bridge/src/index.ts",
+        "rejected_keys": [],
+        "request_kind": "preflight"
+      }
+    ],
+    "digest": "sha256:efe5a93d77320e8f032638fa278fdf5f0a425ba02425cbd119a43b88a560e264",
+    "exclusions": [
+      "frontend/js/**/module_tests/** (test doubles, not shipped consumers)",
+      "rph/packages/**/dist/** (build output)",
+      "rph/packages/**/node_modules/** (build output)"
+    ],
+    "regeneration": "python3.11 scripts/acceptance/check_v1_request_field_consumers.py --out /tmp/consumers.json",
+    "scanned_roots": [
+      "frontend/js",
+      "rph/packages",
+      "src/acp/cli.py",
+      "scripts/acceptance",
+      "docs"
+    ],
+    "schema": "acp2.identity.v1.request-field-consumers",
+    "summary": {
+      "breaking_consumers": [],
+      "consumers": 36,
+      "counts": {
+        "breaking": 0,
+        "compliant": 23,
+        "contract_divergence": 0,
+        "expected_rejection": 10,
+        "other_request_kind": 3
+      }
+    }
+  },
   "closes": [
     "G02",
     "G03",
@@ -14,39 +848,6 @@
     "G13",
     "G20"
   ],
-  "prerequisites": [
-    {
-      "task": "M0-04",
-      "commit": "a1cf33b",
-      "subject": "one CommandIdentity for HTTP/CLI/admission + idempotency scope"
-    },
-    {
-      "task": "M0-05",
-      "commit": "17aee7a",
-      "subject": "MCP idempotency through CommandIdentity + versioned prepare key"
-    },
-    {
-      "task": "M0-06",
-      "commit": "96d6c81",
-      "subject": "v1 request field policy + cross-entry JobSpec/digest equivalence"
-    }
-  ],
-  "status_vocabulary": {
-    "frozen": "implemented in this checkout and pinned by at least one resolvable vector; no owner may change it without a new ADR/contract change.",
-    "pending_implementation": "the decision is recorded as a forward convention (frozen_forward_convention=true) because no producer exists yet; the consumer task must implement it before it may be called frozen.",
-    "pending_conflict": "two frozen surfaces disagree and choosing one changes a contract; recorded with the exact conflicting evidence, resolved by the named consumer task, never silently."
-  },
-  "pending_rule": "An undecided item is never frozen: a decision with status pending_* must carry pending_reason, consumer_task and frozen_forward_convention, and must not be advertised as closed by M1. M1-02 flipped D-IDENT-04/05/07 after landing their producers and vectors; no pending decision remains in this file.",
-  "approval_protocol": {
-    "aggregated_by": "INT",
-    "signoff_pending": [
-      "B (protocol/runtime owner) — D-IDENT-01/02/03/04/05/08/09/10",
-      "A (science owner) — D-IDENT-01/02/08",
-      "C-RPH — D-IDENT-03/06/07/10",
-      "C-Web — D-IDENT-02"
-    ],
-    "note": "Signoff is recorded per decision under signoff[]; an unsigned decision keeps its status and cannot be consumed as frozen by M1-02/M1-04."
-  },
   "consumers_by_task": {
     "M1-01": [
       "D-IDENT-02",
@@ -65,445 +866,16 @@
       "D-IDENT-08"
     ]
   },
-  "client_inventory": {
-    "authority": "scripts/acceptance/check_v1_request_field_consumers.py",
-    "schema": "acp2.identity.v1.request-field-consumers",
-    "digest": "sha256:dc9c62e976bb5841443967bd80d2fe9457449ad1219152236542a118adf1289e",
-    "scanned_roots": [
-      "frontend/js",
-      "rph/packages",
-      "src/acp/cli.py",
-      "scripts/acceptance",
-      "docs"
-    ],
-    "exclusions": [
-      "frontend/js/**/module_tests/** (test doubles, not shipped consumers)",
-      "rph/packages/**/dist/** (build output)",
-      "rph/packages/**/node_modules/** (build output)"
-    ],
-    "summary": {
-      "consumers": 35,
-      "counts": {
-        "breaking": 0,
-        "compliant": 22,
-        "contract_divergence": 0,
-        "expected_rejection": 10,
-        "other_request_kind": 3
-      },
-      "breaking_consumers": []
-    },
-    "breaking": [],
-    "consumers": [
-      {
-        "consumer": "acceptance:_execute_m1",
-        "path": "scripts/acceptance/real_environment.py",
-        "kind": "acceptance-python",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_package_install_scheduler_probe",
-        "path": "scripts/acceptance/acp2_package_install.py",
-        "kind": "acceptance-python",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_run_approval_budget",
-        "path": "scripts/acceptance/acp2_runtime.py",
-        "kind": "acceptance-python",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_run_artifact",
-        "path": "scripts/acceptance/acp2_runtime.py",
-        "kind": "acceptance-python",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_run_artifact",
-        "path": "scripts/acceptance/acp2_runtime.py",
-        "kind": "acceptance-python",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_run_artifact",
-        "path": "scripts/acceptance/acp2_runtime.py",
-        "kind": "acceptance-python",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_run_multitenant_authz",
-        "path": "scripts/acceptance/acp2_runtime.py",
-        "kind": "acceptance-python",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_run_multitenant_authz",
-        "path": "scripts/acceptance/acp2_runtime.py",
-        "kind": "acceptance-python",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "acceptance:_run_multitenant_two_project",
-        "path": "scripts/acceptance/acp2_runtime.py",
-        "kind": "acceptance-python",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "cli:_handle_task_execute",
-        "path": "src/acp/cli.py",
-        "kind": "acp-cli",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "docs:idempotency-key-reuse.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-reuse.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [
-          "existing_plan_digest"
-        ],
-        "rejected_keys": [],
-        "contract_extra_keys": [
-          "existing_plan_digest"
-        ],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:idempotency-key-short-cross-tenant.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [
-          "existing_owner_project",
-          "key_entropy",
-          "namespace",
-          "requesting_project"
-        ],
-        "rejected_keys": [],
-        "contract_extra_keys": [
-          "existing_owner_project",
-          "key_entropy",
-          "namespace",
-          "requesting_project"
-        ],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:preflight.positive",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/preflight.positive.json",
-        "kind": "docs-json",
-        "request_kind": "preflight",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "docs:prepare-missing-purpose.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare-missing-purpose.negative.json",
-        "kind": "docs-json",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:prepare-without-purpose.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare-without-purpose.negative.json",
-        "kind": "docs-json",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:prepare.positive",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare.positive.json",
-        "kind": "docs-json",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "docs:prepare.positive",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare.positive.json",
-        "kind": "docs-json",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "docs:submit-invalid-workflow.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-invalid-workflow.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:submit-keyless-duplicate-task.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [
-          "entry"
-        ],
-        "rejected_keys": [],
-        "contract_extra_keys": [
-          "entry"
-        ],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:submit-missing-idempotency-key.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-idempotency-key.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:submit-missing-plan-digest.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-plan-digest.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:submit-unknown-field.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unknown-field.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [
-          "speedy"
-        ],
-        "rejected_keys": [],
-        "contract_extra_keys": [
-          "speedy"
-        ],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:submit-unsupported-version.negative",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unsupported-version.negative.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "expected_rejection"
-      },
-      {
-        "consumer": "docs:submit.positive",
-        "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit.positive.json",
-        "kind": "docs-json",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "frontend:buildStructureJobBody",
-        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-        "kind": "frontend-js",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "frontend:submit",
-        "path": "frontend/js/tsmode_editor.js",
-        "kind": "frontend-js",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "frontend:submitJobModal",
-        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-        "kind": "frontend-js",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "frontend:submitPESsearchTask",
-        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-        "kind": "frontend-js",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "frontend:submitStageWorkflowJob",
-        "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-        "kind": "frontend-js",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "rph:buildToolArguments:evidence",
-        "path": "rph/packages/bridge/src/index.ts",
-        "kind": "rph-typescript",
-        "request_kind": "analyze",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [
-          "input",
-          "method",
-          "project_id",
-          "resources",
-          "workflow"
-        ],
-        "disposition": "other_request_kind"
-      },
-      {
-        "consumer": "rph:buildToolArguments:prepare",
-        "path": "rph/packages/bridge/src/index.ts",
-        "kind": "rph-typescript",
-        "request_kind": "prepare",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "rph:buildToolArguments:read",
-        "path": "rph/packages/bridge/src/index.ts",
-        "kind": "rph-typescript",
-        "request_kind": "read",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [
-          "attempt",
-          "job_id",
-          "resource_id"
-        ],
-        "disposition": "other_request_kind"
-      },
-      {
-        "consumer": "rph:buildToolArguments:status",
-        "path": "rph/packages/bridge/src/index.ts",
-        "kind": "rph-typescript",
-        "request_kind": "status",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [
-          "reference"
-        ],
-        "disposition": "other_request_kind"
-      },
-      {
-        "consumer": "rph:buildToolArguments:submit",
-        "path": "rph/packages/bridge/src/index.ts",
-        "kind": "rph-typescript",
-        "request_kind": "submit",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      },
-      {
-        "consumer": "rph:buildToolArguments:validate",
-        "path": "rph/packages/bridge/src/index.ts",
-        "kind": "rph-typescript",
-        "request_kind": "preflight",
-        "extra_keys": [],
-        "rejected_keys": [],
-        "contract_extra_keys": [],
-        "disposition": "compliant"
-      }
-    ],
-    "regeneration": "python3.11 scripts/acceptance/check_v1_request_field_consumers.py --out /tmp/consumers.json"
-  },
+  "contract_version": "1.0.0",
   "decisions": [
     {
-      "id": "D-IDENT-01",
-      "title": "CommandIdentity is the only per-command identity; IdempotencyContext is its only idempotency projection",
-      "status": "frozen",
-      "owner": "B",
-      "signoff": [
-        "B",
-        "A",
-        "C-RPH",
-        "C-Web"
-      ],
+      "compatible_clients": [],
       "decision": "Every command entry projects exactly one acp_services.workspace.command_identity.CommandIdentity (from_verified_http for an authenticated HTTP/MCP caller, from_server for the Controller process, from_local only for the explicit local-single operator). The idempotency scope id is identity.idempotency_scope(project_id=...) = resolve_scope_id(principal, project) and IdempotencyContext carries that scope plus identity.principal_id/key_id. No entry may build a second scope, fold a permission scope into the key, or hard-code LOCAL_PRINCIPAL_ID for an authenticated caller.",
-      "rationale": "Before M0-04 the HTTP submit entry hard-coded LOCAL_PRINCIPAL_ID while admission recorded the process default, so two authenticated users in one project shared one idempotency scope and one admission principal (a retry replayed the other user's task).",
+      "id": "D-IDENT-01",
       "impact": {
-        "files": [
-          "src/acp_services/workspace/command_identity.py",
-          "src/acp_services/runtime/idempotency.py",
-          "src/acp_services/runtime/local_admission.py",
-          "src/acp_services/entrypoints/mcp.py",
-          "src/acp/api/v1_routes.py",
-          "src/acp/cli.py",
-          "src/acp/scheduler/manager.py"
+        "documents": [
+          "src/acp_services/AGENTS.md",
+          "docs/reference/current/ACP_Services_Closure_20261019.md"
         ],
         "entries": [
           "http:POST /api/v1/jobs (submit)",
@@ -512,77 +884,252 @@
           "cli:acp task execute",
           "controller/worker: JobManager.submit(identity=...)"
         ],
-        "documents": [
-          "src/acp_services/AGENTS.md",
-          "docs/reference/current/ACP_Services_Closure_20261019.md"
+        "files": [
+          "src/acp_services/workspace/command_identity.py",
+          "src/acp_services/runtime/idempotency.py",
+          "src/acp_services/runtime/local_admission.py",
+          "src/acp_services/entrypoints/mcp.py",
+          "src/acp/api/v1_routes.py",
+          "src/acp/cli.py",
+          "src/acp/scheduler/manager.py"
         ]
       },
-      "wire_version": null,
       "migration_version": "024",
-      "rollback": "Server-side only, no wire change. Rollback = stop the Controller, restore the jobs DB snapshot taken before migration 024, and deploy the pre-M0-04 build; rows already written with identity_version=2 are not silently downgraded (the old code folds the principal and cannot find them), so idempotency_records must be archived with the rollback rather than rewritten in place.",
-      "compatible_clients": [],
-      "vectors": [
-        {
-          "test": "tests/test_acp2_runtime_command_identity.py::test_from_verified_http_projects_the_credential_principal",
-          "asserts": "an authenticated request yields that user's principal, never LOCAL_PRINCIPAL_ID"
-        },
-        {
-          "test": "tests/test_acp2_runtime_command_identity.py::test_two_principals_same_project_same_key_is_an_explicit_conflict",
-          "asserts": "two users in one project with one key get conflict, not a replay"
-        },
-        {
-          "test": "tests/test_acp2_runtime_command_identity.py::test_admission_principal_is_not_merged_across_users",
-          "asserts": "the admission ledger attributes each reservation to its own principal"
-        },
-        {
-          "test": "tests/test_acp2_runtime_command_identity.py::test_cli_task_execute_wires_the_operator_identity_end_to_end",
-          "asserts": "the CLI local operator is an explicit CommandIdentity.from_local, scope included"
-        }
-      ],
-      "notes": "LOCAL_PRINCIPAL_ID stays legal on exactly one path: the explicit local-single operator."
-    },
-    {
-      "id": "D-IDENT-02",
-      "title": "v1 request fields are extra=forbid with one 422 rule vocabulary and an empty legacy allowlist",
-      "status": "frozen",
+      "notes": "LOCAL_PRINCIPAL_ID stays legal on exactly one path: the explicit local-single operator.",
       "owner": "B",
+      "rationale": "Before M0-04 the HTTP submit entry hard-coded LOCAL_PRINCIPAL_ID while admission recorded the process default, so two authenticated users in one project shared one idempotency scope and one admission principal (a retry replayed the other user's task).",
+      "rollback": "Server-side only, no wire change. Rollback = stop the Controller, restore the jobs DB snapshot taken before migration 024, and deploy the pre-M0-04 build; rows already written with identity_version=2 are not silently downgraded (the old code folds the principal and cannot find them), so idempotency_records must be archived with the rollback rather than rewritten in place.",
       "signoff": [
         "B",
-        "C-Web",
-        "C-RPH"
+        "A",
+        "C-RPH",
+        "C-Web"
+      ],
+      "status": "frozen",
+      "title": "CommandIdentity is the only per-command identity; IdempotencyContext is its only idempotency projection",
+      "vectors": [
+        {
+          "asserts": "an authenticated request yields that user's principal, never LOCAL_PRINCIPAL_ID",
+          "test": "tests/test_acp2_runtime_command_identity.py::test_from_verified_http_projects_the_credential_principal"
+        },
+        {
+          "asserts": "two users in one project with one key get conflict, not a replay",
+          "test": "tests/test_acp2_runtime_command_identity.py::test_two_principals_same_project_same_key_is_an_explicit_conflict"
+        },
+        {
+          "asserts": "the admission ledger attributes each reservation to its own principal",
+          "test": "tests/test_acp2_runtime_command_identity.py::test_admission_principal_is_not_merged_across_users"
+        },
+        {
+          "asserts": "the CLI local operator is an explicit CommandIdentity.from_local, scope included",
+          "test": "tests/test_acp2_runtime_command_identity.py::test_cli_task_execute_wires_the_operator_identity_end_to_end"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "compatible_clients": [
+        {
+          "consumer": "acceptance:_execute_m1",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/real_environment.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_package_install_scheduler_probe",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_package_install.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_run_approval_budget",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_runtime.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_run_artifact",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_runtime.py",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "acceptance:_run_multitenant_authz",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_runtime.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_run_multitenant_two_project",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_runtime.py",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "acceptance:injection_and_revocation",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_thin_slice.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "cli:_handle_task_execute",
+          "disposition": "compliant",
+          "path": "src/acp/cli.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:idempotency-key-reuse.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-reuse.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:idempotency-key-short-cross-tenant.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:preflight.positive",
+          "disposition": "compliant",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/preflight.positive.json",
+          "request_kind": "preflight"
+        },
+        {
+          "consumer": "docs:prepare-missing-purpose.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare-missing-purpose.negative.json",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "docs:prepare-without-purpose.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare-without-purpose.negative.json",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "docs:prepare.positive",
+          "disposition": "compliant",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare.positive.json",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "docs:prepare.positive",
+          "disposition": "compliant",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare.positive.json",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "docs:submit-invalid-workflow.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-invalid-workflow.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:submit-keyless-duplicate-task.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:submit-missing-idempotency-key.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-idempotency-key.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:submit-missing-plan-digest.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-plan-digest.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:submit-unknown-field.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unknown-field.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:submit-unsupported-version.negative",
+          "disposition": "expected_rejection",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unsupported-version.negative.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "docs:submit.positive",
+          "disposition": "compliant",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit.positive.json",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "frontend:buildStructureJobBody",
+          "disposition": "compliant",
+          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "frontend:submit",
+          "disposition": "compliant",
+          "path": "frontend/js/tsmode_editor.js",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "frontend:submitJobModal",
+          "disposition": "compliant",
+          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "frontend:submitPESsearchTask",
+          "disposition": "compliant",
+          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "frontend:submitStageWorkflowJob",
+          "disposition": "compliant",
+          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "rph:buildToolArguments:evidence",
+          "disposition": "other_request_kind",
+          "path": "rph/packages/bridge/src/index.ts",
+          "request_kind": "analyze"
+        },
+        {
+          "consumer": "rph:buildToolArguments:prepare",
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "rph:buildToolArguments:read",
+          "disposition": "other_request_kind",
+          "path": "rph/packages/bridge/src/index.ts",
+          "request_kind": "read"
+        },
+        {
+          "consumer": "rph:buildToolArguments:status",
+          "disposition": "other_request_kind",
+          "path": "rph/packages/bridge/src/index.ts",
+          "request_kind": "status"
+        },
+        {
+          "consumer": "rph:buildToolArguments:submit",
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "rph:buildToolArguments:validate",
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts",
+          "request_kind": "preflight"
+        }
       ],
       "decision": "acp_services.entrypoints.application_params is the single authority for what a v1 request field means. An undeclared execution field is refused with input_invalid/params.rule=unknown_field (HTTP 422); a server path is refused with input_invalid/params.rule=unsupported_server_path (HTTP 422). There is no 'ignore unknown and warn' mode. LEGACY_REQUEST_FIELD_ALLOWLIST is empty in v1 and a future row must carry removal_version + exit_condition (FieldPolicy rejects a row without them).",
-      "rationale": "The v1 DTO silently dropped unknown fields, so a typo such as execution_mod degraded into a local run instead of an error. The mechanical client inventory (scripts/acceptance/check_v1_request_field_consumers.py) found no undeclared field in use, so v1 can hard-cut instead of carrying a permanent dual field policy.",
-      "impact": {
-        "files": [
-          "src/acp_services/entrypoints/application_params.py",
-          "src/acp/api/v1_schemas.py",
-          "src/acp/api/v1_routes.py",
-          "src/acp/services_mcp_bootstrap.py",
-          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-          "scripts/acceptance/check_v1_request_field_consumers.py"
-        ],
-        "entries": [
-          "http",
-          "mcp",
-          "cli"
-        ],
-        "documents": [
-          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#unknown_field_policy",
-          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#submit_field_policy"
-        ]
-      },
-      "wire_version": "application-api.v1 (contract_version 1.3.0; submit field table unchanged since 1.2.0)",
-      "migration_version": null,
-      "rollback": "Revert = add the field to SUBMIT_FIELD_POLICY and, only if a shipped client needs a transition window, add a legacy_allowlist row with removal_version + exit_condition. No DB change. Re-introducing a silent 'ignore unknown' mode is not a legal rollback: it was the defect U1 removes.",
       "field_decision": {
-        "additional_properties": false,
-        "http_status": 422,
-        "error_code": "input_invalid",
-        "rules": [
-          "unknown_field",
-          "unsupported_server_path"
-        ],
         "accepted_submit_fields": [
           "budget",
           "execution_mode",
@@ -606,536 +1153,392 @@
           "task_name",
           "workflow"
         ],
+        "additional_properties": false,
+        "error_code": "input_invalid",
+        "http_status": 422,
+        "legacy_allowlist": {
+          "exit_condition_rule": "A future allowlist row must carry removal_version + exit_condition (FieldPolicy rejects a row without them), name the consumer set, and state the condition that proves no client sends the field any more (the same mechanical scanner must report that consumer as gone). The v1 allowlist is empty because every registered consumer sends declared fields only; there is deliberately no 'ignore unknown and warn' mode.",
+          "inventory_basis": "M0-06 manual inventory plus this task's mechanical scan: scripts/acceptance/check_v1_request_field_consumers.py",
+          "per_field_exit_conditions": [],
+          "removal_version": "application-api.v2 (next major)",
+          "rows": [],
+          "rows_authority": "src/acp_services/entrypoints/application_params.py::LEGACY_REQUEST_FIELD_ALLOWLIST"
+        },
+        "preflight_field_set": "identical to submit (one normalised body, two commands)",
+        "rules": [
+          "unknown_field",
+          "unsupported_server_path"
+        ],
         "server_path_fields": [
           "config_path",
           "output_dir"
-        ],
-        "preflight_field_set": "identical to submit (one normalised body, two commands)",
-        "legacy_allowlist": {
-          "rows": [],
-          "rows_authority": "src/acp_services/entrypoints/application_params.py::LEGACY_REQUEST_FIELD_ALLOWLIST",
-          "removal_version": "application-api.v2 (next major)",
-          "per_field_exit_conditions": [],
-          "exit_condition_rule": "A future allowlist row must carry removal_version + exit_condition (FieldPolicy rejects a row without them), name the consumer set, and state the condition that proves no client sends the field any more (the same mechanical scanner must report that consumer as gone). The v1 allowlist is empty because every registered consumer sends declared fields only; there is deliberately no 'ignore unknown and warn' mode.",
-          "inventory_basis": "M0-06 manual inventory plus this task's mechanical scan: scripts/acceptance/check_v1_request_field_consumers.py"
-        }
-      },
-      "compatible_clients": [
-        {
-          "consumer": "acceptance:_execute_m1",
-          "path": "scripts/acceptance/real_environment.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_package_install_scheduler_probe",
-          "path": "scripts/acceptance/acp2_package_install.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_run_approval_budget",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_run_artifact",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_run_artifact",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_run_artifact",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_run_multitenant_authz",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_run_multitenant_authz",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "acceptance:_run_multitenant_two_project",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "cli:_handle_task_execute",
-          "path": "src/acp/cli.py",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "docs:idempotency-key-reuse.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-reuse.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:idempotency-key-short-cross-tenant.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/idempotency-key-short-cross-tenant.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:preflight.positive",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/preflight.positive.json",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "docs:prepare-missing-purpose.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare-missing-purpose.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:prepare-without-purpose.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare-without-purpose.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:prepare.positive",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/prepare.positive.json",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "docs:prepare.positive",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/prepare.positive.json",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "docs:submit-invalid-workflow.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-invalid-workflow.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:submit-keyless-duplicate-task.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/control-and-data/submit-keyless-duplicate-task.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:submit-missing-idempotency-key.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-idempotency-key.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:submit-missing-plan-digest.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-missing-plan-digest.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:submit-unknown-field.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unknown-field.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:submit-unsupported-version.negative",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit-unsupported-version.negative.json",
-          "disposition": "expected_rejection"
-        },
-        {
-          "consumer": "docs:submit.positive",
-          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/submit.positive.json",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "frontend:buildStructureJobBody",
-          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "frontend:submit",
-          "path": "frontend/js/tsmode_editor.js",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "frontend:submitJobModal",
-          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "frontend:submitPESsearchTask",
-          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "frontend:submitStageWorkflowJob",
-          "path": "frontend/js/workbench/features/wizard/submit-edit.js",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "rph:buildToolArguments:evidence",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "other_request_kind"
-        },
-        {
-          "consumer": "rph:buildToolArguments:prepare",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "rph:buildToolArguments:read",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "other_request_kind"
-        },
-        {
-          "consumer": "rph:buildToolArguments:status",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "other_request_kind"
-        },
-        {
-          "consumer": "rph:buildToolArguments:submit",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "rph:buildToolArguments:validate",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
-        }
-      ],
-      "vectors": [
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_registered_contract_matches_the_field_policy",
-          "asserts": "the registered contract fields equal the policy's accepted set; additional_properties=false"
-        },
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_execution_mod_typo_is_input_invalid_at_every_entry",
-          "asserts": "one unknown field is input_invalid/unknown_field at http, mcp and cli"
-        },
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_client_chosen_server_paths_are_explicitly_rejected",
-          "asserts": "output_dir/config_path answer unsupported_server_path, never a silent server path"
-        },
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_legacy_allowlist_is_empty_and_every_row_would_be_scheduled",
-          "asserts": "the allowlist is empty and any future row carries removal_version + exit_condition"
-        },
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_frontend_and_bridge_request_keys_are_registered_consumers",
-          "asserts": "the shipped frontend/RPH request keys are all registered"
-        },
-        {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_scanner_reports_the_frontend_structure_body_builder",
-          "asserts": "the mechanical scanner reproduces the frontend builder's key set"
-        }
-      ],
-      "notes": "The client inventory in this file is generated, not hand-written: its digest must equal a fresh run of the scanner (tests/test_acp2_decision_freeze_identity.py)."
-    },
-    {
-      "id": "D-IDENT-03",
-      "title": "P2 implementation_status is the three-value enum planned|delivered|verified",
-      "status": "frozen",
-      "owner": "B",
-      "signoff": [
-        "B",
-        "C-RPH"
-      ],
-      "decision": "Every P2 row's implementation_status is exactly one of planned, delivered, verified. planned = promised but not callable (unregistered tools are refused as unknown_tool and acp_capabilities answers implemented=false); delivered = the registered tool set covers the row in code with contract-level evidence; verified = delivered plus live producer-to-consumer evidence. Advertising an extension never promotes a row: a partial implementation never reports negotiated=true (ADR-006 D7).",
-      "rationale": "The audit found 'advertised' read as 'delivered'. One enum with an explicit verified level keeps the three-state evidence rule (PASS/FAIL/NOT_VERIFIED) aligned with the contract vocabulary.",
-      "impact": {
-        "files": [
-          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-          "src/acp_services/entrypoints/mcp.py",
-          "tests/test_acp2_runtime_contracts.py",
-          "tests/test_acp2_decision_freeze_identity.py"
-        ],
-        "entries": [
-          "mcp:acp_capabilities (research_extension)",
-          "mcp:tools/list"
-        ],
-        "documents": [
-          "docs/reference/next-change/adr/ADR-006-mcp-negotiation.md#D7"
         ]
       },
-      "wire_version": "p2-research-operations.v1 (contract_version 1.0.0)",
+      "id": "D-IDENT-02",
+      "impact": {
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#unknown_field_policy",
+          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#submit_field_policy"
+        ],
+        "entries": [
+          "http",
+          "mcp",
+          "cli"
+        ],
+        "files": [
+          "src/acp_services/entrypoints/application_params.py",
+          "src/acp/api/v1_schemas.py",
+          "src/acp/api/v1_routes.py",
+          "src/acp/services_mcp_bootstrap.py",
+          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "scripts/acceptance/check_v1_request_field_consumers.py"
+        ]
+      },
       "migration_version": null,
-      "rollback": "None needed at runtime: the field is documentation of delivery state. Rolling a row back from delivered to planned is legal only with a contract change that also removes the tool registration; downgrading verified to delivered is legal and expected when live evidence expires.",
+      "notes": "The client inventory in this file is generated, not hand-written: its digest must equal a fresh run of the scanner (tests/test_acp2_decision_freeze_identity.py).",
+      "owner": "B",
+      "rationale": "The v1 DTO silently dropped unknown fields, so a typo such as execution_mod degraded into a local run instead of an error. The mechanical client inventory (scripts/acceptance/check_v1_request_field_consumers.py) found no undeclared field in use, so v1 can hard-cut instead of carrying a permanent dual field policy.",
+      "rollback": "Revert = add the field to SUBMIT_FIELD_POLICY and, only if a shipped client needs a transition window, add a legacy_allowlist row with removal_version + exit_condition. No DB change. Re-introducing a silent 'ignore unknown' mode is not a legal rollback: it was the defect U1 removes.",
+      "signoff": [
+        "B",
+        "C-Web",
+        "C-RPH"
+      ],
+      "status": "frozen",
+      "title": "v1 request fields are extra=forbid with one 422 rule vocabulary and an empty legacy allowlist",
+      "vectors": [
+        {
+          "asserts": "the registered contract fields equal the policy's accepted set; additional_properties=false",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_registered_contract_matches_the_field_policy"
+        },
+        {
+          "asserts": "one unknown field is input_invalid/unknown_field at http, mcp and cli",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_execution_mod_typo_is_input_invalid_at_every_entry"
+        },
+        {
+          "asserts": "output_dir/config_path answer unsupported_server_path, never a silent server path",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_client_chosen_server_paths_are_explicitly_rejected"
+        },
+        {
+          "asserts": "the allowlist is empty and any future row carries removal_version + exit_condition",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_legacy_allowlist_is_empty_and_every_row_would_be_scheduled"
+        },
+        {
+          "asserts": "the shipped frontend/RPH request keys are all registered",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_frontend_and_bridge_request_keys_are_registered_consumers"
+        },
+        {
+          "asserts": "the mechanical scanner reproduces the frontend builder's key set",
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_scanner_reports_the_frontend_structure_body_builder"
+        }
+      ],
+      "wire_version": "application-api.v1 (contract_version 1.3.0; submit field table unchanged since 1.2.0)"
+    },
+    {
       "compatible_clients": [],
       "current_values": {
         "authority": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json#rows",
         "rows": [
           {
             "id": "P2-R1",
-            "operation": "Proposal/ResearchRecord create/read/CAS",
-            "implementation_status": "planned"
+            "implementation_status": "delivered",
+            "operation": "Proposal/ResearchRecord create/read/CAS"
           },
           {
             "id": "P2-R2",
-            "operation": "request/query approval",
-            "implementation_status": "delivered"
+            "implementation_status": "delivered",
+            "operation": "request/query approval"
           },
           {
             "id": "P2-R3",
-            "operation": "approve/reject/revoke",
-            "implementation_status": "delivered"
+            "implementation_status": "delivered",
+            "operation": "approve/reject/revoke"
           },
           {
             "id": "P2-R4",
-            "operation": "task/approval/budget waiting",
-            "implementation_status": "planned"
+            "implementation_status": "delivered",
+            "operation": "task/approval/budget waiting"
           },
           {
             "id": "P2-R5",
-            "operation": "research resume",
-            "implementation_status": "planned"
+            "implementation_status": "delivered",
+            "operation": "research resume"
           }
         ],
         "verified_rows": []
       },
-      "vectors": [
-        {
-          "test": "tests/test_acp2_runtime_contracts.py::test_p2_research_operations_are_complete_and_owned",
-          "asserts": "the five P2 rows, owners and tool names are frozen"
-        },
-        {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_p2_rows_use_the_frozen_status_enum",
-          "asserts": "every P2 row carries exactly planned|delivered|verified"
-        }
-      ],
-      "notes": "admission-approval.v1.json records 'delivered (approval: B16; cumulative budget: B17)' in a different contract; normalising that prose is M1-01 work and is not covered by this enum (recorded under observations)."
-    },
-    {
-      "id": "D-IDENT-04",
-      "title": "Planning claim namespace plan|<project>|<research>|<session>|<round>|<call_seq>",
-      "status": "frozen",
+      "decision": "Every P2 row's implementation_status is exactly one of planned, delivered, verified. planned = promised but not callable (unregistered tools are refused as unknown_tool and acp_capabilities answers implemented=false); delivered = the registered tool set covers the row in code with contract-level evidence; verified = delivered plus live producer-to-consumer evidence. Advertising an extension never promotes a row: a partial implementation never reports negotiated=true (ADR-006 D7).",
+      "id": "D-IDENT-03",
+      "impact": {
+        "documents": [
+          "docs/reference/next-change/adr/ADR-006-mcp-negotiation.md#D7"
+        ],
+        "entries": [
+          "mcp:acp_capabilities (research_extension)",
+          "mcp:tools/list"
+        ],
+        "files": [
+          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "src/acp_services/entrypoints/mcp.py",
+          "tests/test_acp2_runtime_contracts.py",
+          "tests/test_acp2_decision_freeze_identity.py"
+        ]
+      },
+      "migration_version": null,
+      "notes": "M2-01c flipped P2-R1/P2-R4/P2-R5 to delivered (the live tool, the ControllerClient method and the application use case ship together). No row is verified: the cross-track live DSH evidence is still pending.",
       "owner": "B",
+      "rationale": "The audit found 'advertised' read as 'delivered'. One enum with an explicit verified level keeps the three-state evidence rule (PASS/FAIL/NOT_VERIFIED) aligned with the contract vocabulary.",
+      "rollback": "None needed at runtime: the field is documentation of delivery state. Rolling a row back from delivered to planned is legal only with a contract change that also removes the tool registration; downgrading verified to delivered is legal and expected when live evidence expires.",
       "signoff": [
         "B",
         "C-RPH"
       ],
+      "status": "frozen",
+      "title": "P2 implementation_status is the three-value enum planned|delivered|verified",
+      "vectors": [
+        {
+          "asserts": "the five P2 rows, owners and tool names are frozen",
+          "test": "tests/test_acp2_runtime_contracts.py::test_p2_research_operations_are_complete_and_owned"
+        },
+        {
+          "asserts": "every P2 row carries exactly planned|delivered|verified",
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_p2_rows_use_the_frozen_status_enum"
+        }
+      ],
+      "wire_version": "p2-research-operations.v1 (contract_version 1.0.0)"
+    },
+    {
+      "compatible_clients": [],
       "decision": "A planning/model claim id is the pipe-joined tuple plan|<project>|<research>|<session>|<round>|<call_seq>. Every segment is non-empty, contains no '|', and is server-derived (the client supplies neither project nor research/session identity). call_seq is monotonically increasing per (project, research, session, round). The claim carries its request_digest and a model receipt namespace (D-IDENT-05). It is a planning reservation id, never a submit ledger key: it must not be written to idempotency_records (whose action is submit) and it must not be an empty claim_id that escapes the partial index. Implemented by acp_services.runtime.research_session.planning_claim (producer + the single canonical digest); the research/session identity is allocated before the first plan by ResearchIdentity.allocate.",
-      "rationale": "Without a stable planning identity a model call cannot be charged before a proposal exists, and a retry cannot be reconciled to the call it repeats.",
+      "id": "D-IDENT-04",
       "impact": {
-        "files": [
-          "src/acp_services/runtime/research_session.py",
-          "src/acp_services/runtime/research_budget.py",
-          "src/acp_services/runtime/canonical_digest.py"
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
         ],
         "entries": [
           "planning model call (research session -> planning claim -> model receipt)"
         ],
-        "documents": [
-          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
-          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
+        "files": [
+          "src/acp_services/runtime/research_session.py",
+          "src/acp_services/runtime/research_budget.py",
+          "src/acp_services/runtime/canonical_digest.py"
         ]
       },
-      "wire_version": null,
-      "migration_version": null,
-      "rollback": "The convention is additive: a new claim namespace is a new prefix with its own segments, never a re-interpretation of a stored claim id. Removing the producer deletes the helper and its tests; no persisted claim id is rewritten or re-parsed by a second implementation.",
-      "compatible_clients": [],
-      "vectors": [
-        {
-          "test": "tests/test_acp2_research_session_contract.py::test_planning_claim_namespace_vector",
-          "asserts": "the claim reproduces plan|<project>|<research>|<session>|<round>|<call_seq> and reuses the single canonical digest"
-        },
-        {
-          "test": "tests/test_acp2_research_session_contract.py::test_planning_claim_is_never_a_submit_ledger_key",
-          "asserts": "a claim/receipt id is never a submit ledger key and the module never writes claim_idempotency"
-        },
-        {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_planning_claim_namespace_is_implemented",
-          "asserts": "the namespace has a real producer in src/ and the decision is frozen"
-        }
-      ],
-      "notes": "Exit condition: M1-04c implements the producer, a test pins the segment grammar, then this decision flips to frozen with a new commit.",
       "implementation": {
-        "producer": "src/acp_services/runtime/research_session.py::planning_claim",
-        "identity": "src/acp_services/runtime/research_session.py::ResearchIdentity.allocate",
-        "digest": "src/acp_services/runtime/canonical_digest.py (single implementation)",
         "budget": "src/acp_services/runtime/research_budget.py::budget_id_for (project + research/session)",
-        "consumer_task": "M1-04c owns the planning reservation; M1-02 delivered the research/session/round identity and this producer"
-      }
-    },
-    {
-      "id": "D-IDENT-05",
-      "title": "Model receipt namespace modelrcpt|... binds research/round/call/request, never a job/attempt",
-      "status": "frozen",
+        "consumer_task": "M1-04c owns the planning reservation; M1-02 delivered the research/session/round identity and this producer",
+        "digest": "src/acp_services/runtime/canonical_digest.py (single implementation)",
+        "identity": "src/acp_services/runtime/research_session.py::ResearchIdentity.allocate",
+        "producer": "src/acp_services/runtime/research_session.py::planning_claim"
+      },
+      "migration_version": null,
+      "notes": "Exit condition: M1-04c implements the producer, a test pins the segment grammar, then this decision flips to frozen with a new commit.",
       "owner": "B",
+      "rationale": "Without a stable planning identity a model call cannot be charged before a proposal exists, and a retry cannot be reconciled to the call it repeats.",
+      "rollback": "The convention is additive: a new claim namespace is a new prefix with its own segments, never a re-interpretation of a stored claim id. Removing the producer deletes the helper and its tests; no persisted claim id is rewritten or re-parsed by a second implementation.",
       "signoff": [
         "B",
         "C-RPH"
       ],
+      "status": "frozen",
+      "title": "Planning claim namespace plan|<project>|<research>|<session>|<round>|<call_seq>",
+      "vectors": [
+        {
+          "asserts": "the claim reproduces plan|<project>|<research>|<session>|<round>|<call_seq> and reuses the single canonical digest",
+          "test": "tests/test_acp2_research_session_contract.py::test_planning_claim_namespace_vector"
+        },
+        {
+          "asserts": "a claim/receipt id is never a submit ledger key and the module never writes claim_idempotency",
+          "test": "tests/test_acp2_research_session_contract.py::test_planning_claim_is_never_a_submit_ledger_key"
+        },
+        {
+          "asserts": "the namespace has a real producer in src/ and the decision is frozen",
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_planning_claim_namespace_is_implemented"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "compatible_clients": [],
       "decision": "A model receipt id is modelrcpt|<project>|<research>|<session>|<round>|<call_seq>|<request_digest>. It is the settlement key for one model call, bound to research/round/call/request/model and explicitly NOT to a job_id or attempt (a model call is not a platform task). Unknown, stream-interrupted or unknown-outcome calls stay reserved and reconcile; a scientific rejection deletes no already-incurred model usage. Implemented by acp_services.runtime.research_session.model_receipt_id; the grammar has no job/attempt segment and a test pins that absence.",
-      "rationale": "A receipt that binds to a job/attempt would be a false execution fact: planning happens before any task exists, and a rejected proposal still consumed model budget.",
+      "id": "D-IDENT-05",
       "impact": {
-        "files": [
-          "src/acp_services/runtime/research_session.py",
-          "src/acp_services/runtime/research_budget.py"
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
         ],
         "entries": [
           "model gateway -> runtime research budget settlement"
         ],
-        "documents": [
-          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
-          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
+        "files": [
+          "src/acp_services/runtime/research_session.py",
+          "src/acp_services/runtime/research_budget.py"
         ]
       },
-      "wire_version": null,
-      "migration_version": null,
-      "rollback": "Receipt ids are persisted settlement facts: a rollback must not rewrite an existing receipt id, only stop producing new ones. The namespace is additive and the settlement ledger keeps the rows it already holds.",
-      "compatible_clients": [],
-      "vectors": [
-        {
-          "test": "tests/test_acp2_research_session_contract.py::test_model_receipt_namespace_vector",
-          "asserts": "the receipt reproduces modelrcpt|<project>|<research>|<session>|<round>|<call_seq>|<request_digest> with no job/attempt segment"
-        },
-        {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_model_receipt_namespace_is_implemented",
-          "asserts": "the receipt has a real producer in src/ and the decision is frozen"
-        }
-      ],
-      "notes": "Exit condition: M1-04c lands the producer + a settlement idempotency test, then this decision flips to frozen.",
       "implementation": {
-        "producer": "src/acp_services/runtime/research_session.py::model_receipt_id",
-        "settlement_owner": "M1-04c owns model settlement; M1-02 owns the research/round the receipt names",
         "not_bound_to": [
           "job_id",
           "attempt"
-        ]
-      }
+        ],
+        "producer": "src/acp_services/runtime/research_session.py::model_receipt_id",
+        "settlement_owner": "M1-04c owns model settlement; M1-02 owns the research/round the receipt names"
+      },
+      "migration_version": null,
+      "notes": "Exit condition: M1-04c lands the producer + a settlement idempotency test, then this decision flips to frozen.",
+      "owner": "B",
+      "rationale": "A receipt that binds to a job/attempt would be a false execution fact: planning happens before any task exists, and a rejected proposal still consumed model budget.",
+      "rollback": "Receipt ids are persisted settlement facts: a rollback must not rewrite an existing receipt id, only stop producing new ones. The namespace is additive and the settlement ledger keeps the rows it already holds.",
+      "signoff": [
+        "B",
+        "C-RPH"
+      ],
+      "status": "frozen",
+      "title": "Model receipt namespace modelrcpt|... binds research/round/call/request, never a job/attempt",
+      "vectors": [
+        {
+          "asserts": "the receipt reproduces modelrcpt|<project>|<research>|<session>|<round>|<call_seq>|<request_digest> with no job/attempt segment",
+          "test": "tests/test_acp2_research_session_contract.py::test_model_receipt_namespace_vector"
+        },
+        {
+          "asserts": "the receipt has a real producer in src/ and the decision is frozen",
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_model_receipt_namespace_is_implemented"
+        }
+      ],
+      "wire_version": null
     },
     {
-      "id": "D-IDENT-06",
-      "title": "RPH research keys encode project/research/round with colon-joined segments; the platform treats them as opaque",
-      "status": "frozen",
-      "owner": "C-RPH",
-      "signoff": [
-        "C-RPH",
-        "B"
+      "compatible_clients": [
+        {
+          "consumer": "rph:buildToolArguments:submit",
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts"
+        }
       ],
       "decision": "RPH derives its stable keys locally and the platform treats them as opaque. Current frozen encoding: researchRoundKey = '<project_id>:record:<research_id>:round-<round>'; researchEventKey = researchRoundKey + ':event:<eventId>'; the store indexes '<project_id>:record:<recordId>' and '<project_id>:proposal:<proposalId>'; the record id is '<research_id>:round-<round>'. project_id is always the first segment, round is always 'round-<n>', and segments never contain ':'. Change rule: a new segment is appended at the end behind a new key function; changing or reordering an existing segment requires a new key function plus a migration, because the value is persisted and replayed as an idempotency key.",
-      "rationale": "The round key is the client-side idempotency key: a replay must address the same resource and a changed body must be duplicate_round, not a second record.",
+      "id": "D-IDENT-06",
       "impact": {
-        "files": [
-          "rph/packages/research/src/record.ts",
-          "rph/packages/research/src/store.ts",
-          "rph/packages/bridge/src/index.ts"
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json"
         ],
         "entries": [
           "rph:ResearchStore.createRecord (round idempotency key)",
           "rph:ResearchStore.compareAndSwap (event idempotency key)",
           "mcp:acp_submit/adapter prepare (idempotency_key forwarded unchanged)"
         ],
-        "documents": [
-          "docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
-          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json"
+        "files": [
+          "rph/packages/research/src/record.ts",
+          "rph/packages/research/src/store.ts",
+          "rph/packages/bridge/src/index.ts"
         ]
       },
-      "wire_version": null,
       "migration_version": null,
-      "rollback": "Keys live in the RPH client and in the platform's opaque idempotency ledger. A rollback of the key grammar keeps both key functions available and re-derives the old key for lookup; it never rewrites a stored client key.",
-      "compatible_clients": [
-        {
-          "consumer": "rph:buildToolArguments:submit",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
-        }
-      ],
-      "vectors": [
-        {
-          "test": "rph/test/research-store.test.ts::record: same round idempotency key does not create a second record",
-          "asserts": "the round key addresses one record; a replay creates nothing"
-        },
-        {
-          "test": "rph/test/research-store.test.ts::record: duplicate round with a different body returns duplicate_round",
-          "asserts": "a different body under the same round key is rejected, not appended"
-        },
-        {
-          "test": "rph/test/research-store.test.ts::record: event idempotency key prevents a duplicate CAS write",
-          "asserts": "the event key makes the CAS write idempotent"
-        },
-        {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_rph_research_key_encoding_is_unchanged",
-          "asserts": "the recorded encoding still matches the RPH source"
-        }
-      ],
-      "notes": "The bridge never derives a submit key: request.idempotencyKey is forwarded verbatim (buildToolArguments)."
-    },
-    {
-      "id": "D-IDENT-07",
-      "title": "plan_digest is a required segment of the RPH-derived stable key (forward, not implemented)",
-      "status": "frozen",
+      "notes": "The bridge never derives a submit key: request.idempotencyKey is forwarded verbatim (buildToolArguments).",
       "owner": "C-RPH",
+      "rationale": "The round key is the client-side idempotency key: a replay must address the same resource and a changed body must be duplicate_round, not a second record.",
+      "rollback": "Keys live in the RPH client and in the platform's opaque idempotency ledger. A rollback of the key grammar keeps both key functions available and re-derives the old key for lookup; it never rewrites a stored client key.",
       "signoff": [
         "C-RPH",
         "B"
       ],
+      "status": "frozen",
+      "title": "RPH research keys encode project/research/round with colon-joined segments; the platform treats them as opaque",
+      "vectors": [
+        {
+          "asserts": "the round key addresses one record; a replay creates nothing",
+          "test": "rph/test/research-store.test.ts::record: same round idempotency key does not create a second record"
+        },
+        {
+          "asserts": "a different body under the same round key is rejected, not appended",
+          "test": "rph/test/research-store.test.ts::record: duplicate round with a different body returns duplicate_round"
+        },
+        {
+          "asserts": "the event key makes the CAS write idempotent",
+          "test": "rph/test/research-store.test.ts::record: event idempotency key prevents a duplicate CAS write"
+        },
+        {
+          "asserts": "the recorded encoding still matches the RPH source",
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_rph_research_key_encoding_is_unchanged"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "compatible_clients": [
+        {
+          "consumer": "rph:buildToolArguments:submit",
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts"
+        }
+      ],
       "decision": "When RPH derives a submit idempotency key for a research round it binds project + research + round + plan_digest (the approved plan), persists the derived key before the call, and never rewrites it when the plan changes: a changed plan_digest invalidates the old approval and opens a new round/revision with a new key. Implemented by rph/packages/research/src/submit-intent.ts: submitIntentKey appends ':submit:plan-<digest hex>' to the frozen researchRoundKey (the old encoding stays addressable) and SubmitIntentLedger persists the intent through an injected store before the platform call. A changed digest for the same round is a typed plan_digest_changed conflict carrying next_round; the bridge forwards a caller-supplied opaque key verbatim and never completes or rewrites it.",
-      "rationale": "Without plan_digest in the key, a revised plan could replay the previous intent's key and silently reuse an approval for different science.",
+      "id": "D-IDENT-07",
       "impact": {
-        "files": [
-          "rph/packages/research/src/submit-intent.ts",
-          "rph/packages/research/src/record.ts",
-          "rph/packages/bridge/src/index.ts"
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
         ],
         "entries": [
           "rph:research submit intent -> mcp:acp_submit"
         ],
-        "documents": [
-          "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
-          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M1-02"
+        "files": [
+          "rph/packages/research/src/submit-intent.ts",
+          "rph/packages/research/src/record.ts",
+          "rph/packages/bridge/src/index.ts"
         ]
       },
-      "wire_version": null,
+      "implementation": {
+        "bridge": "rph/packages/bridge/src/index.ts::Bridge.resolveSubmitKey (persist before call, never rewrite)",
+        "key": "rph/packages/research/src/submit-intent.ts::submitIntentKey",
+        "ledger": "rph/packages/research/src/submit-intent.ts::SubmitIntentLedger",
+        "platform": "src/acp_services/runtime/research_session.py (opaque key + approval invalidation)"
+      },
       "migration_version": null,
+      "notes": "Exit condition: M1-02 lands the derived key + a changed-plan test, then this decision flips to frozen.",
+      "owner": "C-RPH",
+      "rationale": "Without plan_digest in the key, a revised plan could replay the previous intent's key and silently reuse an approval for different science.",
       "rollback": "Additive: the old key function stays for lookup of already-persisted intents; a rollback keeps both key functions and re-derives the old key for lookup. No persisted client key is rewritten, and the platform ledger keeps receiving the opaque value it was given.",
+      "signoff": [
+        "C-RPH",
+        "B"
+      ],
+      "status": "frozen",
+      "title": "plan_digest is a required segment of the RPH-derived stable key (forward, not implemented)",
+      "vectors": [
+        {
+          "asserts": "the derived key appends the plan-digest segment to the frozen round key without changing it",
+          "test": "rph/test/submit-intent.test.ts::submit-intent: key binds project/research/round/plan digest and appends to the round key"
+        },
+        {
+          "asserts": "a new plan digest cannot reuse the round key; the conflict names next_round",
+          "test": "rph/test/submit-intent.test.ts::submit-intent: a changed plan digest for the same round is a typed conflict"
+        },
+        {
+          "asserts": "the intent is persisted before the call and reused by a retry",
+          "test": "rph/test/submit-intent.test.ts::submit-intent: the ledger persists the key before the platform call"
+        },
+        {
+          "asserts": "the plan-digest segment has a producer and the decision is frozen",
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_rph_key_plan_digest_segment_is_implemented"
+        }
+      ],
+      "wire_version": null
+    },
+    {
       "compatible_clients": [
         {
           "consumer": "rph:buildToolArguments:submit",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts"
         }
-      ],
-      "vectors": [
-        {
-          "test": "rph/test/submit-intent.test.ts::submit-intent: key binds project/research/round/plan digest and appends to the round key",
-          "asserts": "the derived key appends the plan-digest segment to the frozen round key without changing it"
-        },
-        {
-          "test": "rph/test/submit-intent.test.ts::submit-intent: a changed plan digest for the same round is a typed conflict",
-          "asserts": "a new plan digest cannot reuse the round key; the conflict names next_round"
-        },
-        {
-          "test": "rph/test/submit-intent.test.ts::submit-intent: the ledger persists the key before the platform call",
-          "asserts": "the intent is persisted before the call and reused by a retry"
-        },
-        {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_rph_key_plan_digest_segment_is_implemented",
-          "asserts": "the plan-digest segment has a producer and the decision is frozen"
-        }
-      ],
-      "notes": "Exit condition: M1-02 lands the derived key + a changed-plan test, then this decision flips to frozen.",
-      "implementation": {
-        "key": "rph/packages/research/src/submit-intent.ts::submitIntentKey",
-        "ledger": "rph/packages/research/src/submit-intent.ts::SubmitIntentLedger",
-        "bridge": "rph/packages/bridge/src/index.ts::Bridge.resolveSubmitKey (persist before call, never rewrite)",
-        "platform": "src/acp_services/runtime/research_session.py (opaque key + approval invalidation)"
-      }
-    },
-    {
-      "id": "D-IDENT-08",
-      "title": "Request digest rule v2 over the canonical request; v1 rows verified by their own frozen field table",
-      "status": "frozen",
-      "owner": "B",
-      "signoff": [
-        "B",
-        "A",
-        "C-RPH"
       ],
       "decision": "REQUEST_DIGEST_VERSION='2' hashes the field-policy canonical request (canonical_submit_request: exhaustive policy set, defaults materialised, node_tags normalised, server-path fields rejected before identity, schema_version always included). LEGACY_REQUEST_DIGEST_FIELDS freezes the v1 declaration (it still carries output_dir/config_path). A row written under another version is never called tampered: equal digest bytes mean the same request; otherwise the stored digest is re-derived from the row's own frozen field table, and an unverifiable difference is a typed conflict whose remedy is reconcile, never a blind resubmit with a new key.",
-      "rationale": "Each entry used to hash whatever it happened to serialise, so the same logical request could be a different request per entry and a rule change looked like tampering.",
+      "id": "D-IDENT-08",
       "impact": {
-        "files": [
-          "src/acp_services/runtime/idempotency.py",
-          "src/acp_services/entrypoints/application_params.py",
-          "src/acp_services/store/store.py",
-          "src/acp_services/store/migrations.py",
-          "src/acp/api/v1_routes.py",
-          "src/acp/cli.py"
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#canonical_digest",
+          "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json"
         ],
         "entries": [
           "http",
@@ -1143,102 +1546,125 @@
           "cli",
           "controller ledger"
         ],
-        "documents": [
-          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json#canonical_digest",
-          "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json"
+        "files": [
+          "src/acp_services/runtime/idempotency.py",
+          "src/acp_services/entrypoints/application_params.py",
+          "src/acp_services/store/store.py",
+          "src/acp_services/store/migrations.py",
+          "src/acp/api/v1_routes.py",
+          "src/acp/cli.py"
         ]
       },
-      "wire_version": "application-api.v1#canonical_digest (request digest v2)",
       "migration_version": "024 (request_digest_version column)",
+      "notes": "digest fields are key-sorted, sequences keep order, floats are rendered as exact decimal strings (no JSON float).",
+      "owner": "B",
+      "rationale": "Each entry used to hash whatever it happened to serialise, so the same logical request could be a different request per entry and a rule change looked like tampering.",
       "rollback": "A bump is additive: add the new field table to DIGEST_FIELD_TABLES before changing the constant. Rolling back to v1 without a table entry would make v2 rows unverifiable; the ledger then answers reconcile for those rows, which is safe but noisy, so a rollback keeps both tables registered.",
+      "signoff": [
+        "B",
+        "A",
+        "C-RPH"
+      ],
+      "status": "frozen",
+      "title": "Request digest rule v2 over the canonical request; v1 rows verified by their own frozen field table",
+      "vectors": [
+        {
+          "asserts": "v1 and v2 rules agree on a request that predates the policy",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_digest_versions_share_one_canonical_request_for_a_legacy_payload"
+        },
+        {
+          "asserts": "a v1 row replays on equal bytes and reconciles (never 'tampered') otherwise",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_legacy_digest_row_replays_or_reconciles_by_its_frozen_table"
+        },
+        {
+          "asserts": "a changed accepted field changes the digest and is a conflict",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_same_key_with_a_changed_legal_target_is_a_conflict_not_a_replay"
+        }
+      ],
+      "wire_version": "application-api.v1#canonical_digest (request digest v2)"
+    },
+    {
       "compatible_clients": [
         {
           "consumer": "rph:buildToolArguments:submit",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts"
         }
-      ],
-      "vectors": [
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_digest_versions_share_one_canonical_request_for_a_legacy_payload",
-          "asserts": "v1 and v2 rules agree on a request that predates the policy"
-        },
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_legacy_digest_row_replays_or_reconciles_by_its_frozen_table",
-          "asserts": "a v1 row replays on equal bytes and reconciles (never 'tampered') otherwise"
-        },
-        {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_same_key_with_a_changed_legal_target_is_a_conflict_not_a_replay",
-          "asserts": "a changed accepted field changes the digest and is a conflict"
-        }
-      ],
-      "notes": "digest fields are key-sorted, sequences keep order, floats are rendered as exact decimal strings (no JSON float)."
-    },
-    {
-      "id": "D-IDENT-09",
-      "title": "Legacy auto_ derived keys are lookup-only; op_ is an operation reference and never a ledger key",
-      "status": "frozen",
-      "owner": "B",
-      "signoff": [
-        "B",
-        "C-RPH"
       ],
       "decision": "The pre-M0-05 MCP derivation auto_<sha256[:32]> (LEGACY_DERIVED_KEY_VERSION='auto-v1') is recomputed only to find a pre-existing local-single row; it is never applied to a client-supplied key and never claims a new row for an authenticated binding. op_<uuid> is the operation-reference namespace (prepare operation ids) and must never be written to the idempotency ledger as a key. A missing client key is explicitly non-idempotent; the adapter owns no result cache and no second ledger.",
-      "rationale": "M0-05 removed the permission-scope fold: the old adapter folded scope+payload into an op_-looking key, so the ledger key was neither the client's nor attributable.",
+      "id": "D-IDENT-09",
       "impact": {
-        "files": [
-          "src/acp_services/entrypoints/mcp.py",
-          "src/acp_services/data/operations.py",
-          "src/acp_services/store/store.py",
-          "src/acp/services_mcp_bootstrap.py"
+        "documents": [
+          "src/acp_services/entrypoints/mcp.py#IdempotencyResolution"
         ],
         "entries": [
           "mcp:acp_submit/acp_prepare_artifact",
           "http:prepare operation reference"
         ],
-        "documents": [
-          "src/acp_services/entrypoints/mcp.py#IdempotencyResolution"
+        "files": [
+          "src/acp_services/entrypoints/mcp.py",
+          "src/acp_services/data/operations.py",
+          "src/acp_services/store/store.py",
+          "src/acp/services_mcp_bootstrap.py"
         ]
       },
-      "wire_version": null,
       "migration_version": "022 (idempotency ledger), 024 (identity versioning)",
-      "rollback": "The derivation formula is byte-frozen so old rows stay findable; changing it would orphan them. Rolling back to a scope-folded key is not legal: it re-creates the unattributable rows R09 reconciles.",
-      "compatible_clients": [
-        {
-          "consumer": "rph:buildToolArguments:submit",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
-        }
-      ],
-      "vectors": [
-        {
-          "test": "tests/test_acp2_runtime_mcp_identity.py::test_two_principals_same_raw_key_conflict_and_never_cross_tasks",
-          "asserts": "the ledger key is the raw client key; no op_ key is ever written"
-        },
-        {
-          "test": "tests/test_acp2_runtime_mcp_identity.py::test_legacy_auto_row_is_never_claimed_by_a_keyless_submit",
-          "asserts": "a key-less submit is refused before any port is touched and never claims the historical auto_ row (M1-01b supersedes the M0-05 fallback)"
-        },
-        {
-          "test": "tests/test_acp2_runtime_command_identity.py::test_legacy_auto_derived_mcp_key_is_a_distinct_reconciliation_namespace",
-          "asserts": "auto_ is a separate reconciliation namespace, not a second ledger"
-        }
-      ],
-      "notes": "An authenticated binding never claims the auto_ namespace. M1-01b refuses a key-less MCP submit outright, so the legacy auto_ derivation is lookup-only."
-    },
-    {
-      "id": "D-IDENT-10",
-      "title": "One prepare field table: the HTTP prepare body; resource_id is server-derived and the bridge sends artifact_id",
-      "status": "frozen",
+      "notes": "An authenticated binding never claims the auto_ namespace. M1-01b refuses a key-less MCP submit outright, so the legacy auto_ derivation is lookup-only.",
       "owner": "B",
+      "rationale": "M0-05 removed the permission-scope fold: the old adapter folded scope+payload into an op_-looking key, so the ledger key was neither the client's nor attributable.",
+      "rollback": "The derivation formula is byte-frozen so old rows stay findable; changing it would orphan them. Rolling back to a scope-folded key is not legal: it re-creates the unattributable rows R09 reconciles.",
       "signoff": [
         "B",
-        "C-RPH",
-        "INT"
+        "C-RPH"
+      ],
+      "status": "frozen",
+      "title": "Legacy auto_ derived keys are lookup-only; op_ is an operation reference and never a ledger key",
+      "vectors": [
+        {
+          "asserts": "the ledger key is the raw client key; no op_ key is ever written",
+          "test": "tests/test_acp2_runtime_mcp_identity.py::test_two_principals_same_raw_key_conflict_and_never_cross_tasks"
+        },
+        {
+          "asserts": "a key-less submit is refused before any port is touched and never claims the historical auto_ row (M1-01b supersedes the M0-05 fallback)",
+          "test": "tests/test_acp2_runtime_mcp_identity.py::test_legacy_auto_row_is_never_claimed_by_a_keyless_submit"
+        },
+        {
+          "asserts": "auto_ is a separate reconciliation namespace, not a second ledger",
+          "test": "tests/test_acp2_runtime_command_identity.py::test_legacy_auto_derived_mcp_key_is_a_distinct_reconciliation_namespace"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "compatible_clients": [
+        {
+          "consumer": "rph:buildToolArguments:prepare",
+          "disposition": "compliant",
+          "path": "rph/packages/bridge/src/index.ts"
+        },
+        {
+          "consumer": "rph:buildToolArguments:read",
+          "disposition": "other_request_kind",
+          "path": "rph/packages/bridge/src/index.ts"
+        },
+        {
+          "consumer": "acceptance:_run_artifact",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_runtime.py"
+        }
       ],
       "decision": "Resolved by the HTTP route being the only authority. POST /api/v1/jobs/{job_id}/prepare accepts exactly V1PrepareRequest (extra=forbid), normalises it once through acp_services.entrypoints.application_params.normalize_prepare and consumes it into acp_services.data.operations.PrepareRequest; the prepare field table is therefore that route body: schema_version, purpose (required), task_ref, job_id, artifact_id (required when purpose=artifact), attempt, generation, expected_revision, relative_path, expected_digest, content_digest, expected_size_bytes, schema_ref, source_refs, evidence_report, media_type, idempotency_key. resource_id is NOT a request field: the route derives it (artifact_id for purpose=artifact, structure-input:<relative_path> otherwise) and passes it as PrepareRequest.resource_id, so a client-sent resource_id stays input_invalid/unknown_field. extensions is a submit-only control field and was removed from the prepare table. The RPH bridge now sends that body (purpose=artifact, job_id, attempt, artifact_id, idempotency_key) instead of the bridge-local resource_id name, and the acp_prepare_artifact input schema declares the same field set. PREPARE_FIELD_POLICY, V1PrepareRequest, application-api.v1.json#operations.prepare.request.fields (contract_version 1.2.0 -> 1.3.0) and the bridge arguments are one table, pinned by tests/test_acp2_request_field_equivalence.py.",
-      "rationale": "The conflict was a live regression of the v1 field cut: the bridge documented an argument the Controller rejects (422 input_invalid/unknown_field), and the registered prepare field list had drifted in both directions (missing the eight fields the route consumes, declaring submit-only extensions). Aligning on the route - rather than widening the HTTP DTO to accept resource_id - keeps one identity for a prepared artifact (the server-derived resource_id) and one name on the wire (artifact_id).",
+      "id": "D-IDENT-10",
       "impact": {
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "rph/test/bridge-contract.test.ts"
+        ],
+        "entries": [
+          "mcp:acp_prepare_artifact",
+          "http:POST /api/v1/jobs/{id}/prepare",
+          "rph:prepare"
+        ],
         "files": [
           "src/acp_services/entrypoints/application_params.py",
           "src/acp_services/entrypoints/mcp.py",
@@ -1246,171 +1672,42 @@
           "src/acp/api/v1_schemas.py",
           "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
           "rph/packages/bridge/src/index.ts"
-        ],
-        "entries": [
-          "mcp:acp_prepare_artifact",
-          "http:POST /api/v1/jobs/{id}/prepare",
-          "rph:prepare"
-        ],
-        "documents": [
-          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-          "rph/test/bridge-contract.test.ts"
         ]
       },
-      "wire_version": "application-api.v1 1.3.0#operations.prepare.request (17-field table, purpose required)",
       "migration_version": null,
+      "notes": "The read path keeps the resource_id identity (GET /jobs/{id}/prepared/{resource}); it is not judged by the submit policy (other_request_kind). The MCP launch contract mcp-launch.schema.json declares a strict subset of the prepare fields; widening it is left to M1-01.",
+      "owner": "B",
+      "rationale": "The conflict was a live regression of the v1 field cut: the bridge documented an argument the Controller rejects (422 input_invalid/unknown_field), and the registered prepare field list had drifted in both directions (missing the eight fields the route consumes, declaring submit-only extensions). Aligning on the route - rather than widening the HTTP DTO to accept resource_id - keeps one identity for a prepared artifact (the server-derived resource_id) and one name on the wire (artifact_id).",
       "rollback": "Revert the four aligned surfaces together: bridge prepare arguments back to resource_id (the scan then reports rph:buildToolArguments:prepare as breaking again), application-api.v1.json#operations.prepare.request.fields back to its 1.2.0 list and contract_version back to 1.2.0, the acp_prepare_artifact input schema back to the shared artifact schema, and PREPARE_FIELD_POLICY/V1PrepareRequest docstrings; then regenerate the consumer inventory digest. No stored row, operation key or receipt changes, so there is no data migration to roll back.",
-      "compatible_clients": [
-        {
-          "consumer": "rph:buildToolArguments:prepare",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "compliant"
-        },
-        {
-          "consumer": "rph:buildToolArguments:read",
-          "path": "rph/packages/bridge/src/index.ts",
-          "disposition": "other_request_kind"
-        },
-        {
-          "consumer": "acceptance:_run_artifact",
-          "path": "scripts/acceptance/acp2_runtime.py",
-          "disposition": "compliant"
-        }
+      "signoff": [
+        "B",
+        "C-RPH",
+        "INT"
       ],
+      "status": "frozen",
+      "title": "One prepare field table: the HTTP prepare body; resource_id is server-derived and the bridge sends artifact_id",
       "vectors": [
         {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_prepare_field_authority_is_one_table",
-          "asserts": "PREPARE_FIELD_POLICY, V1PrepareRequest, the registered prepare field table and the bridge prepare arguments are the same 17-field table and never contain resource_id/extensions"
+          "asserts": "PREPARE_FIELD_POLICY, V1PrepareRequest, the registered prepare field table and the bridge prepare arguments are the same 17-field table and never contain resource_id/extensions",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_prepare_field_authority_is_one_table"
         },
         {
-          "test": "tests/test_acp2_request_field_equivalence.py::test_http_prepare_route_consumes_exactly_that_table",
-          "asserts": "the live HTTP prepare route accepts every declared field (path reaches the 404 for an unknown job) and rejects resource_id with 422"
+          "asserts": "the live HTTP prepare route accepts every declared field (path reaches the 404 for an unknown job) and rejects resource_id with 422",
+          "test": "tests/test_acp2_request_field_equivalence.py::test_http_prepare_route_consumes_exactly_that_table"
         },
         {
-          "test": "rph/test/bridge-contract.test.ts::prepare registers the artifact and read forwards the artifact identity",
-          "asserts": "the bridge sends {purpose: artifact, job_id, attempt, artifact_id, idempotency_key} to acp_prepare_artifact while read keeps the resource_id identity"
+          "asserts": "the bridge sends {purpose: artifact, job_id, attempt, artifact_id, idempotency_key} to acp_prepare_artifact while read keeps the resource_id identity",
+          "test": "rph/test/bridge-contract.test.ts::prepare registers the artifact and read forwards the artifact identity"
         },
         {
-          "test": "tests/test_acp2_decision_freeze_identity.py::test_prepare_field_authority_is_frozen_and_not_breaking",
-          "asserts": "the regenerated inventory has no breaking consumer, the MCP policy still refuses resource_id, and the freeze carries the resolution with no pending fields"
+          "asserts": "the regenerated inventory has no breaking consumer, the MCP policy still refuses resource_id, and the freeze carries the resolution with no pending fields",
+          "test": "tests/test_acp2_decision_freeze_identity.py::test_prepare_field_authority_is_frozen_and_not_breaking"
         }
       ],
-      "notes": "The read path keeps the resource_id identity (GET /jobs/{id}/prepared/{resource}); it is not judged by the submit policy (other_request_kind). The MCP launch contract mcp-launch.schema.json declares a strict subset of the prepare fields; widening it is left to M1-01."
+      "wire_version": "application-api.v1 1.3.0#operations.prepare.request (17-field table, purpose required)"
     }
-  ],
-  "pending_summary": [],
-  "observations": [
-    {
-      "id": "O-IDENT-01",
-      "subject": "admission-approval.v1.json implementation_status prose",
-      "observed": "'delivered (approval: B16; cumulative budget: B17)' in p2_additive, outside the D-IDENT-03 enum",
-      "disposition": "out_of_scope_noted",
-      "owner_task": "M1-01",
-      "note": "The enum decision governs P2 research rows; normalising this prose is an M1-01 contract edit, not a freeze conflict."
-    },
-    {
-      "id": "O-IDENT-02",
-      "subject": "prepare contract field list vs PREPARE_FIELD_POLICY",
-      "observed": "registered contract declares 9 prepare fields; the policy declares 17 (job_id/relative_path/expected_digest/expected_size_bytes/schema_ref/source_refs/evidence_report/media_type missing; extensions extra)",
-      "disposition": "folded_into_pending_conflict",
-      "owner_task": "M1-01",
-      "note": "See D-IDENT-10."
-    },
-    {
-      "id": "O-IDENT-03",
-      "subject": "auto_ derived-key fixture provenance",
-      "observed": "the auto_ namespace must be exercised with a fixture produced by the pre-M0-05 code, not re-derived in a test",
-      "disposition": "recorded",
-      "owner_task": "M4-06",
-      "note": "Recorded by M0-05; no fixture rewrite here."
-    }
-  ],
-  "validator": "scripts/acceptance/validate_acp2_decision_freeze.py",
-  "validator_tests": "tests/test_acp2_decision_freeze_identity.py",
-  "scope_notes": [
-    "This file freezes decisions; it does not register itself in the contract manifest (M0-12 decides the registration rule).",
-    "legacy_allowlist is empty and must stay empty until a named consumer needs a transition window.",
-    "Nothing in this file changes science or execution behaviour: M0-11 is a freeze, not a fix. The one exception is D-IDENT-10, whose resolution is a field-contract alignment (bridge prepare arguments, the acp_prepare_artifact input schema and the registered prepare field table) and is pinned by its own vectors and the regenerated client inventory.",
-    "Boundary with M0-12: research-extension version authority, the negotiated request field position/source, the external_change_required/scope_change branches and the CI/Ruff required scope are NOT decided here. D-IDENT-03 fixes only the implementation_status vocabulary those decisions must use, not the negotiation carrier.",
-    "Boundary with M0-12 registration: docs/reference/next-change/acp2-contracts/manifest.json is intentionally untouched; whether decision-freeze/ is registered, and with which owner/digest rule, is M0-12's call."
   ],
   "field_policy_authority": {
-    "module": "src/acp_services/entrypoints/application_params.py",
-    "declared_fields": {
-      "submit": [
-        "budget",
-        "config_path",
-        "execution_mode",
-        "extensions",
-        "idempotency_key",
-        "input",
-        "method",
-        "molecule_name",
-        "name",
-        "node_tags",
-        "output_dir",
-        "plan_digest",
-        "preflight_fingerprint",
-        "project_id",
-        "proposal_digest",
-        "proposal_ref",
-        "remark",
-        "resources",
-        "schema_version",
-        "tags",
-        "target_node",
-        "task_name",
-        "workflow"
-      ],
-      "preflight": [
-        "budget",
-        "config_path",
-        "execution_mode",
-        "extensions",
-        "idempotency_key",
-        "input",
-        "method",
-        "molecule_name",
-        "name",
-        "node_tags",
-        "output_dir",
-        "plan_digest",
-        "preflight_fingerprint",
-        "project_id",
-        "proposal_digest",
-        "proposal_ref",
-        "remark",
-        "resources",
-        "schema_version",
-        "tags",
-        "target_node",
-        "task_name",
-        "workflow"
-      ],
-      "prepare": [
-        "artifact_id",
-        "attempt",
-        "content_digest",
-        "evidence_report",
-        "expected_digest",
-        "expected_revision",
-        "expected_size_bytes",
-        "generation",
-        "idempotency_key",
-        "job_id",
-        "media_type",
-        "purpose",
-        "relative_path",
-        "schema_ref",
-        "schema_version",
-        "source_refs",
-        "task_ref"
-      ]
-    },
-    "server_path_rejected": [
-      "config_path",
-      "output_dir"
-    ],
     "contract_fields": {
       "analyze": [
         "analysis_id",
@@ -1535,7 +1832,79 @@
         "workflow"
       ]
     },
+    "declared_fields": {
+      "preflight": [
+        "budget",
+        "config_path",
+        "execution_mode",
+        "extensions",
+        "idempotency_key",
+        "input",
+        "method",
+        "molecule_name",
+        "name",
+        "node_tags",
+        "output_dir",
+        "plan_digest",
+        "preflight_fingerprint",
+        "project_id",
+        "proposal_digest",
+        "proposal_ref",
+        "remark",
+        "resources",
+        "schema_version",
+        "tags",
+        "target_node",
+        "task_name",
+        "workflow"
+      ],
+      "prepare": [
+        "artifact_id",
+        "attempt",
+        "content_digest",
+        "evidence_report",
+        "expected_digest",
+        "expected_revision",
+        "expected_size_bytes",
+        "generation",
+        "idempotency_key",
+        "job_id",
+        "media_type",
+        "purpose",
+        "relative_path",
+        "schema_ref",
+        "schema_version",
+        "source_refs",
+        "task_ref"
+      ],
+      "submit": [
+        "budget",
+        "config_path",
+        "execution_mode",
+        "extensions",
+        "idempotency_key",
+        "input",
+        "method",
+        "molecule_name",
+        "name",
+        "node_tags",
+        "output_dir",
+        "plan_digest",
+        "preflight_fingerprint",
+        "project_id",
+        "proposal_digest",
+        "proposal_ref",
+        "remark",
+        "resources",
+        "schema_version",
+        "tags",
+        "target_node",
+        "task_name",
+        "workflow"
+      ]
+    },
     "legacy_allowlist": [],
+    "module": "src/acp_services/entrypoints/application_params.py",
     "prepare_kind_declared_fields": [
       "artifact_id",
       "attempt",
@@ -1554,6 +1923,75 @@
       "schema_version",
       "source_refs",
       "task_ref"
+    ],
+    "server_path_rejected": [
+      "config_path",
+      "output_dir"
     ]
-  }
+  },
+  "frozen_at": "2026-10-27",
+  "head": "e82cd8a",
+  "observations": [
+    {
+      "disposition": "out_of_scope_noted",
+      "id": "O-IDENT-01",
+      "note": "The enum decision governs P2 research rows; normalising this prose is an M1-01 contract edit, not a freeze conflict.",
+      "observed": "'delivered (approval: B16; cumulative budget: B17)' in p2_additive, outside the D-IDENT-03 enum",
+      "owner_task": "M1-01",
+      "subject": "admission-approval.v1.json implementation_status prose"
+    },
+    {
+      "disposition": "folded_into_pending_conflict",
+      "id": "O-IDENT-02",
+      "note": "See D-IDENT-10.",
+      "observed": "registered contract declares 9 prepare fields; the policy declares 17 (job_id/relative_path/expected_digest/expected_size_bytes/schema_ref/source_refs/evidence_report/media_type missing; extensions extra)",
+      "owner_task": "M1-01",
+      "subject": "prepare contract field list vs PREPARE_FIELD_POLICY"
+    },
+    {
+      "disposition": "recorded",
+      "id": "O-IDENT-03",
+      "note": "Recorded by M0-05; no fixture rewrite here.",
+      "observed": "the auto_ namespace must be exercised with a fixture produced by the pre-M0-05 code, not re-derived in a test",
+      "owner_task": "M4-06",
+      "subject": "auto_ derived-key fixture provenance"
+    }
+  ],
+  "owner": "INT",
+  "pending_rule": "An undecided item is never frozen: a decision with status pending_* must carry pending_reason, consumer_task and frozen_forward_convention, and must not be advertised as closed by M1. M1-02 flipped D-IDENT-04/05/07 after landing their producers and vectors; no pending decision remains in this file.",
+  "pending_summary": [],
+  "prerequisites": [
+    {
+      "commit": "a1cf33b",
+      "subject": "one CommandIdentity for HTTP/CLI/admission + idempotency scope",
+      "task": "M0-04"
+    },
+    {
+      "commit": "17aee7a",
+      "subject": "MCP idempotency through CommandIdentity + versioned prepare key",
+      "task": "M0-05"
+    },
+    {
+      "commit": "96d6c81",
+      "subject": "v1 request field policy + cross-entry JobSpec/digest equivalence",
+      "task": "M0-06"
+    }
+  ],
+  "schema": "acp2.decision-freeze.identity.v1",
+  "scope_notes": [
+    "This file freezes decisions; it does not register itself in the contract manifest (M0-12 decides the registration rule).",
+    "legacy_allowlist is empty and must stay empty until a named consumer needs a transition window.",
+    "Nothing in this file changes science or execution behaviour: M0-11 is a freeze, not a fix. The one exception is D-IDENT-10, whose resolution is a field-contract alignment (bridge prepare arguments, the acp_prepare_artifact input schema and the registered prepare field table) and is pinned by its own vectors and the regenerated client inventory.",
+    "Boundary with M0-12: research-extension version authority, the negotiated request field position/source, the external_change_required/scope_change branches and the CI/Ruff required scope are NOT decided here. D-IDENT-03 fixes only the implementation_status vocabulary those decisions must use, not the negotiation carrier.",
+    "Boundary with M0-12 registration: docs/reference/next-change/acp2-contracts/manifest.json is intentionally untouched; whether decision-freeze/ is registered, and with which owner/digest rule, is M0-12's call."
+  ],
+  "status_vocabulary": {
+    "frozen": "implemented in this checkout and pinned by at least one resolvable vector; no owner may change it without a new ADR/contract change.",
+    "pending_conflict": "two frozen surfaces disagree and choosing one changes a contract; recorded with the exact conflicting evidence, resolved by the named consumer task, never silently.",
+    "pending_implementation": "the decision is recorded as a forward convention (frozen_forward_convention=true) because no producer exists yet; the consumer task must implement it before it may be called frozen."
+  },
+  "task": "M0-11 (M1-02 flipped D-IDENT-04/05/07 after landing their producers and vectors)",
+  "title": "Identity, field and migration decisions (G02/G03/G12/G13/G20)",
+  "validator": "scripts/acceptance/validate_acp2_decision_freeze.py",
+  "validator_tests": "tests/test_acp2_decision_freeze_identity.py"
 }

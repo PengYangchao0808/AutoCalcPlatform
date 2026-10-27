@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "c4cdfde34be81b3144a49d6c8bd780224cfd5bad4f83a888163b8b807e66fcaf",
+  "contract_digest": "855e0eb4c4769c0b125f010a6665cfc012b70cd43d1d9ad9cae0d7bc52abb05c",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "contract_version": "1.6.0",
   "contract_version_history": [
@@ -219,7 +219,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "7f3dd5bf81c25f6a05ae868a0496e2d75adb85fd977e0e25986607a186ddea1e",
+      "sha256": "c6647e8db78031d4e488b1eefd14f1d7bccc21ef62a9e08e41081e933deb5b0a",
       "status": "delivered"
     },
     {
@@ -285,7 +285,7 @@
       "id": "application-api",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "sha256": "271b67082117d1156a7a48881601144fa8073e06646c7b729dd5afc820fa9a89",
+      "sha256": "fb603a7e930f8d316267dfe2c78fdd98aa419ec353e92e41ffd020fdea28a934",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -303,7 +303,7 @@
       "id": "p2-research-operations",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-      "sha256": "4902a8c8b0825dcf1b9b2ab5a4e0c01412189d1a6b083698e612cf32d2bf5746",
+      "sha256": "32525b7bd1866ad0d3f2c73162733dd4e44f49d1eec26dbeba14b4ca55696227",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -380,7 +380,7 @@
       "id": "samples",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/samples/",
-      "sha256": "663747319082b019c9f089b16b7f4c565c3a15503cb33cb5369cb46ace61f4dc",
+      "sha256": "bbaf406cbe4f88fcb2fd46f0edfb3c2dd6cb7cf9b782a755f2cb1fdb84f2ef3a",
       "status": "delivered"
     },
     {
@@ -439,7 +439,7 @@
       "note": "M0-11 frozen identity/field/migration decisions with the mechanical client inventory digest embedded.",
       "owner": "INT",
       "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
-      "sha256": "13d37243efee7cec00622c206f8011ab6ef9a6d9cba82a67faf9ee516eca69d8",
+      "sha256": "0d6ec8fa311196a154fe3dcfdd88d2371fc25b1f7ae4edd847b9ce34c4f948df",
       "status": "delivered"
     },
     {
@@ -448,7 +448,7 @@
       "note": "M0-12 frozen extension-negotiation/branch/CI/hygiene/registration decisions; M1-01 consumes only this file.",
       "owner": "INT",
       "path": "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
-      "sha256": "5002f4fae48eb7e275031c76ed2498afd902b8546382a5d5f7be75941f49f7a6",
+      "sha256": "9ba4731a564a30c651e016e4525b61f4f9289af7c285f7a44cbec242f8c33b30",
       "status": "delivered"
     },
     {
