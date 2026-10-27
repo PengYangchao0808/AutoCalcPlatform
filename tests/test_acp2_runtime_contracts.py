@@ -1094,8 +1094,10 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     # 1.4.0 (M1-01a/b): the research-extension projection names the
     # advertised/implemented/negotiated relation and submit requires the
     # idempotency key (client-visible request-schema change).
+    # 1.5.0 (M2-01c): the research extension projection flips to
+    # implemented=true with the tool-visibility rule (additive; no P1 change).
     # 1.1.0's research fields stay untouched.
-    assert api["contract_version"] == "1.4.0"
+    assert api["contract_version"] == "1.5.0"
     submit = api["operations"]["submit"]
     for name in ("proposal_ref", "plan_digest", "budget"):
         assert name in submit["request"]["fields"], name
@@ -1160,8 +1162,14 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     assert extension["initialize_claim"] == "none"
     assert extension["version"] == "1.0.0"
     assert extension["p1_tool_allowlist_unchanged"] is True
-    assert extension["implemented"] is False
+    # M2-01c registers all ten promised tools: implemented=true, while a session
+    # that never negotiates is still never negotiated (negotiated_default false)
+    # and never sees the research tools in tools/list.
+    assert extension["implemented"] is True
+    assert extension["implemented_by"] == "M2-01c"
+    assert set(extension["implemented_tools"]) == set(extension["promised_tools"])
     assert extension["negotiated_default"] is False
+    assert "extension_not_negotiated" in extension["tool_visibility"]
 
 
 def test_extension_version_authority_is_the_p2_contract() -> None:
@@ -1175,7 +1183,8 @@ def test_extension_version_authority_is_the_p2_contract() -> None:
     assert negotiation["request_tool"] == "acp_capabilities"
     assert negotiation["request_field"] == "research_extension"
     assert negotiation["initialize_claim"] == "none"
-    assert negotiation["implemented"] is False
+    assert negotiation["implemented"] is True
+    assert negotiation["implemented_by"] == "M2-01c"
     assert negotiation["negotiated_default"] is False
     assert "initialize_param" not in negotiation
     projection = api["mcp_extensions"]["acp.research.v1"]
