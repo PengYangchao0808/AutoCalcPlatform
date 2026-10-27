@@ -1000,12 +1000,20 @@ class ApprovalService:
                 "approved_proposal_digest_mismatch",
                 "the proposal/Recipe projection changed after approval",
             )
+        # Only a *restated* budget is compared; an omitted one is not a change.
+        # A research approval carries the C ``PlanBudget`` while the v1 submit
+        # field is the ``{unit, count, timeout_s}`` launch union, so a client
+        # cannot restate the approved shape at all — and it never needs to: the
+        # effective limits always come from the persisted approval
+        # (``_budget_claim_from_approval``), never from the request.  A client
+        # that *does* send a (launch-shaped) budget is compared as before.
         submitted_budget = self._normalize_budget(budget)
-        submitted_budget_digest = budget_digest(submitted_budget) if submitted_budget else ""
-        if submitted_budget_digest != approval.budget_digest:
-            raise ApprovalConflictError(
-                "approved_budget_mismatch", "the requested budget changed after approval"
-            )
+        if submitted_budget:
+            submitted_budget_digest = budget_digest(submitted_budget)
+            if submitted_budget_digest != approval.budget_digest:
+                raise ApprovalConflictError(
+                    "approved_budget_mismatch", "the requested budget changed after approval"
+                )
         return approval
 
     def bind_task_ref(

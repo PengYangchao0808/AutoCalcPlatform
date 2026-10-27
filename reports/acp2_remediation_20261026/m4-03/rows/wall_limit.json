@@ -1,0 +1,62 @@
+{
+  "data": {
+    "approval_budget": {
+      "input_tokens": 0,
+      "model_requests": 0,
+      "output_tokens": 0,
+      "qc_invocations": 0,
+      "queue_seconds": 0,
+      "recipe_steps": 0,
+      "task_refs": 1,
+      "wall_seconds": 60
+    },
+    "approval_ref": "ap_59b144531f8940b8a323fb2a1a7d7e28",
+    "approval_wall_seconds": 60,
+    "bsub_walltime": "#BSUB -W 00:01",
+    "completed_at": "2026-10-27T17:20:11.205981+00:00",
+    "duration_s": 118.74,
+    "error": "[WALLTIME_EXCEEDED] the attempt was terminated at its wall deadline",
+    "job_id": "20261028_011822_004_m403-wall",
+    "lsf_job_id": "104",
+    "native_bjobs_l": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+    "native_bjobs_l_has_runlimit_or_exit140": true,
+    "receipt": {
+      "admitted_at": "2026-10-27T17:18:22.168283Z",
+      "attempt": 1,
+      "clock": "wall",
+      "deadline_at": "2026-10-27T17:20:06.838970Z",
+      "decision": "wall-deadline-expired",
+      "job_id": "20261028_011822_004_m403-wall",
+      "native": {
+        "bjobs_l_after": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+        "bjobs_l_before": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+        "bkill_delivered": false,
+        "confirmed_stopped": true,
+        "lsf_job_id": "104",
+        "node": "lsf-local",
+        "phase": "terminated",
+        "surface": "lsf"
+      },
+      "observed_at": "2026-10-27T17:20:18.145910Z",
+      "queue_seconds": null,
+      "schema": "acp2.runtime.deadline-receipt.v1",
+      "started_at": "2026-10-27T17:19:06.838970Z",
+      "surface": "lsf",
+      "terminal_status": "failed",
+      "verified": true,
+      "wall_seconds": 60
+    },
+    "script_has_w": true,
+    "started_at": "2026-10-27T17:18:22.179410+00:00",
+    "status": "failed"
+  },
+  "detail": "approval wall 60s \u2192 #BSUB -W 00:01 \u2192 native LSF RUNLIMIT (exit 140) + platform receipt",
+  "evidence": [
+    "native/submit-104.lsf",
+    "native/bjobs-104.txt"
+  ],
+  "name": "wall_limit",
+  "recorded_at": "2026-10-27T17:20:18.687113Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

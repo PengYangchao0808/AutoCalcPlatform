@@ -1,0 +1,23 @@
+{
+  "availability_http": 200,
+  "detail_http": 200,
+  "energy_graph_http": 200,
+  "input_digest_remote": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+  "input_digest_served": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+  "job_id": "20261028_011442_001_m403-submission",
+  "manifest_digest_remote": "sha256:a5a705aadf3e6a88a934652788eb5e98ece718f36ad200b3e34a606a51ba3d83",
+  "manifest_digest_served": "",
+  "prepare_input_http": 200,
+  "prepare_input_state": "pending",
+  "prepare_manifest_http": 200,
+  "prepare_manifest_state": "pending",
+  "prepared_geometry_http": 200,
+  "prepared_manifest_http": 200,
+  "read_root_served_without_local_result": true,
+  "release_identity": {
+    "code_release": "2d1ab37a0f988933",
+    "release_digest": null,
+    "release_id": null
+  },
+  "status": "completed"
+}

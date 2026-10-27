@@ -95,6 +95,7 @@ __all__ = [
     "limit_row",
     "LAUNCH_BUDGET_UNITS",
     "LAUNCH_SHAPE_UNITS",
+    "limits_from_execution_limits_block",
     "normalize_walltime_s",
     "resource_limits_from_projection",
     "resolve_resource_limits",
@@ -638,6 +639,36 @@ def resource_limits_from_projection(
         if key in source:
             budget_fields[key] = source[key]
     return resolve_resource_limits(budget_fields)
+
+
+def limits_from_execution_limits_block(
+    block: Mapping[str, Any] | None,
+) -> ResourceLimits:
+    """Re-read a persisted ``result["admission"]["execution_limits"]`` block.
+
+    That block is already the *resolved* :meth:`ResourceLimits.to_dict`
+    projection (M2-03c), so it carries surface keys rather than budget fields.
+    Reading it back must not run the budget validator: ``wall_seconds`` is not
+    there, and a resolved ``None`` surface is "not limited" — never a reason to
+    re-derive a limit from the request.  An unknown/absent block reads as
+    unbounded (the truthful answer: this attempt had no persisted deadline).
+    """
+    source = dict(block or {})
+    if not source:
+        return ResourceLimits()
+    minutes = source.get("lsf_walltime_minutes")
+    queue = source.get("queue_deadline_s")
+    local = source.get("local_terminate_after_s")
+    ccp = source.get("ccp_resources_timeout_s")
+    recorded = source.get("recorded_only")
+    return ResourceLimits(
+        local_terminate_after_s=None if local is None else int(local),
+        ccp_resources_timeout_s=None if ccp is None else float(ccp),
+        lsf_walltime_minutes=None if minutes is None else int(minutes),
+        queue_deadline_s=None if queue is None else int(queue),
+        recorded_only=dict(recorded) if isinstance(recorded, Mapping) else {},
+        bounded=bool(source.get("bounded") or local is not None or queue is not None),
+    )
 
 
 @dataclass(frozen=True, slots=True)

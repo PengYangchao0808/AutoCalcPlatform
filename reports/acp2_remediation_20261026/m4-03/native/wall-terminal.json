@@ -1,0 +1,171 @@
+{
+  "attempt": 1,
+  "completed_at": "2026-10-27T17:20:11.205981+00:00",
+  "created_at": "2026-10-27T17:18:22.168283+00:00",
+  "current_stage": "optimize",
+  "custom_name": null,
+  "default_name": "c1ccc2ccccc2c1_optimize",
+  "display_method": null,
+  "error": "[WALLTIME_EXCEEDED] the attempt was terminated at its wall deadline",
+  "exit_code": 143,
+  "group_id": "20261028_011822_004_m403-wall",
+  "host": "127.0.0.1",
+  "id": "20261028_011822_004_m403-wall",
+  "input_hash": "sha256:1791bf1b715205cf0b33af88b9da550fb1f6b05e57441bf8629766e904c8d1fd",
+  "latest_event": null,
+  "live_status": null,
+  "name_revision": 0,
+  "name_updated_at": null,
+  "node_id": "lsf-local",
+  "pid": null,
+  "plan_digest": null,
+  "progress": 0.0,
+  "progress_state": "determinate",
+  "project_id": "b680d7d9-79dc-4204-b5ba-d3450e3e05b7",
+  "project_name": null,
+  "release_digest": null,
+  "release_id": null,
+  "remote_job_id": "104",
+  "resolved_name": "c1ccc2ccccc2c1_optimize",
+  "result": {
+    "admission": {
+      "budget": {
+        "budget_id": "rb_0e9dc52303f030703d8de524",
+        "reservation_id": "bres_20261028_011822_004_m403-wall",
+        "state": "reserved",
+        "units": {
+          "attempt": 1,
+          "task_ref": 1
+        }
+      },
+      "enforced": true,
+      "enforcement": "local-single-enforced",
+      "execution_limits": {
+        "bounded": true,
+        "ccp_resources_timeout_s": 60.0,
+        "local_terminate_after_s": 60,
+        "lsf_walltime": "00:01",
+        "lsf_walltime_limited": true,
+        "lsf_walltime_minutes": 1,
+        "queue_deadline_s": null,
+        "recorded_only": {},
+        "schema": "acp2.runtime.execution-limits.v1",
+        "source": "research-budget-policy",
+        "wired_surfaces": {
+          "cccp_resources_timeout_s": 60.0,
+          "local_admission_duration_s": 60,
+          "lsf_walltime": "00:01"
+        }
+      },
+      "key_id": null,
+      "mode": "quota-only",
+      "multi_tenant_security": false,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "reason_code": "admitted",
+      "reservation_id": "res_job_20261028_011822_004_m403-wall",
+      "verified_project": null
+    },
+    "command_line": "/usr/bin/python3.11 -m acp.cli run optimize --input input.xyz --output . --name c1ccc2ccccc2c1_optimize --nproc 4 --mem 8GB",
+    "deadline_receipt_path": "/ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/WORK/00_RUNTIME/deadline_receipt.json",
+    "execution": {
+      "attempt": 1,
+      "closure": "integrated",
+      "entry": "legacy",
+      "protocol": "lsf",
+      "release_id": "2d1ab37a0f988933",
+      "schema": 1,
+      "workflow": "optimize"
+    },
+    "execution_deadline": {
+      "admitted_at": "2026-10-27T17:18:22.168283Z",
+      "attempt": 1,
+      "clock": "wall",
+      "deadline_at": "2026-10-27T17:20:06.838970Z",
+      "decision": "wall-deadline-expired",
+      "job_id": "20261028_011822_004_m403-wall",
+      "native": {
+        "bjobs_l_after": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+        "bjobs_l_before": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+        "bkill_delivered": false,
+        "confirmed_stopped": true,
+        "lsf_job_id": "104",
+        "node": "lsf-local",
+        "phase": "terminated",
+        "surface": "lsf"
+      },
+      "observed_at": "2026-10-27T17:20:18.145910Z",
+      "queue_seconds": null,
+      "schema": "acp2.runtime.deadline-receipt.v1",
+      "started_at": "2026-10-27T17:19:06.838970Z",
+      "surface": "lsf",
+      "terminal_status": "failed",
+      "verified": true,
+      "wall_seconds": 60
+    },
+    "execution_kind": "remote",
+    "execution_target": "lsf-local",
+    "lsf_job_id": "104",
+    "node": "lsf-local",
+    "remote": {
+      "attempt": 1,
+      "code_release": "2d1ab37a0f988933",
+      "intent_at": "2026-10-27T17:18:22.215742+00:00",
+      "lease_expires_at": "2026-10-27T17:20:22.215724+00:00",
+      "lsf_job_id": "104",
+      "node": "lsf-local",
+      "path_source": "stored",
+      "relative": "M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize",
+      "schema": 1,
+      "started_at": "2026-10-27T17:19:06.838970+00:00",
+      "submission_id": "sub_c5397acc7be6a797",
+      "submit_owner": "827643:1793121274430878599:140564137764416:1",
+      "submit_state": "submitted",
+      "submitted_at": "2026-10-27T17:18:44.828393+00:00"
+    },
+    "remote_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize",
+    "required_software": [
+      "orca"
+    ],
+    "terminal_side_effects_done": true
+  },
+  "revision": 19,
+  "snapshot_version": null,
+  "spec": {
+    "config_path": null,
+    "execution_mode": "remote",
+    "input": {
+      "source": "c1ccc2ccccc2c1",
+      "source_type": "smiles"
+    },
+    "method": {
+      "method": "B3LYP D3 ma-def2-SVP"
+    },
+    "molecule_name": "c1ccc2ccccc2c1",
+    "name": "c1ccc2ccccc2c1_optimize",
+    "node_tags": [],
+    "output_dir": null,
+    "project_id": "b680d7d9-79dc-4204-b5ba-d3450e3e05b7",
+    "remark": "",
+    "resources": {
+      "mem": "8GB",
+      "nproc": 4
+    },
+    "tags": [],
+    "target_node": "lsf-local",
+    "task_name": "optimize",
+    "workflow": "optimize"
+  },
+  "stage_detail": null,
+  "stage_index": null,
+  "stage_order": [],
+  "stage_progress": null,
+  "stage_total": null,
+  "started_at": "2026-10-27T17:18:22.179410+00:00",
+  "status": "failed",
+  "study_id": null,
+  "study_status": null,
+  "submission_id": null,
+  "updated_at": "2026-10-27T17:20:18.148305+00:00",
+  "work_dir": "/ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize"
+}

@@ -1,0 +1,17 @@
+#!/bin/bash
+#BSUB -J acp_sub_c5397acc7be6a797
+#BSUB -q normal
+#BSUB -n 4
+#BSUB -M 8808038
+#BSUB -W 00:01
+#BSUB -o /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/stdout.log
+#BSUB -e /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/stderr.log
+
+_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }
+trap 'exit $?' USR2 TERM INT HUP
+trap _acp_record_exit EXIT
+
+export PYTHONPATH="/ACPServer/acp2-runs/remediation/m4-03/remote_code/releases/2d1ab37a0f988933/src:$PYTHONPATH"
+cd "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize"
+/usr/bin/python3.11 -m acp.cli run optimize --input input.xyz --output . --name c1ccc2ccccc2c1_optimize --nproc 4 --mem 8GB
+echo $? > .exit_code

@@ -1,0 +1,2 @@
+QUEUE_NAME      PRIO STATUS          MAX JL/U JL/P JL/H NJOBS  PEND   RUN  SUSP 
+normal           30   Open:Active      -    -    -    -     0     0     0     0

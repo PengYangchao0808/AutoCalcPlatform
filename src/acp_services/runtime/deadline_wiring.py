@@ -57,6 +57,7 @@ __all__ = [
     "DEADLINE_SURFACES",
     "DEADLINE_WIRING_SCHEMA",
     "DeadlineWiring",
+    "admission_walltime_minutes",
     "apply_to_task_resources",
     "deadline_wiring",
     "deadline_wiring_statement",
@@ -259,6 +260,27 @@ def deadline_wiring(
         resources=resolved,
         cluster_walltime_s=normalize_walltime_s(cluster_walltime_s),
     )
+
+
+def admission_walltime_minutes(admission: Mapping[str, Any] | None) -> int | None:
+    """Read the approval deadline (LSF ``-W`` minutes) from a persisted admission.
+
+    The remote submission path does not re-derive the limit from the request: the
+    admission result is the durable, server-verified projection
+    (``result["admission"]["execution_limits"]``), so a restart and a live submit
+    render the identical ``-W`` value.  ``None`` means "this attempt was not
+    bounded" and must stay unbounded — never a deployment default.
+    """
+    from acp_services.runtime.execution_limits import (
+        limits_from_execution_limits_block,
+    )
+
+    if not isinstance(admission, Mapping):
+        return None
+    block = admission.get("execution_limits")
+    if not isinstance(block, Mapping):
+        return None
+    return limits_from_execution_limits_block(block).lsf_walltime_minutes
 
 
 def apply_to_task_resources(

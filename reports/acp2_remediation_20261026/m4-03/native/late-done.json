@@ -1,0 +1,14 @@
+{
+  "after": "completed",
+  "attempt_after": 1,
+  "attempt_before": 1,
+  "before": "completed",
+  "job_id": "20261028_011442_001_m403-submission",
+  "late_event": {
+    "job_id": "20261028_011442_001_m403-submission",
+    "late": true,
+    "note": "an observation emitted after the terminal transition",
+    "timestamp": "2026-10-27T17:27:37.445199Z",
+    "type": "remote.observed_done"
+  }
+}

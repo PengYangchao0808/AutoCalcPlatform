@@ -1,0 +1,52 @@
+{
+  "data": {
+    "duration_s": 56.35,
+    "error": "[QUEUE_DEADLINE_EXPIRED] the queued attempt did not start before its deadline",
+    "hclose": {
+      "rc": 0,
+      "stderr": "Close <workstation> ...... done\n",
+      "stdout": ""
+    },
+    "job_id": "20261028_012024_005_m403-queue",
+    "lsf_absent_after": true,
+    "lsf_job_id": "105",
+    "pending_detail_has_reason": true,
+    "pending_stat": "PEND",
+    "receipt": {
+      "admitted_at": "2026-10-27T17:20:24.412073Z",
+      "attempt": 1,
+      "clock": "queue",
+      "deadline_at": "2026-10-27T17:21:04.412073Z",
+      "decision": "queue-deadline-expired",
+      "job_id": "20261028_012024_005_m403-queue",
+      "native": {
+        "bjobs_l_after": "\nJob <105>, Job Name <acp_sub_99cf77110e3a6090>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_99cf77110e3a6090;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -o /ACPServer/acp2-runs/remediati\n                     on/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_\n                     xtb_optimize__02/stdout.log;#BSUB -e /ACPServ>\nWed Oct 28 01:20:49: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/CCO_xtb_optimize__02>, Output File </ACPServer/acp\n                     2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2026\n                     1028T011416/CCO_xtb_optimize__02/stdout.log>, Error File <\n                     /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_L\n                     SF_matrix_20261028T011416/CCO_xtb_optimize__02/stderr.log>\n                     , 4 Processors Requested;\n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:21:11: Exited\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+        "bjobs_l_before": "\nJob <105>, Job Name <acp_sub_99cf77110e3a6090>, User <xieningke>, Project <defa\n                     ult>, Status <PEND>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_99cf77110e3a6090;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -o /ACPServer/acp2-runs/remediati\n                     on/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_\n                     xtb_optimize__02/stdout.log;#BSUB -e /ACPServ>\nWed Oct 28 01:20:49: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/CCO_xtb_optimize__02>, Output File </ACPServer/acp\n                     2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2026\n                     1028T011416/CCO_xtb_optimize__02/stdout.log>, Error File <\n                     /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_L\n                     SF_matrix_20261028T011416/CCO_xtb_optimize__02/stderr.log>\n                     , 4 Processors Requested;\n\n MEMLIMIT\n 8808038 K\n PENDING REASONS:\n Closed by LSF administrator;\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+        "bkill_delivered": true,
+        "confirmed_stopped": true,
+        "lsf_job_id": "105",
+        "node": "lsf-local",
+        "phase": "terminated",
+        "surface": "lsf"
+      },
+      "observed_at": "2026-10-27T17:21:14.303442Z",
+      "queue_seconds": 40,
+      "schema": "acp2.runtime.deadline-receipt.v1",
+      "started_at": null,
+      "surface": "lsf",
+      "terminal_status": "failed",
+      "verified": true,
+      "wall_seconds": null
+    },
+    "status": "failed"
+  },
+  "detail": "pending LSF job 105 expired at its 40 s queue deadline \u2192 terminal + bkill",
+  "evidence": [
+    "native/bjobs-pending-105.txt",
+    "native/queue-deadline.json"
+  ],
+  "name": "queue_deadline",
+  "recorded_at": "2026-10-27T17:21:15.039617Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

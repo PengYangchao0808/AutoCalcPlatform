@@ -1,0 +1,664 @@
+{
+  "cleanup": {
+    "errors": [],
+    "killed": [],
+    "leftovers": []
+  },
+  "cleanup_ok": true,
+  "execution_limits": {
+    "rows": [
+      {
+        "current": "NOT_VERIFIED",
+        "decision": "upgrade-to-enforced",
+        "evidence": {
+          "local_process_group": true,
+          "lsf_three_way": true,
+          "paused_counts": true,
+          "restart_remaining": true
+        },
+        "limit": "walltime_process_termination"
+      },
+      {
+        "current": "NOT_VERIFIED",
+        "decision": "upgrade-to-enforced",
+        "evidence": {
+          "expiry_terminal_receipt": true
+        },
+        "limit": "queue_deadline"
+      }
+    ],
+    "rule": "a row is upgraded only with a real receipt; wiring is never evidence"
+  },
+  "failed": [],
+  "generated_at": "2026-10-27T17:30:06.030360Z",
+  "head": {
+    "dirty_paths": 18,
+    "head": "36b505ab6bfc94a582cd5fcbf97941a4e4450c75"
+  },
+  "not_verified": [],
+  "passed": [
+    "environment",
+    "code_release",
+    "submission",
+    "illegal_target",
+    "lifecycle",
+    "race",
+    "wall_limit",
+    "queue_deadline",
+    "paused_timing",
+    "local_wall",
+    "restart",
+    "publication",
+    "late_done",
+    "budget_concurrency",
+    "multiuser"
+  ],
+  "rows": [
+    {
+      "data": {
+        "active_jobs_before": [],
+        "duration_s": 1.97,
+        "hosts": [
+          "HOST_NAME          STATUS       JL/U    MAX  NJOBS    RUN  SSUSP  USUSP    RSV ",
+          "workstation        ok              -     20      0      0      0      0      0"
+        ],
+        "lsf_envdir": "/opt/openlava-2.0/etc",
+        "lsf_version": "openlava project 2.0, May 31 2026",
+        "node": "lsf-local",
+        "queues": [
+          "QUEUE_NAME      PRIO STATUS          MAX JL/U JL/P JL/H NJOBS  PEND   RUN  SUSP ",
+          "normal           30   Open:Active      -    -    -    -     0     0     0     0"
+        ],
+        "ssh": true
+      },
+      "detail": "Openlava reachable, host workstation ok, queue normal open",
+      "evidence": [
+        "native/bhosts.txt",
+        "native/bqueues.txt"
+      ],
+      "name": "environment",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "complete_marker": true,
+        "duration_s": 11.4,
+        "files": 606,
+        "publish_retries": 6,
+        "release_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_code/releases/2d1ab37a0f988933",
+        "release_id": "2d1ab37a0f988933",
+        "sample_path": "config/defaults.yaml",
+        "sample_present": true,
+        "source": "remote"
+      },
+      "detail": "release 2d1ab37a0f988933 publish-verified (606 files, 11.4s)",
+      "evidence": [
+        "native/code_release.json"
+      ],
+      "name": "code_release",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "bjobs_row": {
+          "exec_host": "workstation",
+          "from_host": "workstation",
+          "job_id": "1",
+          "job_name": "*d8baf6d9a",
+          "queue": "normal",
+          "raw": "1       xiening RUN   normal     workstation workstation *d8baf6d9a Oct 28 01:15",
+          "stat": "RUN",
+          "submit_time": "Oct 28 01:15",
+          "user": "xiening"
+        },
+        "checks": {
+          "exec_host_matches_node": true,
+          "http_201": true,
+          "job_name_matches_submission_id": true,
+          "new_lsf_job_created": true,
+          "no_walltime_for_unbounded_approval": true,
+          "node_tags_in_spec": true,
+          "persisted_lsf_id": true,
+          "queue_matches_frozen_target": true,
+          "release_bound": true,
+          "remote_dir_matches": true,
+          "target_in_spec": true
+        },
+        "duration_s": 56.24,
+        "frozen_spec": {
+          "execution_mode": "remote",
+          "node_tags": [
+            "xtb"
+          ],
+          "target_node": "lsf-local",
+          "workflow": "xtb_optimize"
+        },
+        "job_id": "20261028_011442_001_m403-submission",
+        "lsf_job_id": "1",
+        "release_id": "2d1ab37a0f988933",
+        "remote_start_observed": false,
+        "submit_directives": {
+          "#BSUB -J": "acp_sub_41332c2d8baf6d9a",
+          "#BSUB -M": "8808038",
+          "#BSUB -e": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize/stderr.log",
+          "#BSUB -n": "4",
+          "#BSUB -o": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize/stdout.log",
+          "#BSUB -q": "normal"
+        },
+        "terminal": "completed"
+      },
+      "detail": "real bsub 1 on normal/workstation matches the frozen JobSpec; release 2d1ab37a0f988933",
+      "evidence": [
+        "native/submit-1.lsf",
+        "native/bjobs-1.txt"
+      ],
+      "name": "submission",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "duration_s": 4.88,
+        "new_lsf_jobs": [],
+        "unknown_node": {
+          "http": 422,
+          "payload": {
+            "detail": {
+              "code": "input_invalid",
+              "message": "target_node 'no-such-node' is not a configured node",
+              "params": {
+                "field": "target_node",
+                "local_missing_software": [],
+                "missing_software": [],
+                "missing_tags": [],
+                "remote_nodes_configured": null,
+                "rule": "unknown_target_node"
+              },
+              "retryable": false
+            }
+          }
+        },
+        "unsatisfied_node_tags": {
+          "http": 422,
+          "payload": {
+            "detail": {
+              "code": "input_invalid",
+              "message": "target_node 'lsf-local' cannot run the job: missing tags: no-such-tag",
+              "params": {
+                "field": "node_tags",
+                "local_missing_software": [],
+                "missing_software": [],
+                "missing_tags": [
+                  "no-such-tag"
+                ],
+                "remote_nodes_configured": null,
+                "rule": "target_node_incapable"
+              },
+              "retryable": false
+            }
+          }
+        }
+      },
+      "detail": "unknown node and unsatisfied node_tags refused at the entry with no bsub",
+      "evidence": [
+        "native/illegal-target.json"
+      ],
+      "name": "illegal_target",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "availability_http": 200,
+        "detail_http": 200,
+        "duration_s": 11.01,
+        "energy_graph_http": 200,
+        "input_digest_remote": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "input_digest_served": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "job_id": "20261028_011442_001_m403-submission",
+        "manifest_digest_remote": "sha256:a5a705aadf3e6a88a934652788eb5e98ece718f36ad200b3e34a606a51ba3d83",
+        "manifest_digest_served": "",
+        "prepare_input_http": 200,
+        "prepare_input_state": "pending",
+        "prepare_manifest_http": 200,
+        "prepare_manifest_state": "pending",
+        "prepared_geometry_http": 200,
+        "prepared_manifest_http": 200,
+        "read_root_served_without_local_result": true,
+        "release_identity": {
+          "code_release": "2d1ab37a0f988933",
+          "release_digest": null,
+          "release_id": null
+        },
+        "status": "completed"
+      },
+      "detail": "same TaskRef 20261028_011442_001_m403-submission: availability/energy/manifest+geometry prepared and read from the remote read root with matching digests; release 2d1ab37a0f988933",
+      "evidence": [
+        "native/lifecycle.json"
+      ],
+      "name": "lifecycle",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "duration_s": 151.87,
+        "job_id": "20261028_011548_002_m403-race",
+        "lsf_job_id": "2",
+        "pause_http": 200,
+        "paused_lsf_stat": "USUSP",
+        "paused_status": "paused",
+        "race_job_id": "20261028_011705_003_m403-race-2",
+        "race_lsf_absent": true,
+        "race_lsf_job_id": "103",
+        "race_lsf_stat": "EXIT",
+        "race_outcomes": {
+          "cancel": 200,
+          "pause": 200
+        },
+        "race_status": "cancelled",
+        "resumed_lsf_stat": "RUN",
+        "resumed_status": "running",
+        "unpause_http": 200
+      },
+      "detail": "bstop/bresume on 2; concurrent cancel+pause resolved to cancelled with LSF EXIT",
+      "evidence": [
+        "native/race.json"
+      ],
+      "name": "race",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "approval_budget": {
+          "input_tokens": 0,
+          "model_requests": 0,
+          "output_tokens": 0,
+          "qc_invocations": 0,
+          "queue_seconds": 0,
+          "recipe_steps": 0,
+          "task_refs": 1,
+          "wall_seconds": 60
+        },
+        "approval_ref": "ap_59b144531f8940b8a323fb2a1a7d7e28",
+        "approval_wall_seconds": 60,
+        "bsub_walltime": "#BSUB -W 00:01",
+        "completed_at": "2026-10-27T17:20:11.205981+00:00",
+        "duration_s": 118.74,
+        "error": "[WALLTIME_EXCEEDED] the attempt was terminated at its wall deadline",
+        "job_id": "20261028_011822_004_m403-wall",
+        "lsf_job_id": "104",
+        "native_bjobs_l": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+        "native_bjobs_l_has_runlimit_or_exit140": true,
+        "receipt": {
+          "admitted_at": "2026-10-27T17:18:22.168283Z",
+          "attempt": 1,
+          "clock": "wall",
+          "deadline_at": "2026-10-27T17:20:06.838970Z",
+          "decision": "wall-deadline-expired",
+          "job_id": "20261028_011822_004_m403-wall",
+          "native": {
+            "bjobs_l_after": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bjobs_l_before": "\nJob <104>, Job Name <acp_sub_c5397acc7be6a797>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_c5397acc7be6a797;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:01;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize/stdout.log>\nWed Oct 28 01:18:44: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize>, Output File </ACPServer/\n                     acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2\n                     0261028T011416/c1ccc2ccccc2c1_optimize/stdout.log>, Error \n                     File </ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M\n                     4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_optimize/st\n                     derr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 1.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:18:52: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize>;\nWed Oct 28 01:20:07: Exited with exit code 140. The CPU time used is 2.8 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bkill_delivered": false,
+            "confirmed_stopped": true,
+            "lsf_job_id": "104",
+            "node": "lsf-local",
+            "phase": "terminated",
+            "surface": "lsf"
+          },
+          "observed_at": "2026-10-27T17:20:18.145910Z",
+          "queue_seconds": null,
+          "schema": "acp2.runtime.deadline-receipt.v1",
+          "started_at": "2026-10-27T17:19:06.838970Z",
+          "surface": "lsf",
+          "terminal_status": "failed",
+          "verified": true,
+          "wall_seconds": 60
+        },
+        "script_has_w": true,
+        "started_at": "2026-10-27T17:18:22.179410+00:00",
+        "status": "failed"
+      },
+      "detail": "approval wall 60s \u2192 #BSUB -W 00:01 \u2192 native LSF RUNLIMIT (exit 140) + platform receipt",
+      "evidence": [
+        "native/submit-104.lsf",
+        "native/bjobs-104.txt"
+      ],
+      "name": "wall_limit",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "duration_s": 56.35,
+        "error": "[QUEUE_DEADLINE_EXPIRED] the queued attempt did not start before its deadline",
+        "hclose": {
+          "rc": 0,
+          "stderr": "Close <workstation> ...... done\n",
+          "stdout": ""
+        },
+        "job_id": "20261028_012024_005_m403-queue",
+        "lsf_absent_after": true,
+        "lsf_job_id": "105",
+        "pending_detail_has_reason": true,
+        "pending_stat": "PEND",
+        "receipt": {
+          "admitted_at": "2026-10-27T17:20:24.412073Z",
+          "attempt": 1,
+          "clock": "queue",
+          "deadline_at": "2026-10-27T17:21:04.412073Z",
+          "decision": "queue-deadline-expired",
+          "job_id": "20261028_012024_005_m403-queue",
+          "native": {
+            "bjobs_l_after": "\nJob <105>, Job Name <acp_sub_99cf77110e3a6090>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_99cf77110e3a6090;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -o /ACPServer/acp2-runs/remediati\n                     on/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_\n                     xtb_optimize__02/stdout.log;#BSUB -e /ACPServ>\nWed Oct 28 01:20:49: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/CCO_xtb_optimize__02>, Output File </ACPServer/acp\n                     2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2026\n                     1028T011416/CCO_xtb_optimize__02/stdout.log>, Error File <\n                     /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_L\n                     SF_matrix_20261028T011416/CCO_xtb_optimize__02/stderr.log>\n                     , 4 Processors Requested;\n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:21:11: Exited\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bjobs_l_before": "\nJob <105>, Job Name <acp_sub_99cf77110e3a6090>, User <xieningke>, Project <defa\n                     ult>, Status <PEND>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_99cf77110e3a6090;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -o /ACPServer/acp2-runs/remediati\n                     on/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_\n                     xtb_optimize__02/stdout.log;#BSUB -e /ACPServ>\nWed Oct 28 01:20:49: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/CCO_xtb_optimize__02>, Output File </ACPServer/acp\n                     2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2026\n                     1028T011416/CCO_xtb_optimize__02/stdout.log>, Error File <\n                     /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_L\n                     SF_matrix_20261028T011416/CCO_xtb_optimize__02/stderr.log>\n                     , 4 Processors Requested;\n\n MEMLIMIT\n 8808038 K\n PENDING REASONS:\n Closed by LSF administrator;\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bkill_delivered": true,
+            "confirmed_stopped": true,
+            "lsf_job_id": "105",
+            "node": "lsf-local",
+            "phase": "terminated",
+            "surface": "lsf"
+          },
+          "observed_at": "2026-10-27T17:21:14.303442Z",
+          "queue_seconds": 40,
+          "schema": "acp2.runtime.deadline-receipt.v1",
+          "started_at": null,
+          "surface": "lsf",
+          "terminal_status": "failed",
+          "verified": true,
+          "wall_seconds": null
+        },
+        "status": "failed"
+      },
+      "detail": "pending LSF job 105 expired at its 40 s queue deadline \u2192 terminal + bkill",
+      "evidence": [
+        "native/bjobs-pending-105.txt",
+        "native/queue-deadline.json"
+      ],
+      "name": "queue_deadline",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "deadline_minus_started_s": 90,
+        "duration_s": 155.6,
+        "elapsed_since_start_s": 121.9,
+        "job_id": "20261028_012117_006_m403-paused",
+        "lsf_job_id": "106",
+        "paused_lsf_stat": "USUSP",
+        "receipt": {
+          "admitted_at": "2026-10-27T17:21:17.447454Z",
+          "attempt": 1,
+          "clock": "wall",
+          "deadline_at": "2026-10-27T17:23:18.629463Z",
+          "decision": "wall-deadline-expired",
+          "job_id": "20261028_012117_006_m403-paused",
+          "native": {
+            "bjobs_l_after": "\nJob <106>, Job Name <acp_sub_2727c78568e7150a>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_2727c78568e7150a;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:02;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize__02/stdout>\nWed Oct 28 01:21:40: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize__02>, Output File </ACPSer\n                     ver/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matr\n                     ix_20261028T011416/c1ccc2ccccc2c1_optimize__02/stdout.log>\n                     , Error File </ACPServer/acp2-runs/remediation/m4-03/remot\n                     e_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_opt\n                     imize__02/stderr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 2.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:21:42: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize__02>;\nWed Oct 28 01:23:47: Exited with exit code 130. The CPU time used is 74.1 secon\n                     ds.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bjobs_l_before": "\nJob <106>, Job Name <acp_sub_2727c78568e7150a>, User <xieningke>, Project <defa\n                     ult>, Status <RUN>, Queue <normal>, Command <#!/bin/bash;#\n                     BSUB -J acp_sub_2727c78568e7150a;#BSUB -q normal;#BSUB -n \n                     4;#BSUB -M 8808038;#BSUB -W 00:02;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize__02/stdout>\nWed Oct 28 01:21:40: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize__02>, Output File </ACPSer\n                     ver/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matr\n                     ix_20261028T011416/c1ccc2ccccc2c1_optimize__02/stdout.log>\n                     , Error File </ACPServer/acp2-runs/remediation/m4-03/remot\n                     e_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_opt\n                     imize__02/stderr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 2.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:21:42: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize__02>;\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bkill_delivered": true,
+            "confirmed_stopped": true,
+            "lsf_job_id": "106",
+            "node": "lsf-local",
+            "phase": "terminated",
+            "surface": "lsf"
+          },
+          "observed_at": "2026-10-27T17:23:49.908568Z",
+          "queue_seconds": null,
+          "schema": "acp2.runtime.deadline-receipt.v1",
+          "started_at": "2026-10-27T17:21:48.629463Z",
+          "surface": "lsf",
+          "terminal_status": "failed",
+          "verified": true,
+          "wall_seconds": 90
+        },
+        "status": "failed",
+        "wall_seconds": 90
+      },
+      "detail": "the 90 s absolute deadline terminated the attempt after a real bstop (elapsed 121.9s from start)",
+      "evidence": [
+        "native/paused-timing.json"
+      ],
+      "name": "paused_timing",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "alive_after": [],
+        "duration_s": 15.35,
+        "job_id": "20261028_012350_007_m403-local-wall",
+        "killed_pids": [
+          946839,
+          947607,
+          947999,
+          948008,
+          948010,
+          948012,
+          948013
+        ],
+        "receipt": {
+          "admitted_at": "2026-10-27T17:23:50.800661Z",
+          "attempt": 1,
+          "clock": "wall",
+          "deadline_at": "2026-10-27T17:24:00.811154Z",
+          "decision": "wall-deadline-expired",
+          "job_id": "20261028_012350_007_m403-local-wall",
+          "native": {
+            "confirmed_stopped": true,
+            "killed_pids": [
+              946839,
+              947607,
+              947999,
+              948008,
+              948010,
+              948012,
+              948013
+            ],
+            "lsf_job_id": "",
+            "node": "",
+            "phase": "terminated",
+            "signals": "SIGCONT,SIGTERM,SIGKILL (process group via acp.scheduler.processctl)",
+            "still_alive_pids": [],
+            "surface": "local-process-group"
+          },
+          "observed_at": "2026-10-27T17:24:05.322028Z",
+          "queue_seconds": null,
+          "schema": "acp2.runtime.deadline-receipt.v1",
+          "started_at": "2026-10-27T17:23:50.811154Z",
+          "surface": "local-process-group",
+          "terminal_status": "failed",
+          "verified": true,
+          "wall_seconds": 10
+        },
+        "status": "failed",
+        "wall_seconds": 10
+      },
+      "detail": "the same wall deadline terminated local process group [946839, 947607, 947999, 948008, 948010, 948012, 948013] (SIGCONT\u2192TERM\u2192KILL receipt)",
+      "evidence": [
+        "native/local-wall.json"
+      ],
+      "name": "local_wall",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "adopted_status": "running",
+        "deadline_after_restart": "2026-10-27T17:26:51.971709Z",
+        "deadline_before_restart": "2026-10-27 17:26:51.971709+00:00",
+        "duration_s": 176.04,
+        "job_id": "20261028_012408_008_m403-restart",
+        "lsf_job_id": "107",
+        "new_lsf_jobs_after_restart": [],
+        "receipt": {
+          "admitted_at": "2026-10-27T17:24:08.456614Z",
+          "attempt": 1,
+          "clock": "wall",
+          "deadline_at": "2026-10-27T17:26:51.971709Z",
+          "decision": "wall-deadline-expired",
+          "job_id": "20261028_012408_008_m403-restart",
+          "native": {
+            "bjobs_l_after": "\nJob <107>, Job Name <acp_sub_849779f00a630ac6>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_849779f00a630ac6;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:02;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize__04/stdout>\nWed Oct 28 01:24:33: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize__04>, Output File </ACPSer\n                     ver/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matr\n                     ix_20261028T011416/c1ccc2ccccc2c1_optimize__04/stdout.log>\n                     , Error File </ACPServer/acp2-runs/remediation/m4-03/remot\n                     e_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_opt\n                     imize__04/stderr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 2.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:24:42: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize__04>;\nWed Oct 28 01:26:53: Exited with exit code 140. The CPU time used is 3.0 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bjobs_l_before": "\nJob <107>, Job Name <acp_sub_849779f00a630ac6>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_849779f00a630ac6;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:02;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize__04/stdout>\nWed Oct 28 01:24:33: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize__04>, Output File </ACPSer\n                     ver/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matr\n                     ix_20261028T011416/c1ccc2ccccc2c1_optimize__04/stdout.log>\n                     , Error File </ACPServer/acp2-runs/remediation/m4-03/remot\n                     e_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_opt\n                     imize__04/stderr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 2.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:24:42: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize__04>;\nWed Oct 28 01:26:53: Exited with exit code 140. The CPU time used is 3.0 second\n                     s.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+            "bkill_delivered": false,
+            "confirmed_stopped": true,
+            "lsf_job_id": "107",
+            "node": "lsf-local",
+            "phase": "terminated",
+            "surface": "lsf"
+          },
+          "observed_at": "2026-10-27T17:27:01.074314Z",
+          "queue_seconds": null,
+          "schema": "acp2.runtime.deadline-receipt.v1",
+          "started_at": "2026-10-27T17:24:51.971709Z",
+          "surface": "lsf",
+          "terminal_status": "failed",
+          "verified": true,
+          "wall_seconds": 120
+        },
+        "same_absolute_deadline": true,
+        "status": "failed",
+        "wall_here_s": 165.0,
+        "wall_seconds": 120
+      },
+      "detail": "Controller restart re-adopted LSF 107 with the same absolute deadline (2026-10-27T17:26:51.971709Z); no second bsub",
+      "evidence": [
+        "native/restart.json"
+      ],
+      "name": "restart",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "attempt": 1,
+        "attempt_after_retries": 1,
+        "baseline_publications": 0,
+        "duration_s": 35.39,
+        "job_id": "20261028_012702_001_m403-publication",
+        "manifest_present": false,
+        "manifest_restored": true,
+        "no_recompute_same_attempt": true,
+        "publication_count": 1,
+        "publication_events": [
+          "{\"type\": \"attempt.frozen\", \"timestamp\": \"2026-10-27T17:27:04.134439+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"workflow\": \"singlepoint\", \"attempt\": 1, \"release_id\": \"2d1ab37a0f988933\", \"release_digest\": \"813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b\"}",
+          "{\"type\": \"process.starting\", \"timestamp\": \"2026-10-27T17:27:04.137035+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"cmd\": \"/usr/bin/python3.11 -m acp_services.worker_bootstrap --envelope /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint/WORK/00_RUNTIME/frozen/envelope.json --plan /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint/WORK/00_RUNTIME/frozen/plan.json --work-dir /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint --binding /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint/WORK/00_RUNTIME/frozen/binding.json\"}",
+          "{\"type\": \"job.completed\", \"timestamp\": \"2026-10-27T17:27:12.227431+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"exit_code\": 0, \"idempotency_key\": \"terminal:20261028_012702_001_m403-publication:1:job.completed\"}",
+          "{\"type\": \"job.publication_completed\", \"timestamp\": \"2026-10-27T17:27:24.273590+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"attempt\": 1, \"result_id\": \"20261028_012702_001_m403-publication:attempt1:sub_67ee3fa8cf11c493\", \"idempotency_key\": \"publication-completed:20261028_012702_001_m403-publication:1\"}",
+          "{\"type\": \"job.publication_pending\", \"timestamp\": \"2026-10-27T17:27:36.965605+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"code\": \"publication_failed\", \"attempt\": 1, \"detail\": \"publication failed: PublicationIntegrityError: receipt is missing\", \"idempotency_key\": \"publication-pending:20261028_012702_001_m403-publication:1:publication_failed\"}"
+        ],
+        "receipt_lost_refused": true,
+        "receipt_present": false,
+        "status_after_retries": "completed"
+      },
+      "detail": "publication retried from the existing receipt (same attempt) and a lost receipt is refused instead of recomputed",
+      "evidence": [
+        "native/publication.json"
+      ],
+      "name": "publication",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "after": "completed",
+        "attempt_after": 1,
+        "attempt_before": 1,
+        "before": "completed",
+        "duration_s": 6.02,
+        "job_id": "20261028_011442_001_m403-submission",
+        "late_event": {
+          "job_id": "20261028_011442_001_m403-submission",
+          "late": true,
+          "note": "an observation emitted after the terminal transition",
+          "timestamp": "2026-10-27T17:27:37.445199Z",
+          "type": "remote.observed_done"
+        }
+      },
+      "detail": "a terminal row is not revived by a later observation (CAS + terminal scan set)",
+      "evidence": [
+        "native/late-done.json"
+      ],
+      "name": "late_done",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "accepted": [
+          "20261028_012750_001_m403-budget"
+        ],
+        "approval_ref": "ap_12f232117df1407c9a4754f343746849",
+        "codes": [
+          201,
+          403
+        ],
+        "denied": [
+          {
+            "code": 403,
+            "payload": {
+              "detail": {
+                "code": "budget_exhausted",
+                "message": "task_ref budget 1 - consumed 1 < requested 1; new dispatch refused",
+                "params": {
+                  "enforced": true,
+                  "exceeded": [
+                    {
+                      "dimension": "task_ref",
+                      "requested": {
+                        "attempt": 1,
+                        "task_ref": 1
+                      },
+                      "scope": "research_budget"
+                    }
+                  ],
+                  "mode": "quota-only",
+                  "reason_code": "budget_exhausted"
+                },
+                "retryable": false
+              }
+            }
+          }
+        ],
+        "duration_s": 54.3,
+        "new_lsf_jobs": [
+          "108"
+        ]
+      },
+      "detail": "an approval with task_ref=1 admitted exactly one of two concurrent remote submits",
+      "evidence": [
+        "native/budget-concurrency.json"
+      ],
+      "name": "budget_concurrency",
+      "status": "PASS"
+    },
+    {
+      "data": {
+        "alice_job": "20261028_012855_001_m403-multiuser",
+        "alice_status": "completed",
+        "cross_project_http": 403,
+        "cross_project_payload": {
+          "detail": {
+            "code": "access_denied",
+            "message": "entry 'scope' denied for principal 'principal_m403_bob': no_grant",
+            "params": {
+              "reason_code": "no_grant",
+              "requested_project": "f4a6e319-1c0a-4f60-bd2e-908ae1fa0aab"
+            },
+            "retryable": false
+          }
+        },
+        "cross_read_http": 404,
+        "duration_s": 78.91,
+        "new_lsf_jobs": [
+          "109"
+        ],
+        "read_only_submit_http": 403,
+        "revoked_submit_http": 401,
+        "usage_write_http": 404,
+        "usage_write_route_exists": false
+      },
+      "detail": "project isolation, action ceiling, revocation and the absent usage-write surface hold on the remote submit path",
+      "evidence": [
+        "native/multiuser.json"
+      ],
+      "name": "multiuser",
+      "status": "PASS"
+    }
+  ],
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}
