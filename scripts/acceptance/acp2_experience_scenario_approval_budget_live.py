@@ -197,7 +197,16 @@ def _phase_budget(context: Any) -> int:
     )
 
 
+def _phase_approval_live(context: Any) -> int:
+    """M4-02: the real browser approval/budget row (registered id, live mode)."""
+    from acp2_approval_browser import run as run_browser_row
+
+    return run_browser_row(context)
+
+
 def _phase_approval(context: Any) -> int:
+    if getattr(context.identity, "evidence_kind", None) == "live":
+        return _phase_approval_live(context)
     source = _env_path("ACP2_C_SOURCE")
     if source is None:
         return _not_verified(context, "missing_prerequisite:ACP2_C_SOURCE")

@@ -1,0 +1,27 @@
+{
+  "artifact_digests": [
+    "sha256:25cc550ead880e87df5fbeedcd14bf687823a72423385f17846cd6fec7125e0e",
+    "sha256:6914400e9577f6655312ce4836f0ba6fbfc1dc87f0a199f8b1a0a7b2b995374b",
+    "sha256:777d1d45b520ba034e656b1c403719272adcafc46ed98dfe41300d660f8999fb",
+    "sha256:80b7f52ca54e9ce18fbc434bf31545d241a4016c988d098b97d002bd1f04b897",
+    "sha256:c897f007b93ecdbc06768abf90184586a65549bd3d39863897bb26ec02864e5a",
+    "sha256:f5ee7e0ec7a9ea64a919134254472b3b8ba6536e8b85cfa4f6e7ed0d1df3f5b5"
+  ],
+  "auditor_denial": {
+    "code": "http_403",
+    "status": 403
+  },
+  "browsers": {
+    "auditor": "chromium/153.0.8010.12",
+    "operator": "chromium/153.0.8010.12",
+    "reviewer": "msedge/156.0.4314.50"
+  },
+  "model_receipt": "modelrcpt|482b0aa0-7569-4fe4-b728-50c818a0eb8a|res-94576f2a1b3da09e022060b7|ses-0c61d0e0e55551dd8f2ee43e|0|1|sha256:c714288086a4552f64705e99d93485fd572b935f4d7954ed24e09d1438bfb040",
+  "schema": "acp2.m4-02.same-task-browser.v1",
+  "task_ref": {
+    "attempt": 1,
+    "job_id": "20261027_211707_001_m402-browser-singlepoint",
+    "release_digest": "adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+    "release_id": "910ca9d3aff95737"
+  }
+}

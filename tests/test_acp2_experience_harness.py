@@ -645,7 +645,15 @@ def test_subcase_whitelist_negative(harness, runtime_env, tmp_path, scenario, su
     assert code == 3
 
 
-def test_approval_budget_live_phase_alias_writes_fixture(harness, runtime_env, tmp_path):
+def test_approval_budget_live_is_a_live_browser_row(harness, runtime_env, tmp_path):
+    """M4-02: the row is no longer fixture-only — a live run is the real thing.
+
+    The registered id and the ``--phase approval`` invocation are unchanged;
+    what changed is the honest classification: the row runs two real browsers
+    against a real Controller, so ``approval`` resolves to a live phase and
+    ``--mode live`` is accepted.  A dry run still executes nothing.
+    """
+
     out = _out(tmp_path, "approval-budget-live", "alias-approval", suffix="approval")
     assert (
         harness.main(
@@ -664,10 +672,11 @@ def test_approval_budget_live_phase_alias_writes_fixture(harness, runtime_env, t
         == 0
     )
     _, document = _one_receipt(out)
-    assert document["phase"] == "experience:fixture"
-    assert document["evidence_kind"] == "fixture"
-    assert document["extensions"]["experience.mode"] == "fixture"
-    assert document["result"] == "NOT_VERIFIED"
+    assert document["phase"] == "approval"
+    assert document["evidence_kind"] == "live"
+    assert document["extensions"]["experience.mode"] == "live"
+    assert document["result"] == "NOT_VERIFIED"  # dry run: nothing executed
+    assert "dry_run" in json.dumps(document["assertions"])
 
     budget_out = _out(tmp_path, "approval-budget-live", "alias-budget", suffix="budget")
     assert (
@@ -688,25 +697,30 @@ def test_approval_budget_live_phase_alias_writes_fixture(harness, runtime_env, t
     )
     _, budget = _one_receipt(budget_out)
     assert budget["phase"] == "budget"
-    assert budget["evidence_kind"] == "fixture"
     assert budget["result"] == "NOT_VERIFIED"
 
-    live_out = _out(tmp_path, "approval-budget-live", "alias-live", suffix="live")
+    mode_out = _out(tmp_path, "approval-budget-live", "mode-live", suffix="approval")
     assert (
         harness.main(
             [
                 "--scenario",
                 "approval-budget-live",
                 "--out",
-                str(live_out),
+                str(mode_out),
                 "--timeout",
                 "60",
                 "--mode",
                 "live",
+                "--phase",
+                "approval",
+                "--dry-run",
             ]
         )
-        == 3
+        == 0
     )
+    _, mode_document = _one_receipt(mode_out)
+    assert mode_document["evidence_kind"] == "live"
+    assert mode_document["phase"] == "approval"
 
 
 # ---------------------------------------------------------------------------

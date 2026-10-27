@@ -31,6 +31,8 @@ from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
 from acp.api.v2_approvals import router as v2_approvals_router
 from acp.api.v2_budgets import router as v2_budgets_router
+from acp.api.v2_model_gateway import build_controller_model_gateway
+from acp.api.v2_model_gateway import router as v2_model_gateway_router
 from acp.api.v2_routes import router as v2_router
 from acp.api.v2_structure_sources import router as v2_struct_router
 from acp_services.contracts.access import DeploymentTier, is_loopback_host
@@ -261,11 +263,22 @@ _IDENTITY_EXEMPT_PATHS = frozenset(
 _IDENTITY_EXEMPT_PREFIXES = ("/docs/", "/redoc/", "/assets/", "/static/")
 
 
+#: The Workbench page's own static asset mounts.  A browser session with an
+#: API-key identity must be able to load the page's scripts/styles or the
+#: product UI cannot run at all (found by the M4-02 browser leg: `/js/...`
+#: answered 401 under ``ACP_IDENTITY_MODE=api-key``).  These mounts serve
+#: committed frontend assets only — never a task, an approval, a budget or any
+#: other tenant-scoped read — so they carry no authorization fact.
+_STATIC_ASSET_PREFIXES = ("/js/", "/css/", "/legacy/")
+
+
 def _identity_exempt(path: str) -> bool:
     """Discovery/static routes that must stay reachable without a credential."""
     if path in _IDENTITY_EXEMPT_PATHS:
         return True
-    return any(path.startswith(prefix) for prefix in _IDENTITY_EXEMPT_PREFIXES)
+    return any(
+        path.startswith(prefix) for prefix in (*_IDENTITY_EXEMPT_PREFIXES, *_STATIC_ASSET_PREFIXES)
+    )
 
 
 def _maybe_configure_structured_logging() -> bool:
@@ -380,6 +393,12 @@ def create_app(
             app.state.host = eff_host
             app.state.port = eff_port
             app.state.run_root = str(run_root_path)
+            # M4-02: the one Controller model gateway (M3-03) bound to the
+            # admission ledger.  DSH/RPH reach a provider only through this
+            # object; the credential stays in the process environment.
+            app.state.model_gateway = build_controller_model_gateway(
+                admission.ledger, run_root_path
+            )
             # Dedicated DB file: never the jobs DB.
             app.state.research_resources = ResearchResourceStore(run_root_path / "acp_research.db")
             # M2-02: the application-level analysis registry is built once here
@@ -505,6 +524,7 @@ def create_app(
     app.include_router(v2_router, prefix="/api/v2")
     app.include_router(v2_approvals_router, prefix="/api/v2")
     app.include_router(v2_budgets_router, prefix="/api/v2")
+    app.include_router(v2_model_gateway_router, prefix="/api/v2")
     app.include_router(v2_struct_router, prefix="/api/v2")
     app.include_router(v2_science.router, prefix="/api/v2")
     app.include_router(v1_science.router, prefix="/api/v1")

@@ -175,11 +175,20 @@ EXPERIENCE_REQUIRED_OBSERVATIONS: dict[str, dict[str, str]] = {
         model="present", qc="present", lsf="present", artifact="present"
     ),
     "dsh-optfreq-live": _observations(model="present", qc="present", artifact="present"),
+    # M4-02: the row now runs two real browsers plus a read-only identity, so
+    # the negative (a read-only submit refused by the platform) is a required
+    # observation of the row, not an optional extra.
     "same-task-browser-live": _observations(
-        model="present", qc="present", browser="present", artifact="present"
+        model="present",
+        qc="present",
+        browser="present",
+        artifact="present",
+        denial="present",
     ),
     "client-recovery-live": _observations(),
-    "approval-budget-live": _observations(denial="present"),
+    # M4-02: the row now runs in real browsers (two acting identities + one
+    # read-only), so the live row must observe the browser and the denial.
+    "approval-budget-live": _observations(browser="present", denial="present"),
     "research-loop-live": _observations(model="present"),
     "evidence-browser-live": _observations(
         controller="absent", browser="present", artifact="present"

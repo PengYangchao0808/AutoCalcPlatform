@@ -1,0 +1,66 @@
+[
+  {
+    "approval_ref": "ap_5345587eb1be4054b95dc02fd77abbe9",
+    "approval_revision": 1,
+    "budget": {
+      "count": 1,
+      "timeout_s": 600,
+      "unit": "task_count"
+    },
+    "index": 1,
+    "plan_digest": "sha256:d627b0ac438db4053bea1f144165bf22c5fc0de59583161b57528776e5428821",
+    "proposal_digest": "sha256:750500b65664fdace93272d75b893678c986ce2c2e2355375df7858e8154db1c",
+    "proposal_ref": "prop-m4-02-approval-1",
+    "requester_ref": "principal_m402_operator",
+    "research_id": "res-dc77b56964f45e1f8c07be43",
+    "science_digest": "sha256:944a3b3a68391954a7d1813877fd3d5ccc7841b9ff33825b364c5dd6f9a06782"
+  },
+  {
+    "approval_ref": "ap_ea9c14ebb44a42ce8867bdd13e0e80c6",
+    "approval_revision": 1,
+    "budget": {
+      "count": 1,
+      "timeout_s": 600,
+      "unit": "task_count"
+    },
+    "index": 2,
+    "plan_digest": "sha256:d627b0ac438db4053bea1f144165bf22c5fc0de59583161b57528776e5428821",
+    "proposal_digest": "sha256:ca70dba4968d6918cf8377d52a63422db096160a07aa0986ac9ebd80082f2874",
+    "proposal_ref": "prop-m4-02-approval-2",
+    "requester_ref": "principal_m402_operator",
+    "research_id": "res-f59cb889167dd06425f86471",
+    "science_digest": "sha256:944a3b3a68391954a7d1813877fd3d5ccc7841b9ff33825b364c5dd6f9a06782"
+  },
+  {
+    "approval_ref": "ap_1db5633db5c043c9b3492099126103c4",
+    "approval_revision": 1,
+    "budget": {
+      "count": 1,
+      "timeout_s": 600,
+      "unit": "task_count"
+    },
+    "index": 3,
+    "plan_digest": "sha256:d627b0ac438db4053bea1f144165bf22c5fc0de59583161b57528776e5428821",
+    "proposal_digest": "sha256:bc63db053b57e0d5598f86d22f0d3973abae26c09eae9515ba5ba2aa968ee693",
+    "proposal_ref": "prop-m4-02-approval-3",
+    "requester_ref": "principal_m402_operator",
+    "research_id": "res-5c55af2196549b108c697c29",
+    "science_digest": "sha256:944a3b3a68391954a7d1813877fd3d5ccc7841b9ff33825b364c5dd6f9a06782"
+  },
+  {
+    "approval_ref": "ap_7b1296c3eee04af181629be97da2cf8d",
+    "approval_revision": 1,
+    "budget": {
+      "count": 1,
+      "timeout_s": 600,
+      "unit": "task_count"
+    },
+    "index": 4,
+    "plan_digest": "sha256:d627b0ac438db4053bea1f144165bf22c5fc0de59583161b57528776e5428821",
+    "proposal_digest": "sha256:286e0ce952b5afb08f95a07ddd2c59eacf71a1724114019f7739e3477a1150f6",
+    "proposal_ref": "prop-m4-02-approval-4",
+    "requester_ref": "principal_m402_operator",
+    "research_id": "res-f59d144ce4032f7690842764",
+    "science_digest": "sha256:944a3b3a68391954a7d1813877fd3d5ccc7841b9ff33825b364c5dd6f9a06782"
+  }
+]

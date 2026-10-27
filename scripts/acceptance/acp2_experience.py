@@ -181,15 +181,16 @@ COMMON_PHASES = (
 # process is started for those rows.  The C workbench owns this classification
 # (B does not know which C content is fixture), so it lives here next to the
 # phase normalizer.
-FIXTURE_ONLY_SCENARIOS = frozenset(("approval-budget-live",))
+# M4-02 removed ``approval-budget-live`` from this set: the row now runs a real
+# Controller with two independent browser identities, real approval decisions
+# and a real budget refusal, so a live run is exactly what it must be.
+FIXTURE_ONLY_SCENARIOS: frozenset[str] = frozenset()
 
 # Scenario-level phase aliases.  The CLI keeps accepting B01's common phase
 # (``--phase approval`` is T-27's required invocation) while the receipt is
 # written with the honest public phase.  The requested phase stays available to
 # the scenario body through ``ResolvedIdentity.requested_phase``.
-PHASE_ALIASES: dict[str, dict[str, str]] = {
-    "approval-budget-live": {"approval": "experience:fixture"},
-}
+PHASE_ALIASES: dict[str, dict[str, str]] = {}
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$")
 REVISION_RE = re.compile(r"^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$")
