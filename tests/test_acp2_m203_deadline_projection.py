@@ -177,24 +177,30 @@ def test_admission_bound_and_process_termination_are_split_claims() -> None:
     admission_row = limit_row("walltime_admission_bound")
     termination_row = limit_row("walltime_process_termination")
     assert admission_row.capability == BudgetCapability.ENFORCED
-    assert termination_row.capability == BudgetCapability.NOT_VERIFIED
-    # Wiring the deadline does not upgrade the termination claim.
+    # M4-03 closed the termination claim with real receipts; the narrower
+    # subprocess-level surface keeps its own honest NOT_VERIFIED.
+    assert termination_row.capability == BudgetCapability.ENFORCED
     wiring_statement = deadline_wiring_statement()
     assert "local_process_group" in wiring_statement["wired"]
     assert "remote_lsf" in wiring_statement["wired"]
     assert {row["surface"] for row in wiring_statement["not_verified"]} >= {
-        "local_process_group",
         "cccp_subprocess",
-        "remote_lsf",
-        "queue_clock",
     }
-    assert statement["enforced"] == ["walltime_admission_bound"]
+    enforced_surfaces = set(wiring_statement["enforced"])
+    assert {"local_process_group", "remote_lsf", "queue_clock"} <= enforced_surfaces
+    assert statement["enforced"] == [
+        "walltime_admission_bound",
+        "walltime_process_termination",
+        "queue_deadline",
+    ]
     by_surface = {row.surface: row for row in DEADLINE_SURFACES}
     assert by_surface["local_admission"].capability == BudgetCapability.ENFORCED
-    for surface in ("local_process_group", "cccp_subprocess", "remote_lsf", "queue_clock"):
-        assert by_surface[surface].capability == BudgetCapability.NOT_VERIFIED
-        # Wired but not certified as terminating (M4-03 evidence).
+    for surface in ("local_process_group", "remote_lsf", "queue_clock"):
+        assert by_surface[surface].capability == BudgetCapability.ENFORCED
+        # Wired and certified by M4-03 real receipts.
         assert by_surface[surface].wired is True
+    assert by_surface["cccp_subprocess"].capability == BudgetCapability.NOT_VERIFIED
+    assert by_surface["cccp_subprocess"].wired is True
 
 
 # ---------------------------------------------------------------------------
@@ -202,22 +208,31 @@ def test_admission_bound_and_process_termination_are_split_claims() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_recipe_qc_model_and_deadline_rows_stay_unenforced() -> None:
+def test_recipe_qc_model_and_bsub_rows_stay_unenforced() -> None:
     assert UNIT_CAPABILITIES["recipe_step"] == BudgetCapability.RECORDED_ONLY
     assert UNIT_CAPABILITIES["qc_invocation"] == BudgetCapability.RECORDED_ONLY
     assert UNIT_CAPABILITIES["model_request"] == BudgetCapability.RECORDED_ONLY
     assert UNIT_CAPABILITIES["bsub"] == BudgetCapability.RECORDED_ONLY
     capabilities = {row.limit: row.capability for row in EXECUTION_LIMITS}
-    assert capabilities["walltime_process_termination"] == BudgetCapability.NOT_VERIFIED
-    assert capabilities["queue_deadline"] == BudgetCapability.NOT_VERIFIED
+    # M4-03 receipts closed the two clock rows; the quota rows stay gated.
+    assert capabilities["walltime_process_termination"] == BudgetCapability.ENFORCED
+    assert capabilities["queue_deadline"] == BudgetCapability.ENFORCED
 
     blocked = blocked_upgrades()
     assert blocked["recipe_step"].startswith("M2-04")
     assert blocked["qc_invocation"].startswith("M2-04")
     assert blocked["model_request"].startswith("M3-03")
-    assert blocked["walltime_process_termination"].startswith("M4-03")
+    assert "walltime_process_termination" not in blocked
     projection = enforcement_projection()
-    assert projection["enforced"] == ["attempt", "task_ref", "walltime_admission_bound"]
+    assert projection["enforced"] == sorted(
+        [
+            "attempt",
+            "task_ref",
+            "walltime_admission_bound",
+            "walltime_process_termination",
+            "queue_deadline",
+        ]
+    )
     assert "recipe_step" not in projection["enforced"]
 
 

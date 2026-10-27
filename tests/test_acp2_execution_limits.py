@@ -61,12 +61,18 @@ def test_unit_matrix_is_unchanged_and_truthful() -> None:
     }
 
 
-def test_only_the_admission_bound_walltime_claim_is_enforced() -> None:
+def test_only_the_platform_termination_rows_are_enforced() -> None:
     enforced = [row.limit for row in EXECUTION_LIMITS if row.capability == "enforced"]
-    assert enforced == ["walltime_admission_bound"]
+    # M4-03 receipts closed the process-termination and queue-deadline rows.
+    assert enforced == [
+        "walltime_admission_bound",
+        "walltime_process_termination",
+        "queue_deadline",
+    ]
     termination = limit_row("walltime_process_termination")
-    assert termination.capability == "NOT_VERIFIED"
+    assert termination.capability == "enforced"
     assert termination.kind == "process-termination"
+    assert "M4-03" in termination.evidence
     assert limit_row("queue_deadline").kind == "queue-deadline"
     assert limit_row("science_runtime_recorded").capability == "recorded-only"
     assert limit_row("model_tokens").capability == "recorded-only"
@@ -211,8 +217,14 @@ def test_release_statement_carries_the_execution_limits_section() -> None:
     statement = release_statement()
     section = statement["execution_limits"]
     assert section["schema"] == "acp2.runtime.execution-limits.v1"
-    assert section["enforced"] == ["walltime_admission_bound"]
-    assert "walltime_process_termination" in {row["capability"] for row in section["not_verified"]}
+    assert section["enforced"] == [
+        "walltime_admission_bound",
+        "walltime_process_termination",
+        "queue_deadline",
+    ]
+    assert "walltime_process_termination" not in {
+        row["capability"] for row in section["not_verified"]
+    }
     assert statement["enforced"] == ["task_ref", "attempt"]
 
 

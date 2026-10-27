@@ -121,11 +121,15 @@ DEADLINE_SURFACES: tuple[DeadlineSurface, ...] = (
         surface="local_process_group",
         kind=LIMIT_PROCESS_TERMINATION,
         carrier="local_terminate_after_s (same resolver value)",
-        consumer="JobRunner process group (killpg) — consumer lands with M4-03",
+        consumer="JobRunner process group (killpg)",
         wiring=WIRING_WIRED,
-        capability=BudgetCapability.NOT_VERIFIED,
-        evidence="wiring only: no termination receipt exists yet",
-        upgrade_gate="M4-03 (real local process-group termination receipt)",
+        capability=BudgetCapability.ENFORCED,
+        evidence=(
+            "M4-03 local_wall row: the real worker+ORCA process group (7 PIDs) "
+            "killed to zero survivors at the deadline "
+            "(reports/acp2_remediation_20261026/m4-03/)"
+        ),
+        upgrade_gate="closed by M4-03 (real local process-group termination receipt)",
     ),
     DeadlineSurface(
         surface="cccp_subprocess",
@@ -134,8 +138,12 @@ DEADLINE_SURFACES: tuple[DeadlineSurface, ...] = (
         consumer="runtime.deadline_wiring.apply_to_task_resources",
         wiring=WIRING_WIRED,
         capability=BudgetCapability.NOT_VERIFIED,
-        evidence="subprocess-level only; wiring tested against cccp TaskResources",
-        upgrade_gate="M4-03 (real subprocess timeout receipt)",
+        evidence=(
+            "subprocess-level only; wiring tested against cccp TaskResources; no "
+            "standalone subprocess-timeout receipt yet — the platform termination "
+            "evidence covers the whole process group, which is the stronger claim"
+        ),
+        upgrade_gate="a standalone cccp resources.timeout_s receipt",
     ),
     DeadlineSurface(
         surface="remote_lsf",
@@ -143,9 +151,14 @@ DEADLINE_SURFACES: tuple[DeadlineSurface, ...] = (
         carrier="bsub -W HH:MM (lsf_walltime_minutes from the same resolver)",
         consumer="Controller LSF script generator derive_lsf_resources(walltime_minutes=...)",
         wiring=WIRING_WIRED,
-        capability=BudgetCapability.NOT_VERIFIED,
-        evidence="argument mapping only; no LSF queue/submission in this environment",
-        upgrade_gate="M4-03 (real LSF -W plus a terminal LSF state)",
+        capability=BudgetCapability.ENFORCED,
+        evidence=(
+            "M4-03 wall_limit three-way: approval 60s -> #BSUB -W 00:01 -> native "
+            "RUNLIMIT exit 140 with a verified deadline receipt; PAUSED time counts "
+            "and a restart restores the same absolute deadline "
+            "(reports/acp2_remediation_20261026/m4-03/)"
+        ),
+        upgrade_gate="closed by M4-03 (real LSF -W plus a terminal LSF state)",
     ),
     DeadlineSurface(
         surface="queue_clock",
@@ -153,9 +166,13 @@ DEADLINE_SURFACES: tuple[DeadlineSurface, ...] = (
         carrier="queue_deadline_s (persistent absolute deadline at admission)",
         consumer="runtime.execution_limits.compute_attempt_clock",
         wiring=WIRING_WIRED,
-        capability=BudgetCapability.NOT_VERIFIED,
-        evidence="clock computed; expiry -> terminal transition receipt pending",
-        upgrade_gate="M4-03 (expiry -> terminal transition receipt)",
+        capability=BudgetCapability.ENFORCED,
+        evidence=(
+            "M4-03 queue_deadline row: a real PEND job under a closed queue expired "
+            "by a 40s bound, terminated with bkill and recorded a verified receipt "
+            "(reports/acp2_remediation_20261026/m4-03/)"
+        ),
+        upgrade_gate="closed by M4-03 (expiry -> terminal transition receipt)",
     ),
 )
 

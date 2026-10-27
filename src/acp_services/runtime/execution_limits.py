@@ -189,22 +189,32 @@ EXECUTION_LIMITS: tuple[ExecutionLimit, ...] = (
         limit="walltime_process_termination",
         kind=LIMIT_PROCESS_TERMINATION,
         carrier="local process group / CCCP resources.timeout_s / LSF -W",
-        capability=BudgetCapability.NOT_VERIFIED,
+        capability=BudgetCapability.ENFORCED,
         source_field="wall_seconds",
-        evidence="needs a real termination receipt (M1-05 local+LSF, M4-03)",
+        evidence=(
+            "M4-03 real receipts: local worker+ORCA process group killed to zero "
+            "survivors; approval 60s -> #BSUB -W 00:01 -> native RUNLIMIT exit 140 "
+            "with a verified deadline receipt; PAUSED time counts against the "
+            "absolute deadline and a restart restores the same bound "
+            "(reports/acp2_remediation_20261026/m4-03/)"
+        ),
         notes=(
-            "CCCP resources.timeout_s is subprocess-level only; the local deadline "
-            "needs the process-group kill receipt and the remote one needs -W plus a "
-            "terminal LSF state"
+            "CCCP resources.timeout_s stays subprocess-level only; platform "
+            "termination is the claim-deadline-then-terminate ordering in the "
+            "manager's dedicated deadline thread"
         ),
     ),
     ExecutionLimit(
         limit="queue_deadline",
         kind=LIMIT_QUEUE_DEADLINE,
         carrier="persistent absolute deadline recorded at admission",
-        capability=BudgetCapability.NOT_VERIFIED,
+        capability=BudgetCapability.ENFORCED,
         source_field="queue_seconds",
-        evidence="needs an expiry -> terminal transition receipt (M1-05)",
+        evidence=(
+            "M4-03 real receipt: a PEND job under a closed queue expired by a 40s "
+            "queue deadline, terminated with bkill and recorded a verified "
+            "deadline receipt (reports/acp2_remediation_20261026/m4-03/)"
+        ),
         notes="a queued attempt is governed by this clock only; it never starts late",
     ),
     ExecutionLimit(

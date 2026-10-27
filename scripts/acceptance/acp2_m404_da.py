@@ -4013,8 +4013,14 @@ class M404:
             "budget": {
                 "timing_basis": "unmeasured",
                 "measured_step_timings": "recorded in chain/<step>.json",
-                "walltime_process_termination": "NOT_VERIFIED",
-                "queue_deadline": "NOT_VERIFIED",
+                "walltime_process_termination": (
+                    "platform-enforced per M4-03 real receipts (local process-group "
+                    "kill + LSF RUNLIMIT); not re-exercised inside this run"
+                ),
+                "queue_deadline": (
+                    "platform-enforced per M4-03 real receipt (40s expiry on a real "
+                    "PEND job); not re-exercised inside this run"
+                ),
                 "requested_cores": RESOURCE_NPROC,
                 "requested_memory_mb": requested_memory_mb,
                 "admission_max_cores": admission.max_cores,
@@ -4037,7 +4043,8 @@ class M404:
             "receipts": {
                 "usage_receipt": "not produced (no Controller-side usage collection in this run)",
                 "process_group_termination_receipt": (
-                    "NOT_VERIFIED (M1-04 walltime_process_termination)"
+                    "platform-enforced per M4-03 real receipts "
+                    "(walltime_process_termination); not re-exercised in this run"
                 ),
                 "attempt_attribution": "per step in chain/<step>.json",
             },

@@ -13,8 +13,8 @@ row                                   capability now                  upgrade ga
 ``bsub``                              recorded-only                   M4-03 (real LSF)
 ``model_request``                     recorded-only                   M3-03 (gateway)
 ``walltime_admission_bound``          enforced                        —
-``walltime_process_termination``      NOT_VERIFIED                    M4-03 (receipt)
-``queue_deadline``                    NOT_VERIFIED                    M4-03 (receipt)
+``walltime_process_termination``      enforced (M4-03 receipts)       closed
+``queue_deadline``                    enforced (M4-03 receipts)       closed
 ``cumulative_core_hours``/tokens      recorded-only                   (out of scope)
 ===================================  ==============================  =================
 
@@ -109,18 +109,10 @@ UPGRADE_GATES: tuple[UpgradeGate, ...] = (
         gate="M4-03 (real LSF submission)",
         evidence="a real bsub receipt counted before submission",
     ),
-    UpgradeGate(
-        row="walltime_process_termination",
-        capability=BudgetCapability.NOT_VERIFIED,
-        gate="M4-03 (real local/LSF termination)",
-        evidence="a termination receipt at the deadline (local process group + LSF -W)",
-    ),
-    UpgradeGate(
-        row="queue_deadline",
-        capability=BudgetCapability.NOT_VERIFIED,
-        gate="M4-03 (expiry -> terminal)",
-        evidence="a queued attempt that expires and reaches a terminal state",
-    ),
+    # walltime_process_termination and queue_deadline gates are CLOSED by M4-03
+    # real receipts (local process-group kill, native RUNLIMIT via #BSUB -W, and
+    # a 40s queue-deadline expiry on a real PEND job); both rows ship as
+    # enforced and no longer gate anything.
 )
 
 _GATES_BY_ROW = {gate.row: gate for gate in UPGRADE_GATES}
