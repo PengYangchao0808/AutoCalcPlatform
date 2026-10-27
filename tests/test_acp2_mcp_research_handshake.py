@@ -156,7 +156,7 @@ def test_extension_identity_has_one_authority() -> None:
     # M0-06 -> 1.2.0 (field policy); D-IDENT-10 -> 1.3.0 (prepare field table);
     # M1-01 -> 1.4.0 (negotiation relation projection + required submit key);
     # M2-01c -> 1.5.0 (implemented projection + research tool visibility rule).
-    assert api["contract_version"] == "1.5.0"
+    assert api["contract_version"] == "1.6.0"
     assert api["contract_version"] != mcp_extension.RESEARCH_EXTENSION_VERSION
     # M1-01a: the projection states the advertised/implemented relation and never
     # promotes advertising to delivery.  M2-01c registers all ten promised tools,

@@ -1096,8 +1096,10 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     # idempotency key (client-visible request-schema change).
     # 1.5.0 (M2-01c): the research extension projection flips to
     # implemented=true with the tool-visibility rule (additive; no P1 change).
+    # 1.6.0 (M2-02): analysis_capabilities and product_digest are declared
+    # response fields (single science catalog projection).
     # 1.1.0's research fields stay untouched.
-    assert api["contract_version"] == "1.5.0"
+    assert api["contract_version"] == "1.6.0"
     submit = api["operations"]["submit"]
     for name in ("proposal_ref", "plan_digest", "budget"):
         assert name in submit["request"]["fields"], name

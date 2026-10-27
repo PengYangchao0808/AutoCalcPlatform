@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "855e0eb4c4769c0b125f010a6665cfc012b70cd43d1d9ad9cae0d7bc52abb05c",
+  "contract_digest": "7f3962812eedf4e5ff5ae4ee95cca846d96a9eb3a25094e7e4aaf47f41a87566",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "contract_version": "1.6.0",
   "contract_version_history": [
@@ -219,7 +219,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "c6647e8db78031d4e488b1eefd14f1d7bccc21ef62a9e08e41081e933deb5b0a",
+      "sha256": "79ab43cc471f906d76519581c22ba12a29477290ca4da2b8ec6546901b59c335",
       "status": "delivered"
     },
     {
@@ -285,7 +285,7 @@
       "id": "application-api",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "sha256": "fb603a7e930f8d316267dfe2c78fdd98aa419ec353e92e41ffd020fdea28a934",
+      "sha256": "d55f470aab72c2ee3ceed652fd51f16489bff764cc49a0bc1461f8c1333588f0",
       "status": "delivered",
       "updated_by": "B16"
     },
