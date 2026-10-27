@@ -460,9 +460,10 @@ def test_science_capabilities_shape(descriptors: dict, domain: dict) -> None:
     assert "fixture" not in document
 
     capabilities = document["capabilities"]
-    assert set(capabilities) == {"questions", "descriptors", "domain"}
+    assert set(capabilities) == {"questions", "descriptors", "domain", "analysis"}
     assert capabilities["descriptors"] is descriptors
     assert capabilities["domain"] is domain
+    assert capabilities["analysis"] == []
     assert len(capabilities["questions"]) == 3
     assert "fixture" not in capabilities
 

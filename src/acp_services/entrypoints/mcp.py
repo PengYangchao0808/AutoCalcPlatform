@@ -118,7 +118,17 @@ from acp_services.contracts.access import (
 )
 from acp_services.entrypoints import machine_output as mo
 from acp_services.entrypoints import wire_identifiers
-from acp_services.runtime.analysis_capabilities import capability_projection
+from acp_services.entrypoints.application_params import (
+    ANALYZE_REQUEST_FIELDS,
+    ANALYZE_REQUEST_REQUIRED,
+    MAX_READ_BYTES,
+    ApplicationParamError,
+    normalize_artifact_ref,
+)
+from acp_services.runtime.analysis_capabilities import (
+    AnalysisCapabilityRegistry,
+    capability_projection,
+)
 from acp_services.workspace.boundary import evaluate_tier_request
 from acp_services.workspace.command_identity import (
     CommandIdentity,
@@ -827,12 +837,21 @@ _READ_SCHEMA: dict[str, Any] = {
     "description": (
         "Bounded read of an already-prepared artifact. artifact_ref is required; a miss is "
         "resource_not_ready and a read never fetches, prepares or starts computation "
-        "(M1-01b)."
+        "(M1-01b). max_bytes above the frozen max_read_bytes bound is refused "
+        "(input_invalid, rule=max_read_bytes_exceeded) instead of served."
     ),
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
         "artifact_ref": _ARTIFACT_REF_SCHEMA,
-        "max_bytes": {"type": "integer", "minimum": 1},
+        "max_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": MAX_READ_BYTES,
+            "description": (
+                f"Requested response bound (<= {MAX_READ_BYTES} bytes). A larger request is "
+                "refused rather than silently clamped."
+            ),
+        },
         "encoding": {"type": "string", "enum": ["identity", "base64"]},
         "extensions": {
             "type": "object",
@@ -843,6 +862,40 @@ _READ_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+#: Declared analyze properties, keyed by the frozen field name.  The advertised
+#: table is built from
+#: :data:`~acp_services.entrypoints.application_params.ANALYZE_REQUEST_FIELDS`,
+#: so a field that is not in the one application table cannot be advertised or
+#: accepted here (M2-02; the registered ``application-api.v1``
+#: ``operations.analyze.request`` declares the same names).
+_ANALYZE_PROPERTIES: dict[str, Any] = {
+    "schema_version": {"type": "integer", "enum": [1], "default": 1},
+    "analysis_id": {"type": "string"},
+    "input_refs": {
+        "type": "array",
+        "items": _ARTIFACT_REF_SCHEMA,
+        "minItems": 1,
+        "description": "Frozen ArtifactRef inputs (full identity tuple).",
+    },
+    "explicit": {
+        "type": "boolean",
+        "description": "Must be exactly true; there is no implicit analysis.",
+    },
+    "parameters": {"type": "object"},
+    "plan_digest": {
+        "type": "string",
+        "description": "Required for vibration.compute (it starts exactly one task).",
+    },
+    "idempotency_key": {
+        "type": "string",
+        "description": "Optional retry key for analysis; omitting it is not idempotent.",
+    },
+    "extensions": {
+        "type": "object",
+        "description": "Namespaced extension metadata (never used for execution).",
+    },
+}
+
 _ANALYZE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": (
@@ -850,37 +903,14 @@ _ANALYZE_SCHEMA: dict[str, Any] = {
         "required: an implicit/heuristic trigger is refused (input_invalid, "
         "rule=explicit_required); an unregistered capability is unsupported_capability "
         "(rule=analysis_capability_not_registered) and a declared-but-not-executable one is "
-        "unsupported_capability (rule=analysis_capability_not_executable). vibration.analyze "
-        "reads existing evidence and starts no QC."
+        "unsupported_capability (rule=analysis_capability_not_executable). Each input_refs "
+        "entry must be the full ArtifactRef identity tuple (task_id/attempt/artifact_id/"
+        "generation/digest) of an already prepared artifact. vibration.analyze reads "
+        "existing evidence and starts no QC; vibration.compute is a compute capability "
+        "(submit it as a frequency task) and is never a read-only analysis."
     ),
-    "properties": {
-        "schema_version": {"type": "integer", "enum": [1], "default": 1},
-        "analysis_id": {"type": "string"},
-        "input_refs": {
-            "type": "array",
-            "items": _ARTIFACT_REF_SCHEMA,
-            "minItems": 1,
-            "description": "Frozen ArtifactRef inputs (full identity tuple).",
-        },
-        "explicit": {
-            "type": "boolean",
-            "description": "Must be exactly true; there is no implicit analysis.",
-        },
-        "parameters": {"type": "object"},
-        "plan_digest": {
-            "type": "string",
-            "description": "Required for vibration.compute (it starts exactly one task).",
-        },
-        "idempotency_key": {
-            "type": "string",
-            "description": "Optional retry key for analysis; omitting it is not idempotent.",
-        },
-        "extensions": {
-            "type": "object",
-            "description": "Namespaced extension metadata (never used for execution).",
-        },
-    },
-    "required": ["analysis_id", "input_refs", "explicit"],
+    "properties": {name: _ANALYZE_PROPERTIES[name] for name in ANALYZE_REQUEST_FIELDS},
+    "required": [name for name in ANALYZE_REQUEST_REQUIRED],
     "additionalProperties": False,
 }
 
@@ -1232,6 +1262,41 @@ def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
             params={"field": missing[0], "rule": rule, "missing": missing, "tool": tool},
             retryable=False,
         )
+    _validate_artifact_refs(tool, arguments)
+
+
+def _validate_artifact_refs(tool: str, arguments: Mapping[str, Any]) -> None:
+    """Refuse an incomplete ArtifactRef *before* any port call (M2-02).
+
+    A bounded read and an explicit analysis are both addressed by the frozen
+    ``acp2.artifact-ref.v1`` identity tuple.  The JSON schema documents it; this
+    is the adapter half that enforces it locally, so a partial/typo'd reference
+    is the same typed ``input_invalid`` here and never reaches a Controller (or
+    a custom port) where it would have to be guessed.
+
+    Raises:
+        McpToolError: ``input_invalid`` with ``params.rule``
+            ``missing_artifact_ref``/``unknown_field``/``digest``/``minimum``.
+    """
+    if tool == McpTool.READ_ARTIFACT:
+        targets: list[tuple[str, Any]] = [("artifact_ref", arguments.get("artifact_ref"))]
+    elif tool == McpTool.ANALYZE:
+        raw_refs = arguments.get("input_refs")
+        if not isinstance(raw_refs, (list, tuple)):
+            return
+        targets = [(f"input_refs[{index}]", item) for index, item in enumerate(raw_refs)]
+    else:
+        return
+    for field, value in targets:
+        try:
+            normalize_artifact_ref(value, field=field)
+        except ApplicationParamError as exc:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                exc.message,
+                params={"tool": tool, **dict(exc.params)},
+                retryable=False,
+            ) from None
 
 
 def _tool_specs() -> tuple[dict[str, Any], ...]:
@@ -2393,10 +2458,16 @@ class McpServer:
         """
         data = dict(self._backends.capabilities.capabilities())
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
-        # M1-01b: the frozen three-state analysis-capability projection.  A
+        # M1-01b/M2-02: the frozen three-state analysis-capability projection.  A
         # descriptor is never "available": registered/executable/unavailable are
         # the only states, and analyze refuses anything that is not executable.
-        data.setdefault("analysis_capabilities", list(capability_projection()))
+        # The Controller's composition root injects the application registry, so a
+        # payload that already carries the projection is forwarded verbatim; the
+        # fallback is an explicitly empty table, never the process-global default
+        # registry (that module-level object is not a production authority).
+        data.setdefault(
+            "analysis_capabilities", list(capability_projection(AnalysisCapabilityRegistry()))
+        )
 
         raw_extension = arguments.get("research_extension")
         if raw_extension is not None and not isinstance(raw_extension, Mapping):

@@ -27,8 +27,7 @@ The ``:path`` converter on the artifact id exists only so that a slash-bearing
 id reaches :class:`~acp.api.science_projection.UnsafeArtifactId` and becomes an
 explicit 400; a readable artifact id is always a single safe token.
 
-This router is not mounted by ``server.py`` in this change; mounting is a
-separate lane.
+``server.py`` mounts this router (``/api/v2``); the module never mounts itself.
 """
 
 from __future__ import annotations
@@ -41,7 +40,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from acp.api import science_projection
+from acp.api import science_catalog, science_projection
 from acp.api.v1_routes import (
     _artifact_authorization_projection,
     _command_error,
@@ -57,6 +56,7 @@ from acp.api.v1_schemas import V1PreflightRequest
 from acp.services_data_bootstrap import build_read_root_resolver
 from acp_services.contracts.access import AccessAction as _AccessAction
 from acp_services.data.artifacts import ArtifactStore
+from acp_services.entrypoints.application_params import MAX_READ_BYTES as _MAX_READ_BYTES
 from acp_services.workspace.entry_authz import EntryClass as _EntryClass
 
 __all__ = ["router"]
@@ -65,9 +65,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-#: Default and hard-cap bounds for a bounded artifact read.
+#: Default bound for a bounded artifact read (the hard cap is ``MAX_READ_BYTES``).
 _DEFAULT_MAX_BYTES = 256 * 1024
-_MAX_READ_BYTES = 64 * 1024 * 1024
 
 #: A required artifact digest is ``sha256:<64 hex>`` (a bare hex is normalized).
 _DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-f]{64}$")
@@ -116,21 +115,15 @@ def _artifact_store(request: Request) -> ArtifactStore:
 
 
 def _capability_descriptors(request: Request) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """Return the per-app capability documents, probing executables only once."""
+    """Return the per-app capability documents (one catalog build per process).
 
-    state = request.app.state
-    descriptors = getattr(state, "science_capability_descriptors", None)
-    domain = getattr(state, "science_capability_domain", None)
-    if descriptors is None or domain is None:
-        from cccp.calculation.capabilities import builtin_catalog, domain_catalog
+    Delegates to :mod:`acp.api.science_catalog`, the single discovery provider
+    that ``GET /api/capabilities`` also reads, so the two surfaces can never
+    probe the executable seam twice or answer with different documents (M2-02).
+    """
 
-        if descriptors is None:
-            descriptors = builtin_catalog().to_dict()
-            state.science_capability_descriptors = descriptors
-        if domain is None:
-            domain = domain_catalog().to_dict()
-            state.science_capability_domain = domain
-    return descriptors, domain
+    catalog = science_catalog.science_catalog(request.app.state)
+    return catalog.descriptors, catalog.domain
 
 
 def _resolve_workflow(payload: Mapping[str, Any], request: Request) -> str:
@@ -192,9 +185,27 @@ def _normalize_digest(value: str | None) -> str:
 
 
 def _bounded_max_bytes(value: int | None) -> int:
+    """Return the bounded read limit, refusing a request above the frozen cap.
+
+    ``None``/``<1`` means the default bound; a value above
+    ``capabilities.limits.max_read_bytes`` is an ``input_invalid`` refusal
+    (``max_read_bytes_exceeded``) rather than a silently clamped read.
+    """
     if value is None or value < 1:
         return _DEFAULT_MAX_BYTES
-    return min(int(value), _MAX_READ_BYTES)
+    if int(value) > _MAX_READ_BYTES:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"max_bytes exceeds the frozen read bound ({_MAX_READ_BYTES} bytes)",
+            params={
+                "field": "max_bytes",
+                "rule": "max_read_bytes_exceeded",
+                "limit": _MAX_READ_BYTES,
+                "requested": int(value),
+            },
+        )
+    return int(value)
 
 
 def _scoped_read_root(request: Request, job_id: str, attempt: int) -> Any:
@@ -245,7 +256,11 @@ def get_science_capabilities(
     _research_project(_manager(request), resolved)
 
     descriptors, domain = _capability_descriptors(request)
-    return science_projection.science_capabilities(descriptors=descriptors, domain=domain)
+    return science_projection.science_capabilities(
+        descriptors=descriptors,
+        domain=domain,
+        analysis=science_catalog.analysis_capabilities(request.app.state),
+    )
 
 
 @router.post("/science/preflight")

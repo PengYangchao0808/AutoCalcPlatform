@@ -1962,6 +1962,18 @@ class V1PrepareRequest(BaseModel):
 
 
 class V1AnalyzeRequest(BaseModel):
+    """Explicit analysis request — the frozen ``operations.analyze`` field table.
+
+    The declared names are
+    :data:`acp_services.entrypoints.application_params.ANALYZE_REQUEST_FIELDS`
+    (M2-02): the same tuple builds the MCP advertised ``acp_analyze`` input
+    schema, and the registered ``application-api.v1`` contract declares the same
+    eight fields.  ``extra="forbid"`` makes an undeclared field the shared
+    ``input_invalid``/``unknown_field`` envelope instead of a silent drop.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     schema_version: int = 1
     analysis_id: str
     input_refs: list[dict[str, Any]] = Field(default_factory=list)
@@ -1969,6 +1981,7 @@ class V1AnalyzeRequest(BaseModel):
     parameters: dict[str, Any] | None = None
     plan_digest: str | None = None
     idempotency_key: str | None = None
+    extensions: dict[str, Any] | None = None
 
 
 __all__ = [

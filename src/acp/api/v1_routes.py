@@ -8069,6 +8069,67 @@ def get_job_availability(
     return snapshot.to_dict()
 
 
+def _artifact_error(exc: Any) -> HTTPException:
+    """Map one Data artifact refusal onto the frozen command error.
+
+    One mapping for every route that resolves prepared artifacts (the prepared
+    read and the explicit analysis), so ``attempt_mismatch``/``digest_mismatch``/
+    ``generation_stale``/``not_prepared``/``path_traversal`` mean the same thing
+    at every entry (M2-02).
+    """
+    from acp_services.data.artifacts import (
+        ArtifactAttemptMismatchError,
+        ArtifactDigestMismatchError,
+        ArtifactGenerationMismatchError,
+        ArtifactNotPreparedError,
+        ArtifactPathRefusedError,
+    )
+
+    if isinstance(exc, ArtifactPathRefusedError):
+        return _command_error(
+            400,
+            "input_invalid",
+            str(exc),
+            params={"rule": "path_traversal", **exc.params},
+        )
+    if isinstance(exc, ArtifactGenerationMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "generation_stale", **exc.params},
+        )
+    if isinstance(exc, ArtifactDigestMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "digest_mismatch", **exc.params},
+        )
+    if isinstance(exc, ArtifactAttemptMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "attempt_mismatch", **exc.params},
+        )
+    if isinstance(exc, ArtifactNotPreparedError):
+        reason = str(exc.params.get("reason") or "not_prepared")
+        return _command_error(
+            409,
+            "resource_not_ready",
+            f"not_prepared: {reason}",
+            params={"reason": reason, **exc.params},
+            retryable=True,
+        )
+    return _command_error(
+        int(getattr(exc, "http_status", 500)),
+        "resource_not_ready" if int(getattr(exc, "http_status", 500)) == 409 else "input_invalid",
+        str(exc),
+        params=dict(getattr(exc, "params", {}) or {}),
+    )
+
+
 def _serve_prepared_artifact(
     request: Request,
     record: Any,
@@ -8087,17 +8148,11 @@ def _serve_prepared_artifact(
     a ``not_prepared`` message, a stale generation / corrupt digest / cross-
     attempt read is ``revision_conflict`` with an explicit rule, and a
     traversing id is ``input_invalid``.  No branch enqueues, fetches or parses.
+    A requested ``max_bytes`` above the frozen read bound is refused instead of
+    served (``input_invalid``/``max_read_bytes_exceeded``).
     """
-    from acp_services.data.artifacts import (
-        ArtifactAttemptMismatchError,
-        ArtifactDigestMismatchError,
-        ArtifactError,
-        ArtifactGenerationMismatchError,
-        ArtifactNotPreparedError,
-        ArtifactPathRefusedError,
-        ArtifactStore,
-        resolve_artifact_read,
-    )
+    from acp_services.data.artifacts import ArtifactError, ArtifactStore, resolve_artifact_read
+    from acp_services.entrypoints.application_params import MAX_READ_BYTES
 
     if encoding not in {"identity", "base64"}:
         raise _command_error(
@@ -8112,6 +8167,18 @@ def _serve_prepared_artifact(
             "input_invalid",
             "an artifact read requires artifact_ref.digest",
             params={"field": "digest", "rule": "required"},
+        )
+    if int(max_bytes) > MAX_READ_BYTES:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"max_bytes exceeds the frozen read bound ({MAX_READ_BYTES} bytes)",
+            params={
+                "field": "max_bytes",
+                "rule": "max_read_bytes_exceeded",
+                "limit": MAX_READ_BYTES,
+                "requested": int(max_bytes),
+            },
         )
     _require_entry_access(
         request,
@@ -8159,50 +8226,8 @@ def _serve_prepared_artifact(
             max_bytes=int(max_bytes),
             encoding=encoding,
         )
-    except ArtifactPathRefusedError as exc:
-        raise _command_error(
-            400,
-            "input_invalid",
-            str(exc),
-            params={"rule": "path_traversal", **exc.params},
-        ) from exc
-    except ArtifactGenerationMismatchError as exc:
-        raise _command_error(
-            409,
-            "revision_conflict",
-            str(exc),
-            params={"rule": "generation_stale", **exc.params},
-        ) from exc
-    except ArtifactDigestMismatchError as exc:
-        raise _command_error(
-            409,
-            "revision_conflict",
-            str(exc),
-            params={"rule": "digest_mismatch", **exc.params},
-        ) from exc
-    except ArtifactAttemptMismatchError as exc:
-        raise _command_error(
-            409,
-            "revision_conflict",
-            str(exc),
-            params={"rule": "attempt_mismatch", **exc.params},
-        ) from exc
-    except ArtifactNotPreparedError as exc:
-        reason = str(exc.params.get("reason") or "not_prepared")
-        raise _command_error(
-            409,
-            "resource_not_ready",
-            f"not_prepared: {reason}",
-            params={"reason": reason, **exc.params},
-            retryable=True,
-        ) from exc
     except ArtifactError as exc:
-        raise _command_error(
-            exc.http_status,
-            "resource_not_ready" if exc.http_status == 409 else "input_invalid",
-            str(exc),
-            params=dict(exc.params),
-        ) from exc
+        raise _artifact_error(exc) from exc
     return JSONResponse(content=read.to_dict())
 
 
@@ -8623,20 +8648,40 @@ def _budget_claim_from_approval(approval: Any) -> dict[str, Any] | None:
     The client's ``budget`` payload is only compared with the approval digest by
     B16; the effective limits come from the persisted approval, never from the
     request.  The budget id is project+proposal (independent of ``run_id``).
+
+    M2-03c: the approved budget is normalized through the one mapping
+    (:mod:`acp_services.runtime.budget_projection`), so a non-empty unknown shape
+    or an unsupported launch unit is a typed 400/422 here — never a 500 inside
+    the ledger and never "no limits".  The resolved deadline projection travels
+    with the claim so the dispatcher has one value for all three surfaces.
     """
     if approval is None:
         return None
     approved_budget = getattr(approval, "budget", None)
     if not approved_budget:
         return None
+    from acp_services.runtime.budget_projection import (
+        BudgetRequestError,
+        budget_request_from_approval,
+    )
     from acp_services.runtime.research_budget import budget_id_for
 
+    try:
+        request = budget_request_from_approval(approved_budget)
+    except BudgetRequestError as exc:
+        raise _command_error(
+            exc.http_status,
+            "input_invalid",
+            exc.message,
+            params=dict(exc.params),
+        ) from exc
     return {
         "budget_id": budget_id_for(str(approval.project_id), str(approval.proposal_ref)),
         "budget": dict(approved_budget),
         "approved_budget": dict(approved_budget),
         "approval_ref": str(approval.approval_id),
         "project_id": str(approval.project_id),
+        "execution_limits": request.resources.to_dict(),
     }
 
 
@@ -9149,15 +9194,27 @@ def analyze_job(
     req: V1AnalyzeRequest,
     request: Request,
 ) -> dict[str, Any]:
-    """Registry-gated explicit analysis; unsupported until A registers it."""
+    """Registry-gated explicit analysis over prepared artifacts (M2-02).
+
+    The capability registry is the **application-level** one injected by the
+    composition root (``app.state.analysis_registry``) — never the module-level
+    default.  Only ``state=executable`` runs: an unregistered id and a
+    registered-but-not-executable id (``vibration.compute``, which is a compute
+    task) are distinct typed refusals, and neither starts anything.
+
+    A ``vibration.analyze`` handler reads only prepared artifacts of *this* task:
+    each ``input_refs`` entry must be the full ArtifactRef tuple whose
+    ``task_id`` equals the route's job id, and the handler re-verifies the
+    prepare operation + published body digest before parsing.  Nothing here
+    creates a task or calls a submit path.
+    """
+    from acp.api import science_catalog
+    from acp_services.data.artifacts import ArtifactError
     from acp_services.entrypoints.application_params import (
         ApplicationParamError,
         normalize_analyze,
     )
-    from acp_services.runtime.analysis_capabilities import (
-        ANALYSIS_CAPABILITY_IDS,
-        DEFAULT_ANALYSIS_REGISTRY,
-    )
+    from acp_services.runtime.analysis_capabilities import ANALYSIS_CAPABILITY_IDS
 
     manager = _manager(request)
     _require_entry_access(
@@ -9179,7 +9236,16 @@ def analyze_job(
             f"unknown analysis capability {req.analysis_id!r}",
             params={"field": "analysis_id", "allowed": list(ANALYSIS_CAPABILITY_IDS)},
         )
-    capability = DEFAULT_ANALYSIS_REGISTRY.get(req.analysis_id)
+    registry = science_catalog.analysis_registry(request.app.state)
+    if registry is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "the application analysis registry is not initialized",
+            params={"rule": "analysis_registry_unavailable"},
+            retryable=True,
+        )
+    capability = registry.get(req.analysis_id)
     if capability is None or capability.handler is None:
         # M1-01b freezes two distinct refusals: an id that was never registered is
         # ``not_registered``; a declared capability without a handler is
@@ -9202,8 +9268,8 @@ def analyze_job(
             params={
                 "analysis_id": req.analysis_id,
                 "registered": registered,
-                "state": "unavailable" if not registered else capability.state,
-                "owner": capability.owner if registered else "A",
+                "state": (capability.state if capability is not None else "unavailable"),
+                "owner": capability.owner if capability is not None else "A",
                 "rule": rule,
             },
         )
@@ -9216,6 +9282,26 @@ def analyze_job(
             params={"job_id": job_id},
             retryable=True,
         )
+    # The analysis reads prepared artifacts of the route's task only.  A ref to a
+    # different task is an input error, not a cross-task read that "works".
+    foreign = [
+        index
+        for index, ref in enumerate(normalized["input_refs"])
+        if str(ref.get("task_id")) != str(job_id)
+    ]
+    if foreign:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "input_refs must reference artifacts of the route's task",
+            params={
+                "field": f"input_refs[{foreign[0]}].task_id",
+                "rule": "task_id_mismatch",
+                "expected": job_id,
+            },
+        )
+    from acp.services_analysis_bootstrap import VibrationAnalysisInputError
+
     try:
         result = capability.handler(normalized)
     except NotImplementedError as exc:
@@ -9225,14 +9311,30 @@ def analyze_job(
             f"analysis capability {req.analysis_id!r} is not implemented",
             params={"analysis_id": req.analysis_id, "owner": "B12"},
         ) from exc
+    except ArtifactError as exc:
+        raise _artifact_error(exc) from exc
+    except VibrationAnalysisInputError as exc:
+        raise _command_error(
+            exc.http_status,
+            "resource_not_ready" if exc.http_status == 409 else "input_invalid",
+            str(exc),
+            params=dict(exc.params),
+        ) from exc
+    product = result.get("product") if isinstance(result, Mapping) else None
+    evidence_refs = list(result.get("inputs") or ()) if isinstance(result, Mapping) else []
     return {
         "schema_version": 1,
         "analysis_id": req.analysis_id,
-        "started": req.analysis_id == "vibration.compute",
+        # A read-only analysis starts nothing; only vibration.compute starts one
+        # frequency task, and that path is a task submit, never this route.
+        "started": False,
         "task_ref": None,
         "operation_ref": None,
-        "result": dict(result),
-        "evidence_refs": [],
+        "result": dict(result) if isinstance(result, Mapping) else {"result": result},
+        "evidence_refs": evidence_refs,
+        "product_digest": (
+            str(product.get("digest") or "") if isinstance(product, Mapping) else ""
+        ),
     }
 
 

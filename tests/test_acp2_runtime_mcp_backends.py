@@ -269,6 +269,14 @@ def test_prepare_operation_projection_and_not_prepared(live_controller: _LiveCon
 def test_analyze_requires_explicit_and_is_registry_gated(
     live_controller: _LiveController,
 ) -> None:
+    """M2-02: the analyze surface is executable, and refusals stay typed.
+
+    ``vibration.analyze`` is executable since M2-02, so an *incomplete*
+    ArtifactRef is now the input error (never the "unsupported" default it used
+    to be), ``vibration.compute`` is a registered-but-not-executable compute
+    capability, and an unprepared reference is ``resource_not_ready``.  None of
+    them creates a task or a prepare operation.
+    """
     created = _submit(live_controller)
     job_id = created["job_id"]
     mcp_runtime = _runtime(live_controller)
@@ -287,7 +295,8 @@ def test_analyze_requires_explicit_and_is_registry_gated(
     assert implicit["isError"] is True
     assert implicit["structuredContent"]["error"]["code"] == "input_invalid"
 
-    unsupported = _tool(
+    # A partial reference can never prove which artifact was meant.
+    partial = _tool(
         mcp_runtime,
         "acp_analyze",
         {
@@ -296,8 +305,42 @@ def test_analyze_requires_explicit_and_is_registry_gated(
             "explicit": True,
         },
     )
-    assert unsupported["isError"] is True
-    assert unsupported["structuredContent"]["error"]["code"] == "unsupported_capability"
+    assert partial["isError"] is True
+    partial_error = partial["structuredContent"]["error"]
+    assert partial_error["code"] == "input_invalid"
+    assert partial_error["params"]["rule"] == "missing_artifact_ref"
+
+    prepared_ref = {
+        "task_id": job_id,
+        "attempt": 1,
+        "artifact_id": "freq_out",
+        "generation": 1,
+        "digest": "sha256:" + "0" * 64,
+    }
+    # ``vibration.compute`` is registered (owner B12) but not executable as an
+    # analysis: it runs one frequency task, submitted as a task.
+    compute = _tool(
+        mcp_runtime,
+        "acp_analyze",
+        {"analysis_id": "vibration.compute", "input_refs": [prepared_ref], "explicit": True},
+    )
+    assert compute["isError"] is True
+    compute_error = compute["structuredContent"]["error"]
+    assert compute_error["code"] == "unsupported_capability"
+    assert compute_error["params"]["rule"] == "analysis_capability_not_executable"
+    assert compute_error["params"]["state"] == "registered"
+
+    # Nothing is prepared for this task yet: the executable capability refuses
+    # with the named not-prepared class instead of fabricating a product.
+    unprepared = _tool(
+        mcp_runtime,
+        "acp_analyze",
+        {"analysis_id": "vibration.analyze", "input_refs": [prepared_ref], "explicit": True},
+    )
+    assert unprepared["isError"] is True
+    assert unprepared["structuredContent"]["error"]["code"] == "resource_not_ready"
+    assert "not_prepared" in unprepared["structuredContent"]["error"]["message"]
+
     assert _task_count(live_controller) == tasks_before
     assert _prepare_count(live_controller) == prepares_before
 
@@ -390,8 +433,16 @@ def test_error_matrix_is_structured_and_consistent(live_controller: _LiveControl
     with pytest.raises(UnsupportedError):
         client.analyze(
             {
-                "analysis_id": "vibration.analyze",
-                "input_refs": [{"task_id": created["job_id"]}],
+                "analysis_id": "vibration.compute",
+                "input_refs": [
+                    {
+                        "task_id": created["job_id"],
+                        "attempt": 1,
+                        "artifact_id": "freq_out",
+                        "generation": 1,
+                        "digest": "sha256:" + "0" * 64,
+                    }
+                ],
                 "explicit": True,
             }
         )

@@ -354,6 +354,13 @@ _OPAQUE_RE = re.compile(
 _WIRE_IDENTIFIER_RE = re.compile(
     r"^acp[_a-z0-9]*$|^rph[_a-z0-9]*$|^acp\.[a-z0-9_.]+$|^rph\.[a-z0-9_.]+$"
 )
+#: The frozen error ``params.rule`` vocabulary is a *published enum* of lowercase
+#: snake-case tokens (``analysis_capability_not_executable``,
+#: ``max_read_bytes_exceeded``, ``extension_not_negotiated``...).  It is longer
+#: than the opaque-token net and carries no secret, so a client can still branch
+#: on the typed rule.  Deliberately narrow: lowercase ASCII words plus ``_`` and
+#: no digits (a random secret is not a dictionary-looking snake phrase).
+_RULE_IDENTIFIER_RE = re.compile(r"^[a-z]+(?:_[a-z]+){0,7}$")
 
 
 def _redact_secrets(text: str) -> str:
@@ -364,7 +371,11 @@ def _redact_secrets(text: str) -> str:
     value = _URL_SECRET_RE.sub(r"\1" + REDACTED_SECRET, value)
     value = _SECRET_ASSIGN_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED_SECRET}", value)
     value = _OPAQUE_RE.sub(
-        lambda m: m.group(0) if _WIRE_IDENTIFIER_RE.match(m.group(0)) else REDACTED_SECRET,
+        lambda m: (
+            m.group(0)
+            if _WIRE_IDENTIFIER_RE.match(m.group(0)) or _RULE_IDENTIFIER_RE.match(m.group(0))
+            else REDACTED_SECRET
+        ),
         value,
     )
     return value

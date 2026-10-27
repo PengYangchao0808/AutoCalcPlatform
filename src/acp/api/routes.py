@@ -48,6 +48,7 @@ from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS
 from acp.scheduler.logs import read_log_tail
 from acp.storage.layout import runtime_file
 from acp.workflows.registry import list_workflow_entries, workflow_to_dict
+from acp_services.entrypoints.application_params import MAX_READ_BYTES
 
 router = APIRouter()
 
@@ -167,7 +168,7 @@ _MCP_TOOLS: tuple[str, ...] = (
 #: Bounded discovery limits (application-api.v1 ``capabilities.limits``).
 _CONTROLLER_LIMITS: dict[str, int] = {
     "max_artifact_bytes": 8 * 1024 * 1024,
-    "max_read_bytes": 1 << 20,
+    "max_read_bytes": MAX_READ_BYTES,
     "max_walltime_s": 7 * 24 * 60 * 60,
     "max_cores": 64,
 }
@@ -286,6 +287,7 @@ def _capabilities_payload(
     project hint is checked against the server-resolved binding and can only
     *narrow* (a mismatch is refused), never widen, and no input can authorize.
     """
+    from acp.api import science_catalog
     from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
     from acp_services.entrypoints.mcp import (
         RESEARCH_TOOL_NAMES,
@@ -302,6 +304,7 @@ def _capabilities_payload(
     admission = getattr(request.app.state, "admission", None)
     identity = getattr(request.app.state, "server_identity", None)
     identity_mode = getattr(request.app.state, "identity_mode", IdentityMode.LOCAL_SINGLE)
+
     if admission is not None:
         admission_snapshot = admission.snapshot()
     else:
@@ -330,7 +333,15 @@ def _capabilities_payload(
         "task_kinds": _task_kinds(),
         "workflows": _active_workflows(),
         "backends": _backend_capability_summary(),
-        "capability_descriptors": None,
+        # M2-02: the A-owned capability descriptors are forwarded instead of
+        # returning ``None``.  The documents come from the one per-application
+        # science catalog that `/api/v2/science/capabilities` also reads, so no
+        # executable probe runs twice.  The analysis registry projection is the
+        # platform fact ("what this process can execute") and keeps the frozen
+        # registered/executable/unavailable distinction: a declared capability is
+        # never reported as executable.
+        "capability_descriptors": list(science_catalog.capability_descriptors(request.app.state)),
+        "analysis_capabilities": list(science_catalog.analysis_capabilities(request.app.state)),
         "limits": dict(_CONTROLLER_LIMITS),
         # M2-01c: the HTTP surface mirrors tools/list — the eight P1 tools, plus
         # the ten research tools only for a request that negotiated the extension.

@@ -2650,6 +2650,15 @@ MIGRATION_STATION_PREFIXES = (
     # ``acp_services.entrypoints.mcp``; registered as an exact file so the
     # R1 boundary keeps auditing it (no whole-directory exemption).
     "src/acp/services_mcp_bootstrap.py",
+    # M2-02 (remediation 2026-10-27): the application-level analysis registry
+    # composition root.  It builds the injected registry and registers the real
+    # ``vibration.analyze`` handler (prepared-artifact read + A's declared pure
+    # analysis binding).  Exact file: it deliberately imports
+    # ``cccp.calculation.capabilities`` (the analysis binding, never a task
+    # core), so it is registered here for the R1 boundary only and is NOT added
+    # to ``SERVICES_BOOTSTRAP_STATIONS`` (that tuple bans the calculation
+    # package prefix for the pure port-wiring seams).
+    "src/acp/services_analysis_bootstrap.py",
     # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
     # station (unified answers/plan/persist + pure node validation); the
     # package-wide module-level-paramiko ban below is the added tooth.

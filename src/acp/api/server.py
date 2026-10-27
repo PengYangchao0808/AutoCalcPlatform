@@ -342,6 +342,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from acp.scheduler.manager import JobManager
+        from acp.services_analysis_bootstrap import build_analysis_registry
         from acp_services.runtime.local_admission import build_local_admission
         from acp_services.workspace.server_identity import (
             ServerIdentity,
@@ -377,6 +378,15 @@ def create_app(
             app.state.run_root = str(run_root_path)
             # Dedicated DB file: never the jobs DB.
             app.state.research_resources = ResearchResourceStore(run_root_path / "acp_research.db")
+            # M2-02: the application-level analysis registry is built once here
+            # (never the module-level default) and is the only table the analyze
+            # command and the discovery projection read.  `vibration.analyze` is
+            # executable over prepared artifacts; `vibration.compute` stays a
+            # declared compute capability (a frequency task, not an analysis).
+            app.state.analysis_registry = build_analysis_registry(
+                prepare_operations=getattr(manager, "_prepare_operations", None),
+                artifact_store_root=run_root_path / "artifact-store",
+            )
             yield
         finally:
             # A store-close failure must never skip the manager shutdown.

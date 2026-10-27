@@ -64,7 +64,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ANALYZE_REQUEST_FIELDS",
+    "ANALYZE_REQUEST_REQUIRED",
     "APPLICATION_SCHEMA_VERSION",
+    "ARTIFACT_REF_IDENTITY_FIELDS",
+    "ARTIFACT_REF_OPTIONAL_FIELDS",
     "ApplicationParamError",
     "ENTRIES",
     "ENTRY_CLI",
@@ -73,6 +77,7 @@ __all__ = [
     "FIELD_POLICY",
     "FieldPolicy",
     "LEGACY_REQUEST_FIELD_ALLOWLIST",
+    "MAX_READ_BYTES",
     "NODE_TAGS_MAX_COUNT",
     "NODE_TAGS_MAX_LENGTH",
     "PREFLIGHT_FIELD_POLICY",
@@ -84,6 +89,7 @@ __all__ = [
     "canonical_submit_request",
     "field_policy_gaps",
     "normalize_analyze",
+    "normalize_artifact_ref",
     "normalize_node_tags",
     "normalize_preflight",
     "normalize_prepare",
@@ -125,6 +131,51 @@ DISPOSITION_LEGACY_ALLOWLIST = "legacy_allowlist"
 #: DTO, the CLI and the canonical request share one implementation).
 NODE_TAGS_MAX_COUNT = 16
 NODE_TAGS_MAX_LENGTH = 64
+
+#: The frozen explicit-analysis request table (M2-02).  One authority for
+#: "which fields an analyze request may carry": the HTTP DTO
+#: (``acp.api.v1_schemas.V1AnalyzeRequest``), the MCP advertised input schema
+#: (``acp_services.entrypoints.mcp._ANALYZE_SCHEMA``, built from this tuple) and
+#: :func:`normalize_analyze`.  The registered ``application-api.v1`` contract
+#: declares exactly the same eight names for ``operations.analyze.request``;
+#: the drift guard is ``tests/test_acp2_analysis_chain.py``.
+ANALYZE_REQUEST_FIELDS: tuple[str, ...] = (
+    "schema_version",
+    "analysis_id",
+    "input_refs",
+    "explicit",
+    "parameters",
+    "plan_digest",
+    "idempotency_key",
+    "extensions",
+)
+
+#: Fields an analyze request must carry (the frozen ``required`` set).
+ANALYZE_REQUEST_REQUIRED: tuple[str, ...] = ("analysis_id", "input_refs", "explicit")
+
+#: The frozen ArtifactRef identity tuple (``acp2.artifact-ref.v1``) as an
+#: application request spells it.  A read or analyze addressed by a subset is
+#: refused here — the server can never prove which artifact was meant.
+ARTIFACT_REF_IDENTITY_FIELDS: tuple[str, ...] = (
+    "task_id",
+    "attempt",
+    "artifact_id",
+    "generation",
+    "digest",
+)
+
+#: Declared, non-identifying ArtifactRef fields (carried, never required).
+ARTIFACT_REF_OPTIONAL_FIELDS: tuple[str, ...] = ("size_bytes", "media_type", "relative_path")
+
+#: Hard bound of one *client* read response — the frozen
+#: ``capabilities.limits.max_read_bytes`` (1 MiB).  A request above it is
+#: refused (``max_read_bytes_exceeded``) instead of served: a bounded read is a
+#: bound on the caller's request, not only on the returned body.  Server-side
+#: analysis reads use the artifact publication cap instead (they are internal).
+MAX_READ_BYTES = 1 << 20
+
+#: Shape of one safe artifact/job token (mirrors the Data artifact store).
+_SAFE_ARTIFACT_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class ApplicationParamError(ValueError):
@@ -969,7 +1020,13 @@ def normalize_prepare(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def normalize_read(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalise a cache-only artifact read request."""
+    """Normalise a cache-only artifact read request.
+
+    The read is addressed by the **full** frozen ``artifact_ref`` identity tuple
+    (M2-02): a subset can never prove which artifact/attempt/generation was
+    meant, so it is refused before any port call.  ``max_bytes`` above the
+    frozen :data:`MAX_READ_BYTES` bound is refused instead of silently served.
+    """
     request = _require_mapping(payload, field="request")
     _schema_version(request)
     artifact_ref = request.get("artifact_ref")
@@ -979,18 +1036,134 @@ def normalize_read(payload: Mapping[str, Any]) -> dict[str, Any]:
         )
     data: dict[str, Any] = {
         "schema_version": APPLICATION_SCHEMA_VERSION,
-        "artifact_ref": _require_mapping(artifact_ref, field="artifact_ref"),
+        "artifact_ref": normalize_artifact_ref(artifact_ref, field="artifact_ref"),
     }
-    for field in ("max_bytes", "encoding"):
-        value = request.get(field)
-        if value is not None:
-            data[field] = value
+    max_bytes = _optional_int(request, "max_bytes", minimum=1)
+    if max_bytes is not None:
+        if max_bytes > MAX_READ_BYTES:
+            raise ApplicationParamError(
+                f"max_bytes exceeds the frozen read bound ({MAX_READ_BYTES} bytes)",
+                params={
+                    "field": "max_bytes",
+                    "rule": "max_read_bytes_exceeded",
+                    "limit": MAX_READ_BYTES,
+                    "requested": max_bytes,
+                },
+            )
+        data["max_bytes"] = max_bytes
+    encoding = request.get("encoding")
+    if encoding is not None:
+        if encoding not in {"identity", "base64"}:
+            raise ApplicationParamError(
+                f"unsupported encoding {encoding!r}",
+                params={"field": "encoding", "rule": "enum"},
+            )
+        data["encoding"] = encoding
+    return data
+
+
+def normalize_artifact_ref(value: Any, *, field: str = "artifact_ref") -> dict[str, Any]:
+    """Validate one frozen ``artifact_ref`` and return its normalised mapping.
+
+    The identity tuple is exactly
+    :data:`ARTIFACT_REF_IDENTITY_FIELDS` (``task_id``/``attempt``/``artifact_id``/
+    ``generation``/``digest``); the optional fields are carried but never
+    required.  Every refusal is a typed ``input_invalid``:
+
+    * ``unknown_field`` — an undeclared key;
+    * ``missing_artifact_ref`` — a missing identity field (named in ``field``);
+    * ``digest`` — a digest that is not ``sha256:<64 hex>``;
+    * ``type``/``minimum`` — a non-integer or non-positive attempt/generation.
+
+    Raises:
+        ApplicationParamError: the reference is not the frozen tuple.
+    """
+    ref = _require_mapping(value, field=field)
+    declared = set(ARTIFACT_REF_IDENTITY_FIELDS) | set(ARTIFACT_REF_OPTIONAL_FIELDS)
+    unknown = sorted(str(name) for name in ref if str(name) not in declared)
+    if unknown:
+        raise ApplicationParamError(
+            f"{field} has an undeclared field {unknown[0]!r}",
+            params={
+                "field": f"{field}.{unknown[0]}",
+                "rule": "unknown_field",
+                "fields": unknown,
+            },
+        )
+    missing = [name for name in ARTIFACT_REF_IDENTITY_FIELDS if ref.get(name) in (None, "")]
+    if missing:
+        raise ApplicationParamError(
+            f"{field}.{missing[0]} is required",
+            params={
+                "field": f"{field}.{missing[0]}",
+                "rule": "missing_artifact_ref",
+                "missing": missing,
+            },
+        )
+    for token_field in ("task_id", "artifact_id"):
+        token = ref.get(token_field)
+        if not isinstance(token, str) or _SAFE_ARTIFACT_TOKEN.match(token.strip()) is None:
+            raise ApplicationParamError(
+                f"{field}.{token_field} is not a safe artifact token",
+                params={"field": f"{field}.{token_field}", "rule": "path_traversal"},
+            )
+    for int_field in ("attempt", "generation"):
+        raw = ref.get(int_field)
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw < 1:
+            raise ApplicationParamError(
+                f"{field}.{int_field} must be an integer >= 1",
+                params={"field": f"{field}.{int_field}", "rule": "minimum", "minimum": 1},
+            )
+    digest = ref.get("digest")
+    if not isinstance(digest, str) or _DIGEST.match(digest.strip().lower()) is None:
+        raise ApplicationParamError(
+            f"{field}.digest must be a sha256: digest",
+            params={"field": f"{field}.digest", "rule": "digest"},
+        )
+    data: dict[str, Any] = {
+        "task_id": str(ref["task_id"]).strip(),
+        "attempt": int(ref["attempt"]),
+        "artifact_id": str(ref["artifact_id"]).strip(),
+        "generation": int(ref["generation"]),
+        "digest": digest.strip().lower(),
+    }
+    size_bytes = ref.get("size_bytes")
+    if size_bytes is not None:
+        if isinstance(size_bytes, bool) or not isinstance(size_bytes, int) or size_bytes < 0:
+            raise ApplicationParamError(
+                f"{field}.size_bytes must be an integer >= 0",
+                params={"field": f"{field}.size_bytes", "rule": "minimum", "minimum": 0},
+            )
+        data["size_bytes"] = size_bytes
+    for text_field in ("media_type", "relative_path"):
+        text = ref.get(text_field)
+        if text is not None:
+            if not isinstance(text, str) or not text.strip():
+                raise ApplicationParamError(
+                    f"{field}.{text_field} must be a non-empty string",
+                    params={"field": f"{field}.{text_field}", "rule": "type"},
+                )
+            data[text_field] = text
     return data
 
 
 def normalize_analyze(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalise an explicit analysis request (``explicit=true`` is mandatory)."""
+    """Normalise an explicit analysis request (``explicit=true`` is mandatory).
+
+    The declared field table is :data:`ANALYZE_REQUEST_FIELDS` (M2-02): an
+    undeclared field is ``input_invalid``/``unknown_field`` and every
+    ``input_refs`` entry must be the full frozen ``artifact_ref`` tuple, so an
+    incomplete reference is refused here — at every entry — instead of being
+    forwarded and guessed server-side.  ``extensions`` is opaque metadata and is
+    never part of the normalised execution payload.
+    """
     request = _require_mapping(payload, field="request")
+    unknown = sorted(str(name) for name in request if str(name) not in ANALYZE_REQUEST_FIELDS)
+    if unknown:
+        raise ApplicationParamError(
+            f"analyze request has an undeclared field {unknown[0]!r}",
+            params={"field": unknown[0], "rule": "unknown_field", "fields": unknown},
+        )
     _schema_version(request)
     if request.get("explicit") is not True:
         raise ApplicationParamError(
@@ -1009,7 +1182,7 @@ def normalize_analyze(payload: Mapping[str, Any]) -> dict[str, Any]:
             params={"field": "input_refs", "rule": "required"},
         )
     normalized_refs = [
-        _require_mapping(item, field=f"input_refs[{index}]")
+        normalize_artifact_ref(item, field=f"input_refs[{index}]")
         for index, item in enumerate(input_refs)
     ]
     data: dict[str, Any] = {
