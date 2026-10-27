@@ -1,0 +1,182 @@
+{
+  "mode": "workbench",
+  "view": {
+    "blocking_missing_checks": [
+      "c-ts-exactly-one-imaginary-mode/not_executed",
+      "c-ts-mapped-imaginary-mode/not_executed",
+      "c-frequency-hessian-present/not_executed",
+      "c-irc-bidirectional-complete/not_executed",
+      "c-irc-forward-endpoint/irc_not_bidirectional",
+      "c-electronic-activation-barrier-comparable/partial_output"
+    ],
+    "claims": [
+      {
+        "blocking_missing_checks": [
+          "not_executed"
+        ],
+        "claim_id": "c-ts-exactly-one-imaginary-mode",
+        "source_ref_count": 0,
+        "status": "not_evaluated",
+        "validator_id": "check.ts_saddle_candidate",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "not_executed"
+        ],
+        "claim_id": "c-ts-mapped-imaginary-mode",
+        "source_ref_count": 0,
+        "status": "not_evaluated",
+        "validator_id": "check.ts_mode_mapping",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "not_executed"
+        ],
+        "claim_id": "c-frequency-hessian-present",
+        "source_ref_count": 0,
+        "status": "not_evaluated",
+        "validator_id": "check.frequency_evidence",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "not_executed"
+        ],
+        "claim_id": "c-irc-bidirectional-complete",
+        "source_ref_count": 0,
+        "status": "not_evaluated",
+        "validator_id": "check.irc_bidirectional_completion",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "irc_not_bidirectional"
+        ],
+        "claim_id": "c-irc-forward-endpoint",
+        "source_ref_count": 0,
+        "status": "inconclusive",
+        "validator_id": "check.irc_endpoint_identity",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "partial_output"
+        ],
+        "claim_id": "c-electronic-activation-barrier-comparable",
+        "source_ref_count": 10,
+        "status": "inconclusive",
+        "validator_id": "check.activation_energy_comparability",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "c-reactant-stoichiometry-complete",
+        "source_ref_count": 10,
+        "status": "supported",
+        "validator_id": "check.reactant_stoichiometry_completeness",
+        "validator_version": "1.0.0"
+      }
+    ],
+    "contract_version": "1.0.0",
+    "evidence_refs": [
+      {
+        "evidence_id": "art-0fc096d9278a3fd9",
+        "kind": "step:endpoint_prep_butadiene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_butadiene/001_optimize.xyz",
+        "sha256": "sha256:0fc096d9278a3fd9d6885cfe2a4447b751bf9ba5bfe45c56f8c41f38e87cacd6"
+      },
+      {
+        "evidence_id": "art-238a9fb246570cea",
+        "kind": "step:endpoint_prep_butadiene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_butadiene/004_optimize.property.txt",
+        "sha256": "sha256:238a9fb246570cea53b93e846c799166f30c36e4252b93e41050350a415c02a5"
+      },
+      {
+        "evidence_id": "art-2724a4794c2adc3d",
+        "kind": "step:endpoint_prep_butadiene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_butadiene/003_optimize.inp",
+        "sha256": "sha256:2724a4794c2adc3dc826c0af245e7fad45fa07d4357ae523073291a6ce97c989"
+      },
+      {
+        "evidence_id": "art-3a3323319c3e8c7a",
+        "kind": "step:endpoint_prep_ethene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_ethene/002_optimize_trj.xyz",
+        "sha256": "sha256:3a3323319c3e8c7ae14083932aba463ce170040226c177d39d1bcac76b6ae473"
+      },
+      {
+        "evidence_id": "art-59664df763973ff2",
+        "kind": "step:endpoint_prep_butadiene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_butadiene/000_optimize.out",
+        "sha256": "sha256:59664df763973ff2266595a6bac24d7e1f3c70aae9e1fd5ce1b5ac6d728f1385"
+      },
+      {
+        "evidence_id": "art-6da00834eeb94403",
+        "kind": "step:endpoint_prep_ethene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_ethene/004_optimize.property.txt",
+        "sha256": "sha256:6da00834eeb9440362a07ae333f428040f8963282b9a17ae0e3aff04bb097847"
+      },
+      {
+        "evidence_id": "art-a2a649046d540069",
+        "kind": "step:endpoint_prep_butadiene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_butadiene/002_optimize_trj.xyz",
+        "sha256": "sha256:a2a649046d540069fc18cd09d402d9796b78a25dc66637c8188ec66e115d1d59"
+      },
+      {
+        "evidence_id": "art-b4e9022764462dd6",
+        "kind": "step:endpoint_prep_ethene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_ethene/003_optimize.inp",
+        "sha256": "sha256:b4e9022764462dd66b398c1385a3fbd1d7ba4f269c111007ca9ff53c443729e0"
+      },
+      {
+        "evidence_id": "art-c01b68f339b76523",
+        "kind": "step:endpoint_prep_ethene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_ethene/000_optimize.out",
+        "sha256": "sha256:c01b68f339b76523d58fb82e301287920502fca75e567d1f7036fc5469fa619c"
+      },
+      {
+        "evidence_id": "art-e1b99e39f41133e4",
+        "kind": "step:endpoint_prep_ethene",
+        "relative_path": "RESULT/m4-04/endpoint_prep_ethene/001_optimize.xyz",
+        "sha256": "sha256:e1b99e39f41133e4cf133bf63cbafbffa2693147d2683a6c7000822be1e2841a"
+      }
+    ],
+    "evidence_status": "complete",
+    "execution_terminal_state": "completed",
+    "limitations": [
+      "A frozen known candidate was carried through the execution chain; this is a control run, never a search result.",
+      "One conformer per endpoint and one declared candidate path: a declared boundary, not a finding.",
+      "Every compared quantity was produced at the ADR-008 frozen level; no equivalent tier was substituted."
+    ],
+    "normal_reuse": true,
+    "overall_claim_status": "inconclusive",
+    "projection_digest": "sha256:8ffe04144baab7d2ad3d20e0cc0222f880bcae8030c9974c51e2ae4d1af2fd6b",
+    "provenance_digest": "",
+    "qualification": "complete",
+    "report": {
+      "digest": "sha256:82864b88da2722bf5f4b44f3aa6f683d4ebaa34416e178923366be1f531eed25",
+      "report_id": "report.m4-04.diels-alder.v1",
+      "schema_version": 1,
+      "subject_id": "subject.diels_alder.limited.v1"
+    },
+    "research": {
+      "principal_id": "principal_m404",
+      "project_id": "project_m404_da",
+      "research_id": "res-m404-da",
+      "round": 0,
+      "session_id": "ses-m404-da"
+    },
+    "schema": "acp2.runtime.evidence-projection.v1",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "20261027_943_projection_attempt",
+      "project_id": "project_m404_da",
+      "release": {
+        "release_digest": "sha256:813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+        "release_id": "2d1ab37a0f988933"
+      },
+      "task_id": "20261027_943_projection_attempt"
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "compiled": false,
+  "compiler_error": {
+    "code": "unsupported_step_kind",
+    "detail": "unsupported_step_kind: endpoint_prep: pure-analysis/non-dispatchable steps are not dispatchable bounded DAG steps",
+    "type": "StepDagError"
+  },
+  "dispatchable_steps": [
+    "candidate_frequency",
+    "ts_optimize",
+    "ts_frequency",
+    "irc",
+    "endpoint_reactants",
+    "endpoint_product"
+  ],
+  "explanation": "The frozen recipe.diels_alder.limited.v1 is the ADR-008 control recipe. The bounded-DAG compiler accepts only dispatchable task kinds (singlepoint/optimize/frequency/nmr_shielding); conformer_search, xtb_path_search, irc and thermochemistry are not dispatchable today, so the frozen nine-step recipe cannot be submitted as ONE BoundedRecipe attempt. The run therefore executes every ADR-008 step for real and records the entry each step actually used.",
+  "nine_steps_in_one_attempt": false,
+  "open_steps": [
+    "endpoint_prep",
+    "candidate_path",
+    "energy_thermochemistry"
+  ],
+  "recipe_id": "recipe.diels_alder.limited.v1",
+  "schema": "acp2.m4-04.public-entry.v1",
+  "step_declaration": [
+    {
+      "dag_step_kind": "",
+      "index": 1,
+      "mapping": "open",
+      "reason": "conformer_search has no bounded StepDispatchAdapter task core mapping",
+      "required": true,
+      "step_id": "endpoint_prep",
+      "task_kind": "conformer_search"
+    },
+    {
+      "dag_step_kind": "",
+      "index": 2,
+      "mapping": "open",
+      "reason": "xtb_path_search has no bounded StepDispatchAdapter task core mapping",
+      "required": true,
+      "step_id": "candidate_path",
+      "task_kind": "xtb_path_search"
+    },
+    {
+      "dag_step_kind": "frequency",
+      "index": 3,
+      "mapping": "mapped",
+      "reason": "",
+      "required": true,
+      "step_id": "candidate_frequency",
+      "task_kind": "frequency"
+    },
+    {
+      "dag_step_kind": "optimize",
+      "index": 4,
+      "mapping": "mapped",
+      "reason": "",
+      "required": true,
+      "step_id": "ts_optimize",
+      "task_kind": "optimize"
+    },
+    {
+      "dag_step_kind": "frequency",
+      "index": 5,
+      "mapping": "mapped",
+      "reason": "",
+      "required": true,
+      "step_id": "ts_frequency",
+      "task_kind": "frequency"
+    },
+    {
+      "dag_step_kind": "irc",
+      "index": 6,
+      "mapping": "mapped",
+      "reason": "",
+      "required": true,
+      "step_id": "irc",
+      "task_kind": "irc"
+    },
+    {
+      "dag_step_kind": "singlepoint",
+      "index": 7,
+      "mapping": "mapped",
+      "reason": "",
+      "required": true,
+      "step_id": "endpoint_reactants",
+      "task_kind": "singlepoint"
+    },
+    {
+      "dag_step_kind": "singlepoint",
+      "index": 8,
+      "mapping": "mapped",
+      "reason": "",
+      "required": true,
+      "step_id": "endpoint_product",
+      "task_kind": "singlepoint"
+    },
+    {
+      "dag_step_kind": "",
+      "index": 9,
+      "mapping": "open",
+      "reason": "thermochemistry has no bounded StepDispatchAdapter task core mapping",
+      "required": true,
+      "step_id": "energy_thermochemistry",
+      "task_kind": "thermochemistry"
+    }
+  ]
+}

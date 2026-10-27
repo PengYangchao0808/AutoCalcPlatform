@@ -1,0 +1,355 @@
+{
+  "adr_step_index": 1,
+  "adr_task_kind": "conformer_search",
+  "attempt": 1,
+  "bounded_alternative": "alt_endpoint_prep_single_conformation",
+  "complete": true,
+  "duration_seconds": 2543.09,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "method": "wB97X-D4",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "59664df763973ff2266595a6bac24d7e1f3c70aae9e1fd5ce1b5ac6d728f1385",
+      "size_bytes": 1295957
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "0fc096d9278a3fd9d6885cfe2a4447b751bf9ba5bfe45c56f8c41f38e87cacd6",
+      "size_bytes": 874
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "a2a649046d540069fc18cd09d402d9796b78a25dc66637c8188ec66e115d1d59",
+      "size_bytes": 23760
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "2724a4794c2adc3dc826c0af245e7fad45fa07d4357ae523073291a6ce97c989",
+      "size_bytes": 590
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "238a9fb246570cea53b93e846c799166f30c36e4252b93e41050350a415c02a5",
+      "size_bytes": 246885
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "c01b68f339b76523d58fb82e301287920502fca75e567d1f7036fc5469fa619c",
+      "size_bytes": 196582
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "e1b99e39f41133e4cf133bf63cbafbffa2693147d2683a6c7000822be1e2841a",
+      "size_bytes": 569
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "3a3323319c3e8c7ae14083932aba463ce170040226c177d39d1bcac76b6ae473",
+      "size_bytes": 2406
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "b4e9022764462dd66b398c1385a3fbd1d7ba4f269c111007ca9ff53c443729e0",
+      "size_bytes": 386
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "6da00834eeb9440362a07ae333f428040f8963282b9a17ae0e3aff04bb097847",
+      "size_bytes": 43728
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "de4706e477dffab0c344940d559cd0a7982d06ee31e3e20d5aafa04a1e8dac1f",
+      "size_bytes": 867829
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "9765432038945496207b096e238a36abddd0bf49ca765960b7c95c7515c63346",
+      "size_bytes": 1326
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "3337e56e7711354f84246925a73b49ca9584f52ae20f57047f2e67642dfac149",
+      "size_bytes": 21072
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "715110f5623c8275f8e706f1987b57a570bb0441c576d38f16c6c5083c0c6e36",
+      "size_bytes": 896
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "04f32eae5ca3d15f202e00339f7d45393c4edad4eb667d6507b9adaed3c9478f",
+      "size_bytes": 202959
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "50bc7eae49ab21652222b38a574b40de6ff1084ed40660b8b72400eb450257cf",
+  "release_id": "14ddbc6078bb38af",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_prep",
+  "sub_executions": [
+    {
+      "optimized_geometry": {
+        "coordinates": [
+          [
+            -0.76997,
+            1.052622,
+            -0.000695
+          ],
+          [
+            0.007655,
+            -0.027009,
+            -0.001651
+          ],
+          [
+            1.470943,
+            0.024954,
+            0.003575
+          ],
+          [
+            2.251428,
+            -1.052582,
+            -0.000598
+          ],
+          [
+            -0.345853,
+            2.05267,
+            0.002074
+          ],
+          [
+            -1.851188,
+            0.975276,
+            -0.002747
+          ],
+          [
+            1.91767,
+            1.017107,
+            0.009931
+          ],
+          [
+            -0.443088,
+            -1.017476,
+            -0.003342
+          ],
+          [
+            3.332415,
+            -0.971821,
+            0.001583
+          ],
+          [
+            1.829988,
+            -2.053741,
+            -0.00813
+          ]
+        ],
+        "symbols": [
+          "C",
+          "C",
+          "C",
+          "C",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H"
+        ]
+      },
+      "species": "butadiene",
+      "status": "completed",
+      "step_id": "endpoint_prep_butadiene",
+      "task_ref": "20261027_940_endpoint_prep_butadiene"
+    },
+    {
+      "optimized_geometry": {
+        "coordinates": [
+          [
+            6.007683,
+            1.0,
+            0.0
+          ],
+          [
+            7.332317,
+            1.0,
+            0.0
+          ],
+          [
+            5.438445,
+            1.924244,
+            -0.0
+          ],
+          [
+            5.438444,
+            0.075756,
+            -0.0
+          ],
+          [
+            7.901555,
+            1.924245,
+            -0.0
+          ],
+          [
+            7.901556,
+            0.075755,
+            -0.0
+          ]
+        ],
+        "symbols": [
+          "C",
+          "C",
+          "H",
+          "H",
+          "H",
+          "H"
+        ]
+      },
+      "species": "ethene",
+      "status": "completed",
+      "step_id": "endpoint_prep_ethene",
+      "task_ref": "20261027_940_endpoint_prep_ethene"
+    },
+    {
+      "optimized_geometry": {
+        "coordinates": [
+          [
+            1.304628,
+            0.668451,
+            -0.207971
+          ],
+          [
+            -0.03308,
+            1.347836,
+            -0.076199
+          ],
+          [
+            -1.17222,
+            0.692674,
+            0.120958
+          ],
+          [
+            -1.264363,
+            -0.808995,
+            0.195325
+          ],
+          [
+            0.009319,
+            -1.481063,
+            -0.317567
+          ],
+          [
+            1.247705,
+            -0.789147,
+            0.249975
+          ],
+          [
+            2.052442,
+            1.220017,
+            0.371715
+          ],
+          [
+            1.63688,
+            0.722439,
+            -1.253006
+          ],
+          [
+            -0.047964,
+            2.432903,
+            -0.14407
+          ],
+          [
+            -2.096777,
+            1.254091,
+            0.231401
+          ],
+          [
+            -2.132551,
+            -1.149402,
+            -0.378982
+          ],
+          [
+            -1.456295,
+            -1.108339,
+            1.234036
+          ],
+          [
+            0.004885,
+            -2.543876,
+            -0.058837
+          ],
+          [
+            0.035058,
+            -1.418327,
+            -1.411852
+          ],
+          [
+            2.157214,
+            -1.317597,
+            -0.049995
+          ],
+          [
+            1.205119,
+            -0.821666,
+            1.34507
+          ]
+        ],
+        "symbols": [
+          "C",
+          "C",
+          "C",
+          "C",
+          "C",
+          "C",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H",
+          "H"
+        ]
+      },
+      "species": "cyclohexene",
+      "status": "completed",
+      "step_id": "endpoint_prep_cyclohexene",
+      "task_ref": "20261027_940_endpoint_prep_cyclohexene"
+    }
+  ],
+  "task_ref": null,
+  "task_result": {
+    "children": [
+      "endpoint_prep_butadiene",
+      "endpoint_prep_ethene",
+      "endpoint_prep_cyclohexene"
+    ],
+    "note": "endpoint_prep is two independent single-conformation relaxations"
+  }
+}

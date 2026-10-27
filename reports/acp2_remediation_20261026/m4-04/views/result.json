@@ -1,0 +1,101 @@
+{
+  "available": true,
+  "ok": true,
+  "problem": null,
+  "supported": false,
+  "rows": [
+    {
+      "label": "research",
+      "value": "res-m404-da"
+    },
+    {
+      "label": "round",
+      "value": "0"
+    },
+    {
+      "label": "task",
+      "value": "20261027_943_projection_attempt#1"
+    },
+    {
+      "label": "release",
+      "value": "2d1ab37a0f988933"
+    },
+    {
+      "label": "execution",
+      "value": "completed"
+    },
+    {
+      "label": "evidence",
+      "value": "complete"
+    },
+    {
+      "label": "claims",
+      "value": "inconclusive"
+    },
+    {
+      "label": "report",
+      "value": "report.m4-04.diels-alder.v1"
+    },
+    {
+      "label": "projection",
+      "value": "sha256:8ffe04144baab7d2ad3d20e0cc0222f880bcae8030c9974c51e2ae4d1af2fd6b"
+    },
+    {
+      "label": "verdict",
+      "value": "needs_review"
+    },
+    {
+      "label": "claim[0]",
+      "value": "c-ts-exactly-one-imaginary-mode: not_evaluated"
+    },
+    {
+      "label": "claim[1]",
+      "value": "c-ts-mapped-imaginary-mode: not_evaluated"
+    },
+    {
+      "label": "claim[2]",
+      "value": "c-frequency-hessian-present: not_evaluated"
+    },
+    {
+      "label": "claim[3]",
+      "value": "c-irc-bidirectional-complete: not_evaluated"
+    },
+    {
+      "label": "claim[4]",
+      "value": "c-irc-forward-endpoint: inconclusive"
+    },
+    {
+      "label": "claim[5]",
+      "value": "c-electronic-activation-barrier-comparable: inconclusive"
+    },
+    {
+      "label": "claim[6]",
+      "value": "c-reactant-stoichiometry-complete: supported"
+    },
+    {
+      "label": "blocking[0]",
+      "value": "c-ts-exactly-one-imaginary-mode/not_executed"
+    },
+    {
+      "label": "blocking[1]",
+      "value": "c-ts-mapped-imaginary-mode/not_executed"
+    },
+    {
+      "label": "blocking[2]",
+      "value": "c-frequency-hessian-present/not_executed"
+    },
+    {
+      "label": "blocking[3]",
+      "value": "c-irc-bidirectional-complete/not_executed"
+    },
+    {
+      "label": "blocking[4]",
+      "value": "c-irc-forward-endpoint/irc_not_bidirectional"
+    },
+    {
+      "label": "blocking[5]",
+      "value": "c-electronic-activation-barrier-comparable/partial_output"
+    }
+  ],
+  "source": "frontend/js/workbench/features/research-evidence-view.js::project"
+}
