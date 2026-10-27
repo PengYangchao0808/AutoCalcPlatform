@@ -538,6 +538,31 @@ class ResearchOperations:
             "limit": bounded,
         }
 
+    def _require_decision_policy(
+        self, command: CommandIdentity, approval: Any, *, action: str
+    ) -> None:
+        """Raise the typed denial when the approval policy refuses this decision."""
+        from acp_services.runtime.approval_policy import (
+            authorize_decision,
+            resolve_approval_policy,
+        )
+
+        policy = resolve_approval_policy(command)
+        verdict = authorize_decision(
+            policy,
+            action=action,
+            approver_principal=str(command.principal_id),
+            requester_principal=str(getattr(approval, "requester_principal", "") or ""),
+            decided_by=getattr(approval, "approver_principal", None),
+        )
+        if not verdict.allowed:
+            raise ResearchOperationDeniedError(
+                verdict.rule,
+                verdict.message,
+                profile=policy.name,
+                action=action,
+            )
+
     def approval_decide(
         self,
         *,
@@ -559,6 +584,10 @@ class ResearchOperations:
                 field="decision",
             )
         approval = self._require_approval(command, approval_ref)
+        # M2-03a: the server policy — not this entry — decides whether the
+        # credential may decide at all and whether requester/approver separation
+        # applies.  Enforced here as well so no P2/legacy surface is a bypass.
+        self._require_decision_policy(command, approval, action=normalized)
         replay = self._replay(
             command,
             operation=f"approval_decide:{normalized}",
@@ -606,6 +635,7 @@ class ResearchOperations:
     ) -> dict[str, Any]:
         """Revoke one approval (terminal; it can no longer authorize a submit)."""
         approval = self._require_approval(command, approval_ref)
+        self._require_decision_policy(command, approval, action="revoke")
         replay = self._replay(
             command,
             operation="approval_revoke",

@@ -88,11 +88,15 @@ __all__ = [
     "ExecutionLimitError",
     "ResourceLimits",
     "bind_budget_shape",
+    "bind_launch_budget_shape",
     "clock_projection",
     "compute_attempt_clock",
     "execution_limits_statement",
     "limit_row",
+    "LAUNCH_BUDGET_UNITS",
+    "LAUNCH_SHAPE_UNITS",
     "normalize_walltime_s",
+    "resource_limits_from_projection",
     "resolve_resource_limits",
 ]
 
@@ -322,6 +326,11 @@ _BUDGET_KNOWN_KEYS: frozenset[str] = frozenset(
     _BUDGET_UNIT_KEYS + _BUDGET_TIME_KEYS + _BUDGET_TOKEN_KEYS + _BUDGET_META_KEYS
 )
 
+#: The v1 launch budget field accepts three ``unit`` values.  ``task_count`` is
+#: a usage unit; the other two are D09 *shape* (M2-03c) and are never counters.
+LAUNCH_BUDGET_UNITS: tuple[str, ...] = ("task_count", "walltime_s", "core_hours")
+LAUNCH_SHAPE_UNITS: frozenset[str] = frozenset({"walltime_s", "core_hours"})
+
 
 @dataclass(frozen=True, slots=True)
 class BudgetShape:
@@ -457,6 +466,63 @@ def bind_budget_shape(budget: Mapping[str, Any] | None) -> BudgetShape:
     )
 
 
+def bind_launch_budget_shape(
+    budget: Mapping[str, Any] | None,
+) -> tuple[dict[str, int], BudgetShape]:
+    """Bridge the v1 launch budget union onto the one D09 shape (M2-03c).
+
+    The v1 launch field is ``{"unit", "count", "timeout_s"}`` where ``unit`` may
+    be ``task_count`` (a usage counter), ``walltime_s`` or ``core_hours`` (both
+    *shape*).  Before this function the latter two reached
+    :func:`~acp_services.runtime.usage_units.normalize_usage_unit` and raised a
+    bare ``UsageUnitValidationError`` (an unhandled 500).
+
+    Args:
+        budget: A v1 launch budget, a D09 shape, or a mix of both.
+
+    Returns:
+        ``(unit_limits, shape)``: the ``task_ref`` counter (when
+        ``unit="task_count"``) and the normalized D09 shape.
+
+    Raises:
+        ExecutionLimitError: A non-empty unknown field/value.  A non-empty
+            unknown shape never reads as "no limits".
+    """
+    source = dict(budget or {})
+    unit = str(source.get("unit") or "")
+    payload = dict(source)
+    if unit and "count" in source:
+        count = source.get("count")
+        if unit == "walltime_s":
+            payload.pop("unit", None)
+            payload.pop("count", None)
+            if count is not None and payload.get("wall_seconds") is None:
+                payload["wall_seconds"] = count
+        elif unit == "core_hours":
+            payload.pop("unit", None)
+            payload.pop("count", None)
+            if count is not None and payload.get("core_hours") is None:
+                payload["core_hours"] = count
+        elif unit == "task_count":
+            payload.pop("unit", None)
+            payload.pop("count", None)
+            payload["units"] = {"task_ref": 1 if count is None else count}
+        else:
+            raise ExecutionLimitError(
+                "unknown_budget_unit",
+                f"budget.unit {unit!r} is not one of {list(LAUNCH_BUDGET_UNITS)}",
+                params={"field": "budget.unit", "allowed": list(LAUNCH_BUDGET_UNITS)},
+            )
+    shape = bind_budget_shape(payload)
+    limits: dict[str, int] = {}
+    for name in ("units", "unit_limits"):
+        raw = payload.get(name)
+        if isinstance(raw, Mapping):
+            for key, value in raw.items():
+                limits[str(key)] = _non_negative_int(value, f"budget.{name}.{key}")
+    return limits, shape
+
+
 @dataclass(frozen=True, slots=True)
 class ResourceLimits:
     """The one resolver's projection onto the three enforcement surfaces."""
@@ -468,12 +534,20 @@ class ResourceLimits:
     recorded_only: Mapping[str, int] = field(default_factory=dict)
     bounded: bool = False
 
+    @property
+    def lsf_walltime(self) -> str | None:
+        """The LSF ``-W`` value (``HH:MM``) of this projection, or ``None``."""
+        from acp_services.runtime.deadline_wiring import lsf_walltime_string
+
+        return lsf_walltime_string(self.lsf_walltime_minutes)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema": EXECUTION_LIMIT_SCHEMA,
             "local_terminate_after_s": self.local_terminate_after_s,
             "ccp_resources_timeout_s": self.ccp_resources_timeout_s,
             "lsf_walltime_minutes": self.lsf_walltime_minutes,
+            "lsf_walltime": self.lsf_walltime,
             "queue_deadline_s": self.queue_deadline_s,
             "recorded_only": dict(self.recorded_only),
             "bounded": self.bounded,
@@ -542,6 +616,28 @@ def resolve_resource_limits(
         recorded_only=dict(shape.recorded_only),
         bounded=shape.bounded,
     )
+
+
+def resource_limits_from_projection(
+    projection: Mapping[str, Any] | None,
+) -> ResourceLimits:
+    """Re-read a persisted :class:`BudgetShape` projection (durable hand-off).
+
+    A research-budget policy persists ``BudgetShape.to_dict()`` (``shape``).  That
+    statement carries framework members (``schema``/``limits``/``recorded_only``)
+    which are *not* budget fields; this function drops exactly those and runs the
+    one validator, so a restart reads the same deadline instead of a private
+    parse.  A genuinely unknown field still raises
+    :class:`ExecutionLimitError` (it cannot be read as "no limits").
+    """
+    source = dict(projection or {})
+    if not source:
+        return ResourceLimits()
+    budget_fields: dict[str, Any] = {}
+    for key in _BUDGET_KNOWN_KEYS:
+        if key in source:
+            budget_fields[key] = source[key]
+    return resolve_resource_limits(budget_fields)
 
 
 @dataclass(frozen=True, slots=True)

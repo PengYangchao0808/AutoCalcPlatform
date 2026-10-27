@@ -57,6 +57,8 @@ __all__ = [
     "APPROVAL_EVENT_TYPES",
     "APPROVAL_STATES",
     "budget_digest",
+    "project_science_body",
+    "science_projection_digest",
     "is_valid_approval_ref",
 ]
 
@@ -191,6 +193,52 @@ def budget_digest(budget: Mapping[str, Any] | None) -> str:
         raise ApprovalValidationError(exc.rule, str(exc)) from exc
 
 
+def science_projection_digest(projection: Mapping[str, Any] | None) -> str:
+    """The D06 ``plan_definition_digest`` of a stored science projection.
+
+    One canonicalization (:func:`~acp_services.runtime.canonical_digest.
+    proposal_plan_definition_digest`) — the same one the HTTP route and the
+    submit path use.  A platform-only proposal body (no ``recipe_digest`` +
+    ``science`` + ``budget``) has no science projection: the caller keeps the
+    approval execution-only instead of inventing a digest.
+    """
+    if not projection:
+        return ""
+    from acp_services.runtime.canonical_digest import (
+        CanonicalDigestError as _DigestError,
+    )
+    from acp_services.runtime.canonical_digest import (
+        proposal_plan_definition_digest,
+    )
+
+    if not {"recipe_digest", "science", "budget"} <= set(projection):
+        return ""
+    try:
+        return proposal_plan_definition_digest(dict(projection)).digest
+    except _DigestError as exc:
+        raise ApprovalValidationError(exc.rule, str(exc)) from exc
+
+
+def project_science_body(projection: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The C plan-definition projection of a supplied science body (M2-03a).
+
+    Storing the *projection* rather than the caller's whole document keeps the
+    approval free of display/state fields the digest excludes: what is persisted
+    is exactly what was signed.  A non-C-shaped body has no projection (``{}``).
+    """
+    if not projection:
+        return {}
+    if not {"recipe_digest", "science", "budget"} <= set(projection):
+        return {}
+    from acp_services.runtime.canonical_digest import CanonicalDigestError as _DigestError
+    from acp_services.runtime.canonical_digest import proposal_plan_definition
+
+    try:
+        return dict(proposal_plan_definition(dict(projection)))
+    except _DigestError as exc:
+        raise ApprovalValidationError(exc.rule, str(exc)) from exc
+
+
 @dataclass(frozen=True)
 class Approval:
     """One persisted approval record."""
@@ -211,6 +259,11 @@ class Approval:
     #: that gap is reported as ``binding_status=execution-only`` and never
     #: silently presented as a full science binding.
     science_digest: str
+    #: M2-03a: the scientific plan *projection* the science digest was computed
+    #: from, persisted additively so the approver's view is reproducible after
+    #: the Proposal moves on.  ``{}`` for a pre-M2-03a or execution-only record
+    #: (never invented, never silently re-derived from a later Proposal).
+    science_projection: dict[str, Any]
     allowed_change_range: dict[str, Any]
     state: str
     expires_at: str | None
@@ -246,6 +299,8 @@ class Approval:
             "plan_digest": self.plan_digest,
             "science_digest": self.science_digest,
             "binding_status": self.binding_status,
+            "science_projection_digest": (self.science_digest if self.science_projection else ""),
+            "science_projection_stored": bool(self.science_projection),
             "proposal_digest": self.proposal_digest,
             "project_id": self.project_id,
             "budget_digest": self.budget_digest,
@@ -259,6 +314,7 @@ class Approval:
             "proposal_digest": self.proposal_digest,
             "plan_digest": self.plan_digest,
             "science_digest": self.science_digest,
+            "science_projection": self.science_projection,
             "binding_status": self.binding_status,
             "plan_definition": self.plan_definition,
             "project_id": self.project_id,
@@ -306,6 +362,7 @@ def _row_to_approval(row: sqlite3.Row) -> Approval:
         budget=budget,
         budget_digest=str(row["budget_digest"] or ""),
         science_digest=str(row["science_digest"] or ""),
+        science_projection=_json(row["science_projection_json"], {}) or {},
         allowed_change_range=_json(row["allowed_change_range_json"], {}) or {},
         state=str(row["state"]),
         expires_at=row["expires_at"],
@@ -365,18 +422,29 @@ class ApprovalService:
         expires_at: str | None = None,
         idempotency_key: str | None = None,
         science_digest: str = "",
+        science_projection: Mapping[str, Any] | None = None,
     ) -> Approval:
         """Persist an unrequested (``draft``) record.
 
         A draft is not approvable and does not authorize anything.  It exists so
         a Proposal can be assembled before it is shown to an approver.
+
+        M2-03a: ``science_projection`` is the scientific plan body the science
+        digest was computed from.  When both are supplied the projection must
+        reproduce the digest (typed ``ApprovalValidationError`` otherwise) — the
+        additive save never stores a body that does not match its identity.
         """
         proposal_ref = self._require_text(proposal_ref, "proposal_ref")
         project_id = self._require_text(project_id, "project_id")
         requester = self._require_text(requester_principal, "requester_principal")
         proposal_digest = _require_digest(proposal_digest, "proposal_digest")
         plan_digest = _require_digest(plan_digest, "plan_digest")
+        stored_projection = self._normalize_science_projection(science_projection, science_digest)
         science_digest = self._normalize_science_digest(science_digest)
+        if not science_digest and stored_projection:
+            # The projection is self-identifying: derive the science digest from
+            # the one canonicalization instead of asking the client for it.
+            science_digest = science_projection_digest(stored_projection)
         expires = self._normalize_expiry(expires_at)
         binding_budget = self._normalize_budget(budget)
         now = self._now()
@@ -395,9 +463,10 @@ class ApprovalService:
                            approver_principal, budget_json, budget_digest,
                            allowed_change_range_json, state, expires_at, revision,
                            created_at, updated_at, decided_at, reason, task_ref_json,
-                           idempotency_key, science_digest, last_event_revision)
+                           idempotency_key, science_digest, science_projection_json,
+                           last_event_revision)
                        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'draft', ?, 1,
-                               ?, ?, NULL, NULL, NULL, ?, ?, 0)""",
+                               ?, ?, NULL, NULL, NULL, ?, ?, ?, 0)""",
                     (
                         approval_id,
                         proposal_ref,
@@ -414,6 +483,7 @@ class ApprovalService:
                         now,
                         idempotency_key,
                         science_digest,
+                        json.dumps(stored_projection, sort_keys=True, default=str),
                     ),
                 )
                 row = conn.execute(
@@ -442,6 +512,7 @@ class ApprovalService:
         expires_at: str | None = None,
         idempotency_key: str | None = None,
         science_digest: str = "",
+        science_projection: Mapping[str, Any] | None = None,
     ) -> tuple[Approval, bool]:
         """Create/return the live approval for ``(proposal_ref, plan_digest)``.
 
@@ -449,13 +520,22 @@ class ApprovalService:
         A repeat request returns the existing record (``replayed=True``) and
         never creates a second one.  An approved record for the same pair is
         also replayed; a rejected/expired/revoked one allows a fresh request.
+
+        M2-03a: the scientific plan projection is persisted additively next to
+        the two digests and is verified against ``science_digest`` before the
+        write (a body that does not reproduce its digest is never stored).
         """
         proposal_ref = self._require_text(proposal_ref, "proposal_ref")
         project_id = self._require_text(project_id, "project_id")
         requester = self._require_text(requester_principal, "requester_principal")
         proposal_digest = _require_digest(proposal_digest, "proposal_digest")
         plan_digest = _require_digest(plan_digest, "plan_digest")
+        stored_projection = self._normalize_science_projection(science_projection, science_digest)
         science_digest = self._normalize_science_digest(science_digest)
+        if not science_digest and stored_projection:
+            # The projection is self-identifying: derive the science digest from
+            # the one canonicalization instead of asking the client for it.
+            science_digest = science_projection_digest(stored_projection)
         expires = self._normalize_expiry(expires_at)
         binding_budget = self._normalize_budget(budget)
         budget_ref = budget_digest(binding_budget) if binding_budget else ""
@@ -489,6 +569,15 @@ class ApprovalService:
                             "approval_binding_mismatch",
                             "the live approval is bound to a different scientific plan digest",
                         )
+                    if (
+                        stored_projection
+                        and existing.science_projection
+                        and existing.science_projection != stored_projection
+                    ):
+                        raise ApprovalConflictError(
+                            "approval_science_projection_changed",
+                            "the live approval binds a different scientific plan projection",
+                        )
                     if existing.state == "pending":
                         conn.commit()
                         return existing, True
@@ -519,9 +608,10 @@ class ApprovalService:
                            approver_principal, budget_json, budget_digest,
                            allowed_change_range_json, state, expires_at, revision,
                            created_at, updated_at, decided_at, reason, task_ref_json,
-                           idempotency_key, science_digest, last_event_revision)
+                           idempotency_key, science_digest, science_projection_json,
+                           last_event_revision)
                        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 'pending', ?, 1,
-                               ?, ?, NULL, NULL, NULL, ?, ?, 0)""",
+                               ?, ?, NULL, NULL, NULL, ?, ?, ?, 0)""",
                     (
                         approval_id,
                         proposal_ref,
@@ -538,6 +628,7 @@ class ApprovalService:
                         now,
                         idempotency_key,
                         science_digest,
+                        json.dumps(stored_projection, sort_keys=True, default=str),
                     ),
                 )
                 row = conn.execute(
@@ -1005,6 +1096,34 @@ class ApprovalService:
         if not text:
             return ""
         return _require_digest(text, "science_digest")
+
+    def _normalize_science_projection(
+        self,
+        projection: Mapping[str, Any] | None,
+        science_digest: Any,
+    ) -> dict[str, Any]:
+        """Validate the additive science projection against its digest (M2-03a)."""
+        if projection is None:
+            return {}
+        if not isinstance(projection, Mapping):
+            raise ApprovalValidationError(
+                "science_projection_invalid", "science_projection must be an object"
+            )
+        stored = project_science_body(projection)
+        if not stored:
+            return {}
+        computed = science_projection_digest(stored)
+        claimed = str(science_digest or "").strip()
+        if computed and claimed and computed != claimed:
+            raise ApprovalValidationError(
+                "science_digest_mismatch",
+                "the science projection does not reproduce the bound science_digest",
+            )
+        if computed and not claimed:
+            # The projection is self-identifying: the digest is derived from it,
+            # never taken from a client field.
+            return stored
+        return stored
 
     def _get_locked(self, conn: sqlite3.Connection, approval_ref: str) -> Approval | None:
         row = conn.execute(

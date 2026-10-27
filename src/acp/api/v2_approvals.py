@@ -20,6 +20,13 @@ authenticated Controller channel, never from the payload.  A payload field that
 names an approver/role/tenant is refused with
 ``access_denied(rule=approver_identity_from_payload)``.  A model cannot approve
 on behalf of a human and a chat reply is never read by these endpoints.
+
+M2-03a moves the *policy* out of this router:
+:mod:`acp_services.runtime.approval_policy` is the single decision.  It answers
+"may this credential decide at all" (an agent/model/service credential may not)
+and "must the approver differ from the requester" (a deployment-profile
+question), so a second entry calling ``ApprovalService`` directly cannot bypass
+the rule, and this router stays a thin HTTP projection of that verdict.
 """
 
 from __future__ import annotations
@@ -30,12 +37,19 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from acp.api.v1_routes import (
+    _command_identity,
     _EntryClass,
     _manager,
     _require_entry_access,
     _require_submit_access,
     _research_project,
     _server_identity,
+)
+from acp_services.runtime.approval_policy import (
+    APPROVER_PAYLOAD_FIELDS,
+    authorize_decision,
+    payload_approver_fields,
+    resolve_approval_policy,
 )
 from acp_services.runtime.approvals import (
     ApprovalError,
@@ -55,19 +69,10 @@ from acp_services.runtime.canonical_digest import (
 
 router = APIRouter()
 
-#: Payload fields that would impersonate the authenticated approver.
-_FORBIDDEN_IDENTITY_FIELDS = (
-    "approver",
-    "approver_ref",
-    "approver_id",
-    "approver_source",
-    "approved_by",
-    "role",
-    "roles",
-    "tenant",
-    "tenant_id",
-    "principal_id",
-)
+#: Payload fields that would impersonate the authenticated approver.  The single
+#: definition lives in the approval policy (M2-03a); this alias keeps the old
+#: private name importable for the existing negative tests.
+_FORBIDDEN_IDENTITY_FIELDS = APPROVER_PAYLOAD_FIELDS
 
 
 class ApprovalRequestBody(BaseModel):
@@ -82,6 +87,10 @@ class ApprovalRequestBody(BaseModel):
     #: derived from ``proposal`` when that body is supplied, and verified when
     #: both are present.  The approval binds it *in addition to* ``plan_digest``.
     science_digest: str | None = None
+    #: M2-03a: the C plan-definition body the ``science_digest`` signs.  It is
+    #: persisted additively with the approval so the approver's view is
+    #: reproducible; when ``proposal`` is itself C-shaped this is derived from it.
+    science_projection: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
     plan_digest: str | None = None
     project_id: str | None = None
@@ -122,9 +131,7 @@ def _http_error(exc: ApprovalError) -> HTTPException:
 
 def _reject_payload_identity(body: BaseModel) -> None:
     extra = getattr(body, "model_extra", None) or {}
-    claimed = sorted(
-        name for name in _FORBIDDEN_IDENTITY_FIELDS if extra.get(name) not in (None, "", [])
-    )
+    claimed = list(payload_approver_fields(extra))
     if claimed:
         raise HTTPException(
             status_code=403,
@@ -183,7 +190,7 @@ def _approval_projection(approval: Any, *, replayed: bool = False) -> dict[str, 
 
 def _compute_request_digests(
     body: ApprovalRequestBody,
-) -> tuple[str, str, str, dict[str, Any] | None]:
+) -> tuple[str, str, str, dict[str, Any] | None, dict[str, Any]]:
     plan_definition = dict(body.plan) if body.plan is not None else None
     if plan_definition is not None:
         if body.plan_digest is not None:
@@ -254,16 +261,29 @@ def _compute_request_digests(
     # proposal body it is derived from that body (one canonicalization); an
     # explicit value must agree with it.
     science_digest = ""
+    science_projection: dict[str, Any] = {}
+    science_body: dict[str, Any] | None = None
     if body.proposal is not None and {"recipe_digest", "science", "budget"} <= set(body.proposal):
-        # Only a C-shaped Proposal (recipe + science + budget) has a
-        # ``plan_definition_digest``.  A platform-only proposal body keeps the
+        # A C-shaped Proposal (recipe + science + budget) carries the science
+        # plan definition itself.  A platform-only proposal body keeps the
         # approval execution-only instead of failing the request.
+        science_body = dict(body.proposal)
+    elif body.science_projection is not None:
+        # M2-03a: the platform Proposal (title/capability ids) and the C plan
+        # definition are different documents; a C client may send both.
+        science_body = dict(body.science_projection)
+    if science_body is not None:
         from acp_services.runtime.canonical_digest import (
+            proposal_plan_definition,
             proposal_plan_definition_digest,
         )
 
         try:
-            science_digest = proposal_plan_definition_digest(body.proposal).digest
+            # The *projection* is what the digest signs, so that is what the
+            # approval additively stores (never a document with display/state
+            # fields the digest excludes).
+            science_projection = proposal_plan_definition(science_body)
+            science_digest = proposal_plan_definition_digest(science_body).digest
         except CanonicalDigestError as exc:
             raise _digest_error(exc) from exc
     claimed = str(body.science_digest or "").strip()
@@ -279,7 +299,7 @@ def _compute_request_digests(
                 },
             )
         science_digest = claimed
-    return proposal_digest, plan_digest, science_digest, plan_definition
+    return proposal_digest, plan_digest, science_digest, plan_definition, science_projection
 
 
 @router.post("/research/approvals", status_code=201)
@@ -287,7 +307,13 @@ def request_approval(body: ApprovalRequestBody, request: Request) -> dict[str, A
     """Persist (or replay) the approval request for a frozen plan."""
     _reject_payload_identity(body)
     project_id = _resolve_project(request, body.project_id)
-    proposal_digest, plan_digest, science_digest, plan_definition = _compute_request_digests(body)
+    (
+        proposal_digest,
+        plan_digest,
+        science_digest,
+        plan_definition,
+        science_projection,
+    ) = _compute_request_digests(body)
     principal = _principal(request)
     service = _approval_service(request)
     try:
@@ -304,6 +330,7 @@ def request_approval(body: ApprovalRequestBody, request: Request) -> dict[str, A
                 expires_at=body.expires_at,
                 idempotency_key=body.idempotency_key,
                 science_digest=science_digest,
+                science_projection=science_projection,
             )
             return _approval_projection(approval)
         approval, replayed = service.request(
@@ -318,6 +345,7 @@ def request_approval(body: ApprovalRequestBody, request: Request) -> dict[str, A
             expires_at=body.expires_at,
             idempotency_key=body.idempotency_key,
             science_digest=science_digest,
+            science_projection=science_projection,
         )
     except ApprovalError as exc:
         raise _http_error(exc) from exc
@@ -398,6 +426,10 @@ def get_approval(approval_ref: str, request: Request) -> dict[str, Any]:
     return _approval_projection(approval)
 
 
+#: The wire outcome name -> the policy action it exercises.
+_DECISION_ACTIONS = {"approved": "approve", "rejected": "reject", "revoked": "revoke"}
+
+
 def _decision(
     request: Request,
     approval_ref: str,
@@ -428,6 +460,19 @@ def _decision(
             },
         )
     actor = _principal(request)
+    # M2-03a: the *policy* answers whether this credential may decide at all and
+    # whether requester/approver separation applies.  A model/service credential
+    # is refused here even though it holds the project's control action.
+    policy = resolve_approval_policy(_command_identity(request, project_id=approval.project_id))
+    verdict = authorize_decision(
+        policy,
+        action=_DECISION_ACTIONS[outcome],
+        approver_principal=actor,
+        requester_principal=approval.requester_principal,
+        decided_by=approval.approver_principal,
+    )
+    if not verdict.allowed:
+        raise HTTPException(status_code=verdict.http_status, detail=verdict.detail())
     try:
         if outcome == "approved":
             updated, replayed = service.approve(

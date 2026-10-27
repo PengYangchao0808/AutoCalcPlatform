@@ -1040,6 +1040,10 @@ class ResearchWriter:
                 else None,
                 expires_at=expires_at,
                 science_digest=digests["science_digest"],
+                # M2-03a: persist the scientific plan projection the digest
+                # signs (the service projects/verifies it, never re-derives the
+                # digest from a later document).
+                science_projection=document,
             )
         except ApprovalError as exc:
             status = getattr(exc, "http_status", 400)

@@ -31,6 +31,7 @@ from typing import Any
 from acp_services.runtime.usage_units import (
     USAGE_UNIT_FIELDS,
     UsageUnitCounts,
+    UsageUnitValidationError,
     normalize_usage_unit,
 )
 
@@ -282,7 +283,12 @@ def budget_id_for(project_id: str, proposal_ref: str) -> str:
 def _coerce_limits(payload: Mapping[str, Any] | None) -> dict[str, int]:
     limits: dict[str, int] = {}
     for raw_unit, raw_value in (payload or {}).items():
-        unit = BudgetUnit.normalize(raw_unit)
+        try:
+            unit = BudgetUnit.normalize(raw_unit)
+        except UsageUnitValidationError as exc:
+            # M2-03c: a bare unit-counter error must not escape as a 500.  The
+            # budget layer owns one typed configuration error.
+            raise BudgetConfigurationError(f"unknown budget unit {raw_unit!r}") from exc
         try:
             amount = int(raw_value)
         except (TypeError, ValueError) as exc:
@@ -374,16 +380,33 @@ def parse_budget_policy(
     source = dict(budget or {})
     # Validation + D09 interpretation (single implementation; also lazy-imported
     # this way because execution_limits imports the capability vocabulary here).
-    from acp_services.runtime.execution_limits import bind_budget_shape
+    from acp_services.runtime.execution_limits import (
+        LAUNCH_SHAPE_UNITS,
+        bind_launch_budget_shape,
+    )
 
-    shape = bind_budget_shape(source)
+    # M2-03c: a C-shaped Proposal budget is an RPH ``PlanBudget`` (its own field
+    # names).  It is mapped by the one budget mapping instead of being rejected
+    # as an unknown shape, so an approval can bind the proposal budget as-is.
+    source = _plan_budget_to_shape_payload(source)
+
+    launch_limits, shape = bind_launch_budget_shape(source)
     limits: dict[str, int] = {}
     for key in ("units", "unit_limits"):
         raw = source.get(key)
         if isinstance(raw, Mapping):
             limits.update(_coerce_limits(raw))
     if "unit" in source and "count" in source:
-        limits[BudgetUnit.normalize(source["unit"])] = int(source["count"])
+        # The v1 launch field also accepts the two *shape* units
+        # (``walltime_s``/``core_hours``); they are interpreted by the D09 shape
+        # above and are never usage-unit counters (M2-03c).
+        if str(source["unit"]) not in LAUNCH_SHAPE_UNITS:
+            try:
+                limits[BudgetUnit.normalize(str(source["unit"]))] = int(source["count"])
+            except UsageUnitValidationError as exc:
+                raise BudgetConfigurationError(f"unknown budget unit {source['unit']!r}") from exc
+    for unit, value in launch_limits.items():
+        limits.setdefault(unit, int(value))
 
     timeouts: dict[str, float] = {}
     for key in TIMEOUT_KEYS:
@@ -622,6 +645,30 @@ def evaluate_budget_boundary(
     return BudgetBoundary(status="PASS", at_cap=at_cap, detail="within cap")
 
 
+def _plan_budget_to_shape_payload(source: dict[str, Any]) -> dict[str, Any]:
+    """Translate an RPH ``PlanBudget`` into the D09 shape (identity when not one)."""
+    from acp_services.runtime.budget_projection import (
+        PLAN_BUDGET_UNIT_FIELDS,
+        plan_budget_to_execution_shape,
+        plan_budget_to_unit_limits,
+    )
+
+    if not any(name in source for name in PLAN_BUDGET_UNIT_FIELDS):
+        return source
+    try:
+        limits = plan_budget_to_unit_limits(source)
+        shape = plan_budget_to_execution_shape(source)
+    except ValueError as exc:  # BudgetRequestError
+        raise BudgetConfigurationError(str(exc)) from exc
+    payload: dict[str, Any] = dict(shape)
+    if limits:
+        payload["units"] = dict(limits)
+    for key in ("timeouts", "unit_basis", "notes"):
+        if key in source:
+            payload[key] = source[key]
+    return payload
+
+
 def release_statement() -> dict[str, Any]:
     """The enforced / recorded-only / NOT_VERIFIED release statement."""
     from acp_services.runtime.execution_limits import execution_limits_statement
@@ -650,4 +697,14 @@ def release_statement() -> dict[str, Any]:
         # termination / queue deadline) and the three clocks, from the one
         # execution-limits matrix.  Never re-derived per surface.
         "execution_limits": execution_limits_statement(),
+        # M2-03c: the composed projection (unit capabilities + approval policy +
+        # deadline wiring + the upgrade gate of every non-final row).
+        "enforcement": _enforcement_projection(),
     }
+
+
+def _enforcement_projection() -> dict[str, Any]:
+    """Lazy import: the projection imports this module's unit matrix."""
+    from acp_services.runtime.enforcement_projection import enforcement_projection
+
+    return enforcement_projection()

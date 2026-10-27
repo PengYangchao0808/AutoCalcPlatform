@@ -350,10 +350,11 @@ def action_seed_legacy(args: argparse.Namespace) -> int:
     conn = _connect(db)
     try:
         conn.execute("BEGIN IMMEDIATE")
-        # 025 is the M1-04a approval science-digest column on approval_records;
-        # dropping that table below removes the column too, so the row goes with
-        # 022/023/024 to keep the legacy drill at schema 021.
-        conn.execute("DELETE FROM _schema_migrations WHERE id IN ('022','023','024','025')")
+        # 025 (M1-04a approval science digest) and 027 (M2-03a approval science
+        # projection) are additive columns on approval_records; dropping that
+        # table below removes them too, so both rows go with 022/023/024 to keep
+        # the legacy drill at schema 021.
+        conn.execute("DELETE FROM _schema_migrations WHERE id IN ('022','023','024','025','027')")
         conn.execute("DROP TABLE IF EXISTS idempotency_records")
         conn.execute("DROP TABLE IF EXISTS approval_records")
         conn.commit()

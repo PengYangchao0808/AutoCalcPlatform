@@ -379,6 +379,16 @@ CREATE INDEX IF NOT EXISTS idx_approval_proposal
         ),
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
     },
+    {
+        "id": "027",
+        "description": (
+            "M2-03a/G12: the approval additively persists the scientific plan "
+            "projection it binds (science_projection_json), next to the two "
+            "digests; the body is verified against science_digest before it is "
+            "stored, so the approver's view is reproducible"
+        ),
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
 ]
 
 
@@ -1064,6 +1074,27 @@ def _apply_approval_science_digest_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_approval_science_projection_column(conn: sqlite3.Connection) -> bool:
+    """Add ``approval_records.science_projection_json`` (M2-03a additive save).
+
+    The approval already binds ``science_digest``; the projection is the body that
+    digest was computed from, so an approver's view is reproducible after the
+    Proposal moves on.  Additive and idempotent: a pre-M2-03 row keeps ``{}`` and
+    is reported as having no stored projection (never invented).
+    """
+    columns = {
+        str(row["name"]) for row in conn.execute("PRAGMA table_info(approval_records)").fetchall()
+    }
+    if not columns:
+        return False
+    if "science_projection_json" in columns:
+        return True
+    conn.execute(
+        "ALTER TABLE approval_records ADD COLUMN science_projection_json TEXT NOT NULL DEFAULT '{}'"
+    )
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -1092,6 +1123,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_idempotency_identity_columns(conn)
     if migration_id == "025":
         return _apply_approval_science_digest_column(conn)
+    if migration_id == "027":
+        return _apply_approval_science_projection_column(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

@@ -2572,6 +2572,10 @@ class ReservationLedger:
             timeouts=payload.get("timeouts") or {},
             approval_ref=str(row["approval_ref"] or ""),
             project_id=str(row["project_id"] or ""),
+            # M2-03c: the persisted D09 shape carries the deadline surfaces, so a
+            # restart reads the same wall/queue bound instead of losing it (the
+            # pre-M2-03c reader dropped this member).
+            shape=payload.get("shape") or {},
         )
 
     @staticmethod
@@ -2600,6 +2604,9 @@ class ReservationLedger:
             "limits": dict(policy.limits),
             "approved_limits": dict(policy.approved_limits),
             "timeouts": dict(policy.timeouts),
+            # M2-03c: the D09 shape is part of the durable policy so the deadline
+            # surfaces survive a restart (additive member; old rows read ``{}``).
+            "shape": dict(policy.shape),
         }
         now = self._clock()
         with self._lock:
