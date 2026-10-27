@@ -1,0 +1,110 @@
+{
+  "mode": "resume",
+  "controller_url": "http://127.0.0.1:35115",
+  "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+  "session_seed": "m4-01-session",
+  "proposal_ref": "prop-m4-01-rounds",
+  "proposal_idempotency_key": "m4-01-proposal-create-1",
+  "approval_action": "none",
+  "approval_ref": "ap_7e076f8da7d5466f927f1fb184ac2a01",
+  "approval_idempotency_key": "m4-01-approval-1",
+  "submit": {
+    "workflow": "fake",
+    "input": {
+      "source": "CCO",
+      "source_type": "smiles"
+    },
+    "method": {},
+    "resources": {
+      "cores": 2
+    },
+    "budget": {
+      "unit": "task_count",
+      "count": 3,
+      "timeout_s": 120
+    }
+  },
+  "artifact": {
+    "resource": "input_preview",
+    "generation": 1,
+    "relative_path": "RESULT/input_preview.xyz",
+    "idempotency_key": "m4-01-prepare-r1"
+  },
+  "launch": {
+    "command": "/usr/bin/python3.11",
+    "args": [
+      "-m",
+      "acp.cli",
+      "mcp",
+      "serve",
+      "--controller",
+      "http://127.0.0.1:35115"
+    ],
+    "cwd": "/ACPServer/acp2-remediation-integration",
+    "env": {
+      "PYTHONPATH": "/ACPServer/acp2-remediation-integration/src",
+      "ACP_RUN_ROOT": "/tmp/opencode/acp2-m4-01-_khzo445/runs"
+    },
+    "timeoutMs": 30000
+  },
+  "model": {
+    "adapter": "test-fixture"
+  },
+  "question": "M4-01 round 1: does the stub evidence support the hypothesis?",
+  "recipe_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "initial_input": {
+    "input_id": "in-m4-01",
+    "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "format": "smiles",
+    "role": "minimum"
+  },
+  "science_seed": {
+    "method": "r2SCAN-3c",
+    "mapping": "canonical",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_state": null,
+    "structure_provenance": [
+      {
+        "input_id": "in-m4-01",
+        "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "format": "smiles",
+        "role": "minimum"
+      }
+    ],
+    "constraints": []
+  },
+  "task_ref_release": {
+    "release_id": "cfea0aae4416275e",
+    "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04"
+  },
+  "research": {
+    "principal_id": "principal_local",
+    "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+    "research_id": "res-2e3811a850b801a3369be874",
+    "session_id": "ses-f5b45d8cdcd6121b1ece8fa2",
+    "round": 1
+  },
+  "digests": {
+    "canonical_digest_version": "1.0.0",
+    "science_digest": "sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49",
+    "plan_digest": "sha256:fa868afe03f7355383c2b3de399978d9d49b12b381d6d961081a427ca50145cb",
+    "proposal_digest": "sha256:02c6b863adc0cd706f7ba161f7a5524f942c2daec446db73ce2160868cc38697"
+  },
+  "plan": {
+    "workflow": "fake",
+    "input": {
+      "source": "CCO",
+      "source_type": "smiles"
+    },
+    "method": {},
+    "resources": {
+      "cores": 2
+    }
+  },
+  "budget": {
+    "unit": "task_count",
+    "count": 3,
+    "timeout_s": 120
+  }
+}

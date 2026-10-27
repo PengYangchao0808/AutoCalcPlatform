@@ -665,6 +665,7 @@ class ResearchWriter:
                     project=project,
                     requester=command.principal_id,
                     proposal_digest=digests["proposal_digest"],
+                    digests=digests,
                     plan=plan,
                     budget=budget,
                     expires_at=expires_at,
@@ -1064,11 +1065,17 @@ class ResearchWriter:
         project: str,
         requester: str,
         proposal_digest: str,
+        digests: Mapping[str, str],
         plan: Mapping[str, Any],
         budget: Mapping[str, Any] | None,
         expires_at: str | None,
     ) -> Approval:
-        """Revoke the old approval and request the new one (M1-02 chain)."""
+        """Revoke the old approval and request the new one (M1-02 chain).
+
+        M4-01: the superseding approval carries the same scientific binding as
+        the create path (``science_digest`` + the signed science projection), so
+        a revised round is never downgraded to an execution-only approval.
+        """
         intent = SubmitIntent(
             intent_key=f"writer:{document['proposal_id']}:{live.revision}",
             project_id=project,
@@ -1099,6 +1106,8 @@ class ResearchWriter:
                 if isinstance(document.get("allowed_change_scope"), Mapping)
                 else None,
                 expires_at=expires_at,
+                science_digest=str(digests.get("science_digest") or ""),
+                science_projection=document,
             )
         except (ResearchSessionConflictError, ResearchSessionValidationError) as exc:
             raise ResearchWriteConflictError(exc.rule, str(exc)) from exc

@@ -1003,6 +1003,8 @@ def supersede_approval_for_plan_change(
     budget: Mapping[str, Any] | None = None,
     allowed_change_range: Mapping[str, Any] | None = None,
     expires_at: str | None = None,
+    science_digest: str = "",
+    science_projection: Mapping[str, Any] | None = None,
 ) -> PlanChangeOutcome:
     """Invalidate the old approval and request a new one for the new plan.
 
@@ -1067,6 +1069,8 @@ def supersede_approval_for_plan_change(
             budget=budget,
             allowed_change_range=allowed_change_range,
             expires_at=expires_at,
+            science_digest=science_digest,
+            science_projection=science_projection,
         )
     except ApprovalError as exc:
         raise ResearchSessionConflictError(
