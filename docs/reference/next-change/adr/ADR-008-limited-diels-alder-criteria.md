@@ -297,3 +297,59 @@ buta-1,3-diene (C4H6) + ethene (C2H4) -> cyclohexene (C6H10)
 | C-Web | 证据展示、limitations/missing checks 可见 | 已签署（2026-10-27） |
 
 会签仅冻结契约与判据，**不**宣称任何真实计算、LSF 远程执行或 H4 关闭。
+
+## 18. Amendment A（2026-10-28）— TS 猜测获取路线变更（§16 变更控制）
+
+- **状态**：M4-04 路线复跑执行记录；判据/阈值/降级/拒绝/聚合规则**零改动**；待 Orchestrator 会签确认。
+- **触发**：M4-04 首次真实运行（`reports/acp2_remediation_20261026/m4-04/`）在 §4 第 2 步 `candidate_path` 的 `xtb_path_search` 生产者上失败（`xTB path trajectory (xtbpath.txt/xtbpath.xyz) not found`，9.64 s），其后 7 步无 TS 猜测可用，DA-C01…C06 只能 `not_evaluated`。经 Orchestrator 定性：这是**化学路线问题**，不是程序缺陷。
+- **参考算例**（真实、同机、已完成，只读复制于 `tests/fixtures/acp2/science/diels_alder/reference-case/`）：
+
+| 项目 | 值 |
+| --- | --- |
+| PESsearch job | `20261014_165743_003_PESsearch`（`3_PESsearch__02`，PESsearch 平台工作流，wall 71.46 s） |
+| scan | ORCA relaxed scan，21 点；双坐标 `[4,5]` 1.5181→3.5181 Å、`[1,0]` 1.4893→3.4893 Å；`reuse_previous_geometry=true`、`full_scan=true`、`max_iterations=250`；优化器 GFN2-xTB；单点 B97-3c/Tight |
+| 选帧 | 人工 review `pes_ts_frame_005`（frame_index 5，`selection_source=manual`），profile sha256 `044fcbe4…` |
+| BatchOptimize job | `20261014_170039_004_BatchOptimize`（`opt_freq`，wall 185.14 s；optimize 122.2 s，frequency 38.0 s） |
+| TS 精化 | `r2SCAN-3c/def2-mTZVPP`，TS role：`TightOpt/TightSCF`、`Trust 0.3`、`Calc_Hess`、`Recalc_Hess 5`、`MaxIter 200`；8 周期收敛；频率 42 模，唯一虚频 **−456.57 cm⁻¹**（native index 6），`ts_validation=passed` |
+
+> **frame 9 vs frame 5 差异（如实记录）**：`pes_profile_v2` 的 21 帧中 frame 9 确实存在（`reaction_progress=0.7207161535591919`），但从未被选中；`pes_review.json`（revision 1）、`RESULT/result_manifest.json`、BatchOptimize 的 `source_ref`（`pes_ts_frame_005`，checksum `59cb1a49…`）与工作目录名均绑定 frame 005。以文件为准，frame 009 仅作为“存在但未选”的对照件保留。`acp_jobs.db` 中无 frame_009 选择记录。
+
+### 18.1 修订范围（仅生产者，不动契约行）
+
+§4 第 2 行 `candidate_path` 的 **step_id、required、证据角色、Recipe 文档标签**保持不变；**仅其生产者**由 `xtb_path_search` 改为下述平台路线。`recipe.json` fixture 不改（其 digest 仍为冻结值），`recipe_definition_digest` 按 §16.4 继续保持 **not-frozen**。
+
+- **路线 id**：`route.diels_alder.ts_guess.pes_relaxed_scan_frame_batch_optimize_ts.v1`
+- **R1 — relaxed scan（PESsearch 平台工作流）**：`acp.workflows.pes_search.run_bond_length_scan` 真实执行。坐标 = 冻结 `reaction.json` 声明的两条**形成键**（`butadiene:bd_c1–ethene:et_c2`、`butadiene:bd_c4–ethene:et_c1`）；起点 = 冻结**产物**几何中该键长，终点 = 起点 + **2.0 Å**，**21** 点；驱动 `orca`/`relaxed_scan`、`reuse_previous_geometry=true`、`full_scan=true`、`max_iterations=250`；优化器 `GFN2-xTB`；单点 `B97-3c`/`Tight`。扫描沿**开环（逆向）**方向进行；反应方向由后续双向 IRC（DA-C04/C05）独立建立，鞍点本身无方向。
+- **R2 — 显式选帧规则**：在 `optimization_converged=true`、`constraint_residual_ok=true`、`invalid_reasons` 为空且 `reaction_progress >= 0.5` 的帧中，取**帧索引最小**者。**无兜底挑帧**：规则无解 → 第 2 步失败（下游 `not_evaluated`，DG-02），不得任选一帧。选择规则、帧索引、progress、目标/实际坐标与能量逐项入 step 记录。
+  - 该规则在参考 profile 上复现人工选择：frame 4 `0.08892 < 0.5`，frame 5 `0.634688 ≥ 0.5` → **frame 005**。
+- **R3 — TS 精化（BatchOptimize 平台工作流）**：`acp.workflows.batch_optimize.run_batch_optimize`，`profile=opt_freq`，输入带 `TAG: TS`；层级 `r2SCAN-3c/def2-mTZVPP`，TS role `Trust 0.3`、`Calc_Hess`、`Recalc_Hess 5`。优化**必须收敛**，其几何作为第 2 步输出的 TS 猜测。
+  - 第 4 步（冻结层级 `wB97X-D4/def2-TZVP` 的 TS 优化）因 bounded-recipe 参数模式只接受标量/列表、无法承载嵌套 `ts` 映射，经**真实 task core**（`cccp.calculation.run_optimize`）执行；与第 1/2/6/9 步同一执行驻点，层级不变。
+  - 长作业变体：若首次 TS 优化在冻结层级内达到周期上限（40）仍未收敛，允许以其**最终几何**在同一层级热重启一次（周期上限 ≤ 100，`Trust 0.3`）；两次尝试逐项入账。仍不收敛 → 第 4 步失败，下游 `not_evaluated`（DG-02），**不得**以未收敛几何充当“优化后 TS”。原生日志的 `did not converge` 标记优先于上游 payload 摘要。
+- **R4 — 证据边界（硬约束）**：路线层级只产生**猜测**。第 3–9 步仍在冻结 §3 层级 `wB97X-D4/def2-TZVP` 真实执行；DA-C01…C07 只消费该层级的原生工件。**不声明**参考层级与冻结层级的等价性；每次运行的层级偏差写入 `route.deviation` 与报告。
+- **R5 — 失败语义**：scan 失败、无合格帧、精化不收敛或产物缺失 → 第 2 步 `failed`；下游按 DG-02 记 `not_evaluated`；不得以未收敛几何或人工指定帧充当猜测。
+- **R6 — 层级变体（仅在冻结层级第 4 步不收敛时）**：若第 4 步在冻结层级 `wB97X-D4/def2-TZVP` 的声明预算内仍不收敛，允许以参考算例层级 `r2SCAN-3c/def2-mTZVPP` **整链**重跑（第 1/3/4/5/7/8/9 步全部同层级，绝不允许跨层混用）。**不声称**该层级与冻结层级等价；`preflight.executed_level`、summary 与报告必须单列 `deviation_from_frozen=true`、`equivalence_claimed=false`。判据仍按 §8/§9/§10 只读评估：DA-C06 只要求参与者共享 method/basis/state/条件，不指定某一具体 method。冻结层级结果与参考层级结果不得合并成同一个 claim。
+
+### 18.2 参考算例的证据地位
+
+参考算例证明“该路线在一次真实、同机的 C6H10 16 原子 DA 体系上收敛到单虚频 TS”，**不是**本切片判据证据，也**不**证明本切片必然收敛：参考算例几何/构象与本切片冻结 fixture 不同。它不改变任何判据、阈值、降级规则或 `claim_status`。
+
+### 18.3 明确不变项（逐条）
+
+| 项目 | 状态 |
+| --- | --- |
+| §3 方法与电子态 | 判据/阈值不变；默认仍为 `wB97X-D4/def2-TZVP`。若启用 R6 层级变体，整链切换为参考层级并在 `preflight.executed_level` 与报告单列 deviation（`equivalence_claimed=false`） |
+| §4 其余 8 行、第 2 行 step_id/required/证据角色 | 不变 |
+| §5 阈值与容差（含 §5 所有权） | **一字不动** |
+| §8 判据表与四值状态规则 | **一字不动** |
+| §9 问题聚合、§10 降级、§11 拒绝、§12 记录分离 | **一字不动** |
+| `science_criteria.py`（`CRITERIA`/`FROZEN_THRESHOLDS`/`DEGRADATION_RULES`/`REJECTION_RULES`/`QUESTION_ROWS`） | 只读，未修改 |
+| `criteria_version` | 仍 `1.0.0` |
+| `criteria_definition_digest` | 仍 `f89f73da4178f4db35b5eb2b8f3958a4cad8bacc5c82490ccfc6777a2c3449d3` |
+| `recipe_definition_digest` | 仍 not-frozen（§16.4） |
+| §14 Local / LSF 两行 | 不变；LSF 仍依赖 M4-03，不得用 Local 替代 |
+
+**指纹为何不变**：`criteria_definition_payload()` 仅含 `schema/version/regime/validator_version/thresholds/downgrade_rules/rejection_rules/criteria/questions`，路线不在冻结数据内；因此 §16.1 的“判据/阈值/降级/聚合/拒绝任一变化 → 新 `criteria_version`”**未触发**。若 Orchestrator 决定把路线上升为 Recipe 契约的规范字段，则需新的 ADR 修订与审批（本 Amendment A 不自行升级）。
+
+### 18.4 变更控制声明
+
+本 Amendment 只改 **M4-04 第 2 步的生产者与选帧规则**，用于让真实链路获得可检验的 TS 猜测；它不新增 active 工作流、不新增判据、不放宽/加严任何阈值、不改变 `scenario_result` 与 `claim_status` 的分离，也不关闭任何 H4 行。

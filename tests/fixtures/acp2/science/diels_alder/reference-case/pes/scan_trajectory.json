@@ -1,0 +1,528 @@
+{
+  "coordinate": {
+    "atoms": [
+      4,
+      5
+    ],
+    "end": 3.5181,
+    "kind": "distance",
+    "n_points": 21,
+    "start": 1.5181,
+    "unit": "angstrom"
+  },
+  "coordinates": [
+    {
+      "atoms": [
+        4,
+        5
+      ],
+      "end": 3.5181,
+      "kind": "distance",
+      "n_points": 21,
+      "start": 1.5181,
+      "unit": "angstrom"
+    },
+    {
+      "atoms": [
+        1,
+        0
+      ],
+      "end": 3.4893,
+      "kind": "distance",
+      "n_points": 21,
+      "start": 1.4893,
+      "unit": "angstrom"
+    }
+  ],
+  "driver": "orca",
+  "frames": [
+    {
+      "actual_coordinate": 1.518099730408052,
+      "actual_coordinates": {
+        "coordinate_1": 1.518099730408052,
+        "coordinate_2": 1.4893000572268842
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.9306739858,
+      "frame_id": "frame_000",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_000.xyz",
+      "index": 0,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.528442645893,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 1.5181,
+      "target_coordinates": {
+        "coordinate_1": 1.5181,
+        "coordinate_2": 1.4893
+      }
+    },
+    {
+      "actual_coordinate": 1.6181002423131887,
+      "actual_coordinates": {
+        "coordinate_1": 1.6181002423131887,
+        "coordinate_2": 1.5892997684024246
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.92601545538,
+      "frame_id": "frame_001",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_001.xyz",
+      "index": 1,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.523754174651,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 1.6181,
+      "target_coordinates": {
+        "coordinate_1": 1.6181,
+        "coordinate_2": 1.5893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 1.7180998117495967,
+      "actual_coordinates": {
+        "coordinate_1": 1.7180998117495967,
+        "coordinate_2": 1.6892998971979487
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.90737557298,
+      "frame_id": "frame_002",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_002.xyz",
+      "index": 2,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.507275563738,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 1.7181,
+      "target_coordinates": {
+        "coordinate_1": 1.7181,
+        "coordinate_2": 1.6893
+      }
+    },
+    {
+      "actual_coordinate": 1.818100708354188,
+      "actual_coordinates": {
+        "coordinate_1": 1.818100708354188,
+        "coordinate_2": 1.7893000353439887
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.88047493362,
+      "frame_id": "frame_003",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_003.xyz",
+      "index": 3,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.484578863973,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 1.8181,
+      "target_coordinates": {
+        "coordinate_1": 1.8181,
+        "coordinate_2": 1.7893000000000001
+      }
+    },
+    {
+      "actual_coordinate": 1.91810033124365,
+      "actual_coordinates": {
+        "coordinate_1": 1.91810033124365,
+        "coordinate_2": 1.8892999333327145
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.84943389052,
+      "frame_id": "frame_004",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_004.xyz",
+      "index": 4,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.459451434423,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 1.9181,
+      "target_coordinates": {
+        "coordinate_1": 1.9181,
+        "coordinate_2": 1.8893
+      }
+    },
+    {
+      "actual_coordinate": 2.0181002618487516,
+      "actual_coordinates": {
+        "coordinate_1": 2.0181002618487516,
+        "coordinate_2": 1.9892998508774389
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.83819973123,
+      "frame_id": "frame_005",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_005.xyz",
+      "index": 5,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.451855894692,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.0181,
+      "target_coordinates": {
+        "coordinate_1": 2.0181,
+        "coordinate_2": 1.9893
+      }
+    },
+    {
+      "actual_coordinate": 2.1181000355821253,
+      "actual_coordinates": {
+        "coordinate_1": 2.1181000355821253,
+        "coordinate_2": 2.089299462101831
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82268031711,
+      "frame_id": "frame_006",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_006.xyz",
+      "index": 6,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.441375177557,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.1181,
+      "target_coordinates": {
+        "coordinate_1": 2.1181,
+        "coordinate_2": 2.0893
+      }
+    },
+    {
+      "actual_coordinate": 2.2181005576984103,
+      "actual_coordinates": {
+        "coordinate_1": 2.2181005576984103,
+        "coordinate_2": 2.1892999576880734
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.8145522114,
+      "frame_id": "frame_007",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_007.xyz",
+      "index": 7,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.435915802105,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.2180999999999997,
+      "target_coordinates": {
+        "coordinate_1": 2.2180999999999997,
+        "coordinate_2": 2.1893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 2.3181008246430954,
+      "actual_coordinates": {
+        "coordinate_1": 2.3181008246430954,
+        "coordinate_2": 2.289299979464465
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.81226926006,
+      "frame_id": "frame_008",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_008.xyz",
+      "index": 8,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.435132799905,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.3181000000000003,
+      "target_coordinates": {
+        "coordinate_1": 2.3181000000000003,
+        "coordinate_2": 2.2893
+      }
+    },
+    {
+      "actual_coordinate": 2.41809945762969,
+      "actual_coordinates": {
+        "coordinate_1": 2.41809945762969,
+        "coordinate_2": 2.3892999689492735
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.8130756327,
+      "frame_id": "frame_009",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_009.xyz",
+      "index": 9,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.437281140819,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.4181,
+      "target_coordinates": {
+        "coordinate_1": 2.4181,
+        "coordinate_2": 2.3893
+      }
+    },
+    {
+      "actual_coordinate": 2.5181001381154404,
+      "actual_coordinates": {
+        "coordinate_1": 2.5181001381154404,
+        "coordinate_2": 2.489300551144036
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.81507677863,
+      "frame_id": "frame_010",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_010.xyz",
+      "index": 10,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.440700980832,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.5181,
+      "target_coordinates": {
+        "coordinate_1": 2.5181,
+        "coordinate_2": 2.4893
+      }
+    },
+    {
+      "actual_coordinate": 2.618099830067219,
+      "actual_coordinates": {
+        "coordinate_1": 2.618099830067219,
+        "coordinate_2": 2.5893000662375925
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.81726263108,
+      "frame_id": "frame_011",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_011.xyz",
+      "index": 11,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.444236043921,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.6181,
+      "target_coordinates": {
+        "coordinate_1": 2.6181,
+        "coordinate_2": 2.5893
+      }
+    },
+    {
+      "actual_coordinate": 2.718099788264772,
+      "actual_coordinates": {
+        "coordinate_1": 2.718099788264772,
+        "coordinate_2": 2.6893008617508753
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.81917128137,
+      "frame_id": "frame_012",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_012.xyz",
+      "index": 12,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.447416168303,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.7180999999999997,
+      "target_coordinates": {
+        "coordinate_1": 2.7180999999999997,
+        "coordinate_2": 2.6893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 2.8181002153630024,
+      "actual_coordinates": {
+        "coordinate_1": 2.8181002153630024,
+        "coordinate_2": 2.789299339824788
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82063787937,
+      "frame_id": "frame_013",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_013.xyz",
+      "index": 13,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.450055907053,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.8181000000000003,
+      "target_coordinates": {
+        "coordinate_1": 2.8181000000000003,
+        "coordinate_2": 2.7893
+      }
+    },
+    {
+      "actual_coordinate": 2.918099444191887,
+      "actual_coordinates": {
+        "coordinate_1": 2.918099444191887,
+        "coordinate_2": 2.8893005708977393
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82166770436,
+      "frame_id": "frame_014",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_014.xyz",
+      "index": 14,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.452078044724,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 2.9181,
+      "target_coordinates": {
+        "coordinate_1": 2.9181,
+        "coordinate_2": 2.8893
+      }
+    },
+    {
+      "actual_coordinate": 3.018099633148813,
+      "actual_coordinates": {
+        "coordinate_1": 3.018099633148813,
+        "coordinate_2": 2.989299929009968
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82233377188,
+      "frame_id": "frame_015",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_015.xyz",
+      "index": 15,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.453517221108,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 3.0181,
+      "target_coordinates": {
+        "coordinate_1": 3.0181,
+        "coordinate_2": 2.9893
+      }
+    },
+    {
+      "actual_coordinate": 3.1180999177220086,
+      "actual_coordinates": {
+        "coordinate_1": 3.1180999177220086,
+        "coordinate_2": 3.0893003464205293
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82272731649,
+      "frame_id": "frame_016",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_016.xyz",
+      "index": 16,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.454493012783,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 3.1181,
+      "target_coordinates": {
+        "coordinate_1": 3.1181,
+        "coordinate_2": 3.0893
+      }
+    },
+    {
+      "actual_coordinate": 3.2181001126256152,
+      "actual_coordinates": {
+        "coordinate_1": 3.2181001126256152,
+        "coordinate_2": 3.189299475725351
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82292820401,
+      "frame_id": "frame_017",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_017.xyz",
+      "index": 17,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.455099711056,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 3.2180999999999997,
+      "target_coordinates": {
+        "coordinate_1": 3.2180999999999997,
+        "coordinate_2": 3.1893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 3.318099704265079,
+      "actual_coordinates": {
+        "coordinate_1": 3.318099704265079,
+        "coordinate_2": 3.2892996370619687
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82299345828,
+      "frame_id": "frame_018",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_018.xyz",
+      "index": 18,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.4554431595,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 3.3181000000000003,
+      "target_coordinates": {
+        "coordinate_1": 3.3181000000000003,
+        "coordinate_2": 3.2893
+      }
+    },
+    {
+      "actual_coordinate": 3.418100192597929,
+      "actual_coordinates": {
+        "coordinate_1": 3.418100192597929,
+        "coordinate_2": 3.38930082212379
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82296627077,
+      "frame_id": "frame_019",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_019.xyz",
+      "index": 19,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.455603187036,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 3.4181,
+      "target_coordinates": {
+        "coordinate_1": 3.4181,
+        "coordinate_2": 3.3893
+      }
+    },
+    {
+      "actual_coordinate": 3.5181005432217254,
+      "actual_coordinates": {
+        "coordinate_1": 3.5181005432217254,
+        "coordinate_2": 3.489299935120224
+      },
+      "converged": true,
+      "coordinate_unit": "angstrom",
+      "energy_hartree": -17.82288075506,
+      "frame_id": "frame_020",
+      "frame_role": "constrained_optimization",
+      "geometry_ref": "WORK/07_PATH/pes_scan_001/scan_frames/frame_020.xyz",
+      "index": 20,
+      "published_at": "2026-10-14T08:58:05+00:00",
+      "sp_energy_hartree": -234.455608928478,
+      "sp_status": "completed",
+      "status": "completed",
+      "target_coordinate": 3.5181,
+      "target_coordinates": {
+        "coordinate_1": 3.5181,
+        "coordinate_2": 3.4893
+      }
+    }
+  ],
+  "points_total": 21,
+  "scan_stage": "completed",
+  "schema_version": "pes_scan_trajectory_v1",
+  "updated_at": "2026-10-14T08:58:43+00:00",
+  "workflow": "PESsearch"
+}

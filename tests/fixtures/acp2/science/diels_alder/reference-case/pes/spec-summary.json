@@ -1,0 +1,166 @@
+{
+  "completed_at": "2026-10-14T08:58:55.306466+00:00",
+  "created_at": "2026-10-14T08:57:43.825861+00:00",
+  "frame_selection_probe": {
+    "frame_4_reaction_progress": 0.08891975972639253,
+    "frame_5_reaction_progress": 0.6346877412644145,
+    "frame_5_scan_energy_hartree": -17.83819973123,
+    "frame_5_single_point_energy_hartree": -234.451855894692,
+    "frame_5_target_coordinate": 2.0181,
+    "frame_9_note": "frame_009 exists in the 21-point profile but was never selected; the operator review record, the result manifest and the BatchOptimize input all bind frame_005",
+    "frame_9_reaction_progress": 0.7207161535591919,
+    "frame_9_selected": false
+  },
+  "frames_count": 21,
+  "host": "workstation",
+  "job_id": "20261014_165743_003_PESsearch",
+  "name": "3_PESsearch__02",
+  "profile_sha256": "044fcbe426814699b66a98ed633a79572707a3e0c5cd2758b5f0b65b2191f8bb",
+  "profile_status": "completed",
+  "resources": {
+    "mem": "32GB",
+    "nproc": 16,
+    "parallelism": 1
+  },
+  "review": {
+    "attempt": 1,
+    "confirmed_at": "2026-10-14T16:59:45+08:00",
+    "job_id": "20261014_165743_003_PESsearch",
+    "note": "",
+    "profile_sha256": "044fcbe426814699b66a98ed633a79572707a3e0c5cd2758b5f0b65b2191f8bb",
+    "revision": 1,
+    "schema_version": "pes_review_v1",
+    "selected": [
+      {
+        "candidate_id": "pes_ts_frame_005",
+        "frame_converged": true,
+        "frame_index": 5,
+        "name": "pes_ts_frame_005",
+        "role": "TS",
+        "selection_source": "manual",
+        "structure_path": "structures/pes_ts_frame_005.xyz"
+      }
+    ],
+    "source": {
+      "data_sha256": "044fcbe426814699b66a98ed633a79572707a3e0c5cd2758b5f0b65b2191f8bb",
+      "data_source": "RESULT/pes_search/pes_profile.json",
+      "frame_source": "final_profile",
+      "scan_complete": true,
+      "task_status": "COMPLETED"
+    },
+    "status": "confirmed"
+  },
+  "scan": {
+    "coordinate": {
+      "atoms": [
+        4,
+        5
+      ],
+      "bond_type": "double",
+      "end": 3.5181,
+      "kind": "distance",
+      "n_points": 21,
+      "start": 1.5181,
+      "unit": "angstrom"
+    },
+    "coordinates": [
+      {
+        "atoms": [
+          4,
+          5
+        ],
+        "end": 3.5181,
+        "kind": "distance",
+        "n_points": 21,
+        "start": 1.5181,
+        "unit": "angstrom"
+      },
+      {
+        "atoms": [
+          1,
+          0
+        ],
+        "end": 3.4893,
+        "kind": "distance",
+        "n_points": 21,
+        "start": 1.4893,
+        "unit": "angstrom"
+      }
+    ],
+    "mode": "bond_length_scan",
+    "scan_driver": {
+      "failure_policy": "retry_previous",
+      "full_scan": true,
+      "max_iterations": 250,
+      "mode": "relaxed_scan",
+      "retry_count": 2,
+      "reuse_previous_geometry": true,
+      "software": "orca",
+      "use_scants": false
+    },
+    "scan_optimizer": {
+      "basis": null,
+      "convergence": "normal",
+      "dispersion": null,
+      "grid": null,
+      "max_iterations": 250,
+      "method": "GFN2-xTB",
+      "retry_count": 2,
+      "retry_strategy": "previous_geometry",
+      "ri_approximation": "none",
+      "scf_convergence": null,
+      "scf_max_iterations": 200,
+      "solvent": null,
+      "solvent_model": "none"
+    },
+    "selection": {
+      "atom_indices": [
+        4,
+        5,
+        1,
+        0
+      ],
+      "groups": [
+        [
+          4,
+          5
+        ],
+        [
+          1,
+          0
+        ]
+      ],
+      "kind": "double_bond_scan",
+      "mode": "functional",
+      "selected_bond": false
+    },
+    "single_point": {
+      "aux_c_basis": null,
+      "aux_j_basis": null,
+      "basis": null,
+      "charge": 0,
+      "dispersion": "none",
+      "enabled": true,
+      "grid": null,
+      "method": "B97-3c",
+      "multiplicity": 1,
+      "resume": true,
+      "ri_approximation": "none",
+      "scf_convergence": "Tight",
+      "software": "orca",
+      "solvent": null,
+      "solvent_model": "none"
+    }
+  },
+  "schema": "acp2.science.reference-case.pes-summary.v1",
+  "stage_wall_seconds_derived": {
+    "run_relaxed_scan": 21.011626,
+    "run_single_points": 37.747081,
+    "total": 71.457402
+  },
+  "stages_seconds": {},
+  "status": "completed",
+  "wall_time_seconds": 71.457402,
+  "work_dir": "/home/xieningke/ACP_runs/uncategorized/3_PESsearch__02",
+  "workflow": "PESsearch"
+}

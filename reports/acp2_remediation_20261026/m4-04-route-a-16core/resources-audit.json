@@ -1,0 +1,204 @@
+{
+  "envelope": {
+    "maxcore_mb": 2000,
+    "mem": "32GB",
+    "nproc": 16,
+    "reference_jobs": [
+      "20261014_165743_003_PESsearch",
+      "20261014_170039_004_BatchOptimize"
+    ]
+  },
+  "generated_at": "2026-10-28T00:00:00Z",
+  "run_root_16core": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c",
+  "run_root_4core": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel",
+  "schema": "acp2.m4-04.resources-audit.v1",
+  "steps": [
+    {
+      "actual_pal_nprocs": [
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "4556b1bae5c842e1c56fdd62db900a8460fd323fa7339c9190107daaada5fe68"
+        },
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "73c003c90c570911ea370e899ff0ad11192def300f5e4bc94889ab847f503ba1"
+        },
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_cyclohexene/optimize.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "00f4e4c641df674b70f41acfa7d73d0395d18e3ed111dfe0efc0c6940b104f10"
+        }
+      ],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "endpoint_prep",
+      "wall_seconds_16core": 257.6,
+      "wall_seconds_4core": 367.31
+    },
+    {
+      "actual_pal_nprocs": [
+        4,
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/pes/WORK/07_PATH/pes_scan_001/frame_005/orca_relaxed_scan_try1.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "3fa4052752c109752b0c95e3fb556c0e3450a801b563c881efabf23f4406de7a"
+        },
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/pes/WORK/07_PATH/pes_scan_001/sp/.batch_sp/d86aa9cf80919beb/group_000/sp_0001/sp_0001.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 4,
+          "sha256": "d58b82a102e1762ad68ce0f42c6fc475747e971529f3f383ddfe0a3caad09485"
+        },
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "906712062257c8866de0539b2c82adc8c51ffaad6ec75a7ab62c12831fc966af"
+        }
+      ],
+      "note": "PES single points run as 4 workers x 4 cores (total 16); the relaxed-scan frame and the BatchOptimize TS refinement use 16 cores",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "candidate_path",
+      "wall_seconds_16core": 272.39,
+      "wall_seconds_4core": 802.4
+    },
+    {
+      "actual_pal_nprocs": [
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_frequency/candidate_frequency/freq.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "68f41a09778900bfe0b4df6d8c7f1b5787816d7077bcb5476c91fd2f76552960"
+        }
+      ],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "candidate_frequency",
+      "wall_seconds_16core": 34.04,
+      "wall_seconds_4core": 94.2
+    },
+    {
+      "actual_pal_nprocs": [
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "906712062257c8866de0539b2c82adc8c51ffaad6ec75a7ab62c12831fc966af"
+        }
+      ],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "ts_optimize",
+      "wall_seconds_16core": 211.22,
+      "wall_seconds_4core": 521.33
+    },
+    {
+      "actual_pal_nprocs": [
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/ts_frequency/ts_frequency/freq.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "68f41a09778900bfe0b4df6d8c7f1b5787816d7077bcb5476c91fd2f76552960"
+        }
+      ],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "ts_frequency",
+      "wall_seconds_16core": 33.98,
+      "wall_seconds_4core": 94.51
+    },
+    {
+      "actual_pal_nprocs": [
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "94b9924584ad6be4dc3aa706ebe6b89616b65c230ac851b02d426c90afa8ff81"
+        }
+      ],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "irc",
+      "wall_seconds_16core": 1451.26,
+      "wall_seconds_4core": 2454.71
+    },
+    {
+      "actual_pal_nprocs": [
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/endpoint_reactants/sp.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "21b39d8526b6449e0e8a9b0bbfe3412164a9f32e6a172cacf0516a98a1bc0680"
+        }
+      ],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "endpoint_reactants",
+      "wall_seconds_16core": 5.34,
+      "wall_seconds_4core": 8.16
+    },
+    {
+      "actual_pal_nprocs": [
+        16
+      ],
+      "inputs": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_product/endpoint_product/sp.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "9f9824544a23fbabe1217889cdadb54c9e065a9fee7f83c3b0b237606c521589"
+        }
+      ],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "endpoint_product",
+      "wall_seconds_16core": 5.67,
+      "wall_seconds_4core": 8.17
+    },
+    {
+      "actual_pal_nprocs": [],
+      "inputs": [],
+      "note": "",
+      "requested_mem": "32GB",
+      "requested_nproc": 16,
+      "step_id": "energy_thermochemistry",
+      "wall_seconds_16core": 0.0,
+      "wall_seconds_4core": 0.0
+    }
+  ]
+}

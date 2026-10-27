@@ -1,0 +1,816 @@
+{
+  "actual_orca_resources": [
+    {
+      "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc.inp",
+      "maxcore": 2000,
+      "pal_nprocs": 16,
+      "sha256": "94b9924584ad6be4dc3aa706ebe6b89616b65c230ac851b02d426c90afa8ff81"
+    }
+  ],
+  "adr_step_index": 6,
+  "adr_task_kind": "irc",
+  "attempt": 1,
+  "bounded_alternative": null,
+  "complete": true,
+  "duration_seconds": 1451.26,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "irc",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc.out",
+      "path": "irc.out",
+      "sha256": "cad9eccf891160c94f76e0e7ed2ab8948151c1d6250a99bc4ed93034a31821e1",
+      "size_bytes": 90342
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc_IRC_B.xyz",
+      "path": "irc_IRC_B.xyz",
+      "sha256": "b5ae30c527359107733175cbe677919521ba9057d3731f831b3001912f44d37e",
+      "size_bytes": 1317
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc_IRC_B_trj.xyz",
+      "path": "irc_IRC_B_trj.xyz",
+      "sha256": "34dce6f32e135e9159328e0b5dac6295979a11629e6d53187de2c2330199ce59",
+      "size_bytes": 40843
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc_IRC_F.xyz",
+      "path": "irc_IRC_F.xyz",
+      "sha256": "48e5d025f3eef9aad62831b4ed6c72644d8c804df03c279d197d4a5b4817fa2e",
+      "size_bytes": 1317
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc_IRC_F_trj.xyz",
+      "path": "irc_IRC_F_trj.xyz",
+      "sha256": "06d085088b7d68077719d88528bb7a0bcf496993e75266413b215866ef99b2b1",
+      "size_bytes": 20856
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc_IRC_Full_trj.xyz",
+      "path": "irc_IRC_Full_trj.xyz",
+      "sha256": "356ad0baf3fdf0d6646b60b045c72db0288238d71a749565b4932d279313db81",
+      "size_bytes": 62784
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc.inp",
+      "path": "irc.inp",
+      "sha256": "94b9924584ad6be4dc3aa706ebe6b89616b65c230ac851b02d426c90afa8ff81",
+      "size_bytes": 918
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc.property.txt",
+      "path": "irc.property.txt",
+      "sha256": "dd1f9275bc9458748b1f045e58dffe8dd22905004df3194fd85d64647c49188d",
+      "size_bytes": 197689
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc.hess",
+      "path": "irc.hess",
+      "sha256": "1ac3bd4d8e2cc5a72ae22a6043fb8a611dbe70bced9219f9a454e444c41cf761",
+      "size_bytes": 107391
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_path.xyz",
+      "path": "RESULT/irc/irc_forward_path.xyz",
+      "sha256": "a02337e5cf017920f8ada610f9cffecc372daddb9b5993befcaa29e6a2c8e85c",
+      "size_bytes": 20630
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0000.xyz",
+      "path": "RESULT/irc/irc_forward_point_0000.xyz",
+      "sha256": "ce1db961e969c543685d1417798265d3d837b20b22563c966015863bd567c22f",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0001.xyz",
+      "path": "RESULT/irc/irc_forward_point_0001.xyz",
+      "sha256": "3cc29a46b26f02ed5bfa0cf40a6bfc3069f32fb98ace06e1a8a587b1d0f28391",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0002.xyz",
+      "path": "RESULT/irc/irc_forward_point_0002.xyz",
+      "sha256": "743a3027cfbb24d42db5caec0439bea203faba9bcecf4ac933f2f67ade938e88",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0003.xyz",
+      "path": "RESULT/irc/irc_forward_point_0003.xyz",
+      "sha256": "5b5e42527d40bb26af9f50038b1098f4b224768cad2df41bc4d0c179e313ecb2",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0004.xyz",
+      "path": "RESULT/irc/irc_forward_point_0004.xyz",
+      "sha256": "aa0caa1b1066d9c4e797e969fedd88859a9119648eec16e00b3012b8926497f6",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0005.xyz",
+      "path": "RESULT/irc/irc_forward_point_0005.xyz",
+      "sha256": "6bec3dff28604dd2673596959ba320bef2f63cea51d0e4459cfa4e667828828f",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0006.xyz",
+      "path": "RESULT/irc/irc_forward_point_0006.xyz",
+      "sha256": "1ce82811b4bb769455ec518df9a78fde535ebe8373f65ba797ce2deb4cdc4f13",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0007.xyz",
+      "path": "RESULT/irc/irc_forward_point_0007.xyz",
+      "sha256": "11fab5f7fbaead1122fc0aa3df5665fbac13c8aa321fc203160a0b1ac3b8e419",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0008.xyz",
+      "path": "RESULT/irc/irc_forward_point_0008.xyz",
+      "sha256": "ec01321309b944eb5ab6c06ff5875f3d7deb9dea162328f05e67cbbfcd850b00",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0009.xyz",
+      "path": "RESULT/irc/irc_forward_point_0009.xyz",
+      "sha256": "7c1570a508c287413c8141251af36519b814b4fdd3f939f8e3c9ad0f5f9a3378",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0010.xyz",
+      "path": "RESULT/irc/irc_forward_point_0010.xyz",
+      "sha256": "16393c086e885cdc1c1bb08c9e74cb8c77ae3afe2e4e6db751f17c269553dfc4",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0011.xyz",
+      "path": "RESULT/irc/irc_forward_point_0011.xyz",
+      "sha256": "008e7f42a08845a5d118aacbc0bc9587b8b24dcb7ba87d11f77d665b35a42535",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0012.xyz",
+      "path": "RESULT/irc/irc_forward_point_0012.xyz",
+      "sha256": "8141a14405d98afabcae2f59ad1ee2c38a6d2bba3b65df92d3461939f50ffcac",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0013.xyz",
+      "path": "RESULT/irc/irc_forward_point_0013.xyz",
+      "sha256": "55ad23cd387058345918a7199aefdf6f4a8f4d1e7df5791c82203b897a8719fe",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0014.xyz",
+      "path": "RESULT/irc/irc_forward_point_0014.xyz",
+      "sha256": "c6eb8249fcb20af80d818f43ae4e586f07cbf8e5756b98c5cfb64a3a9581afdf",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0015.xyz",
+      "path": "RESULT/irc/irc_forward_point_0015.xyz",
+      "sha256": "d19658ffbf02a2d6c039f19611e19c9a29a59e095259ab3753222a13b10c450b",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0016.xyz",
+      "path": "RESULT/irc/irc_forward_point_0016.xyz",
+      "sha256": "4c3c81c33c618ace6cd722595d34a30fe5b5703b8e90d9fa12758bb3a014579b",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0017.xyz",
+      "path": "RESULT/irc/irc_forward_point_0017.xyz",
+      "sha256": "7e93faa0e0c0446511c2b4def6fd35d7446486a8895ec298d1c2c8c8e5aa9240",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0018.xyz",
+      "path": "RESULT/irc/irc_forward_point_0018.xyz",
+      "sha256": "cd94b6b2bbc17cc6717e051220b25eb6526fc28e24a3a8d4037fe99749f761b1",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0019.xyz",
+      "path": "RESULT/irc/irc_forward_point_0019.xyz",
+      "sha256": "156a6f17dcb8e4a2469fec5eb33f4b6ee4cd0e320e408e5881c8e4280572efd9",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0020.xyz",
+      "path": "RESULT/irc/irc_forward_point_0020.xyz",
+      "sha256": "58f1d017f30d6bf8527aef1300ebc8c83ca68c92c92fe7927c3c520491814db7",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0021.xyz",
+      "path": "RESULT/irc/irc_forward_point_0021.xyz",
+      "sha256": "984d5aae6231a0229b72659a07351762f001a4f63718d8b812e20e2f429ee4f5",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0022.xyz",
+      "path": "RESULT/irc/irc_forward_point_0022.xyz",
+      "sha256": "c039fa7e9ebb846d596941d277a24d5d9d78b8ed300c7a4abc585d816462eb3c",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_forward_point_0023.xyz",
+      "path": "RESULT/irc/irc_forward_point_0023.xyz",
+      "sha256": "17d3a4c894ea72cb4296302dfd1c2e1694abb1478e5823a09043ebb078982983",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_path.xyz",
+      "path": "RESULT/irc/irc_reverse_path.xyz",
+      "sha256": "faf9b775d1b013abee2373fd70a2d2794d63c3d99012c9d87a3877491018976f",
+      "size_bytes": 40410
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0000.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0000.xyz",
+      "sha256": "9de1a5670a55ed6738c12a075b4d79091c3a6d802651a7d972745fe487ed9996",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0001.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0001.xyz",
+      "sha256": "803e180635c229a6949fd2890861bd3d9177d11e42b58a84a2263c909a06f925",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0002.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0002.xyz",
+      "sha256": "7dceb9a20645383009064f327510dc6bf22219875ccd29b01b2ed09f0e76a135",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0003.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0003.xyz",
+      "sha256": "de5df96f4bb3dd651cc3271f3b3a377fccdb76169c217f6925506e4d2028331a",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0004.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0004.xyz",
+      "sha256": "8e995621f4410ffc0ca16fa173731fb8893ce0bd67e58e453ca0659cb6243cc5",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0005.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0005.xyz",
+      "sha256": "add2e6231f93017b30afaeecea5e97ccfca40d43af9958cb6de8eb4f04945596",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0006.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0006.xyz",
+      "sha256": "2d84c9622d74fd1648cb4266ca2bb9f8b31496ba789bdafbaba04700e6973064",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0007.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0007.xyz",
+      "sha256": "c8e4d8b4d435de5a8cb129f0712a9a73ec71a2239e4714876ff5d91f0f2d8414",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0008.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0008.xyz",
+      "sha256": "90844db9d3d16bb00b96e46be6cdc6520a832c9f635826b7f7f4c4b2edf74eca",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0009.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0009.xyz",
+      "sha256": "3b90021a4a9d6d51a4053aa5b21e2845fa572af2e03c378654dfd5381e71d00f",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0010.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0010.xyz",
+      "sha256": "d26a97e2ba39f7b732e339acb2bc3dcf024e08b5ec663af3f06e0c1c63713171",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0011.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0011.xyz",
+      "sha256": "e205fcbd1647051961c360e05030147dd9e243789f81b60074bc8a1844ddc7f4",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0012.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0012.xyz",
+      "sha256": "447dea24a7b93aa0803859d38117f404338e3479072a644a6fb50c7a558d483f",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0013.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0013.xyz",
+      "sha256": "3c9039c83fec88162f61ba598966de5624746523f8c2b8bbd8292d9ddd6a38c3",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0014.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0014.xyz",
+      "sha256": "89ef21f142fd60c9942d4a8673d5afcef17a51fb05e8f07eab587fdd1f6c0133",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0015.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0015.xyz",
+      "sha256": "e29481f25993a41cb5e20e684ed31fcc21e6e36eab91922299ba676c22ce7177",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0016.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0016.xyz",
+      "sha256": "be2f997d5b3d3fbf11c06c45eb23b51c0d6180dfd56c90d2459f57d11a45a616",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0017.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0017.xyz",
+      "sha256": "b01177ec5721fbad1f84386979545f1abd73b3e8c3e2c6104ab016a5e0436168",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0018.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0018.xyz",
+      "sha256": "e93a52c5102210e6d1ecb25238f4daff065fd8e9f43fee836591710b134cfc42",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0019.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0019.xyz",
+      "sha256": "4031725e9a4e6496449efa1cce5f93ff85df1d74196a12d0ed0b2b91aed8ed5c",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0020.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0020.xyz",
+      "sha256": "753ed725ce711013191c7824f326e23e61d79fe8f6c5d0df8bc7a038283f4be6",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0021.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0021.xyz",
+      "sha256": "25a3f7c49ce793a020c7ae06d46233a3801d052ae6954a7e451375e689b912b8",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0022.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0022.xyz",
+      "sha256": "417e1a9f62aa9392fb4959ee3e751b5f5a5ef0fbbbe57a71e1c434b35a8de818",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0023.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0023.xyz",
+      "sha256": "829e1306c437277fb05177aa9af40bd1d2fbfbcf98e6a0e892a8f4414b53f963",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0024.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0024.xyz",
+      "sha256": "34e54a447721d894faa0ff4805937f635bb180523f9d751757a12eb1d6d2368f",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0025.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0025.xyz",
+      "sha256": "dd34f4ff532cc198877fc492687dc2b151b80bd39a18b449b0e9713beeb7d46e",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0026.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0026.xyz",
+      "sha256": "06c667ee7a4a73bf6b3d1801b73e6f6c5489780a9cbe3ade5cd3e4090a727f0f",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0027.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0027.xyz",
+      "sha256": "2b69794bb16aee09e1bd10fe9ea9479c145516b30a63fcc32ba99439dacbb4fb",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0028.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0028.xyz",
+      "sha256": "1a9490578757bfb5648d0281fb2561d62d1c88bf4324959092b3489eba6d97c1",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0029.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0029.xyz",
+      "sha256": "53648620d2ffc60116ffdc3ef4cdf13e68dab83ab1af943a4d90efc5d3384167",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0030.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0030.xyz",
+      "sha256": "e14eff82a13a105190b9149f1633ef1bb026b3aa8512c75bd3786419c426977f",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0031.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0031.xyz",
+      "sha256": "c5b736b85d4e43d18587ead921cb58ab07719d5642f1df96443c63af728d7cf9",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0032.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0032.xyz",
+      "sha256": "26ac876ec2982769ad60f7d89449fcd35f63502699069037316c569a6ba705f4",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0033.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0033.xyz",
+      "sha256": "53084b15f99efe04051a826ed929d407dfbc655e615a748c8d551c1601e55344",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0034.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0034.xyz",
+      "sha256": "5df9e696907e4c0fbed634ebb382c837aa472786e052c34e7c9e4bc161d5f387",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0035.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0035.xyz",
+      "sha256": "d1f4b1cf611d267d710ef9249cac3152ce117d031c8f28fcaf89dfdefbb942bf",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0036.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0036.xyz",
+      "sha256": "219545577e9d3b2711010a490766e2baa9a50684653bb7b6d935b7df499decfd",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0037.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0037.xyz",
+      "sha256": "928cf8be86953e9f1bab839d019f4986d632f3cb605f4d49c9ca8c21eb14a27b",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0038.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0038.xyz",
+      "sha256": "408ea8d9567fcadc6c4d85338d30bb6d5de8780a45fb84efc5e7aa9bbc717833",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0039.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0039.xyz",
+      "sha256": "68db5b213fde78388003405e58605f6bec2bfcc26a8b89030c9e0c76c3ab45ab",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0040.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0040.xyz",
+      "sha256": "6359849e0682e7d1604058e33b4134e83f4895fda71ec410f872dfdd48c6c0e2",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0041.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0041.xyz",
+      "sha256": "9bafc1b32c1269033430493f10cda8dcbf94d77079470eb1f61f7bf66a5f74a0",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0042.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0042.xyz",
+      "sha256": "5654544e7029a23819115f39d4acbf0d8a9248fc0f1f8d10db667596076b048d",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0043.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0043.xyz",
+      "sha256": "06b49f48e18d5769435a6a80afdcfa6ee5c7325ab3d33fa32d377ea7d02db763",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0044.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0044.xyz",
+      "sha256": "63ca25d3c6c22d591edf2cb685e1ddc26759989a1affb6048464bea943707ae7",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0045.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0045.xyz",
+      "sha256": "6890da333def90883b7af797b40be9859482122b62546a90b480a859dbe31fe5",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/irc/irc_reverse_point_0046.xyz",
+      "path": "RESULT/irc/irc_reverse_point_0046.xyz",
+      "sha256": "5188ba3edbfe8846c0d26f46dcdfed746473133f468981ff6d8fa399aa94aee7",
+      "size_bytes": 860
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/RESULT/trajectories/irc_trajectory.json",
+      "path": "RESULT/trajectories/irc_trajectory.json",
+      "sha256": "24fe82c97ff248896df0ceb4a74350f83caaf13005478862b8fb05cb71e7a08d",
+      "size_bytes": 27438
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "resources": {
+    "cores": 16,
+    "maxcore": 2000,
+    "mem": "32GB",
+    "nproc": 16
+  },
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "irc",
+  "task_ref": "20261028_940_irc",
+  "task_result": {
+    "artifacts": [],
+    "complete": true,
+    "converged": true,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {
+      "directions": [
+        "forward",
+        "reverse"
+      ],
+      "endpoint_count": 2,
+      "forward_endpoint": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc_IRC_F.xyz",
+      "path_files": {
+        "forward": "irc/irc_forward_path.xyz",
+        "reverse": "irc/irc_reverse_path.xyz"
+      },
+      "reverse_endpoint": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc_IRC_B.xyz",
+      "trajectory_frame_count": 71,
+      "trajectory_path": "trajectories/irc_trajectory.json"
+    },
+    "payload": {
+      "directions": [
+        {
+          "converged": true,
+          "coordinates": [
+            [
+              1.17959404977461,
+              0.65051966253665,
+              0.32239459536523
+            ],
+            [
+              0.02787881625138,
+              1.31899007971012,
+              -0.37152109537501
+            ],
+            [
+              -1.14949234279922,
+              0.69075657224658,
+              -0.32916775495012
+            ],
+            [
+              -1.19600433065926,
+              -0.61622766655485,
+              0.40867611797188
+            ],
+            [
+              0.98919613821929,
+              0.62437191741061,
+              1.40659720849281
+            ],
+            [
+              2.1219978407199,
+              1.18761250909507,
+              0.18377305207747
+            ],
+            [
+              0.17477772483067,
+              2.24132633887828,
+              -0.92815470192057
+            ],
+            [
+              -2.02766858913652,
+              1.06633564565798,
+              -0.8486338467313
+            ],
+            [
+              -2.17251937802078,
+              -1.10339834988872,
+              0.33875092451506
+            ],
+            [
+              -1.00908653968383,
+              -0.43890760757918,
+              1.4791934208607
+            ],
+            [
+              -0.07637318672592,
+              -1.53648844703677,
+              -0.13308628633629
+            ],
+            [
+              1.28985185412542,
+              -0.80624381712677,
+              -0.18674809405628
+            ],
+            [
+              -0.01024037121035,
+              -2.43886743908209,
+              0.48496995184789
+            ],
+            [
+              -0.36532980427234,
+              -1.86116276979894,
+              -1.13865718691118
+            ],
+            [
+              1.65498159276646,
+              -0.77360015246699,
+              -1.21910179791159
+            ],
+            [
+              2.04234583630258,
+              -1.34570677704625,
+              0.39924368916412
+            ]
+          ],
+          "direction": "forward",
+          "energy_hartree": -234.562005534552,
+          "steps": 24,
+          "success": true,
+          "symbols": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "trajectory_ref": {
+            "path": "irc/irc_forward_path.xyz",
+            "source": "orca",
+            "type": "trajectory"
+          }
+        },
+        {
+          "converged": true,
+          "coordinates": [
+            [
+              1.05414055356594,
+              1.26820475986722,
+              0.55923424572559
+            ],
+            [
+              0.01315643539713,
+              1.48407719469376,
+              -0.25467709883661
+            ],
+            [
+              -1.27225859477847,
+              0.79893208555181,
+              -0.20812198090549
+            ],
+            [
+              -1.62576304950538,
+              -0.16107529339602,
+              0.65555265018568
+            ],
+            [
+              1.00229850722129,
+              0.57163163842146,
+              1.3900282097122
+            ],
+            [
+              1.99781279460163,
+              1.78328553134975,
+              0.41270022029258
+            ],
+            [
+              0.13771866001957,
+              2.19739733369083,
+              -1.06809544440672
+            ],
+            [
+              -1.97927916487302,
+              1.06952458918907,
+              -0.99056729544626
+            ],
+            [
+              -2.58618238859106,
+              -0.66006789988788,
+              0.57797606999664
+            ],
+            [
+              -0.97260479834616,
+              -0.48345011485467,
+              1.46056300252515
+            ],
+            [
+              0.36076976535944,
+              -2.14086140181189,
+              -0.42875734270435
+            ],
+            [
+              1.5311927754558,
+              -1.5139795569642,
+              -0.47660547425423
+            ],
+            [
+              0.05320604017675,
+              -2.71609881110452,
+              0.44025311550961
+            ],
+            [
+              -0.3469538274243,
+              -2.08594491453262,
+              -1.25016725860532
+            ],
+            [
+              1.82418740295538,
+              -0.92277157647233,
+              -1.33874673735144
+            ],
+            [
+              2.23464357827633,
+              -1.54812526269936,
+              0.35090292245695
+            ]
+          ],
+          "direction": "reverse",
+          "energy_hartree": -234.491022953724,
+          "steps": 47,
+          "success": true,
+          "symbols": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "trajectory_ref": {
+            "path": "irc/irc_reverse_path.xyz",
+            "source": "orca",
+            "type": "trajectory"
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/inputs/optimized_ts.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "irc"
+  }
+}

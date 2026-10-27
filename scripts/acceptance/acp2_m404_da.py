@@ -52,7 +52,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -89,6 +91,11 @@ EXPECTED_CRITERIA_DIGEST = "f89f73da4178f4db35b5eb2b8f3958a4cad8bacc5c82490ccfc6
 #: ADR-008 §3 — the frozen method/basis/state the slice was frozen against.
 FROZEN_METHOD = "wB97X-D4"
 FROZEN_BASIS = "def2-TZVP"
+#: ADR-008 Amendment A R6 — the reference-case level.  It is *not* claimed
+#: equivalent to the frozen layer; it is an explicitly recorded protocol
+#: deviation used only when the frozen-level TS optimization cannot converge.
+REFERENCE_METHOD = "r2SCAN-3c"
+REFERENCE_BASIS = "def2-mTZVPP"
 FROZEN_CHARGE = 0
 FROZEN_MULTIPLICITY = 1
 FROZEN_STATE_ID = "state.singlet.s0"
@@ -108,6 +115,35 @@ REFERENCE_STATE = (
     "and cyclohexene, all at the frozen conditions"
 )
 
+#: ADR-008 Amendment A — the TS-guess acquisition route.  Step 2 keeps its
+#: frozen step identity/required flag/evidence role, but its *producer* is the
+#: platform route the operator validated on the reference case: PESsearch
+#: (ORCA relaxed scan) → explicit frame selection → BatchOptimize TS refinement.
+ROUTE_AMENDMENT_ID = "ADR-008 Amendment A"
+ROUTE_ID = "route.diels_alder.ts_guess.pes_relaxed_scan_frame_batch_optimize_ts.v1"
+ROUTE_REFERENCE_JOB_PES = "20261014_165743_003_PESsearch"
+ROUTE_REFERENCE_JOB_BATCH = "20261014_170039_004_BatchOptimize"
+ROUTE_REFERENCE_SELECTED_FRAME = 5
+#: The selection rule: the first converged, constraint-satisfied scan frame at
+#: or beyond the midpoint of the scanned reaction coordinate.  No fallback pick.
+ROUTE_FRAME_PROGRESS_THRESHOLD = 0.5
+ROUTE_SCAN_POINTS = 21
+ROUTE_SCAN_EXTENSION_ANGSTROM = 2.0
+ROUTE_SCAN_OPTIMIZER = "GFN2-xTB"
+ROUTE_SCAN_SINGLE_POINT = "B97-3c"
+ROUTE_OPTIMIZE_METHOD = "r2SCAN-3c"
+ROUTE_OPTIMIZE_BASIS = "def2-mTZVPP"
+ROUTE_OPTIMIZE_SP_METHOD = "wB97M-V"
+ROUTE_OPTIMIZE_SP_BASIS = "def2-TZVPP"
+
+#: Reference-case resource envelope (20261014_*_003/004: nproc=16, mem=32–41 GB).
+#: Every real ORCA step of this slice runs with the same envelope; the PES
+#: single-point planner splits 16 cores into at most 4 workers × 4 cores so no
+#: single frame exceeds ``-P 4`` while the scan still uses all 16 cores.
+RESOURCE_NPROC = 16
+RESOURCE_MEM = "32GB"
+RESOURCE_MAXCORE = 2000
+
 #: ADR-008 §4 — the nine required steps, in order (``dispatch`` is the bounded
 #: DAG vocabulary of today; ``None`` means the step cannot be dispatched as a
 #: bounded DAG step and runs through the real task core instead).
@@ -126,7 +162,8 @@ ADR_STEPS: tuple[dict[str, Any], ...] = (
         "task_kind": "xtb_path_search",
         "dispatch": None,
         "bounded_alternative": "alt_candidate_path_declared",
-        "executed_as": "xtb_path_search",
+        "executed_as": "pes_scan_frame_batch_optimize",
+        "route_amendment": ROUTE_AMENDMENT_ID,
     },
     {
         "index": 3,
@@ -360,6 +397,61 @@ def _xyz_text(
     return f"{len(symbols)}\n{comment}\n{rows}\n"
 
 
+def select_scan_frame(
+    profile: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Apply the Amendment A frame rule to a real PES profile.
+
+    The rule is deliberately explicit and has no fallback pick: among the
+    frames whose constrained optimization converged, whose constraint residual
+    is acceptable and which carry no invalid reason, the *first* frame at or
+    beyond the midpoint of the scanned reaction coordinate is selected.  On the
+    validated reference profile this reproduces the operator's manual choice
+    (frame 4 progress 0.0889, frame 5 progress 0.6347 → frame 5).
+
+    Args:
+        profile: The persisted ``pes_profile.json`` document.
+
+    Returns:
+        ``(selected_frame, candidate_table)``; ``selected_frame`` is ``None``
+        when the rule has no answer, so the caller can fail honestly.
+    """
+    frames = [
+        frame
+        for frame in (profile.get("frames") or ())
+        if isinstance(frame, dict) and frame.get("index") is not None
+    ]
+    frames.sort(key=lambda frame: int(frame["index"]))
+    table: list[dict[str, Any]] = []
+    selected: dict[str, Any] | None = None
+    for frame in frames:
+        progress = float(frame.get("reaction_progress") or 0.0)
+        eligible = (
+            frame.get("optimization_converged") is True
+            and frame.get("constraint_residual_ok") is True
+            and not (frame.get("invalid_reasons") or ())
+        )
+        table.append(
+            {
+                "index": int(frame["index"]),
+                "reaction_progress": round(progress, 6),
+                "target_coordinate": frame.get("target_coordinate"),
+                "actual_coordinate": frame.get("actual_coordinate"),
+                "scan_energy_hartree": frame.get("scan_energy_hartree"),
+                "single_point_energy_hartree": frame.get("single_point_energy_hartree"),
+                "optimization_converged": bool(frame.get("optimization_converged")),
+                "constraint_residual_ok": bool(frame.get("constraint_residual_ok")),
+                "invalid_reasons": list(frame.get("invalid_reasons") or ()),
+                "eligible": eligible,
+                "selected": False,
+            }
+        )
+        if selected is None and eligible and progress >= ROUTE_FRAME_PROGRESS_THRESHOLD:
+            selected = frame
+            table[-1]["selected"] = True
+    return selected, table
+
+
 # ── frozen inputs (ADR-008 fixture) ────────────────────────────────────────
 
 
@@ -375,6 +467,7 @@ class FrozenInputs:
     product_coordinates: tuple[tuple[float, float, float], ...]
     product_atom_ids: tuple[str, ...]
     atom_mapping: tuple[tuple[int, int], ...]
+    formed_bonds: tuple[tuple[int, int], ...]
     recipe: dict[str, Any]
     question: dict[str, Any]
     acceptance: dict[str, Any]
@@ -466,6 +559,23 @@ def load_frozen_inputs() -> FrozenInputs:
                 f"the frozen mapping pairs different elements at {left_index}/{right_index}"
             )
 
+    # The two formed bonds (ADR-008 §2) expressed in the reactant atom order.
+    # They are the scan coordinates of the Amendment A route; deriving them
+    # from the frozen reaction contract keeps the route audit-bound.
+    left_index_of = {atom_id: index for index, atom_id in enumerate(left_atom_ids)}
+    formed_bonds: list[tuple[int, int]] = []
+    for change in reaction.get("bond_changes") or ():
+        if str(change.get("change_type")) != "formed":
+            continue
+        atoms = [str(value) for value in change.get("left_atoms") or ()]
+        if len(atoms) != 2 or any(atom not in left_index_of for atom in atoms):
+            raise SystemExit(f"a frozen formed bond is not resolvable: {change}")
+        formed_bonds.append((left_index_of[atoms[0]], left_index_of[atoms[1]]))
+    if len(formed_bonds) != 2:
+        raise SystemExit(
+            f"the frozen reaction declares {len(formed_bonds)} formed bonds, expected 2"
+        )
+
     digests["reactants.xyz"] = bare_digest(FIXTURE_V1 / "reactants.xyz")
     digests["product.xyz"] = bare_digest(FIXTURE_V1 / "product.xyz")
     return FrozenInputs(
@@ -477,6 +587,7 @@ def load_frozen_inputs() -> FrozenInputs:
         product_coordinates=tuple(product_coordinates),
         product_atom_ids=right_atom_ids,
         atom_mapping=tuple(mapping),
+        formed_bonds=tuple(formed_bonds),
         recipe=recipe,
         question=question,
         acceptance=acceptance,
@@ -632,9 +743,14 @@ def resolve_software() -> dict[str, Any]:
         "findings": findings,
         "config": {
             "executables": {
-                name: {"path": identity.executable, "nproc": 4, "maxcore": 3000}
+                name: {
+                    "path": identity.executable,
+                    "nproc": RESOURCE_NPROC,
+                    "maxcore": RESOURCE_MAXCORE,
+                }
                 for name, identity in chosen.items()
-            }
+            },
+            "resources": {"nproc": RESOURCE_NPROC, "mem": RESOURCE_MEM},
         },
     }
 
@@ -671,6 +787,13 @@ class M404:
         self.run_root.mkdir(parents=True, exist_ok=True)
         self.reuse = bool(args.reuse)
         self.phase = str(args.phase)
+        self.level_mode = str(getattr(args, "level", "frozen") or "frozen")
+        if self.level_mode == "reference":
+            self.method = REFERENCE_METHOD
+            self.basis = REFERENCE_BASIS
+        else:
+            self.method = FROZEN_METHOD
+            self.basis = FROZEN_BASIS
         self.timeouts = {
             "singlepoint": float(args.singlepoint_timeout),
             "frequency": float(args.frequency_timeout),
@@ -765,6 +888,21 @@ class M404:
                 "energy_unit": "hartree",
                 "solvent": None,
             },
+            "executed_level": {
+                "mode": self.level_mode,
+                "method": self.method,
+                "basis": self.basis,
+                "deviation_from_frozen": self.level_mode != "frozen",
+                "equivalence_claimed": False,
+                "rationale": (
+                    "Amendment A R6: the frozen-level TS optimization did not converge "
+                    "within the declared budget, so the whole chain runs at the "
+                    "reference-case level. No equivalence to wB97X-D4/def2-TZVP is "
+                    "claimed; all energy participants share this level."
+                )
+                if self.level_mode != "frozen"
+                else None,
+            },
             "criteria": {
                 "version": CRITERIA_VERSION,
                 "digest": digest,
@@ -776,6 +914,24 @@ class M404:
                 "frozen_read_only": True,
             },
             "adr008_step_declaration": declaration,
+            "ts_guess_route": {
+                "amendment": ROUTE_AMENDMENT_ID,
+                "route_id": ROUTE_ID,
+                "reference_case": {
+                    "pes_search_job": ROUTE_REFERENCE_JOB_PES,
+                    "batch_optimize_job": ROUTE_REFERENCE_JOB_BATCH,
+                    "selected_frame": ROUTE_REFERENCE_SELECTED_FRAME,
+                },
+                "frame_rule": (
+                    "first converged, constraint-satisfied frame with "
+                    f"reaction_progress >= {ROUTE_FRAME_PROGRESS_THRESHOLD}"
+                ),
+                "criteria_digest_impact": (
+                    "the route is not part of criteria_definition_payload "
+                    "(criteria/thresholds/rules/questions only); the frozen digest is "
+                    "unchanged and criteria_version stays 1.0.0"
+                ),
+            },
             "atom_mapping": {
                 "pairs": [[left, right] for left, right in self.frozen.atom_mapping],
                 "reactant_atom_ids": list(self.frozen.reactant_atom_ids),
@@ -802,6 +958,12 @@ class M404:
             )
         if not self.preflight["criteria"]["fingerprint_in_adr"]:
             self.reasons.append("the ADR-008 document does not carry the frozen fingerprint")
+        if self.level_mode != "frozen":
+            self.notes.append(
+                "executed level is the Amendment A R6 reference-case variant "
+                f"({self.method}/{self.basis}); no equivalence to {FROZEN_METHOD}/{FROZEN_BASIS} "
+                "is claimed and the deviation is recorded in preflight.executed_level"
+            )
         for name in ("orca", "xtb"):
             if name not in (self.software.get("resolved") or {}):
                 self.reasons.append(f"{name} could not be identified; that step is NOT_VERIFIED")
@@ -813,9 +975,15 @@ class M404:
             lines.append(f"  {name}:")
             lines.append(f'    path: "{identity["executable"]}"')
             if name == "orca":
-                lines.append("    nproc: 4")
-                lines.append("    maxcore: 3000")
-        lines.extend(["resources:", "  nproc: 4"])
+                lines.append(f"    nproc: {RESOURCE_NPROC}")
+                lines.append(f"    maxcore: {RESOURCE_MAXCORE}")
+        lines.extend(
+            [
+                "resources:",
+                f"  nproc: {RESOURCE_NPROC}",
+                f'  mem: "{RESOURCE_MEM}"',
+            ]
+        )
         path = self.out / "task-config.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -907,6 +1075,25 @@ class M404:
 
     # -- real task execution ----------------------------------------------
 
+    def _actual_orca_resources(self, native_files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Read the real ``%pal nprocs`` / ``%maxcore`` from generated ORCA inputs."""
+        rows: list[dict[str, Any]] = []
+        for entry in native_files:
+            path = Path(str(entry.get("absolute_path") or entry.get("path") or ""))
+            if path.suffix != ".inp" or not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            pal = re.search(r"%pal\s+nprocs\s+(\d+)\s+end", text)
+            maxcore = re.search(r"%maxcore\s+(\d+)", text)
+            rows.append(
+                {
+                    "inp": str(path),
+                    "pal_nprocs": int(pal.group(1)) if pal else None,
+                    "maxcore": int(maxcore.group(1)) if maxcore else None,
+                }
+            )
+        return rows
+
     def _record_step(self, step_id: str, record: dict[str, Any]) -> dict[str, Any]:
         self.steps[step_id] = record
         write_json(self.step_path(step_id), record)
@@ -930,11 +1117,18 @@ class M404:
             if self.release_facts
             else None,
             "level": {
-                "method": FROZEN_METHOD,
-                "basis": FROZEN_BASIS,
+                "method": self.method,
+                "basis": self.basis,
                 "charge": FROZEN_CHARGE,
                 "multiplicity": FROZEN_MULTIPLICITY,
             },
+            "resources": {
+                "cores": RESOURCE_NPROC,
+                "nproc": RESOURCE_NPROC,
+                "maxcore": RESOURCE_MAXCORE,
+                "mem": RESOURCE_MEM,
+            },
+            "actual_orca_resources": None,
             "duration_seconds": None,
             "task_result": None,
             "native_files": [],
@@ -949,7 +1143,18 @@ class M404:
         document = read_json(self.step_path(step["step_id"]))
         if not isinstance(document, dict):
             return None
-        if document.get("status") not in ("completed", "partial"):
+        # Only a fully completed step is reusable.  A ``partial`` document (for
+        # example thermochemistry recorded before the TS existed) must be
+        # recomputed when its inputs change; reusing it would freeze a stale
+        # "missing participant" verdict into a resumed run.
+        if document.get("status") != "completed":
+            return None
+        if document.get("converged") is False:
+            return None
+        # A TS optimization whose native log says it did not converge is not a
+        # reusable completed step, even if the upstream payload summarised it as
+        # converged (ORCA stops at MaxIter and prints an explicit error block).
+        if document.get("step_id") == "ts_optimize" and not self._optimize_converged(document)[0]:
             return None
         for entry in document.get("native_files") or ():
             path = Path(str(entry.get("absolute_path") or ""))
@@ -1006,8 +1211,13 @@ class M404:
             "structure": {"path": str(structure), "role": structure_role},
             "charge": FROZEN_CHARGE,
             "multiplicity": FROZEN_MULTIPLICITY,
-            "level": {"method": FROZEN_METHOD, "basis": FROZEN_BASIS},
-            "resources": {"cores": 1, "nproc": 4, "maxcore": 3000},
+            "level": {"method": self.method, "basis": self.basis},
+            "resources": {
+                "cores": RESOURCE_NPROC,
+                "nproc": RESOURCE_NPROC,
+                "maxcore": RESOURCE_MAXCORE,
+                "mem": RESOURCE_MEM,
+            },
             "options": options,
             "output_dir": str(work),
         }
@@ -1035,6 +1245,7 @@ class M404:
             record["status"] = "failed"
             record["error"] = f"{type(exc).__name__}: {exc}"
         record["native_files"] = self._collect_native(work)
+        record["actual_orca_resources"] = self._actual_orca_resources(record["native_files"])
         return self._record_step(step["step_id"], record)
 
     def run_bounded_step(
@@ -1099,10 +1310,15 @@ class M404:
             "inputs": {},
             "structure_role": "transition_state" if task_kind == "optimize" else "minimum",
             "step_requirements": [{"step_id": step["step_id"], "executables": ["orca"]}],
-            "method": {"method": FROZEN_METHOD, "basis": FROZEN_BASIS},
+            "method": {"method": self.method, "basis": self.basis},
             "charge": FROZEN_CHARGE,
             "multiplicity": FROZEN_MULTIPLICITY,
-            "resources": {"cores": 1, "nproc": 4, "maxcore": 3000},
+            "resources": {
+                "cores": RESOURCE_NPROC,
+                "nproc": RESOURCE_NPROC,
+                "maxcore": RESOURCE_MAXCORE,
+                "mem": RESOURCE_MEM,
+            },
             "config": self.task_config,
         }
         if task_kind == "frequency":
@@ -1187,6 +1403,7 @@ class M404:
             record["status"] = "failed"
             record["error"] = f"{type(exc).__name__}: {exc}"
         record["native_files"] = self._collect_native(work)
+        record["actual_orca_resources"] = self._actual_orca_resources(record["native_files"])
         return self._record_step(step["step_id"], record)
 
     def _collect_native(self, work: Path) -> list[dict[str, Any]]:
@@ -1232,7 +1449,7 @@ class M404:
             if not root.is_dir():
                 continue
             for child in sorted(root.rglob("*")):
-                if child.is_file() and child.suffix in (".xyz", ".out", ".json", ".log"):
+                if child.is_file() and child.suffix in (".xyz", ".out", ".json", ".log", ".inp"):
                     entry = file_record(child, root=work)
                     entry["absolute_path"] = str(child)
                     if entry["path"] not in seen and not entry["path"].startswith(
@@ -1250,6 +1467,14 @@ class M404:
         existing = self._existing_step(step)
         if existing is not None:
             self.steps[step["step_id"]] = existing
+            # A resumed run must also load the per-species child documents: the
+            # barrier comparison reads their energies, and the merged parent
+            # record only carries geometry/sub-execution summaries.
+            for species in ("butadiene", "ethene", "cyclohexene"):
+                child_id = f"{step['step_id']}_{species}"
+                child = self._existing_step({"step_id": child_id})
+                if child is not None:
+                    self.steps[child_id] = child
             return
         # The frozen recipe's declared alternative relaxes the single declared
         # input conformation per endpoint (no conformer search, no global claim).
@@ -1317,108 +1542,493 @@ class M404:
         return {"symbols": list(symbols), "coordinates": [list(row) for row in coordinates]}
 
     def step_candidate_path(self) -> None:
-        """ADR step 2 — GFN2-xTB PATH between the frozen endpoints."""
+        """ADR step 2 — TS guess via the Amendment A platform route.
+
+        The frozen recipe names ``xtb_path_search`` for this step, and the
+        original implementation followed it literally.  The validated reference
+        case shows that route does not deliver a TS guess on this system, while
+        ``PESsearch (ORCA relaxed scan) → explicit frame → BatchOptimize TS``
+        does.  ADR-008 Amendment A re-routes the *producer* of this step; the
+        step identity, required flag and evidence role are unchanged, and every
+        criterion still has to be earned at the frozen §3 method layer.
+        """
         step = ADR_STEPS[1]
         existing = self._existing_step(step)
         if existing is not None:
             self.steps[step["step_id"]] = existing
             return
+        record = self._base_step_record(step)
+        record["entry"] = "platform_workflow_route"
+        record["task_ref"] = f"{time.strftime('%Y%m%d')}_945_candidate_path"
+        record["route"] = {
+            "route_id": ROUTE_ID,
+            "amendment": ROUTE_AMENDMENT_ID,
+            "reference_case": {
+                "pes_search_job": ROUTE_REFERENCE_JOB_PES,
+                "batch_optimize_job": ROUTE_REFERENCE_JOB_BATCH,
+                "selected_frame": ROUTE_REFERENCE_SELECTED_FRAME,
+            },
+            "stages": [],
+        }
+        record["level"] = {
+            "evidence_level": {
+                "method": self.method,
+                "basis": self.basis,
+                "charge": FROZEN_CHARGE,
+                "multiplicity": FROZEN_MULTIPLICITY,
+            },
+            "route_levels": {
+                "scan_optimizer": {"method": ROUTE_SCAN_OPTIMIZER, "basis": None},
+                "scan_single_point": {"method": ROUTE_SCAN_SINGLE_POINT, "basis": None},
+                "ts_refinement": {
+                    "method": ROUTE_OPTIMIZE_METHOD,
+                    "basis": ROUTE_OPTIMIZE_BASIS,
+                    "role": "ts",
+                    "trust_radius": 0.3,
+                    "initial_hessian": "calculate",
+                    "recalc_hess": 5,
+                },
+            },
+        }
+        if self.level_mode == "reference":
+            record["level"]["note"] = (
+                "R6 reference-level variant: DA-C01..C07 are evaluated at "
+                f"{self.method}/{self.basis}; every energy participant shares this level. "
+                "No equivalence to the frozen wB97X-D4/def2-TZVP layer is claimed; the "
+                "deviation is recorded in preflight.executed_level."
+            )
+        else:
+            record["level"]["note"] = (
+                "the route level produces a TS *guess* only; DA-C01..C07 are "
+                "evaluated exclusively from the frozen wB97X-D4/def2-TZVP "
+                "artifacts of steps 3-9 (ADR-008 §3 unchanged)"
+            )
         work = self.work_dir(step["step_id"])
+        if work.exists():
+            shutil.rmtree(work)
         work.mkdir(parents=True, exist_ok=True)
-        start = self.input_dir / "reactants.xyz"
+
+        # The scan starts from the frozen product geometry (ring) and opens the
+        # two formed bonds outward — the same direction the operator validated
+        # on the reference case.  For a saddle the scan direction is immaterial;
+        # the reaction direction is established later by the bidirectional IRC.
+        start_symbols, start_coordinates = self.frozen.product_in_reactant_order()
+        start = self.input_dir / "route_scan_start_product_order.xyz"
         start.write_text(
             _xyz_text(
-                self.frozen.reactant_symbols,
-                self.frozen.reactant_coordinates,
-                "frozen reactants (butadiene + ethene, reactant atom order)",
+                start_symbols,
+                start_coordinates,
+                "frozen cyclohexene re-indexed into reactant atom order (Amendment A scan start)",
             ),
             encoding="utf-8",
         )
-        product_symbols, product_coordinates = self.frozen.product_in_reactant_order()
-        end = self.input_dir / "product_in_reactant_order.xyz"
-        end.write_text(
+        scan_coordinates: list[dict[str, Any]] = []
+        for first, second in self.frozen.formed_bonds:
+            distance = math.dist(start_coordinates[first], start_coordinates[second])
+            scan_coordinates.append(
+                {
+                    "kind": "distance",
+                    "atoms": [int(first), int(second)],
+                    "unit": "angstrom",
+                    "start": round(distance, 4),
+                    "end": round(distance + ROUTE_SCAN_EXTENSION_ANGSTROM, 4),
+                    "n_points": ROUTE_SCAN_POINTS,
+                }
+            )
+        scan_request: dict[str, Any] = {
+            "mode": "bond_length_scan",
+            "source": {
+                "source_type": "xyz_text",
+                "xyz_text": start.read_text(encoding="utf-8"),
+                "charge": FROZEN_CHARGE,
+                "multiplicity": FROZEN_MULTIPLICITY,
+            },
+            "coordinate": dict(scan_coordinates[0]),
+            "coordinates": scan_coordinates,
+            "selection": {
+                "mode": "functional",
+                "kind": "double_bond_scan",
+                "atom_indices": [int(atom) for pair in self.frozen.formed_bonds for atom in pair],
+                "groups": [[int(first), int(second)] for first, second in self.frozen.formed_bonds],
+                "selected_bond": False,
+            },
+            "protocol": {
+                "scan_driver": {
+                    "software": "orca",
+                    "mode": "relaxed_scan",
+                    "reuse_previous_geometry": True,
+                    "full_scan": True,
+                    "use_scants": False,
+                    "max_iterations": 250,
+                    "failure_policy": "retry_previous",
+                    "retry_count": 2,
+                },
+                "scan_optimizer": {
+                    "method": ROUTE_SCAN_OPTIMIZER,
+                    "basis": None,
+                    "dispersion": None,
+                    "solvent_model": "none",
+                    "solvent": None,
+                    "grid": None,
+                    "scf_convergence": None,
+                    "scf_max_iterations": 200,
+                    "ri_approximation": "none",
+                    "max_iterations": 250,
+                    "convergence": "normal",
+                    "retry_count": 2,
+                    "retry_strategy": "previous_geometry",
+                },
+                "single_point": {
+                    "enabled": True,
+                    "software": "orca",
+                    "method": ROUTE_SCAN_SINGLE_POINT,
+                    "basis": None,
+                    "dispersion": None,
+                    "ri_approximation": "none",
+                    "aux_j_basis": None,
+                    "aux_c_basis": None,
+                    "solvent_model": "none",
+                    "solvent": None,
+                    "grid": None,
+                    "scf_convergence": "Tight",
+                    "charge": FROZEN_CHARGE,
+                    "multiplicity": FROZEN_MULTIPLICITY,
+                    "resume": True,
+                },
+            },
+        }
+        write_json(work / "scan_request.json", scan_request)
+        record["route"]["scan_request"] = scan_request
+
+        from acp.workflows.pes_search import run_bond_length_scan
+
+        pes_dir = work / "pes"
+        started = time.perf_counter()
+        try:
+            scan_result = run_bond_length_scan(
+                scan_request=scan_request,
+                output_dir=pes_dir,
+                config=self.task_config,
+            )
+        except Exception as exc:  # noqa: BLE001 - the refusal is the evidence
+            record["duration_seconds"] = round(time.perf_counter() - started, 2)
+            record["status"] = "failed"
+            record["error"] = f"PESsearch route raised {type(exc).__name__}: {exc}"
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+        scan_seconds = round(time.perf_counter() - started, 2)
+        record["route"]["stages"].append(
+            {
+                "stage": "pes_search",
+                "entry": "acp.workflows.pes_search.run_bond_length_scan",
+                "status": scan_result.status,
+                "duration_seconds": scan_seconds,
+                "error": scan_result.error,
+                "metadata": dict(scan_result.metadata or {}),
+                "level": {
+                    "scan_optimizer": ROUTE_SCAN_OPTIMIZER,
+                    "scan_driver": "orca.relaxed_scan",
+                    "single_point": ROUTE_SCAN_SINGLE_POINT,
+                },
+            }
+        )
+        if scan_result.status != "completed":
+            record["duration_seconds"] = scan_seconds
+            record["status"] = "failed"
+            record["error"] = f"PESsearch route failed: {scan_result.error}"
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+
+        profile_path = Path(str((scan_result.metadata or {}).get("pes_profile_path") or ""))
+        if not profile_path.is_file():
+            profile_path = pes_dir / "RESULT" / "pes_search" / "pes_profile.json"
+        profile = read_json(profile_path)
+        if not isinstance(profile, dict):
+            record["duration_seconds"] = scan_seconds
+            record["status"] = "failed"
+            record["error"] = "PESsearch route produced no readable pes_profile.json"
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+
+        selected, candidate_table = select_scan_frame(profile)
+        record["route"]["frame_selection"] = {
+            "rule": (
+                "first converged, constraint-satisfied frame with "
+                f"reaction_progress >= {ROUTE_FRAME_PROGRESS_THRESHOLD}"
+            ),
+            "progress_threshold": ROUTE_FRAME_PROGRESS_THRESHOLD,
+            "frame_count": len(profile.get("frames") or ()),
+            "selected_index": None if selected is None else int(selected["index"]),
+            "selected_reaction_progress": None
+            if selected is None
+            else float(selected.get("reaction_progress") or 0.0),
+            "candidates": candidate_table,
+        }
+        if selected is None:
+            record["duration_seconds"] = scan_seconds
+            record["status"] = "failed"
+            record["error"] = (
+                "the Amendment A frame rule selected no frame "
+                f"(no converged frame with reaction_progress >= {ROUTE_FRAME_PROGRESS_THRESHOLD}); "
+                "the route fails honestly instead of picking a frame"
+            )
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+
+        scan_dir = Path(str((scan_result.metadata or {}).get("scan_dir") or ""))
+        if not scan_dir.is_absolute():
+            scan_dir = pes_dir / scan_dir
+        geometry_path = scan_dir / str(selected.get("geometry_path") or "")
+        if not geometry_path.is_file():
+            record["duration_seconds"] = scan_seconds
+            record["status"] = "failed"
+            record["error"] = f"the selected scan frame geometry is missing: {geometry_path}"
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+
+        selected_xyz = work / "selected_frame.xyz"
+        frame_symbols, frame_coordinates = _xyz_records(geometry_path.read_text(encoding="utf-8"))
+        if tuple(frame_symbols) != self.frozen.reactant_symbols:
+            record["duration_seconds"] = scan_seconds
+            record["status"] = "failed"
+            record["error"] = (
+                "the selected scan frame does not carry the frozen reactant atom order"
+            )
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+        selected_xyz.write_text(
             _xyz_text(
-                product_symbols,
-                product_coordinates,
-                "frozen cyclohexene re-indexed into reactant atom order via the frozen mapping",
+                frame_symbols,
+                frame_coordinates,
+                "TAG: TS | route="
+                f"{ROUTE_ID} | frame={int(selected['index']):03d} "
+                "| selection_source=amendment_a_rule | "
+                f"reaction_progress={float(selected.get('reaction_progress') or 0.0):.6f} "
+                f"| scan_energy_hartree={selected.get('scan_energy_hartree')}",
             ),
             encoding="utf-8",
         )
-        options = {
-            "end_structure": {"path": str(end), "role": "minimum"},
-            "gfn_level": 2,
-        }
-        record = self.run_task_core(
-            step, structure=start, options=options, timeout=self.timeouts["xtb_path_search"]
+        record["route"]["frame_selection"]["selected_frame_sha256"] = bare_digest(selected_xyz)
+
+        # BatchOptimize TS refinement — the exact platform workflow and profile
+        # of the validated reference case (opt_freq, TS role defaults).
+        from acp.calculations.batch.options import BatchMethodOptions
+        from acp.workflows.batch_optimize import run_batch_optimize
+
+        methods = BatchMethodOptions.from_method_dict(
+            {
+                "optimization_method": ROUTE_OPTIMIZE_METHOD,
+                "optimization_basis": ROUTE_OPTIMIZE_BASIS,
+                "single_point_method": ROUTE_OPTIMIZE_SP_METHOD,
+                "single_point_basis": ROUTE_OPTIMIZE_SP_BASIS,
+                "transition_state_method": ROUTE_OPTIMIZE_METHOD,
+                "transition_state_basis": ROUTE_OPTIMIZE_BASIS,
+                "transition_state_opt_trust_radius": 0.3,
+                "transition_state_opt_initial_hessian": "calculate",
+                "transition_state_opt_recalc_hess": 5,
+                "temperature": TEMPERATURE_K,
+                "pressure": PRESSURE_PA / 101325.0,
+                "scale_factor": 0.9905,
+            }
         )
-        # A path search must yield a TS-guess frame; record the best frame found.
-        record["derived_views"] = {
-            "product_in_reactant_order": file_record(end, root=work),
-            "mapping_used": [[left, right] for left, right in self.frozen.atom_mapping],
+        batch_dir = work / "batch"
+        started = time.perf_counter()
+        try:
+            batch_result = run_batch_optimize(
+                selected_xyz,
+                profile="opt_freq",
+                output_dir=batch_dir,
+                config=self.task_config,
+                charge=FROZEN_CHARGE,
+                multiplicity=FROZEN_MULTIPLICITY,
+                methods=methods,
+                layout_mode="single_flat",
+            )
+        except Exception as exc:  # noqa: BLE001 - the refusal is the evidence
+            record["duration_seconds"] = round(scan_seconds + time.perf_counter() - started, 2)
+            record["status"] = "failed"
+            record["error"] = f"BatchOptimize TS route raised {type(exc).__name__}: {exc}"
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+        batch_seconds = round(time.perf_counter() - started, 2)
+        manifest = read_json(batch_dir / "RESULT" / "result_manifest.json") or {}
+        optimization = read_json(batch_dir / "RESULT" / "trajectories" / "optimization.json") or {}
+        ts_product = None
+        for product in manifest.get("products") or ():
+            if str(product.get("kind")) != "structure":
+                continue
+            if "TS" in str(product.get("label") or ""):
+                ts_product = product
+                break
+        optimized_path: Path | None = None
+        if isinstance(ts_product, dict):
+            raw_path = str(ts_product.get("path") or "")
+            optimized_path = batch_dir / "RESULT" / raw_path.removeprefix("RESULT/")
+        if optimized_path is None or not optimized_path.is_file():
+            candidates = sorted((batch_dir / "RESULT" / "structures").glob("*.xyz"))
+            optimized_path = candidates[0] if candidates else None
+        frequency = ((ts_product or {}).get("metadata") or {}).get("frequency") or {}
+        record["route"]["stages"].append(
+            {
+                "stage": "batch_optimize_ts",
+                "entry": "acp.workflows.batch_optimize.run_batch_optimize",
+                "profile": "opt_freq",
+                "status": batch_result.status,
+                "duration_seconds": batch_seconds,
+                "error": batch_result.error,
+                "level": {
+                    "method": ROUTE_OPTIMIZE_METHOD,
+                    "basis": ROUTE_OPTIMIZE_BASIS,
+                    "role": "ts",
+                    "single_point": [ROUTE_OPTIMIZE_SP_METHOD, ROUTE_OPTIMIZE_SP_BASIS],
+                },
+                "optimization": {
+                    "converged": bool(optimization.get("converged")),
+                    "cycles": optimization.get("current_cycle"),
+                    "final_energy_hartree": optimization.get("cycles", [{}])[-1].get(
+                        "energy_hartree"
+                    )
+                    if optimization.get("cycles")
+                    else None,
+                },
+                "frequency": frequency,
+            }
+        )
+        record["route"]["batch_ts_frequency"] = frequency
+        if batch_result.status != "completed" or not optimized_path or not optimized_path.is_file():
+            record["duration_seconds"] = round(scan_seconds + batch_seconds, 2)
+            record["status"] = "failed"
+            record["error"] = (
+                f"BatchOptimize TS refinement did not complete: {batch_result.error or 'no output'}"
+            )
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+        if not bool(optimization.get("converged")):
+            record["duration_seconds"] = round(scan_seconds + batch_seconds, 2)
+            record["status"] = "failed"
+            record["error"] = (
+                "BatchOptimize TS refinement did not converge; a non-converged geometry is "
+                "not used as a TS guess"
+            )
+            record["native_files"] = self._collect_route_native(work)
+            self._record_step(step["step_id"], record)
+            return
+
+        ts_guess = work / "ts_guess.xyz"
+        shutil.copy2(optimized_path, ts_guess)
+        record["route"]["ts_guess"] = {
+            "path": str(ts_guess),
+            "sha256": bare_digest(ts_guess),
+            "source": "batch_optimize_ts_refined",
+            "level": {"method": ROUTE_OPTIMIZE_METHOD, "basis": ROUTE_OPTIMIZE_BASIS},
         }
+        if self.level_mode == "reference":
+            record["route"]["deviation"] = (
+                "R6 reference-level variant: the whole chain (steps 1-9) executes at "
+                f"{self.method}/{self.basis} because the frozen-level TS optimization did "
+                "not converge within the declared budget. All energy participants share "
+                "this level; no equivalence to wB97X-D4/def2-TZVP is claimed. The frozen "
+                "level attempt is preserved separately and its numbers are never merged "
+                "into this claim."
+            )
+        else:
+            record["route"]["deviation"] = (
+                "the reference case refined the TS at r2SCAN-3c/def2-mTZVPP; Amendment A "
+                "uses that level for the GUESS only. No equivalence to the frozen "
+                "wB97X-D4/def2-TZVP evidence layer is claimed, and no criterion consumes "
+                "the route-level numbers."
+            )
+        record["derived_views"] = {
+            "scan_start": file_record(start, root=work),
+            "scan_request": file_record(work / "scan_request.json", root=work),
+            "scan_profile": file_record(profile_path, root=work),
+            "selected_frame": file_record(selected_xyz, root=work),
+            "ts_guess": file_record(ts_guess, root=work),
+            "batch_optimized": file_record(optimized_path, root=work),
+        }
+        record["status"] = "completed"
+        record["complete"] = True
+        record["duration_seconds"] = round(scan_seconds + batch_seconds, 2)
+        record["native_files"] = self._collect_route_native(work)
+        actual = self._actual_orca_resources(record["native_files"])
+        record["actual_orca_resources"] = {
+            "pes_scan": next(
+                (
+                    row
+                    for row in actual
+                    if "/pes/" in row["inp"] and "/sp/" not in row["inp"] and "frame_" in row["inp"]
+                ),
+                None,
+            ),
+            "pes_single_point": next(
+                (row for row in actual if "/pes/" in row["inp"] and "/sp/" in row["inp"]),
+                None,
+            ),
+            "batch_ts": next((row for row in actual if "/batch/" in row["inp"]), None),
+            "distinct_pal_nprocs": sorted(
+                {row["pal_nprocs"] for row in actual if row["pal_nprocs"] is not None}
+            ),
+        }
+        self._record_step(step["step_id"], record)
+
+    def _collect_route_native(self, work: Path) -> list[dict[str, Any]]:
+        """Collect the route's native artifacts (real workflows, two roots)."""
+        files = self._collect_native(work)
+        seen = {str(entry.get("path")) for entry in files}
+        for sub in ("pes", "batch"):
+            root = work / sub
+            if not root.is_dir():
+                continue
+            for child in sorted(root.rglob("*")):
+                if not child.is_file():
+                    continue
+                if child.suffix not in (".xyz", ".out", ".json", ".log", ".inp", ".txt"):
+                    continue
+                entry = file_record(child, root=work)
+                entry["absolute_path"] = str(child)
+                if entry["path"] not in seen:
+                    seen.add(entry["path"])
+                    files.append(entry)
+        return files
 
     def _ts_guess_path(self) -> tuple[Path, dict[str, Any]] | None:
-        """Return the TS-guess structure and its selection provenance.
+        """Return the Amendment A TS-guess structure plus its provenance.
 
-        The GFN2-xTB PATH run returns one trajectory artifact plus indexed frame
-        energies.  The barrier-top frame (highest energy along the path) is the
-        frozen-level candidate; the selection rule and the frame index/energy are
-        recorded so the choice is auditable, never implicit.
+        The candidate is the BatchOptimize-refined TS geometry.  The provenance
+        keeps the frame-selection rule, the selected frame index and the route
+        levels so the guess can never be read as criterion evidence.
         """
         record = self.steps.get("candidate_path") or {}
-        result = self._result_of(record)
-        if result is None:
+        if record.get("status") != "completed":
             return None
-        trajectory: Path | None = None
-        for artifact in result.artifacts:
-            if str(getattr(artifact, "type", "")) == "trajectory":
-                candidate = Path(str(getattr(artifact, "path", "")))
-                if candidate.is_file():
-                    trajectory = candidate
-                    break
-        if trajectory is None:
-            # A failed path search must not be turned into a candidate by
-            # picking an arbitrary frame: the metadynamics frames of a run that
-            # never reached the product are not a transition-state guess.
+        route = record.get("route") or {}
+        target = route.get("ts_guess") or {}
+        path = Path(str(target.get("path") or ""))
+        if not path.is_file():
             return None
-        frames = _xyz_frames(trajectory.read_text(encoding="utf-8"))
-        if not frames:
+        if bare_digest(path) != str(target.get("sha256")):
             return None
-        payload = result.payload
-        energies = [
-            None if frame.energy_hartree is None else float(frame.energy_hartree)
-            for frame in (getattr(payload, "frames", ()) or ())
-        ]
-        if len(energies) != len(frames):
-            energies = [None] * len(frames)
-        peak_index = max(
-            range(len(frames)),
-            key=lambda index: energies[index] if energies[index] is not None else float("-inf"),
-        )
-        if all(energy is None for energy in energies):
-            peak_index = len(frames) // 2
-        symbols, coordinates, comment = frames[peak_index]
-        if tuple(symbols) != self.frozen.reactant_symbols:
-            return None
-        target = self.input_dir / "ts_guess.xyz"
-        target.write_text(
-            _xyz_text(
-                symbols,
-                coordinates,
-                f"xTB PATH barrier-top frame {peak_index} ({comment[:60]})",
-            ),
-            encoding="utf-8",
-        )
-        return target, {
-            "selection_rule": "highest-energy frame along the GFN2-xTB PATH trajectory",
-            "frame_index": peak_index,
-            "frame_count": len(frames),
-            "frame_energy_hartree": energies[peak_index],
-            "trajectory": str(trajectory),
-            "trajectory_sha256": bare_digest(trajectory),
-            "ts_guess": str(target),
-            "ts_guess_sha256": bare_digest(target),
+        selection = route.get("frame_selection") or {}
+        return path, {
+            "route_id": route.get("route_id"),
+            "amendment": route.get("amendment"),
+            "selection_rule": selection.get("rule"),
+            "frame_index": selection.get("selected_index"),
+            "frame_count": selection.get("frame_count"),
+            "reaction_progress": selection.get("selected_reaction_progress"),
+            "ts_guess": str(path),
+            "ts_guess_sha256": str(target.get("sha256")),
             "candidate_kind": "generated_candidate",
+            "level": target.get("level"),
+            "batch_ts_frequency": route.get("batch_ts_frequency"),
         }
 
     def step_candidate_frequency(self) -> None:
@@ -1440,7 +2050,22 @@ class M404:
         self.run_bounded_step(step, structure=guess[0], parameters={})
 
     def step_ts_optimize(self) -> None:
-        """ADR step 4 — transition-state optimization following the native mode."""
+        """ADR step 4 — transition-state optimization following the native mode.
+
+        The bounded-recipe parameter schema is closed to scalars/lists, so a
+        nested ``ts`` spec cannot travel through the envelope
+        (``RecipeSchemaError: step.parameters.ts: unsupported parameter value
+        type dict``).  The real task core is the same execution station and
+        accepts the typed ``TsSpec``, so this step runs there — like the other
+        non-dispatchable ADR steps.
+
+        A TS optimization at the frozen level is a long step.  If the first
+        attempt hits its cycle cap without converging, one warm restart is
+        allowed from its final geometry with a larger cycle cap and the
+        reference-case trust radius (0.3).  Both attempts stay at the frozen
+        method/basis; no threshold is touched.  A second non-convergence fails
+        the step honestly (downstream DG-02).
+        """
         step = ADR_STEPS[3]
         existing = self._existing_step(step)
         if existing is not None:
@@ -1454,14 +2079,273 @@ class M404:
             self._record_step(step["step_id"], record)
             return
         mode_index = self._native_imaginary_index()
-        parameters: dict[str, Any] = {
-            "mode": "transition_state",
-            "max_cycles": 40,
-            "initial_hessian": "calculate",
+        start_path = guess[0]
+        attempts: list[dict[str, Any]] = []
+
+        # Amendment A R6: at the reference level the route's BatchOptimize
+        # ``opt_freq`` TS optimization *is* the step-4 optimization — it ran at
+        # exactly this method/basis and converged.  Re-running OptTS on its own
+        # converged geometry makes ORCA step off the stationary point and
+        # wander, so the receipt is reused instead of duplicated.
+        if self.level_mode == "reference":
+            reused = self._route_batch_optimization()
+            if reused is not None:
+                record = self._base_step_record(step)
+                record["entry"] = "route_batch_optimize_ts"
+                route_record = self.steps.get("candidate_path") or {}
+                route_task_ref = str(route_record.get("task_ref") or "")
+                record["task_ref"] = f"{route_task_ref}_ts"
+                record["task_result"] = reused["result"].to_dict()
+                record["native_files"] = reused["native_files"]
+                route = route_record.get("route") or {}
+                batch_stage = next(
+                    (
+                        stage
+                        for stage in route.get("stages") or ()
+                        if stage.get("stage") == "batch_optimize_ts"
+                    ),
+                    {},
+                )
+                record["attempts"] = [
+                    {
+                        "attempt": 1,
+                        "start_structure": str(reused["ts_path"]),
+                        "start_sha256": bare_digest(reused["ts_path"]),
+                        "max_cycles": 200,
+                        "trust_radius": 0.3,
+                        "duration_seconds": batch_stage.get("duration_seconds"),
+                        "optimization_status": "converged",
+                        "native_success_marker": "batch_optimize_ts",
+                        "converged": True,
+                        "reason": (
+                            "BatchOptimize opt_freq TS role converged at the reference "
+                            "level (the route's R3 refinement)"
+                        ),
+                        "task_ref": record["task_ref"],
+                    }
+                ]
+                record["converged"] = True
+                record["status"] = "completed"
+                record["complete"] = True
+                record["duration_seconds"] = batch_stage.get("duration_seconds")
+                record["route_reuse"] = {
+                    "stage": "batch_optimize_ts",
+                    "note": (
+                        "R6 reference-level variant: the BatchOptimize opt_freq TS "
+                        "optimization is consumed as ADR step 4; no redundant second "
+                        "OptTS is run on an already-converged geometry"
+                    ),
+                    "optimization": reused["optimization"],
+                }
+                self._record_step(step["step_id"], record)
+                return
+
+        # A non-converged attempt left by an interrupted earlier run is a valid
+        # warm start: preserve its geometry before ``run_task_core`` clears the
+        # work dir, and keep a digest of its native log for the receipt.
+        previous = read_json(self.step_path(step["step_id"]))
+        previous_summary = self._previous_ts_attempt(previous)
+        if previous_summary is not None and previous_summary["restart_geometry"] is not None:
+            start_path = previous_summary["restart_geometry"]
+            attempts.append(previous_summary["attempt"])
+            # Persist the honest state before the retry clears the work dir: a
+            # later resume must not reuse this attempt as "completed".
+            previous["converged"] = False
+            previous["status"] = "failed"
+            previous["error"] = (
+                "previous TS optimization attempt did not converge; a warm restart was started"
+            )
+            write_json(self.step_path(step["step_id"]), previous)
+
+        plan: list[tuple[int, float | None]] = (
+            [(100, 0.3)] if attempts else [(40, None), (100, 0.3)]
+        )
+        if self.level_mode == "reference" and not attempts:
+            # The reference case converged with the TS-role trust radius (0.3).
+            plan = [(40, 0.3), (100, 0.3)]
+        for max_cycles, trust_radius in plan:
+            parameters: dict[str, Any] = {
+                "mode": "transition_state",
+                "max_cycles": max_cycles,
+                "initial_hessian": "calculate",
+            }
+            if trust_radius is not None:
+                parameters["trust_radius"] = trust_radius
+            if mode_index is not None:
+                parameters["ts"] = {"enabled": True, "mode_index": mode_index}
+            record = self.run_task_core(
+                step,
+                structure=start_path,
+                options=parameters,
+                timeout=self.timeouts["optimize"],
+                structure_role="transition_state",
+            )
+            converged, reason, native_log = self._optimize_converged(record)
+            attempts.append(
+                {
+                    "attempt": len(attempts) + 1,
+                    "start_structure": str(start_path),
+                    "start_sha256": bare_digest(start_path),
+                    "max_cycles": max_cycles,
+                    "trust_radius": trust_radius,
+                    "duration_seconds": record.get("duration_seconds"),
+                    "optimization_status": (
+                        (record.get("task_result") or {}).get("payload") or {}
+                    ).get("optimization_status"),
+                    "native_success_marker": native_log,
+                    "converged": converged,
+                    "reason": reason,
+                    "task_ref": record.get("task_ref"),
+                }
+            )
+            if converged:
+                break
+            restart = self._geometry_from_optimize_record(record)
+            if restart is None:
+                break
+            start_path = restart
+        record["attempts"] = attempts
+        record["converged"] = bool(attempts and attempts[-1]["converged"])
+        if not record["converged"]:
+            record["status"] = "failed"
+            record["error"] = (
+                "TS optimization did not converge at the frozen level "
+                f"({', '.join(str(row['max_cycles']) + ' cycles' for row in attempts)}); "
+                "no non-converged geometry is used as evidence"
+            )
+        self._record_step(step["step_id"], record)
+
+    def _route_batch_optimization(self) -> dict[str, Any] | None:
+        """Return the route's converged BatchOptimize TS optimization receipt."""
+        record = self.steps.get("candidate_path") or {}
+        route = record.get("route") or {}
+        target = (route.get("ts_guess") or {}).get("path")
+        ts_path = Path(str(target or ""))
+        if not ts_path.is_file():
+            return None
+        batch_dir = self.work_dir("candidate_path") / "batch"
+        optimization = read_json(batch_dir / "RESULT" / "trajectories" / "optimization.json") or {}
+        if not optimization.get("converged"):
+            return None
+        cycles = optimization.get("cycles") or []
+        energy = (cycles[-1] or {}).get("energy_hartree") if cycles else None
+        if energy is None:
+            return None
+        symbols, coordinates = _xyz_records(ts_path.read_text(encoding="utf-8"))
+        from cccp.calculation.requests import TaskKind
+        from cccp.calculation.results import OptimizePayload, TaskResult
+
+        result = TaskResult(
+            task=TaskKind.OPTIMIZE,
+            status="completed",
+            complete=True,
+            energy_hartree=float(energy),
+            coordinates=tuple(coordinates),
+            symbols=tuple(symbols),
+            converged=True,
+            payload=OptimizePayload(optimization_status="converged"),
+        )
+        native: list[dict[str, Any]] = []
+        for relative in (
+            "WORK/03_OPT/ts_opt.inp",
+            "WORK/03_OPT/ts_opt.out",
+            "WORK/03_OPT/ts_opt.xyz",
+            "RESULT/trajectories/optimization.json",
+            "RESULT/structures/item_001__TAG_TS__optimized.xyz",
+        ):
+            path = batch_dir / relative
+            if path.is_file():
+                entry = file_record(path, root=self.work_dir("candidate_path"))
+                entry["absolute_path"] = str(path)
+                native.append(entry)
+        return {
+            "result": result,
+            "optimization": optimization,
+            "native_files": native,
+            "ts_path": ts_path,
         }
-        if mode_index is not None:
-            parameters["ts"] = {"enabled": True, "mode_index": mode_index}
-        self.run_bounded_step(step, structure=guess[0], parameters=parameters)
+
+    def _optimize_converged(self, record: dict[str, Any]) -> tuple[bool, str, str | None]:
+        """Return whether a real optimize run converged, from its native log.
+
+        The task payload alone is not trusted: a native ORCA run that stops at
+        ``MaxIter`` can still be summarised as ``converged`` upstream, while the
+        log carries an explicit ``did not converge`` marker.  The native marker
+        therefore wins.
+        """
+        text = ""
+        log_path: Path | None = None
+        for entry in record.get("native_files") or ():
+            candidate = Path(str(entry.get("absolute_path") or ""))
+            if candidate.suffix == ".out" and candidate.is_file():
+                log_path = candidate
+                break
+        if log_path is not None:
+            text = log_path.read_text(encoding="utf-8", errors="replace")
+        payload = (record.get("task_result") or {}).get("payload") or {}
+        payload_status = str(payload.get("optimization_status") or "")
+        if "did not converge" in text:
+            return False, "native log reports 'did not converge'", "did_not_converge"
+        if "HURRAY" in text or "OPTIMIZATION RUN DONE" in text:
+            return True, "native log reports a converged optimization", "hurray"
+        if payload_status == "converged":
+            return True, "task payload reports converged (no native marker found)", None
+        return False, f"task payload status {payload_status!r} without native success marker", None
+
+    def _geometry_from_optimize_record(self, record: dict[str, Any]) -> Path | None:
+        """Write one optimize result's final geometry to the stable input dir."""
+        result = record.get("task_result") or {}
+        symbols = result.get("symbols")
+        coordinates = result.get("coordinates")
+        if not symbols or not coordinates:
+            return None
+        target = self.input_dir / "ts_restart.xyz"
+        target.write_text(
+            _xyz_text(
+                list(symbols),
+                [tuple(float(value) for value in row) for row in coordinates],
+                "ADR step 4 warm restart — last geometry of a non-converged TS optimization",
+            ),
+            encoding="utf-8",
+        )
+        return target
+
+    def _previous_ts_attempt(self, document: Any) -> dict[str, Any] | None:
+        """Return a warm-start record for an earlier non-converged TS attempt."""
+        if not isinstance(document, dict):
+            return None
+        record = document
+        text = ""
+        for entry in record.get("native_files") or ():
+            candidate = Path(str(entry.get("absolute_path") or ""))
+            if candidate.suffix == ".out" and candidate.is_file():
+                text = candidate.read_text(encoding="utf-8", errors="replace")
+                break
+        converged, reason, marker = self._optimize_converged(record)
+        if converged:
+            return None
+        restart = self._geometry_from_optimize_record(record)
+        return {
+            "attempt": {
+                "attempt": 1,
+                "start_structure": "previous run (interrupted)",
+                "start_sha256": None,
+                "max_cycles": 40,
+                "trust_radius": None,
+                "duration_seconds": record.get("duration_seconds"),
+                "optimization_status": ((record.get("task_result") or {}).get("payload") or {}).get(
+                    "optimization_status"
+                ),
+                "native_success_marker": marker,
+                "converged": False,
+                "reason": reason,
+                "task_ref": record.get("task_ref"),
+                "native_log_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()
+                if text
+                else None,
+            },
+            "restart_geometry": restart,
+        }
 
     def _native_imaginary_index(self) -> int | None:
         """Return the native printed index of the lowest imaginary mode."""
@@ -1531,6 +2415,7 @@ class M404:
             structure=optimized,
             options={"directions": ["forward", "reverse"]},
             timeout=self.timeouts["irc"],
+            structure_role="transition_state",
         )
 
     def _irc_endpoints(self) -> dict[str, tuple[list[str], list[tuple[float, float, float]]]]:
@@ -1649,7 +2534,7 @@ class M404:
             "structure": {"path": str(freq_log), "role": "minimum"},
             "charge": FROZEN_CHARGE,
             "multiplicity": FROZEN_MULTIPLICITY,
-            "level": {"method": FROZEN_METHOD, "basis": FROZEN_BASIS},
+            "level": {"method": self.method, "basis": self.basis},
             "resources": {"cores": 1},
             "options": {
                 "freq_log_path": str(freq_log),
@@ -1701,7 +2586,7 @@ class M404:
         return EnergyIdentity(
             energy_hartree=float(result.energy_hartree),
             energy_kind="electronic",
-            method=FROZEN_METHOD,
+            method=self.method,
             electronic_state=ELECTRONIC_STATE_IDENTITY,
             charge=FROZEN_CHARGE,
             multiplicity=FROZEN_MULTIPLICITY,
@@ -1861,6 +2746,13 @@ class M404:
                         "adr_step_index": step["index"],
                         "status": (self.steps.get(step["step_id"]) or {}).get("status"),
                         "entry": (self.steps.get(step["step_id"]) or {}).get("entry"),
+                        "resources": (self.steps.get(step["step_id"]) or {}).get("resources"),
+                        "actual_orca_resources": (self.steps.get(step["step_id"]) or {}).get(
+                            "actual_orca_resources"
+                        ),
+                        "route_id": (
+                            (self.steps.get(step["step_id"]) or {}).get("route") or {}
+                        ).get("route_id"),
                         "duration_seconds": (self.steps.get(step["step_id"]) or {}).get(
                             "duration_seconds"
                         ),
@@ -2024,7 +2916,7 @@ class M404:
             subject="reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
             applicability="system_specific",
             conditions=(
-                f"{FROZEN_METHOD}/{FROZEN_BASIS}, charge {FROZEN_CHARGE}, multiplicity "
+                f"{self.method}/{self.basis}, charge {FROZEN_CHARGE}, multiplicity "
                 f"{FROZEN_MULTIPLICITY}, {TEMPERATURE_K} K, {PRESSURE_PA} Pa, {STANDARD_STATE}"
             ),
             not_in_scope=(
@@ -2250,6 +3142,13 @@ class M404:
 
     def run_degradation(self) -> None:
         """Record at least three honest-negative scenarios with real artifacts."""
+        existing = read_json(self.out / "degradation.json")
+        if self.reuse and isinstance(existing, dict) and existing.get("scenarios"):
+            # The honest-negative scenarios are independent of the main chain;
+            # a verified earlier document is reused instead of re-running a
+            # 40-minute one-sided IRC.
+            self.degradation = existing
+            return
         from cccp.analysis.research import validators
         from cccp.analysis.research.science_criteria import (
             CriterionEvidence,
@@ -2275,6 +3174,7 @@ class M404:
                 structure=optimized,
                 options={"directions": ["forward"], "maxpoints": 4},
                 timeout=self.timeouts["irc"],
+                structure_role="transition_state",
             )
             result = self._result_of(record)
             assessment = validators.validate_irc_bidirectional_completion(result)
@@ -2564,15 +3464,15 @@ class M404:
                 name="m4-04-projection-attempt",
                 input={"charge": FROZEN_CHARGE, "multiplicity": FROZEN_MULTIPLICITY},
                 method={
-                    "method": FROZEN_METHOD,
+                    "method": self.method,
                     "levels": {
                         "default": {
-                            "functional": FROZEN_METHOD,
-                            "basis": FROZEN_BASIS,
+                            "functional": self.method,
+                            "basis": self.basis,
                         }
                     },
                 },
-                resources={"nproc": 4},
+                resources={"nproc": RESOURCE_NPROC, "mem": RESOURCE_MEM},
                 config_path=str(self.config_path),
             ),
         )
@@ -2723,7 +3623,7 @@ class M404:
             subject="reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
             applicability="system_specific",
             conditions=(
-                f"{FROZEN_METHOD}/{FROZEN_BASIS}, charge {FROZEN_CHARGE}, multiplicity "
+                f"{self.method}/{self.basis}, charge {FROZEN_CHARGE}, multiplicity "
                 f"{FROZEN_MULTIPLICITY}, {TEMPERATURE_K} K, {PRESSURE_PA} Pa, {STANDARD_STATE}"
             ),
             not_in_scope=(
@@ -2743,6 +3643,21 @@ class M404:
             started_at=self.started_at,
             finished_at=utc_now(),
         )
+        level_limitation_id = (
+            "execution-level-is-the-frozen-level"
+            if self.level_mode == "frozen"
+            else "execution-level-is-the-reference-variant"
+        )
+        level_limitation_text = (
+            "Every compared quantity was produced at the ADR-008 frozen level; no "
+            "equivalent tier was substituted."
+            if self.level_mode == "frozen"
+            else (
+                "Every compared quantity was produced at the Amendment A R6 reference "
+                f"level {self.method}/{self.basis}; no equivalence to the frozen "
+                f"{FROZEN_METHOD}/{FROZEN_BASIS} layer is claimed."
+            )
+        )
         limitations = (
             Limitation(
                 limitation_id="known-candidate-control-only",
@@ -2759,11 +3674,8 @@ class M404:
                 ),
             ),
             Limitation(
-                limitation_id="execution-level-is-the-frozen-level",
-                description=(
-                    "Every compared quantity was produced at the ADR-008 frozen level; no "
-                    "equivalent tier was substituted."
-                ),
+                limitation_id=level_limitation_id,
+                description=level_limitation_text,
             ),
         )
         summary = self.criteria.get("evaluation") or {}
@@ -2830,7 +3742,7 @@ class M404:
                 limitations=(
                     "known-candidate-control-only",
                     "single-conformer-single-path",
-                    "execution-level-is-the-frozen-level",
+                    level_limitation_id,
                 ),
                 missing_checks=missing,
             )
@@ -3074,6 +3986,10 @@ class M404:
 
     def build_h4(self) -> None:
         """Record the two ADR-008 environment rows and the H4 consequence."""
+        from acp_services.runtime.local_admission import AdmissionLimits
+
+        admission = AdmissionLimits.from_environment()
+        requested_memory_mb = 32 * 1024
         local = {
             "row_id": "DA-ENV-LOCAL",
             "environment": "Local",
@@ -3099,6 +4015,14 @@ class M404:
                 "measured_step_timings": "recorded in chain/<step>.json",
                 "walltime_process_termination": "NOT_VERIFIED",
                 "queue_deadline": "NOT_VERIFIED",
+                "requested_cores": RESOURCE_NPROC,
+                "requested_memory_mb": requested_memory_mb,
+                "admission_max_cores": admission.max_cores,
+                "admission_max_memory_mb": admission.max_memory_mb,
+                "within_admission_limits": (
+                    RESOURCE_NPROC <= admission.max_cores
+                    and requested_memory_mb <= admission.max_memory_mb
+                ),
             },
             "counts": {
                 "task_ref": len({step["step_id"] for step in ADR_STEPS}),
@@ -3183,6 +4107,47 @@ class M404:
 
     # -- summary ----------------------------------------------------------
 
+    def _route_summary(self) -> dict[str, Any] | None:
+        """Return the Amendment A route receipt (never criterion evidence)."""
+        record = self.steps.get("candidate_path") or {}
+        route = record.get("route") or {}
+        if not route:
+            return None
+        selection = route.get("frame_selection") or {}
+        return {
+            "route_id": route.get("route_id"),
+            "amendment": route.get("amendment"),
+            "contract_step": {
+                "step_id": "candidate_path",
+                "adr_task_kind": ADR_STEPS[1]["task_kind"],
+                "executed_as": ADR_STEPS[1]["executed_as"],
+            },
+            "reference_case": route.get("reference_case"),
+            "stages": [
+                {
+                    "stage": stage.get("stage"),
+                    "entry": stage.get("entry"),
+                    "status": stage.get("status"),
+                    "duration_seconds": stage.get("duration_seconds"),
+                    "level": stage.get("level"),
+                }
+                for stage in route.get("stages") or ()
+            ],
+            "frame_selection": {
+                "rule": selection.get("rule"),
+                "progress_threshold": selection.get("progress_threshold"),
+                "frame_count": selection.get("frame_count"),
+                "selected_index": selection.get("selected_index"),
+                "selected_reaction_progress": selection.get("selected_reaction_progress"),
+                "selected_frame_sha256": selection.get("selected_frame_sha256"),
+            },
+            "ts_guess": route.get("ts_guess"),
+            "batch_ts_frequency": route.get("batch_ts_frequency"),
+            "deviation": route.get("deviation"),
+            "step_status": record.get("status"),
+            "step_error": record.get("error"),
+        }
+
     def summary(self) -> dict[str, Any]:
         """Return the run summary (the acceptance receipt body)."""
         scenario = self.criteria.get("scenario_result") or self.scenario_result()
@@ -3235,13 +4200,32 @@ class M404:
                         if child.get("task_ref")
                     )
                     or None,
+                    "resources": (self.steps.get(step["step_id"]) or {}).get("resources"),
+                    "actual_orca_resources": (self.steps.get(step["step_id"]) or {}).get(
+                        "actual_orca_resources"
+                    ),
                     "error": (self.steps.get(step["step_id"]) or {}).get("error"),
                 }
                 for step in ADR_STEPS
             ],
             "release": self.release_facts,
+            "executed_level": {
+                "mode": self.level_mode,
+                "method": self.method,
+                "basis": self.basis,
+                "declared_method": FROZEN_METHOD,
+                "declared_basis": FROZEN_BASIS,
+                "deviation_from_frozen": self.level_mode != "frozen",
+                "equivalence_claimed": False,
+            },
+            "resources": {
+                "nproc": RESOURCE_NPROC,
+                "mem": RESOURCE_MEM,
+                "maxcore_mb": RESOURCE_MAXCORE,
+            },
             "software": self.software.get("resolved"),
             "software_findings": self.software.get("findings"),
+            "route": self._route_summary(),
             "evidence_chain": {
                 "report_digest": self.evidence.get("report_digest"),
                 "attribution_verified": (self.evidence.get("platform_projection") or {}).get(
@@ -3331,19 +4315,91 @@ class M404:
             "",
             "## Executed level",
             "",
-            f"- frozen ADR-008 level: `{FROZEN_METHOD}/{FROZEN_BASIS}` — used unchanged",
+            f"- declared ADR-008 level: `{FROZEN_METHOD}/{FROZEN_BASIS}`",
+            f"- executed level: `{self.method}/{self.basis}`"
+            + (
+                " — Amendment A R6 reference-level variant (deviation recorded, "
+                "no equivalence claimed)"
+                if self.level_mode != "frozen"
+                else " — unchanged"
+            ),
+            f"- resources: nproc={RESOURCE_NPROC}, mem={RESOURCE_MEM}, "
+            f"maxcore={RESOURCE_MAXCORE} MB per core (reference-case envelope)",
             f"- ORCA: `{(summary.get('software') or {}).get('orca', {})}`",
             f"- xTB: `{(summary.get('software') or {}).get('xtb', {})}`",
             "",
-            "## ADR-008 steps",
+            "## TS-guess route (ADR-008 Amendment A)",
             "",
-            "| step | entry | status | seconds | task ref |",
-            "| --- | --- | --- | --- | --- |",
         ]
+        route = summary.get("route") or {}
+        if route:
+            stages = route.get("stages") or []
+            selection = route.get("frame_selection") or {}
+            lines.extend(
+                [
+                    f"- route: `{route.get('route_id')}`",
+                    "- reference case: PESsearch "
+                    f"`{(route.get('reference_case') or {}).get('pes_search_job')}`"
+                    " → BatchOptimize "
+                    f"`{(route.get('reference_case') or {}).get('batch_optimize_job')}`",
+                    f"- frame rule: {selection.get('rule')}",
+                    f"- selected frame: `{selection.get('selected_index')}` "
+                    f"(reaction_progress `{selection.get('selected_reaction_progress')}`, "
+                    f"{selection.get('frame_count')} frames)",
+                    "- stages: "
+                    + ", ".join(
+                        f"{stage.get('stage')}={stage.get('status')} "
+                        f"({stage.get('duration_seconds')} s)"
+                        for stage in stages
+                    ),
+                    f"- deviation: {route.get('deviation')}",
+                ]
+            )
+        else:
+            lines.append("- not executed in this phase")
+        lines.extend(
+            [
+                "",
+                "## ADR-008 steps",
+                "",
+                "| step | entry | status | seconds | task ref |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
         for step in summary["steps"]:
             lines.append(
                 f"| {step['step_id']} | {step.get('entry')} | {step.get('status')} | "
                 f"{step.get('duration_seconds')} | {step.get('task_ref')} |"
+            )
+        lines.extend(
+            [
+                "",
+                "## Actual ORCA resources (`%pal` read from generated inputs)",
+                "",
+                "| step | nproc | `%pal nprocs` values | `%maxcore` MB |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+        for step in summary["steps"]:
+            actual = step.get("actual_orca_resources")
+            if isinstance(actual, dict):
+                samples = [
+                    actual.get("pes_scan"),
+                    actual.get("pes_single_point"),
+                    actual.get("batch_ts"),
+                ]
+            else:
+                samples = list(actual or ())
+            samples = [row for row in samples if isinstance(row, dict)]
+            pals = sorted(
+                {row.get("pal_nprocs") for row in samples if row.get("pal_nprocs") is not None}
+            )
+            maxcores = sorted(
+                {row.get("maxcore") for row in samples if row.get("maxcore") is not None}
+            )
+            lines.append(
+                f"| {step['step_id']} | {(step.get('resources') or {}).get('nproc')} | "
+                f"{pals or '—'} | {maxcores or '—'} |"
             )
         lines.extend(
             [
@@ -3476,6 +4532,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", "public-entry", "chain", "evaluate"),
         default="all",
         help="which legs to run",
+    )
+    parser.add_argument(
+        "--level",
+        choices=("frozen", "reference"),
+        default="frozen",
+        help=(
+            "frozen ADR-008 level (wB97X-D4/def2-TZVP) or the Amendment A R6 "
+            "reference-level variant (r2SCAN-3c/def2-mTZVPP, recorded deviation)"
+        ),
     )
     parser.add_argument("--reuse", action="store_true", help="reuse verified completed steps")
     parser.add_argument("--singlepoint-timeout", type=float, default=1800.0)

@@ -1,0 +1,129 @@
+{
+  "criteria": [
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C01-ts-single-imaginary-mode",
+      "evidence_digest": "3fc03b4c98812b8ede5ba3cb3f7be58fbbc2e8438c8d0176254984d83399e646",
+      "evidence_status": "inconclusive",
+      "missing_check_ids": [
+        "artifact_missing"
+      ],
+      "notes": [],
+      "reason": "missing_evidence",
+      "scenario_result": "FAIL",
+      "validator_id": "check.ts_saddle_candidate"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C02-ts-mode-mapping",
+      "evidence_digest": "d4368ce8c164035855869f9b1a08d2c6a5c515fd96b2b56d20c581c0e1f6d34e",
+      "evidence_status": "supported",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "affirmed",
+      "scenario_result": "FAIL",
+      "validator_id": "check.ts_mode_mapping"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C03-frequency-evidence",
+      "evidence_digest": "095b9fa06f1acc4aae894c9c77349a41c170221a8e9f07f5e5eb8d965e0c1be3",
+      "evidence_status": "inconclusive",
+      "missing_check_ids": [
+        "artifact_missing"
+      ],
+      "notes": [],
+      "reason": "missing_evidence",
+      "scenario_result": "FAIL",
+      "validator_id": "check.frequency_evidence"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C04-irc-bidirectional",
+      "evidence_digest": "f35a056a2ca7c9dcc2bd0e055b200b765d5d3ac2438dd9ef75da3244cecf1935",
+      "evidence_status": "not_evaluated",
+      "missing_check_ids": [
+        "not_executed"
+      ],
+      "notes": [],
+      "reason": "not_checked",
+      "scenario_result": "FAIL",
+      "validator_id": "check.irc_bidirectional_completion"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C05-endpoint-association",
+      "evidence_digest": "f15444ac7affbb6d1140d15864933453b66aff08f8d30a0d620920520b04cc8a",
+      "evidence_status": "inconclusive",
+      "missing_check_ids": [
+        "irc_not_bidirectional"
+      ],
+      "notes": [],
+      "reason": "missing_evidence",
+      "scenario_result": "FAIL",
+      "validator_id": "check.irc_endpoint_identity"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C06-energy-comparability",
+      "evidence_digest": "d1448a8ef6f7f593e4ab39458909cb145045539db588255ff9252f9e8548f13a",
+      "evidence_status": "not_evaluated",
+      "missing_check_ids": [
+        "not_executed"
+      ],
+      "notes": [],
+      "reason": "not_checked",
+      "scenario_result": "FAIL",
+      "validator_id": "check.activation_energy_comparability"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C07-reactant-stoichiometry",
+      "evidence_digest": "e294a1c732582218a56a19da341bae03f73e35a10daafa058bec5a2af1165d9c",
+      "evidence_status": "inconclusive",
+      "missing_check_ids": [
+        "artifact_missing"
+      ],
+      "notes": [],
+      "reason": "missing_evidence",
+      "scenario_result": "FAIL",
+      "validator_id": "check.reactant_stoichiometry_completeness"
+    }
+  ],
+  "overall_claim_status": "inconclusive",
+  "questions": [
+    {
+      "blocked_by": [
+        "DA-C01-ts-single-imaginary-mode",
+        "DA-C03-frequency-evidence",
+        "DA-C04-irc-bidirectional",
+        "DA-C05-endpoint-association"
+      ],
+      "claim_status": "inconclusive",
+      "question_id": "question.diels_alder.path_connectivity.v1",
+      "reason": "missing_evidence",
+      "refuted_by": []
+    },
+    {
+      "blocked_by": [
+        "DA-C01-ts-single-imaginary-mode",
+        "DA-C03-frequency-evidence",
+        "DA-C06-energy-comparability",
+        "DA-C07-reactant-stoichiometry"
+      ],
+      "claim_status": "inconclusive",
+      "question_id": "question.diels_alder.activation_energy.v1",
+      "reason": "missing_evidence",
+      "refuted_by": []
+    }
+  ],
+  "scenario_result": "FAIL",
+  "schema": "acp2.m4-04.criteria-table.v1"
+}

@@ -401,7 +401,7 @@ def test_forged_supported_record_is_rejected():
 
 
 def test_path_frames_split_and_the_barrier_top_is_selected(tmp_path):
-    """The TS-guess rule is the highest-energy frame of the real trajectory."""
+    """``_xyz_frames`` still splits a multi-frame XYZ document."""
     frozen = M.load_frozen_inputs()
     frames = []
     for index, scale in enumerate((1.0, 1.4, 1.1)):
@@ -416,37 +416,110 @@ def test_path_frames_split_and_the_barrier_top_is_selected(tmp_path):
     assert parsed[0][0] == list(frozen.reactant_symbols)
     assert parsed[0][1][0][0] == pytest.approx(frozen.reactant_coordinates[0][0] + 1.0)
 
-    step_args = M.build_parser().parse_args(["--out", str(tmp_path / "out")])
-    run = M.M404(step_args)
-    from cccp.calculation.contracts import ArtifactRef
-    from cccp.calculation.requests import TaskKind
-    from cccp.calculation.results import (
-        TaskResult,
-        XtbPathFrame,
-        XtbPathSearchPayload,
-    )
 
-    result = TaskResult(
-        task=TaskKind.XTB_PATH_SEARCH,
-        status="completed",
-        complete=True,
-        artifacts=(ArtifactRef(path=trajectory, type="trajectory"),),
-        payload=XtbPathSearchPayload(
-            frames=tuple(
-                XtbPathFrame(index=index, energy_hartree=-155.0 + index) for index in range(3)
-            )
-        ),
+# ── ADR-008 Amendment A: TS-guess route ──────────────────────────────────
+
+
+REFERENCE = REPO / "tests" / "fixtures" / "acp2" / "science" / "diels_alder" / "reference-case"
+
+
+def test_adr_amendment_a_replaces_only_the_step_two_producer():
+    step = M.ADR_STEPS[1]
+    assert step["step_id"] == "candidate_path"
+    # The frozen recipe contract label is untouched; only the producer changes.
+    assert step["task_kind"] == "xtb_path_search"
+    assert step["executed_as"] == "pes_scan_frame_batch_optimize"
+    assert step["route_amendment"] == M.ROUTE_AMENDMENT_ID
+    assert [row["index"] for row in M.ADR_STEPS] == list(range(1, 10))
+    # The frozen criteria definition does not carry the route: digest unchanged.
+    from cccp.analysis.research.science_criteria import criteria_definition_digest
+
+    assert criteria_definition_digest() == M.EXPECTED_CRITERIA_DIGEST
+    adr = M.ADR_PATH.read_text(encoding="utf-8")
+    assert "Amendment A" in adr
+    assert M.ROUTE_ID in adr
+
+
+def test_amendment_a_frame_rule_reproduces_the_reference_manual_selection():
+    """The explicit rule picks frame 005, the frame the operator selected."""
+    profile = json.loads((REFERENCE / "pes" / "pes_profile.json").read_text(encoding="utf-8"))
+    selected, table = M.select_scan_frame(profile)
+    assert selected is not None
+    assert int(selected["index"]) == M.ROUTE_REFERENCE_SELECTED_FRAME == 5
+    assert float(selected["reaction_progress"]) == pytest.approx(0.6346877412644145)
+    # Frame 4 is below the midpoint, frame 5 is the first eligible frame above it.
+    assert table[4]["reaction_progress"] < M.ROUTE_FRAME_PROGRESS_THRESHOLD
+    assert table[5]["selected"] is True
+    assert sum(1 for row in table if row["selected"]) == 1
+    # The user's remembered frame_009 exists in the profile but was never
+    # selected; the file evidence (frame 005) wins over the recollection.
+    assert any(row["index"] == 9 for row in table)
+    assert not any(row["selected"] for row in table if row["index"] == 9)
+
+
+def test_amendment_a_frame_rule_has_no_fallback_pick():
+    profile = {
+        "frames": [
+            {
+                "index": index,
+                "reaction_progress": 0.1 * index,
+                "optimization_converged": True,
+                "constraint_residual_ok": True,
+                "invalid_reasons": [],
+            }
+            for index in range(3)
+        ]
+    }
+    selected, table = M.select_scan_frame(profile)
+    assert selected is None
+    assert all(row["selected"] is False for row in table)
+    # A non-converged frame above the threshold is not eligible either.
+    profile["frames"][2]["reaction_progress"] = 0.9
+    profile["frames"][2]["optimization_converged"] = False
+    selected, _ = M.select_scan_frame(profile)
+    assert selected is None
+
+
+def test_reference_level_variant_is_an_explicit_deviation(tmp_path):
+    frozen = M.M404(M.build_parser().parse_args(["--out", str(tmp_path / "frozen")]))
+    assert frozen.level_mode == "frozen"
+    assert (frozen.method, frozen.basis) == (M.FROZEN_METHOD, M.FROZEN_BASIS)
+    reference = M.M404(
+        M.build_parser().parse_args(["--out", str(tmp_path / "ref"), "--level", "reference"])
     )
-    run.steps["candidate_path"] = _step_document(result, task_ref="path")
-    guess = run._ts_guess_path()
-    assert guess is not None
-    path, provenance = guess
-    assert path.is_file()
-    assert provenance["frame_index"] == 2
-    assert provenance["selection_rule"].startswith("highest-energy frame")
-    symbols, coordinates = M._xyz_records(path.read_text(encoding="utf-8"))
-    assert symbols == list(frozen.reactant_symbols)
-    assert coordinates[0][0] == pytest.approx(frozen.reactant_coordinates[0][0] + 1.1)
+    assert reference.level_mode == "reference"
+    assert (reference.method, reference.basis) == (M.REFERENCE_METHOD, M.REFERENCE_BASIS)
+    # The criteria definition is level-independent: only the protocol deviation moves.
+    from cccp.analysis.research.science_criteria import criteria_definition_digest
+
+    assert criteria_definition_digest() == M.EXPECTED_CRITERIA_DIGEST
+
+
+def test_reference_case_fixture_is_digest_bound_to_the_real_jobs():
+    provenance = json.loads((REFERENCE / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["reference_jobs"]["pes_search"] == M.ROUTE_REFERENCE_JOB_PES
+    assert provenance["reference_jobs"]["batch_optimize"] == M.ROUTE_REFERENCE_JOB_BATCH
+    assert provenance["selected_frame"]["index"] == M.ROUTE_REFERENCE_SELECTED_FRAME
+    for relative, expected in provenance["file_digests"].items():
+        path = REFERENCE / relative
+        assert path.is_file(), relative
+        assert M.bare_digest(path) == expected, relative
+    # The batch input is the selected scan frame geometry (the job payload
+    # re-prints the coordinates at higher precision, so the comparison is
+    # geometric, not byte-for-byte).
+    selected = REFERENCE / provenance["selected_frame"]["geometry_path"]
+    batch_input = REFERENCE / "batch" / "input.xyz"
+    selected_symbols, selected_coordinates = M._xyz_records(selected.read_text(encoding="utf-8"))
+    input_symbols, input_coordinates = M._xyz_records(batch_input.read_text(encoding="utf-8"))
+    assert selected_symbols == input_symbols
+    for left, right in zip(selected_coordinates, input_coordinates, strict=True):
+        for first, second in zip(left, right, strict=True):
+            assert first == pytest.approx(second, abs=1e-6)
+    # The reference TS frequency carries exactly one imaginary mode.
+    frequencies = provenance["batch_ts_frequency"]["frequencies"]
+    assert sum(1 for value in frequencies if value < 0) == 1
+    assert frequencies[0] == pytest.approx(-456.57)
+    assert provenance["batch_ts_frequency"]["ts_validation"] == "passed"
 
 
 # ── H4 ────────────────────────────────────────────────────────────────────

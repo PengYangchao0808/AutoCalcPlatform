@@ -1,0 +1,1006 @@
+{
+  "activation_energy_validation": {
+    "claims": [
+      {
+        "claim_id": "c-reactant-stoichiometry-complete",
+        "details": {
+          "coefficient_mismatches": {},
+          "missing_components": [],
+          "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+          "required_reactants": {
+            "butadiene": 1,
+            "ethene": 1
+          },
+          "stoichiometry_scope": "component presence and coefficients; atom counts are not parsed here",
+          "supplied_reactants": {
+            "butadiene": 1,
+            "ethene": 1
+          },
+          "unexpected_components": []
+        },
+        "missing_checks": [],
+        "notes": [],
+        "reason": "affirmed",
+        "statement": "Every reactant component declared by the reaction is present with its stoichiometric coefficient, so the reactant side of the activation-energy subtraction is complete.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.reactant_stoichiometry_completeness",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "c-electronic-activation-barrier-comparable",
+        "details": {
+          "barrier_expression": "E(TS) - [1*E(butadiene) + 1*E(ethene)]",
+          "barrier_kind": "electronic",
+          "barrier_unit": "hartree",
+          "barrier_value": 0.02415022082598739,
+          "claim_scope": "the declared reactant -> transition state -> product reaction only; no claim about other paths, conformers, global minima or species outside the supplied records",
+          "declared_energy_kinds": [
+            "electronic"
+          ],
+          "identity_assessments": [
+            {
+              "claim_id": "c-energy-identities-comparable",
+              "details": {
+                "compared_state_fields": [
+                  "reference_multiplicity",
+                  "state_id",
+                  "target_multiplicity"
+                ],
+                "differing_fields": [],
+                "left": {
+                  "charge": 0,
+                  "electronic_state": {
+                    "reference_multiplicity": 1,
+                    "state_id": "state.singlet.s0",
+                    "target_multiplicity": 1
+                  },
+                  "energy_hartree": -234.472954154901,
+                  "energy_kind": "electronic",
+                  "energy_unit": "hartree",
+                  "method": "r2SCAN-3c",
+                  "multiplicity": 1,
+                  "pressure_pa": 100000.0,
+                  "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                  "standard_state": "1_bar_ideal_gas",
+                  "temperature_k": 298.15
+                },
+                "left_electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "missing_fields": [],
+                "right": {
+                  "charge": 0,
+                  "electronic_state": {
+                    "reference_multiplicity": 1,
+                    "state_id": "state.singlet.s0",
+                    "target_multiplicity": 1
+                  },
+                  "energy_hartree": -155.940064721338,
+                  "energy_kind": "electronic",
+                  "energy_unit": "hartree",
+                  "method": "r2SCAN-3c",
+                  "multiplicity": 1,
+                  "pressure_pa": 100000.0,
+                  "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                  "standard_state": "1_bar_ideal_gas",
+                  "temperature_k": 298.15
+                },
+                "right_electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "standard_state_lexicon": {
+                  "comparison_basis": "declared token, not the collapsed lexicon token",
+                  "left_normalized": "1atm",
+                  "left_raw": "1_bar_ideal_gas",
+                  "right_normalized": "1atm",
+                  "right_raw": "1_bar_ideal_gas"
+                },
+                "subtraction_performed": false
+              },
+              "missing_checks": [],
+              "notes": [],
+              "reason": "affirmed",
+              "statement": "The two energies share the method, electronic state, reference state and standard state required for a meaningful subtraction.",
+              "status": "supported",
+              "validator": {
+                "kind": "deterministic",
+                "validator_id": "check.energy_comparability",
+                "validator_version": "1.0.0"
+              }
+            },
+            {
+              "claim_id": "c-energy-identities-comparable",
+              "details": {
+                "compared_state_fields": [
+                  "reference_multiplicity",
+                  "state_id",
+                  "target_multiplicity"
+                ],
+                "differing_fields": [],
+                "left": {
+                  "charge": 0,
+                  "electronic_state": {
+                    "reference_multiplicity": 1,
+                    "state_id": "state.singlet.s0",
+                    "target_multiplicity": 1
+                  },
+                  "energy_hartree": -234.472954154901,
+                  "energy_kind": "electronic",
+                  "energy_unit": "hartree",
+                  "method": "r2SCAN-3c",
+                  "multiplicity": 1,
+                  "pressure_pa": 100000.0,
+                  "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                  "standard_state": "1_bar_ideal_gas",
+                  "temperature_k": 298.15
+                },
+                "left_electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "missing_fields": [],
+                "right": {
+                  "charge": 0,
+                  "electronic_state": {
+                    "reference_multiplicity": 1,
+                    "state_id": "state.singlet.s0",
+                    "target_multiplicity": 1
+                  },
+                  "energy_hartree": -78.557039654389,
+                  "energy_kind": "electronic",
+                  "energy_unit": "hartree",
+                  "method": "r2SCAN-3c",
+                  "multiplicity": 1,
+                  "pressure_pa": 100000.0,
+                  "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                  "standard_state": "1_bar_ideal_gas",
+                  "temperature_k": 298.15
+                },
+                "right_electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "standard_state_lexicon": {
+                  "comparison_basis": "declared token, not the collapsed lexicon token",
+                  "left_normalized": "1atm",
+                  "left_raw": "1_bar_ideal_gas",
+                  "right_normalized": "1atm",
+                  "right_raw": "1_bar_ideal_gas"
+                },
+                "subtraction_performed": false
+              },
+              "missing_checks": [],
+              "notes": [],
+              "reason": "affirmed",
+              "statement": "The two energies share the method, electronic state, reference state and standard state required for a meaningful subtraction.",
+              "status": "supported",
+              "validator": {
+                "kind": "deterministic",
+                "validator_id": "check.energy_comparability",
+                "validator_version": "1.0.0"
+              }
+            },
+            {
+              "claim_id": "c-energy-identities-comparable",
+              "details": {
+                "compared_state_fields": [
+                  "reference_multiplicity",
+                  "state_id",
+                  "target_multiplicity"
+                ],
+                "differing_fields": [],
+                "left": {
+                  "charge": 0,
+                  "electronic_state": {
+                    "reference_multiplicity": 1,
+                    "state_id": "state.singlet.s0",
+                    "target_multiplicity": 1
+                  },
+                  "energy_hartree": -234.472954154901,
+                  "energy_kind": "electronic",
+                  "energy_unit": "hartree",
+                  "method": "r2SCAN-3c",
+                  "multiplicity": 1,
+                  "pressure_pa": 100000.0,
+                  "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                  "standard_state": "1_bar_ideal_gas",
+                  "temperature_k": 298.15
+                },
+                "left_electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "missing_fields": [],
+                "right": {
+                  "charge": 0,
+                  "electronic_state": {
+                    "reference_multiplicity": 1,
+                    "state_id": "state.singlet.s0",
+                    "target_multiplicity": 1
+                  },
+                  "energy_hartree": -234.491022936733,
+                  "energy_kind": "electronic",
+                  "energy_unit": "hartree",
+                  "method": "r2SCAN-3c",
+                  "multiplicity": 1,
+                  "pressure_pa": 100000.0,
+                  "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                  "standard_state": "1_bar_ideal_gas",
+                  "temperature_k": 298.15
+                },
+                "right_electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "standard_state_lexicon": {
+                  "comparison_basis": "declared token, not the collapsed lexicon token",
+                  "left_normalized": "1atm",
+                  "left_raw": "1_bar_ideal_gas",
+                  "right_normalized": "1atm",
+                  "right_raw": "1_bar_ideal_gas"
+                },
+                "subtraction_performed": false
+              },
+              "missing_checks": [],
+              "notes": [],
+              "reason": "affirmed",
+              "statement": "The two energies share the method, electronic state, reference state and standard state required for a meaningful subtraction.",
+              "status": "supported",
+              "validator": {
+                "kind": "deterministic",
+                "validator_id": "check.energy_comparability",
+                "validator_version": "1.0.0"
+              }
+            }
+          ],
+          "mixed_energy_kinds": false,
+          "other_kind_presence": {
+            "any_present": false,
+            "complete": false,
+            "energy_kind": "gibbs_free",
+            "missing": [
+              "reactant:butadiene",
+              "reactant:ethene",
+              "transition_state",
+              "product:cyclohexene"
+            ],
+            "participant_count": 4,
+            "present": [],
+            "present_count": 0
+          },
+          "participant_identities_complete": true,
+          "participants": [
+            {
+              "declared_energy_kind": "electronic",
+              "energy_hartree": -155.940064721338,
+              "identity_present": true,
+              "label": "reactant:butadiene",
+              "role": "reactant",
+              "slot": "electronic",
+              "species_id": "butadiene",
+              "stoichiometry": 1
+            },
+            {
+              "declared_energy_kind": "electronic",
+              "energy_hartree": -78.557039654389,
+              "identity_present": true,
+              "label": "reactant:ethene",
+              "role": "reactant",
+              "slot": "electronic",
+              "species_id": "ethene",
+              "stoichiometry": 1
+            },
+            {
+              "declared_energy_kind": "electronic",
+              "energy_hartree": -234.472954154901,
+              "identity_present": true,
+              "label": "transition_state",
+              "role": "transition_state",
+              "slot": "electronic",
+              "species_id": "transition_state",
+              "stoichiometry": 1
+            },
+            {
+              "declared_energy_kind": "electronic",
+              "energy_hartree": -234.491022936733,
+              "identity_present": true,
+              "label": "product:cyclohexene",
+              "role": "product",
+              "slot": "electronic",
+              "species_id": "cyclohexene",
+              "stoichiometry": 1
+            }
+          ],
+          "presence": {
+            "any_present": true,
+            "complete": true,
+            "energy_kind": "electronic",
+            "missing": [],
+            "participant_count": 4,
+            "present": [
+              "reactant:butadiene",
+              "reactant:ethene",
+              "transition_state",
+              "product:cyclohexene"
+            ],
+            "present_count": 4
+          },
+          "reactant_energy_sum": -234.497104375727,
+          "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+          "subtraction_performed": true,
+          "thermochemistry_complete": null,
+          "transition_state_energy": -234.472954154901
+        },
+        "missing_checks": [],
+        "notes": [],
+        "reason": "affirmed",
+        "statement": "Within the declared reaction and its shared electronic identity, the electronic activation barrier E(TS) - sum(nu_i * E(reactant_i)) is comparable; this is not a free-energy barrier and carries no thermal or entropic claim.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.activation_energy_comparability",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "c-free-energy-activation-barrier-comparable",
+        "details": {
+          "barrier_expression": null,
+          "barrier_kind": "gibbs_free",
+          "barrier_unit": null,
+          "barrier_value": null,
+          "claim_scope": "the declared reactant -> transition state -> product reaction only; no claim about other paths, conformers, global minima or species outside the supplied records",
+          "declared_energy_kinds": [
+            "electronic"
+          ],
+          "mixed_energy_kinds": false,
+          "other_kind_presence": {
+            "any_present": true,
+            "complete": true,
+            "energy_kind": "electronic",
+            "missing": [],
+            "participant_count": 4,
+            "present": [
+              "reactant:butadiene",
+              "reactant:ethene",
+              "transition_state",
+              "product:cyclohexene"
+            ],
+            "present_count": 4
+          },
+          "participant_identities_complete": false,
+          "participants": [
+            {
+              "declared_energy_kind": null,
+              "energy_hartree": null,
+              "identity_present": false,
+              "label": "reactant:butadiene",
+              "role": "reactant",
+              "slot": "gibbs_free",
+              "species_id": "butadiene",
+              "stoichiometry": 1
+            },
+            {
+              "declared_energy_kind": null,
+              "energy_hartree": null,
+              "identity_present": false,
+              "label": "reactant:ethene",
+              "role": "reactant",
+              "slot": "gibbs_free",
+              "species_id": "ethene",
+              "stoichiometry": 1
+            },
+            {
+              "declared_energy_kind": null,
+              "energy_hartree": null,
+              "identity_present": false,
+              "label": "transition_state",
+              "role": "transition_state",
+              "slot": "gibbs_free",
+              "species_id": "transition_state",
+              "stoichiometry": 1
+            },
+            {
+              "declared_energy_kind": null,
+              "energy_hartree": null,
+              "identity_present": false,
+              "label": "product:cyclohexene",
+              "role": "product",
+              "slot": "gibbs_free",
+              "species_id": "cyclohexene",
+              "stoichiometry": 1
+            }
+          ],
+          "presence": {
+            "any_present": false,
+            "complete": false,
+            "energy_kind": "gibbs_free",
+            "missing": [
+              "reactant:butadiene",
+              "reactant:ethene",
+              "transition_state",
+              "product:cyclohexene"
+            ],
+            "participant_count": 4,
+            "present": [],
+            "present_count": 0
+          },
+          "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+          "subtraction_performed": false,
+          "thermochemistry_complete": false
+        },
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "frequency_not_computed",
+            "reason": "no thermochemistry was supplied, so no free-energy barrier may be claimed"
+          }
+        ],
+        "notes": [],
+        "reason": "not_checked",
+        "statement": "Within the declared reaction, temperature and standard state, the Gibbs free-energy activation barrier G(TS) - sum(nu_i * G(reactant_i)) is comparable; this claim is limited to complete, standardized thermochemistry for every participant.",
+        "status": "not_evaluated",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.activation_energy_comparability",
+          "validator_version": "1.0.0"
+        }
+      }
+    ],
+    "details": {
+      "claim_scope": "activation barriers for the declared reactant -> transition state -> product reaction only; no claim about other paths, conformers, global minima or species outside the supplied records",
+      "declared_energy_kinds": [
+        "electronic"
+      ],
+      "electronic_barrier_status": "supported",
+      "electronic_barrier_value": 0.02415022082598739,
+      "free_energy_barrier_status": "not_evaluated",
+      "free_energy_barrier_value": null,
+      "free_energy_claimed": false,
+      "mixed_energy_kinds": false,
+      "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+      "stoichiometry_scope": "component presence and coefficients; atom counts are not parsed here",
+      "subtraction_performed": true,
+      "validator_version": "1.0.0"
+    },
+    "electronic_barrier": {
+      "claim_id": "c-electronic-activation-barrier-comparable",
+      "details": {
+        "barrier_expression": "E(TS) - [1*E(butadiene) + 1*E(ethene)]",
+        "barrier_kind": "electronic",
+        "barrier_unit": "hartree",
+        "barrier_value": 0.02415022082598739,
+        "claim_scope": "the declared reactant -> transition state -> product reaction only; no claim about other paths, conformers, global minima or species outside the supplied records",
+        "declared_energy_kinds": [
+          "electronic"
+        ],
+        "identity_assessments": [
+          {
+            "claim_id": "c-energy-identities-comparable",
+            "details": {
+              "compared_state_fields": [
+                "reference_multiplicity",
+                "state_id",
+                "target_multiplicity"
+              ],
+              "differing_fields": [],
+              "left": {
+                "charge": 0,
+                "electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "energy_hartree": -234.472954154901,
+                "energy_kind": "electronic",
+                "energy_unit": "hartree",
+                "method": "r2SCAN-3c",
+                "multiplicity": 1,
+                "pressure_pa": 100000.0,
+                "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                "standard_state": "1_bar_ideal_gas",
+                "temperature_k": 298.15
+              },
+              "left_electronic_state": {
+                "reference_multiplicity": 1,
+                "state_id": "state.singlet.s0",
+                "target_multiplicity": 1
+              },
+              "missing_fields": [],
+              "right": {
+                "charge": 0,
+                "electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "energy_hartree": -155.940064721338,
+                "energy_kind": "electronic",
+                "energy_unit": "hartree",
+                "method": "r2SCAN-3c",
+                "multiplicity": 1,
+                "pressure_pa": 100000.0,
+                "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                "standard_state": "1_bar_ideal_gas",
+                "temperature_k": 298.15
+              },
+              "right_electronic_state": {
+                "reference_multiplicity": 1,
+                "state_id": "state.singlet.s0",
+                "target_multiplicity": 1
+              },
+              "standard_state_lexicon": {
+                "comparison_basis": "declared token, not the collapsed lexicon token",
+                "left_normalized": "1atm",
+                "left_raw": "1_bar_ideal_gas",
+                "right_normalized": "1atm",
+                "right_raw": "1_bar_ideal_gas"
+              },
+              "subtraction_performed": false
+            },
+            "missing_checks": [],
+            "notes": [],
+            "reason": "affirmed",
+            "statement": "The two energies share the method, electronic state, reference state and standard state required for a meaningful subtraction.",
+            "status": "supported",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.energy_comparability",
+              "validator_version": "1.0.0"
+            }
+          },
+          {
+            "claim_id": "c-energy-identities-comparable",
+            "details": {
+              "compared_state_fields": [
+                "reference_multiplicity",
+                "state_id",
+                "target_multiplicity"
+              ],
+              "differing_fields": [],
+              "left": {
+                "charge": 0,
+                "electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "energy_hartree": -234.472954154901,
+                "energy_kind": "electronic",
+                "energy_unit": "hartree",
+                "method": "r2SCAN-3c",
+                "multiplicity": 1,
+                "pressure_pa": 100000.0,
+                "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                "standard_state": "1_bar_ideal_gas",
+                "temperature_k": 298.15
+              },
+              "left_electronic_state": {
+                "reference_multiplicity": 1,
+                "state_id": "state.singlet.s0",
+                "target_multiplicity": 1
+              },
+              "missing_fields": [],
+              "right": {
+                "charge": 0,
+                "electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "energy_hartree": -78.557039654389,
+                "energy_kind": "electronic",
+                "energy_unit": "hartree",
+                "method": "r2SCAN-3c",
+                "multiplicity": 1,
+                "pressure_pa": 100000.0,
+                "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                "standard_state": "1_bar_ideal_gas",
+                "temperature_k": 298.15
+              },
+              "right_electronic_state": {
+                "reference_multiplicity": 1,
+                "state_id": "state.singlet.s0",
+                "target_multiplicity": 1
+              },
+              "standard_state_lexicon": {
+                "comparison_basis": "declared token, not the collapsed lexicon token",
+                "left_normalized": "1atm",
+                "left_raw": "1_bar_ideal_gas",
+                "right_normalized": "1atm",
+                "right_raw": "1_bar_ideal_gas"
+              },
+              "subtraction_performed": false
+            },
+            "missing_checks": [],
+            "notes": [],
+            "reason": "affirmed",
+            "statement": "The two energies share the method, electronic state, reference state and standard state required for a meaningful subtraction.",
+            "status": "supported",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.energy_comparability",
+              "validator_version": "1.0.0"
+            }
+          },
+          {
+            "claim_id": "c-energy-identities-comparable",
+            "details": {
+              "compared_state_fields": [
+                "reference_multiplicity",
+                "state_id",
+                "target_multiplicity"
+              ],
+              "differing_fields": [],
+              "left": {
+                "charge": 0,
+                "electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "energy_hartree": -234.472954154901,
+                "energy_kind": "electronic",
+                "energy_unit": "hartree",
+                "method": "r2SCAN-3c",
+                "multiplicity": 1,
+                "pressure_pa": 100000.0,
+                "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                "standard_state": "1_bar_ideal_gas",
+                "temperature_k": 298.15
+              },
+              "left_electronic_state": {
+                "reference_multiplicity": 1,
+                "state_id": "state.singlet.s0",
+                "target_multiplicity": 1
+              },
+              "missing_fields": [],
+              "right": {
+                "charge": 0,
+                "electronic_state": {
+                  "reference_multiplicity": 1,
+                  "state_id": "state.singlet.s0",
+                  "target_multiplicity": 1
+                },
+                "energy_hartree": -234.491022936733,
+                "energy_kind": "electronic",
+                "energy_unit": "hartree",
+                "method": "r2SCAN-3c",
+                "multiplicity": 1,
+                "pressure_pa": 100000.0,
+                "reference_state": "frozen endpoints: separated butadiene + ethene (gas phase, infinite separation) and cyclohexene, all at the frozen conditions",
+                "standard_state": "1_bar_ideal_gas",
+                "temperature_k": 298.15
+              },
+              "right_electronic_state": {
+                "reference_multiplicity": 1,
+                "state_id": "state.singlet.s0",
+                "target_multiplicity": 1
+              },
+              "standard_state_lexicon": {
+                "comparison_basis": "declared token, not the collapsed lexicon token",
+                "left_normalized": "1atm",
+                "left_raw": "1_bar_ideal_gas",
+                "right_normalized": "1atm",
+                "right_raw": "1_bar_ideal_gas"
+              },
+              "subtraction_performed": false
+            },
+            "missing_checks": [],
+            "notes": [],
+            "reason": "affirmed",
+            "statement": "The two energies share the method, electronic state, reference state and standard state required for a meaningful subtraction.",
+            "status": "supported",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.energy_comparability",
+              "validator_version": "1.0.0"
+            }
+          }
+        ],
+        "mixed_energy_kinds": false,
+        "other_kind_presence": {
+          "any_present": false,
+          "complete": false,
+          "energy_kind": "gibbs_free",
+          "missing": [
+            "reactant:butadiene",
+            "reactant:ethene",
+            "transition_state",
+            "product:cyclohexene"
+          ],
+          "participant_count": 4,
+          "present": [],
+          "present_count": 0
+        },
+        "participant_identities_complete": true,
+        "participants": [
+          {
+            "declared_energy_kind": "electronic",
+            "energy_hartree": -155.940064721338,
+            "identity_present": true,
+            "label": "reactant:butadiene",
+            "role": "reactant",
+            "slot": "electronic",
+            "species_id": "butadiene",
+            "stoichiometry": 1
+          },
+          {
+            "declared_energy_kind": "electronic",
+            "energy_hartree": -78.557039654389,
+            "identity_present": true,
+            "label": "reactant:ethene",
+            "role": "reactant",
+            "slot": "electronic",
+            "species_id": "ethene",
+            "stoichiometry": 1
+          },
+          {
+            "declared_energy_kind": "electronic",
+            "energy_hartree": -234.472954154901,
+            "identity_present": true,
+            "label": "transition_state",
+            "role": "transition_state",
+            "slot": "electronic",
+            "species_id": "transition_state",
+            "stoichiometry": 1
+          },
+          {
+            "declared_energy_kind": "electronic",
+            "energy_hartree": -234.491022936733,
+            "identity_present": true,
+            "label": "product:cyclohexene",
+            "role": "product",
+            "slot": "electronic",
+            "species_id": "cyclohexene",
+            "stoichiometry": 1
+          }
+        ],
+        "presence": {
+          "any_present": true,
+          "complete": true,
+          "energy_kind": "electronic",
+          "missing": [],
+          "participant_count": 4,
+          "present": [
+            "reactant:butadiene",
+            "reactant:ethene",
+            "transition_state",
+            "product:cyclohexene"
+          ],
+          "present_count": 4
+        },
+        "reactant_energy_sum": -234.497104375727,
+        "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+        "subtraction_performed": true,
+        "thermochemistry_complete": null,
+        "transition_state_energy": -234.472954154901
+      },
+      "missing_checks": [],
+      "notes": [],
+      "reason": "affirmed",
+      "statement": "Within the declared reaction and its shared electronic identity, the electronic activation barrier E(TS) - sum(nu_i * E(reactant_i)) is comparable; this is not a free-energy barrier and carries no thermal or entropic claim.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.activation_energy_comparability",
+        "validator_version": "1.0.0"
+      }
+    },
+    "free_energy_barrier": {
+      "claim_id": "c-free-energy-activation-barrier-comparable",
+      "details": {
+        "barrier_expression": null,
+        "barrier_kind": "gibbs_free",
+        "barrier_unit": null,
+        "barrier_value": null,
+        "claim_scope": "the declared reactant -> transition state -> product reaction only; no claim about other paths, conformers, global minima or species outside the supplied records",
+        "declared_energy_kinds": [
+          "electronic"
+        ],
+        "mixed_energy_kinds": false,
+        "other_kind_presence": {
+          "any_present": true,
+          "complete": true,
+          "energy_kind": "electronic",
+          "missing": [],
+          "participant_count": 4,
+          "present": [
+            "reactant:butadiene",
+            "reactant:ethene",
+            "transition_state",
+            "product:cyclohexene"
+          ],
+          "present_count": 4
+        },
+        "participant_identities_complete": false,
+        "participants": [
+          {
+            "declared_energy_kind": null,
+            "energy_hartree": null,
+            "identity_present": false,
+            "label": "reactant:butadiene",
+            "role": "reactant",
+            "slot": "gibbs_free",
+            "species_id": "butadiene",
+            "stoichiometry": 1
+          },
+          {
+            "declared_energy_kind": null,
+            "energy_hartree": null,
+            "identity_present": false,
+            "label": "reactant:ethene",
+            "role": "reactant",
+            "slot": "gibbs_free",
+            "species_id": "ethene",
+            "stoichiometry": 1
+          },
+          {
+            "declared_energy_kind": null,
+            "energy_hartree": null,
+            "identity_present": false,
+            "label": "transition_state",
+            "role": "transition_state",
+            "slot": "gibbs_free",
+            "species_id": "transition_state",
+            "stoichiometry": 1
+          },
+          {
+            "declared_energy_kind": null,
+            "energy_hartree": null,
+            "identity_present": false,
+            "label": "product:cyclohexene",
+            "role": "product",
+            "slot": "gibbs_free",
+            "species_id": "cyclohexene",
+            "stoichiometry": 1
+          }
+        ],
+        "presence": {
+          "any_present": false,
+          "complete": false,
+          "energy_kind": "gibbs_free",
+          "missing": [
+            "reactant:butadiene",
+            "reactant:ethene",
+            "transition_state",
+            "product:cyclohexene"
+          ],
+          "participant_count": 4,
+          "present": [],
+          "present_count": 0
+        },
+        "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+        "subtraction_performed": false,
+        "thermochemistry_complete": false
+      },
+      "missing_checks": [
+        {
+          "blocking": true,
+          "check_id": "frequency_not_computed",
+          "reason": "no thermochemistry was supplied, so no free-energy barrier may be claimed"
+        }
+      ],
+      "notes": [],
+      "reason": "not_checked",
+      "statement": "Within the declared reaction, temperature and standard state, the Gibbs free-energy activation barrier G(TS) - sum(nu_i * G(reactant_i)) is comparable; this claim is limited to complete, standardized thermochemistry for every participant.",
+      "status": "not_evaluated",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.activation_energy_comparability",
+        "validator_version": "1.0.0"
+      }
+    },
+    "reactant_stoichiometry": {
+      "claim_id": "c-reactant-stoichiometry-complete",
+      "details": {
+        "coefficient_mismatches": {},
+        "missing_components": [],
+        "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+        "required_reactants": {
+          "butadiene": 1,
+          "ethene": 1
+        },
+        "stoichiometry_scope": "component presence and coefficients; atom counts are not parsed here",
+        "supplied_reactants": {
+          "butadiene": 1,
+          "ethene": 1
+        },
+        "unexpected_components": []
+      },
+      "missing_checks": [],
+      "notes": [],
+      "reason": "affirmed",
+      "statement": "Every reactant component declared by the reaction is present with its stoichiometric coefficient, so the reactant side of the activation-energy subtraction is complete.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.reactant_stoichiometry_completeness",
+        "validator_version": "1.0.0"
+      }
+    },
+    "status": "not_evaluated",
+    "validator_version": "1.0.0"
+  },
+  "actual_orca_resources": [],
+  "adr_step_index": 9,
+  "adr_task_kind": "thermochemistry",
+  "attempt": 1,
+  "bounded_alternative": null,
+  "complete": true,
+  "duration_seconds": 0.0,
+  "energies": {
+    "complete": true,
+    "product": {
+      "energy_hartree": -234.491022936733,
+      "energy_kind": "electronic"
+    },
+    "reactants": [
+      {
+        "energy_hartree": -155.940064721338,
+        "energy_kind": "electronic",
+        "species_id": "butadiene"
+      },
+      {
+        "energy_hartree": -78.557039654389,
+        "energy_kind": "electronic",
+        "species_id": "ethene"
+      }
+    ],
+    "transition_state": {
+      "energy_hartree": -234.472954154901,
+      "energy_kind": "electronic"
+    }
+  },
+  "entry": "deterministic_analysis",
+  "error": null,
+  "executed_task_kind": "thermochemistry",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "resources": {
+    "cores": 16,
+    "maxcore": 2000,
+    "mem": "32GB",
+    "nproc": 16
+  },
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "energy_thermochemistry",
+  "task_ref": "20261028_942_energy_thermochemistry",
+  "task_result": null,
+  "thermochemistry": {
+    "attempted": false,
+    "error": "no frequency log artifact exists for the TS candidate",
+    "shermo": null
+  },
+  "thresholds": {
+    "activation_energy_comparison_abs_kcal_per_mol": 0.5,
+    "energy_reparse_abs_hartree": 1e-06
+  },
+  "validator_ids": [
+    "check.method_consistency",
+    "check.electronic_state_consistency",
+    "check.energy_comparability",
+    "check.activation_energy_comparability"
+  ]
+}

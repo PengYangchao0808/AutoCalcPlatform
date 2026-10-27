@@ -1,0 +1,322 @@
+# TS optimization native output
+# source: /home/xieningke/ACP_runs/uncategorized/PESsearch_TS_candidate_pes_ts_frame_005_manual_BatchOptimize/WORK/00_RUNTIME/attempts/2/WORK/03_OPT/ts_opt.out
+# total_lines: 7686
+
+## ORCA version line (lines 54-56)
+    54:                          Program Version 6.1.1  -  RELEASE   -
+    55:                                 (GIT: $487d211c$)
+    56:                           ($2025-11-21 10:33:24 +0100$)
+
+## final convergence / termination (lines 7475-7686)
+  7475: -------------------------   --------------------
+  7476: FINAL SINGLE POINT ENERGY      -234.472973137812
+  7477: -------------------------   --------------------
+  7478: 
+  7479:                                 *** OPTIMIZATION RUN DONE ***
+  7480: 
+  7481: 
+  7482: 
+  7483:            ************************************************************
+  7484:            *        Program running with 16 parallel MPI-processes    *
+  7485:            *              working on a common directory               *
+  7486:            ************************************************************
+  7487: 
+  7488: ------------------------------------------------------------------------------
+  7489:                               ORCA PROPERTY CALCULATIONS
+  7490: ------------------------------------------------------------------------------
+  7491: 
+  7492: GBWName                                 ... /var/lib/acp/runs/uncategorized/PESsearch_TS_candidate_pes_ts_frame_005_manual_BatchOptimize/WORK/03_OPT/ts_opt.gbw
+  7493: Number of atoms                         ...     16
+  7494: Number of basis functions               ...    164
+  7495: Max core memory                         ...   2099 MB
+  7496: 
+  7497: Electric properties:
+  7498: Dipole moment                           ... YES
+  7499: Quadrupole moment                       ...  NO
+  7500: Static polarizability (Dipole/Dipole)   ...  NO
+  7501: Static polarizability (Dipole/Quad.)    ...  NO
+  7502: Static polarizability (Quad./Quad.)     ...  NO
+  7503: Static polarizability (Velocity)        ...  NO
+  7504: Static hyperpolarizability              ...  NO
+  7505: 
+  7506: Atomic electric properties:
+  7507: Dipole moment                           ...  NO
+  7508: Quadrupole moment                       ...  NO
+  7509: Static polarizability                   ...  NO
+  7510: 
+  7511: Choice of electric origin               ... Center of mass
+  7512: Position of electric origin             ...     0.066010     0.269559    -0.043756
+  7513: 
+  7514: General magnetic properties:
+  7515: Magnetizability                         ...  NO
+  7516: 
+  7517: EPR properties:
+  7518: g-Tensor (aka g-matrix)                 ...  NO
+  7519: Zero-Field splitting spin-orbit         ...  NO
+  7520: Zero-field splitting spin-spin          ...  NO
+  7521: Hyperfine couplings                     ...  NO (   0 nuclei)
+  7522: Quadrupole couplings                    ...  NO (   0 nuclei)
+  7523: Contact density                         ...  NO (   0 nuclei)
+  7524: 
+  7525: NMR properties:
+  7526: Chemical shifts                         ...  NO (   0 nuclei)
+  7527: Spin-rotation constants                 ...  NO (   0 nuclei)
+  7528: Spin-spin couplings                     ...  NO (   0 nuclei,    0 pairs)
+  7529: 
+  7530: Choice of magnetic origin               ... GIAO
+  7531: Position of magnetic origin             ...     0.000000     0.000000     0.000000
+  7532: 
+  7533: Properties with geometric perturbations:
+  7534: SCF Hessian                             ...  NO
+  7535: IR spectrum                             ...  NO
+  7536: VCD spectrum                            ...  NO
+  7537: X-ray spectroscopy properties:
+  7538: SCF XES/XAS/RIXS spectra                ...  NO
+  7539: 
+  7540: SCF SOC stabilization energy            ...  NO
+  7541: Diagonal Born-Oppenheimer correction    ...  NO
+  7542: 
+  7543: -------------
+  7544: DIPOLE MOMENT
+  7545: -------------
+  7546: 
+  7547: Method             : SCF
+  7548: Type of density    : Electron Density
+  7549: Multiplicity       :   1
+  7550: Irrep              :   0
+  7551: Energy             :  -234.4731188098745918 Eh
+  7552: Basis              : AO
+  7553:                                 X                 Y                 Z
+  7554: Electronic contribution:      0.538231009       2.177916501      -0.306864394
+  7555: Nuclear contribution   :     -0.572383354      -2.337379635       0.379408855
+  7556:                         -----------------------------------------
+  7557: Total Dipole Moment    :     -0.034152345      -0.159463134       0.072544461
+  7558:                         -----------------------------------------
+  7559: Magnitude (a.u.)       :      0.178486898
+  7560: Magnitude (Debye)      :      0.453677640
+  7561: 
+  7562: 
+  7563: 
+  7564: --------------------
+  7565: Rotational spectrum 
+  7566: --------------------
+  7567:  
+  7568: Rotational constants in cm-1:             0.144905             0.115142             0.075399 
+  7569: Rotational constants in MHz :          4344.134071          3451.866961          2260.400631 
+  7570: 
+  7571: Dipole components along the rotational axes: 
+  7572: x,y,z [a.u.] :    -0.177595    -0.000291     0.017817 
+  7573: x,y,z [Debye]:    -0.451411    -0.000741     0.045288 
+  7574: 
+  7575:  
+  7576: 
+  7577: Dipole moment calculation done in   0.1 sec 
+  7578: 
+  7579: Maximum memory used throughout the entire PROP-calculation: 6.8 MB
+  7580: 
+  7581: --------------------------------
+  7582: SUGGESTED CITATIONS FOR THIS RUN
+  7583: --------------------------------
+  7584: 
+  7585: Below you find a list of papers that are relevant to this ORCA run
+  7586: We neither can nor want to force you to cite these papers, but we appreciate if you do
+  7587: You receive ORCA, which is the product of decades of hard work by many enthusiastic individuals, for free
+  7588: The only thing we kindly ask in return is that you cite our papers,
+  7589: We deeply appreciate it, if you show your appreciation for ORCA by not just citing the generic ORCA reference.
+  7590: 
+  7591: Please note that relegating all ORCA citations to the supporting information does *not* help us.
+  7592: SI sections are not indexed - citations you put there will not count into any citation statistics
+  7593: But we need these citations in order to attract the funding resources that allow us to do what we are doing
+  7594: 
+  7595: Therefore, if you are a happy ORCA user, please consider citing a few of the papers listed below in the main body of your paper
+  7596: 
+  7597: In addition to the list printed below, the program has created the file /var/lib/acp/runs/uncategorized/PESsearch_TS_candidate_pes_ts_frame_005_manual_BatchOptimize/WORK/03_OPT/ts_opt.bibtex that contains the list in bibtex format
+  7598: You can import this file easily into all common literature databanks and citation aid programs
+  7599: 
+  7600: It goes without saying that in many instances, there are alternative algorithms to achieve similar
+  7601: results as the ones you have gotten from ORCA. It is, of course, also the case that in some instances
+  7602: ORCA just re-implements algorithms worked out by others. We are fully aware of that and we are also
+  7603: fully appreciative of our colleagues work. Hence this citation list should not be read as indicating
+  7604: that the listed papers, which are focused on our own work, are the only ones worth citing. It simply
+  7605: meant to make it easier for users to cite ORCA specific papers. It is not a substitute for doing your
+  7606: own literature research and citing the relevant literature in a scientifically appropriate manner.
+  7607: 
+  7608: List of essential papers. We consider these as the minimum necessary citations
+  7609: 
+  7610:   1. Grimme, S.; Hansen, A.; Ehlert, S.; Mewes, J.
+  7611:      r2SCAN-3c: A 'Swiss army knife' composite electronic-structure method
+  7612:      J. Chem. Phys. 2021 154 , 064103
+  7613:      doi.org/10.1063/5.0040021
+  7614:   2. Neese, F.
+  7615:      Software update: the ORCA program system, version 6.0
+  7616:      WIRES Comput. Molec. Sci. 2025 15(1), e70019
+  7617:      doi.org/10.1002/wcms.70019
+  7618: 
+  7619: List of papers to cite with high priority. The work reported in these papers was absolutely
+  7620: necessary for this run to complete.
+  7621: Our perspective: the developers of density functionals and basis sets usually get cited in chemistry papers
+  7622: Good! But without the algorithms to do something with them, the functionals or basis sets would not do anything.
+  7623: Hence, in our opinion, the algorithm design and method developments papers are equally worthy of getting cited
+  7624: 
+  7625:   1. Neese, F.
+  7626:      An improvement of the resolution of the identity approximation for the formation of the Coulomb matrix
+  7627:      J. Comp. Chem. 2003 24(14), 1740-1747
+  7628:      doi.org/10.1002/jcc.10318
+  7629:   2. Bykov, D.; Petrenko, T.; Izsak, R.; Kossmann, S.; Becker, U.; Valeev, E.; Neese, F.
+  7630:      Efficient implementation of the analytic second derivatives of Hartree-Fock and hybrid DFT energies: a detailed analysis of different approximations
+  7631:      Molec. Phys. 2015 113 , 1961-1977
+  7632:      doi.org/10.1080/00268976.2015.1025114
+  7633:   3. Caldeweyher, E.; Bannwarth, C.; Grimme, S.
+  7634:      Extension of the D3 dispersion coefficient model
+  7635:      J. Chem. Phys. 2017 147 , 034112
+  7636:      doi.org/10.1063/1.4993215
+  7637:   4. Lehtola, S.; Steigemann, C.; Oliveira, M.; Marques, M.
+  7638:      Recent developments in Libxc - A comprehensive library of functionals for density functional theory
+  7639:      Software X 2018 7 , 
+  7640:      doi.org/10.1016/j.softx.2017.11.002
+  7641:   5. Caldeweyher, E.; Ehlert, S.; Hansen, A.; Neugebauer, H.; Spicher, S.; Bannwarth, C.; Grimme, S.
+  7642:      A generally applicable atomic-charge dependent London dispersion correction
+  7643:      J. Chem. Phys. 2019 150 , 154122
+  7644:      doi.org/10.1063/1.5090222
+  7645:   6. Neese, F.
+  7646:      The SHARK Integral Generation and Digestion System
+  7647:      J. Comp. Chem. 2022 44(3), 381
+  7648:      doi.org/10.1002/jcc.26942
+  7649: 
+  7650: List of suggested additional citations. These are papers that are important in the 'surrounding' of 
+  7651: of this run, or papers that preceded the highly important papers. If you like your results we are grateful for a citation.
+  7652: 
+  7653:   1. Neese, F.
+  7654:      The ORCA program system
+  7655:      WIRES Comput. Molec. Sci. 2012 2(1), 73-78
+  7656:      doi.org/10.1002/wcms.81
+  7657:   2. Neese, F.
+  7658:      Software update: the ORCA program system, version 4.0
+  7659:      WIRES Comput. Molec. Sci. 2018 8(1), 1-6
+  7660:      doi.org/10.1002/wcms.1327
+  7661:   3. Neese, F.; Wennmohs, F.; Becker, U.; Riplinger, C.
+  7662:      The ORCA quantum chemistry program package
+  7663:      J. Chem. Phys. 2020 152(22), 224108
+  7664:      doi.org/10.1063/5.0004608
+  7665:   4. Neese, F.
+  7666:      Software update: The ORCA program system—Version 5.0
+  7667:      WIRES Comput. Molec. Sci. 2022 12(1), e1606
+  7668:      doi.org/10.1002/wcms.1606
+  7669: 
+  7670: List of optional additional citations
+  7671: 
+  7672:   1. Neese, F.
+  7673:      Approximate second-order SCF convergence for spin unrestricted wavefunctions
+  7674:      Chem. Phys. Lett. 2000 325(1-3), 93-98
+  7675:      doi.org/10.1016/s0009-2614(00)00662-x
+  7676: 
+  7677: Timings for individual modules:
+  7678: 
+  7679: Sum of individual times          ...       44.992 sec (=   0.750 min)
+  7680: Startup calculation              ...        7.864 sec (=   0.131 min)  17.5 %
+  7681: SCF iterations                   ...       26.891 sec (=   0.448 min)  59.8 %
+  7682: Property calculations            ...        0.536 sec (=   0.009 min)   1.2 %
+  7683: SCF Gradient evaluation          ...        9.608 sec (=   0.160 min)  21.4 %
+  7684: Geometry relaxation              ...        0.092 sec (=   0.002 min)   0.2 %
+  7685:                              ****ORCA TERMINATED NORMALLY****
+  7686: TOTAL RUN TIME: 0 days 0 hours 1 minutes 55 seconds 949 msec
+
+# TS frequency native output
+# source: /home/xieningke/ACP_runs/uncategorized/PESsearch_TS_candidate_pes_ts_frame_005_manual_BatchOptimize/WORK/00_RUNTIME/attempts/2/WORK/04_FREQ/freq.out
+# total_lines: 2180
+
+## ORCA version line (freq.out) (lines 54-56)
+    54:                          Program Version 6.1.1  -  RELEASE   -
+    55:                                 (GIT: $487d211c$)
+    56:                           ($2025-11-21 10:33:24 +0100$)
+
+## vibrational frequencies (imaginary mode at native index 6) (lines 1384-1446)
+  1384: VIBRATIONAL FREQUENCIES
+  1385: -----------------------
+  1386: 
+  1387: Scaling factor for frequencies =  1.000000000  (already applied!)
+  1388: 
+  1389:      0:       0.00 cm**-1
+  1390:      1:       0.00 cm**-1
+  1391:      2:       0.00 cm**-1
+  1392:      3:       0.00 cm**-1
+  1393:      4:       0.00 cm**-1
+  1394:      5:       0.00 cm**-1
+  1395:      6:    -456.57 cm**-1  ***imaginary mode***
+  1396:      7:     126.95 cm**-1
+  1397:      8:     193.30 cm**-1
+  1398:      9:     278.64 cm**-1
+  1399:     10:     376.73 cm**-1
+  1400:     11:     389.87 cm**-1
+  1401:     12:     476.62 cm**-1
+  1402:     13:     589.45 cm**-1
+  1403:     14:     608.20 cm**-1
+  1404:     15:     681.14 cm**-1
+  1405:     16:     775.48 cm**-1
+  1406:     17:     824.84 cm**-1
+  1407:     18:     852.10 cm**-1
+  1408:     19:     900.53 cm**-1
+  1409:     20:     944.07 cm**-1
+  1410:     21:     963.27 cm**-1
+  1411:     22:     966.70 cm**-1
+  1412:     23:     989.45 cm**-1
+  1413:     24:     992.16 cm**-1
+  1414:     25:    1002.64 cm**-1
+  1415:     26:    1101.25 cm**-1
+  1416:     27:    1111.46 cm**-1
+  1417:     28:    1244.86 cm**-1
+  1418:     29:    1257.58 cm**-1
+  1419:     30:    1272.94 cm**-1
+  1420:     31:    1319.82 cm**-1
+  1421:     32:    1428.02 cm**-1
+  1422:     33:    1463.76 cm**-1
+  1423:     34:    1488.27 cm**-1
+  1424:     35:    1540.37 cm**-1
+  1425:     36:    1587.17 cm**-1
+  1426:     37:    1592.71 cm**-1
+  1427:     38:    3133.11 cm**-1
+  1428:     39:    3136.25 cm**-1
+  1429:     40:    3137.47 cm**-1
+  1430:     41:    3142.94 cm**-1
+  1431:     42:    3145.19 cm**-1
+  1432:     43:    3156.43 cm**-1
+  1433:     44:    3218.96 cm**-1
+  1434:     45:    3227.00 cm**-1
+  1435:     46:    3229.49 cm**-1
+  1436:     47:    3244.46 cm**-1
+  1437: 
+  1438: 
+  1439: ------------
+  1440: NORMAL MODES
+  1441: ------------
+  1442: 
+  1443: These modes are the Cartesian displacements weighted by the diagonal matrix
+  1444: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+  1445: Thus, these vectors are normalized but *not* orthogonal
+  1446: 
+
+## thermochemistry header (lines 1898-1906)
+  1898: THERMOCHEMISTRY AT 298.15K
+  1899: --------------------------
+  1900: 
+  1901: Temperature         ...   298.15 K
+  1902: Pressure            ...     1.00 atm
+  1903: Total Mass          ...    82.15 AMU
+  1904: Quasi RRHO          ...     True
+  1905: Cut-Off Frequency   ...     1.00 cm^-1
+  1906: 
+
+## timings / termination (lines 2168-2180)
+  2168:      Chem. Phys. Lett. 2000 325(1-3), 93-98
+  2169:      doi.org/10.1016/s0009-2614(00)00662-x
+  2170: 
+  2171: Timings for individual modules:
+  2172: 
+  2173: Sum of individual times          ...       36.318 sec (=   0.605 min)
+  2174: Startup calculation              ...        0.833 sec (=   0.014 min)   2.3 %
+  2175: SCF iterations                   ...        3.366 sec (=   0.056 min)   9.3 %
+  2176: Property integrals               ...       16.703 sec (=   0.278 min)  46.0 %
+  2177: SCF Response                     ...        8.213 sec (=   0.137 min)  22.6 %
+  2178: Property calculations            ...        7.202 sec (=   0.120 min)  19.8 %
+  2179:                              ****ORCA TERMINATED NORMALLY****
+  2180: TOTAL RUN TIME: 0 days 0 hours 0 minutes 36 seconds 856 msec

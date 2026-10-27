@@ -1,0 +1,110 @@
+{
+  "mode": "bond_length_scan",
+  "source": {
+    "source_type": "xyz_text",
+    "xyz_text": "16\n\nC      0.371233   -1.258702   -0.059977\nC      1.418549   -0.209682   -0.203595\nC      0.882981    1.168046   -0.216115\nC     -0.403009    1.475454   -0.207685\nC     -1.412789    0.355731   -0.183617\nC     -0.793166   -0.689023    0.726950\nH     -0.030478   -1.491341   -1.064600\nH      0.796418   -2.114519    0.473649\nH      2.156830   -0.273613    0.634843\nH      2.010420   -0.436864   -1.122603\nH      1.602838    1.980171   -0.233471\nH     -0.716081    2.515863   -0.217997\nH     -2.406499    0.703079    0.147132\nH     -1.516398   -0.120458   -1.180860\nH     -0.451907   -0.141962    1.643929\nH     -1.508940   -1.462181    1.064016\n",
+    "charge": 0,
+    "multiplicity": 1
+  },
+  "coordinate": {
+    "kind": "distance",
+    "atoms": [
+      4,
+      5
+    ],
+    "unit": "angstrom",
+    "start": 1.5181,
+    "end": 3.5181,
+    "n_points": 21,
+    "bond_type": "double"
+  },
+  "coordinates": [
+    {
+      "kind": "distance",
+      "atoms": [
+        4,
+        5
+      ],
+      "unit": "angstrom",
+      "start": 1.5181,
+      "end": 3.5181,
+      "n_points": 21
+    },
+    {
+      "kind": "distance",
+      "atoms": [
+        1,
+        0
+      ],
+      "unit": "angstrom",
+      "start": 1.4893,
+      "end": 3.4893,
+      "n_points": 21
+    }
+  ],
+  "selection": {
+    "mode": "functional",
+    "kind": "double_bond_scan",
+    "atom_indices": [
+      4,
+      5,
+      1,
+      0
+    ],
+    "groups": [
+      [
+        4,
+        5
+      ],
+      [
+        1,
+        0
+      ]
+    ],
+    "selected_bond": false
+  },
+  "protocol": {
+    "scan_driver": {
+      "software": "orca",
+      "mode": "relaxed_scan",
+      "reuse_previous_geometry": true,
+      "full_scan": true,
+      "use_scants": false,
+      "max_iterations": 250,
+      "failure_policy": "retry_previous",
+      "retry_count": 2
+    },
+    "scan_optimizer": {
+      "method": "GFN2-xTB",
+      "basis": null,
+      "dispersion": null,
+      "solvent_model": "none",
+      "solvent": null,
+      "grid": null,
+      "scf_convergence": null,
+      "scf_max_iterations": 200,
+      "ri_approximation": "none",
+      "max_iterations": 250,
+      "convergence": "normal",
+      "retry_count": 2,
+      "retry_strategy": "previous_geometry"
+    },
+    "single_point": {
+      "enabled": true,
+      "software": "orca",
+      "method": "B97-3c",
+      "basis": null,
+      "dispersion": null,
+      "ri_approximation": "none",
+      "aux_j_basis": null,
+      "aux_c_basis": null,
+      "solvent_model": "none",
+      "solvent": null,
+      "grid": null,
+      "scf_convergence": "Tight",
+      "charge": 0,
+      "multiplicity": 1,
+      "resume": true
+    }
+  }
+}

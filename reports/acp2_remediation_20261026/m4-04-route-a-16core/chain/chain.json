@@ -1,0 +1,237 @@
+{
+  "generated_at": "2026-10-27T23:22:39Z",
+  "release": {
+    "built": true,
+    "manifest_path": "",
+    "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+    "release_id": "2d1ab37a0f988933"
+  },
+  "schema": "acp2.m4-04.chain.v1",
+  "steps": [
+    {
+      "actual_orca_resources": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "4556b1bae5c842e1c56fdd62db900a8460fd323fa7339c9190107daaada5fe68"
+        },
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "73c003c90c570911ea370e899ff0ad11192def300f5e4bc94889ab847f503ba1"
+        },
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_cyclohexene/optimize.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "00f4e4c641df674b70f41acfa7d73d0395d18e3ed111dfe0efc0c6940b104f10"
+        }
+      ],
+      "adr_step_index": 1,
+      "digest": "b46c6bc56f56b4e0b06f7317b9bc6890539d8729301a24e6fdb738f7fbfda2db",
+      "duration_seconds": 257.6,
+      "entry": "legacy_task_core",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "endpoint_prep"
+    },
+    {
+      "actual_orca_resources": {
+        "batch_ts": {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16
+        },
+        "distinct_pal_nprocs": [
+          4,
+          16
+        ],
+        "pes_scan": {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/pes/WORK/07_PATH/pes_scan_001/frame_000/orca_relaxed_scan_try1.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16
+        },
+        "pes_single_point": {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/pes/WORK/07_PATH/pes_scan_001/sp/.batch_sp/d86aa9cf80919beb/group_000/sp_0000/sp_0000.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 4
+        }
+      },
+      "adr_step_index": 2,
+      "digest": "33aff97ac2c3287069f993db8d7d5dce8f3686d34b2b96e4079fd1ed771dd0e9",
+      "duration_seconds": 272.39,
+      "entry": "platform_workflow_route",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": "route.diels_alder.ts_guess.pes_relaxed_scan_frame_batch_optimize_ts.v1",
+      "status": "completed",
+      "step_id": "candidate_path"
+    },
+    {
+      "actual_orca_resources": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_frequency/candidate_frequency/freq.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "68f41a09778900bfe0b4df6d8c7f1b5787816d7077bcb5476c91fd2f76552960"
+        }
+      ],
+      "adr_step_index": 3,
+      "digest": "73ce12ac7ba1eb9d9f55dadfa4645db4ba56fcb2eead195ee9192eb6aa37c880",
+      "duration_seconds": 34.04,
+      "entry": "bounded_recipe_envelope",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "candidate_frequency"
+    },
+    {
+      "actual_orca_resources": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "906712062257c8866de0539b2c82adc8c51ffaad6ec75a7ab62c12831fc966af"
+        }
+      ],
+      "adr_step_index": 4,
+      "digest": "2273d6ac62f7d4cb97e11bd2a9bc832415eb58ce7548642235243cddae78864d",
+      "duration_seconds": 211.22,
+      "entry": "route_batch_optimize_ts",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "ts_optimize"
+    },
+    {
+      "actual_orca_resources": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/ts_frequency/ts_frequency/freq.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "68f41a09778900bfe0b4df6d8c7f1b5787816d7077bcb5476c91fd2f76552960"
+        }
+      ],
+      "adr_step_index": 5,
+      "digest": "34d546ae5778ebe14ef4f27f9e69dc5c5ddfdfc2b029eecd0a3465bb11b8e162",
+      "duration_seconds": 33.98,
+      "entry": "bounded_recipe_envelope",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "ts_frequency"
+    },
+    {
+      "actual_orca_resources": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/irc/irc.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "94b9924584ad6be4dc3aa706ebe6b89616b65c230ac851b02d426c90afa8ff81"
+        }
+      ],
+      "adr_step_index": 6,
+      "digest": "0f71a297dc5169173b3fe41c50e9779078db610ad051e496e62b578868e33220",
+      "duration_seconds": 1451.26,
+      "entry": "legacy_task_core",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "irc"
+    },
+    {
+      "actual_orca_resources": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/endpoint_reactants/sp.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "21b39d8526b6449e0e8a9b0bbfe3412164a9f32e6a172cacf0516a98a1bc0680"
+        }
+      ],
+      "adr_step_index": 7,
+      "digest": "34f59de650b0327d0af96905b623937abb8984295459d630948355b9ce7b3c19",
+      "duration_seconds": 5.34,
+      "entry": "bounded_recipe_envelope",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "endpoint_reactants"
+    },
+    {
+      "actual_orca_resources": [
+        {
+          "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_product/endpoint_product/sp.inp",
+          "maxcore": 2000,
+          "pal_nprocs": 16,
+          "sha256": "9f9824544a23fbabe1217889cdadb54c9e065a9fee7f83c3b0b237606c521589"
+        }
+      ],
+      "adr_step_index": 8,
+      "digest": "a27235a5182d7111a44f7e4cd7c5dbe7ae0f983754181bff4083c3ed514777a2",
+      "duration_seconds": 5.67,
+      "entry": "bounded_recipe_envelope",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "endpoint_product"
+    },
+    {
+      "actual_orca_resources": [],
+      "adr_step_index": 9,
+      "digest": "4d6e3159a7011acf86d8d9ad6898a9168bb94e7930db28d2077168f380906b5d",
+      "duration_seconds": 0.0,
+      "entry": "deterministic_analysis",
+      "resources": {
+        "cores": 16,
+        "maxcore": 2000,
+        "mem": "32GB",
+        "nproc": 16
+      },
+      "route_id": null,
+      "status": "completed",
+      "step_id": "energy_thermochemistry"
+    }
+  ]
+}
