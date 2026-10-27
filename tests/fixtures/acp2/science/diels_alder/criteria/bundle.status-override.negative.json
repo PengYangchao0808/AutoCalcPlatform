@@ -1,0 +1,28 @@
+{
+  "constructed": true,
+  "expected": {
+    "error_rule": "RJ-05-status-override"
+  },
+  "fixture_id": "da-criteria-status-override",
+  "notes": "Bypass negative sample: the record tries to smuggle a verdict through the evidence payload. The key is refused instead of being read as a pass.",
+  "real_run": false,
+  "records": [
+    {
+      "claim_id": "c-ts-exactly-one-imaginary-mode",
+      "criterion_id": "DA-C01-ts-single-imaginary-mode",
+      "evidence": {
+        "criteria_passed": true,
+        "imaginary_mode_count": 1
+      },
+      "evidence_digest": "69ade6ee420603c9885cd23f3b05e93a6090c4e6a1cd6b2e006e234121edd40d",
+      "missing_check_ids": [],
+      "source_digests": [],
+      "status": "supported",
+      "validator_id": "check.ts_saddle_candidate",
+      "validator_version": "1.0.0"
+    }
+  ],
+  "scenario_result": "PASS",
+  "schema": "acp2.science.criteria-evaluation",
+  "schema_version": 1
+}

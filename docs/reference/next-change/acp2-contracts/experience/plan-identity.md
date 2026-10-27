@@ -358,6 +358,7 @@ that the two sets agree row for row, so neither side may drift.
 | `submit_request_digest` | B | `2` | `src/acp_services/runtime/idempotency.py::canonical_request_digest` | platform | frozen |
 | `frozen_plan_body_digest` | B | `2` | `src/acp_services/runtime/attempt_freeze.py::frozen_group` | platform | frozen |
 | `recipe_definition_digest` | A (CCCP) | `0.0.0-pending` | — (no cross-side verifier registered) | cccp | not-frozen |
+| `science_criteria_digest` | A (CCCP) | `1.0.0` | `src/cccp/analysis/research/science_criteria.py::criteria_definition_digest` | cccp | frozen |
 | `step_execution_identity` | B worker + A science | `2` | `src/acp_services/runtime/receipt_identity.py::identity_digest` | platform | frozen |
 | `contract_digest` | B | `1.0.0` | `scripts/acceptance/validate_acp2_contracts.py::contract_digest_for` | platform | frozen |
 | `artifact_digest` | B | `1.0.0` | `src/acp_services/data/artifacts.py::normalize_artifact_digest` | platform | frozen |

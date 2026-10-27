@@ -10,7 +10,7 @@ analysis/
 ├── orca_parser.py        # OrcaOutputParser / OrcaCalculation (frequency science delegates to cccp.calculation.frequency_parse)
 ├── frequency_products.py # build_normal_modes_product / build_frequency_report
 ├── nmr/                  # 27 .py + model_assets/ — FULL DP4/DP5/FCHL home (see below)
-├── research/             # 10 .py + contracts/ corpus — evidence/provenance/question/reaction/selectivity (see below)
+├── research/             # 11 .py + contracts/ corpus — evidence/provenance/question/reaction/selectivity (see below); science_criteria (ADR-008 M1-05 冻结判据表+评估器)
 ├── pes/                  # 8: path profiles, atom mapping, bond changes, seed selection, topology guards
 ├── ensemble/             # 8: retired-engine ensemble science + A-24b science-protocol binding (science.py)
 ├── bounded/              # 7: chunked/subsampled/multi-resolution science products

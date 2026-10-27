@@ -108,7 +108,7 @@ class DigestDomain:
         }
 
 
-#: The D06 registry.  Nine domains are frozen; ``recipe_definition_digest`` is
+#: The D06 registry.  Ten domains are frozen; ``recipe_definition_digest`` is
 #: deliberately **not** frozen: CCCP computes an internal recipe identity but no
 #: cross-side verifier is registered yet (owner A, M2-05), and a domain without
 #: a registered validator must not be cited as frozen.
@@ -265,6 +265,31 @@ DIGEST_DOMAINS: tuple[DigestDomain, ...] = (
             "CCCP computes an internal recipe identity; no cross-side verifier is "
             "registered yet (owner A, M2-05). A not-frozen domain may not be cited as "
             "frozen in a BOM, an approval or a release statement."
+        ),
+    ),
+    DigestDomain(
+        domain="science_criteria_digest",
+        owner="A (CCCP)",
+        canonical_inputs=(
+            "schema",
+            "version",
+            "regime",
+            "validator_version",
+            "thresholds",
+            "downgrade_rules",
+            "rejection_rules",
+            "criteria",
+            "questions",
+        ),
+        version="1.0.0",
+        canonicalizer="cccp.analysis.research._common.canonical_json (sorted keys)",
+        validator_path="src/cccp/analysis/research/science_criteria.py",
+        validator_symbol="criteria_definition_digest",
+        validator_side="cccp",
+        notes=(
+            "frozen ADR-008 science criteria table (M1-05); never a recipe or plan "
+            "identity — a criteria change is a new version plus a new approval, so an "
+            "inline edit after seeing a result becomes visible in the signed digest."
         ),
     ),
     DigestDomain(
