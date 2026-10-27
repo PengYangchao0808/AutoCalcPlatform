@@ -948,6 +948,11 @@ class Slice:
                     "timeoutMs": 30000,
                 },
                 "out_dir": str(out_dir),
+                # F6 declared boundary: the synthetic legacy workflow answers a
+                # TaskRef without a release.  The real local release identity is
+                # passed so the client can *declare* it during reconciliation
+                # instead of defaulting a release_id ("pending"/empty digest).
+                "task_ref_release": local_release(),
             }
             config_path = out_dir / "config.json"
             config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
@@ -1745,47 +1750,55 @@ class Slice:
             {
                 "id": "F2-bridge-redaction-blocks-discovery",
                 "owner": "C-RPH",
-                "status": "open",
+                "status": "closed_by_m3_01b",
                 "detail": (
-                    "The bridge's model-facing redaction guard refuses the whole "
-                    "acp_capabilities payload because it carries an inert `authorization` "
+                    "The bridge's model-facing redaction guard refused the whole "
+                    "acp_capabilities payload because it carried an inert `authorization` "
                     "projection (credential_in_result at "
                     "$.data.capability_request.authorization) and absolute backend paths. "
-                    "Discovery therefore cannot be projected through "
-                    "the bridge as-is; the slice reads it on the raw transport and records "
-                    "the refusal."
+                    "M3-01b added one restoration step between the verbatim transport and "
+                    "the strict guard (`restorePlatformResult`): it drops exactly that "
+                    "frozen audit member and replaces host paths with `<host-path>`, while "
+                    "a real credential is still refused. Discovery now runs through the "
+                    "bridge (`bridge.discover`)."
                 ),
             },
             {
                 "id": "F3-prepare-read-field-rename",
                 "owner": "C-RPH + B",
-                "status": "worked_around_in_client",
+                "status": "closed_by_m3_01b",
                 "detail": (
                     "The prepare response names the artifact `artifact_ref.resource_id` with an "
                     "empty digest and `availability=absent`, while the frozen read contract "
-                    "requires `artifact_ref.artifact_id` and a digest; the bridge's read builder "
-                    "still emits the legacy flat names unless the caller supplies a digest. The "
-                    "slice polls the prepare operation and maps resource_id→artifact_id locally."
+                    "requires `artifact_ref.artifact_id` and a digest. M3-01b moved the rename "
+                    "into the bridge (`preparedArtifactView`/`applyArtifactStatus`/"
+                    "`readRequestFor`): the read builder now always emits the complete frozen "
+                    "`artifact_ref` and refuses a read without a digest."
                 ),
             },
             {
                 "id": "F4-availability-vocabulary",
                 "owner": "B",
-                "status": "open",
+                "status": "closed_by_m3_01b",
                 "detail": (
                     "Prepare operations report availability `ready`, while the C experience "
-                    "contract freezes `unprepared|preparing|readable|failed`. A consumer that "
-                    "trusts the C vocabulary sees no valid state for a successful prepare."
+                    "contract freezes `unprepared|preparing|readable|failed`. M3-01b pins the "
+                    "explicit mapping in the bridge (`AVAILABILITY_MAP`: absent→unprepared, "
+                    "preparing→preparing, ready→readable, unavailable→failed) and refuses an "
+                    "unknown state with `availability_unknown` instead of inventing a fifth one."
                 ),
             },
             {
                 "id": "F5-submit-response-redaction",
                 "owner": "B",
-                "status": "observation",
+                "status": "closed_by_m3_01b",
                 "detail": (
-                    "The MCP machine envelope redacts project_id/approval_ref/reservation ids as "
-                    "'<redacted>'. The TaskRef survives, but a client cannot reconstruct the full "
-                    "submit binding from the response alone."
+                    "The MCP machine envelope redacted project_id/approval_ref/reservation ids "
+                    "as '<redacted>'. M3-01b carries the binding through the digest-bound TaskRef: "
+                    "`attributedSubmitBinding` takes the project from the TaskRef and the "
+                    "research/round/approval reference from the caller's own records, so a "
+                    "redacted response body cannot break attribution. The server-side net also "
+                    "keeps published identifiers (see machine_output redaction tests)."
                 ),
             },
             {
@@ -1810,8 +1823,10 @@ class Slice:
             "the orchestrator; it is not yet a platform call made by the supervisor itself "
             "(M3-04).",
             "Remote/LSF evidence reads are not wired in this slice (local work dir only).",
-            "The bridge's model-facing projection currently refuses capabilities and prepare "
-            "envelopes (F2/F3); M3-01b must resolve the guard/field contract.",
+            "F2/F3/F4/F5 are closed by M3-01b (restoration step, frozen artifact_ref builder, "
+            "availability mapping, TaskRef-carried attribution); the remaining declared boundary "
+            "is F6 (the synthetic legacy workflow answers a TaskRef without a release, completed "
+            "from the declared local release identity).",
         ]
         if self.status != "PASS":
             risks.append("The slice did not pass every step: " + "; ".join(self.reasons[:5]))

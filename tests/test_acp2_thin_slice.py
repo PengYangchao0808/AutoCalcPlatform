@@ -480,6 +480,42 @@ def test_thin_slice_script_passes_end_to_end(tmp_path: Path) -> None:
     assert completed.returncode == 0
     assert summary["mcp"]["protocol_version"] == "2025-06-18"
     assert len(summary["mcp"]["tools"]) == 8
+    # M3-01b: the discovery/prepare/read/evidence surface runs through the real
+    # bridge (not the raw transport) and the submit reference is normalized by
+    # the single ADR-003 normalizer after a real status reconciliation.
+    steps = set(summary["mcp"]["steps"])
+    for required in (
+        "mcp.capabilities_handshake",
+        "bridge.discover",
+        "bridge.submit",
+        "bridge.task_ref_reconcile",
+        "bridge.submit_replay",
+        "bridge.cross_operation_key",
+        "bridge.submit_concurrent",
+        "bridge.prepare_artifact",
+        "bridge.operation_status",
+        "bridge.read_artifact",
+        "bridge.read_wrong_target",
+        "bridge.evidence_read",
+    ):
+        assert required in steps, (required, sorted(steps))
+    trace_text = (out / "mcp-runner" / "mcp-trace.jsonl").read_text(encoding="utf-8")
+    contract_trace = [json.loads(line) for line in trace_text.splitlines() if line.strip()]
+    by_step = {item["step"]: item for item in contract_trace}
+    assert by_step["mcp.capabilities_handshake"]["response"]["status"] == "negotiated"
+    assert by_step["bridge.discover"]["response"]["isError"] is False
+    # F4: the platform "ready" is the experience "readable".
+    assert by_step["bridge.prepare_artifact"]["response"]["availability"] == "unprepared"
+    assert by_step["bridge.operation_status"]["response"]["availability"] == "readable"
+    assert by_step["bridge.read_artifact"]["response"]["digest"].startswith("sha256:")
+    assert (
+        by_step["bridge.read_wrong_target"]["response"]["error"]["params"]["rule"]
+        == "attempt_ownership_mismatch"
+    )
+    assert (
+        by_step["bridge.evidence_read"]["response"]["error"]["code"]
+        == "evidence_read_is_not_analysis"
+    )
     negatives = json.loads((out / "negative-cases.json").read_text(encoding="utf-8"))
     assert {item["name"] for item in negatives} == {
         "negative.stale_revision",
@@ -496,6 +532,15 @@ def test_thin_slice_script_passes_end_to_end(tmp_path: Path) -> None:
     assert contracts["claims"]["real_science"] is False
     assert contracts["claims"]["real_controller"] is True
     go_no_go = json.loads((out / "go-no-go-inputs.json").read_text(encoding="utf-8"))
+    findings = {item["id"]: item["status"] for item in go_no_go["contracts"]["rework_required"]}
+    for closed in (
+        "F2-bridge-redaction-blocks-discovery",
+        "F3-prepare-read-field-rename",
+        "F4-availability-vocabulary",
+        "F5-submit-response-redaction",
+    ):
+        assert findings[closed] == "closed_by_m3_01b", (closed, findings[closed])
+    assert findings["F6-legacy-job-has-no-release"] == "declared_boundary"
     assert go_no_go["decision"] == "NOT_TAKEN_HERE"
     assert go_no_go["quota"]["model_calls"] == 0
     assert go_no_go["plan_graph"]["start_critical_after_m1_06"]

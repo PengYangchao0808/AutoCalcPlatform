@@ -239,6 +239,49 @@ def test_redaction_keeps_lowercase_hex_identity() -> None:
     assert mo.redact(identity) == identity
 
 
+# M3-01b (F5): the published platform identifiers must survive so RPH can
+# attribute a submit.  The net keeps its named namespaces; a random opaque run
+# is still redacted.
+_PROJECT_ID = "6f1c2a9e-4b3d-4f80-9a11-2c7d5e8b0f42"
+_APPROVAL_REF = "ap_" + "d" * 32
+_RESERVATION_ID = "rsv_" + "e" * 32
+_SESSION_ID = "session_" + "f" * 32
+
+
+def test_redaction_keeps_published_platform_identifiers() -> None:
+    for identifier in (_PROJECT_ID, _APPROVAL_REF, _RESERVATION_ID, _SESSION_ID):
+        assert mo.redact(identifier) == identifier, identifier
+        assert mo.redact(f"project {identifier} approved") == f"project {identifier} approved"
+
+
+def test_redaction_keeps_identifiers_inside_a_result_payload() -> None:
+    payload = {
+        "project_id": _PROJECT_ID,
+        "approval_ref": _APPROVAL_REF,
+        "reservation_id": _RESERVATION_ID,
+        "task_ref": {"task_id": "20261027_001_fake", "attempt": 1},
+    }
+    cleaned = mo.redact_value(payload)
+    assert cleaned == payload
+    serialized = json.dumps(cleaned)
+    assert "<redacted" not in serialized
+
+
+def test_redaction_still_hides_random_opaque_runs() -> None:
+    secret = "Zx9Qv2LmN8pR4sT6uW0yB3cD5eF7gH1j"
+    cleaned = mo.redact(f"value {secret}")
+    assert secret not in cleaned
+    assert mo.REDACTED_SECRET in cleaned
+
+
+def test_redaction_keeps_the_credential_path_intact() -> None:
+    # A real credential is still caught by the assignment/bearer nets even when
+    # it sits next to a preserved identifier.
+    cleaned = mo.redact(f"project {_PROJECT_ID} token=abcDEF123456")
+    assert _PROJECT_ID in cleaned
+    assert "abcDEF123456" not in cleaned
+
+
 def test_error_object_redacts_message_and_params() -> None:
     obj = mo.error_object(
         mo.ErrorCode.INPUT_INVALID,

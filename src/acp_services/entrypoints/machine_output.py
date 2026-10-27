@@ -361,6 +361,21 @@ _WIRE_IDENTIFIER_RE = re.compile(
 #: on the typed rule.  Deliberately narrow: lowercase ASCII words plus ``_`` and
 #: no digits (a random secret is not a dictionary-looking snake phrase).
 _RULE_IDENTIFIER_RE = re.compile(r"^[a-z]+(?:_[a-z]+){0,7}$")
+#: Published *platform* identifiers (M3-01b, F5).  A project id is a canonical
+#: UUID, an approval/reservation/record reference is a namespaced token
+#: (``ap_<hex>``, ``rsv_<hex>``, ``proj_``, ...).  The RPH attribution and the
+#: Workbench need them verbatim: rewriting them to ``<redacted>`` broke the
+#: submit binding (the TaskRef survived but the surrounding record did not).
+#: Same rule as ``_WIRE_IDENTIFIER_RE``: a short, *named* published namespace —
+#: never a general entropy exemption.
+_PUBLIC_IDENTIFIER_RE = re.compile(
+    r"^(?:"
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|(?:ap|rsv|res|proj|project|proposal|prop|approval|reservation|research|"
+    r"session|principal|account|workspace|record|release|rel|attempt|epoch|"
+    r"idc|key)_[A-Za-z0-9_]+"
+    r")$"
+)
 
 
 def _redact_secrets(text: str) -> str:
@@ -373,7 +388,9 @@ def _redact_secrets(text: str) -> str:
     value = _OPAQUE_RE.sub(
         lambda m: (
             m.group(0)
-            if _WIRE_IDENTIFIER_RE.match(m.group(0)) or _RULE_IDENTIFIER_RE.match(m.group(0))
+            if _WIRE_IDENTIFIER_RE.match(m.group(0))
+            or _RULE_IDENTIFIER_RE.match(m.group(0))
+            or _PUBLIC_IDENTIFIER_RE.match(m.group(0))
             else REDACTED_SECRET
         ),
         value,

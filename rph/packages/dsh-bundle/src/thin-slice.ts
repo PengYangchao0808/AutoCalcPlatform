@@ -8,11 +8,19 @@
  * the stdio adapter.
  *
  * Scope of this runner (M3-01a, extended by M3-01b/M3-04):
- *   - initialize + tools/list (protocol/allowlist);
- *   - one bridge submit with the approved research binding (double digest),
- *     then the same submit again to prove the M1-02 ledger key + M0-05 raw-key
- *     replay return the same TaskRef;
- *   - status, prepare and read of the small `input_preview` artifact;
+ *   - initialize + tools/list (protocol/allowlist) and the **real** application
+ *     handshake through the public session adapter (`openMcpSession`), which
+ *     binds the bridge to the server's negotiated extension set;
+ *   - discovery through the bridge (F2 restoration), then one bridge submit with
+ *     the approved research binding (double digest) and its TaskRef reconciled
+ *     through `status` (ADR-003; no defaulted attempt/release);
+ *   - the same submit again from a second Bridge instance (cross-instance
+ *     replay), a cross-operation key that must not replay, and two concurrent
+ *     submits that must resolve to one task;
+ *   - prepare → operation status → read of the small `input_preview` artifact
+ *     through the bridge (F3/F4: frozen `artifact_ref`, `ready`→`readable`), a
+ *     wrong-attempt read refusal, and the "an evidence read is not an analysis"
+ *     refusal;
  *   - an injected-test-skills supervisor leg whose submit port calls the *same*
  *     bridge with the *same* intent identity: the platform replays the TaskRef,
  *     so the supervisor cannot create a second task, and malicious model text
@@ -22,7 +30,17 @@
  * process seam and the bridge is the only platform seam.
  */
 
-import { Bridge, type BridgeRequest, type BridgeResult } from "@rph/bridge";
+import {
+  Bridge,
+  applyArtifactStatus,
+  preparedArtifactView,
+  readRequestFor,
+  type ArtifactRefView,
+  type BridgeRequest,
+  type BridgeResult,
+  type TaskRef,
+  reconcileTaskRef,
+} from "@rph/bridge";
 import {
   type PlanBudget,
   type ScienceSeed,
@@ -35,7 +53,9 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { launchMcpStdio, type McpLaunchConfig } from "./mcp-stdio-launch.js";
-import { platformClientFromMcp, type McpToolCallResult } from "./mcp-stdio.js";
+import { platformClientFromMcp } from "./mcp-stdio.js";
+import type { ResultRestorationReport } from "./platform-result.js";
+import { openMcpSession, type PlatformSession } from "./platform-session.js";
 
 export const THIN_SLICE_SCHEMA = "acp2.m1-06.thin-slice.runner.v1";
 
@@ -73,6 +93,18 @@ export interface ThinSliceConfig {
   readonly submit: ThinSliceSubmitConfig;
   readonly launch: McpLaunchConfig;
   readonly evidence_report_bytes?: string;
+  /**
+   * Release identity the orchestrator really built (`local_release_identity`).
+   *
+   * M3-01b: the synthetic legacy workflow answers a TaskRef without a release
+   * (F6 declared boundary), so the client reconciles the incomplete reference
+   * with this **declared** fact after a `status` query — never with `pending`
+   * and never with an empty digest.  Omitted means "do not complete it".
+   */
+  readonly task_ref_release?: {
+    readonly release_id: string;
+    readonly release_digest: string;
+  };
 }
 
 export interface ThinSliceRunnerResult {
@@ -82,6 +114,9 @@ export interface ThinSliceRunnerResult {
   readonly tools: readonly string[];
   readonly protocol_version: string;
   readonly task_ref: Readonly<Record<string, unknown>> | null;
+  /** The full ADR-003 TaskRef (submit answer, or `status` reconciliation). */
+  readonly task_ref_normalized: TaskRef | null;
+  readonly task_ref_source: string;
   readonly supervisor: Readonly<Record<string, unknown>> | null;
   readonly errors: readonly string[];
   readonly trace_path: string;
@@ -136,6 +171,7 @@ class Trace {
 function submitRequest(
   config: ThinSliceConfig,
   idempotencyKey?: string,
+  planDigest?: string,
 ): BridgeRequest {
   return {
     operation: "submit",
@@ -147,7 +183,7 @@ function submitRequest(
     budget: config.submit.budget,
     research: config.research.research_id,
     round: config.research.round,
-    planDigest: config.digests.plan_digest,
+    planDigest: planDigest ?? config.digests.plan_digest,
     proposalRef: config.proposal_ref,
     proposalDigest: config.digests.proposal_digest,
     ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
@@ -155,6 +191,9 @@ function submitRequest(
 }
 
 function taskRefOf(result: BridgeResult): Readonly<Record<string, unknown>> {
+  if (result.taskRef !== null) {
+    return result.taskRef as unknown as Readonly<Record<string, unknown>>;
+  }
   const data = result.structuredContent["data"];
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     throw new Error(
@@ -169,6 +208,51 @@ function taskRefOf(result: BridgeResult): Readonly<Record<string, unknown>> {
     return reference as Readonly<Record<string, unknown>>;
   }
   return requireRecord(payload["reference"], "acp_submit reference");
+}
+
+/**
+ * Complete one submit reference through `status` (+ a declared release).
+ *
+ * M3-01b: a submit answer is authoritative but not always complete (the
+ * synthetic legacy workflow has no release, F6).  The reference is then
+ * reconciled against `acp_status`; a release is only added when the orchestrator
+ * *declared* the real local release identity, never as `pending`/empty.  An
+ * unreconciled reference stays `null` and is recorded as such.
+ */
+async function reconciledTaskRef(
+  bridge: Bridge,
+  config: ThinSliceConfig,
+  result: BridgeResult,
+): Promise<{
+  readonly taskRef: TaskRef | null;
+  readonly source: string;
+  readonly missing: readonly string[];
+}> {
+  if (result.taskRef !== null) {
+    return { taskRef: result.taskRef, source: "submit", missing: [] };
+  }
+  const raw = taskRefOf(result);
+  const taskId = String(raw["task_id"] ?? raw["job_id"] ?? "");
+  if (taskId.length === 0) {
+    return { taskRef: null, source: "unreconciled", missing: ["task_id"] };
+  }
+  const status = await bridge.execute({
+    operation: "status",
+    task: taskId,
+    attempt: Number(raw["attempt"] ?? 1),
+  });
+  const reconciled = reconcileTaskRef(status, {
+    projectId: config.project_id,
+    taskId,
+    ...(config.task_ref_release === undefined
+      ? {}
+      : { release: config.task_ref_release }),
+  });
+  return {
+    taskRef: reconciled.taskRef,
+    source: reconciled.taskRef === null ? "unreconciled" : "status+declared_release",
+    missing: reconciled.missing,
+  };
 }
 
 /**
@@ -212,20 +296,28 @@ async function runSupervisorLeg(
     async submit() {
       submitCalls += 1;
       const result = await bridge.execute(submitRequest(config));
-      const ref = taskRefOf(result);
-      const taskId = String(ref["task_id"] ?? ref["job_id"] ?? "");
-      submitted.push(taskId);
+      const reconciled = await reconciledTaskRef(bridge, config, result);
+      const ref: TaskRef | null = reconciled.taskRef;
+      const taskId = ref === null ? "" : ref.task_id;
+      if (ref !== null) {
+        submitted.push(taskId);
+      }
       return {
-        ok: !result.isError,
-        task_ref: result.isError
-          ? null
-          : {
-              job_id: taskId,
-              attempt: Number(ref["attempt"] ?? 1),
-              release_id: String(ref["release_id"] ?? "pending"),
-              project_id: config.project_id,
-            },
-        reason: result.isError ? "submit_error" : "ok",
+        ok: !result.isError && ref !== null,
+        task_ref:
+          result.isError || ref === null
+            ? null
+            : {
+                job_id: ref.task_id,
+                attempt: ref.attempt,
+                release_id: ref.release.release_id,
+                project_id: ref.project_id,
+              },
+        reason: result.isError
+          ? "submit_error"
+          : ref === null
+            ? "task_ref_incomplete"
+            : "ok",
       };
     },
     async wait() {
@@ -318,8 +410,8 @@ function testSkills(): SupervisorSkills {
       };
     },
     async plan(input) {
-      const { runPlanner } = await import("../skills/planner.js");
-      const output = await runPlanner(input);
+      const { runFixturePlanner } = await import("../skills/fixture-planner.js");
+      const output = await runFixturePlanner(input);
       return { ...output, notes: [PROMPT_INJECTION_TEXT, ...output.notes] };
     },
   };
@@ -341,19 +433,34 @@ export async function runThinSlice(
   const tools: string[] = [];
   let protocolVersion = "";
   let taskRef: Readonly<Record<string, unknown>> | null = null;
+  let taskRefNormalized: TaskRef | null = null;
+  let taskRefSource = "none";
   let supervisor: Readonly<Record<string, unknown>> | null = null;
   const launched = launchMcpStdio(config.launch);
+  // M3-01b: the session adapter (initialize + `tools/call:acp_capabilities`
+  // handshake + real `tools/list`) binds the bridge to the server's *negotiated*
+  // extension set.  `acceptance` mode keeps a P1-only server usable and still
+  // records the real answer; nothing here injects an extension.
+  let session: PlatformSession | null = null;
+  const restoration: ResultRestorationReport[] = [];
   // The bridge owns the M1-02 submit-intent ledger (its default in-memory store
   // is the real `SubmitIntentLedger`; a durable store is injected by the CLI in
   // M3-02).  This runner never derives a key itself.
-  const bridge = new Bridge(platformClientFromMcp(launched.client), {
-    negotiatedExtensions: [],
-  });
+  let bridge: Bridge = new Bridge(
+    platformClientFromMcp(launched.client, {
+      onRestore: (report) => restoration.push(report),
+    }),
+  );
 
   const recordError = (step: string, error: unknown): void => {
     const message = error instanceof Error ? error.message : String(error);
-    errors.push(`${step}: ${message}`);
-    trace.record(step, { status: "error", error: message });
+    const contract = (error as { error?: unknown }).error;
+    errors.push(`${step}: ${message}${contract === undefined ? "" : ` ${JSON.stringify(contract)}`}`);
+    trace.record(step, {
+      status: "error",
+      error: message,
+      ...(contract === undefined ? {} : { contract }),
+    });
   };
 
   try {
@@ -390,41 +497,75 @@ export async function runThinSlice(
     }
 
     try {
-      // The extension handshake rides `tools/call:acp_capabilities` (M0-09), so
-      // it is read from the raw MCP result, not from the bridge's model-facing
-      // projection (which also redacts absolute server paths).
-      const capabilities = await launched.client.callTool("acp_capabilities", {
-        research_extension: { id: "acp.research.v1", version: "1.0.0" },
-        project_id: config.project_id,
+      // The extension handshake rides `tools/call:acp_capabilities` (M0-09).
+      // M3-01b: it is performed by the public session adapter, which injects the
+      // real `tools/list` and binds the bridge to the server's negotiated set.
+      session = await openMcpSession(launched.client, {
+        mode: "acceptance",
+        projectId: config.project_id,
         client: { name: "rph-thin-slice", version: "0.0.0" },
+        onRestore: (report) => restoration.push(report),
       });
-      const payload = capabilities.structuredContent;
-      const data = (payload["data"] ?? null) as Record<string, unknown> | null;
+      bridge = session.bridge;
+      // A negotiated session advertises the ten research tools too; the first
+      // list above is the pre-negotiation P1 surface.
+      const listed = await launched.client.listTools();
       trace.record("mcp.capabilities_handshake", {
         request: {
           tool: "acp_capabilities",
           research_extension: { id: "acp.research.v1", version: "1.0.0" },
+          carrier: "tools/call",
         },
         response: {
-          isError: capabilities.isError,
-          status: payload["status"] ?? null,
-          error: payload["error"] ?? null,
-          extensions: data?.["extensions"] ?? null,
-          tools: data?.["tools"] ?? null,
+          status: session.handshake.status,
+          negotiated: session.researchEnabled,
+          negotiated_extensions: session.negotiatedExtensions,
+          refusal: session.handshake.refusal,
+          advertised: session.handshake.advertised.map((entry) => ({
+            id: entry.id,
+            version: entry.version,
+            implemented: entry.implemented,
+            negotiated: entry.negotiated,
+          })),
+          tools_after_handshake: listed.map((tool) => tool.name).sort(),
         },
-        digest: digestOf(payload),
+        digest: digestOf({
+          status: session.handshake.status,
+          negotiated: session.negotiatedExtensions,
+          tools: listed.map((tool) => tool.name),
+        }),
       });
+      if (session.handshake.status === "absent") {
+        errors.push("mcp.capabilities_handshake: the server advertises no research extension");
+      }
     } catch (error) {
       recordError("mcp.capabilities_handshake", error);
     }
 
     try {
+      // F2: the discovery payload survives the bridge's strict redaction guard
+      // because the platform client restores the two things the guard cannot
+      // distinguish from a leak (the inert audit member and host paths).
       const capabilities = await bridge.execute({ operation: "discover" });
+      const data = (capabilities.structuredContent["data"] ?? null) as Record<
+        string,
+        unknown
+      > | null;
       trace.record("bridge.discover", {
         request: { operation: "discover" },
-        response: { isError: capabilities.isError, digest: digestOf(capabilities.structuredContent) },
+        response: {
+          isError: capabilities.isError,
+          tool: capabilities.tool,
+          outcome: capabilities.projection.outcome,
+          extensions: data?.["extensions"] ?? null,
+          tools: data?.["tools"] ?? null,
+          restorations: restoration.length,
+        },
         digest: digestOf(capabilities.structuredContent),
       });
+      if (capabilities.isError) {
+        errors.push("bridge.discover: the bridge refused the discovery projection");
+      }
     } catch (error) {
       // A refusal is a real result of the model-facing guard, not a failure of
       // the slice: record the typed rule instead of aborting the chain.
@@ -477,6 +618,40 @@ export async function runThinSlice(
       recordError("bridge.submit", error);
     }
 
+    // M3-01b: an incomplete submit reference is reconciled through `status`
+    // (plus a *declared* release when the legacy path carries none), never
+    // defaulted.  `taskRef` keeps the raw reference so the remaining steps can
+    // still address the job, while `taskRefNormalized` is the honest TaskRef.
+    if (submit !== null) {
+      try {
+        const reconciled = await reconciledTaskRef(bridge, config, submit);
+        taskRefNormalized = reconciled.taskRef;
+        taskRefSource = reconciled.source;
+        trace.record("bridge.task_ref_reconcile", {
+          request: { operation: "status", task: taskRef === null ? null : taskRef },
+          response: {
+            task_ref: reconciled.taskRef,
+            source: reconciled.source,
+            missing: reconciled.missing,
+            declared_release: config.task_ref_release ?? null,
+          },
+          digest: digestOf({
+            task_ref: reconciled.taskRef,
+            source: reconciled.source,
+          }),
+        });
+        if (reconciled.taskRef === null) {
+          errors.push(
+            "bridge.task_ref_reconcile: the reference stayed incomplete (" +
+              reconciled.missing.join(", ") +
+              ")",
+          );
+        }
+      } catch (error) {
+        recordError("bridge.task_ref_reconcile", error);
+      }
+    }
+
     try {
       // A second Bridge instance with its own intent store: the M1-02 key is
       // derived deterministically from the same research round/plan, so this is
@@ -508,7 +683,84 @@ export async function runThinSlice(
       recordError("bridge.submit_replay", error);
     }
 
-    let preparedCall: McpToolCallResult | null = null;
+    // -- G21: cross-operation key isolation ----------------------------------
+    //
+    // The raw key is a platform-wide namespace, so one caller key used for a
+    // preflight and then a submit must reach *both* operations.  Before M3-01b
+    // the bridge cached results by key alone and a submit could "replay" a
+    // preflight envelope; the cache is now scoped by operation.
+    try {
+      const crossKey = "m301.cross-op.0001";
+      const preflight = await bridge.execute({
+        operation: "validate",
+        project: config.project_id,
+        workflow: config.submit.workflow,
+        input: config.submit.input,
+        method: config.submit.method,
+        resources: config.submit.resources,
+        budget: config.submit.budget,
+        idempotencyKey: crossKey,
+      });
+      const crossed = await bridge.execute(
+        submitRequest(config, crossKey, "sha256:" + "d".repeat(64)),
+      );
+      trace.record("bridge.cross_operation_key", {
+        request: { idempotency_key: crossKey, operations: ["validate", "submit"] },
+        response: {
+          preflight_tool: preflight.tool,
+          preflight_is_error: preflight.isError,
+          submit_tool: crossed.tool,
+          submit_is_error: crossed.isError,
+          submit_error: crossed.structuredContent["error"] ?? null,
+          replayed_a_preflight: crossed.tool !== "acp_submit",
+        },
+        digest: digestOf({
+          preflight: preflight.projection,
+          submit: crossed.projection,
+        }),
+      });
+      if (crossed.tool !== "acp_submit") {
+        errors.push("bridge.cross_operation_key: the submit replayed the preflight result");
+      }
+    } catch (error) {
+      recordError("bridge.cross_operation_key", error);
+    }
+
+    // -- G21: concurrent identical submits (two instances, one intent) --------
+    if (taskRef !== null) {
+      try {
+        const concurrent = await Promise.all([
+          new Bridge(platformClientFromMcp(launched.client)).execute(submitRequest(config)),
+          new Bridge(platformClientFromMcp(launched.client)).execute(submitRequest(config)),
+        ]);
+        // The raw reference is compared: the platform answer carries no release
+        // on the synthetic legacy path, so the normalization is a separate fact.
+        const ids = concurrent.map((result) => {
+          try {
+            return String(taskRefOf(result)["task_id"] ?? "");
+          } catch {
+            return "";
+          }
+        });
+        const sameTask = ids.every((id) => id.length > 0 && id === ids[0]);
+        trace.record("bridge.submit_concurrent", {
+          request: { operation: "submit", concurrent_instances: concurrent.length },
+          response: {
+            task_ids: ids,
+            same_task_ref: sameTask,
+            all_error: concurrent.every((result) => result.isError),
+          },
+          digest: digestOf(ids),
+        });
+        if (!sameTask) {
+          errors.push("bridge.submit_concurrent: concurrent retries returned different tasks");
+        }
+      } catch (error) {
+        recordError("bridge.submit_concurrent", error);
+      }
+    }
+
+    let artifactView: ArtifactRefView | null = null;
     if (taskRef !== null) {
       const taskId = String(taskRef["task_id"] ?? taskRef["job_id"] ?? "");
       const attempt = Number(taskRef["attempt"] ?? 1);
@@ -526,6 +778,7 @@ export async function runThinSlice(
               (status.structuredContent["data"] as Record<string, unknown> | undefined)?.[
                 "status"
               ] ?? null,
+            task_ref_reconciliation: status.taskRefReconciliation,
           },
           digest: digestOf(status.structuredContent),
         });
@@ -558,121 +811,183 @@ export async function runThinSlice(
         digest: digestOf({ status: terminalStatus }),
       });
 
-      // Prepare/read run on the real eight-tool surface.  The *bridge's*
-      // model-facing projection refuses the inert `authorization` member of the
-      // prepare envelope (recorded above as a typed rule), so these two calls
-      // are made through the raw MCP client; nothing is bypassed silently.
+      // M3-01b (F2/F3/F4): prepare and read run **through the bridge** on the
+      // frozen M1-01 argument tables.  The prepare response names the body
+      // `resource_id` with no digest; `preparedArtifactView` is the one client
+      // mapping, the operation poll fills the digest in, and the platform's
+      // `ready` is mapped to the experience `readable`.
       try {
-        preparedCall = await launched.client.callTool("acp_prepare_artifact", {
-          purpose: "artifact",
-          job_id: taskId,
+        const prepared = await bridge.execute({
+          operation: "prepare",
+          project: config.project_id,
+          task: taskId,
           attempt,
-          artifact_id: "input_preview",
-          relative_path: "RESULT/input_preview.xyz",
-          idempotency_key: `m106-slice-prepare-${taskId}`,
+          resource: "input_preview",
+          generation: 1,
+          relativePath: "RESULT/input_preview.xyz",
+          idempotencyKey: `m301-slice-prepare-${taskId}`,
         });
-        trace.record("mcp.prepare_artifact", {
+        artifactView = preparedArtifactView(prepared, {
+          task: taskId,
+          attempt,
+          resource: "input_preview",
+        });
+        trace.record("bridge.prepare_artifact", {
           request: {
-            tool: "acp_prepare_artifact",
+            operation: "prepare",
             job_id: taskId,
             attempt,
             artifact_id: "input_preview",
+            generation: 1,
             relative_path: "RESULT/input_preview.xyz",
           },
           response: {
-            isError: preparedCall.isError,
-            status: preparedCall.structuredContent["status"] ?? null,
-            state: (preparedCall.structuredContent["data"] as Record<string, unknown> | null)
-              ?.state ?? null,
-            availability: (preparedCall.structuredContent["data"] as Record<string, unknown> | null)
-              ?.availability ?? null,
-            artifact_ref: (preparedCall.structuredContent["data"] as Record<string, unknown> | null)
-              ?.artifact_ref ?? null,
+            isError: prepared.isError,
+            tool: prepared.tool,
+            availability: artifactView?.availability ?? null,
+            operation_reference: artifactView?.operation_reference ?? null,
+            digest: artifactView?.digest ?? null,
+            error: prepared.isError ? prepared.structuredContent["error"] ?? null : null,
           },
-          digest: digestOf(preparedCall.structuredContent),
+          digest: digestOf(prepared.structuredContent),
         });
+        if (prepared.isError) {
+          errors.push("bridge.prepare_artifact: the platform refused the prepare");
+        }
       } catch (error) {
-        recordError("mcp.prepare_artifact", error);
+        recordError("bridge.prepare_artifact", error);
       }
 
-      const preparedData = (preparedCall?.structuredContent["data"] ?? null) as Record<
-        string,
-        unknown
-      > | null;
-      const preparedArtifact = (preparedData?.["artifact_ref"] ?? null) as Record<
-        string,
-        unknown
-      > | null;
-      const operationId = String(preparedData?.["operation_id"] ?? "");
-      // The prepare response names the body `resource_id` while the read
-      // contract requires `artifact_id`; that rename is a client mapping, and
-      // the digest only appears once the operation has produced the body, so the
-      // runner polls the operation before reading.
-      let artifactRef: Record<string, unknown> | null = null;
-      if (preparedArtifact !== null && operationId.length > 0) {
-        for (let poll = 0; poll < 20; poll += 1) {
-          const status = await launched.client.callTool("acp_status", {
-            reference: { kind: "operation", id: operationId },
+      const operationId = artifactView?.operation_reference?.id ?? "";
+      if (artifactView !== null && operationId.length > 0) {
+        try {
+          for (let poll = 0; poll < 20; poll += 1) {
+            const status = await bridge.execute({
+              operation: "status",
+              task: operationId,
+              attempt,
+              reference: { kind: "operation", id: operationId },
+            });
+            artifactView = applyArtifactStatus(artifactView, status);
+            if (
+              artifactView.availability === "readable" &&
+              artifactView.digest !== null
+            ) {
+              break;
+            }
+            if (artifactView.availability === "failed") {
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+          trace.record("bridge.operation_status", {
+            request: { operation: "status", reference: { kind: "operation", id: operationId } },
+            response: {
+              availability: artifactView.availability,
+              digest: artifactView.digest,
+              generation: artifactView.generation,
+            },
+            digest: digestOf({
+              availability: artifactView.availability,
+              digest: artifactView.digest,
+            }),
           });
-          const statusData = (status.structuredContent["data"] ?? null) as Record<
+        } catch (error) {
+          recordError("bridge.operation_status", error);
+        }
+      }
+
+      if (artifactView !== null && artifactView.availability === "readable") {
+        try {
+          const readRequest = readRequestFor(artifactView, {
+            project: config.project_id,
+            encoding: "identity",
+          });
+          const read = await bridge.execute(readRequest);
+          const readData = (read.structuredContent["data"] ?? null) as Record<
             string,
             unknown
           > | null;
-          const availability = String(statusData?.["availability"] ?? "");
-          const sha256 = String(statusData?.["sha256"] ?? "");
-          if ((availability === "readable" || availability === "ready") && sha256.length === 64) {
-            artifactRef = {
-              task_id: String(preparedArtifact["job_id"] ?? taskId),
-              attempt,
-              artifact_id: "input_preview",
-              generation: Number(
-                statusData?.["expected_revision"] ?? statusData?.["basis_revision"] ?? 1,
-              ),
-              digest: `sha256:${sha256}`,
-            };
-            break;
-          }
-          if (availability === "failed" || availability === "error") {
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
-      }
-      if (artifactRef !== null) {
-        let readCall = await launched.client.callTool("acp_read_artifact", {
-          artifact_ref: artifactRef,
-          encoding: "identity",
-        });
-        for (let attemptIndex = 0; attemptIndex < 10 && readCall.isError; attemptIndex += 1) {
-          const code = (readCall.structuredContent["error"] as Record<string, unknown> | null)?.[
-            "code"
-          ];
-          if (code !== "resource_not_ready") {
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          readCall = await launched.client.callTool("acp_read_artifact", {
-            artifact_ref: artifactRef,
-            encoding: "identity",
+          trace.record("bridge.read_artifact", {
+            request: {
+              operation: "read",
+              artifact_ref: {
+                task_id: artifactView.task_id,
+                attempt: artifactView.attempt,
+                artifact_id: artifactView.artifact_id,
+                generation: artifactView.generation,
+                digest: artifactView.digest,
+              },
+            },
+            response: {
+              isError: read.isError,
+              tool: read.tool,
+              digest: readData?.["digest"] ?? null,
+              body_bytes:
+                typeof readData?.["body"] === "string" ? readData["body"].length : null,
+              error: read.isError ? read.structuredContent["error"] ?? null : null,
+            },
+            digest: digestOf(read.structuredContent),
           });
+          if (read.isError) {
+            errors.push("bridge.read_artifact: the platform refused the read");
+          }
+
+          // G21: an error target (another attempt) is refused, never served by
+          // the nearest prepared artifact.
+          const wrongAttempt = (readRequest.attempt ?? artifactView.attempt) + 1;
+          try {
+            await bridge.execute({
+              ...readRequest,
+              attempt: wrongAttempt,
+            });
+            errors.push("bridge.read_wrong_target: a foreign attempt was read");
+          } catch (error) {
+            const contract = error as { error?: { code?: string; params?: unknown } };
+            trace.record("bridge.read_wrong_target", {
+              request: { operation: "read", attempt: wrongAttempt },
+              response: { status: "refused", error: contract.error ?? String(error) },
+              digest: digestOf(contract.error ?? String(error)),
+            });
+            if (contract.error?.code === undefined) {
+              recordError("bridge.read_wrong_target", error);
+            }
+          }
+        } catch (error) {
+          recordError("bridge.read_artifact", error);
         }
-        const readData = (readCall.structuredContent["data"] ?? null) as Record<string, unknown> | null;
-        trace.record("mcp.read_artifact", {
-          request: { tool: "acp_read_artifact", artifact_ref: artifactRef },
-          response: {
-            isError: readCall.isError,
-            availability: readData?.["availability"] ?? null,
-            digest: readData?.["digest"] ?? null,
-            body_bytes: typeof readData?.["body"] === "string" ? readData["body"].length : null,
-            error: readCall.isError ? readCall.structuredContent["error"] ?? null : null,
-          },
-          digest: digestOf(readCall.structuredContent),
-        });
       } else {
-        trace.record("mcp.read_artifact", {
-          request: { tool: "acp_read_artifact" },
-          response: { status: "skipped", reason: "prepare produced no artifact_ref" },
+        trace.record("bridge.read_artifact", {
+          request: { operation: "read" },
+          response: {
+            status: "skipped",
+            reason: "prepare produced no readable artifact view",
+            availability: artifactView?.availability ?? null,
+          },
         });
+      }
+
+      // M1-01: reading existing evidence is `read`; `evidence` is an explicit
+      // analysis.  A task-only `evidence` request is refused locally instead of
+      // silently starting computation.
+      try {
+        await bridge.execute({
+          operation: "evidence",
+          task: taskId,
+          attempt,
+          resource: "input_preview",
+        });
+        errors.push("bridge.evidence_read: an evidence read was accepted as an analysis");
+      } catch (error) {
+        const contract = error as { error?: { code?: string; params?: unknown } };
+        trace.record("bridge.evidence_read", {
+          request: { operation: "evidence", task: taskId, attempt },
+          response: { status: "refused", error: contract.error ?? String(error) },
+          digest: digestOf(contract.error ?? String(error)),
+        });
+        if (contract.error?.code === undefined) {
+          recordError("bridge.evidence_read", error);
+        }
       }
     }
 
@@ -693,6 +1008,8 @@ export async function runThinSlice(
     tools,
     protocol_version: protocolVersion,
     task_ref: taskRef,
+    task_ref_normalized: taskRefNormalized,
+    task_ref_source: taskRefSource,
     supervisor,
     errors,
     trace_path: trace.path,

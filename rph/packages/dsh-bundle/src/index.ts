@@ -13,6 +13,8 @@ import {
   type BridgeOperation,
 } from "@rph/bridge";
 
+import { withResultRestoration, type RestorationSink } from "./platform-result.js";
+
 /** Public DSH MCP client plugin package name (official interface). */
 export const DSH_MCP_CLIENT_PLUGIN = "@deepseek-ai/dsh-mcp-client";
 
@@ -100,6 +102,10 @@ export interface DshToolAdapterOptions {
    * (`mcp__acp__`). A profile with another `serverName` passes its own mapper.
    */
   readonly resolveToolName?: (raw: string) => string;
+  /** Apply the F2 result restoration (default `true`); `false` is test-only. */
+  readonly restore?: boolean;
+  /** Receives every restoration report (trace/acceptance). */
+  readonly onRestore?: RestorationSink;
 }
 
 const DEFAULT_CALL_ID_PREFIX = "rph-acp";
@@ -195,7 +201,7 @@ export function platformClientFromToolRuntime(
   const resolveToolName =
     options.resolveToolName ?? ((raw: string) => toModelToolName(raw));
   let sequence = 0;
-  return {
+  const transport: PlatformClient = {
     async callTool(rawName, params) {
       sequence += 1;
       const request: DshToolExecutionRequest = {
@@ -227,6 +233,9 @@ export function platformClientFromToolRuntime(
       return { isError: false, structuredContent: structured };
     },
   };
+  return options.restore === false
+    ? transport
+    : withResultRestoration(transport, options.onRestore);
 }
 
 // ---------------------------------------------------------------------------
@@ -240,3 +249,16 @@ export function platformClientFromToolRuntime(
 
 export * from "./mcp-stdio.js";
 export * from "./mcp-stdio-launch.js";
+
+// ---------------------------------------------------------------------------
+// M3-01b: result restoration (F2) and the public platform-session adapter
+// ---------------------------------------------------------------------------
+//
+// `platform-result.ts` is the one client-side restoration step between the
+// verbatim transport and the bridge's strict guard; `platform-session.ts` is
+// the only place that turns a real `initialize` + `tools/call` handshake +
+// `tools/list` into a bridge bound to the server's *negotiated* extension set
+// (product mode fails closed).
+
+export * from "./platform-result.js";
+export * from "./platform-session.js";

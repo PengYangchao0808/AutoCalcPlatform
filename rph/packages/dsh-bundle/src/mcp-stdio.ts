@@ -19,6 +19,11 @@
 
 import type { BridgeToolResult, PlatformClient } from "@rph/bridge";
 
+import {
+  withResultRestoration,
+  type RestorationSink,
+} from "./platform-result.js";
+
 /** Protocol version this client speaks (the ACP adapter's supported version). */
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const MCP_CLIENT_NAME = "rph-acp-bridge";
@@ -104,6 +109,8 @@ export class McpStdioClient {
   private initialized = false;
   private closed = false;
   private closeError: Error | null = null;
+  private negotiatedProtocolVersion: string | null = null;
+  private serverInformation: Readonly<Record<string, unknown>> | null = null;
 
   constructor(transport: McpTransport, options: { readonly timeoutMs?: number } = {}) {
     this.transport = transport;
@@ -122,6 +129,16 @@ export class McpStdioClient {
     return this.initialized;
   }
 
+  /** The protocol version the server answered (`null` before initialize). */
+  get protocolVersion(): string | null {
+    return this.negotiatedProtocolVersion;
+  }
+
+  /** The server's `initialize.serverInfo` (never derived from configuration). */
+  get serverInfo(): Readonly<Record<string, unknown>> | null {
+    return this.serverInformation;
+  }
+
   /** Run the standard handshake; returns the server's initialize result. */
   async initialize(
     params: Readonly<Record<string, unknown>> = {},
@@ -138,6 +155,9 @@ export class McpStdioClient {
     if (!isRecord(result)) {
       throw new McpClientError("invalid_initialize", "initialize did not return an object");
     }
+    const version = result["protocolVersion"];
+    this.negotiatedProtocolVersion = typeof version === "string" ? version : null;
+    this.serverInformation = isRecord(result["serverInfo"]) ? result["serverInfo"] : null;
     this.initialized = true;
     this.transport.send(
       JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }),
@@ -307,9 +327,22 @@ export class McpStdioClient {
  * (`code=backend_failure`, `params.rule=protocol_error`) instead of an
  * exception, so the bridge's typed refusal path still owns the decision.  A
  * tool `isError` result keeps the server's `structuredContent` untouched.
+ *
+ * M3-01b (F2): between the verbatim transport result and the bridge's strict
+ * redaction guard sits exactly one restoration step
+ * (`restorePlatformResult`): it drops the frozen inert audit member and
+ * replaces absolute host paths with `<host-path>`, so a legitimate
+ * capabilities/prepare projection survives while a credential still refuses.
+ * Pass `restore: false` only in a test that asserts the raw shape.
  */
-export function platformClientFromMcp(client: McpStdioClient): PlatformClient {
-  return {
+export function platformClientFromMcp(
+  client: McpStdioClient,
+  options: {
+    readonly restore?: boolean;
+    readonly onRestore?: RestorationSink;
+  } = {},
+): PlatformClient {
+  const transport: PlatformClient = {
     async callTool(
       rawName: string,
       params: Readonly<Record<string, unknown>>,
@@ -345,4 +378,7 @@ export function platformClientFromMcp(client: McpStdioClient): PlatformClient {
       return { isError: result.isError, structuredContent: structured };
     },
   };
+  return options.restore === false
+    ? transport
+    : withResultRestoration(transport, options.onRestore);
 }

@@ -25,6 +25,33 @@ cli -> dsh-bundle -> bridge -> research
 `research` never imports the platform store. `scripts/check-boundaries.mjs`
 enforces this and the execution/private-surface rules.
 
+## Platform client (M3-01b)
+
+`@rph/dsh-bundle` owns the **public adapter** that turns a real session into a
+bridge bound to the server's answer:
+
+```text
+initialize/host handshake -> real tools/list -> tools/call:acp_capabilities
+  -> handshake.negotiatedExtensions -> new Bridge(client, {negotiatedExtensions})
+```
+
+- `src/platform-session.ts`: `openMcpSession` / `openToolRuntimeSession` /
+  `buildPlatformSession`. `product` mode fails closed on a protocol mismatch,
+  an un-negotiated `acp.research.v1`, or a `tools/list` that does not cover the
+  promised P1+P2 surface; `acceptance` mode records the real answer and keeps
+  P2 locked. There is **no option** that can inject a negotiated extension.
+- `src/mcp-stdio.ts`: the injected-transport client (no process of its own);
+  `src/mcp-stdio-launch.ts` remains the only launcher (`acp mcp serve`).
+- `src/platform-result.ts`: one restoration step between the verbatim transport
+  result and the bridge's strict guard — it drops the frozen inert audit member
+  (`data.capability_request.authorization`) and withholds absolute host paths;
+  a real credential is never rewritten and is still refused by the bridge.
+- No `@modelcontextprotocol/client` runtime dependency is declared here: the
+  official SDK is owned by the DSH plugin (`@deepseek-ai/dsh-mcp-client`) that
+  provides `ctx.tools`, and by the injected stdio transport. Adding the SDK to
+  this package would create a second transport owner.
+
+
 ## Commands
 
 ```bash
