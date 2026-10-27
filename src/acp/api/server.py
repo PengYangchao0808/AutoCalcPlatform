@@ -343,6 +343,10 @@ def create_app(
     async def lifespan(app: FastAPI):
         from acp.scheduler.manager import JobManager
         from acp.services_analysis_bootstrap import build_analysis_registry
+        from acp.services_science_plugins_bootstrap import (
+            build_plugin_analysis_capabilities,
+            build_science_plugin_registry,
+        )
         from acp_services.runtime.local_admission import build_local_admission
         from acp_services.workspace.server_identity import (
             ServerIdentity,
@@ -383,9 +387,25 @@ def create_app(
             # command and the discovery projection read.  `vibration.analyze` is
             # executable over prepared artifacts; `vibration.compute` stays a
             # declared compute capability (a frequency task, not an analysis).
-            app.state.analysis_registry = build_analysis_registry(
-                prepare_operations=getattr(manager, "_prepare_operations", None),
+            # M2-05: enabled third-party pure-analysis plugins are registered
+            # into the *same* injected registry from the install/enablement
+            # facts, so a new process serves them without any manual register.
+            plugin_registry = build_science_plugin_registry(run_root=run_root_path)
+            # Fail closed before serving: a plugin that violates the contract
+            # (licence, version range, conflicting name/capability, unreadable
+            # payload) refuses startup instead of becoming silently discoverable.
+            plugin_registry.scan()
+            app.state.science_plugin_registry = plugin_registry
+            prepare_operations = getattr(manager, "_prepare_operations", None)
+            plugin_analysis = build_plugin_analysis_capabilities(
+                registry=plugin_registry,
+                prepare_operations=prepare_operations,
                 artifact_store_root=run_root_path / "artifact-store",
+            )
+            app.state.analysis_registry = build_analysis_registry(
+                prepare_operations=prepare_operations,
+                artifact_store_root=run_root_path / "artifact-store",
+                plugin_capabilities=plugin_analysis,
             )
             yield
         finally:

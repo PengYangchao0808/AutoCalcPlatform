@@ -353,7 +353,7 @@
       "status": "OPEN"
     }
   ],
-  "coverage_sha256": "d54e89bde74d378bd59ef72dff737e06d174c663dd3da90fb668c9dadb27e363",
+  "coverage_sha256": "a971579dc7bec7cec70664ce7ed331ab3db999864416260abaf15763cc6ce350",
   "digest_rules": {
     "coverage_sha256": "sha256 of canonical compact JSON (sort_keys=True, separators=(',', ':'), ensure_ascii=False) of this document with coverage_sha256 set to ''"
   },
@@ -956,7 +956,7 @@
       "handoff_version": 1,
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
       "release_ready": false,
-      "sha256": "aafe1dba70cc0fb10005eeec95468cc872405da4a24f75bd1e6fd33085867bb4"
+      "sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524"
     }
   },
   "h_rows": [
@@ -1115,7 +1115,7 @@
   "schema": "acp2.release.evidence-coverage.v1",
   "source": {
     "h7_handoff": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
-    "h7_handoff_sha256": "aafe1dba70cc0fb10005eeec95468cc872405da4a24f75bd1e6fd33085867bb4",
+    "h7_handoff_sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524",
     "h_index": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
     "plan": "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md",
     "plan_graph": "reports/acp2_delivery_gap_audit_20261026/plan-graph.json",

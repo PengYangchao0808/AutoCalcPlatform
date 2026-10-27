@@ -31,7 +31,7 @@ import json
 import logging
 import os
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,7 +65,9 @@ __all__ = [
     "CapabilityRegistry",
     "discover_view_model",
     "load_capability_schema",
+    "require_capability_authorization",
     "validate_descriptor_against_schema",
+    "write_read_only_snapshot",
 ]
 
 
@@ -989,36 +991,15 @@ class CapabilityRegistry:
         version: str,
         digest: str,
     ) -> None:
-        if authorization is None:
-            raise CapabilityAuthorizationError(
-                f"{action} for {capability_id}@{version} needs a server-side authorization fact",
-                code="capability_authorization_required",
-            )
-        if (
-            authorization.action != action
-            or authorization.capability_id != capability_id
-            or authorization.version != version
-            or authorization.descriptor_digest != digest
-        ):
-            raise CapabilityAuthorizationError(
-                "authorization fact does not match the requested capability action/identity",
-                code="capability_authorization_invalid",
-            )
-        if authorization.authorized_by not in self.authorized_principals:
-            raise CapabilityAuthorizationError(
-                f"principal {authorization.authorized_by!r} may not authorize capabilities",
-                code="capability_authorization_invalid",
-            )
-        if not authorization.issued_at:
-            raise CapabilityAuthorizationError(
-                "authorization fact has no issued_at",
-                code="capability_authorization_invalid",
-            )
-        if authorization.is_expired(self._now()):
-            raise CapabilityAuthorizationError(
-                f"authorization fact expired at {authorization.expires_at}",
-                code="capability_authorization_expired",
-            )
+        require_capability_authorization(
+            authorization,
+            action=action,
+            capability_id=capability_id,
+            version=version,
+            digest=digest,
+            authorized_principals=self.authorized_principals,
+            now=self._now(),
+        )
 
     def _load_state(self) -> None:
         if self.state_root is None or not self.state_root.is_dir():
@@ -1091,16 +1072,11 @@ class CapabilityRegistry:
         directory = self._artifact_dir(freeze)
         if directory is None:
             return
-        directory.mkdir(parents=True, exist_ok=True)
         record = freeze.registration
-        _atomic_write_json(directory / "descriptor.json", dict(record.descriptor))
-        _atomic_write_json(directory / "task-binding.json", dict(record.task_binding))
-        if self.view_model_path is not None and self.view_model_path.is_file():
-            view_document, _ = _read_json(self.view_model_path)
-            _atomic_write_json(directory / "view-model.json", view_document)
-        _atomic_write_json(
-            directory / "snapshot.json",
-            {
+        documents: dict[str, Mapping[str, Any]] = {
+            "descriptor": dict(record.descriptor),
+            "task-binding": dict(record.task_binding),
+            "snapshot": {
                 "schema": CAPABILITY_ARTIFACT_SCHEMA,
                 "task_id": freeze.task_id,
                 "attempt": freeze.attempt,
@@ -1116,7 +1092,87 @@ class CapabilityRegistry:
                 "purpose": freeze.purpose,
                 "read_only": True,
             },
+        }
+        if self.view_model_path is not None and self.view_model_path.is_file():
+            view_document, _ = _read_json(self.view_model_path)
+            documents["view-model"] = view_document
+        write_read_only_snapshot(directory, documents)
+
+
+def require_capability_authorization(
+    authorization: CapabilityAuthorization | None,
+    *,
+    action: str,
+    capability_id: str,
+    version: str,
+    digest: str,
+    authorized_principals: Iterable[str],
+    now: str,
+) -> None:
+    """Verify one server-side authorization fact against the requested action.
+
+    This is the single authorization predicate of the platform capability
+    authority: :class:`CapabilityRegistry` and the installed-plugin enablement
+    ledger both call it, so "who may authorize what, bound to which digest" has
+    exactly one implementation.
+
+    Raises:
+        CapabilityAuthorizationError: absent, mismatched, issued by an
+            unauthorized principal, undated or expired.
+    """
+    principals = frozenset(authorized_principals)
+    if authorization is None:
+        raise CapabilityAuthorizationError(
+            f"{action} for {capability_id}@{version} needs a server-side authorization fact",
+            code="capability_authorization_required",
         )
+    if (
+        authorization.action != action
+        or authorization.capability_id != capability_id
+        or authorization.version != version
+        or authorization.descriptor_digest != digest
+    ):
+        raise CapabilityAuthorizationError(
+            "authorization fact does not match the requested capability action/identity",
+            code="capability_authorization_invalid",
+        )
+    if authorization.authorized_by not in principals:
+        raise CapabilityAuthorizationError(
+            f"principal {authorization.authorized_by!r} may not authorize capabilities",
+            code="capability_authorization_invalid",
+        )
+    if not authorization.issued_at:
+        raise CapabilityAuthorizationError(
+            "authorization fact has no issued_at",
+            code="capability_authorization_invalid",
+        )
+    if authorization.is_expired(now):
+        raise CapabilityAuthorizationError(
+            f"authorization fact expired at {authorization.expires_at}",
+            code="capability_authorization_expired",
+        )
+
+
+def write_read_only_snapshot(
+    directory: str | Path,
+    documents: Mapping[str, Mapping[str, Any]],
+) -> Path:
+    """Write one read-only capability snapshot directory atomically.
+
+    ``documents`` maps a snapshot document name to its JSON document; each name
+    becomes ``<name>.json`` in *directory*.  This is the one snapshot writer
+    shared by the descriptor-based capability freeze and the installed-plugin
+    enablement ledger, so both historical records have the same layout rules
+    (atomic ``os.replace``, sorted keys, ``read_only``).
+
+    Returns:
+        The snapshot directory.
+    """
+    target = Path(directory)
+    target.mkdir(parents=True, exist_ok=True)
+    for name, document in documents.items():
+        _atomic_write_json(target / f"{name}.json", dict(document))
+    return target
 
 
 def _resolve_run_function(implementation_id: str, task_kind: str) -> Any:

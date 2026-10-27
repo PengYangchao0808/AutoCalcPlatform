@@ -9229,14 +9229,21 @@ def analyze_job(
         normalized = normalize_analyze(payload)
     except ApplicationParamError as exc:
         raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
-    if req.analysis_id not in ANALYSIS_CAPABILITY_IDS:
+    registry = science_catalog.analysis_registry(request.app.state)
+    # M2-05: the frozen table is the built-in surface; an enabled third-party
+    # capability is registered by the same composition root into the injected
+    # registry.  An id in neither place is the frozen ``unsupported_capability``
+    # refusal, with the full allowed set (built-in ids, then the registered ids).
+    if req.analysis_id not in ANALYSIS_CAPABILITY_IDS and (
+        registry is None or registry.get(req.analysis_id) is None
+    ):
+        allowed = [*ANALYSIS_CAPABILITY_IDS, *(registry.ids() if registry is not None else ())]
         raise _command_error(
             422,
             "unsupported_capability",
             f"unknown analysis capability {req.analysis_id!r}",
-            params={"field": "analysis_id", "allowed": list(ANALYSIS_CAPABILITY_IDS)},
+            params={"field": "analysis_id", "allowed": allowed},
         )
-    registry = science_catalog.analysis_registry(request.app.state)
     if registry is None:
         raise _command_error(
             503,
@@ -9300,7 +9307,8 @@ def analyze_job(
                 "expected": job_id,
             },
         )
-    from acp.services_analysis_bootstrap import VibrationAnalysisInputError
+    from acp.services_analysis_bootstrap import AnalysisInputError
+    from acp.services_science_plugins_bootstrap import PluginAnalysisInputError
 
     try:
         result = capability.handler(normalized)
@@ -9313,7 +9321,7 @@ def analyze_job(
         ) from exc
     except ArtifactError as exc:
         raise _artifact_error(exc) from exc
-    except VibrationAnalysisInputError as exc:
+    except (AnalysisInputError, PluginAnalysisInputError) as exc:
         raise _command_error(
             exc.http_status,
             "resource_not_ready" if exc.http_status == 409 else "input_invalid",

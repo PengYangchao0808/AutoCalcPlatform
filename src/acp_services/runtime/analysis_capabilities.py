@@ -155,30 +155,47 @@ def capability_projection(
     ``unsupported_capability``), a registered id without a handler is
     ``registered`` (declared, still refused), and only a handler makes it
     ``executable``.  The projection is read-only and starts nothing.
+
+    A registry may hold capabilities beyond the frozen built-in ids (M2-05: an
+    enabled third-party pure-analysis capability registered by the composition
+    root).  Those entries are projected with exactly the same six keys and the
+    same three states — the extra ids never change what a built-in id means.
     """
     table = registry if registry is not None else DEFAULT_ANALYSIS_REGISTRY
     entries: list[dict[str, Any]] = []
     for analysis_id in ANALYSIS_CAPABILITY_IDS:
         capability = table.get(analysis_id)
         if capability is None:
-            entries.append(
-                {
-                    "analysis_id": analysis_id,
-                    "state": "unavailable",
-                    "registered": False,
-                    "executable": False,
-                    "version": None,
-                    "owner": None,
-                }
-            )
+            entries.append(_unavailable_entry(analysis_id))
             continue
-        entry = {
-            "analysis_id": analysis_id,
-            "state": capability.state,
-            "registered": True,
-            "executable": capability.handler is not None,
-            "version": capability.version,
-            "owner": capability.owner,
-        }
-        entries.append(entry)
+        entries.append(_registered_entry(capability))
+    for analysis_id in table.ids():
+        if analysis_id in ANALYSIS_CAPABILITY_IDS:
+            continue
+        capability = table.get(analysis_id)
+        if capability is not None:
+            entries.append(_registered_entry(capability))
     return tuple(entries)
+
+
+def _unavailable_entry(analysis_id: str) -> dict[str, Any]:
+    return {
+        "analysis_id": analysis_id,
+        "state": "unavailable",
+        "registered": False,
+        "executable": False,
+        "version": None,
+        "owner": None,
+    }
+
+
+def _registered_entry(capability: AnalysisCapability) -> dict[str, Any]:
+    return {
+        "analysis_id": capability.analysis_id,
+        "state": capability.state,
+        "registered": True,
+        "executable": capability.handler is not None,
+        "version": capability.version,
+        "owner": capability.owner,
+    }
+

@@ -2381,6 +2381,56 @@ process never starts or owns a Controller, scheduler or jobs database.
         help="Hard per-frame JSON-RPC byte limit (default: 1048576, minimum 1024)",
     )
 
+    science_plugin_parser = subparsers.add_parser(
+        "science-plugin",
+        help="Inspect/enable/disable installed third-party science plugin capabilities",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp science-plugin list --run-root /data/acp-runs
+  acp science-plugin enable --capability my_capability --run-root /data/acp-runs
+
+The command is the authorised operator path for M2-05: it reads the installed
+fact from the cccp.science_plugins entry-point group, reads/writes the run
+root's enablement ledger (installed/enabled/enabled_by/enabled_at) and writes an
+explicit authorization fact bound to the computed descriptor digest. It never
+installs anything, imports no plugin module and starts no Controller/task.
+
+Trust allow-list (comma separated, environment):
+  ACP_SCIENCE_PLUGIN_TRUSTED_CAPABILITIES  capability ids
+  ACP_SCIENCE_PLUGIN_TRUSTED_PLUGINS       plugin names
+        """,
+    )
+    science_plugin_sub = science_plugin_parser.add_subparsers(dest="plugin_command", required=True)
+    plugin_list = science_plugin_sub.add_parser(
+        "list",
+        help="List installed plugins, persisted enablements and executables",
+    )
+    plugin_list.add_argument(
+        "--run-root", default=None, help="Data run root (default: ACP_RUN_ROOT)"
+    )
+    for name, help_text in (
+        ("enable", "Enable one installed pure-analysis capability (persisted)"),
+        ("disable", "Disable one enabled capability (frozen history stays readable)"),
+    ):
+        plugin_parser = science_plugin_sub.add_parser(name, help=help_text)
+        plugin_parser.add_argument(
+            "--capability",
+            required=True,
+            help="Declared capability id (e.g. vendor.example_native_singlepoint)",
+        )
+        plugin_parser.add_argument(
+            "--version", default=None, help="Plugin version (default: the installed one)"
+        )
+        plugin_parser.add_argument(
+            "--authorized-by",
+            default="controller",
+            help="Authorization principal recorded in the enablement fact (default: controller)",
+        )
+        plugin_parser.add_argument(
+            "--run-root", default=None, help="Data run root (default: ACP_RUN_ROOT)"
+        )
+
 
 def _configure_mcp_logging(level: str) -> None:
     logging.basicConfig(
@@ -2458,6 +2508,149 @@ def _dispatch_mcp(args: argparse.Namespace) -> int:
     if getattr(args, "mcp_command", None) == "serve":
         return _handle_mcp_serve(args)
     return _MCP_EXIT_USAGE
+
+
+def _handle_science_plugin(args: argparse.Namespace) -> int:
+    """List/enable/disable installed third-party science plugin capabilities (M2-05).
+
+    The command is the authorised operator path: it reads the installed fact
+    from the environment (the ``cccp.science_plugins`` entry-point group) and
+    the enabled fact from the run root's enablement ledger, and it writes an
+    explicit server-side authorization fact bound to the *computed* descriptor
+    digest.  It never installs anything, never imports a plugin module and
+    never starts a Controller, a task or a subprocess.
+    """
+    import json as _json
+
+    from acp.core.paths import resolve_run_root
+    from acp.services_science_plugins_bootstrap import (
+        build_science_plugin_registry,
+        describe_enablements,
+    )
+    from acp_services.runtime.capability_registry import (
+        CapabilityAuthorization,
+        CapabilityError,
+        require_capability_authorization,
+    )
+
+    run_root = resolve_run_root(getattr(args, "run_root", None))
+    registry = build_science_plugin_registry(run_root=run_root)
+    command = str(getattr(args, "plugin_command", "") or "")
+    payload: dict[str, Any] = {"command": command, "run_root": str(run_root)}
+
+    def _fail(error: Exception, code: str) -> int:
+        payload.update(
+            {
+                "status": "failed",
+                "error": getattr(error, "code", code),
+                "reason": str(error),
+            }
+        )
+        print(_json.dumps(payload, sort_keys=True, default=str))
+        return 1
+
+    try:
+        if command == "list":
+            installed = registry.scan()
+            payload.update(
+                {
+                    "status": "ok",
+                    "generation": registry.generation(),
+                    "installed": [record.to_metadata() for record in installed],
+                    "enablements": describe_enablements(registry.enablements()),
+                    "executable": [
+                        record.capability_id for record in registry.authorized_capabilities()
+                    ],
+                    "refusals": list(registry.refusals()),
+                }
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 0
+        capability_id = str(getattr(args, "capability", "") or "").strip()
+        version = getattr(args, "version", None)
+        if not capability_id:
+            payload.update(
+                {"status": "failed", "error": "usage", "reason": "--capability is required"}
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 2
+        authorized_by = str(getattr(args, "authorized_by", "controller") or "controller")
+        if command == "enable":
+            record = registry.installed_capability(capability_id, version)
+            authorization = CapabilityAuthorization(
+                action="capability.enable",
+                capability_id=record.capability_id,
+                version=record.version,
+                descriptor_digest=record.descriptor_digest,
+                authorized_by=authorized_by,
+                issued_at=_utc_now_iso(),
+            )
+            require_capability_authorization(
+                authorization,
+                action="capability.enable",
+                capability_id=record.capability_id,
+                version=record.version,
+                digest=record.descriptor_digest,
+                authorized_principals=registry.authorized_principals,
+                now=_utc_now_iso(),
+            )
+            enablement = registry.enable(
+                capability_id, authorization=authorization, version=version
+            )
+            payload.update(
+                {
+                    "status": "ok",
+                    "enabled": describe_enablements([enablement])[0],
+                    "generation": registry.generation(),
+                }
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 0
+        if command == "disable":
+            existing = registry.enablement(capability_id, version)
+            if existing is None:
+                payload.update(
+                    {
+                        "status": "failed",
+                        "error": "capability_not_enabled",
+                        "reason": f"{capability_id} is not enabled",
+                    }
+                )
+                print(_json.dumps(payload, sort_keys=True, default=str))
+                return 1
+            authorization = CapabilityAuthorization(
+                action="capability.disable",
+                capability_id=existing.capability_id,
+                version=existing.version,
+                descriptor_digest=existing.descriptor_digest,
+                authorized_by=authorized_by,
+                issued_at=_utc_now_iso(),
+            )
+            enablement = registry.disable(
+                capability_id, authorization=authorization, version=version
+            )
+            payload.update(
+                {
+                    "status": "ok",
+                    "disabled": describe_enablements([enablement])[0],
+                    "generation": registry.generation(),
+                }
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 0
+    except CapabilityError as exc:
+        return _fail(exc, "capability_error")
+    except (ValueError, OSError) as exc:
+        return _fail(exc, "science_plugin_error")
+    payload.update({"status": "failed", "error": "usage", "reason": "unknown command"})
+    print(_json.dumps(payload, sort_keys=True, default=str))
+    return 2
+
+
+def _utc_now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def job_submit_command(
@@ -5697,6 +5890,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "mcp":
         return _dispatch_mcp(args)
+
+    if args.command == "science-plugin":
+        return _handle_science_plugin(args)
 
     if args.command != "run":
         parser.print_help()

@@ -92,7 +92,9 @@ def _manifest_payload() -> dict[str, object]:
         raise RuntimeError("manifest distribution does not match build_meta.json")
     if payload.get("version") != VERSION:
         raise RuntimeError("manifest version does not match build_meta.json")
-    payload["distribution_digest"] = integrity.distribution_digest(PACKAGE_DIR)
+    payload["distribution_digest"] = integrity.distribution_digest(
+        PACKAGE_DIR, data_dir=FIXTURES_DIR
+    )
     evidence = payload.get("fixture_evidence")
     if not isinstance(evidence, list) or len(evidence) != 1:
         raise RuntimeError("manifest must declare exactly one fixture_evidence record")

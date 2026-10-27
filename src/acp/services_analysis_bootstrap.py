@@ -54,8 +54,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "ANALYSIS_PRODUCT_SCHEMA",
+    "AnalysisInputError",
     "VIBRATION_ANALYZE_ID",
     "VIBRATION_ANALYZE_VERSION",
+    "VibrationAnalysisInputError",
     "VibrationAnalyzeHandler",
     "build_analysis_registry",
 ]
@@ -81,8 +83,8 @@ _SUPPORTED_INPUT_FORMATS: tuple[str, ...] = ("orca-output",)
 _SUPPORTED_PARAMETER_KEYS: frozenset[str] = frozenset({"format"})
 
 
-class VibrationAnalysisInputError(ValueError):
-    """The prepared artifact cannot be read as a vibration analysis input."""
+class AnalysisInputError(ValueError):
+    """A prepared artifact cannot be read as the requested analysis input."""
 
     def __init__(
         self,
@@ -94,6 +96,11 @@ class VibrationAnalysisInputError(ValueError):
         super().__init__(message)
         self.params: dict[str, Any] = dict(params or {})
         self.http_status = int(http_status)
+
+
+#: Previous name of :class:`AnalysisInputError` (M2-02 public surface).  The
+#: analyze route catches it, so an alias keeps every installed caller working.
+VibrationAnalysisInputError = AnalysisInputError
 
 
 @dataclass
@@ -121,7 +128,7 @@ class VibrationAnalyzeHandler:
         params = dict(parameters) if isinstance(parameters, Mapping) else {}
         input_format = str(params.get("format") or _SUPPORTED_INPUT_FORMATS[0])
         if input_format not in _SUPPORTED_INPUT_FORMATS:
-            raise VibrationAnalysisInputError(
+            raise AnalysisInputError(
                 f"unsupported vibration analysis input format {input_format!r}",
                 params={
                     "field": "parameters.format",
@@ -131,7 +138,7 @@ class VibrationAnalyzeHandler:
             )
         undeclared = sorted(name for name in params if name not in _SUPPORTED_PARAMETER_KEYS)
         if undeclared:
-            raise VibrationAnalysisInputError(
+            raise AnalysisInputError(
                 f"vibration.analyze does not accept the parameter {undeclared[0]!r}",
                 params={
                     "field": f"parameters.{undeclared[0]}",
@@ -148,7 +155,7 @@ class VibrationAnalyzeHandler:
         try:
             text = primary.body.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise VibrationAnalysisInputError(
+            raise AnalysisInputError(
                 "the prepared artifact is not a UTF-8 text frequency output",
                 params={
                     "field": "input_refs[0]",
@@ -216,7 +223,7 @@ class VibrationAnalyzeHandler:
         binding = bind_capability(VIBRATION_ANALYZE_ID, analysis_input=calculation)
         preflight = binding.preflight()
         if not preflight.ready:
-            raise VibrationAnalysisInputError(
+            raise AnalysisInputError(
                 "the prepared artifact does not carry usable frequency products",
                 params={
                     "field": "input_refs[0]",
@@ -227,7 +234,7 @@ class VibrationAnalyzeHandler:
             )
         report = binding.execute()
         if not isinstance(report, Mapping):  # pragma: no cover - contract drift guard
-            raise VibrationAnalysisInputError(
+            raise AnalysisInputError(
                 "the analysis entry point did not return a report object",
                 params={"rule": "invalid_scientific_input"},
                 http_status=500,
@@ -251,14 +258,14 @@ def _coerce_refs(value: Any) -> tuple[Mapping[str, Any], ...]:
     the same refusal instead of a silently empty analysis.
     """
     if not isinstance(value, (list, tuple)) or not value:
-        raise VibrationAnalysisInputError(
+        raise AnalysisInputError(
             "analysis requires at least one prepared artifact reference",
             params={"field": "input_refs", "rule": "required"},
         )
     refs: list[Mapping[str, Any]] = []
     for index, item in enumerate(value):
         if not isinstance(item, Mapping):
-            raise VibrationAnalysisInputError(
+            raise AnalysisInputError(
                 "input_refs entries must be ArtifactRef objects",
                 params={"field": f"input_refs[{index}]", "rule": "type"},
             )
@@ -268,7 +275,7 @@ def _coerce_refs(value: Any) -> tuple[Mapping[str, Any], ...]:
             if item.get(name) in (None, "")
         ]
         if missing:
-            raise VibrationAnalysisInputError(
+            raise AnalysisInputError(
                 f"input_refs[{index}].{missing[0]} is required",
                 params={
                     "field": f"input_refs[{index}].{missing[0]}",
@@ -285,6 +292,7 @@ def build_analysis_registry(
     artifact_store_root: str | Path,
     permission_scope: str = "local-single",
     max_input_bytes: int = MAX_ARTIFACT_BYTES,
+    plugin_capabilities: tuple[AnalysisCapability, ...] | list[AnalysisCapability] = (),
 ) -> AnalysisCapabilityRegistry:
     """Build the application-level analysis registry (M2-02).
 
@@ -300,6 +308,12 @@ def build_analysis_registry(
         artifact_store_root: Root of the controlled artifact publication store.
         permission_scope: Scope of the prepare operations to read.
         max_input_bytes: Server-side input read bound (artifact publication cap).
+        plugin_capabilities: Enabled third-party pure-analysis capabilities
+            (M2-05), already built by
+            :func:`acp.services_science_plugins_bootstrap.build_plugin_analysis_capabilities`
+            from the enablement ledger.  They share this one injected registry
+            and therefore the same public analyze path as the built-in
+            capability; an empty tuple is the honest "none enabled" state.
 
     Returns:
         The registry with ``vibration.analyze`` executable when the artifact
@@ -367,6 +381,8 @@ def build_analysis_registry(
             },
         )
     )
+    for capability in plugin_capabilities:
+        registry.register(capability)
     logger.debug(
         "analysis registry built: %s", [entry["analysis_id"] for entry in registry.describe()]
     )

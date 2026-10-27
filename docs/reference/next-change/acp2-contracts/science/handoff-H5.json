@@ -35,7 +35,7 @@
           "api_compatible_range": ">=1,<2",
           "default_enabled": true,
           "distribution": "acp2-upgrade-science-validator",
-          "distribution_digest": "sha256:19d3f7bcd5c64ea37e419a8b616a9f04b7ba119a45d69b914785597f9f7c57c8",
+          "distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
           "license": "MIT",
           "name": "acp2_upgrade.native_singlepoint",
           "science_version_range": ">=1,<2",
@@ -70,7 +70,7 @@
           "capability_schema_version": 1,
           "note": "Read-only historical artifact identity; it is never substituted into a v2 task.",
           "plugin_digest": "7820646bf5780e89754e0371f625d0231368d055e26347248227d6a5dc09d95c",
-          "plugin_distribution_digest": "sha256:30ae47306814dea5ce8aa3f3608740fd1b75528c43dac39569482e3341aeb748",
+          "plugin_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
           "plugin_version": "1.0.0"
         }
       },
@@ -123,7 +123,7 @@
           },
           {
             "path": "tests/fixtures/acp2/science/external_plugin/cccp_science_plugin.json",
-            "sha256": "1eeccacd3d8840007cd2f85a8d4b4f53de8c8eff52e2c83662e231175a352c5f"
+            "sha256": "529cf4a8c532b6c05197fc2e9b1b9764fd27414d8000fdc6c6a681d99b21239b"
           }
         ],
         "commands": [
@@ -278,7 +278,7 @@
           },
           {
             "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-            "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+            "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
           }
         ],
         "commands": [
@@ -342,7 +342,7 @@
           },
           {
             "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-            "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+            "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
           },
           {
             "path": "tests/fixtures/acp2/science/plugin_upgrade/constructed.json",
@@ -555,7 +555,7 @@
           "artifacts": [
             {
               "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+              "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
             }
           ],
           "commands": [
@@ -569,7 +569,7 @@
         "result": "PASS",
         "step_id": "H5-UP-1-keep-v1-artifact",
         "v1_artifact_path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-        "v1_artifact_sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee",
+        "v1_artifact_sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4",
         "v1_capability_schema_version": 1,
         "v1_plugin_lock_digest": "7820646bf5780e89754e0371f625d0231368d055e26347248227d6a5dc09d95c",
         "v1_plugin_version": "1.0.0"
@@ -596,7 +596,7 @@
         },
         "result": "PASS",
         "step_id": "H5-UP-2-install-v2",
-        "v2_distribution_digest": "sha256:19d3f7bcd5c64ea37e419a8b616a9f04b7ba119a45d69b914785597f9f7c57c8",
+        "v2_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
         "v2_plugin_lock_digest": "2b5cfe8371c747524fe5f7a5742bcfce17ad38f476fd64ced0becedacf4dbdfc",
         "v2_plugin_version": "2.0.0",
         "v2_wheel_filename": "acp2_upgrade_science_validator-2.0.0-py3-none-any.whl"
@@ -633,7 +633,7 @@
           "artifacts": [
             {
               "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+              "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
             },
             {
               "path": "tests/_acp2_upgrade_plugin_probe.py",
@@ -654,7 +654,7 @@
         "roundtrip_byte_for_value": true,
         "step_id": "H5-UP-4-v1-artifact-readable-after-v2",
         "v1_artifact_readable": true,
-        "v1_artifact_sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+        "v1_artifact_sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
       },
       {
         "evidence": {
@@ -682,7 +682,7 @@
           "artifacts": [
             {
               "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+              "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
             },
             {
               "path": "tests/test_acp2_science_plugin_gate.py",

@@ -58,7 +58,7 @@
     },
     "H5": {
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
-      "sha256": "fd8573b5c71c35be07e20bcbf54506803705e0ab5c9bf01c5d278ed1a3f7caa9",
+      "sha256": "cc69d6a2f26186854cff992d16330bdb15a854ab5e6f8d33f598b6c7c0b6f9a5",
       "handoff_version": 1,
       "generated_by": "A-23",
       "contract_set_version": 1,
@@ -335,7 +335,7 @@
         "artifacts": [
           {
             "path": "docs/reference/next-change/acp2-contracts/science/handoff-H5.json",
-            "sha256": "fd8573b5c71c35be07e20bcbf54506803705e0ab5c9bf01c5d278ed1a3f7caa9"
+            "sha256": "cc69d6a2f26186854cff992d16330bdb15a854ab5e6f8d33f598b6c7c0b6f9a5"
           }
         ],
         "records": [
