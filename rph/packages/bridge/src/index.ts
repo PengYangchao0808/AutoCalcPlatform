@@ -8,6 +8,8 @@
  * DSH plugin) in a later task.
  */
 
+import { createHash } from "node:crypto";
+
 import {
   MemorySubmitIntentStore,
   SubmitIntentConflict,
@@ -118,6 +120,22 @@ export interface BridgeRequest {
   readonly research?: string;
   readonly round?: number;
   readonly planDigest?: string;
+  /**
+   * Research-launch binding forwarded to `acp_submit` (M1-06).
+   *
+   * `planDigest` is the frozen *execution* plan digest; `proposalRef` /
+   * `proposalDigest` name the approved proposal.  Without them the submit is a
+   * legacy launch: the platform would accept it without an approval, so the
+   * bridge forwards them verbatim and never fabricates a value.
+   */
+  readonly proposalRef?: string;
+  readonly proposalDigest?: string;
+  /** Approved launch budget (`{unit, count, timeout_s}`), forwarded verbatim. */
+  readonly budget?: unknown;
+  /** Artifact body path relative to the attempt work dir (prepare only). */
+  readonly relativePath?: string;
+  /** `sha256:<64 hex>` of the prepared body; with it a read sends `artifact_ref`. */
+  readonly artifactDigest?: string;
 }
 
 /** One tool result as returned by a platform client (public envelope only). */
@@ -1421,6 +1439,10 @@ export function buildToolArguments(
       put("project_id", request.project);
       put("resources", request.resources);
       put("idempotency_key", idempotencyKey);
+      put("plan_digest", request.planDigest);
+      put("proposal_ref", request.proposalRef);
+      put("proposal_digest", request.proposalDigest);
+      put("budget", request.budget);
       if (request.operation === "evidence") {
         put("explicit", request.explicit);
       }
@@ -1439,12 +1461,28 @@ export function buildToolArguments(
       put("job_id", request.task);
       put("attempt", request.attempt);
       put("artifact_id", request.resource);
+      put("relative_path", request.relativePath);
       put("idempotency_key", idempotencyKey);
       return Object.freeze(args);
     case "read":
-      put("job_id", request.task);
-      put("attempt", request.attempt);
-      put("resource_id", request.resource);
+      // M1-01b: a read carries the frozen `artifact_ref` identity tuple.  The
+      // bridge only builds it when the caller supplies the digest it got from
+      // prepare; without one it forwards the legacy flat names so the server
+      // answers its typed `input_invalid` instead of the bridge inventing a
+      // generation or a digest.
+      if (typeof request.artifactDigest === "string" && request.artifactDigest.length > 0) {
+        put("artifact_ref", {
+          task_id: request.task,
+          attempt: request.attempt,
+          artifact_id: request.resource,
+          generation: request.generation,
+          digest: request.artifactDigest,
+        });
+      } else {
+        put("job_id", request.task);
+        put("attempt", request.attempt);
+        put("resource_id", request.resource);
+      }
       return Object.freeze(args);
   }
 }
@@ -1490,6 +1528,27 @@ export interface BridgeOptions {
    * its own `SubmitIntentStore`.
    */
   readonly submitIntentStore?: SubmitIntentStore;
+}
+
+/** M1-01b wire-key grammar: 8..128 chars from `[A-Za-z0-9._:-]`. */
+const WIRE_IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
+
+/**
+ * Project the M1-02 intent key onto the M1-01b wire-key grammar.
+ *
+ * The RPH intent key is the durable, human-auditable identity
+ * (`project:record:research:round-N:submit:plan-<hex>`); the wire only needs a
+ * stable high-entropy opaque key.  The frozen layout can exceed the 128-char
+ * wire limit, so when it does the bridge sends a deterministic `rph.<sha256>`
+ * projection of the *persisted* intent key.  The same intent always maps to the
+ * same wire key, a changed plan digest still conflicts before any call, and the
+ * platform never sees a truncated or re-derived value.
+ */
+export function submitWireKey(intentKey: string): string {
+  if (WIRE_IDEMPOTENCY_KEY_RE.test(intentKey)) {
+    return intentKey;
+  }
+  return "rph." + createHash("sha256").update(intentKey).digest("hex");
 }
 
 function notPreparedResult(request: BridgeRequest): BridgeResult {
@@ -1662,12 +1721,13 @@ export class Bridge {
       });
     }
     try {
-      return this.submitIntents.prepare({
+      const prepared = this.submitIntents.prepare({
         project_id: identity.project,
         research_id: identity.research,
         round: identity.round,
         plan_definition_digest: identity.planDigest,
-      }).intent.key;
+      });
+      return submitWireKey(prepared.intent.key);
     } catch (error) {
       if (error instanceof SubmitIntentConflict) {
         return contractError("conflict", "revision_conflict", error.toParams());
@@ -1744,6 +1804,10 @@ export class Bridge {
       method: request.method ?? null,
       resources: request.resources ?? null,
       project: request.project ?? null,
+      plan_digest: request.planDigest ?? null,
+      proposal_ref: request.proposalRef ?? null,
+      proposal_digest: request.proposalDigest ?? null,
+      budget: request.budget ?? null,
     });
   }
 

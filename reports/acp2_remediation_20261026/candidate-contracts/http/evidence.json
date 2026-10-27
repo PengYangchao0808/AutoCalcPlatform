@@ -1,0 +1,56 @@
+{
+  "schema": "acp2.runtime.evidence-projection.v1",
+  "contract_version": "1.0.0",
+  "research": {
+    "principal_id": "principal_local",
+    "project_id": "ca5fafd3-a566-424a-b5de-2b01c95e312d",
+    "research_id": "res-dd750138f09691f961016dbd",
+    "session_id": "ses-db04db4ceb1ea9f30be9eb13",
+    "round": 0
+  },
+  "task_ref": {
+    "project_id": "ca5fafd3-a566-424a-b5de-2b01c95e312d",
+    "task_id": "20261027_085136_001_fake",
+    "job_id": "20261027_085136_001_fake",
+    "attempt": 1,
+    "release": {
+      "release_id": "8d08ae54f628fcdf",
+      "release_digest": "sha256:eed7d8e47363614da91d131a78f781145e1ab87c6d67531c8905970e5aae124d"
+    }
+  },
+  "report": {
+    "report_id": "report-20261027_085136_001_fake-a1",
+    "digest": "sha256:2e73121707c3d622a03798227985e3953ff7e610cee6125a012d9f9332c06a25",
+    "schema_version": 1,
+    "subject_id": "20261027_085136_001_fake"
+  },
+  "execution_terminal_state": "completed",
+  "qualification": "complete",
+  "evidence_status": "complete",
+  "claims": [
+    {
+      "claim_id": "c-true-minimum",
+      "status": "supported",
+      "validator_id": "check.imaginary_mode_count",
+      "validator_version": "1.0.0",
+      "source_ref_count": 1,
+      "blocking_missing_checks": []
+    }
+  ],
+  "overall_claim_status": "supported",
+  "blocking_missing_checks": [],
+  "evidence_refs": [
+    {
+      "evidence_id": "art-cec0e00d21f0d39a",
+      "kind": "native_output",
+      "sha256": "sha256:cec0e00d21f0d39aaccc2ad75ba6f6141f1f37030137709648d2858930cf1cfe",
+      "relative_path": "artifacts/freq.out"
+    }
+  ],
+  "limitations": [
+    "STATIC fixture only; no real QC execution."
+  ],
+  "provenance_digest": "sha256:69d6c252c9e2b169bfb7188837e021809523a26da7ad273c1c55fac2e02ebba2",
+  "normal_reuse": false,
+  "projection_digest": "sha256:c3c5d964a05d518b6ca0394031e751a2c0d55833662feaa559a44ffdf10dd227"
+}

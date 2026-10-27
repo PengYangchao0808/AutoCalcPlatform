@@ -22,6 +22,12 @@
  * Endpoints consumed (relative paths; the adapter owns the prefix):
  *   GET /research/proposals/{proposal_id}?project_id=...
  *   GET /research/records/{research_id}?project_id=...
+ *   GET /research/records/{research_id}/evidence?project_id=&session_seed=&round=
+ *
+ * M1-06 adds the evidence read: the platform's single
+ * `acp2.runtime.evidence-projection.v1` payload, validated by the frozen
+ * contract and never re-derived here.  It is a read like any other (no
+ * decision, no submit).
  */
 window.ACPClient = window.ACPClient || {};
 ACPClient.research = (function () {
@@ -208,6 +214,94 @@ ACPClient.research = (function () {
     }).then(copyRecord);
   }
 
+  function evidencePath(researchId, projectId, round, sessionSeed) {
+    return "/research/records/" + encodeURIComponent(researchId) + "/evidence" +
+      "?project_id=" + encodeURIComponent(projectId) +
+      "&session_seed=" + encodeURIComponent(sessionSeed) +
+      (round == null ? "" : "&round=" + encodeURIComponent(String(round)));
+  }
+
+  /** Read the platform evidence projection of one record (read-only). */
+  function fetchEvidence(ref, scope, opts) {
+    opts = opts || {};
+    var s = normalizeScope(scope);
+    var target = normalizeRef(ref, "researchId", "research");
+    var seed = typeof scope.sessionSeed === "string" ? scope.sessionSeed
+      : (typeof scope.session_seed === "string" ? scope.session_seed : "");
+    if (!seed) {
+      return Promise.reject(new Error("research-query: scope.sessionSeed required"));
+    }
+    if (!adapters.v2) return Promise.reject(
+      new Error("ACPClient.research.init({v2}) not configured")
+    );
+    var key = keyFor(s, "evidence", target.id, revisionOf(opts, target));
+    return store.query(key, {
+      group: groupFor(s, "evidence", target.id),
+      signal: opts.signal || null,
+      loader: function (signal) {
+        return adapters.v2(
+          evidencePath(target.id, s.projectId, opts.round, seed),
+          requestOptions(opts, signal)
+        ).then(function (body) {
+          var view = validateOrThrow("validateEvidenceView", body);
+          if (!view.research || view.research.project_id !== s.projectId) {
+            throw new Error("research-query: evidence research.project_id does not match scope");
+          }
+          if (view.research.research_id !== target.id) {
+            throw new Error("research-query: evidence research_id does not match the record");
+          }
+          return copyEvidence(view);
+        });
+      },
+    }).then(copyEvidence);
+  }
+
+  function copyEvidence(view) {
+    return Object.assign({}, view, {
+      research: Object.assign({}, view.research),
+      task_ref: Object.assign({}, view.task_ref, {
+        release: Object.assign({}, view.task_ref.release),
+      }),
+      report: Object.assign({}, view.report),
+      claims: (view.claims || []).map(function (item) {
+        var copy = Object.assign({}, item);
+        copy.blocking_missing_checks = (item.blocking_missing_checks || []).slice();
+        return copy;
+      }),
+      evidence_refs: (view.evidence_refs || []).map(function (item) {
+        return Object.assign({}, item);
+      }),
+      blocking_missing_checks: (view.blocking_missing_checks || []).slice(),
+      limitations: (view.limitations || []).slice(),
+    });
+  }
+
+  /** Pure evidence summary: execution and claim status stay separate, and an
+   * incomplete execution is never displayed as a supported claim. */
+  function summarizeEvidence(view) {
+    view = view || {};
+    var blocking = (view.blocking_missing_checks || []).slice();
+    return {
+      research_id: view.research && view.research.research_id,
+      round: view.research && view.research.round,
+      execution_terminal_state: view.execution_terminal_state,
+      evidence_status: view.evidence_status,
+      overall_claim_status: view.overall_claim_status,
+      claim_count: (view.claims || []).length,
+      blocking_missing_checks: blocking,
+      evidence_refs: (view.evidence_refs || []).map(function (item) {
+        return { evidence_id: item.evidence_id, kind: item.kind, sha256: item.sha256 };
+      }),
+      projection_digest: view.projection_digest,
+      // A single honest display verdict: only a complete execution with a
+      // supported claim and no blocking check may read as "supported".
+      display: view.evidence_status === "complete" &&
+        view.overall_claim_status === "supported" && blocking.length === 0
+        ? "supported"
+        : "needs_review",
+    };
+  }
+
   /** Pure projection: round + decision + approval ref + evidence refs only.
    * It never promotes a decision or invents an approval. */
   function summarizeRecord(record) {
@@ -267,6 +361,8 @@ ACPClient.research = (function () {
     groupFor: groupFor,
     fetchProposal: fetchProposal,
     fetchRecord: fetchRecord,
+    fetchEvidence: fetchEvidence,
+    summarizeEvidence: summarizeEvidence,
     readRound: readRound,
     summarizeRecord: summarizeRecord,
     summarizeProposal: summarizeProposal,

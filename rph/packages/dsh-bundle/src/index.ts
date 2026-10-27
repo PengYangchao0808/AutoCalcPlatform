@@ -228,3 +228,15 @@ export function platformClientFromToolRuntime(
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// M1-06 / M3-01a: real MCP stdio client (transport injected) + named launcher
+// ---------------------------------------------------------------------------
+//
+// The client speaks the framing of the ACP stdio adapter; the launcher is the
+// only file allowed to spawn it.  The thin-slice runner (`thin-slice.ts`) is a
+// CLI entry (`thin-slice-main.js`), deliberately not re-exported here: it owns
+// file/report output and must not enlarge the library import graph.
+
+export * from "./mcp-stdio.js";
+export * from "./mcp-stdio-launch.js";

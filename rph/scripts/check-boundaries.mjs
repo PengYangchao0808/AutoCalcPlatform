@@ -37,6 +37,19 @@ const EXECUTION_RULES = [
   { id: "platform_store", test: (text) => /\bacp_services\b|scheduler\.store|resource-store/.test(text) },
 ];
 
+// ---------------------------------------------------------------------------
+// M1-06 / M3-02 — exactly one named launcher may start a client process
+// ---------------------------------------------------------------------------
+//
+// The MCP stdio client consumes an injected transport (`mcp-stdio.ts`); only the
+// named launcher spawns `acp mcp serve`.  Any *other* file that reaches for
+// child_process/spawn/exec stays a hard failure, and adding a launcher is a
+// deliberate gate change (this list), never an implicit allowance.
+const LAUNCHER_ALLOWLIST = new Set([
+  "packages/dsh-bundle/src/mcp-stdio-launch.ts",
+]);
+const LAUNCHER_RULES = new Set(["child_process", "spawn", "exec", "execFile"]);
+
 const DIRECT_NET_RULE = {
   id: "direct_net",
   test: (text) => /node:net|["']net["']/.test(text),
@@ -161,6 +174,9 @@ for (const pkg of PACKAGES) {
 
     for (const rule of EXECUTION_RULES) {
       if (rule.test(text)) {
+        if (LAUNCHER_ALLOWLIST.has(rel) && LAUNCHER_RULES.has(rule.id)) {
+          continue;
+        }
         findings.push({ package: pkg, file: rel, rule: rule.id, detail: "forbidden execution/private surface" });
       }
     }
@@ -220,6 +236,7 @@ for (const pkg of PACKAGES) {
   const own = scanned.filter((file) => file.startsWith(`packages/${pkg}/`));
   console.log(`  ${pkg}: ${own.length} file(s), imports -> ${[...ALLOWED_IMPORTS[pkg]].join(", ")}`);
 }
+console.log(`  launcher allowlist: ${[...LAUNCHER_ALLOWLIST].join(", ")} (child_process/spawn only)`);
 console.log("  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),");
 console.log("             DSH private source paths, platform store imports, wrong-direction imports,");
 console.log("             duplicate evidence models (only packages/research/src/evidence.ts),");

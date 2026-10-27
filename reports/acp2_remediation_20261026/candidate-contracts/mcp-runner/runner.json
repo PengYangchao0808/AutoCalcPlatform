@@ -1,0 +1,56 @@
+{
+  "schema": "acp2.m1-06.thin-slice.runner.v1",
+  "status": "ok",
+  "steps": [
+    "mcp.initialize",
+    "mcp.tools_list",
+    "mcp.capabilities_handshake",
+    "bridge.discover",
+    "bridge.submit",
+    "bridge.submit_replay",
+    "bridge.status",
+    "mcp.status_terminal",
+    "mcp.prepare_artifact",
+    "mcp.read_artifact",
+    "supervisor.injected_test_skills"
+  ],
+  "tools": [
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_submit",
+    "acp_status",
+    "acp_cancel",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_analyze"
+  ],
+  "protocol_version": "2025-06-18",
+  "task_ref": {
+    "task_id": "20261027_085136_001_fake",
+    "job_id": "20261027_085136_001_fake",
+    "attempt": 1
+  },
+  "supervisor": {
+    "status": "stopped",
+    "stop_reason": "wait_timeout",
+    "submits": 1,
+    "submit_port_calls": 1,
+    "submitted_task_ids": [
+      "20261027_085136_001_fake"
+    ],
+    "model_invocations": 4,
+    "wait_invocations": 1,
+    "phases": [
+      "understand@0",
+      "hypothesize@0",
+      "critique@0",
+      "plan@0",
+      "approve@0",
+      "wait@0",
+      "stop@0"
+    ],
+    "injection_text_digest": "sha256:b09efffa6ea0fa238107c9d77d7e7b03c568d90c4e1e612a11181dd9b7c889c2"
+  },
+  "errors": [],
+  "trace_path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/candidate-contracts/mcp-runner/mcp-trace.jsonl"
+}
