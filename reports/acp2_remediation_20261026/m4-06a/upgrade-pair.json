@@ -1,0 +1,211 @@
+{
+  "artifacts": {
+    "candidate": {
+      "artifacts": {
+        "acp-web-0.3.0.tar.gz": "3f83c5795149abd2038b32482af82d2ff569a6f5f48d65888464bf34b3e3132e",
+        "acp-worker-0.3.0.tar.gz": "1c7a4567f5f845404b295fd5a939d1ca5be78d04c599db34872e61dc10611169",
+        "acp_web-0.3.0-py3-none-any.whl": "512a0b3f220c1dc49e5574be532f088069eeb020c3f3e253e63dfb7b89d5e149",
+        "acp_worker-0.3.0-py3-none-any.whl": "c74c51902a739e83100043b8c5508011f1b71aaa34b3d3b5f3432265a8805839",
+        "cccp-0.3.0-py3-none-any.whl": "b1cc2632377c7a4ee27c064c70208589409a9d2b45f1d570a2ba867d56515234",
+        "cccp-0.3.0.tar.gz": "4d85871b7ddd67aa03edf115e92e7a42078c4e9791447b741a85528ded00b50d"
+      },
+      "digest_failing": [],
+      "digest_ok": true,
+      "manifest_sha256": "bfae12103c7a86a89e9ba1022b8e692428f4c643337dc492d885ed778ede66da",
+      "path": "/ACPServer/acp2-artifacts/remediation/m4-06a/candidate/release-manifest.json",
+      "roles": [
+        "cccp",
+        "web",
+        "worker"
+      ],
+      "schema": "acp2.release.manifest.v1",
+      "source": {
+        "clean": false,
+        "dirty_paths": [
+          " M src/acp_services/runtime/admission.py"
+        ],
+        "git": true,
+        "path": "/ACPServer/acp2-artifacts/remediation/m4-06a/candidate-src",
+        "revision": "be6c5e82916d6b14382cebd524a3c10133e0c78a",
+        "tree": "7ea1b96094fa0f49dd83089ba4e185552daec16f"
+      },
+      "version": "0.3.0"
+    },
+    "previous": {
+      "artifacts": {
+        "acp-web-0.3.0.tar.gz": "b4da25501ab80e17f81314f9b93ec2a16ca21b291bd620cf549fcde88eccc2a2",
+        "acp-worker-0.3.0.tar.gz": "72632869dbd79965ae06f3a7ac3a657cf4e8882dd854f4a24a37cc99eba2c719",
+        "acp_web-0.3.0-py3-none-any.whl": "a932e07e877215d3e32fdd6b4e7fd32c5bef59a58e302a48b706bf61440e9808",
+        "acp_worker-0.3.0-py3-none-any.whl": "3c89ccbe781668d6e9c38bc0aff939901422c1ca7aa69acd6f09430c3346e61c",
+        "cccp-0.3.0-py3-none-any.whl": "05f4de87ab82b17ff70e4eaee96bcac29fc0b42ecf18ece1705d7a571486e132",
+        "cccp-0.3.0.tar.gz": "111992e285a41589cecf33bfc5f498abf0bf3fe47d3307b724f8a060a5137b76"
+      },
+      "digest_failing": [],
+      "digest_ok": true,
+      "manifest_sha256": "c0a5367e72c3a8247b9395ad920ebbc68dbaf857b0bfeca10359febb625bb3ab",
+      "path": "/ACPServer/acp2-artifacts/remediation/m4-06a/previous/release-manifest.json",
+      "roles": [
+        "cccp",
+        "web",
+        "worker"
+      ],
+      "schema": "acp2.release.manifest.v1",
+      "source": {
+        "clean": true,
+        "dirty_paths": [],
+        "git": true,
+        "path": "/tmp/opencode/acp2-m4-06a-work/src-previous",
+        "revision": "c46370639fae48f8dab286b4f3baa63affc26af2",
+        "tree": "4cacfbac36ee558243917855abdc85dda9f626ba"
+      },
+      "version": "0.3.0"
+    }
+  },
+  "candidate_dirty_paths": [
+    "M src/acp_services/runtime/admission.py"
+  ],
+  "candidate_source": "/ACPServer/acp2-artifacts/remediation/m4-06a/candidate-src",
+  "installs": {
+    "candidate": {
+      "reused": false,
+      "venv": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate",
+      "wheels": [
+        "acp_web-0.3.0-py3-none-any.whl",
+        "acp_worker-0.3.0-py3-none-any.whl",
+        "cccp-0.3.0-py3-none-any.whl"
+      ]
+    },
+    "previous": {
+      "reused": false,
+      "venv": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous",
+      "wheels": [
+        "acp_web-0.3.0-py3-none-any.whl",
+        "acp_worker-0.3.0-py3-none-any.whl",
+        "cccp-0.3.0-py3-none-any.whl"
+      ]
+    }
+  },
+  "previous_ref": "acp2-baseline-20261026",
+  "probes": {
+    "candidate": {
+      "action": "report",
+      "admission_schema_version": 26,
+      "executable": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate/bin/python",
+      "jobs_migrations": [
+        "001",
+        "002",
+        "003",
+        "004",
+        "005",
+        "006",
+        "007",
+        "008",
+        "009",
+        "011",
+        "010",
+        "012",
+        "013",
+        "014",
+        "015",
+        "016",
+        "017",
+        "018",
+        "019",
+        "020",
+        "021",
+        "022",
+        "023",
+        "024",
+        "025",
+        "027"
+      ],
+      "jobs_schema_version": 26,
+      "modules": {
+        "acp": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate/lib64/python3.11/site-packages/acp/__init__.py",
+        "acp_services": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate/lib64/python3.11/site-packages/acp_services/__init__.py"
+      },
+      "prepare_schema_version": 2,
+      "python": "3.11.13",
+      "side": "candidate",
+      "state": {
+        "admission_schema_version_on_disk": 0,
+        "jobs_schema_version_on_disk": 0,
+        "prepare_schema_version_on_disk": 0
+      },
+      "surfaces": {
+        "identity_version": "2",
+        "mcp_derive": true,
+        "prepare_identity_version": "2",
+        "request_digest_version": "2",
+        "science_plugins": true,
+        "verify_usage_history": true
+      },
+      "versions": {
+        "acp": "0.3.0",
+        "acp_services": "0.3.0",
+        "dist.acp-web": "0.3.0",
+        "dist.acp-worker": "0.3.0",
+        "dist.cccp": "0.3.0"
+      }
+    },
+    "previous": {
+      "action": "report",
+      "admission_schema_version": 0,
+      "executable": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous/bin/python",
+      "jobs_migrations": [
+        "001",
+        "002",
+        "003",
+        "004",
+        "005",
+        "006",
+        "007",
+        "008",
+        "009",
+        "011",
+        "010",
+        "012",
+        "013",
+        "014",
+        "015",
+        "016",
+        "017",
+        "018",
+        "019",
+        "020",
+        "021",
+        "022",
+        "023"
+      ],
+      "jobs_schema_version": 23,
+      "modules": {
+        "acp": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous/lib64/python3.11/site-packages/acp/__init__.py",
+        "acp_services": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous/lib64/python3.11/site-packages/acp_services/__init__.py"
+      },
+      "prepare_schema_version": 1,
+      "python": "3.11.13",
+      "side": "previous",
+      "state": {
+        "admission_schema_version_on_disk": 0,
+        "jobs_schema_version_on_disk": 0,
+        "prepare_schema_version_on_disk": 0
+      },
+      "surfaces": {
+        "identity_version": null,
+        "mcp_derive": true,
+        "prepare_identity_version": null,
+        "request_digest_version": null,
+        "science_plugins": false,
+        "verify_usage_history": false
+      },
+      "versions": {
+        "acp": "0.3.0",
+        "acp_services": "0.3.0",
+        "dist.acp-web": "0.3.0",
+        "dist.acp-worker": "0.3.0",
+        "dist.cccp": "0.3.0"
+      }
+    }
+  },
+  "schema": "acp2.upgrade-pair.v1"
+}

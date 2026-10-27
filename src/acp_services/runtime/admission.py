@@ -881,8 +881,6 @@ CREATE TABLE IF NOT EXISTS admission_usage_receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_admission_usage_reservation
     ON admission_usage_receipts(reservation_id);
-CREATE INDEX IF NOT EXISTS idx_admission_usage_job
-    ON admission_usage_receipts(job_id, attempt);
 CREATE TABLE IF NOT EXISTS admission_attempt_bindings (
     job_id               TEXT NOT NULL,
     attempt              INTEGER NOT NULL,
@@ -950,8 +948,6 @@ CREATE TABLE IF NOT EXISTS research_budget_receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_research_budget_receipts_budget
     ON research_budget_receipts(budget_id);
-CREATE INDEX IF NOT EXISTS idx_research_budget_receipts_job
-    ON research_budget_receipts(job_id, attempt);
 CREATE TABLE IF NOT EXISTS research_budget_events (
     seq        INTEGER PRIMARY KEY AUTOINCREMENT,
     subject    TEXT NOT NULL,
@@ -999,6 +995,23 @@ _ADDITIVE_COLUMNS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+#: Indexes that name an **additive** column.  They cannot live in
+#: :data:`_CREATE_TABLE_SQL`: on an upgrade the table already exists (so
+#: ``CREATE TABLE IF NOT EXISTS`` is a no-op) and the index would be created
+#: before :func:`migrate_admission_schema` adds its column, which fails the
+#: Controller startup with "no such column".  They are therefore applied by the
+#: migration, after the columns, for fresh and upgraded databases alike.
+_ADDITIVE_INDEXES: dict[str, tuple[str, ...]] = {
+    "admission_usage_receipts": (
+        "CREATE INDEX IF NOT EXISTS idx_admission_usage_job "
+        "ON admission_usage_receipts(job_id, attempt)",
+    ),
+    "research_budget_receipts": (
+        "CREATE INDEX IF NOT EXISTS idx_research_budget_receipts_job "
+        "ON research_budget_receipts(job_id, attempt)",
+    ),
+}
+
 
 def get_admission_schema_version(conn: sqlite3.Connection) -> int:
     """Return the highest applied admission-DB migration id (``0`` when none)."""
@@ -1035,6 +1048,10 @@ def migrate_admission_schema(conn: sqlite3.Connection) -> int:
                 # only accepted conflict (anything else fails closed).
                 if "duplicate column name" not in str(exc).lower():
                     raise
+        # The index names an additive column, so it is created only after the
+        # column exists (an upgrade keeps the pre-migration table definition).
+        for statement in _ADDITIVE_INDEXES.get(table, ()):
+            conn.execute(statement)
     conn.execute(
         "INSERT OR IGNORE INTO admission_schema_migrations (id, applied_at) VALUES (?, ?)",
         (ADMISSION_SCHEMA_VERSION, utc_now_iso()),

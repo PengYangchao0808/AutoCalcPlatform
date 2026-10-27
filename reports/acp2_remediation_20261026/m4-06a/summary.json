@@ -1,0 +1,640 @@
+{
+  "assertions": [
+    {
+      "detail": "{\"failing\": [], \"schema\": \"acp2.release.manifest.v1\"}",
+      "name": "pair.previous.manifest_digests_match",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"failing\": [], \"schema\": \"acp2.release.manifest.v1\"}",
+      "name": "pair.candidate.manifest_digests_match",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"previous\": \"c46370639fae48f8dab286b4f3baa63affc26af2\", \"tag\": \"c46370639fae48f8dab286b4f3baa63affc26af2\"}",
+      "name": "pair.previous_is_baseline_tag",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"candidate\": \"be6c5e82916d6b14382cebd524a3c10133e0c78a\", \"head\": \"be6c5e82916d6b14382cebd524a3c10133e0c78a\"}",
+      "name": "pair.candidate_is_current_head",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"acp_module\": \"/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous/lib64/python3.11/site-packages/acp/__init__.py\", \"exit\": 0, \"venv\": \"/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous\"}",
+      "name": "install.previous.imports_resolve_inside_venv",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"acp_module\": \"/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate/lib64/python3.11/site-packages/acp/__init__.py\", \"exit\": 0, \"venv\": \"/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate\"}",
+      "name": "install.candidate.imports_resolve_inside_venv",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"admission\": 26, \"candidate_head\": 26, \"prepare\": 2, \"previous_head\": 23}",
+      "name": "pair.candidate_is_a_real_schema_bump",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"http_keyed\": {\"idempotency_key\": \"legacy-http-key\", \"idempotent_replay\": false, \"job_id\": \"20261027_194159_001_legacy_http_keyed\"}, \"http_keyless\": {\"job_id\": \"20261027_194159_002_legacy_http_keyless\"}, \"mcp_keyless\": {\"idempotency_key\": \"op_7444cdb53aa7d2e170658bddf850abbe\", \"idempotent_replay\": false, \"job_id\": \"20261027_194201_003_singlepoint\"}}",
+      "name": "previous.real_entries_write_tasks",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"20261027_194159_001_legacy_http_keyed\": \"cancelled\", \"20261027_194159_002_legacy_http_keyless\": \"cancelled\", \"20261027_194201_003_singlepoint\": \"cancelled\"}",
+      "name": "previous.legacy_tasks_quiesced_before_backup",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"leftover_pids\": [], \"port\": 49603}",
+      "name": "previous.controller_stopped_cleanly",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"exit\": 0, \"stderr\": \"\"}",
+      "name": "previous.legacy_state_written",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"admission\": 0, \"admission_integrity\": \"ok\", \"jobs\": {\"count\": 23, \"ids\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\"], \"integrity\": \"ok\", \"present\": true}, \"prepare\": 1}",
+      "name": "previous.schema_is_the_old_head",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"ledger_key\": \"op_7444cdb53aa7d2e170658bddf850abbe\", \"ledger_key_prefix\": \"op_\", \"note\": \"pre-M0-05 MCP scoped the auto_ derivation into an op_ ledger key\", \"scope_id\": \"principal_local\\u001funcategorized\"}",
+      "name": "previous.pre_m0_05_mcp_row_observed",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"differing\": [], \"files\": 622}",
+      "name": "backup.file_copy_matches_source",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"admission\": 26, \"admission_integrity\": \"ok\", \"jobs\": {\"count\": 26, \"ids\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\", \"024\", \"025\", \"027\"], \"integrity\": \"ok\", \"present\": true}, \"prepare\": 2}",
+      "name": "upgrade.schema_migrated_to_candidate_head",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"candidate\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\", \"024\", \"025\", \"027\"], \"previous\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\"]}",
+      "name": "upgrade.old_migration_rows_are_a_prefix",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"http_keyed\": {\"job_id\": \"20261027_194159_001_legacy_http_keyed\", \"name\": null, \"revision\": 7, \"status\": \"cancelled\"}, \"http_keyless\": {\"job_id\": \"20261027_194159_002_legacy_http_keyless\", \"name\": null, \"revision\": 7, \"status\": \"cancelled\"}, \"mcp_keyless\": {\"job_id\": \"20261027_194201_003_singlepoint\", \"name\": null, \"revision\": 7, \"status\": \"cancelled\"}}",
+      "name": "upgrade.old_tasks_readable",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"research_id\": \"legacy-research-1\", \"round\": 1, \"schema\": \"acp2.experience.research-record.v1\"}",
+      "name": "upgrade.research_record_readable",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"exit\": 0, \"stderr\": \"\", \"summary\": {\"failed\": 0, \"failing\": [], \"passed\": 20, \"status\": \"PASS\", \"total\": 20}}",
+      "name": "upgrade.legacy_semantics_all_pass",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"idempotency_key\": \"candidate-http-key\", \"job_id\": \"20261027_194208_001_candidate_http_keyed\", \"row\": {\"idempotency_key\": \"candidate-http-key\", \"identity_version\": \"2\", \"migration_state\": \"native\", \"request_digest_version\": \"2\", \"scope_origin\": \"verified\"}}",
+      "name": "upgrade.new_http_task_writes_v2_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"error_code\": \"input_invalid\", \"jobs_after\": 7, \"jobs_before\": 7, \"params\": {\"field\": \"idempotency_key\", \"missing\": [\"idempotency_key\"], \"rule\": \"idempotency_key_required\", \"tool\": \"acp_submit\"}}",
+      "name": "upgrade.keyless_mcp_submit_refused_without_side_effect",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"leftover_pids\": [], \"port\": 58161}",
+      "name": "upgrade.controller_stopped_cleanly",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"differing\": [], \"files\": 622}",
+      "name": "rollback.restore_is_byte_identical",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"admission\": 0, \"admission_integrity\": \"ok\", \"jobs\": {\"count\": 23, \"ids\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\"], \"integrity\": \"ok\", \"present\": true}, \"prepare\": 1}",
+      "name": "rollback.previous_schema_restored_no_half_migration",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"health\": {\"candidate_revision\": \"m4-06a-previous-rollback\", \"contract_digest\": \"812b9ba0886874f7a1fad6fd75c63dd57181cc2e5348e10ea15511f2653b8f50\", \"contract_digest_scope\": \"delivered-contract-set\", \"contract_version\": \"1.0.0\", \"read_only\": true, \"schema_version\": 1, \"started_at\": \"2026-10-27T11:42:18.463389Z\", \"status\": \"ok\"}, \"job_reads\": {\"http_keyed\": \"cancelled\", \"http_keyless\": \"cancelled\", \"mcp_keyless\": \"cancelled\"}, \"listed_legacy_jobs\": [\"20261027_194159_001_legacy_http_keyed\", \"20261027_194159_002_legacy_http_keyless\", \"20261027_194201_003_singlepoint\"], \"research_id\": \"legacy-research-1\", \"schema\": {\"admission\": 0, \"admission_integrity\": \"ok\", \"jobs\": {\"count\": 23, \"ids\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\"], \"integrity\": \"ok\", \"present\": true}, \"prepare\": 1}}",
+      "name": "rollback.old_data_readable_after_rollback",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"status\": 404}",
+      "name": "rollback.candidate_only_rows_removed_by_restore",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"leftover_pids\": [], \"port\": 55781}",
+      "name": "rollback.controller_stopped_cleanly",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"exit\": -9, \"schema\": {\"count\": 23, \"ids\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\"], \"integrity\": \"ok\", \"present\": true}}",
+      "name": "injection.migration_killed_before_024",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"after\": 5, \"before\": 5}",
+      "name": "injection.jobs_never_deleted_by_interrupted_migration",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"count\": 23, \"ids\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\"], \"integrity\": \"ok\", \"present\": true}",
+      "name": "injection.interrupted_db_is_readable_and_intact",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"exit\": 0, \"jobs\": 5, \"state\": {\"admission\": 26, \"admission_integrity\": \"ok\", \"jobs\": {\"count\": 26, \"ids\": [\"001\", \"002\", \"003\", \"004\", \"005\", \"006\", \"007\", \"008\", \"009\", \"010\", \"011\", \"012\", \"013\", \"014\", \"015\", \"016\", \"017\", \"018\", \"019\", \"020\", \"021\", \"022\", \"023\", \"024\", \"025\", \"027\"], \"integrity\": \"ok\", \"present\": true}, \"prepare\": 1}, \"stderr\": \"\"}",
+      "name": "injection.recovery_migrates_to_head_without_losing_jobs",
+      "status": "PASS"
+    }
+  ],
+  "before": {
+    "admission_db": {
+      "admission_reservations": 3,
+      "admission_usage_receipts": 4,
+      "research_budget_events": 0,
+      "research_budget_policies": 0,
+      "research_budget_receipts": 0,
+      "research_budget_reservations": 0
+    },
+    "jobs_db": {
+      "approval_records": 1,
+      "artifacts": 0,
+      "data_operations": 1,
+      "idempotency_records": 6,
+      "job_outbox": 2,
+      "jobs": 5,
+      "organization_events": 0,
+      "stage_tasks": 3,
+      "tasks": 3
+    },
+    "research_db": {
+      "research_resources": 2
+    },
+    "schema": {
+      "admission": 0,
+      "admission_integrity": "ok",
+      "jobs": {
+        "count": 23,
+        "ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005",
+          "006",
+          "007",
+          "008",
+          "009",
+          "010",
+          "011",
+          "012",
+          "013",
+          "014",
+          "015",
+          "016",
+          "017",
+          "018",
+          "019",
+          "020",
+          "021",
+          "022",
+          "023"
+        ],
+        "integrity": "ok",
+        "present": true
+      },
+      "prepare": 1
+    }
+  },
+  "evidence_kind": "fixture+aggregate",
+  "failure_injection": {
+    "exit": -9,
+    "recovery": {
+      "exit": 0,
+      "jobs": 5,
+      "state": {
+        "admission": 26,
+        "admission_integrity": "ok",
+        "jobs": {
+          "count": 26,
+          "ids": [
+            "001",
+            "002",
+            "003",
+            "004",
+            "005",
+            "006",
+            "007",
+            "008",
+            "009",
+            "010",
+            "011",
+            "012",
+            "013",
+            "014",
+            "015",
+            "016",
+            "017",
+            "018",
+            "019",
+            "020",
+            "021",
+            "022",
+            "023",
+            "024",
+            "025",
+            "027"
+          ],
+          "integrity": "ok",
+          "present": true
+        },
+        "prepare": 1
+      },
+      "stderr": ""
+    },
+    "state_after_interrupt": {
+      "admission": 26,
+      "admission_integrity": "ok",
+      "jobs": {
+        "count": 23,
+        "ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005",
+          "006",
+          "007",
+          "008",
+          "009",
+          "010",
+          "011",
+          "012",
+          "013",
+          "014",
+          "015",
+          "016",
+          "017",
+          "018",
+          "019",
+          "020",
+          "021",
+          "022",
+          "023"
+        ],
+        "integrity": "ok",
+        "present": true
+      },
+      "prepare": 1
+    }
+  },
+  "isolation": {
+    "note": "isolated run root under the harness work dir; no production service or data used",
+    "production_run_root_untouched": true,
+    "work_dir": "/tmp/opencode/acp2-m4-06a-work/run_root"
+  },
+  "migration_matrix": {
+    "items": 14,
+    "path": "migration-matrix.json",
+    "status": "PASS"
+  },
+  "not_production_data": true,
+  "rollback": {
+    "job_reads": {
+      "http_keyed": "cancelled",
+      "http_keyless": "cancelled",
+      "mcp_keyless": "cancelled"
+    },
+    "schema": {
+      "admission": 0,
+      "admission_integrity": "ok",
+      "jobs": {
+        "count": 23,
+        "ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005",
+          "006",
+          "007",
+          "008",
+          "009",
+          "010",
+          "011",
+          "012",
+          "013",
+          "014",
+          "015",
+          "016",
+          "017",
+          "018",
+          "019",
+          "020",
+          "021",
+          "022",
+          "023"
+        ],
+        "integrity": "ok",
+        "present": true
+      },
+      "prepare": 1
+    }
+  },
+  "schema": "acp2.upgrade-pair.v1",
+  "status": "PASS",
+  "summary": {
+    "failed": 0,
+    "failing": [],
+    "passed": 31,
+    "status": "PASS",
+    "total": 31
+  },
+  "task": "M4-06a",
+  "upgrade": {
+    "keyless_mcp": {
+      "error_code": "input_invalid",
+      "jobs_after": 7,
+      "jobs_before": 7,
+      "params": {
+        "field": "idempotency_key",
+        "missing": [
+          "idempotency_key"
+        ],
+        "rule": "idempotency_key_required",
+        "tool": "acp_submit"
+      }
+    },
+    "legacy_semantics": {
+      "failed": 0,
+      "failing": [],
+      "passed": 20,
+      "status": "PASS",
+      "total": 20
+    },
+    "new_task": {
+      "idempotency_key": "candidate-http-key",
+      "job_id": "20261027_194208_001_candidate_http_keyed",
+      "row": {
+        "idempotency_key": "candidate-http-key",
+        "identity_version": "2",
+        "migration_state": "native",
+        "request_digest_version": "2",
+        "scope_origin": "verified"
+      }
+    },
+    "schema": {
+      "admission": 26,
+      "admission_integrity": "ok",
+      "jobs": {
+        "count": 26,
+        "ids": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005",
+          "006",
+          "007",
+          "008",
+          "009",
+          "010",
+          "011",
+          "012",
+          "013",
+          "014",
+          "015",
+          "016",
+          "017",
+          "018",
+          "019",
+          "020",
+          "021",
+          "022",
+          "023",
+          "024",
+          "025",
+          "027"
+        ],
+        "integrity": "ok",
+        "present": true
+      },
+      "prepare": 2
+    }
+  },
+  "upgrade_pair": {
+    "candidate": {
+      "artifacts": {
+        "acp-web-0.3.0.tar.gz": "3f83c5795149abd2038b32482af82d2ff569a6f5f48d65888464bf34b3e3132e",
+        "acp-worker-0.3.0.tar.gz": "1c7a4567f5f845404b295fd5a939d1ca5be78d04c599db34872e61dc10611169",
+        "acp_web-0.3.0-py3-none-any.whl": "512a0b3f220c1dc49e5574be532f088069eeb020c3f3e253e63dfb7b89d5e149",
+        "acp_worker-0.3.0-py3-none-any.whl": "c74c51902a739e83100043b8c5508011f1b71aaa34b3d3b5f3432265a8805839",
+        "cccp-0.3.0-py3-none-any.whl": "b1cc2632377c7a4ee27c064c70208589409a9d2b45f1d570a2ba867d56515234",
+        "cccp-0.3.0.tar.gz": "4d85871b7ddd67aa03edf115e92e7a42078c4e9791447b741a85528ded00b50d"
+      },
+      "digest_failing": [],
+      "digest_ok": true,
+      "manifest_sha256": "bfae12103c7a86a89e9ba1022b8e692428f4c643337dc492d885ed778ede66da",
+      "path": "/ACPServer/acp2-artifacts/remediation/m4-06a/candidate/release-manifest.json",
+      "roles": [
+        "cccp",
+        "web",
+        "worker"
+      ],
+      "schema": "acp2.release.manifest.v1",
+      "source": {
+        "clean": false,
+        "dirty_paths": [
+          " M src/acp_services/runtime/admission.py"
+        ],
+        "git": true,
+        "path": "/ACPServer/acp2-artifacts/remediation/m4-06a/candidate-src",
+        "revision": "be6c5e82916d6b14382cebd524a3c10133e0c78a",
+        "tree": "7ea1b96094fa0f49dd83089ba4e185552daec16f"
+      },
+      "version": "0.3.0"
+    },
+    "candidate_dirty_paths": [
+      "M src/acp_services/runtime/admission.py"
+    ],
+    "installs": {
+      "candidate": {
+        "reused": false,
+        "venv": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate",
+        "wheels": [
+          "acp_web-0.3.0-py3-none-any.whl",
+          "acp_worker-0.3.0-py3-none-any.whl",
+          "cccp-0.3.0-py3-none-any.whl"
+        ]
+      },
+      "previous": {
+        "reused": false,
+        "venv": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous",
+        "wheels": [
+          "acp_web-0.3.0-py3-none-any.whl",
+          "acp_worker-0.3.0-py3-none-any.whl",
+          "cccp-0.3.0-py3-none-any.whl"
+        ]
+      }
+    },
+    "previous": {
+      "artifacts": {
+        "acp-web-0.3.0.tar.gz": "b4da25501ab80e17f81314f9b93ec2a16ca21b291bd620cf549fcde88eccc2a2",
+        "acp-worker-0.3.0.tar.gz": "72632869dbd79965ae06f3a7ac3a657cf4e8882dd854f4a24a37cc99eba2c719",
+        "acp_web-0.3.0-py3-none-any.whl": "a932e07e877215d3e32fdd6b4e7fd32c5bef59a58e302a48b706bf61440e9808",
+        "acp_worker-0.3.0-py3-none-any.whl": "3c89ccbe781668d6e9c38bc0aff939901422c1ca7aa69acd6f09430c3346e61c",
+        "cccp-0.3.0-py3-none-any.whl": "05f4de87ab82b17ff70e4eaee96bcac29fc0b42ecf18ece1705d7a571486e132",
+        "cccp-0.3.0.tar.gz": "111992e285a41589cecf33bfc5f498abf0bf3fe47d3307b724f8a060a5137b76"
+      },
+      "digest_failing": [],
+      "digest_ok": true,
+      "manifest_sha256": "c0a5367e72c3a8247b9395ad920ebbc68dbaf857b0bfeca10359febb625bb3ab",
+      "path": "/ACPServer/acp2-artifacts/remediation/m4-06a/previous/release-manifest.json",
+      "roles": [
+        "cccp",
+        "web",
+        "worker"
+      ],
+      "schema": "acp2.release.manifest.v1",
+      "source": {
+        "clean": true,
+        "dirty_paths": [],
+        "git": true,
+        "path": "/tmp/opencode/acp2-m4-06a-work/src-previous",
+        "revision": "c46370639fae48f8dab286b4f3baa63affc26af2",
+        "tree": "4cacfbac36ee558243917855abdc85dda9f626ba"
+      },
+      "version": "0.3.0"
+    },
+    "probes": {
+      "candidate": {
+        "action": "report",
+        "admission_schema_version": 26,
+        "executable": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate/bin/python",
+        "jobs_migrations": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005",
+          "006",
+          "007",
+          "008",
+          "009",
+          "011",
+          "010",
+          "012",
+          "013",
+          "014",
+          "015",
+          "016",
+          "017",
+          "018",
+          "019",
+          "020",
+          "021",
+          "022",
+          "023",
+          "024",
+          "025",
+          "027"
+        ],
+        "jobs_schema_version": 26,
+        "modules": {
+          "acp": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate/lib64/python3.11/site-packages/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/candidate/lib64/python3.11/site-packages/acp_services/__init__.py"
+        },
+        "prepare_schema_version": 2,
+        "python": "3.11.13",
+        "side": "candidate",
+        "state": {
+          "admission_schema_version_on_disk": 0,
+          "jobs_schema_version_on_disk": 0,
+          "prepare_schema_version_on_disk": 0
+        },
+        "surfaces": {
+          "identity_version": "2",
+          "mcp_derive": true,
+          "prepare_identity_version": "2",
+          "request_digest_version": "2",
+          "science_plugins": true,
+          "verify_usage_history": true
+        },
+        "versions": {
+          "acp": "0.3.0",
+          "acp_services": "0.3.0",
+          "dist.acp-web": "0.3.0",
+          "dist.acp-worker": "0.3.0",
+          "dist.cccp": "0.3.0"
+        }
+      },
+      "previous": {
+        "action": "report",
+        "admission_schema_version": 0,
+        "executable": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous/bin/python",
+        "jobs_migrations": [
+          "001",
+          "002",
+          "003",
+          "004",
+          "005",
+          "006",
+          "007",
+          "008",
+          "009",
+          "011",
+          "010",
+          "012",
+          "013",
+          "014",
+          "015",
+          "016",
+          "017",
+          "018",
+          "019",
+          "020",
+          "021",
+          "022",
+          "023"
+        ],
+        "jobs_schema_version": 23,
+        "modules": {
+          "acp": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous/lib64/python3.11/site-packages/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-artifacts/remediation/m4-06a/venvs/previous/lib64/python3.11/site-packages/acp_services/__init__.py"
+        },
+        "prepare_schema_version": 1,
+        "python": "3.11.13",
+        "side": "previous",
+        "state": {
+          "admission_schema_version_on_disk": 0,
+          "jobs_schema_version_on_disk": 0,
+          "prepare_schema_version_on_disk": 0
+        },
+        "surfaces": {
+          "identity_version": null,
+          "mcp_derive": true,
+          "prepare_identity_version": null,
+          "request_digest_version": null,
+          "science_plugins": false,
+          "verify_usage_history": false
+        },
+        "versions": {
+          "acp": "0.3.0",
+          "acp_services": "0.3.0",
+          "dist.acp-web": "0.3.0",
+          "dist.acp-worker": "0.3.0",
+          "dist.cccp": "0.3.0"
+        }
+      }
+    }
+  }
+}

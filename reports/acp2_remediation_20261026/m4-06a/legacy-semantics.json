@@ -1,0 +1,125 @@
+{
+  "action": "verify",
+  "checks": [
+    {
+      "detail": "{\"auto\": {\"key\": \"auto_c7c62021c159e9f14f4a32daa8ef8d62\"}, \"committed\": {\"key\": \"legacy-submit-key\"}, \"pending\": {\"key\": \"legacy-pending-key\"}, \"unscoped\": {\"key\": \"legacy-unscoped-key\"}}",
+      "name": "legacy.claims_preserved",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"identity_version\": \"1\", \"migration_state\": \"legacy-verified\", \"principal_id\": \"principal_local\", \"project_id\": \"uncategorized\", \"request_digest_version\": \"1\", \"scope_origin\": \"legacy-local\"}",
+      "name": "legacy.classified_committed_verified",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"identity_version\": \"1\", \"migration_state\": \"legacy-verified\", \"principal_id\": \"principal_local\", \"project_id\": \"uncategorized\", \"request_digest_version\": \"1\", \"scope_origin\": \"legacy-local\"}",
+      "name": "legacy.classified_auto_verified",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"identity_version\": \"1\", \"migration_state\": \"legacy-pending\", \"principal_id\": \"principal_local\", \"project_id\": \"uncategorized\", \"request_digest_version\": \"1\", \"scope_origin\": \"legacy-local\"}",
+      "name": "legacy.classified_pending_not_replayable",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"identity_version\": \"1\", \"migration_state\": \"legacy-unverified\", \"principal_id\": null, \"project_id\": null, \"request_digest_version\": \"1\", \"scope_origin\": \"legacy-unknown\"}",
+      "name": "legacy.classified_unattributable_unverified",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"kind\": \"replay\", \"task_ref\": {\"attempt\": 1, \"job_id\": \"legacy_commit_job\", \"task_id\": \"legacy_commit_job\"}}",
+      "name": "legacy.replay_verified_row_returns_original_task",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"detail\": \"idempotency key was already used under a different verified scope\", \"kind\": \"conflict\"}",
+      "name": "legacy.other_scope_is_conflict_not_replay",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"detail\": \"legacy idempotency claim cannot be attributed to a verified principal; reconcile instead of resubmitting\", \"kind\": \"conflict\"}",
+      "name": "legacy.unattributable_row_is_conflict_not_adopted",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"tampered_claim\": \"conflict\", \"tampered_verified\": false, \"verified\": true}",
+      "name": "legacy.request_digest_v1_verifies_and_rejects_tamper",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"recomputed\": \"auto_c7c62021c159e9f14f4a32daa8ef8d62\", \"stored\": \"auto_c7c62021c159e9f14f4a32daa8ef8d62\", \"task_id\": \"legacy_auto_job\"}",
+      "name": "legacy.auto_derivation_is_byte_frozen",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"authenticated_detail\": \"legacy prepare operation cannot be attributed to the verified caller (scope='local-single', epoch=0); reconcile instead of re-preparing under the same client key\", \"authenticated_refused\": true, \"legacy_key\": \"op_b81ce85904615add7aa9272c2ac07e4b\", \"local_merge_operation\": \"op_4dbbbc84328149fa897be719a764bf66\"}",
+      "name": "prepare.legacy_v1_row_merge_is_local_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"identity_version\": \"2\", \"key\": \"prep_a95f5d0e12923a73c4ad1f79224aa2f1\"}",
+      "name": "prepare.new_row_is_v2",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"indexes\": [\"idx_data_operations_client_key\", \"idx_data_operations_identity_client_key\", \"idx_data_operations_key\", \"idx_data_operations_resource\", \"idx_data_operations_state\", \"sqlite_autoindex_data_operations_1\", \"sqlite_autoindex_data_operations_2\"], \"prepare_schema_version\": 2}",
+      "name": "prepare.v1_unique_index_survives_v2_upgrade",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"history_verified\": false, \"problems\": [{\"attempt\": 1, \"code\": \"binding_missing\", \"usage_id\": \"usage_legacy_0001\"}], \"receipt\": {\"attempt\": 1, \"binding_digest\": \"\", \"budget_id\": \"\", \"budget_reservation_id\": \"\", \"chain_digest\": \"\", \"core_hours\": \"0.033333\", \"cores\": 2, \"job_id\": \"legacy_usage_job\", \"payload_digest\": \"\", \"plan_identity\": \"\", \"producer\": \"\", \"recorded_at\": \"2026-10-27T11:42:05.059268+00:00\", \"release_id\": \"\", \"reservation_id\": \"res_legacy_0001\", \"run_id\": \"\", \"seconds\": 60, \"step_identities_json\": \"[]\", \"submission_id\": \"\", \"trusted_source\": \"\", \"usage_id\": \"usage_legacy_0001\"}, \"totals\": {\"core_hours\": \"0.083333\", \"core_seconds\": 300, \"receipts\": 4}}",
+      "name": "usage.historical_rows_preserved_not_fabricated",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"proposal\": {\"digest\": \"sha256:0524f48e604ceff5dbfc3baacc83b3420f6289a2f05edd7193a939b16493cb83\", \"revision\": 1}, \"record\": {\"digest\": \"sha256:ae62c2327f53513258cf43bb7653fada101e568a388e0d8d8d06cb5a76fcc6f5\", \"revision\": 1}}",
+      "name": "research.record_and_proposal_read_only_readable",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"descriptor_digest\": \"sha256:b9bf989fc63e2b23fd52db1f5010b62b5956fa2ff3a41e362b360e77fb5dd7be\", \"expected\": \"sha256:b9bf989fc63e2b23fd52db1f5010b62b5956fa2ff3a41e362b360e77fb5dd7be\", \"snapshot_files\": {\"descriptor.json\": \"b9bf989fc63e2b23fd52db1f5010b62b5956fa2ff3a41e362b360e77fb5dd7be\", \"snapshot.json\": \"55a0e435c08e03ad6be98666befafd54d620b0ba80ea998f52a1394cea71a297\", \"task-binding.json\": \"61908a9febe7c7ef74c65d891a162d63db34aa4828019be2ab25985f82a8f41d\", \"view-model.json\": \"d5104c2ab176f390874967e93df0c5bd9a6116e7812eb14e6065acad2fe834e9\"}}",
+      "name": "snapshot.capability_freeze_read_only_readable",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"after_usage\": {\"admission_usage_receipts\": 4}, \"before_usage\": {\"admission_usage_receipts\": 4}, \"unchanged\": {\"approvals\": true, \"idempotency_count\": true, \"jobs_count\": true, \"legacy_job_rows\": true, \"research\": true, \"research_budget\": true, \"usage\": true}}",
+      "name": "state.no_legacy_row_deleted_or_rewritten",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"identity_version\": \"2\", \"key\": \"candidate-new-key\", \"migration_state\": \"native\", \"request_digest_version\": \"2\", \"scope_origin\": \"verified\"}",
+      "name": "new.claim_is_v2_native_and_not_legacy_namespace",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"auto_after\": [\"auto_c7c62021c159e9f14f4a32daa8ef8d62\"], \"auto_before\": [\"auto_c7c62021c159e9f14f4a32daa8ef8d62\"], \"op_after\": [\"op_7444cdb53aa7d2e170658bddf850abbe\"], \"op_before\": [\"op_7444cdb53aa7d2e170658bddf850abbe\"]}",
+      "name": "new.no_auto_or_op_ledger_keys_written",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"after\": {\"idempotency_records\": 7}, \"before\": {\"idempotency_records\": 6}}",
+      "name": "state.new_rows_only_the_deliberate_ones",
+      "status": "PASS"
+    }
+  ],
+  "seed_side": "previous",
+  "side": "candidate",
+  "state": {
+    "admission_schema_version": 26,
+    "jobs_schema_version": 26,
+    "legacy_claims": {
+      "auto": "auto_c7c62021c159e9f14f4a32daa8ef8d62",
+      "committed": "legacy-submit-key",
+      "pending": "legacy-pending-key",
+      "unscoped": "legacy-unscoped-key"
+    },
+    "prepare_schema_version": 2
+  },
+  "summary": {
+    "failed": 0,
+    "failing": [],
+    "passed": 20,
+    "status": "PASS",
+    "total": 20
+  }
+}
