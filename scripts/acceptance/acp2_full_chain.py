@@ -224,6 +224,9 @@ class FullChain:
         self.status = "PASS"
         self.reasons: list[str] = []
         self.findings: list[dict[str, str]] = []
+        #: Previously recorded findings this run re-tested and verified closed
+        #: (F7/F8 carry ``status: "closed"`` + the evidence that closed them).
+        self.closed_findings: list[dict[str, Any]] = []
         self.work_root = Path(tempfile.mkdtemp(prefix="acp2-m4-01-", dir="/tmp/opencode"))
         self.run_root = self.work_root / "runs"
         self.controller = Controller(
@@ -531,6 +534,7 @@ class FullChain:
             "evidence_kind": runner.get("evidence_kind"),
             "errors": runner.get("errors"),
             "findings": runner.get("findings"),
+            "closed_findings": runner.get("closed_findings"),
             "duration_ms": duration,
             "dir": str(out_dir),
         }
@@ -544,6 +548,9 @@ class FullChain:
         for finding in runner.get("findings") or []:
             if finding not in self.findings:
                 self.findings.append(finding)
+        for finding in runner.get("closed_findings") or []:
+            if finding not in self.closed_findings:
+                self.closed_findings.append(finding)
         if completed.returncode == 2 or runner.get("status") == "NOT_VERIFIED":
             raise SliceError(
                 "mcp.round",
@@ -2220,11 +2227,19 @@ class FullChain:
             "- a real model or DSH provider run (M4-02);\n"
             "- real browser/Chromium (M4-02; the Workbench row here is Node + real HTTP);\n"
             "- remote/LSF publication retry against a real cluster (M4-03).\n\n"
+            "## Findings\n\n"
+            "`summary.json` separates the two states:\n\n"
+            "- `findings` — defects this run observed and did **not** work around "
+            "(`status: open`); an empty list is a requirement, not a formality;\n"
+            "- `closed_findings` — findings recorded by an earlier run, re-tested here "
+            "with `status: closed` and the evidence that closed them (F7: the product "
+            "session observes the negotiated 8+10 surface; F8: the server-issued wait "
+            "cursor round-trips through the machine envelope and resumes the wait).\n\n"
             "## Fault matrix\n\n"
             "| case | expected | observed | result |\n|---|---|---|---|\n"
             f"{rows}\n\n"
             "## Files\n\n"
-            "- `summary.json` — chain, rounds, findings, limitations\n"
+            "- `summary.json` — chain, rounds, open/closed findings, limitations\n"
             "- `fault-matrix.json` — one row per case with its assertion\n"
             "- `performance.json` — Data idempotency + Controller call counts + p50/p95\n"
             "- `stub-boundaries.json` — the declared seams\n"
@@ -2347,6 +2362,7 @@ class FullChain:
             "failed_steps": [step["name"] for step in self.steps if step["status"] == "FAIL"],
             "reasons": self.reasons,
             "findings": self.findings,
+            "closed_findings": self.closed_findings,
             "chain": {
                 "project_id": self.project,
                 "round0": {
@@ -2397,6 +2413,7 @@ class FullChain:
                     key: (self.round0.get("runner") or {}).get(key)
                     for key in (
                         "protocol_version",
+                        "tools",
                         "task_ref_source",
                         "prepare",
                         "supervisor",
@@ -2408,6 +2425,7 @@ class FullChain:
                     key: (self.round1.get("runner") or {}).get(key)
                     for key in (
                         "protocol_version",
+                        "tools",
                         "task_ref_source",
                         "prepare",
                         "supervisor",

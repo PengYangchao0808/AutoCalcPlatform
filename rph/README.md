@@ -44,12 +44,15 @@ is a deliberate gate change. Shell/QC/LSF execution stays forbidden everywhere.
 bridge bound to the server's answer:
 
 ```text
-initialize/host handshake -> real tools/list -> tools/call:acp_capabilities
-  -> handshake.negotiatedExtensions -> new Bridge(client, {negotiatedExtensions})
+initialize/host handshake -> tools/call:acp_capabilities (negotiation)
+  -> real tools/list (the negotiated surface) -> handshake.negotiatedExtensions
+  -> new Bridge(client, {negotiatedExtensions})
 ```
 
 - `src/platform-session.ts`: `openMcpSession` / `openToolRuntimeSession` /
-  `buildPlatformSession`. `product` mode fails closed on a protocol mismatch,
+  `buildPlatformSession`. The application handshake runs **before**
+  `tools/list` — the platform hides the ten P2 tools until the session
+  negotiates (M4-01/F7), so `product` mode fails closed on a protocol mismatch,
   an un-negotiated `acp.research.v1`, or a `tools/list` that does not cover the
   promised P1+P2 surface; `acceptance` mode records the real answer and keeps
   P2 locked. There is **no option** that can inject a negotiated extension.

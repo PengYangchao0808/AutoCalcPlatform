@@ -13,6 +13,9 @@
  * Adapter: product mode fails closed on a protocol mismatch, an un-negotiated
  *     extension, or an incomplete tool list; the negotiated set comes only from
  *     the server's answer (there is no injection option).
+ * F7: product mode performs the application handshake **before** `tools/list`,
+ *     because the real adapter hides the ten P2 tools until the session
+ *     negotiates (found by M4-01, closed in M4-02).
  */
 
 import assert from "node:assert/strict";
@@ -229,6 +232,74 @@ test("F2: restoration is idempotent", TEST_OPTIONS, () => {
   assert.deepEqual(twice.result.structuredContent, once.result.structuredContent);
   assert.deepEqual(twice.report.dropped_audit_members, []);
   assert.deepEqual(twice.report.withheld_host_paths, []);
+});
+
+/**
+ * F8 (found by M4-01, closed in M4-02): the bounded-wait `cursor` is a
+ * server-issued opaque handle.  The restoration chain must not rewrite it (the
+ * path/URI rules do not match base64url) and the bridge guard must not refuse
+ * it (it is not a credential), so the value a caller received is the value it
+ * can send back — and the server can still decode it.
+ */
+test("F8: a wait cursor survives restoration and is still decodable", TEST_OPTIONS, async () => {
+  const payload = {
+    events: [{ kind: "approval", ref: APPROVAL_REF, state: "approved", revision: 2 }],
+    cursor: "",
+    snapshot: { project_id: PROJECT_ID, refs: [] },
+    snapshot_revision: "sha256:" + "a".repeat(64),
+    timed_out: false,
+  };
+  const encode = (): string =>
+    Buffer.from(
+      JSON.stringify({
+        at: 1790000000.0,
+        project: PROJECT_ID,
+        rev: "sha256:" + "a".repeat(64),
+        v: "w1",
+      }),
+      "utf8",
+    ).toString("base64url");
+  payload.cursor = encode();
+  const raw: BridgeToolResult = {
+    isError: false,
+    structuredContent: { schema_version: 1, status: "ok", data: payload, error: null },
+  };
+
+  const restored = restorePlatformResult(raw);
+  assert.deepEqual(restored.report.dropped_audit_members, []);
+  assert.deepEqual(restored.report.withheld_host_paths, []);
+  const restoredData = restored.result.structuredContent["data"] as Record<string, unknown>;
+  assert.equal(restoredData["cursor"], payload.cursor);
+
+  // The strict guard accepts it (not a credential, no host path) …
+  const projection = projectToolResult("acp_research_wait_v1", restored.result);
+  assert.equal(projection.outcome, "ok");
+  // … and the decoded cursor still names this project and revision.
+  const decoded = JSON.parse(
+    Buffer.from(String(restoredData["cursor"]), "base64url").toString("utf8"),
+  ) as Record<string, unknown>;
+  assert.equal(decoded["project"], PROJECT_ID);
+  assert.equal(decoded["rev"], payload.snapshot_revision);
+  assert.equal(decoded["v"], "w1");
+});
+
+test("F8: the restoration still withholds a host path next to the cursor", TEST_OPTIONS, () => {
+  const raw: BridgeToolResult = {
+    isError: false,
+    structuredContent: {
+      data: {
+        cursor: Buffer.from(
+          JSON.stringify({ at: 1, project: PROJECT_ID, rev: "0", v: "w1" }),
+          "utf8",
+        ).toString("base64url"),
+        note: "read /ACPServer/acp2-runs/remediation/jobs/job-9/result.json",
+      },
+    },
+  };
+  const restored = restorePlatformResult(raw);
+  const data = restored.result.structuredContent["data"] as Record<string, unknown>;
+  assert.equal(String(data["note"]).includes("/ACPServer/acp2-runs"), false);
+  assert.equal(restored.report.withheld_host_paths.length, 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -455,6 +526,116 @@ test("adapter: a negotiated session binds the bridge to the server's answer", TE
   // P2 is usable on the session's bridge.
   const p2 = await session.bridge.executeP2("research.snapshot", {});
   assert.equal(p2.tool, "acp_research_snapshot_v1");
+});
+
+/**
+ * F7 (found by M4-01, closed in M4-02): a server that behaves like the real ACP
+ * adapter — the ten P2 tools exist only once `tools/call:acp_capabilities`
+ * negotiated the extension.  A product-mode session must handshake *before* it
+ * lists tools, otherwise it can never observe the negotiated surface.
+ */
+test("F7: product mode negotiates before listing, so the P2 surface is observed", TEST_OPTIONS, async () => {
+  const order: string[] = [];
+  let negotiated = false;
+  const { transport } = fakeTransport((frame) => {
+    const method = String(frame["method"] ?? "");
+    if (method === "initialize") {
+      order.push("initialize");
+      return {
+        jsonrpc: "2.0",
+        id: frame["id"],
+        result: {
+          protocolVersion: MCP_PROTOCOL_VERSION,
+          capabilities: { tools: {} },
+          serverInfo: { name: "acp", version: "0.3.0" },
+        },
+      };
+    }
+    if (method === "tools/call") {
+      const params = (frame["params"] ?? {}) as Record<string, unknown>;
+      if (params["name"] === RESEARCH_HANDSHAKE_TOOL) {
+        order.push("handshake");
+        negotiated = true;
+        return {
+          jsonrpc: "2.0",
+          id: frame["id"],
+          result: {
+            isError: false,
+            structuredContent: capabilitiesEnvelope({ negotiated: true }),
+            content: [],
+          },
+        };
+      }
+      return null;
+    }
+    if (method === "tools/list") {
+      order.push("tools/list");
+      // The real adapter hides the ten P2 tools until the session negotiates.
+      const tools = negotiated ? [...P1_TOOL_NAMES, ...ALL_P2_TOOL_NAMES] : [...P1_TOOL_NAMES];
+      return { jsonrpc: "2.0", id: frame["id"], result: { tools: toolDescriptors(tools) } };
+    }
+    return null;
+  });
+  const client = await initializedClient(transport);
+  order.length = 0; // the helper's own initialize is not part of this assertion
+
+  const session = await openMcpSession(client, { mode: "product" });
+
+  assert.deepEqual(order, ["handshake", "tools/list"]);
+  assert.equal(session.mode, "product");
+  assert.equal(session.handshake.status, "negotiated");
+  assert.equal(session.researchEnabled, true);
+  assert.equal(session.toolNames.length, P1_TOOL_NAMES.length + ALL_P2_TOOL_NAMES.length);
+  for (const name of [...P1_TOOL_NAMES, ...ALL_P2_TOOL_NAMES]) {
+    assert.equal(session.toolNames.includes(name), true, name);
+  }
+});
+
+test("F7: an un-negotiated product session is refused before tools/list", TEST_OPTIONS, async () => {
+  const order: string[] = [];
+  const { transport } = fakeTransport((frame) => {
+    const method = String(frame["method"] ?? "");
+    if (method === "initialize") {
+      return {
+        jsonrpc: "2.0",
+        id: frame["id"],
+        result: {
+          protocolVersion: MCP_PROTOCOL_VERSION,
+          capabilities: { tools: {} },
+          serverInfo: { name: "acp", version: "0.3.0" },
+        },
+      };
+    }
+    if (method === "tools/call") {
+      order.push("handshake");
+      return {
+        jsonrpc: "2.0",
+        id: frame["id"],
+        result: {
+          isError: false,
+          structuredContent: capabilitiesEnvelope({ negotiated: false }),
+          content: [],
+        },
+      };
+    }
+    if (method === "tools/list") {
+      order.push("tools/list");
+      return {
+        jsonrpc: "2.0",
+        id: frame["id"],
+        result: { tools: toolDescriptors([...P1_TOOL_NAMES]) },
+      };
+    }
+    return null;
+  });
+  const client = await initializedClient(transport);
+  await assert.rejects(
+    () => openMcpSession(client, { mode: "product" }),
+    (error: unknown) =>
+      error instanceof PlatformSessionError &&
+      error.code === "research_extension_not_negotiated",
+  );
+  assert.deepEqual(order, ["handshake"]);
 });
 
 test("adapter: product mode refuses a protocol mismatch", TEST_OPTIONS, async () => {

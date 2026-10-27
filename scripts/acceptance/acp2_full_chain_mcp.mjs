@@ -245,6 +245,7 @@ async function main() {
     supervisor: null,
     errors,
     findings,
+    closed_findings: [],
     trace_path: trace.path,
   };
 
@@ -305,50 +306,68 @@ async function main() {
       recordError("mcp.initialize", error);
     }
 
-    // 2. The real session: negotiation is taken only from the server answer.
+    // 2. The real session, in **product** mode: the application handshake runs
+    //    before `tools/list`.
     //
-    // F7 (found by M4-01): `openMcpSession` lists tools *before* the
-    // application handshake, while the server hides the ten P2 tools until
-    // negotiation.  A `product`-mode session therefore cannot pass on a server
-    // that (correctly) hides them.  This runner opens the session in
-    // `acceptance` mode (real negotiation, no capability injection), then
-    // re-lists the tool surface and asserts the ten research tools are really
-    // visible.  The assertion is the product promise; the ordering defect is
-    // recorded in the M4-01 evidence instead of being worked around silently.
+    // F7 (found by M4-01, closed here): `openMcpSession` used to list tools
+    // *before* the handshake, while the server hides the ten P2 tools until
+    // negotiation — so a product-mode session could never observe the
+    // negotiated surface on a correct server.  The adapter now negotiates
+    // first (initialize -> tools/call:acp_capabilities -> tools/list) and this
+    // runner asserts the product promise on the real server: 8 P1 + 10 P2.
     try {
       session = await openMcpSession(launched.client, {
-        mode: "acceptance",
+        mode: "product",
         projectId: config.project_id,
-        client: { name: "acp2-full-chain", version: "m4-01" },
+        client: { name: "acp2-full-chain", version: "m4-02" },
       });
-      const afterHandshake = await launched.client.listTools();
-      result.tools = afterHandshake.map((tool) => tool.name).sort();
+      result.tools = [...session.toolNames].sort();
       const researchVisible = result.tools.filter((name) => name.startsWith("acp_research_"));
+      const p1Visible = result.tools.filter(
+        (name) => name.startsWith("acp_") && !name.startsWith("acp_research_"),
+      );
       trace.record("mcp.session", {
         response: {
+          mode: session.mode,
           status: session.handshake.status,
           negotiated: session.negotiatedExtensions,
           research_enabled: session.researchEnabled,
-          tools_before_handshake: session.toolNames.length,
-          tools_after_handshake: result.tools.length,
+          tools_observed: result.tools.length,
+          p1_tools_visible: p1Visible.length,
           research_tools_visible: researchVisible.length,
         },
         digest: digestOf({ tools: result.tools, negotiated: session.negotiatedExtensions }),
       });
       if (!session.researchEnabled) {
         errors.push("mcp.session: the research extension was not negotiated");
-      } else {
-        findings.push({
-          id: "F7-session-tools-list-order",
-          detail:
-            "openMcpSession(mode=product) lists tools before the application handshake, " +
-            "while the server hides the ten P2 tools until negotiation; product mode can " +
-            "therefore never observe the negotiated surface on this server",
-        });
       }
       if (researchVisible.length !== 10) {
         errors.push(
           `mcp.session: only ${researchVisible.length} research tools are visible after negotiation`,
+        );
+      }
+      if (result.tools.length === 18) {
+        result.closed_findings.push({
+          id: "F7-session-tools-list-order",
+          status: "closed",
+          found_by: "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+          closed_by:
+            "M4-02: openMcpSession performs the acp_capabilities negotiation before " +
+            "tools/list (platform-session.ts), so a product-mode session sees the " +
+            "negotiated surface",
+          detail:
+            "a real product-mode session observes the negotiated 8+10 tool surface on a " +
+            "server that hides the ten P2 tools until negotiation",
+          evidence: {
+            session_mode: session.mode,
+            handshake_status: session.handshake.status,
+            tools_observed: result.tools.length,
+            research_tools_visible: researchVisible.length,
+          },
+        });
+      } else {
+        errors.push(
+          `mcp.session: the product session observed ${result.tools.length} tools, expected 8+10`,
         );
       }
     } catch (error) {
@@ -471,10 +490,11 @@ async function main() {
 
     // 5. Bounded wait over the approval authority (real P2-R4 call) + replay.
     //
-    // F8 (found by M4-01): the machine envelope redacts the opaque `cursor`
-    // value ("<redacted>"), so a cursor cannot be sent back over MCP and the
-    // bounded wait cannot resume.  The first (authoritative) wait is asserted;
-    // the replay defect is recorded as a finding, not worked around.
+    // F8 (found by M4-01, closed here): the machine envelope used to redact the
+    // server-issued opaque `cursor` ("<redacted>"), so a bounded wait could not
+    // be resumed over MCP.  The envelope now carries a declared opaque handle
+    // through verbatim (machine_output.PASSTHROUGH_FIELD_VALUES); the replay is
+    // asserted for real instead of being worked around.
     try {
       const wait = await callP2("research.wait", {
         kinds: ["approval"],
@@ -486,6 +506,7 @@ async function main() {
         first_timed_out: wait.data === null ? null : wait.data["timed_out"],
         first_events: wait.data === null ? null : (wait.data["events"] ?? []).length,
         cursor_present: typeof cursor === "string" && cursor.length > 0,
+        cursor_redacted: typeof cursor === "string" && cursor.includes("<redacted"),
         cursor_roundtrip: null,
         replay_timed_out: null,
         replay_error: null,
@@ -493,7 +514,17 @@ async function main() {
       if (result.wait.first_events === 0) {
         errors.push("research.wait: the approved round produced no observed event");
       }
-      if (result.wait.cursor_present) {
+      if (!result.wait.cursor_present) {
+        errors.push("research.wait: the platform issued no opaque cursor");
+      } else if (result.wait.cursor_redacted) {
+        findings.push({
+          id: "F8-wait-cursor-redacted",
+          status: "open",
+          detail:
+            "the P2 `research.wait` cursor is redacted by the machine envelope: " +
+            JSON.stringify(cursor),
+        });
+      } else {
         const replay = await callP2("research.wait", {
           kinds: ["approval"],
           cursor,
@@ -507,12 +538,31 @@ async function main() {
           result.wait.replay_error = error;
           findings.push({
             id: "F8-wait-cursor-redacted",
+            status: "open",
             detail:
-              "the P2 `research.wait` cursor is redacted by the machine envelope, so a " +
-              "bounded wait cannot be resumed over MCP: " + JSON.stringify(error),
+              "the P2 `research.wait` cursor cannot be replayed over MCP: " +
+              JSON.stringify(error),
           });
         } else if (result.wait.replay_timed_out !== true) {
           errors.push("research.wait: a replayed cursor fabricated an event");
+        } else {
+          result.closed_findings.push({
+            id: "F8-wait-cursor-redacted",
+            status: "closed",
+            found_by: "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+            closed_by:
+              "M4-02: machine_output.PASSTHROUGH_FIELD_VALUES carries a server-issued " +
+              "opaque wait cursor through the envelope verbatim",
+            detail:
+              "the cursor issued by `research.wait` survives the machine envelope and a " +
+              "replayed bounded wait reports timed_out without inventing an event",
+            evidence: {
+              cursor_chars: cursor.length,
+              replay_timed_out: result.wait.replay_timed_out,
+              replay_events:
+                replay.data === null ? null : (replay.data["events"] ?? []).length,
+            },
+          });
         }
       }
     } catch (error) {

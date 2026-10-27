@@ -14,9 +14,12 @@
  *      negotiated set is taken **only** from the server's `extensions[]`
  *      answer.  There is no option, constant or fallback that can inject a
  *      negotiated extension: "not forged" is structural, not a convention;
- *   4. `tools/list` is injected verbatim and checked for coverage, so a session
+ *   4. the handshake runs **before** `tools/list`: a server hides the ten P2
+ *      tools until the session negotiates (M2-01c), so a pre-handshake list can
+ *      never show the negotiated surface (F7, found by M4-01);
+ *   5. `tools/list` is injected verbatim and checked for coverage, so a session
  *      never claims a tool surface it did not observe;
- *   5. product mode refuses to start on a protocol mismatch, an un-negotiated
+ *   6. product mode refuses to start on a protocol mismatch, an un-negotiated
  *      P2 extension, or a tool list that does not cover the promised surface
  *      (fail-closed, typed codes).
  *
@@ -121,6 +124,41 @@ function missingToolNames(
 }
 
 /**
+ * The two product-mode refusals that do **not** depend on the tool surface.
+ *
+ * Split out so `openMcpSession` can fail closed on a protocol mismatch or an
+ * un-negotiated extension *before* it lists tools: a server that hides the P2
+ * tools until negotiation would otherwise be judged on a list nobody could
+ * have observed (F7).
+ */
+function handshakeRefusal(input: {
+  readonly protocolVersion: string;
+  readonly expectedProtocolVersion: string;
+  readonly handshake: ResearchHandshake;
+}): PlatformSessionError | null {
+  if (input.protocolVersion !== input.expectedProtocolVersion) {
+    return new PlatformSessionError(
+      "protocol_version_mismatch",
+      `the server answers ${input.protocolVersion || "<none>"}, this client speaks ${input.expectedProtocolVersion}`,
+      { expected: input.expectedProtocolVersion, observed: input.protocolVersion || null },
+    );
+  }
+  if (input.handshake.status !== "negotiated") {
+    return new PlatformSessionError(
+      "research_extension_not_negotiated",
+      `the platform did not negotiate ${BRIDGE_EXTENSION_ID}@${BRIDGE_EXTENSION_VERSION}`,
+      {
+        extension: BRIDGE_EXTENSION_ID,
+        expected_version: BRIDGE_EXTENSION_VERSION,
+        status: input.handshake.status,
+        refusal: input.handshake.refusal,
+      },
+    );
+  }
+  return null;
+}
+
+/**
  * Build a session from already observed facts.
  *
  * Every argument is evidence: a protocol version the transport answered, a tool
@@ -140,24 +178,13 @@ export function buildPlatformSession(input: {
   const mode: PlatformSessionMode = input.mode ?? "product";
   const expected = input.expectedProtocolVersion ?? MCP_PROTOCOL_VERSION;
   if (mode === "product") {
-    if (input.protocolVersion !== expected) {
-      throw new PlatformSessionError(
-        "protocol_version_mismatch",
-        `the server answers ${input.protocolVersion || "<none>"}, this client speaks ${expected}`,
-        { expected, observed: input.protocolVersion || null },
-      );
-    }
-    if (input.handshake.status !== "negotiated") {
-      throw new PlatformSessionError(
-        "research_extension_not_negotiated",
-        `the platform did not negotiate ${BRIDGE_EXTENSION_ID}@${BRIDGE_EXTENSION_VERSION}`,
-        {
-          extension: BRIDGE_EXTENSION_ID,
-          expected_version: BRIDGE_EXTENSION_VERSION,
-          status: input.handshake.status,
-          refusal: input.handshake.refusal,
-        },
-      );
+    const refusal = handshakeRefusal({
+      protocolVersion: input.protocolVersion,
+      expectedProtocolVersion: expected,
+      handshake: input.handshake,
+    });
+    if (refusal !== null) {
+      throw refusal;
     }
     const toolNames = input.tools.map((tool) => tool.name);
     const missing = missingToolNames(toolNames, [
@@ -194,8 +221,15 @@ export function buildPlatformSession(input: {
  * Open a session over an **initialized** MCP stdio client.
  *
  * The client must already have completed `initialize` (the launcher's caller
- * owns that lifecycle).  `tools/list` and the handshake are both real calls;
+ * owns that lifecycle).  Both `tools/list` and the handshake are real calls;
  * neither is derived from configuration.
+ *
+ * Order is part of the contract (F7, found by M4-01): the application handshake
+ * runs **first**, then `tools/list`.  A server hides the ten P2 tools until the
+ * session negotiates, so listing first would judge a product session on the
+ * pre-negotiation P1 surface — a session that can never pass on a correct
+ * server.  A product-mode refusal that does not need the tool list (protocol
+ * mismatch, un-negotiated extension) is raised before the list is requested.
  */
 export async function openMcpSession(
   client: McpStdioClient,
@@ -211,13 +245,24 @@ export async function openMcpSession(
     client,
     options.onRestore === undefined ? {} : { onRestore: options.onRestore },
   );
-  const tools = await client.listTools();
+  const mode: PlatformSessionMode = options.mode ?? "product";
   const handshake = await negotiateResearch(platform, {
     ...(options.projectId === undefined ? {} : { projectId: options.projectId }),
     ...(options.client === undefined ? {} : { client: options.client }),
   });
+  if (mode === "product") {
+    const refusal = handshakeRefusal({
+      protocolVersion: client.protocolVersion ?? "",
+      expectedProtocolVersion: options.expectedProtocolVersion ?? MCP_PROTOCOL_VERSION,
+      handshake,
+    });
+    if (refusal !== null) {
+      throw refusal;
+    }
+  }
+  const tools = await client.listTools();
   return buildPlatformSession({
-    ...(options.mode === undefined ? {} : { mode: options.mode }),
+    mode,
     protocolVersion: client.protocolVersion ?? "",
     tools,
     handshake,
@@ -235,6 +280,11 @@ export async function openMcpSession(
  * and tool descriptors (`observedProtocolVersion`/`tools`) so this adapter can
  * apply the same product-mode rules without pretending to have made those
  * calls.
+ *
+ * The host's list is the only surface this adapter can see, so it must be the
+ * one observed **after** the host's own handshake when a P2 surface is claimed:
+ * the platform hides the ten research tools until negotiation (F7), and product
+ * mode refuses an incomplete surface instead of downgrading it silently.
  */
 export async function openToolRuntimeSession(input: {
   readonly runtime: { execute(request: never): Promise<unknown> };

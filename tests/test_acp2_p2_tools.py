@@ -368,6 +368,55 @@ def test_negotiated_calls_reach_the_application_service() -> None:
     assert port.calls[0][2]  # the server-resolved workspace id, never a client claim
 
 
+class _WaitCursorPort(_RecordingResearchPort):
+    """A port whose bounded wait returns one real (server-issued) cursor."""
+
+    def __init__(self, cursor: str) -> None:
+        super().__init__()
+        self.cursor = cursor
+
+    def wait(self, arguments, *, workspace_id):
+        self.calls.append(("wait", dict(arguments), workspace_id))
+        return {
+            "events": [],
+            "cursor": self.cursor,
+            "snapshot_revision": 1,
+            "timed_out": True,
+        }
+
+
+def test_wait_cursor_survives_the_machine_envelope() -> None:
+    """M4-01/F8: an issued cursor round-trips through the envelope verbatim."""
+    issued = encode_wait_cursor(
+        snapshot_revision="sha256:" + "b" * 64,
+        project_id=PROJECT,
+        issued_at=time.time(),
+    )
+    server = _server(_WaitCursorPort(issued))
+    _negotiate(server)
+    result = _call(server, "acp_research_wait_v1", {"kinds": ["approval"], "max_wait_s": 0})
+    assert result["isError"] is False, result
+    data = result["structuredContent"]["data"]
+    assert data["cursor"] == issued
+    assert "<redacted" not in json.dumps(data)
+    # The text frame is the same envelope: the cursor is not lost in one of them.
+    assert issued in result["content"][0]["text"]
+    # And it is a *real* cursor: the server decoder accepts the round-tripped value
+    # and a replayed wait continues from it instead of failing as undecodable.
+    decoded = decode_wait_cursor(data["cursor"], project_id=PROJECT, now=time.time())
+    assert decoded["project"] == PROJECT
+    assert decoded["rev"] == "sha256:" + "b" * 64
+
+
+def test_a_credential_under_the_cursor_field_is_still_redacted() -> None:
+    """The envelope exemption is shape-checked, not a blanket field whitelist."""
+    server = _server(_WaitCursorPort("Bearer " + "c" * 32))
+    _negotiate(server)
+    result = _call(server, "acp_research_wait_v1", {"kinds": ["approval"], "max_wait_s": 0})
+    assert result["isError"] is False, result
+    assert "<redacted" in result["structuredContent"]["data"]["cursor"]
+
+
 def test_missing_research_port_is_a_typed_refusal_not_a_transport_error() -> None:
     server = _server(None)
     _negotiate(server)

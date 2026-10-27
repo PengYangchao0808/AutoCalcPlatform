@@ -181,6 +181,33 @@ def test_the_declared_boundaries_are_written_not_hidden() -> None:
     assert 'EVIDENCE_KIND = "fixture"' in source
 
 
+def test_the_mcp_leg_is_a_real_product_session_and_resumes_the_wait() -> None:
+    """M4-01 found F7/F8 here; the runner must now prove them closed, not hide them."""
+    mcp = MCP_RUNNER.read_text(encoding="utf-8")
+    # F7: the session is opened in *product* mode, so the handshake is performed
+    # before `tools/list` and the negotiated 8+10 surface is asserted for real.
+    assert 'mode: "product"' in mcp
+    assert 'mode: "acceptance"' not in mcp
+    assert "tools_observed" in mcp
+    # F8: the issued cursor is replayed through the envelope (never worked around).
+    assert "cursor_roundtrip" in mcp
+    assert 'id: "F7-session-tools-list-order"' in mcp
+    assert 'id: "F8-wait-cursor-redacted"' in mcp
+    assert 'status: "closed"' in mcp
+    # Both findings are reported as closed *with evidence*, and an open defect is
+    # still reported as open (the two lists never collapse into one).
+    assert "closed_findings" in mcp
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert '"findings": self.findings' in source
+    assert '"closed_findings": self.closed_findings' in source
+    # The machine-envelope passthrough that closes F8 is the declared mechanism.
+    machine_output = (
+        REPO_ROOT / "src" / "acp_services" / "entrypoints" / "machine_output.py"
+    ).read_text(encoding="utf-8")
+    assert "PASSTHROUGH_FIELD_VALUES" in machine_output
+    assert "is_opaque_wait_cursor" in machine_output
+
+
 @pytest.mark.skipif(not EVIDENCE.is_dir(), reason="the committed M4-01 evidence is not present")
 def test_committed_evidence_closes_the_matrix() -> None:
     summary = json.loads((EVIDENCE / "summary.json").read_text(encoding="utf-8"))
@@ -235,6 +262,16 @@ def test_full_chain_end_to_end_matrix(tmp_path: Path) -> None:
     assert matrix["passed"] == matrix["total"] == len(_case_table())
     assert completed.returncode == 0, completed.stderr[-2000:]
     assert "real science" not in json.dumps(summary.get("findings") or [])
+    # F7/F8 (found by M4-01) are re-tested and reported closed with their evidence.
+    closed = {item["id"]: item["status"] for item in summary.get("closed_findings") or []}
+    assert closed.get("F7-session-tools-list-order") == "closed", closed
+    assert closed.get("F8-wait-cursor-redacted") == "closed", closed
+    assert summary.get("findings") == [], summary.get("findings")
+    # The product session observed the real negotiated surface (8 P1 + 10 P2) on
+    # both rounds; the cursor round-trip is part of the wait evidence.
+    for round_key in ("round0", "round1"):
+        tools = (summary["mcp"][round_key] or {}).get("tools") or []
+        assert len(tools) == 18, (round_key, tools)
 
 
 def _environment() -> dict[str, str]:
