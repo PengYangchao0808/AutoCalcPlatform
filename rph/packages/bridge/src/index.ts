@@ -14,14 +14,24 @@ import {
   MemorySubmitIntentStore,
   SubmitIntentConflict,
   SubmitIntentLedger,
+  ResearchStore,
   type SubmitIntentStore,
 } from "@rph/research";
 import type { ResearchRecordRef } from "@rph/research";
 import {
   assertEvidenceView,
+  buildDecisionRecord,
+  evaluateDecision,
+  isAcceptableEvidence,
   parseTaskRef,
   taskRefKey,
+  type ClaimStatus,
+  type DecisionEvaluation,
+  type DecisionRationaleCode,
+  type DecisionRecord,
+  type EvidenceStatus,
   type EvidenceView,
+  type ResearchDecision,
   type TaskRef,
 } from "@rph/research";
 
@@ -2730,4 +2740,108 @@ export function parsePlatformTaskRef(
   projectId = "",
 ): TaskRef {
   return parseTaskRef(payload, projectId);
+}
+
+// ---------------------------------------------------------------------------
+// M3-04: the research policy and the durable submit-intent port
+// ---------------------------------------------------------------------------
+//
+// The Supervisor (`@rph/dsh-bundle`) sits above the bridge in the frozen
+// direction, so it may not import `@rph/research` directly.  The bridge is the
+// only seam that passes the *single* evidence/decision model and its frozen
+// policy through; it adds no rule of its own (no second vocabulary, no local
+// accept test).
+//
+// `createSubmitIntentPort` is the one client-side port the Supervisor needs
+// before a submit: the M1-02 ledger row is persisted **before** the platform
+// call, and the wire key is the M1-01b projection of that persisted key.  A
+// crash between derive and call therefore replays the same key instead of
+// inventing a second task.
+
+export type {
+  ClaimStatus,
+  DecisionEvaluation,
+  DecisionRationaleCode,
+  DecisionRecord,
+  EvidenceStatus,
+  EvidenceView,
+  ResearchDecision,
+};
+export type { TaskRef as ResearchTaskRef } from "@rph/research";
+
+export { buildDecisionRecord, evaluateDecision, isAcceptableEvidence };
+// M3-02/M3-04: the single-hop re-export that lets the composition root build a
+// durable research writer without dsh-bundle importing @rph/research directly
+// (the frozen direction stays cli -> dsh-bundle -> bridge -> research).
+export { ResearchStore };
+
+/** The submit identity the ledger keys on (M1-02 / D-IDENT-07). */
+export interface BridgeSubmitIntentIdentity {
+  readonly project_id: string;
+  readonly research_id: string;
+  readonly round: number;
+  readonly plan_definition_digest: string;
+}
+
+/** A persisted intent: the durable key and its stable wire projection. */
+export interface BridgeSubmitIntentRef {
+  readonly key: string;
+  readonly wire_key: string;
+  readonly created: boolean;
+}
+
+/**
+ * The pre-submit intent port (`SupervisorPorts.submitIntent`).
+ *
+ * `prepare` persists (or replays) the row and returns the key pair; a changed
+ * plan digest for the same round throws `SubmitIntentConflict`
+ * (`code: "plan_digest_changed"`) instead of re-deriving a key.
+ */
+export interface BridgeSubmitIntentPort {
+  prepare(identity: BridgeSubmitIntentIdentity): BridgeSubmitIntentRef;
+  markSubmitted(identity: {
+    readonly project_id: string;
+    readonly research_id: string;
+    readonly round: number;
+  }): boolean;
+}
+
+/**
+ * Adapt the M1-02 ledger into the Supervisor's pre-submit port.
+ *
+ * A caller injects the ledger that owns durability (a `Bridge` instance already
+ * holds one at `bridge.submitIntents`); the default in-memory ledger is a cache
+ * for tests and single-process callers.
+ */
+export function createSubmitIntentPort(
+  ledger: SubmitIntentLedger = new SubmitIntentLedger(),
+): BridgeSubmitIntentPort {
+  return {
+    prepare(identity: BridgeSubmitIntentIdentity): BridgeSubmitIntentRef {
+      const prepared = ledger.prepare({
+        project_id: identity.project_id,
+        research_id: identity.research_id,
+        round: identity.round,
+        plan_definition_digest: identity.plan_definition_digest,
+      });
+      return Object.freeze({
+        key: prepared.intent.key,
+        wire_key: submitWireKey(prepared.intent.key),
+        created: prepared.created,
+      });
+    },
+    markSubmitted(identity: {
+      readonly project_id: string;
+      readonly research_id: string;
+      readonly round: number;
+    }): boolean {
+      return (
+        ledger.markSubmitted({
+          project_id: identity.project_id,
+          research_id: identity.research_id,
+          round: identity.round,
+        }) !== null
+      );
+    },
+  };
 }
