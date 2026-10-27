@@ -219,8 +219,10 @@ export const VERIFY_SCRIPT = `#!/usr/bin/env node
  */
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -269,8 +271,45 @@ for (const [name, symbol] of EXPECTED) {
   resolved.push(name + " -> " + path);
 }
 
+// The published bin, executed from an unrelated absolute directory with no
+// checkout on the module path, and reporting its own package.json version.
+const cliManifest = JSON.parse(
+  readFileSync(join(HERE, "node_modules", "@rph", "cli", "package.json"), "utf8"),
+);
+const binPath = join(HERE, "node_modules", ".bin", "rph");
+assert.ok(existsSync(binPath), "the rph bin is not linked into node_modules/.bin");
+const elsewhere = mkdtempSync(join(tmpdir(), "rph-bin-"));
+const binEnv = { ...process.env };
+delete binEnv.ACP2_CONTROLLER_URL;
+delete binEnv.PYTHONPATH;
+
+const version = spawnSync(binPath, ["--version"], { cwd: elsewhere, env: binEnv, encoding: "utf8", timeout: 60000 });
+assert.equal(version.status, 0, "rph --version failed: " + String(version.stderr));
+assert.equal(
+  version.stdout.trim(),
+  "rph " + cliManifest.version,
+  "the bin prints a version that is not its package.json version",
+);
+
+const help = spawnSync(binPath, ["--help"], { cwd: elsewhere, env: binEnv, encoding: "utf8", timeout: 60000 });
+assert.equal(help.status, 0, "rph --help failed: " + String(help.stderr));
+for (const command of ["rph research", "rph resume", "rph doctor"]) {
+  assert.ok(help.stdout.includes(command), "rph --help does not list " + command);
+}
+
+const doctor = spawnSync(binPath, ["doctor", "--json"], { cwd: elsewhere, env: binEnv, encoding: "utf8", timeout: 60000 });
+assert.ok(
+  doctor.status === 0 || doctor.status === 1,
+  "rph doctor --json exited with " + String(doctor.status),
+);
+const report = JSON.parse(doctor.stdout);
+assert.equal(report.schema, "acp2.rph.doctor.v1");
+assert.ok(Array.isArray(report.checks) && report.checks.length > 0, "doctor reported no checks");
+
 console.log("RPH INSTALL VERIFY PASS");
 for (const line of resolved) console.log("  " + line);
+console.log("  bin: rph " + cliManifest.version + " (from an unrelated cwd)");
+console.log("  doctor: schema " + report.schema + ", " + report.checks.length + " checks");
 `;
 
 export function renderVerifyScript() {

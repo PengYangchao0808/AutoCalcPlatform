@@ -35,6 +35,7 @@ import {
   renderInstallWorkspace,
   sha256File,
   tarballName,
+  VERIFY_SCRIPT,
   verifyChecksums,
   writeChecksums,
 } from "../scripts/install-surface.mjs";
@@ -228,6 +229,26 @@ test("package.mjs wires the install surface into packaging", () => {
     "package.mjs must run the shipped verify script by its canonical name",
   );
   assert.equal(script.includes("overrides:"), false, "overrides belong to install-surface.mjs");
+});
+
+test("the shipped verify script exercises the published bin", () => {
+  // M3-02: the offline proof must run the real `rph` bin from an unrelated cwd
+  // and assert its own package.json version, not just import the modules.
+  for (const marker of [
+    "node_modules",
+    ".bin",
+    "rph",
+    "--version",
+    "--help",
+    "doctor",
+    "acp2.rph.doctor.v1",
+    "rph research",
+    "rph resume",
+    "rph doctor",
+  ]) {
+    assert.equal(VERIFY_SCRIPT.includes(marker), true, `verify-install.mjs must reference ${marker}`);
+  }
+  assert.equal(VERIFY_SCRIPT.includes("mkdtempSync"), true, "the bin runs from a fresh cwd");
 });
 
 test("checksums cover every shipped file and detect tampering", () => {

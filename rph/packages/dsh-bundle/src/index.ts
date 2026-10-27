@@ -262,3 +262,19 @@ export * from "./mcp-stdio-launch.js";
 
 export * from "./platform-result.js";
 export * from "./platform-session.js";
+
+// ---------------------------------------------------------------------------
+// M3-02: portable runtime profiles, composition root, ports and doctor
+// ---------------------------------------------------------------------------
+//
+// `@rph/cli` imports this package only.  The chain stays
+// `cli -> dsh-bundle -> bridge -> research`; the composition root never reaches
+// into a sibling package directly, and the Supervisor state machine is never
+// copied (it is imported from `skills/supervisor.ts`).
+
+export * from "./version.js";
+export * from "./runtime-profile.js";
+export * from "./research-ports.js";
+export * from "./demo.js";
+export * from "./compose.js";
+export * from "./doctor.js";

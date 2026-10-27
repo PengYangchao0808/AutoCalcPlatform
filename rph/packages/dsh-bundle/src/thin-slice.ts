@@ -56,6 +56,7 @@ import { launchMcpStdio, type McpLaunchConfig } from "./mcp-stdio-launch.js";
 import { platformClientFromMcp } from "./mcp-stdio.js";
 import type { ResultRestorationReport } from "./platform-result.js";
 import { openMcpSession, type PlatformSession } from "./platform-session.js";
+import { BUNDLE_VERSION } from "./version.js";
 
 export const THIN_SLICE_SCHEMA = "acp2.m1-06.thin-slice.runner.v1";
 
@@ -503,7 +504,7 @@ export async function runThinSlice(
       session = await openMcpSession(launched.client, {
         mode: "acceptance",
         projectId: config.project_id,
-        client: { name: "rph-thin-slice", version: "0.0.0" },
+        client: { name: "rph-thin-slice", version: BUNDLE_VERSION },
         onRestore: (report) => restoration.push(report),
       });
       bridge = session.bridge;

@@ -3,16 +3,21 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "RPH user entry point (help/usage only until it launches the frozen client)",
+  "description": "RPH user entry point: research/resume/doctor over the frozen DSH client",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "rph": "./dist/main.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b"
   },

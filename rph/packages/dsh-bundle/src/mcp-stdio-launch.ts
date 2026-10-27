@@ -116,6 +116,30 @@ class ChildTransport implements McpTransport {
 const STDERR_TAIL_LIMIT = 8192;
 
 /**
+ * The one approved child argv: `python -m acp mcp serve --controller <url>`.
+ *
+ * The argv lives in this file (and only here) so `check-boundaries` can keep a
+ * single literal allowlist for "something that looks like an MCP controller
+ * adapter": a second module spelling `mcp serve` is a gate failure, not a
+ * convention.
+ */
+export function acpMcpServeArgs(controllerUrl: string): readonly string[] {
+  if (typeof controllerUrl !== "string" || controllerUrl.length === 0) {
+    throw new TypeError("acpMcpServeArgs requires a controller URL");
+  }
+  return Object.freeze([
+    "-m",
+    "acp",
+    "mcp",
+    "serve",
+    "--transport",
+    "stdio",
+    "--controller",
+    controllerUrl,
+  ]);
+}
+
+/**
  * Launch `acp mcp serve` and wrap its stdio in an `McpStdioClient`.
  *
  * Throws a `TypeError` for a missing command; a child that cannot start is

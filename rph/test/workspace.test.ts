@@ -197,5 +197,8 @@ test("cli parser rejects unknown arguments and missing profile values", () => {
   assert.throws(() => parseArgs(["--profile", "prod"]), /unknown profile/);
   const text = usage();
   assert.equal(text.includes("--profile <web|headless>"), true);
-  assert.equal(text.includes("never starts a Controller"), true);
+  // M3-02: the CLI has real commands now; it still never starts a Controller
+  // and its single process seam is the bundle's named launcher.
+  assert.equal(text.includes("No command starts a Controller"), true);
+  assert.equal(text.includes("acp mcp serve"), true);
 });

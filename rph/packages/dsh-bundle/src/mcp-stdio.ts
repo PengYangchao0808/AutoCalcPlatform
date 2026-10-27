@@ -23,11 +23,18 @@ import {
   withResultRestoration,
   type RestorationSink,
 } from "./platform-result.js";
+import { BUNDLE_VERSION } from "./version.js";
 
 /** Protocol version this client speaks (the ACP adapter's supported version). */
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const MCP_CLIENT_NAME = "rph-acp-bridge";
-export const MCP_CLIENT_VERSION = "0.0.0";
+/**
+ * The client identity sent in `initialize.clientInfo`.
+ *
+ * Not a second version constant: it is this package's `package.json` version
+ * (M3-02 single-source rule).
+ */
+export const MCP_CLIENT_VERSION = BUNDLE_VERSION;
 export const MCP_DEFAULT_TIMEOUT_MS = 30_000;
 
 /** One bidirectional line transport (stdout/stdin of the MCP child). */

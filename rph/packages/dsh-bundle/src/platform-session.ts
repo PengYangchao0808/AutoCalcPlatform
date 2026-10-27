@@ -99,6 +99,13 @@ export interface PlatformSession {
   readonly handshake: ResearchHandshake;
   /** Taken only from `handshake.negotiatedExtensions`. */
   readonly negotiatedExtensions: readonly NegotiatedExtension[];
+  /**
+   * The verbatim platform client (the injected transport, never a second one).
+   *
+   * M3-02 needs it for the P2 reads the composition root builds (approval,
+   * resume); the bridge stays the P1 semantic layer.
+   */
+  readonly client: PlatformClient;
   /** The bridge, bound to exactly those extensions. */
   readonly bridge: Bridge;
   /** True when P2 may be called (product mode requires it). */
@@ -177,6 +184,7 @@ export function buildPlatformSession(input: {
     toolNames,
     handshake: input.handshake,
     negotiatedExtensions,
+    client: input.client,
     bridge: new Bridge(input.client, { negotiatedExtensions }),
     researchEnabled: negotiatedExtensions.length > 0,
   });
