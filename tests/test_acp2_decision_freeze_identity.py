@@ -290,6 +290,9 @@ def test_prepare_field_authority_is_frozen_and_not_breaking(
     assert prepare["keys"] == [
         "artifact_id",
         "attempt",
+        "expected_digest",
+        "expected_size_bytes",
+        "generation",
         "idempotency_key",
         "job_id",
         "purpose",

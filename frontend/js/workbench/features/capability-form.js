@@ -346,7 +346,7 @@ window.ACPCapabilityForm = (function () {
     if (!state.selected || state.selected.state !== STATE.AVAILABLE) {
       throw failure("ui_form_missing", "no active capability form is selected");
     }
-    var built = uiSubset.buildRequestBody(state.selected.form, state.values);
+    var built = uiSubset.buildFormOutcome(state.selected.form, state.values);
     if (!built.ok) {
       throw failure(built.code || "ui_form_malformed",
         built.problems.length ? built.problems[0].message : "invalid form values",

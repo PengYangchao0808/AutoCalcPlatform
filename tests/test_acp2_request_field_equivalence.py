@@ -162,6 +162,9 @@ def test_frontend_and_bridge_request_keys_are_registered_consumers() -> None:
     submit_bridge_keys = bridge_keys - {"explicit"}
     # M1-06/M2-01: the research binding (budget/plan_digest/proposal_digest/
     # proposal_ref) rides the same submit block and is declared in the policy.
+    # M3-01: the explicit-analysis spelling (evidence) shares this block with
+    # its own analysis_id/input_refs/parameters keys.
+    submit_bridge_keys -= {"analysis_id", "input_refs", "parameters"}
     assert submit_bridge_keys == {
         "workflow",
         "input",
@@ -576,15 +579,18 @@ def test_prepare_field_authority_is_one_table() -> None:
     bridge = (REPO_ROOT / "rph/packages/bridge/src/index.ts").read_text(encoding="utf-8")
     prepare_block = bridge.split('case "prepare":', 1)[1].split('case "read":', 1)[0]
     bridge_keys = set(re.findall(r'put\("([a-z_]+)"', prepare_block))
-    # relative_path joined the body with the M1-06 structure-input leg; it is
-    # a declared field of the D-IDENT-10 authority table.
+    # M1-06 added relative_path; M3-01 added generation/expected_digest/
+    # expected_size_bytes — all declared fields of the D-IDENT-10 table.
     assert bridge_keys == {
         "purpose",
         "job_id",
         "attempt",
         "artifact_id",
-        "idempotency_key",
+        "generation",
         "relative_path",
+        "expected_digest",
+        "expected_size_bytes",
+        "idempotency_key",
     }
     assert bridge_keys <= contract_fields
 

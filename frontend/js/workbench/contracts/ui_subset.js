@@ -686,7 +686,7 @@ ACPWorkbench.contracts.uiSubset = (function () {
    * Returns the bound field table as well: the caller writes it into the
    * proposal provenance together with the descriptor/form digests.
    */
-  function buildRequestBody(form, values) {
+  function buildFormOutcome(form, values) {
     var validated = validateValues(form, values);
     if (!validated.ok) return Object.assign({}, validated, { body: null, fields: [] });
     var request = isObject(form.request) ? form.request : {};
@@ -758,7 +758,7 @@ ACPWorkbench.contracts.uiSubset = (function () {
     tablesMatch: tablesMatch,
     validateFormDocument: validateFormDocument,
     validateValues: validateValues,
-    buildRequestBody: buildRequestBody,
+    buildFormOutcome: buildFormOutcome,
     fieldModel: fieldModel,
   };
 })();

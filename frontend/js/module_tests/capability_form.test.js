@@ -322,7 +322,7 @@ module.exports.register = async function (h) {
   await test("ui-subset: request body is built only from the binding table", () => {
     const uiSubset = uiSubsetOf(h);
     const form = builtinForm();
-    const built = uiSubset.buildRequestBody(form, { source: "O 0 0 0", charge: 2 });
+    const built = uiSubset.buildFormOutcome(form, { source: "O 0 0 0", charge: 2 });
     assert(built.ok, JSON.stringify(built.problems));
     assertEq(built.body.workflow, "singlepoint", "workflow from the form request");
     assertEq(built.body.input.source, "O 0 0 0", "bound source");

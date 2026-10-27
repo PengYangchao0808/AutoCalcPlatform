@@ -71,7 +71,7 @@
           "workflow"
         ],
         "kind": "acceptance-python",
-        "line": 10292,
+        "line": 10636,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -96,7 +96,7 @@
           "schema_version"
         ],
         "kind": "acceptance-python",
-        "line": 5031,
+        "line": 5052,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -120,7 +120,7 @@
           "schema_version"
         ],
         "kind": "acceptance-python",
-        "line": 5143,
+        "line": 5164,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -146,7 +146,7 @@
           "source_refs"
         ],
         "kind": "acceptance-python",
-        "line": 5187,
+        "line": 5208,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -163,7 +163,7 @@
           "purpose"
         ],
         "kind": "acceptance-python",
-        "line": 14121,
+        "line": 14465,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -181,7 +181,7 @@
           "workflow"
         ],
         "kind": "acceptance-python",
-        "line": 14169,
+        "line": 14513,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -198,7 +198,7 @@
           "purpose"
         ],
         "kind": "acceptance-python",
-        "line": 15162,
+        "line": 15506,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -223,7 +223,7 @@
           "workflow"
         ],
         "kind": "acceptance-python",
-        "line": 1503,
+        "line": 1508,
         "note": "",
         "path": "scripts/acceptance/acp2_thin_slice.py",
         "rejected_keys": [],
@@ -251,7 +251,7 @@
           "workflow"
         ],
         "kind": "acp-cli",
-        "line": 2879,
+        "line": 3072,
         "note": "",
         "path": "src/acp/cli.py",
         "rejected_keys": [],
@@ -668,34 +668,20 @@
       },
       {
         "consumer": "rph:buildToolArguments:evidence",
-        "contract_extra_keys": [
-          "budget",
-          "input",
-          "method",
-          "project_id",
-          "proposal_digest",
-          "proposal_ref",
-          "resources",
-          "workflow"
-        ],
+        "contract_extra_keys": [],
         "disposition": "other_request_kind",
         "entry": "mcp",
         "extra_keys": [],
         "keys": [
-          "budget",
+          "analysis_id",
           "explicit",
           "idempotency_key",
-          "input",
-          "method",
-          "plan_digest",
-          "project_id",
-          "proposal_digest",
-          "proposal_ref",
-          "resources",
-          "workflow"
+          "input_refs",
+          "parameters",
+          "plan_digest"
         ],
         "kind": "rph-typescript",
-        "line": 1422,
+        "line": 1598,
         "note": "bridge operation evidence",
         "path": "rph/packages/bridge/src/index.ts",
         "rejected_keys": [],
@@ -710,13 +696,16 @@
         "keys": [
           "artifact_id",
           "attempt",
+          "expected_digest",
+          "expected_size_bytes",
+          "generation",
           "idempotency_key",
           "job_id",
           "purpose",
           "relative_path"
         ],
         "kind": "rph-typescript",
-        "line": 1422,
+        "line": 1598,
         "note": "bridge operation prepare",
         "path": "rph/packages/bridge/src/index.ts",
         "rejected_keys": [],
@@ -724,22 +713,17 @@
       },
       {
         "consumer": "rph:buildToolArguments:read",
-        "contract_extra_keys": [
-          "attempt",
-          "job_id",
-          "resource_id"
-        ],
+        "contract_extra_keys": [],
         "disposition": "other_request_kind",
         "entry": "mcp",
         "extra_keys": [],
         "keys": [
           "artifact_ref",
-          "attempt",
-          "job_id",
-          "resource_id"
+          "encoding",
+          "max_bytes"
         ],
         "kind": "rph-typescript",
-        "line": 1422,
+        "line": 1598,
         "note": "bridge operation read",
         "path": "rph/packages/bridge/src/index.ts",
         "rejected_keys": [],
@@ -757,7 +741,7 @@
           "reference"
         ],
         "kind": "rph-typescript",
-        "line": 1422,
+        "line": 1598,
         "note": "bridge operation status",
         "path": "rph/packages/bridge/src/index.ts",
         "rejected_keys": [],
@@ -782,7 +766,7 @@
           "workflow"
         ],
         "kind": "rph-typescript",
-        "line": 1422,
+        "line": 1598,
         "note": "bridge operation submit",
         "path": "rph/packages/bridge/src/index.ts",
         "rejected_keys": [],
@@ -807,14 +791,14 @@
           "workflow"
         ],
         "kind": "rph-typescript",
-        "line": 1422,
+        "line": 1598,
         "note": "bridge operation validate",
         "path": "rph/packages/bridge/src/index.ts",
         "rejected_keys": [],
         "request_kind": "preflight"
       }
     ],
-    "digest": "sha256:efe5a93d77320e8f032638fa278fdf5f0a425ba02425cbd119a43b88a560e264",
+    "digest": "sha256:6118a5b9c46407e936d7c61af99b6b23b01892eea3446e018f5645ad7b20cb3f",
     "exclusions": [
       "frontend/js/**/module_tests/** (test doubles, not shipped consumers)",
       "rph/packages/**/dist/** (build output)",
