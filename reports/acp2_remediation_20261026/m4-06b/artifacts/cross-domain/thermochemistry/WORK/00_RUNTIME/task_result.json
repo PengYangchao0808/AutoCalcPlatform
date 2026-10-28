@@ -1,0 +1,36 @@
+{
+  "authority": "acp2-m406b.acceptance",
+  "complete": true,
+  "content_digest": "sha256:7b705df0e9de7d95c559d4b0a5c9ec2e07d8ed158b0c1f04a73b7feda9efc6df",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": false,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "ensemble_status",
+    "enthalpy_hartree",
+    "entropy_au",
+    "gibbs_hartree",
+    "standard_state",
+    "temperature_k"
+  ],
+  "result": {
+    "ensemble_status": "supported",
+    "enthalpy_hartree": -234.3275845,
+    "entropy_au": 326.644,
+    "gibbs_hartree": -234.3646781,
+    "standard_state": "1atm",
+    "temperature_k": 298.15
+  },
+  "result_digest": "sha256:43c227ab84e3e9e18731ee253fb47c0e1f9782e8d5ee76e60a841ccb8b29dc18",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "thermochemistry",
+  "truth_table_row": "a",
+  "written_at": "2026-10-28T00:55:49.986390Z"
+}

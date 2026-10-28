@@ -1,0 +1,62 @@
+{
+  "coverage_recommendation": {
+    "file": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
+    "not_applied_by_this_run": true,
+    "orchestrator_action": "apply only after reviewing both receipts and the per-gap status of H6's own gap list; this run never edits the coverage file",
+    "per_gap_action": "update each gap's result/status from its owning task receipt; this run only supplies G18's cross-domain/multi-tenant half",
+    "reason": "EXECUTION_PLAN M4-06 退出条件：M4-06a 的升级/回滚与 M4-06b 的跨领域、多项目多用户分别取得当前候选原生回执后，H6 才关闭。",
+    "result": "PASS",
+    "row": "H6",
+    "science_state": "NOT_VERIFIED",
+    "science_state_note": "science_state belongs to the H7 handoff prerequisites and is not changed by this stage verdict; only the H6 stage row is judged.",
+    "status": "CLOSED"
+  },
+  "generated_at": "2026-10-28T00:55:51.866116Z",
+  "h4": {
+    "changed_by_this_task": false,
+    "closed": false,
+    "note": "M4-06b does not add DA/Recipe evidence; H4 remains fed by M4-04 route-a and is reported here only as terminal-judgement context.",
+    "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/h4.json",
+    "state": "open"
+  },
+  "h6_before": {
+    "gaps": [
+      "G09",
+      "G12",
+      "G13",
+      "G14",
+      "G18",
+      "G20",
+      "G23",
+      "G24",
+      "G25",
+      "G26"
+    ],
+    "id": "H6",
+    "required": true,
+    "result": "NOT_VERIFIED",
+    "science_state": "NOT_VERIFIED",
+    "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+    "status": "OPEN",
+    "title": "跨领域与可靠性"
+  },
+  "h6_judgement": "CLOSEABLE",
+  "halves": {
+    "M4-06a": {
+      "receipt": "reports/acp2_remediation_20261026/m4-06a/summary.json",
+      "receipt_sha256": "sha256:015d040446f0eef7634a88a37acaf7941c33f5571d554da07927886ed09dde38",
+      "scope": "upgrade/rollback/failure-injection (数据库/schema、Controller、备份恢复)",
+      "status": "PASS"
+    },
+    "M4-06b": {
+      "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+      "scope": "NMR/热化学跨领域复用 + 多项目/多用户/多假设隔离 + 撤权三面一致",
+      "status": "PASS"
+    }
+  },
+  "residual_risks": [
+    "H6's gap list (G09/G12/G13/G14/G18/G20/G23/G24/G25/G26) is broader than this task; the per-gap result/status must be updated from each owning task's receipt.",
+    "the NMR shielding table and experimental spectrum are declared fixture stubs; the row proves contract/permission reuse, not quantitative NMR accuracy."
+  ],
+  "schema": "acp2.m406b.h6-input.v1"
+}

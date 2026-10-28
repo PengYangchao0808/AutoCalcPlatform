@@ -2783,7 +2783,12 @@ def _refuse_local_ownership(args: argparse.Namespace, run_root: Path) -> int | N
 def _task_controller_client(controller_url: str) -> Any:
     from acp_services.entrypoints.controller_client import ControllerClient
 
-    return ControllerClient(controller_url)
+    # M4-06b: the remote CLI task surface authenticates with the same
+    # ``ACP_API_KEY`` credential the stdio MCP entry uses.  Without it an
+    # api-key Controller refused every CLI request, so the CLI could neither
+    # exercise nor be tested against multi-user project scope.
+    api_key = (os.environ.get("ACP_API_KEY") or "").strip() or None
+    return ControllerClient(controller_url, api_key=api_key)
 
 
 def _emit_task(payload: dict[str, Any]) -> None:

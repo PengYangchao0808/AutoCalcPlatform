@@ -1,0 +1,1912 @@
+{
+  "checks": [
+    {
+      "data": {},
+      "detail": "mixed: native_xtb_optimize + declared_stub_shielding + fixture_experiment",
+      "name": "cross_domain_nmr",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "native: M4-04 route-a inputs (digest-verified) + real Shermo 2.6.1",
+      "name": "cross_domain_thermochemistry",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "capability/budget/evidence/viewmodel",
+      "name": "cross_domain_reuse",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "6 concurrent proposals",
+      "name": "research_memory_isolation",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "6 approvals",
+      "name": "approval_isolation",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "no cross-project transfer",
+      "name": "budget_isolation",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "same task id, two projects",
+      "name": "taskref_isolation",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "same relative path",
+      "name": "artifact_isolation",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "single task scope",
+      "name": "event_stream_isolation",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "forms + plugin snapshot",
+      "name": "capability_scope",
+      "status": "PASS"
+    },
+    {
+      "data": {},
+      "detail": "HTTP/MCP/CLI",
+      "name": "revocation_three_face",
+      "status": "PASS"
+    }
+  ],
+  "controller": {
+    "base_url": "http://127.0.0.1:55803",
+    "calls": 39,
+    "calls_record": "controller-calls.json",
+    "log": "controller.log",
+    "log_bytes": 0
+  },
+  "cross_domain_artifacts": {
+    "digests": {
+      "cross-domain/nmr/RESULT/evidence_report.json": "sha256:d93cd5b90effaab6754fac5f84b294d149d977f70c0521175229c6654fc4764f",
+      "cross-domain/nmr/RESULT/nmr_comparison.json": "sha256:e7428872179de2c55a38a6e6060cf80d5302f0afd8afef3c489f0e37666c3025",
+      "cross-domain/nmr/RESULT/result_manifest.json": "sha256:6f69e3b1176675b61deb8efd17d45b829b5811e27c2d7db5965363cc68e0750f",
+      "cross-domain/nmr/WORK/00_RUNTIME/task_result.json": "sha256:f1a40de9297ba8af456c778d3312fea365f475ad7d33ba063026b41abfb3d58c",
+      "cross-domain/nmr/execution_receipt.json": "sha256:c52f74396b88bc2494d3f54b71dad7cb477ec99689c6a94b9bb594d3e1df0ae6",
+      "cross-domain/nmr/experimental_spectrum.json": "sha256:316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69",
+      "cross-domain/nmr/input.xyz": "sha256:53ab6497a805fa1a26335574994f10564db4ce08af39ff93c389117b7e8e67e6",
+      "cross-domain/nmr/model_assets_manifest.json": "sha256:1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2",
+      "cross-domain/nmr/reference_conditions.json": "sha256:02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e",
+      "cross-domain/nmr/shielding_table.json": "sha256:de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755",
+      "cross-domain/nmr/structure.xyz": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932",
+      "cross-domain/nmr/xtb/.xtboptok": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cross-domain/nmr/xtb/charges": "sha256:9cdb90a523e70b73094c0307008968c14c3633015cda061ef2068edb33e725ae",
+      "cross-domain/nmr/xtb/wbo": "sha256:cd927ca3338104f25dd5ff17c1163ad52062ae9bd47621fa0b773dfa7b20f55d",
+      "cross-domain/nmr/xtb/xtb.log": "sha256:5a7c0799625d49516b6140d4be2bb3f07ed9df36d89339190a82af7aaed8c4da",
+      "cross-domain/nmr/xtb/xtb_input.xyz": "sha256:5631ba3044a2ad53433c057234b475104c616f4b17da332e8214651d5e279f1d",
+      "cross-domain/nmr/xtb/xtbopt.log": "sha256:beb156abde909dd78823b29bb043bf2eeb558ba1423e5fd8e7434d6035a68617",
+      "cross-domain/nmr/xtb/xtbopt.xyz": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932",
+      "cross-domain/nmr/xtb/xtbrestart": "sha256:6625e9e5509e2e9e3685af931859401c6a68e3140e09b78eebf8ffe2a7b410a3",
+      "cross-domain/nmr/xtb/xtbtopo.mol": "sha256:9273c9365f4e6f4d9b8352a82bb2f2762ed8711a90e925c03bba01b999d70e99",
+      "cross-domain/thermochemistry/RESULT/evidence_report.json": "sha256:ac4eb9ffa5670adf18105a1080afc0bf8e60afb4d6f5530d149f5d126f2523b0",
+      "cross-domain/thermochemistry/RESULT/result_manifest.json": "sha256:01a9fdbdce0ae63a1a1def3b8f515fedeeb59761527c0c124cfcfe4daea93108",
+      "cross-domain/thermochemistry/RESULT/thermo.json": "sha256:ac8c0829c7537c3ac15e5d800e11e2af9a1e8ae0970ed06b8ad29675c6bdd4c7",
+      "cross-domain/thermochemistry/RESULT/thermochemistry_ensemble.json": "sha256:0096191c05ed5a75672e635e9ff66743a539bff16a5f092c6838ded3d5697a76",
+      "cross-domain/thermochemistry/WORK/00_RUNTIME/task_result.json": "sha256:5a5fa0d263c3177bf9c71685e19f98d39d352f6ad583501e768d430ad97052f7",
+      "cross-domain/thermochemistry/component_energy_table.json": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d",
+      "cross-domain/thermochemistry/execution_receipt.json": "sha256:95c247c5dce8509aec22b5e31744f1f6ae3c7f063a07d1756fddc19079663e1c",
+      "cross-domain/thermochemistry/frequency/freq.out": "sha256:3a9e9fc8fdb1d7f2b9eadf91669f51fd3eeb301c51192f87524ac61d6781d33d",
+      "cross-domain/thermochemistry/shermo/t0/freq.sum": "sha256:b616560a1b5110015f1164729af1123b67be7d7197298aae16c30bca8a463fa0",
+      "cross-domain/thermochemistry/shermo/t1/freq.sum": "sha256:400f1897ac997889ccabf7fd76c67d8ce820c2794643e5fac9fcd6f7f8d19518",
+      "cross-domain/thermochemistry/shermo/t2/freq.sum": "sha256:d477df6fce8345318ac6167d63ffbbffbdee918797c4b6a4b3feb6958aa7f756",
+      "isolation/project_m406b_alpha/native_artifact.txt": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+      "isolation/project_m406b_alpha/plugin_snapshot/freeze.json": "sha256:e8505d15a1eb4d400861d48c3351ea85c4fbbf78f82c0655576e4ef1d1738b33",
+      "isolation/project_m406b_beta/native_artifact.txt": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+      "isolation/project_m406b_beta/plugin_snapshot/freeze.json": "sha256:1b5eb55de43620d1f41b0e7cb3a22378a17c26a51df59ec64ceca50312699ca1",
+      "isolation/project_m406b_gamma/native_artifact.txt": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+      "isolation/project_m406b_gamma/plugin_snapshot/freeze.json": "sha256:d69fe6fbfb2153f9b6d8b2aa0cba9c1328b9bfe77e61b148cb020c0cfee2c4c7"
+    },
+    "files": 37,
+    "root": "artifacts"
+  },
+  "cross_domain_reuse": {
+    "budget": {
+      "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+      "nmr_remaining": {
+        "attempt": 4,
+        "qc_invocation": 7,
+        "task_ref": 3
+      },
+      "passed": true,
+      "same_ledger": true,
+      "thermo_remaining": {
+        "attempt": 4,
+        "qc_invocation": 4,
+        "task_ref": 2
+      }
+    },
+    "capability": {
+      "binding": {
+        "nmr": {
+          "capability_id": "nmr.compare",
+          "delegation_target": "cccp.analysis.nmr.comparison.compare_nmr_shielding",
+          "execution_kind": "pure_analysis",
+          "implementation_id": "cccp.analysis.nmr.comparison",
+          "preflight_ready": true,
+          "registry": "domain_registry()",
+          "selection_mode": "BindingSelectionMode.CAPABILITY"
+        },
+        "passed": true,
+        "thermochemistry": {
+          "capability_id": "thermochemistry.ensemble",
+          "delegation_target": "cccp.analysis.ensemble.science.build_ensemble_thermochemistry",
+          "execution_kind": "pure_analysis",
+          "implementation_id": "cccp.analysis.ensemble.science",
+          "preflight_ready": true,
+          "registry": "domain_registry()",
+          "selection_mode": "BindingSelectionMode.CAPABILITY"
+        }
+      },
+      "catalog_sha256": "sha256:d08dcd07c38ae0b080269f395880bec3d6f6430958e6cc8f3c9e0be4181b5959",
+      "domain_ids": [
+        "electronic.energy",
+        "geometry.optimize",
+        "nmr.compare",
+        "nmr.shielding",
+        "thermochemistry.ensemble",
+        "vibration.analyze",
+        "vibration.compute"
+      ],
+      "forms": {
+        "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+        "passed": true,
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06"
+      },
+      "passed": true
+    },
+    "evidence": {
+      "nmr_projection_digest": "sha256:3d92d13cebee52c4933c006000e27090b0c5bebcb82000f4b29a039c806575f6",
+      "passed": true,
+      "projection_schema": "acp2.runtime.evidence-projection.v1",
+      "same_contract": true,
+      "thermo_projection_digest": "sha256:96d1960e1cd39cfe6ff7ad7fb70053cc1ff23e24a18d31c11e5dd22eb0faf4d3"
+    },
+    "passed": true,
+    "viewmodel": {
+      "annotation_keys": [
+        "frame_index",
+        "geometry_ref",
+        "id",
+        "label",
+        "selected",
+        "status",
+        "type",
+        "x",
+        "y"
+      ],
+      "nmr_product": "sha256:a60dd3ccec5c521430299ed2276b39f7b6e5991e961d64e28c22c72cd191cde0",
+      "node_keys": [
+        "energy",
+        "frame_index",
+        "geometry_ref",
+        "id",
+        "label",
+        "metadata",
+        "status",
+        "type",
+        "x"
+      ],
+      "passed": true,
+      "thermo_product": "sha256:309f7f4a9ebf4421ed4e72263198dd0d511419a2969b5426da00e8f1cb394818",
+      "view_type": "scan"
+    }
+  },
+  "generated_at": "2026-10-28T00:55:51.841826Z",
+  "git": {
+    "branch": "acp2/integration-remediation",
+    "dirty_paths": [
+      "M src/acp/cli.py",
+      "?? reports/acp2_remediation_20261026/m4-06b/",
+      "?? scripts/acceptance/acp2_m406b.py",
+      "?? tests/test_acp2_m406b_cross_domain.py"
+    ],
+    "head": "6bb267fd8764bc6e33d27c45554dead408b81240",
+    "tree": "1f849572f410acd54a7c85cebd71ea5da0ab2d18"
+  },
+  "h6_input": {
+    "coverage_recommendation": {
+      "file": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
+      "not_applied_by_this_run": true,
+      "orchestrator_action": "apply only after reviewing both receipts and the per-gap status of H6's own gap list; this run never edits the coverage file",
+      "per_gap_action": "update each gap's result/status from its owning task receipt; this run only supplies G18's cross-domain/multi-tenant half",
+      "reason": "EXECUTION_PLAN M4-06 退出条件：M4-06a 的升级/回滚与 M4-06b 的跨领域、多项目多用户分别取得当前候选原生回执后，H6 才关闭。",
+      "result": "PASS",
+      "row": "H6",
+      "science_state": "NOT_VERIFIED",
+      "science_state_note": "science_state belongs to the H7 handoff prerequisites and is not changed by this stage verdict; only the H6 stage row is judged.",
+      "status": "CLOSED"
+    },
+    "generated_at": "2026-10-28T00:55:51.866116Z",
+    "h4": {
+      "changed_by_this_task": false,
+      "closed": false,
+      "note": "M4-06b does not add DA/Recipe evidence; H4 remains fed by M4-04 route-a and is reported here only as terminal-judgement context.",
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/h4.json",
+      "state": "open"
+    },
+    "h6_before": {
+      "gaps": [
+        "G09",
+        "G12",
+        "G13",
+        "G14",
+        "G18",
+        "G20",
+        "G23",
+        "G24",
+        "G25",
+        "G26"
+      ],
+      "id": "H6",
+      "required": true,
+      "result": "NOT_VERIFIED",
+      "science_state": "NOT_VERIFIED",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "OPEN",
+      "title": "跨领域与可靠性"
+    },
+    "h6_judgement": "CLOSEABLE",
+    "halves": {
+      "M4-06a": {
+        "receipt": "reports/acp2_remediation_20261026/m4-06a/summary.json",
+        "receipt_sha256": "sha256:015d040446f0eef7634a88a37acaf7941c33f5571d554da07927886ed09dde38",
+        "scope": "upgrade/rollback/failure-injection (数据库/schema、Controller、备份恢复)",
+        "status": "PASS"
+      },
+      "M4-06b": {
+        "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+        "scope": "NMR/热化学跨领域复用 + 多项目/多用户/多假设隔离 + 撤权三面一致",
+        "status": "PASS"
+      }
+    },
+    "residual_risks": [
+      "H6's gap list (G09/G12/G13/G14/G18/G20/G23/G24/G25/G26) is broader than this task; the per-gap result/status must be updated from each owning task's receipt.",
+      "the NMR shielding table and experimental spectrum are declared fixture stubs; the row proves contract/permission reuse, not quantitative NMR accuracy."
+    ],
+    "schema": "acp2.m406b.h6-input.v1"
+  },
+  "limitations": [
+    "NMR shielding table + experimental spectrum are the declared A-24 fixtures; only the xTB structure, the comparison, the projection and the frame contract are native.",
+    "Thermochemistry reuses the M4-04 route-a frequency log and SP energy; it does not recompute the endpoint SP/frequency.",
+    "No browser row: multi-tenant surfaces are HTTP/MCP/CLI by design.",
+    "M4-06b-F1: the served capability-forms document covers the built-in capability subset; the NMR/thermochemistry domain descriptors are forwarded by GET /science/capabilities but have no ui-subset form of their own.",
+    "M4-06b-F2: the remote CLI task surface previously forwarded no credential; it now uses ACP_API_KEY exactly like `acp mcp serve`.",
+    "H6's gap list is broader than this task; per-gap coverage stays with each owner."
+  ],
+  "multitenant": {
+    "approvals": {
+      "approvals": {
+        "ap_2afefe815f9a416298dab75a979a9bd7": {
+          "hypothesis": "hypothesis.h1",
+          "plan_digest": "sha256:88c15ad974491c5465e8f9452228b68af9f096f572aacebd1803de41b265df6a",
+          "project": "project_m406b_gamma",
+          "revision": 2,
+          "state": "approved"
+        },
+        "ap_4dd5b94a6a83417ca93e11ebdccfedef": {
+          "hypothesis": "hypothesis.h2",
+          "plan_digest": "sha256:74bde82ca45721ea64c44aeed4eff01825dda80c29f69c5e816f5a480f0e4f80",
+          "project": "project_m406b_beta",
+          "revision": 2,
+          "state": "approved"
+        },
+        "ap_a6945ec8c5b540c3bb400a468d1a16ba": {
+          "hypothesis": "hypothesis.h2",
+          "plan_digest": "sha256:8fd2cc9c35a58c0d9ef5e52059ce3182e5dd2dc12e8fb43ea8eb1ea530dfc440",
+          "project": "project_m406b_alpha",
+          "revision": 2,
+          "state": "approved"
+        },
+        "ap_cc2268ee3bed4a708f16bc851d1cae72": {
+          "hypothesis": "hypothesis.h1",
+          "plan_digest": "sha256:65447ad698358ee129615d14abace013764ff9ba57b66404848f67ff5c8ac8c2",
+          "project": "project_m406b_alpha",
+          "revision": 2,
+          "state": "approved"
+        },
+        "ap_cf54683b2739431bb138116aedb668a3": {
+          "hypothesis": "hypothesis.h1",
+          "plan_digest": "sha256:ba48ea7deac79767d584fcb5d94226a7fa975e8ab979a473d0cbfbdd0b06cd55",
+          "project": "project_m406b_beta",
+          "revision": 2,
+          "state": "approved"
+        },
+        "ap_fbcde05458dd4c89bc86fbbf12c1275a": {
+          "hypothesis": "hypothesis.h2",
+          "plan_digest": "sha256:145cb58a1ae5aee0466852542b501a2d968061224729a549559db600bcd22f3d",
+          "project": "project_m406b_gamma",
+          "revision": 2,
+          "state": "approved"
+        }
+      },
+      "approved": 6,
+      "concurrent": true,
+      "leaks": [],
+      "passed": true,
+      "query_is_project_scoped": true,
+      "visible_per_project": {
+        "project_m406b_alpha": 2,
+        "project_m406b_beta": 2,
+        "project_m406b_gamma": 2
+      }
+    },
+    "artifacts": {
+      "distinct_bytes": true,
+      "observations": [
+        {
+          "cross_body_bytes": 44,
+          "cross_status": 404,
+          "own_expected_sha256": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+          "own_served_digest": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+          "own_status": 200,
+          "prepare_status": 404,
+          "project": "project_m406b_alpha",
+          "reader": "project_m406b_beta"
+        },
+        {
+          "cross_body_bytes": 44,
+          "cross_status": 404,
+          "own_expected_sha256": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+          "own_served_digest": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+          "own_status": 200,
+          "prepare_status": 404,
+          "project": "project_m406b_alpha",
+          "reader": "project_m406b_gamma"
+        },
+        {
+          "cross_body_bytes": 43,
+          "cross_status": 404,
+          "own_expected_sha256": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+          "own_served_digest": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+          "own_status": 200,
+          "prepare_status": 404,
+          "project": "project_m406b_beta",
+          "reader": "project_m406b_alpha"
+        },
+        {
+          "cross_body_bytes": 43,
+          "cross_status": 404,
+          "own_expected_sha256": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+          "own_served_digest": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+          "own_status": 200,
+          "prepare_status": 404,
+          "project": "project_m406b_beta",
+          "reader": "project_m406b_gamma"
+        },
+        {
+          "cross_body_bytes": 44,
+          "cross_status": 404,
+          "own_expected_sha256": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+          "own_served_digest": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+          "own_status": 200,
+          "prepare_status": 404,
+          "project": "project_m406b_gamma",
+          "reader": "project_m406b_alpha"
+        },
+        {
+          "cross_body_bytes": 44,
+          "cross_status": 404,
+          "own_expected_sha256": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+          "own_served_digest": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+          "own_status": 200,
+          "prepare_status": 404,
+          "project": "project_m406b_gamma",
+          "reader": "project_m406b_beta"
+        }
+      ],
+      "passed": true,
+      "same_relative_path": "RESULT/native_artifact.txt"
+    },
+    "budgets": {
+      "budgets": {
+        "project_m406b_alpha/hypothesis.h1": "rb_c1f29b3b1fad344bbc27ce52",
+        "project_m406b_alpha/hypothesis.h2": "rb_c11d6f7c5f3ddbadeab36c97",
+        "project_m406b_beta/hypothesis.h1": "rb_9d28cde74861caf40a9fe307",
+        "project_m406b_beta/hypothesis.h2": "rb_8f5165fae4dc2d037f16df96",
+        "project_m406b_gamma/hypothesis.h1": "rb_edce75a21e99bfc5a2c4692a",
+        "project_m406b_gamma/hypothesis.h2": "rb_8897ba6451487d8c25929dff"
+      },
+      "concurrent_reservations": 6,
+      "consumed_after": {
+        "project_m406b_alpha/hypothesis.h1": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 4,
+          "recipe_step": 0,
+          "task_ref": 3
+        },
+        "project_m406b_alpha/hypothesis.h2": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 1
+        },
+        "project_m406b_beta/hypothesis.h1": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 1
+        },
+        "project_m406b_beta/hypothesis.h2": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 1
+        },
+        "project_m406b_gamma/hypothesis.h1": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 1
+        },
+        "project_m406b_gamma/hypothesis.h2": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 1
+        }
+      },
+      "consumed_before": {
+        "project_m406b_alpha/hypothesis.h1": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 4,
+          "recipe_step": 0,
+          "task_ref": 2
+        },
+        "project_m406b_alpha/hypothesis.h2": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 0
+        },
+        "project_m406b_beta/hypothesis.h1": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 0
+        },
+        "project_m406b_beta/hypothesis.h2": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 0
+        },
+        "project_m406b_gamma/hypothesis.h1": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 0
+        },
+        "project_m406b_gamma/hypothesis.h2": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 0
+        }
+      },
+      "cross_budget_settlement": {
+        "applied": false,
+        "budget_id": "rb_9d28cde74861caf40a9fe307",
+        "consumed": {},
+        "counters": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 1
+        },
+        "duplicate": false,
+        "reason_code": "budget_reservation_not_found",
+        "receipt_id": "rcpt-cross-budget",
+        "remaining": {},
+        "reservation_id": "rbr-m406b-matrix-project_m406b_alpha-hypothesis-h1"
+      },
+      "distinct_budget_ids": true,
+      "multi_project_budgets": 6,
+      "passed": true,
+      "policies": 6,
+      "task_ref_deltas": {
+        "project_m406b_alpha/hypothesis.h1": 1,
+        "project_m406b_alpha/hypothesis.h2": 1,
+        "project_m406b_beta/hypothesis.h1": 1,
+        "project_m406b_beta/hypothesis.h2": 1,
+        "project_m406b_gamma/hypothesis.h1": 1,
+        "project_m406b_gamma/hypothesis.h2": 1
+      },
+      "tiny_budget": {
+        "first": {
+          "admitted": true,
+          "budget_id": "rb_787971d5014c7ead95f1faf3",
+          "detail": "",
+          "exhausted_unit": null,
+          "reason_code": "budget_admitted",
+          "remaining": {
+            "task_ref": 0
+          },
+          "requested": {
+            "task_ref": 1
+          },
+          "reservation_id": "rbr-m406b-tiny-1"
+        },
+        "second": {
+          "admitted": false,
+          "budget_id": "rb_787971d5014c7ead95f1faf3",
+          "detail": "task_ref budget 1 - consumed 1 < requested 1; new dispatch refused",
+          "exhausted_unit": "task_ref",
+          "reason_code": "budget_exhausted",
+          "remaining": {
+            "task_ref": 0
+          },
+          "requested": {
+            "task_ref": 1
+          },
+          "reservation_id": null
+        }
+      }
+    },
+    "capability_scope": {
+      "cache": {
+        "cached_catalog_warmed_by": 3,
+        "cross_read_after_warm_status": [
+          404
+        ],
+        "note": "the science catalog is one process cache; every read still re-authorizes the project, so a warm cache never widens the caller's scope",
+        "passed": true
+      },
+      "cross_project_status": {
+        "project_m406b_alpha->project_m406b_beta": 404,
+        "project_m406b_alpha->project_m406b_gamma": 404,
+        "project_m406b_beta->project_m406b_alpha": 404,
+        "project_m406b_beta->project_m406b_gamma": 404,
+        "project_m406b_gamma->project_m406b_alpha": 404,
+        "project_m406b_gamma->project_m406b_beta": 404
+      },
+      "forms_per_project": {
+        "project_m406b_alpha": {
+          "entry_count": 4,
+          "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+          "http_status": 200,
+          "nmr_states": [],
+          "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+          "subset_version": "acp2.ui-subset.v1",
+          "thermo_states": []
+        },
+        "project_m406b_beta": {
+          "entry_count": 4,
+          "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+          "http_status": 200,
+          "nmr_states": [],
+          "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+          "subset_version": "acp2.ui-subset.v1",
+          "thermo_states": []
+        },
+        "project_m406b_gamma": {
+          "entry_count": 4,
+          "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+          "http_status": 200,
+          "nmr_states": [],
+          "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+          "subset_version": "acp2.ui-subset.v1",
+          "thermo_states": []
+        }
+      },
+      "passed": true,
+      "plugin_snapshot_per_project": {
+        "project_m406b_alpha": {
+          "cross_status": 404,
+          "freeze_sha256": "sha256:e8505d15a1eb4d400861d48c3351ea85c4fbbf78f82c0655576e4ef1d1738b33",
+          "own_status": 200,
+          "sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2"
+        },
+        "project_m406b_beta": {
+          "cross_status": 404,
+          "freeze_sha256": "sha256:1b5eb55de43620d1f41b0e7cb3a22378a17c26a51df59ec64ceca50312699ca1",
+          "own_status": 200,
+          "sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2"
+        },
+        "project_m406b_gamma": {
+          "cross_status": 404,
+          "freeze_sha256": "sha256:d69fe6fbfb2153f9b6d8b2aa0cba9c1328b9bfe77e61b148cb020c0cfee2c4c7",
+          "own_status": 200,
+          "sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2"
+        }
+      },
+      "scope_enforced": true,
+      "shared_catalog_same_bytes": true
+    },
+    "events": {
+      "closed_reason": "permission_changed",
+      "cross_authorized": false,
+      "cross_task": "m406b-beta-task",
+      "own_event_types": [
+        "job.failed",
+        "job.paused"
+      ],
+      "own_events": [
+        "m406b-alpha-task"
+      ],
+      "own_task": "m406b-alpha-task",
+      "passed": true,
+      "stream_closed": true
+    },
+    "research_memory": {
+      "cas_revision": 2,
+      "created": 6,
+      "cross_project_cas_denied": true,
+      "cross_project_reads": [
+        {
+          "denied": true,
+          "reason": "resource belongs to another project",
+          "resource": "rrk_0e46c0dbb8b1d48998103a64387990efd3c1eb4a2ee2459f"
+        },
+        {
+          "denied": true,
+          "reason": "resource belongs to another project",
+          "resource": "rrk_302dda481395a89e37679de80c8960edd780baa240e27f2d"
+        },
+        {
+          "denied": true,
+          "reason": "resource belongs to another project",
+          "resource": "rrk_478f312ca5b282a476da9da68edcdba1e1bcdc1a422611a7"
+        },
+        {
+          "denied": true,
+          "reason": "resource belongs to another project",
+          "resource": "rrk_dd0ce0fbe738b9eb8773e9d7a6b3397a7832a785bdbbe515"
+        },
+        {
+          "denied": true,
+          "reason": "resource belongs to another project",
+          "resource": "rrk_b2e98d78d74e27d36b48ac412d309c5b00ed220b2d711b86"
+        },
+        {
+          "denied": true,
+          "reason": "resource belongs to another project",
+          "resource": "rrk_1577e7dacc87033353d5ce464fb90e1523e503f3caed59d4"
+        }
+      ],
+      "distinct_resource_ids": 6,
+      "heads_per_project": {
+        "project_m406b_alpha": 2,
+        "project_m406b_beta": 2,
+        "project_m406b_gamma": 2
+      },
+      "hypotheses_per_project": [
+        "hypothesis.h1",
+        "hypothesis.h2"
+      ],
+      "passed": true,
+      "projects": [
+        "project_m406b_alpha",
+        "project_m406b_beta",
+        "project_m406b_gamma"
+      ],
+      "revisions": {
+        "project_m406b_alpha": 1,
+        "project_m406b_beta": 1,
+        "project_m406b_gamma": 1
+      },
+      "users": {
+        "project_m406b_alpha": "principal_m406b_alice",
+        "project_m406b_beta": "principal_m406b_bob",
+        "project_m406b_gamma": "principal_m406b_carol"
+      }
+    },
+    "taskref": {
+      "alpha_task_ref": {
+        "attempt": 1,
+        "job_id": "m406b-nmr-crossdomain",
+        "project_id": "project_m406b_alpha",
+        "release": {
+          "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+          "release_id": "a9fc2614b92fed53"
+        },
+        "schema": "acp2.runtime.task-ref.v1",
+        "task_id": "m406b-nmr-crossdomain"
+      },
+      "beta_task_ref": {
+        "attempt": 1,
+        "job_id": "m406b-nmr-crossdomain",
+        "project_id": "project_m406b_beta",
+        "release": {
+          "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+          "release_id": "a9fc2614b92fed53"
+        },
+        "schema": "acp2.runtime.task-ref.v1",
+        "task_id": "m406b-nmr-crossdomain"
+      },
+      "foreign_project_refused": true,
+      "passed": true,
+      "refusal": "foreign_project",
+      "same_task_id_different_project": true
+    }
+  },
+  "out": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-06b",
+  "records": {
+    "controller-calls.json": {
+      "path": "controller-calls.json",
+      "sha256": "sha256:eea2778fa94bdd5b01cd823bed86077221644ac21b865b441b98f031afebd977"
+    },
+    "seeded_tasks": {
+      "project_m406b_alpha": {
+        "artifact_bytes": 75,
+        "artifact_sha256": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+        "plugin_freeze_sha256": "sha256:e8505d15a1eb4d400861d48c3351ea85c4fbbf78f82c0655576e4ef1d1738b33",
+        "plugin_snapshot_sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2",
+        "task_id": "m406b-alpha-task",
+        "work_dir": "/ACPServer/acp2-runs/remediation/m4-06b/run-root/m406b-alpha-task"
+      },
+      "project_m406b_beta": {
+        "artifact_bytes": 74,
+        "artifact_sha256": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+        "plugin_freeze_sha256": "sha256:1b5eb55de43620d1f41b0e7cb3a22378a17c26a51df59ec64ceca50312699ca1",
+        "plugin_snapshot_sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2",
+        "task_id": "m406b-beta-task",
+        "work_dir": "/ACPServer/acp2-runs/remediation/m4-06b/run-root/m406b-beta-task"
+      },
+      "project_m406b_gamma": {
+        "artifact_bytes": 75,
+        "artifact_sha256": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+        "plugin_freeze_sha256": "sha256:d69fe6fbfb2153f9b6d8b2aa0cba9c1328b9bfe77e61b148cb020c0cfee2c4c7",
+        "plugin_snapshot_sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2",
+        "task_id": "m406b-gamma-task",
+        "work_dir": "/ACPServer/acp2-runs/remediation/m4-06b/run-root/m406b-gamma-task"
+      }
+    }
+  },
+  "release": {
+    "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+    "release_id": "a9fc2614b92fed53"
+  },
+  "revocation": {
+    "after": {
+      "cli": {
+        "code": "unauthenticated",
+        "returncode": 1,
+        "status": "failed"
+      },
+      "http_identity": 401,
+      "http_task": 401,
+      "mcp_error_code": "access_denied",
+      "mcp_is_error": true
+    },
+    "before": {
+      "cli": {
+        "code": null,
+        "returncode": 0,
+        "status": "ok"
+      },
+      "http_identity": 200,
+      "http_task": 200,
+      "mcp_status_is_error": false,
+      "mcp_task_id": "m406b-alpha-task"
+    },
+    "credential_surface": "ACP_API_KEY (same env for mcp serve and task --controller)",
+    "faces": [
+      "http",
+      "mcp_stdio",
+      "cli_task_query_controller"
+    ],
+    "key_id": "9a95d0e44a01f62a",
+    "passed": true,
+    "project": "project_m406b_alpha",
+    "revoked": true,
+    "task_id": "m406b-alpha-task"
+  },
+  "rows": {
+    "cross_domain_nmr": {
+      "budget": {
+        "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+        "reservation": {
+          "admitted": true,
+          "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+          "detail": "",
+          "exhausted_unit": null,
+          "reason_code": "budget_admitted",
+          "remaining": {
+            "attempt": 4,
+            "qc_invocation": 8,
+            "task_ref": 3
+          },
+          "requested": {
+            "task_ref": 1
+          },
+          "reservation_id": "rbr-m406b-nmr-h1"
+        },
+        "settlement": {
+          "applied": true,
+          "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+          "consumed": {
+            "attempt": 0,
+            "bsub": 0,
+            "model_request": 0,
+            "qc_invocation": 1,
+            "recipe_step": 0,
+            "task_ref": 1
+          },
+          "counters": {
+            "attempt": 0,
+            "bsub": 0,
+            "model_request": 0,
+            "qc_invocation": 1,
+            "recipe_step": 0,
+            "task_ref": 1
+          },
+          "duplicate": false,
+          "reason_code": "budget_settled",
+          "receipt_id": "rcpt-m406b-nmr-crossdomain",
+          "remaining": {
+            "attempt": 4,
+            "qc_invocation": 7,
+            "task_ref": 3
+          },
+          "reservation_id": "rbr-m406b-nmr-h1"
+        }
+      },
+      "capability": {
+        "analysis_ids": [
+          "vibration.analyze",
+          "vibration.compute"
+        ],
+        "catalog_sha256": "sha256:d08dcd07c38ae0b080269f395880bec3d6f6430958e6cc8f3c9e0be4181b5959",
+        "descriptor_ids": [
+          "electronic.energy",
+          "geometry.optimize",
+          "vibration.analyze",
+          "vibration.compute"
+        ],
+        "domain_ids": [
+          "electronic.energy",
+          "geometry.optimize",
+          "nmr.compare",
+          "nmr.shielding",
+          "thermochemistry.ensemble",
+          "vibration.analyze",
+          "vibration.compute"
+        ],
+        "domain_version": null,
+        "http_status": 200
+      },
+      "capability_binding": {
+        "capability_id": "nmr.compare",
+        "delegation_target": "cccp.analysis.nmr.comparison.compare_nmr_shielding",
+        "execution_kind": "pure_analysis",
+        "implementation_id": "cccp.analysis.nmr.comparison",
+        "preflight_ready": true,
+        "registry": "domain_registry()",
+        "selection_mode": "BindingSelectionMode.CAPABILITY"
+      },
+      "capability_forms": {
+        "entry_count": 4,
+        "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+        "http_status": 200,
+        "nmr_states": [],
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1",
+        "thermo_states": []
+      },
+      "comparison": {
+        "atom_mapping_digest": "0cdc26aef9b049f9416b4565f513298c3dcb1876f74450f171554dca1079e899",
+        "claim_status": "supported",
+        "model_asset_version": "sha256:81bfe1982afeba533b77db9ceb8a47abe8bc35480ee4f93e5092c427a084e274",
+        "model_assets_available": true,
+        "paired_peak_count": 5,
+        "report_id": "nmr-comparison:m406b-nmr-crossdomain-ethanol",
+        "status": "supported"
+      },
+      "declared_boundaries": [
+        "the GIAO shielding table is the A-24 constructed fixture (no ORCA GIAO run)",
+        "the experimental peak list is the A-24 constructed fixture (no spectrum acquired)",
+        "the comparison and the xTB optimisation are real candidate code paths"
+      ],
+      "digest_chain": {
+        "comparison": "sha256:e7428872179de2c55a38a6e6060cf80d5302f0afd8afef3c489f0e37666c3025",
+        "projection": "sha256:3d92d13cebee52c4933c006000e27090b0c5bebcb82000f4b29a039c806575f6",
+        "report": "sha256:d93cd5b90effaab6754fac5f84b294d149d977f70c0521175229c6654fc4764f",
+        "structure": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932",
+        "task_result": "sha256:9beae8887f057b52b06b2f589cb97e0ef522e4784bf62a11f37bf64e011e0b00",
+        "viewmodel_product": "sha256:a60dd3ccec5c521430299ed2276b39f7b6e5991e961d64e28c22c72cd191cde0",
+        "viewmodel_projection": "sha256:e1cf9fe87bfe428da042608fb453a7b2864aa4efb9cc944473eb70cec8d72bb6"
+      },
+      "domain": "nmr",
+      "evidence_kind": "mixed: native_xtb_optimize + declared_stub_shielding + fixture_experiment",
+      "evidence_view": {
+        "blocking_missing_checks": [],
+        "claims": [
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "nmr.atom_mapping",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.nmr_atom_mapping",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "nmr.experimental_source",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.nmr_experimental_source",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "nmr.reference_conditions",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.nmr_reference_conditions",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "nmr.assignment_coverage",
+            "source_ref_count": 2,
+            "status": "supported",
+            "validator_id": "check.nmr_assignment_coverage",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "nmr.calibration",
+            "source_ref_count": 2,
+            "status": "supported",
+            "validator_id": "check.nmr_calibration",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "nmr.model_assets",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.nmr_model_assets",
+            "validator_version": "1.0.0"
+          }
+        ],
+        "contract_version": "1.0.0",
+        "evidence_refs": [
+          {
+            "evidence_id": "art-02b06749f7f28391",
+            "kind": "reference_conditions",
+            "relative_path": "reference_conditions.json",
+            "sha256": "sha256:02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e"
+          },
+          {
+            "evidence_id": "art-1d0e685b7daba545",
+            "kind": "model_assets_manifest",
+            "relative_path": "model_assets_manifest.json",
+            "sha256": "sha256:1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2"
+          },
+          {
+            "evidence_id": "art-316f1d0a7a3c25b9",
+            "kind": "experimental_spectrum",
+            "relative_path": "experimental_spectrum.json",
+            "sha256": "sha256:316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+          },
+          {
+            "evidence_id": "art-de044ce6b8860152",
+            "kind": "shielding_table",
+            "relative_path": "shielding_table.json",
+            "sha256": "sha256:de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+          }
+        ],
+        "evidence_status": "complete",
+        "execution_terminal_state": "completed",
+        "limitations": [
+          "This report compares an existing GIAO shielding table with a supplied experimental peak list. It does not re-run shielding calculations, conformer sampling, DP4/DP5 probabilities or a quantitative validation."
+        ],
+        "normal_reuse": false,
+        "overall_claim_status": "supported",
+        "projection_digest": "sha256:3d92d13cebee52c4933c006000e27090b0c5bebcb82000f4b29a039c806575f6",
+        "provenance_digest": "sha256:9c098473486703d8204cb166737cdbe6a5396558286320d5d6219c9a5ae97194",
+        "qualification": "complete",
+        "report": {
+          "digest": "sha256:d93cd5b90effaab6754fac5f84b294d149d977f70c0521175229c6654fc4764f",
+          "report_id": "report-m406b-nmr-crossdomain",
+          "schema_version": 1,
+          "subject_id": "m406b-nmr-crossdomain"
+        },
+        "research": {
+          "principal_id": "principal_m406b_alice",
+          "project_id": "project_m406b_alpha",
+          "research_id": "res-m406b-nmr",
+          "round": 0,
+          "session_id": "ses-m406b-nmr"
+        },
+        "schema": "acp2.runtime.evidence-projection.v1",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "m406b-nmr-crossdomain",
+          "project_id": "project_m406b_alpha",
+          "release": {
+            "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+            "release_id": "a9fc2614b92fed53"
+          },
+          "task_id": "m406b-nmr-crossdomain"
+        }
+      },
+      "execution": {
+        "artifacts": [
+          {
+            "bytes": 773,
+            "path": "xtbopt.xyz",
+            "sha256": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932",
+            "type": "output"
+          },
+          {
+            "bytes": 37107,
+            "path": "xtb.log",
+            "sha256": "sha256:5a7c0799625d49516b6140d4be2bb3f07ed9df36d89339190a82af7aaed8c4da",
+            "type": "log"
+          }
+        ],
+        "duration_s": 0.04,
+        "xtb_energy_hartree": -11.391867273602,
+        "xtb_status": "completed"
+      },
+      "input_digests": {
+        "experimental_spectrum.json": "sha256:316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69",
+        "model_assets_manifest.json": "sha256:1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2",
+        "nmr_comparison.json": "sha256:e7428872179de2c55a38a6e6060cf80d5302f0afd8afef3c489f0e37666c3025",
+        "reference_conditions.json": "sha256:02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e",
+        "shielding_table.json": "sha256:de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755",
+        "structure.xyz": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932"
+      },
+      "product": {
+        "manifest": "RESULT/result_manifest.json",
+        "manifest_sha256": "sha256:6f69e3b1176675b61deb8efd17d45b829b5811e27c2d7db5965363cc68e0750f",
+        "products": [
+          {
+            "id": "nmr_comparison",
+            "kind": "report",
+            "label": "NMR shielding comparison",
+            "path": "nmr_comparison.json"
+          }
+        ]
+      },
+      "project": "project_m406b_alpha",
+      "research_decision": {
+        "basis": "defer because the GIAO shielding table and the experimental spectrum are declared fixtures; the projection itself is complete",
+        "decision": "defer",
+        "evidence": {
+          "blocking_missing_checks": [],
+          "overall_claim_status": "supported",
+          "status": "complete"
+        },
+        "evidence_refs": [
+          {
+            "evidence_id": "art-02b06749f7f28391",
+            "kind": "reference_conditions",
+            "relative_path": "reference_conditions.json",
+            "sha256": "sha256:02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e"
+          },
+          {
+            "evidence_id": "art-1d0e685b7daba545",
+            "kind": "model_assets_manifest",
+            "relative_path": "model_assets_manifest.json",
+            "sha256": "sha256:1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2"
+          },
+          {
+            "evidence_id": "art-316f1d0a7a3c25b9",
+            "kind": "experimental_spectrum",
+            "relative_path": "experimental_spectrum.json",
+            "sha256": "sha256:316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+          },
+          {
+            "evidence_id": "art-de044ce6b8860152",
+            "kind": "shielding_table",
+            "relative_path": "shielding_table.json",
+            "sha256": "sha256:de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+          }
+        ],
+        "project_id": "project_m406b_alpha",
+        "projection_digest": "sha256:3d92d13cebee52c4933c006000e27090b0c5bebcb82000f4b29a039c806575f6",
+        "rationale_codes": [
+          "execution_completed",
+          "evidence_complete",
+          "claim_supported",
+          "digest_bound_evidence"
+        ],
+        "research_id": "res-m406b-nmr",
+        "round": 0,
+        "schema": "acp2.runtime.research-decision.v1",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "m406b-nmr-crossdomain",
+          "project_id": "project_m406b_alpha",
+          "release": {
+            "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+            "release_id": "a9fc2614b92fed53"
+          },
+          "schema": "acp2.runtime.task-ref.v1",
+          "task_id": "m406b-nmr-crossdomain"
+        }
+      },
+      "row": "cross_domain_nmr",
+      "task_id": "m406b-nmr-crossdomain",
+      "viewmodel": {
+        "annotation_keys": [
+          "frame_index",
+          "geometry_ref",
+          "id",
+          "label",
+          "selected",
+          "status",
+          "type",
+          "x",
+          "y"
+        ],
+        "node_keys": [
+          "energy",
+          "frame_index",
+          "geometry_ref",
+          "id",
+          "label",
+          "metadata",
+          "status",
+          "type",
+          "x"
+        ],
+        "product": {
+          "complete": true,
+          "errors": [],
+          "identity": {
+            "algorithm": "nmr.shielding_table",
+            "algorithm_version": "1",
+            "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+            "input_digest": "sha256:2c88ad007a121f2b2c6d1501be0545c779e5458022b61e256a0b116d983b7757",
+            "params_digest": "",
+            "product_kind": "curve_scatter",
+            "schema_version": 1
+          },
+          "payload": {
+            "reference_frame": {
+              "axes": "cartesian",
+              "origin": "native_input"
+            },
+            "series": [
+              {
+                "label": "1H isotropic shielding",
+                "points": [
+                  {
+                    "point_id": "nmr-H1",
+                    "x": 3.0,
+                    "y": 30.92435521588
+                  },
+                  {
+                    "point_id": "nmr-H2",
+                    "x": 4.0,
+                    "y": 30.92435521588
+                  },
+                  {
+                    "point_id": "nmr-H3",
+                    "x": 5.0,
+                    "y": 30.92435521588
+                  },
+                  {
+                    "point_id": "nmr-H4",
+                    "x": 6.0,
+                    "y": 28.524432314239995
+                  },
+                  {
+                    "point_id": "nmr-H5",
+                    "x": 7.0,
+                    "y": 28.524432314239995
+                  },
+                  {
+                    "point_id": "nmr-H6",
+                    "x": 8.0,
+                    "y": 29.624396977491664
+                  }
+                ],
+                "reference_frame": {
+                  "axes": "cartesian",
+                  "origin": "native_input"
+                },
+                "series_id": "nmr.shielding.1H",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              {
+                "label": "13C isotropic shielding",
+                "points": [
+                  {
+                    "point_id": "nmr-C1",
+                    "x": 0.0,
+                    "y": 128.4634321275
+                  },
+                  {
+                    "point_id": "nmr-C2",
+                    "x": 1.0,
+                    "y": 168.4558940425
+                  }
+                ],
+                "reference_frame": {
+                  "axes": "cartesian",
+                  "origin": "native_input"
+                },
+                "series_id": "nmr.shielding.13C",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              }
+            ]
+          },
+          "product_kind": "curve_scatter",
+          "schema_version": 1,
+          "state": "available"
+        },
+        "product_digest": "sha256:a60dd3ccec5c521430299ed2276b39f7b6e5991e961d64e28c22c72cd191cde0",
+        "projection": {
+          "annotations": [
+            {
+              "frame_index": 3,
+              "geometry_ref": "",
+              "id": "minimum_0",
+              "label": "最低能量",
+              "selected": false,
+              "status": "completed",
+              "type": "minimum",
+              "x": 6.0,
+              "y": 28.524432314239995
+            }
+          ],
+          "migrations": [],
+          "node_type": "frame",
+          "nodes": [
+            {
+              "energy": 30.92435521588,
+              "frame_index": 0,
+              "geometry_ref": "",
+              "id": "nmr-H1",
+              "label": "Point 0",
+              "metadata": {
+                "series_id": "nmr.shielding.1H",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 3.0
+            },
+            {
+              "energy": 30.92435521588,
+              "frame_index": 1,
+              "geometry_ref": "",
+              "id": "nmr-H2",
+              "label": "Point 1",
+              "metadata": {
+                "series_id": "nmr.shielding.1H",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 4.0
+            },
+            {
+              "energy": 30.92435521588,
+              "frame_index": 2,
+              "geometry_ref": "",
+              "id": "nmr-H3",
+              "label": "Point 2",
+              "metadata": {
+                "series_id": "nmr.shielding.1H",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 5.0
+            },
+            {
+              "energy": 28.524432314239995,
+              "frame_index": 3,
+              "geometry_ref": "",
+              "id": "nmr-H4",
+              "label": "Point 3",
+              "metadata": {
+                "series_id": "nmr.shielding.1H",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 6.0
+            },
+            {
+              "energy": 28.524432314239995,
+              "frame_index": 4,
+              "geometry_ref": "",
+              "id": "nmr-H5",
+              "label": "Point 4",
+              "metadata": {
+                "series_id": "nmr.shielding.1H",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 7.0
+            },
+            {
+              "energy": 29.624396977491664,
+              "frame_index": 5,
+              "geometry_ref": "",
+              "id": "nmr-H6",
+              "label": "Point 5",
+              "metadata": {
+                "series_id": "nmr.shielding.1H",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 8.0
+            },
+            {
+              "energy": 128.4634321275,
+              "frame_index": 0,
+              "geometry_ref": "",
+              "id": "nmr-C1",
+              "label": "Point 0",
+              "metadata": {
+                "series_id": "nmr.shielding.13C",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 0.0
+            },
+            {
+              "energy": 168.4558940425,
+              "frame_index": 1,
+              "geometry_ref": "",
+              "id": "nmr-C2",
+              "label": "Point 1",
+              "metadata": {
+                "series_id": "nmr.shielding.13C",
+                "x_unit": "atom_index",
+                "y_unit": "ppm"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 1.0
+            }
+          ],
+          "skipped_points": [],
+          "unavailable": null,
+          "view_type": "scan"
+        },
+        "projection_digest": "sha256:e1cf9fe87bfe428da042608fb453a7b2864aa4efb9cc944473eb70cec8d72bb6",
+        "view_type": "scan"
+      },
+      "worker": {
+        "receipt_state": "completed",
+        "report_digest": "sha256:d93cd5b90effaab6754fac5f84b294d149d977f70c0521175229c6654fc4764f",
+        "report_relative_path": "RESULT/evidence_report.json",
+        "task_result_digest": "sha256:9beae8887f057b52b06b2f589cb97e0ef522e4784bf62a11f37bf64e011e0b00"
+      }
+    },
+    "cross_domain_thermochemistry": {
+      "budget": {
+        "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+        "reservation": {
+          "admitted": true,
+          "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+          "detail": "",
+          "exhausted_unit": null,
+          "reason_code": "budget_admitted",
+          "remaining": {
+            "attempt": 4,
+            "qc_invocation": 7,
+            "task_ref": 2
+          },
+          "requested": {
+            "task_ref": 1
+          },
+          "reservation_id": "rbr-m406b-thermo-h1"
+        },
+        "settlement": {
+          "applied": true,
+          "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+          "consumed": {
+            "attempt": 0,
+            "bsub": 0,
+            "model_request": 0,
+            "qc_invocation": 4,
+            "recipe_step": 0,
+            "task_ref": 2
+          },
+          "counters": {
+            "attempt": 0,
+            "bsub": 0,
+            "model_request": 0,
+            "qc_invocation": 3,
+            "recipe_step": 0,
+            "task_ref": 1
+          },
+          "duplicate": false,
+          "reason_code": "budget_settled",
+          "receipt_id": "rcpt-m406b-thermo-crossdomain",
+          "remaining": {
+            "attempt": 4,
+            "qc_invocation": 4,
+            "task_ref": 2
+          },
+          "reservation_id": "rbr-m406b-thermo-h1"
+        }
+      },
+      "capability": {
+        "analysis_ids": [
+          "vibration.analyze",
+          "vibration.compute"
+        ],
+        "catalog_sha256": "sha256:d08dcd07c38ae0b080269f395880bec3d6f6430958e6cc8f3c9e0be4181b5959",
+        "descriptor_ids": [
+          "electronic.energy",
+          "geometry.optimize",
+          "vibration.analyze",
+          "vibration.compute"
+        ],
+        "domain_ids": [
+          "electronic.energy",
+          "geometry.optimize",
+          "nmr.compare",
+          "nmr.shielding",
+          "thermochemistry.ensemble",
+          "vibration.analyze",
+          "vibration.compute"
+        ],
+        "domain_version": null,
+        "http_status": 200
+      },
+      "capability_binding": {
+        "capability_id": "thermochemistry.ensemble",
+        "delegation_target": "cccp.analysis.ensemble.science.build_ensemble_thermochemistry",
+        "execution_kind": "pure_analysis",
+        "implementation_id": "cccp.analysis.ensemble.science",
+        "preflight_ready": true,
+        "registry": "domain_registry()",
+        "selection_mode": "BindingSelectionMode.CAPABILITY"
+      },
+      "capability_forms": {
+        "entry_count": 4,
+        "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+        "http_status": 200,
+        "nmr_states": [],
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1",
+        "thermo_states": []
+      },
+      "declared_boundaries": [
+        "the frequency log and the single-point energy are the M4-04 route-a native artifacts; this row does not recompute them",
+        "the ensemble weights are supplied (single component, weight 1.0) and recorded, never re-derived"
+      ],
+      "digest_chain": {
+        "ensemble": "sha256:0096191c05ed5a75672e635e9ff66743a539bff16a5f092c6838ded3d5697a76",
+        "ensemble_input": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d",
+        "projection": "sha256:96d1960e1cd39cfe6ff7ad7fb70053cc1ff23e24a18d31c11e5dd22eb0faf4d3",
+        "report": "sha256:ac4eb9ffa5670adf18105a1080afc0bf8e60afb4d6f5530d149f5d126f2523b0",
+        "route_a_frequency": "sha256:3a9e9fc8fdb1d7f2b9eadf91669f51fd3eeb301c51192f87524ac61d6781d33d",
+        "task_result": "sha256:7b705df0e9de7d95c559d4b0a5c9ec2e07d8ed158b0c1f04a73b7feda9efc6df",
+        "viewmodel_product": "sha256:309f7f4a9ebf4421ed4e72263198dd0d511419a2969b5426da00e8f1cb394818",
+        "viewmodel_projection": "sha256:e5ec6932aca46e0c4a8861fdb994555dac481d78cea6d5b519dd9556e2fc60b2"
+      },
+      "domain": "thermochemistry",
+      "ensemble": {
+        "claim_status": "supported",
+        "report_id": "ensemble-thermo:m406b-thermo-crossdomain-ensemble",
+        "status": "supported",
+        "total_gibbs_hartree": -234.3646781
+      },
+      "evidence_kind": "native: M4-04 route-a inputs (digest-verified) + real Shermo 2.6.1",
+      "evidence_view": {
+        "blocking_missing_checks": [],
+        "claims": [
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "thermochemistry.weight_policy",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.ensemble_weight_policy",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "thermochemistry.ensemble_completeness",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.ensemble_completeness",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "thermochemistry.conditions",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.ensemble_conditions",
+            "validator_version": "1.0.0"
+          },
+          {
+            "blocking_missing_checks": [],
+            "claim_id": "thermochemistry.total_gibbs",
+            "source_ref_count": 1,
+            "status": "supported",
+            "validator_id": "check.ensemble_total_gibbs",
+            "validator_version": "1.0.0"
+          }
+        ],
+        "contract_version": "1.0.0",
+        "evidence_refs": [
+          {
+            "evidence_id": "art-0fc68495f561e161",
+            "kind": "component_energy_table",
+            "relative_path": "component_energy_table.json",
+            "sha256": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+          }
+        ],
+        "evidence_status": "complete",
+        "execution_terminal_state": "completed",
+        "limitations": [
+          "This report applies the supplied component weights and the existing rank-1 total-Gibbs formula. It does not re-derive Boltzmann weights, re-optimize conformers or claim a new thermochemistry calculation."
+        ],
+        "normal_reuse": false,
+        "overall_claim_status": "supported",
+        "projection_digest": "sha256:96d1960e1cd39cfe6ff7ad7fb70053cc1ff23e24a18d31c11e5dd22eb0faf4d3",
+        "provenance_digest": "sha256:2dc150cabc82d03efe08d766fa4715fc43dd59c207bc7e9c00079567b5cde765",
+        "qualification": "complete",
+        "report": {
+          "digest": "sha256:ac4eb9ffa5670adf18105a1080afc0bf8e60afb4d6f5530d149f5d126f2523b0",
+          "report_id": "report-m406b-thermo-crossdomain",
+          "schema_version": 1,
+          "subject_id": "m406b-thermo-crossdomain"
+        },
+        "research": {
+          "principal_id": "principal_m406b_alice",
+          "project_id": "project_m406b_alpha",
+          "research_id": "res-m406b-thermo",
+          "round": 0,
+          "session_id": "ses-m406b-thermo"
+        },
+        "schema": "acp2.runtime.evidence-projection.v1",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "m406b-thermo-crossdomain",
+          "project_id": "project_m406b_alpha",
+          "release": {
+            "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+            "release_id": "a9fc2614b92fed53"
+          },
+          "task_id": "m406b-thermo-crossdomain"
+        }
+      },
+      "execution": {
+        "duration_s": 0.03,
+        "route_a_freq_log": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/ts_frequency/ts_frequency/freq.out",
+        "route_a_freq_log_sha256": "sha256:3a9e9fc8fdb1d7f2b9eadf91669f51fd3eeb301c51192f87524ac61d6781d33d",
+        "runs": [
+          {
+            "artifacts": [
+              {
+                "bytes": 6242,
+                "path": "freq.sum",
+                "sha256": "sha256:b616560a1b5110015f1164729af1123b67be7d7197298aae16c30bca8a463fa0",
+                "type": "thermochemistry"
+              }
+            ],
+            "enthalpy_hartree": -234.3286207,
+            "entropy_au": 317.239,
+            "gibbs_hartree": -234.3616254,
+            "gibbs_source": "g_sum",
+            "standard_state": "1atm",
+            "temperature_k": 273.15
+          },
+          {
+            "artifacts": [
+              {
+                "bytes": 6242,
+                "path": "freq.sum",
+                "sha256": "sha256:400f1897ac997889ccabf7fd76c67d8ce820c2794643e5fac9fcd6f7f8d19518",
+                "type": "thermochemistry"
+              }
+            ],
+            "enthalpy_hartree": -234.3275845,
+            "entropy_au": 326.644,
+            "gibbs_hartree": -234.3646781,
+            "gibbs_source": "g_sum",
+            "standard_state": "1atm",
+            "temperature_k": 298.15
+          },
+          {
+            "artifacts": [
+              {
+                "bytes": 6242,
+                "path": "freq.sum",
+                "sha256": "sha256:d477df6fce8345318ac6167d63ffbbffbdee918797c4b6a4b3feb6958aa7f756",
+                "type": "thermochemistry"
+              }
+            ],
+            "enthalpy_hartree": -234.3264609,
+            "entropy_au": 336.03,
+            "gibbs_hartree": -234.3678199,
+            "gibbs_source": "g_sum",
+            "standard_state": "1atm",
+            "temperature_k": 323.15
+          }
+        ],
+        "sp_energy_hartree": -234.472954154901
+      },
+      "input_digests": {
+        "component_energy_table.json": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d",
+        "frequency/freq.out": "sha256:3a9e9fc8fdb1d7f2b9eadf91669f51fd3eeb301c51192f87524ac61d6781d33d",
+        "thermochemistry_ensemble.json": "sha256:0096191c05ed5a75672e635e9ff66743a539bff16a5f092c6838ded3d5697a76"
+      },
+      "product": {
+        "manifest": "RESULT/result_manifest.json",
+        "manifest_sha256": "sha256:01a9fdbdce0ae63a1a1def3b8f515fedeeb59761527c0c124cfcfe4daea93108",
+        "products": [
+          {
+            "id": "thermo_report",
+            "kind": "thermo_report",
+            "label": "Thermochemistry report",
+            "path": "thermo.json"
+          },
+          {
+            "id": "thermo_ensemble",
+            "kind": "report",
+            "label": "Ensemble thermochemistry",
+            "path": "thermochemistry_ensemble.json"
+          }
+        ],
+        "thermo_view": {
+          "enthalpy_hartree": -234.3275845,
+          "entropy": 326.644,
+          "gibbs_hartree": -234.3646781,
+          "scf_energy_hartree": -234.472954154901,
+          "temperature_k": 298.15,
+          "unit_note": "hartree unless noted",
+          "zpe_included": true
+        }
+      },
+      "project": "project_m406b_alpha",
+      "research_decision": {
+        "basis": "defer because the GIAO shielding table and the experimental spectrum are declared fixtures; the projection itself is complete",
+        "decision": "accept",
+        "evidence": {
+          "blocking_missing_checks": [],
+          "overall_claim_status": "supported",
+          "status": "complete"
+        },
+        "evidence_refs": [
+          {
+            "evidence_id": "art-0fc68495f561e161",
+            "kind": "component_energy_table",
+            "relative_path": "component_energy_table.json",
+            "sha256": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+          }
+        ],
+        "project_id": "project_m406b_alpha",
+        "projection_digest": "sha256:96d1960e1cd39cfe6ff7ad7fb70053cc1ff23e24a18d31c11e5dd22eb0faf4d3",
+        "rationale_codes": [
+          "execution_completed",
+          "evidence_complete",
+          "claim_supported",
+          "digest_bound_evidence"
+        ],
+        "research_id": "res-m406b-thermo",
+        "round": 0,
+        "schema": "acp2.runtime.research-decision.v1",
+        "task_ref": {
+          "attempt": 1,
+          "job_id": "m406b-thermo-crossdomain",
+          "project_id": "project_m406b_alpha",
+          "release": {
+            "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+            "release_id": "a9fc2614b92fed53"
+          },
+          "schema": "acp2.runtime.task-ref.v1",
+          "task_id": "m406b-thermo-crossdomain"
+        }
+      },
+      "row": "cross_domain_thermochemistry",
+      "task_id": "m406b-thermo-crossdomain",
+      "viewmodel": {
+        "annotation_keys": [
+          "frame_index",
+          "geometry_ref",
+          "id",
+          "label",
+          "selected",
+          "status",
+          "type",
+          "x",
+          "y"
+        ],
+        "node_keys": [
+          "energy",
+          "frame_index",
+          "geometry_ref",
+          "id",
+          "label",
+          "metadata",
+          "status",
+          "type",
+          "x"
+        ],
+        "product": {
+          "complete": true,
+          "errors": [],
+          "identity": {
+            "algorithm": "thermochemistry.gibbs_curve",
+            "algorithm_version": "1",
+            "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+            "input_digest": "sha256:70af4c909a570d388036635dc97df9588849e7a45f46a3c89452483a80b8cada",
+            "params_digest": "",
+            "product_kind": "curve_scatter",
+            "schema_version": 1
+          },
+          "payload": {
+            "reference_frame": {
+              "axes": "cartesian",
+              "origin": "native_input"
+            },
+            "series": [
+              {
+                "label": "Gibbs free energy vs temperature",
+                "points": [
+                  {
+                    "point_id": "thermo-t0",
+                    "x": 273.15,
+                    "y": -234.3616254
+                  },
+                  {
+                    "point_id": "thermo-t1",
+                    "x": 298.15,
+                    "y": -234.3646781
+                  },
+                  {
+                    "point_id": "thermo-t2",
+                    "x": 323.15,
+                    "y": -234.3678199
+                  }
+                ],
+                "reference_frame": {
+                  "axes": "cartesian",
+                  "origin": "native_input"
+                },
+                "series_id": "thermochemistry.gibbs.vs.temperature",
+                "x_unit": "kelvin",
+                "y_unit": "hartree"
+              }
+            ]
+          },
+          "product_kind": "curve_scatter",
+          "schema_version": 1,
+          "state": "available"
+        },
+        "product_digest": "sha256:309f7f4a9ebf4421ed4e72263198dd0d511419a2969b5426da00e8f1cb394818",
+        "projection": {
+          "annotations": [
+            {
+              "frame_index": 2,
+              "geometry_ref": "",
+              "id": "minimum_0",
+              "label": "最低能量",
+              "selected": false,
+              "status": "completed",
+              "type": "minimum",
+              "x": 323.15,
+              "y": -234.3678199
+            }
+          ],
+          "migrations": [],
+          "node_type": "frame",
+          "nodes": [
+            {
+              "energy": -234.3616254,
+              "frame_index": 0,
+              "geometry_ref": "",
+              "id": "thermo-t0",
+              "label": "Point 0",
+              "metadata": {
+                "series_id": "thermochemistry.gibbs.vs.temperature",
+                "x_unit": "kelvin",
+                "y_unit": "hartree"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 273.15
+            },
+            {
+              "energy": -234.3646781,
+              "frame_index": 1,
+              "geometry_ref": "",
+              "id": "thermo-t1",
+              "label": "Point 1",
+              "metadata": {
+                "series_id": "thermochemistry.gibbs.vs.temperature",
+                "x_unit": "kelvin",
+                "y_unit": "hartree"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 298.15
+            },
+            {
+              "energy": -234.3678199,
+              "frame_index": 2,
+              "geometry_ref": "",
+              "id": "thermo-t2",
+              "label": "Point 2",
+              "metadata": {
+                "series_id": "thermochemistry.gibbs.vs.temperature",
+                "x_unit": "kelvin",
+                "y_unit": "hartree"
+              },
+              "status": "completed",
+              "type": "frame",
+              "x": 323.15
+            }
+          ],
+          "skipped_points": [],
+          "unavailable": null,
+          "view_type": "scan"
+        },
+        "projection_digest": "sha256:e5ec6932aca46e0c4a8861fdb994555dac481d78cea6d5b519dd9556e2fc60b2",
+        "view_type": "scan"
+      },
+      "worker": {
+        "receipt_state": "completed",
+        "report_digest": "sha256:ac4eb9ffa5670adf18105a1080afc0bf8e60afb4d6f5530d149f5d126f2523b0",
+        "report_relative_path": "RESULT/evidence_report.json",
+        "task_result_digest": "sha256:7b705df0e9de7d95c559d4b0a5c9ec2e07d8ed158b0c1f04a73b7feda9efc6df"
+      }
+    }
+  },
+  "run_root": "/ACPServer/acp2-runs/remediation/m4-06b",
+  "schema": "acp2.m406b.acceptance.v1",
+  "started_at": "2026-10-28T00:55:45.265006Z",
+  "status": "PASS"
+}
