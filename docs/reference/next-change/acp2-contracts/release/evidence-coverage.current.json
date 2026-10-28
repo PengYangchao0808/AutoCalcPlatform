@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "5bb7dc216c81b015e91ff7e11c403f0b8fb888690d693bc31011fe1c3cf1dc7c",
+  "coverage_sha256": "61dfb187d606d7a4983f8023cfc89334be8568562ac81232ace3602c4a2b355c",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
@@ -1912,7 +1912,7 @@
       "handoff_version": 1,
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
       "release_ready": false,
-      "sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c"
+      "sha256": "e419cc260b27dd88de93ebd9c9a03fc6c8a6023ae5fbd75140ddb5826d1d2d84"
     }
   },
   "h_rows": [
@@ -1933,7 +1933,7 @@
       ],
       "notes": "Baseline/boundary row PASS in handoff-H7 and reproduced by the M0-01 ledger and B26 registration.",
       "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
-      "receipt_sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c",
+      "receipt_sha256": "e419cc260b27dd88de93ebd9c9a03fc6c8a6023ae5fbd75140ddb5826d1d2d84",
       "required": true,
       "required_observations": {
         "handoff_H0": "present",
@@ -1963,7 +1963,7 @@
       ],
       "notes": "Contracts are consumable: the contract manifest, consumer scanners and real consumers are green.",
       "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
-      "receipt_sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c",
+      "receipt_sha256": "e419cc260b27dd88de93ebd9c9a03fc6c8a6023ae5fbd75140ddb5826d1d2d84",
       "required": true,
       "required_observations": {
         "consumer_gates": "present",
@@ -2222,7 +2222,7 @@
   "schema": "acp2.release.evidence-coverage.v1",
   "source": {
     "h7_handoff": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
-    "h7_handoff_sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c",
+    "h7_handoff_sha256": "e419cc260b27dd88de93ebd9c9a03fc6c8a6023ae5fbd75140ddb5826d1d2d84",
     "h_index": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
     "plan": "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md",
     "plan_graph": "reports/acp2_delivery_gap_audit_20261026/plan-graph.json",

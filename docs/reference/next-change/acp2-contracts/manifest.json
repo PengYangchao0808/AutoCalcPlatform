@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
   "contract_version": "1.7.0",
-  "contract_digest": "f3c1832d1d20b8b2c7c464da9a42c9a4f3c3b5f0d98a0e43f2de9aa2f95f8ae7",
+  "contract_digest": "933db9abcc8cce4d056c44609982747107b98a0d5978f80d24763741954e185a",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "baseline": {
     "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
@@ -169,7 +169,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "1e0cf06f36880b6e20160563a79f2949708adac8ab3a69081239db21dc3a3fea",
+      "sha256": "d8088455864b7960befb628bb9e2a0124ae8adf2f16c3f81e72bc87099970718",
       "status": "delivered"
     },
     {
@@ -419,7 +419,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "0822c99e0703a033561b45da80098529b8792bb62e8b5d029644749ca86b96aa",
+      "sha256": "5bb02d558825e46a62bf81a99dfd8ef09fce9dc7b82f7d8bbac99393d39e1331",
       "status": "delivered"
     },
     {
@@ -428,7 +428,7 @@
       "note": "M5-02 final coverage ledger: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows + 3 DEFERRED rows, each with a receipt+sha256, candidate, reuse and required_observations. Delivery status lives only here, never in the BOM.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
-      "sha256": "8a85e0a40449e50a85df608d892d0c9997629df831f40bd9c025a72a12cd0c61",
+      "sha256": "12f8b1516236de2ea8f31ff9431850374a8b35ab9fd324a87c8030edb8cd254f",
       "status": "delivered"
     }
   ],
