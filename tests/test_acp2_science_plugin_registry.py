@@ -580,7 +580,9 @@ class TestExternalDistribution:
         assert after_enable["enabled"]["state"] == "present"
         assert after_enable["verified"] == status["verified"]
 
-        assert "--no-isolation" in external_distribution["build_argv"]
+        assert "--no-isolation" in external_distribution["build_argv"] or (
+            "--no-build-isolation" in external_distribution["build_argv"]
+        )
         assert "--no-deps" in external_distribution["install_argv"]
         assert "--no-index" in external_distribution["install_argv"]
 
